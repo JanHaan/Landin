@@ -1,10 +1,10 @@
-sink: (value: i32) -> none =
+consume: (value: i32) -> none =
     _ = value
-end sink
+end consume
 
 f: (leave: bool) -> (result: i32) =
     mut local: i32
-    defer sink(local)
+    defer consume(local)
     result = 0
     return when leave
     local = 42

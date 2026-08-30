@@ -1,0 +1,10 @@
+increment: (inout value: u32) -> none =
+    value = value + 1
+end increment
+
+bad: () -> none =
+    mut value: u32 = 1
+    view: ptr u32 = addr value
+    increment(value)
+    _ = view.val
+end bad

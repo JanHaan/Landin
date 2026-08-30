@@ -188,9 +188,11 @@ kernel, R2.20's aggregate/value-layout work and R2.30's functions, control,
 declared errors, function fields, recursive module images, computed aggregate
 elements and lexical `defer`/failure-only `undo` cleanup are complete. R2.40's
 fixed parameters, compile-time substitution, generic routine instances and
-fixed conditional declarations are complete.
+fixed conditional declarations are complete. R2.50's pointers, slices,
+conventions, local origins and borrows, `escaping`, `from`, consume checking
+and target reference carriers are complete.
 
-**Current roadmap work: R2.50 — Implement references and local lifetime checks.**
+**Current roadmap work: R2.60 — Implement concepts and conformance collection.**
 
 `refine` runs the frontend, lowers and
 verifies target-neutral IR, emits Linux x86-64 assembly, and can assemble and

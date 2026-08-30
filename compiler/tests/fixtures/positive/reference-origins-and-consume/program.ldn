@@ -1,0 +1,24 @@
+identity: (source: ptr u32) -> (pointer: ptr u32 from source) =
+    pointer = source
+end identity
+
+consume: (sink pointer: ptr u32) -> none =
+    _ = pointer
+end consume
+
+increment: (inout value: u32) -> none =
+    value = value + 1
+end increment
+
+ok: () -> none =
+    mut value: u32 = 1
+    mut view: ptr u32 = addr value
+    copied := identity(view)
+    _ = copied.val
+    view = ptr(0x1000)
+    consume(view)
+    view = addr value
+    increment(value)
+    view = addr value
+    _ = view.val
+end ok

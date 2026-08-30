@@ -106,7 +106,7 @@ that one is the tokeniser's. The other is in the rule itself: a
 name that starts with '_' needs something after it, so the lone
 '_' is the discard of [1020] and nothing may be called it. The
 kernel
-reserves twenty-six words; the reserved set of the whole language is
+reserves thirty-three words; the reserved set of the whole language is
 larger, and each word joins it with the construct that introduces
 it, so a program that avoids a construct never trips over its
 keyword. Type names are not among them: u32 and bool are ordinary
@@ -117,11 +117,12 @@ identifier  ::= lower (lower | digit | "_")*
               | "_" (lower | digit | "_")+
 lower       ::= "a" ... "z"
 digit       ::= "0" ... "9"
-keyword     ::= "mut" | "public" | "if" | "then" | "elsif" | "else"
-              | "end" | "return" | "when" | "inc" | "dec" | "none"
-              | "true" | "false" | "and" | "or" | "not"
-              | "sizeof" | "alignof" | "type" | "struct" | "zeroed"
-              | "atom" | "fail" | "fixed" | "try"
+keyword     ::= "addr" | "alignof" | "and" | "atom" | "dec" | "else"
+              | "elsif" | "end" | "escaping" | "fail" | "false"
+              | "fixed" | "from" | "if" | "in" | "inc" | "inout"
+              | "mut" | "none" | "not" | "or" | "ptr" | "public"
+              | "return" | "sink" | "sizeof" | "struct" | "then"
+              | "true" | "try" | "type" | "when" | "zeroed"
 
 ```
 
@@ -187,13 +188,16 @@ A binding names one thing, and says how much it may change.
 The full form, the inferred form and the mutable form are [0040],
 [0050] and [0060]; a binding with no value must be assigned before
 it is read [0080]. The kernel's types are the eleven scalar names, atom sets, fixed arrays,
-function types with their complete declared error sets, and what [1795]
-declares from
-them: aliases, named ordinary structs and D74's named variant-bearing structs.
-Enabled runtime leaves are scalar or fixed array; D86/D87 additionally compose
-one named ordinary struct field for measurement and zeroable storage while
-retaining its nonzero-value boundary. A function type is written with [1800]'s
-signature syntax. Its parameter and return names describe positions and
+pointers, slices, function types with their complete declared error sets, and
+what [1795] declares from them: aliases, named ordinary structs and D74's named
+variant-bearing structs. `mut` in a pointer or slice type records permission to
+write the pointee or viewed elements [0430] [0570]; it is independent of a
+binding's `mut` [0070].
+Enabled runtime leaves are scalar, reference, function or fixed array; ordinary
+and variant-bearing structs compose those leaves recursively. A pointer is one
+target pointer-width carrier and a slice is its non-null base plus a `usize`
+length. Neither has an all-zero value [0540]. A function type is written with
+[1800]'s signature syntax. Its parameter and return names describe positions and
 declare nothing; only a function declaration opens [1840]'s signature scope.
 The other TYPES YOU DECLARE
 remain deferred. A type position holds a declared name either way, since
@@ -212,10 +216,12 @@ template and normalized actual tuple, then checks the substituted field shape.
 ```landin-grammar
 binding       ::= "mut"? identifier ":" type ("=" expression)?
                 | "mut"? identifier ":=" expression
-type          ::= function_type | array_type | type_application | scalar_name
-                | identifier
+type          ::= function_type | array_type | pointer_type | slice_type
+                | type_application | scalar_name | identifier
 function_type ::= signature
 array_type    ::= "[" expression "]" type
+pointer_type  ::= "ptr" "mut"? type
+slice_type    ::= "[" "]" "mut"? type
 type_application ::= identifier "(" type_argument
                      ("," type_argument)* ")"
 type_argument ::= type | integer
@@ -266,11 +272,17 @@ A function is a value with a body, and its returns are named.
 '=' opens the body and 'end' closes it [0870]; a body that is one
 expression still takes an end, and the expression fills the named
 return [0880]; every named return must be assigned before the
-function returns [0930]. The parameter conventions [0900], `escaping` [0780]
+function returns [0930]. The parameter conventions [0900], `escaping` [0780], `from` [0790]
 and generic parameters [1290] have their parser and resolution foundation on
 a declared routine. Its complete signature scope collects type/fixed formals,
 runtime parameters and named returns before resolving any type; runtime
-formals alone make the runtime signature. A generic template has no standalone
+formals alone make the runtime signature. `escaping` precedes an explicitly
+written convention, and both precede the parameter name (D140). An omitted
+convention and explicit `in` have the same language meaning but remain distinct
+syntax facts. Each `from` name is retained in written order and associated with
+the correspondingly labelled runtime parameter position. The reference-origin
+pass checks every returning edge against exactly that ordered source set;
+unknown, duplicate, missing and extra sources are rejected. A generic template has no standalone
 function value or IR item. D138's first executable increment deduces a direct
 type formal or exact `[n]t` shape from context-free runtime argument types,
 interns the concrete routine instance, and emits that instance rather than the
@@ -306,9 +318,11 @@ routine_formals    ::= routine_formal ("," routine_formal)*
 routine_formal     ::= parameter | type_formal
 errors             ::= "!" (identifier ("|" identifier)* | "...")
 parameters         ::= parameter ("," parameter)*
-parameter          ::= identifier ":" type
+parameter          ::= "escaping"? parameter_convention? identifier ":" type
+parameter_convention ::= "in" | "inout" | "sink"
 returns     ::= "(" named_return ("," named_return)* ")" | "none"
 named_return ::= identifier ":" type
+                 ("from" identifier ("," identifier)*)?
 body        ::= block
 block       ::= statement* | value_statement* expression
 value_statement ::= binding | destructuring_binding | assignment
@@ -397,17 +411,20 @@ Comparison takes at most one operator, so 'a < b < c' is not a
 sentence in this grammar rather than a fold: a chain that read
 left to right would compare a bool with a number, and [0310]
 refuses that anyway.
-A selection is [0420]'s member selection, which the kernel enables
-for one member: a field of a struct [0670]. It binds tighter than
-every operator because it is part of naming a thing rather than an
-operation on one, and it is left to right, so 'a.b.c' selects from
-what 'a.b' named.
-An index [0570] binds the same way and for the same reason, and it
-takes what a selection named: 'a[i]' and 'a.b[i]' are both written
-and neither derives from a call, because nothing selects from one
-[1820] and nothing indexes one either. A call may consume that complete
-selection as its callee, which is how a function-valued field is called;
-the call itself still cannot be selected or indexed.
+A selection is [0420]'s ordinary member-selection syntax. The enabled
+representation retains every selected name without deciding whether it denotes
+a struct field or [0430]'s `val` pointee; that classification belongs to later
+checking. It binds tighter than every operator because it is part of naming a
+thing rather than an operation on one, and it is left to right, so 'a.b.c'
+selects from what 'a.b' named.
+An index or slice selection [0570] binds the same way and for the same
+reason, and takes what a selection named: `a[i]`, `a.b[i]` and
+`a[lower..<upper]` are all written there. The two range spellings are
+retained separately so inclusive and half-open upper bounds are checked before
+an address is formed. Neither form derives from a call, because nothing
+selects from one and nothing indexes one either. A call may consume that
+complete selection as its callee, which is how a function-valued field is
+called; the call itself still cannot be selected or indexed.
 An ordinary-struct literal is [0710]'s nonempty run of labelled field values,
 optionally followed by [0720]'s contextual fill. D64--D71 state the contexts
 that admit it. D72's construction and [0980]'s direct named call have one
@@ -429,7 +446,8 @@ decides what binds, never what runs first.
 
 ```landin-grammar
 primary     ::= literal | array_literal | array_repetition | struct_literal
-              | labeled_application | anonymous_function | indexed | call
+              | empty_slice | labeled_application | anonymous_function
+              | indexed | call | address | pointer_conversion
               | measurement | try
               | if | match | bare_block | "(" expression ")"
 array_literal ::= "[" expression ("," expression)* "]"
@@ -444,11 +462,16 @@ labeled_arguments ::= (expression ",")* labeled_argument
                       ("," labeled_argument)* ("," "of" expression)?
 labeled_argument ::= identifier ":" argument_rhs
 argument_rhs ::= expression | type
-indexed     ::= selection (("[" expression "]") | ("." identifier))*
+indexed     ::= selection (index | slice_selection | ("." identifier))*
+index       ::= "[" expression "]"
+slice_selection ::= "[" expression (".." | "..<") expression "]"
 selection   ::= identifier ("." identifier)*
 call        ::= indexed "(" arguments? ")" recovery?
 recovery    ::= "else" expression
               | "else" "(" identifier ")" block "end"
+address     ::= "addr" place
+pointer_conversion ::= "ptr" "(" expression ")"
+empty_slice ::= "[" "]"
 measurement ::= ("sizeof" | "alignof") type | "lenof" identifier
               | "lenof" "(" array_literal ")"
 arguments   ::= expression ("," expression)*
@@ -533,6 +556,8 @@ gives bool its two values; written out, that is:
 | `i8` `i16` `i32` `i64` | every signed one, two's complement |
 | `usize` `isize` | the same pair, at the target's pointer width [0160] |
 | `bool` | false and true [0180] |
+| `ptr T`, `ptr mut T` | one non-null target address, with tracked origin unless constructed from an integer [0430] [0470] |
+| `[]T`, `[]mut T` | one non-null aligned base and a `usize` length [0570] [0580] |
 | an atom union | exactly the declaration identities in its flattened set [0630] [0640] |
 
 Two's complement is not a new decision. [0300]'s wrapping
@@ -552,6 +577,10 @@ is structural: aliases are flattened, order and repeated members do not change
 identity, and assignment or argument passing may widen a singleton or smaller
 set into a set that contains it. No integer is an atom and no zero or default
 atom exists.
+With one atom, `atom | ptr T` uses zero for the atom and every nonzero pattern
+for the pointer, occupying one target pointer carrier [0480]. With two or more
+atoms it uses the ordinary target-parametric tag-plus-pointer payload placement;
+the source spelling never assumes the one-word optimization.
 Fixed arrays hold their declaration-order elements [0520], and ordinary or
 variant-bearing structs hold the fields their nominal declaration gives them
 [0710] [0750]. A function type holds a target code address with the complete
@@ -577,6 +606,8 @@ kernel these positions give a literal a type:
 
 - the element type of a contextual array literal or repetition
 - the field type of a contextual labelled struct literal
+- the complete pointer type of `ptr(integer)` and the complete slice type of
+  `[]`; the address integer itself takes `usize`
 - the other operand's type, for a binary operator
 - a unary operator's own context, handed on [1820]
 - a branch's condition and an exit's 'when', both of which
@@ -600,6 +631,12 @@ and at the logical words. What those give back is a bool
 [1890] and a bool says nothing about what was compared, so
 'r: bool = 1 | 2 == 3' compares two i32 by [0200] and not
 two bools.
+Reference agreement includes the complete referred type and shallow
+permission. [0440] is the sole relaxation: `ptr mut T` satisfies `ptr T`, and
+`[]mut T` satisfies `[]T`; neither direction changes bits, and the reverse is
+refused. Function signature agreement also includes parameter conventions,
+`escaping`, and each result's ordered `from` positions; omitted and explicit
+`in` have the same semantic convention.
 A literal whose value the type does not hold is refused
 [0190], and the report names the literal.
 A unary minus over a literal is part of the value that check
@@ -648,7 +685,8 @@ kernel has, two may be written and two may not.
 | a mutable binding [0060] | may be |
 | a named return | may be: [0930] says it must be, and [1840] declares it as a place for that reason |
 | an immutable binding | may not: [0040] makes it immutable and [0450] says it protects the value it holds |
-| a parameter | may not: the unmarked convention is [0900]'s 'in', which is the promise not to change the value |
+| an `in` or `sink` parameter | may not be replaced |
+| an `inout` parameter | may be replaced, through the caller-owned place |
 
 An atom declaration and a recovery clause's error name are immutable values,
 not places. A function declaration is not a place. A local or module binding holding a
@@ -657,7 +695,9 @@ replaced, and a mutable one may be replaced only by a value with the same
 complete signature. A named function-valued return is a writable place; an
 unmarked function-valued parameter is not. A function-valued struct field is an
 ordinary subobject place: the root binding decides mutability, and replacement
-requires that field's complete recursive signature.
+requires that field's complete recursive signature. A place reached through
+`.val` or slice indexing instead takes writability from the shallow `mut` in
+that reference type, independently of the binding that holds it [0430] [0450].
 The value's type is the place's type [0310], and the report
 names the place as well as the value, because which of the
 two is wrong is the reader's to decide.
@@ -699,10 +739,25 @@ its taken edge returns and its untaken edge continues with the incoming
 assignment state. The unevaluated side of `and` or `or` is likewise a
 fallthrough edge: a return from the right operand cannot erase that skip edge,
 and assignments made only on the right do not survive their join.
-A module binding is not this. [1460] says a value at module
-level is known when the compiler reads it, so one written
-with no value has no such value, and it is the read that is
-refused rather than the declaration.
+A place passed to `sink` becomes unassigned at that exact binding-rooted path.
+Every read requires a later assignment on every arriving path, and a part sunk
+out of an `inout` parameter must be assigned again on every return edge [0910].
+This is definite assignment of one consumed place, not ownership; copies made
+before the sink remain live.
+
+The reference-origin walk is a second local flow fact. `addr` of local storage
+and a slice of a by-value array parameter have frame origin. A returned value
+with frame origin is refused. A retained `escaping` argument must be independent
+or derive only from parameters themselves declared `escaping`. Integer-created
+pointers are explicitly untracked [0470]. For a tracked returned reference, the
+set of parameter origins on every return edge is exactly the signature's `from`
+set. A live local view records the binding it derives from; an `inout` or `sink`
+use of that binding is refused when the view is read before being replaced.
+Volatile reference paths remain exempt [0850].
+
+A module binding is not ordinary pre-use definite assignment. [1460] says its
+value is known when the compiler reads it; reference-containing module images
+must likewise supply a valid non-null static image.
 
 ### [1920] What a call means
 
@@ -747,10 +802,11 @@ also ignored, as [0990]'s one-field example requires. An unknown or repeated
 field and two locals with one name are refused by the ordinary field and scope
 rules. The anonymous shape is not a nominal struct type and has no type spelling
 of its own.
-A scalar type name in front of the '(' is [0700]'s
-conversion, which [0310] describes and this grammar omits,
-so [1830] refuses that by name too. It is not a misspelling
-and must not be reported as one.
+A scalar type name in front of `(` remains [0700]'s explicit conversion.
+The enabled reference slice admits the two directions [0470] requires: an
+integer type applied to a pointer checks that the address fits, and
+`ptr(integer)` takes its complete pointer type from context and produces an
+untracked pointer. Other scalar conversions remain refused by [1830].
 
 ### [1930] What may be discarded
 
@@ -7827,3 +7883,47 @@ cases, generated lexical, construct and IR records; and
 nested generic and inactive-template boundaries are
 `positive/fixed-conditional-generic-activity` and the lowering seam records
 that only a selected generic instance receives an item.
+
+### D140 — `escaping` precedes an explicit parameter convention
+
+**The tour said** that `in`, `inout` and `sink` are conventions written before
+a parameter name [0900], that `escaping` is orthogonal to all three [0780]
+[0900], and that attributes are prefix words [0760]. It did not say how the
+two prefixes are ordered when one parameter carries both.
+
+**Chosen:** `escaping` first, then an optional explicit convention, then the
+name: `escaping inout item: ptr mut node`. The parser retains explicit `in`
+apart from the omitted default even though both have the same language
+meaning. Type and fixed formals keep their existing spellings and admit neither
+runtime modifier.
+
+**The alternatives:** convention first, or both permutations. Convention first
+makes the general prefix attribute interrupt the parameter it qualifies;
+admitting both creates two source spellings for one signature fact and makes
+recovery decide whether a repeated modifier was an order variation or a second
+modifier. Either is workable, and neither was selected by the tour.
+
+**Pinned by** the parser case `reference signature syntax is represented` and
+the resolution case `return sources retain parameter positions`.
+
+### D141 — An empty slice uses the lowest aligned non-null base
+
+**The tour said** that an empty slice has a canonical aligned address, is not
+null, cannot be dereferenced, and yields that base through `base_of` [0580]. It
+did not select one aligned address.
+
+**Chosen:** the numerical address equal to the element alignment: one for a
+byte-aligned element, four for an ordinary `u32`, and so on. It is the lowest
+positive aligned address, depends only on target facts and element layout, and
+therefore remains stable across compiler runs without reserving real storage.
+The zero length is checked before any address arithmetic, so the address is
+never accessed.
+
+**The alternatives:** a compiler-owned static sentinel, one sentinel per type,
+or any implementation-selected aligned nonzero pattern. A static symbol makes
+the observable integer address link-dependent; per-type sentinels add storage
+and identity with no language value; an unspecified pattern contradicts
+`canonical` once pointer-to-integer conversion can observe it.
+
+**Pinned by** `runtime/r250-references`, the empty-slice IR verifier path, and
+the Linux x86-64 backend's target-derived empty-base emission.

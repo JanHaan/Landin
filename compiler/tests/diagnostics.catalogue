@@ -43,6 +43,9 @@ L0310  Live     [0710]: every field is named or covered by `of`
 L0311  Live     [1210]: a match names each variant case at most once
 L0312  Live     [1210]: an exhaustive match names every variant case
 L0313  Live     D137: a nominal value layout cannot contain itself by value
+L0314  Live     [0770]/[0780]: a retained reference must outlive its use
+L0315  Live     [0800]/[0830]: a live derived view keeps its source still
+L0316  Live     [0790]: a returned reference derives from exactly its declared source parameters
 L0500  Live     [1550]: no assembler and linker for the target on this host
 L0501  Live     [1550]: the platform assembler or linker refused what was emitted
 L0502  Live     [1970]: a hosted program with no `public main: () -> (code: i32)`

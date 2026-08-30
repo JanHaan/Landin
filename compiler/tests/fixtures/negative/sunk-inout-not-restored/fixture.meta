@@ -1,0 +1,5 @@
+class: negative
+summary: a place sunk out of inout storage must be assigned before return
+program: program.ldn
+codes: L0302
+constructs: 0430, 0900, 0910, 1800, 1810

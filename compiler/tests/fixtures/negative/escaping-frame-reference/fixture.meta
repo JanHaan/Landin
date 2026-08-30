@@ -1,0 +1,5 @@
+class: negative
+summary: an escaping argument cannot point into the caller frame
+program: program.ldn
+codes: L0314
+constructs: 0430, 0770, 0780, 0900, 1800, 1810

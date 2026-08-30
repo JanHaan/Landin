@@ -52,7 +52,7 @@ package body Landin.Syntax.Parser is
    ------------------------------------------------------------------
    --  The words the tour spells and the kernel does not reserve
    --
-   --  [1760] reserves twenty-five words, and none of them is `loop`,
+   --  [1760] reserves thirty-three words, and none of them is `loop`,
    --  `while`, `for`, `break` or `continue`.
    --  Every one of those lexes as an ordinary identifier, so
    --  the scan cannot refuse it and only the parser can: at a statement
@@ -114,17 +114,6 @@ package body Landin.Syntax.Parser is
             when Type_Usize => "usize",
             when Type_Isize => "isize",
             when Type_Bool  => "bool");
-
-   --  The three parameter conventions [0900].  A convention is written
-   --  before the name, so `inout x: i32` is an identifier followed by an
-   --  identifier, which `parameter ::= identifier ":" type` cannot derive.
-   type Convention is (By_In, By_Inout, By_Sink);
-
-   function Spelling (Item : Convention) return String
-     is (case Item is
-            when By_In    => "in",
-            when By_Inout => "inout",
-            when By_Sink  => "sink");
 
    ------------------------------------------------------------------
 
@@ -220,11 +209,6 @@ package body Landin.Syntax.Parser is
                 [for S in Scalar_Name =>
                    Landin.Source.Names.Intern (Names, Spelling (S))];
 
-            Convention_Id : constant array (Convention)
-              of Landin.Source.Names.Name_Id :=
-                [for C in Convention =>
-                   Landin.Source.Names.Intern (Names, Spelling (C))];
-
             ------------------------------------------------------------
             --  Reading the stream
             ------------------------------------------------------------
@@ -261,6 +245,8 @@ package body Landin.Syntax.Parser is
                Digits_At : Landin.Source.Span := Landin.Source.Empty_Span;
                Exported  : Boolean := False;
                Mutable   : Boolean := False;
+               Escapes   : Boolean := False;
+               Convention : Parameter_Convention := Implicit_In;
                Fills     : Boolean := False;
                Recovers  : Node_Id := No_Node) return Node_Id;
 
@@ -429,6 +415,8 @@ package body Landin.Syntax.Parser is
             begin
                if Peek = Tok.Left_Paren then
                   return Starts_Signature;
+               elsif Peek = Tok.Kw_Ptr then
+                  return Ahead (1) /= Tok.Left_Paren;
                elsif Peek /= Tok.Left_Bracket then
                   return False;
                end if;
@@ -442,7 +430,7 @@ package body Landin.Syntax.Parser is
                      if Level = 0 then
                         return Ahead (Step + 1)
                           in Tok.Identifier | Tok.Left_Bracket
-                             | Tok.Left_Paren;
+                             | Tok.Left_Paren | Tok.Kw_Ptr;
                      end if;
                   end if;
                   Step := Step + 1;
@@ -602,6 +590,8 @@ package body Landin.Syntax.Parser is
                Digits_At : Landin.Source.Span := Landin.Source.Empty_Span;
                Exported  : Boolean := False;
                Mutable   : Boolean := False;
+               Escapes   : Boolean := False;
+               Convention : Parameter_Convention := Implicit_In;
                Fills     : Boolean := False;
                Recovers  : Node_Id := No_Node) return Node_Id
             is
@@ -639,6 +629,8 @@ package body Landin.Syntax.Parser is
                    Sound      => Sound,
                    Exported   => Exported,
                    Mutable    => Mutable,
+                   Escaping   => Escapes,
+                   Convention => Convention,
                    Fill       => Fills,
                    Recovery   => Recovers));
 
@@ -1345,24 +1337,54 @@ package body Landin.Syntax.Parser is
                         Advance;
                         Index := Parse_Expression;
 
-                        if not Expect
-                                 (Wanted  => Tok.Right_Bracket,
-                                  Message => "an index is closed with `]`",
-                                  Note    => "[1820]: `[` opens an index"
-                                             & " and `]` closes it",
-                                  Related => At_Open,
-                                  Because => "opened here")
-                        then
-                           return Add
-                             (Element_Index, At_Open,
-                              Extent   => Join (At_Open, After_Previous),
-                              Children => [Selected, Index]);
-                        end if;
+                        if Peek in Tok.Dot_Dot | Tok.Dot_Dot_Less then
+                           declare
+                              Form : constant Node_Kind :=
+                                (if Peek = Tok.Dot_Dot
+                                 then Inclusive_Slice else Half_Open_Slice);
+                              Upper : Node_Id;
+                           begin
+                              Advance;
+                              Upper := Parse_Expression;
+                              if not Expect
+                                (Wanted  => Tok.Right_Bracket,
+                                 Message => "a slice is closed with `]`",
+                                 Note    => "[0570]: a range between the"
+                                            & " brackets selects a slice",
+                                 Related => At_Open,
+                                 Because => "opened here")
+                              then
+                                 return Add
+                                   (Form, At_Open,
+                                    Extent => Join
+                                      (At_Open, After_Previous),
+                                    Children => [Selected, Index, Upper]);
+                              end if;
+                              Selected := Add
+                                (Form, At_Open,
+                                 Extent => Join (At_Open, After_Previous),
+                                 Children => [Selected, Index, Upper]);
+                           end;
+                        else
+                           if not Expect
+                                    (Wanted  => Tok.Right_Bracket,
+                                     Message => "an index is closed with `]`",
+                                     Note    => "[1820]: `[` opens an index"
+                                                & " and `]` closes it",
+                                     Related => At_Open,
+                                     Because => "opened here")
+                           then
+                              return Add
+                                (Element_Index, At_Open,
+                                 Extent   => Join (At_Open, After_Previous),
+                                 Children => [Selected, Index]);
+                           end if;
 
-                        Selected :=
-                          Add (Element_Index, At_Open,
-                               Extent   => Join (At_Open, After_Previous),
-                               Children => [Selected, Index]);
+                           Selected :=
+                             Add (Element_Index, At_Open,
+                                  Extent   => Join (At_Open, After_Previous),
+                                  Children => [Selected, Index]);
+                        end if;
                      end;
 
                      goto Next;
@@ -1432,7 +1454,7 @@ package body Landin.Syntax.Parser is
                      end;
                      Advance;
                   elsif Peek in Tok.Identifier | Tok.Left_Bracket
-                               | Tok.Left_Paren
+                               | Tok.Left_Paren | Tok.Kw_Ptr
                   then
                      Arguments.Append (Parse_Type (False, Starts));
                   else
@@ -1600,9 +1622,35 @@ package body Landin.Syntax.Parser is
                   return Add (Error_Type, At_Type);
                end if;
 
-               --  array_type ::= "[" expression "]" type         [1790]
+               --  pointer_type ::= "ptr" "mut"? type             [1790]
                --
-               --  D136 gives this expression its closed fixed fold.  Parse
+               --  Permission is a retained syntax fact.  Whether the target
+               --  is a legal pointee and how it is represented belong to the
+               --  later R2.50 checking and layout increments.
+               if Peek = Tok.Kw_Ptr then
+                  declare
+                     Writable : Boolean := False;
+                     Target   : Node_Id;
+                  begin
+                     Advance;
+                     if Peek = Tok.Kw_Mut then
+                        Writable := True;
+                        Advance;
+                     end if;
+                     Target := Parse_Type (In_Parameter, Declared_At);
+                     return Add
+                       (Pointer_Type, At_Type,
+                        Extent   => Join (At_Type, After_Previous),
+                        Children => [1 => Target],
+                        Mutable  => Writable);
+                  end;
+               end if;
+
+               --  array_type ::= "[" expression "]" type         [1790]
+               --  slice_type ::= "[" "]" "mut"? type             [1790]
+               --
+               --  D136 gives an array bound expression its closed fixed fold.
+               --  Parse
                --  the ordinary expression grammar here so a call remains
                --  syntactically valid and the checker can reject it for not
                --  being fixed without ever executing the routine.
@@ -1610,26 +1658,27 @@ package body Landin.Syntax.Parser is
                --  and `[2][3]u8` derives; which elements the kernel can
                --  lay out is the checker's to say, not this stage's.
                if Peek = Tok.Left_Bracket then
-                  --  [0570]'s slice is a view and not an array: it is
-                  --  written with nothing between the brackets, so the
-                  --  parser can tell the two apart and name this one
-                  --  rather than reporting a length that is missing.
+                  --  [0570]'s slice is a view and not an array: nothing
+                  --  between the brackets distinguishes it without a
+                  --  lookahead or a checker decision.
                   if Ahead (1) = Tok.Right_Bracket then
-                     Type_Refused := True;
-                     Refuse
-                       (Item    => Syn.Slice_Type,
-                        Where   => At_Type,
-                        Message => "a slice is not enabled yet");
-                     Advance;
-                     Advance;
                      declare
-                        Ignored : constant Node_Id :=
-                          Parse_Type (In_Parameter, Declared_At);
+                        Writable : Boolean := False;
+                        Element  : Node_Id;
                      begin
-                        pragma Unreferenced (Ignored);
+                        Advance;
+                        Advance;
+                        if Peek = Tok.Kw_Mut then
+                           Writable := True;
+                           Advance;
+                        end if;
+                        Element := Parse_Type (In_Parameter, Declared_At);
+                        return Add
+                          (Slice_Type, At_Type,
+                           Extent   => Join (At_Type, After_Previous),
+                           Children => [1 => Element],
+                           Mutable  => Writable);
                      end;
-
-                     return Add (Error_Type, At_Type);
                   end if;
 
                   declare
@@ -2547,18 +2596,22 @@ package body Landin.Syntax.Parser is
             --  Functions                                        [1800]
             ------------------------------------------------------------
 
-            --  parameter ::= identifier ":" type                  [1800]
-            --  D138 adds type and fixed formals only to a declared routine.
-            --  They retain their distinct syntax nodes, so the runtime
-            --  parameter view cannot accidentally give them an ABI position.
+            --  parameter ::= "escaping"? parameter_convention?
+            --                identifier ":" type                  [1800]
+            --  D140 fixes that modifier order and retains explicit `in`
+            --  separately from the implicit default.  D138's type and fixed
+            --  formals remain distinct nodes, so neither runtime modifier can
+            --  accidentally give a static formal an ABI position.
             function Parse_Parameter
               (Allow_Static : Boolean := False) return Node_Id
             is
-               Start     : constant Landin.Source.Span := Here;
-               Fixed     : constant Boolean := Peek = Tok.Kw_Fixed;
-               Named     : Landin.Source.Names.Name_Id;
-               At_Name   : Landin.Source.Span;
-               Type_Node : Node_Id := No_Node;
+               Start       : constant Landin.Source.Span := Here;
+               Fixed       : constant Boolean := Peek = Tok.Kw_Fixed;
+               Escaping    : Boolean := False;
+               Convention  : Parameter_Convention := Implicit_In;
+               Named       : Landin.Source.Names.Name_Id;
+               At_Name     : Landin.Source.Span;
+               Type_Node   : Node_Id := No_Node;
             begin
                if Fixed then
                   if not Allow_Static then
@@ -2569,27 +2622,25 @@ package body Landin.Syntax.Parser is
                                    & " declared routines");
                   end if;
                   Advance;
-               end if;
+               else
+                  if Peek = Tok.Kw_Escaping then
+                     Escaping := True;
+                     Advance;
+                  end if;
 
-               --  [0900]: a convention is written before the name, so
-               --  `inout x: i32` is two identifiers in a row, which
-               --  `parameter ::= identifier ":" type` cannot derive.
-               if Peek = Tok.Identifier
-                 and then Ahead (1) = Tok.Identifier
-               then
-                  for Item in Convention loop
-                     if Convention_Id (Item) = Named_Here then
-                        Refuse
-                          (Item    => Syn.Parameter_Convention,
-                           Where   => Here,
-                           Message => "`" & Spelling (Item)
-                                      & "` is a parameter convention, and"
-                                      & " the conventions are not enabled"
-                                      & " yet");
+                  case Peek is
+                     when Tok.Kw_In =>
+                        Convention := Explicit_In;
                         Advance;
-                        exit;
-                     end if;
-                  end loop;
+                     when Tok.Kw_Inout =>
+                        Convention := Inout_Convention;
+                        Advance;
+                     when Tok.Kw_Sink =>
+                        Convention := Sink_Convention;
+                        Advance;
+                     when others =>
+                        null;
+                  end case;
                end if;
 
                At_Name := Parse_Declared_Name (Named);
@@ -2597,11 +2648,13 @@ package body Landin.Syntax.Parser is
                if Expect
                     (Wanted  => Tok.Colon,
                      Message => "a parameter names its type after `:`",
-                     Note    => "[1800]: parameter ::= identifier `:` type",
+                     Note    => "[1800]: modifiers precede `name: type`",
                      Related => At_Name,
                      Because => "declared here")
                then
                   if Allow_Static and then not Fixed
+                    and then not Escaping
+                    and then Convention = Implicit_In
                     and then Peek = Tok.Kw_Type
                   then
                      Advance;
@@ -2626,16 +2679,19 @@ package body Landin.Syntax.Parser is
                end if;
 
                return Add
-                 (Of_Kind  => Parameter,
-                  At_Token => At_Name,
-                  Extent   => Join (Start, After_Previous),
-                  Children => [Type_Node],
-                  Named    => Named);
+                 (Of_Kind   => Parameter,
+                  At_Token  => At_Name,
+                  Extent    => Join (Start, After_Previous),
+                  Children  => [Type_Node],
+                  Named     => Named,
+                  Escapes   => Escaping,
+                  Convention => Convention);
             end Parse_Parameter;
 
             --  returns ::= "(" named_return ("," named_return)* ")"
             --              | "none"                              [1800]
             --  named_return ::= identifier ":" type
+            --                   ("from" identifier ("," identifier)*)?
             --
             --  No_Node is `none`.  Every nonempty return list has its own
             --  node so signatures can carry [0920]'s ordered positions
@@ -2671,6 +2727,7 @@ package body Landin.Syntax.Parser is
                      At_Name   : constant Landin.Source.Span :=
                        Parse_Declared_Name (Named);
                      Type_Node : Node_Id;
+                     Sources   : Slot_Vectors.Vector;
                   begin
                      if Expect
                           (Wanted  => Tok.Colon,
@@ -2686,13 +2743,54 @@ package body Landin.Syntax.Parser is
                         Type_Node := Add (Error_Type, After_Previous);
                      end if;
 
-                     Results.Append
-                       (Add
-                          (Of_Kind  => Named_Return,
-                           At_Token => At_Name,
-                           Extent   => Join (At_Name, After_Previous),
-                           Children => [Type_Node],
-                           Named    => Named));
+                     if Peek = Tok.Kw_From then
+                        Advance;
+                        loop
+                           if Peek /= Tok.Identifier then
+                              Complain
+                                (Item    => Syn.Name_Expected,
+                                 Where   => (if Peek = Tok.End_Of_Input
+                                             then After_Previous else Here),
+                                 Message => "a `from` clause names at least"
+                                            & " one parameter",
+                                 Note    => "[0790]: returned references"
+                                            & " name their sources");
+                              exit;
+                           end if;
+
+                           declare
+                              Source_At : constant Landin.Source.Span := Here;
+                              Source_Name : constant
+                                Landin.Source.Names.Name_Id := Named_Here;
+                           begin
+                              Advance;
+                              Sources.Append
+                                (Add (Return_Source, Source_At,
+                                      Named => Source_Name));
+                           end;
+
+                           --  A comma followed by `name:` begins the next
+                           --  named return.  Any other comma continues this
+                           --  return's source list; the grammar deliberately
+                           --  admits both uses and this is its local split.
+                           exit when Peek /= Tok.Comma
+                             or else (Ahead (1) = Tok.Identifier
+                                      and then Ahead (2) = Tok.Colon);
+                           Advance;
+                        end loop;
+                     end if;
+
+                     declare
+                        Head : constant Slot_List (1 .. 1) := [Type_Node];
+                     begin
+                        Results.Append
+                          (Add
+                             (Of_Kind  => Named_Return,
+                              At_Token => At_Name,
+                              Extent   => Join (At_Name, After_Previous),
+                              Children => Head & To_List (Sources),
+                              Named    => Named));
+                     end;
                   end;
 
                   exit when Peek /= Tok.Comma;
@@ -3890,9 +3988,7 @@ package body Landin.Syntax.Parser is
                               At_Name : Landin.Source.Span;
                               Bound   : Landin.Source.Names.Name_Id;
                            begin
-                              if Peek = Tok.Identifier
-                                and then Named_Here = Convention_Id (By_Inout)
-                              then
+                              if Peek = Tok.Kw_Inout then
                                  Mutable := True;
                                  Advance;
                               end if;
@@ -4319,19 +4415,10 @@ package body Landin.Syntax.Parser is
                      end if;
 
                      if Peek = Tok.Right_Bracket then
-                        Complain
-                          (Item    => Syn.Expression_Expected,
-                           Where   => Here,
-                           Message => "an array literal has at least one"
-                                      & " element",
-                           Note    => "[0520]: an array literal writes its"
-                                      & " elements between the brackets",
-                           Related => At_Item,
-                           Because => "the array starts here");
                         Advance;
                         Depth := Depth - 1;
                         return Add
-                          (Error_Expression, At_Item,
+                          (Empty_Slice_Literal, At_Item,
                            Join (At_Item, After_Previous));
                      end if;
 
@@ -4449,6 +4536,56 @@ package body Landin.Syntax.Parser is
                         At_Token  => At_Item,
                         Radix     => Tok.Base (Item),
                         Digits_At => Tok.Digit_Span (Item));
+                  end;
+               end if;
+
+               --  [0460]/[0470]: `ptr(integer)` takes its complete pointer
+               --  type from context.  It is its own node rather than a call:
+               --  `ptr` is reserved and no runtime declaration is involved.
+               if Peek = Tok.Kw_Ptr then
+                  Advance;
+                  if not Expect
+                    (Wanted  => Tok.Left_Paren,
+                     Message => "`ptr` opens its integer with `(`",
+                     Note    => "[0460]: `ptr(integer)` is an address literal",
+                     Related => At_Item,
+                     Because => "the pointer conversion")
+                  then
+                     return Add (Error_Expression, At_Item);
+                  end if;
+                  declare
+                     Value : constant Node_Id := Parse_Expression;
+                  begin
+                     if not Expect
+                       (Wanted  => Tok.Right_Paren,
+                        Message => "`ptr` closes its integer with `)`",
+                        Note    => "[0460]: `ptr(integer)` keeps the value"
+                                   & " between parentheses",
+                        Related => At_Item,
+                        Because => "opened here")
+                     then
+                        return Add
+                          (Pointer_Conversion, At_Item, Children => [Value]);
+                     end if;
+                     return Add
+                       (Pointer_Conversion, At_Item,
+                        Extent => Join (At_Item, After_Previous),
+                        Children => [Value]);
+                  end;
+               end if;
+
+               --  [0380]/[0430]: `addr` takes the ordinary place syntax.
+               --  The parser retains that place without deciding whether it
+               --  is addressable; later R2.50 checking owns that question.
+               if Peek = Tok.Kw_Addr then
+                  Advance;
+                  declare
+                     Place : constant Node_Id := Parse_Place;
+                  begin
+                     return Add
+                       (Address_Of, At_Item,
+                        Extent   => Join (At_Item, After_Previous),
+                        Children => [1 => Place]);
                   end;
                end if;
 
@@ -4801,9 +4938,9 @@ package body Landin.Syntax.Parser is
             end Parse_Struct_Literal;
 
             --  A labelled argument RHS has one compact syntax tree.  The
-            --  only alternatives outside expression grammar are fixed-array
-            --  and function types; all identifiers and positional direct
-            --  applications first use the ordinary expression nodes, and
+            --  alternatives outside expression grammar are fixed-array,
+            --  pointer, slice and function types; identifiers and positional
+            --  direct applications first use the ordinary expression nodes,
             --  Syntax.Type_Projection exposes those ambiguous roots without
             --  cloning their descendants.
             function Parse_Argument_RHS return Node_Id is

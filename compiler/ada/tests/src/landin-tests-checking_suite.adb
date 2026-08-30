@@ -51,6 +51,8 @@ package body Landin.Tests.Checking_Suite is
    use type Landin.Checking.Routine_Instance_State;
    use type Landin.Checking.Signature_Id;
    use type Landin.Types.Magnitude;
+   use type Landin.Targets.Byte_Alignment;
+   use type Landin.Targets.Byte_Count;
    use type Landin.Types.Type_Kind;
 
    Frontend : aliased Landin.Stages.Syntax.Instance;
@@ -74,7 +76,7 @@ package body Landin.Tests.Checking_Suite is
    Layout_Program : constant String :=
      "ahead: type = span" & LF
      & "span: type = struct" & LF
-     & "    from: i32" & LF
+     & "    start: i32" & LF
      & "    to: i32" & LF
      & "    tag: bool" & LF
      & "end span" & LF
@@ -6122,12 +6124,12 @@ package body Landin.Tests.Checking_Suite is
    begin
       Src := Landin.Stages.Add_Source
         (Work, "defer-types.ldn",
-         "sink: (value: i32) -> none = _ = value end sink" & LF
+         "consume: (value: i32) -> none = _ = value end consume" & LF
          & "make_row: () -> (result: [2]i32) =" & LF
          & "    result = [19, 23]" & LF
          & "end make_row" & LF
          & "use: () -> none =" & LF
-         & "    callback := sink" & LF
+         & "    callback := consume" & LF
          & "    defer callback(42)" & LF
          & "    defer make_row()" & LF
          & "end use" & LF);
@@ -6207,7 +6209,7 @@ package body Landin.Tests.Checking_Suite is
    begin
       Src := Landin.Stages.Add_Source
         (Work, "undo-types.ldn",
-         "sink: (value: i32) -> none = _ = value end sink" & LF
+         "consume: (value: i32) -> none = _ = value end consume" & LF
          & "make_row: () -> (result: [2]i32) =" & LF
          & "    result = [19, 23]" & LF
          & "end make_row" & LF
@@ -6216,7 +6218,7 @@ package body Landin.Tests.Checking_Suite is
          & "    right = 23" & LF
          & "end make_multiple" & LF
          & "use: () -> none =" & LF
-         & "    callback := sink" & LF
+         & "    callback := consume" & LF
          & "    undo callback(42)" & LF
          & "    undo make_row()" & LF
          & "    undo make_multiple()" & LF
@@ -6318,14 +6320,14 @@ package body Landin.Tests.Checking_Suite is
       end Check_Source;
 
       Sink : constant String :=
-        "sink: (value: i32) -> none = _ = value end sink" & LF;
+        "consume: (value: i32) -> none = _ = value end consume" & LF;
    begin
       Check_Source
         (Sink
          & "f: () -> (result: i32) =" & LF
          & "    mut local: i32" & LF
-         & "    defer sink(local)" & LF
-         & "    defer sink(begin result = 42 result end)" & LF
+         & "    defer consume(local)" & LF
+         & "    defer consume(begin result = 42 result end)" & LF
          & "    local = 42" & LF
          & "    return" & LF
          & "end f" & LF,
@@ -6334,7 +6336,7 @@ package body Landin.Tests.Checking_Suite is
         (Sink
          & "f: (leave: bool) -> (result: i32) =" & LF
          & "    mut local: i32" & LF
-         & "    defer sink(local)" & LF
+         & "    defer consume(local)" & LF
          & "    result = 0" & LF
          & "    return when leave" & LF
          & "    local = 42" & LF
@@ -6376,14 +6378,14 @@ package body Landin.Tests.Checking_Suite is
       Prelude : constant String :=
         "bad: atom" & LF
         & "problem: type = bad" & LF
-        & "sink: (value: i32) -> none = _ = value end sink" & LF
+        & "consume: (value: i32) -> none = _ = value end consume" & LF
         & "leaf: () -> none ! problem = fail bad end leaf" & LF;
    begin
       Check_Source
         (Prelude
          & "f: () -> none ! problem =" & LF
          & "    mut local: i32" & LF
-         & "    undo sink(local)" & LF
+         & "    undo consume(local)" & LF
          & "    return" & LF
          & "end f" & LF,
          Accepted => True);
@@ -6391,7 +6393,7 @@ package body Landin.Tests.Checking_Suite is
         (Prelude
          & "f: () -> none ! problem =" & LF
          & "    mut local: i32" & LF
-         & "    undo sink(local)" & LF
+         & "    undo consume(local)" & LF
          & "    local = 42" & LF
          & "    fail bad" & LF
          & "end f" & LF,
@@ -6400,7 +6402,7 @@ package body Landin.Tests.Checking_Suite is
         (Prelude
          & "f: () -> none ! problem =" & LF
          & "    mut local: i32" & LF
-         & "    undo sink(local)" & LF
+         & "    undo consume(local)" & LF
          & "    fail bad" & LF
          & "end f" & LF,
          Accepted => False);
@@ -6408,7 +6410,7 @@ package body Landin.Tests.Checking_Suite is
         (Prelude
          & "f: () -> none ! problem =" & LF
          & "    mut local: i32" & LF
-         & "    undo sink(local)" & LF
+         & "    undo consume(local)" & LF
          & "    local = 42" & LF
          & "    try leaf()" & LF
          & "end f" & LF,
@@ -6417,7 +6419,7 @@ package body Landin.Tests.Checking_Suite is
         (Prelude
          & "f: () -> none ! problem =" & LF
          & "    mut local: i32" & LF
-         & "    undo sink(local)" & LF
+         & "    undo consume(local)" & LF
          & "    try leaf()" & LF
          & "end f" & LF,
          Accepted => False);
@@ -6425,7 +6427,7 @@ package body Landin.Tests.Checking_Suite is
         (Prelude
          & "f: () -> none ! problem =" & LF
          & "    mut local: i32" & LF
-         & "    undo sink(local)" & LF
+         & "    undo consume(local)" & LF
          & "    leaf() else 0" & LF
          & "    return" & LF
          & "end f" & LF,
@@ -6582,6 +6584,37 @@ package body Landin.Tests.Checking_Suite is
       end;
    end Named_Runtime_Calls_Record_One_Formal_Match;
 
+   procedure Reference_Unions_Follow_Target_Layout
+     (Item : in out Landin.Testing.Context);
+
+   procedure Reference_Unions_Follow_Target_Layout
+     (Item : in out Landin.Testing.Context)
+   is
+      Size : Landin.Targets.Byte_Count;
+      Alignment : Landin.Targets.Byte_Alignment;
+   begin
+      Landin.Checking.Reference_Union_Extent
+        (1, Landin.Targets.Linux_X86_64, Size, Alignment);
+      Landin.Testing.Check
+        (Item, Size = 8 and then Alignment = 8,
+         "one atom and one pointer use the plain 64-bit pointer carrier");
+      Landin.Checking.Reference_Union_Extent
+        (2, Landin.Targets.Linux_X86_64, Size, Alignment);
+      Landin.Testing.Check
+        (Item, Size = 16 and then Alignment = 8,
+         "two atoms and one pointer keep a 64-bit tag-plus-payload layout");
+      Landin.Checking.Reference_Union_Extent
+        (1, Landin.Targets.Synthetic_32, Size, Alignment);
+      Landin.Testing.Check
+        (Item, Size = 4 and then Alignment = 4,
+         "one atom and one pointer use the plain 32-bit pointer carrier");
+      Landin.Checking.Reference_Union_Extent
+        (2, Landin.Targets.Synthetic_32, Size, Alignment);
+      Landin.Testing.Check
+        (Item, Size = 8 and then Alignment = 4,
+         "two atoms and one pointer keep a 32-bit tag-plus-payload layout");
+   end Reference_Unions_Follow_Target_Layout;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -6722,6 +6755,9 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Register
         (Into, "checking", "array extent follows usize",
          Array_Extent_Follows_Usize'Access);
+      Landin.Testing.Register
+        (Into, "checking", "reference unions follow target layout",
+         Reference_Unions_Follow_Target_Layout'Access);
       Landin.Testing.Register
         (Into, "checking", "struct array field extent follows usize",
          Struct_Array_Field_Extent_Follows_Usize'Access);

@@ -518,8 +518,98 @@ package body Landin.Tests.Resolution_Suite is
       end;
    end Parameterized_Struct_Formals_Have_One_Collected_Scope;
 
+   procedure Return_Sources_Retain_Parameter_Positions
+     (Item : in out Landin.Testing.Context);
+
    procedure Labeled_Applications_Are_Classified_Callee_First
      (Item : in out Landin.Testing.Context);
+
+   --  [0790]'s labels are structural signature positions.  A function type
+   --  opens no declaration scope, while declared and anonymous routines do;
+   --  the one position representation must work for all three without making
+   --  a function-type label into a lexical declaration.
+   procedure Return_Sources_Retain_Parameter_Positions
+     (Item : in out Landin.Testing.Context)
+   is
+      Work  : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Ran   : Natural;
+      Id    : Landin.Source.Source_Id;
+   begin
+      Id := Landin.Stages.Add_Source
+        (Work, "return-sources.ldn",
+         "item: type = u8" & LF
+         & "callback: type = (first: ptr item, second: []item) ->"
+         & " (view: []item from second, first)" & LF
+         & "project: (t: type, first: ptr t, second: []t) ->"
+         & " (view: []t from second, first) = second end project" & LF
+         & "stored := (only: ptr item) ->"
+         & " (view: ptr item from only) = only end" & LF);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Configurer'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+
+      Landin.Testing.Check_Equal (Item, Ran, 3, "the resolver ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "reference signatures need no checking to resolve their labels");
+
+      declare
+         Meanings : constant not null access Landin.Resolution.Table :=
+           Landin.Stages.Meanings (Work);
+         Of_Tree : constant not null access constant Landin.Syntax.Tree :=
+           Landin.Syntax.Forest.Tree_Of
+             (Landin.Stages.Trees (Work).all, Id);
+         Callback : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Declared_Type
+             (Of_Tree.all,
+              Landin.Syntax.Nth_Declaration (Of_Tree.all, 2));
+         Callback_Return : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Nth_Return (Of_Tree.all, Callback, 1);
+         Project : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Nth_Declaration (Of_Tree.all, 3);
+         Project_Return : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Nth_Return (Of_Tree.all, Project, 1);
+         Stored : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Value_Of
+             (Of_Tree.all,
+              Landin.Syntax.Nth_Declaration (Of_Tree.all, 4));
+         Stored_Return : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Nth_Return (Of_Tree.all, Stored, 1);
+      begin
+         Landin.Testing.Check
+           (Item,
+            Landin.Resolution.Source_Parameter_Position
+              (Meanings.all, Of_Tree.all,
+               Landin.Syntax.Nth_Return_Source
+                 (Of_Tree.all, Callback_Return, 1)) = 2
+            and then Landin.Resolution.Source_Parameter_Position
+              (Meanings.all, Of_Tree.all,
+               Landin.Syntax.Nth_Return_Source
+                 (Of_Tree.all, Callback_Return, 2)) = 1,
+            "a function type maps source labels without declarations");
+         Landin.Testing.Check
+           (Item,
+            Landin.Resolution.Source_Parameter_Position
+              (Meanings.all, Of_Tree.all,
+               Landin.Syntax.Nth_Return_Source
+                 (Of_Tree.all, Project_Return, 1)) = 2
+            and then Landin.Resolution.Source_Parameter_Position
+              (Meanings.all, Of_Tree.all,
+               Landin.Syntax.Nth_Return_Source
+                 (Of_Tree.all, Project_Return, 2)) = 1,
+            "generic statics do not consume runtime parameter positions");
+         Landin.Testing.Check_Equal
+           (Item,
+            Landin.Resolution.Source_Parameter_Position
+              (Meanings.all, Of_Tree.all,
+               Landin.Syntax.Nth_Return_Source
+                 (Of_Tree.all, Stored_Return, 1)),
+            1, "an anonymous signature uses the same position table");
+      end;
+   end Return_Sources_Retain_Parameter_Positions;
 
    procedure Labeled_Applications_Are_Classified_Callee_First
      (Item : in out Landin.Testing.Context)
@@ -657,6 +747,9 @@ package body Landin.Tests.Resolution_Suite is
       Landin.Testing.Register
         (Into, "resolution", "variant cases are module visible identities",
          Variant_Cases_Are_Module_Visible_Identities'Access);
+      Landin.Testing.Register
+        (Into, "resolution", "return sources retain parameter positions",
+         Return_Sources_Retain_Parameter_Positions'Access);
       Landin.Testing.Register
         (Into, "resolution", "classifies labelled applications callee first",
          Labeled_Applications_Are_Classified_Callee_First'Access);

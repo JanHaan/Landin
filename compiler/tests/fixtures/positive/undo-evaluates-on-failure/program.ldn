@@ -1,9 +1,9 @@
 bad: atom
 problem: type = bad
 
-sink: (value: i32) -> none =
+consume: (value: i32) -> none =
     _ = value
-end sink
+end consume
 
 leaf: () -> none ! problem =
     fail bad
@@ -11,32 +11,32 @@ end leaf
 
 normal_fallthrough: () -> none ! problem =
     mut local: i32
-    undo sink(local)
+    undo consume(local)
 end normal_fallthrough
 
 successful_return: () -> none ! problem =
     mut local: i32
-    undo sink(local)
+    undo consume(local)
     return
 end successful_return
 
 direct_failure: () -> none ! problem =
     mut local: i32
-    undo sink(local)
+    undo consume(local)
     local = 42
     fail bad
 end direct_failure
 
 propagated_failure: () -> none ! ... =
     mut local: i32
-    undo sink(local)
+    undo consume(local)
     local = 42
     try leaf()
 end propagated_failure
 
 recovered_failure: () -> none ! problem =
     mut local: i32
-    undo sink(local)
+    undo consume(local)
     leaf() else 0
     return
 end recovered_failure

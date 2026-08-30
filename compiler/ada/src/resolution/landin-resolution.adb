@@ -48,6 +48,7 @@ package body Landin.Resolution is
       Into.Applications.Append
         (Application_Fact'(others => <>),
          Ada.Containers.Count_Type (Next));
+      Into.Return_Sources.Append (0, Ada.Containers.Count_Type (Next));
 
       --  [1740] gives the compilation one scope and this is it.
       Into.Scopes.Append (Scope'(Sort => Program, Enclosing => No_Scope));
@@ -284,6 +285,24 @@ package body Landin.Resolution is
    begin
       Into.Bound.Replace_Element (Slot (Into, Of_Tree, Node), To);
    end Bind;
+
+   function Source_Parameter_Position
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Source   : Landin.Syntax.Node_Id) return Natural
+     is (Of_Table.Return_Sources.Element
+           (Slot (Of_Table, Of_Tree, Source)));
+
+   procedure Associate_Return_Source
+     (Into     : in out Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Source   : Landin.Syntax.Node_Id;
+      Position : Positive)
+   is
+   begin
+      Into.Return_Sources.Replace_Element
+        (Slot (Into, Of_Tree, Source), Position);
+   end Associate_Return_Source;
 
    function Class_Of
      (Of_Table : Table;

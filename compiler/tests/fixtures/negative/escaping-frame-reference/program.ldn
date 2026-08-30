@@ -1,0 +1,8 @@
+retain: (escaping pointer: ptr u32) -> none =
+    _ = pointer
+end retain
+
+bad: () -> none =
+    value: u32 = 1
+    retain(addr value)
+end bad

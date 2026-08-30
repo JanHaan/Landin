@@ -149,9 +149,11 @@ binaries. R2.20's target-parametric aggregate and variant representation and
 R2.30's functions, control-flow expressions, lexical cleanup, declared errors
 and internal aggregate ABI are complete. R2.40's fixed parameters,
 compile-time substitution, generic routine instances, fixed conditional
-selection and per-instance inferred errors are complete.
+selection and per-instance inferred errors are complete. R2.50's pointers,
+slices, conventions, local origins and borrows, `escaping`, `from`, consume
+checking and target reference carriers are complete.
 
-**Current roadmap work: R2.50 — Implement references and local lifetime checks.**
+**Current roadmap work: R2.60 — Implement concepts and conformance collection.**
 
 Language and architecture questions are resolved when the first vertical
 slice needs them.

@@ -1,6 +1,0 @@
-class: negative
-summary: [1830] the parameter conventions are [0900] and not enabled
-constructs: 1830, 0900
-program: program.ldn
-targets: linux-x86-64, macos-arm64
-codes: L0010

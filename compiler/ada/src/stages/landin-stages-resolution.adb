@@ -5,6 +5,7 @@ with Landin.Resolution;
 with Landin.Source.Names;
 with Landin.Source;
 with Landin.Syntax.Forest;
+with Landin.Types;
 with Landin.Syntax;
 
 package body Landin.Stages.Resolution is
@@ -80,6 +81,9 @@ package body Landin.Stages.Resolution is
       procedure Resolve_Anonymous
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
 
+      procedure Associate_Return_Sources
+        (Of_Tree : Syn.Tree; Signature_Node : Syn.Node_Id);
+
       procedure Walk_Scoped_Block
         (Of_Tree : Syn.Tree;
          Block   : Syn.Node_Id;
@@ -147,6 +151,47 @@ package body Landin.Stages.Resolution is
          end;
       end Declare_One;
 
+      --  [0790] names runtime parameter labels, not lexical names.  The same
+      --  structural association therefore serves declarations, anonymous
+      --  routines and function types; no declaration is invented for a label
+      --  in a written type [1800].  Missing and duplicated labels remain
+      --  retained for the later R2.50 checker to diagnose.
+      procedure Associate_Return_Sources
+        (Of_Tree : Syn.Tree; Signature_Node : Syn.Node_Id) is
+      begin
+         for Which in 1 .. Syn.Return_Count (Of_Tree, Signature_Node) loop
+            declare
+               Returned : constant Syn.Node_Id :=
+                 Syn.Nth_Return (Of_Tree, Signature_Node, Which);
+            begin
+               for Source_Index in
+                 1 .. Syn.Return_Source_Count (Of_Tree, Returned)
+               loop
+                  declare
+                     Source : constant Syn.Node_Id :=
+                       Syn.Nth_Return_Source
+                         (Of_Tree, Returned, Source_Index);
+                  begin
+                     for Position in
+                       1 .. Syn.Parameter_Count (Of_Tree, Signature_Node)
+                     loop
+                        if Syn.Name
+                             (Of_Tree,
+                              Syn.Nth_Parameter
+                                (Of_Tree, Signature_Node, Position))
+                           = Syn.Name (Of_Tree, Source)
+                        then
+                           Landin.Resolution.Associate_Return_Source
+                             (Meanings.all, Of_Tree, Source, Position);
+                           exit;
+                        end if;
+                     end loop;
+                  end;
+               end loop;
+            end;
+         end loop;
+      end Associate_Return_Sources;
+
       --  [1010]'s anonymous function has a static routine body and captures
       --  nothing.  Its signature therefore encloses the module scope, not the
       --  lexical scope of the expression that produced its code address.
@@ -170,6 +215,7 @@ package body Landin.Stages.Resolution is
             Declare_One
               (Of_Tree, Syn.Nth_Return (Of_Tree, Node, Which), Signature);
          end loop;
+         Associate_Return_Sources (Of_Tree, Node);
          Resolve
            (Of_Tree, Syn.Error_Set_Of (Of_Tree, Node),
             Landin.Resolution.Program_Scope);
@@ -482,6 +528,8 @@ package body Landin.Stages.Resolution is
          if Syn.Kind (Of_Tree, Node) = Syn.Anonymous_Function then
             Resolve_Anonymous (Of_Tree, Node);
             return;
+         elsif Syn.Kind (Of_Tree, Node) = Syn.Function_Type then
+            Associate_Return_Sources (Of_Tree, Node);
          end if;
 
          --  D124: control forms can now occur anywhere an expression can.
@@ -495,7 +543,24 @@ package body Landin.Stages.Resolution is
                return;
 
             when Syn.Call =>
-               Resolve (Of_Tree, Syn.Callee_Of (Of_Tree, Node), Inside);
+               declare
+                  Callee : constant Syn.Node_Id :=
+                    Syn.Callee_Of (Of_Tree, Node);
+                  Is_Scalar_Conversion : Boolean := False;
+               begin
+                  if Syn.Kind (Of_Tree, Callee) = Syn.Name_Reference then
+                     for Scalar in Landin.Types.Scalar_Name loop
+                        Is_Scalar_Conversion := Is_Scalar_Conversion
+                          or else Landin.Types.Spelling (Scalar)
+                            = Spelled (Syn.Name (Of_Tree, Callee));
+                     end loop;
+                  end if;
+                  if Is_Scalar_Conversion then
+                     Resolve_Type_View (Of_Tree, Callee, Inside);
+                  else
+                     Resolve (Of_Tree, Callee, Inside);
+                  end if;
+               end;
                for Argument in 1 .. Syn.Argument_Count (Of_Tree, Node) loop
                   Resolve
                     (Of_Tree,
@@ -845,6 +910,7 @@ package body Landin.Stages.Resolution is
                           (Of_Tree, Node, Which),
                         Signature);
                   end loop;
+                  Associate_Return_Sources (Of_Tree, Node);
 
                   for Which in
                     1 .. Syn.Generic_Formal_Count (Of_Tree, Node)
