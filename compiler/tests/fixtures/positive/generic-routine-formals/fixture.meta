@@ -1,0 +1,5 @@
+class: positive
+summary: generic routine formals are compile-time-only signature binders
+constructs: 1290, 1350
+program: program.ldn
+targets: linux-x86-64, macos-arm64

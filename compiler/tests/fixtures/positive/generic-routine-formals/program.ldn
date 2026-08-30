@@ -1,0 +1,1 @@
+f: (value: t, fixed n: u32, t: type) -> none = end f

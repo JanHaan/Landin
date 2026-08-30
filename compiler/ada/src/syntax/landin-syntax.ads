@@ -487,8 +487,10 @@ package Landin.Syntax is
                              | Type_Declaration | Fixed_Formal | Field;
 
    --  D135's ordered formals are visible to the declared type or struct body
-   --  of a parameterized type declaration.  Type_Formal and Fixed_Formal
-   --  distinguish the two source forms; only the latter has Declared_Type.
+   --  of a parameterized type declaration.  D138 extends the same two
+   --  compile-time-only binders to a declared routine signature. Type_Formal
+   --  and Fixed_Formal distinguish the two source forms; only the latter has
+   --  Declared_Type.
    function Type_Formal_Count (Of_Tree : Tree; Id : Node_Id) return Natural
      with Pre => Contains (Of_Tree, Id)
                  and then Kind (Of_Tree, Id) = Type_Declaration;
@@ -606,6 +608,9 @@ package Landin.Syntax is
      with Pre => Contains (Of_Tree, Id)
                  and then Kind (Of_Tree, Id) = Call;
 
+   --  Runtime parameters only. D138's type and fixed formals share the
+   --  declaration's trailing signature run but never enter this ABI-facing
+   --  view.
    function Parameter_Count (Of_Tree : Tree; Id : Node_Id) return Natural
      with Pre => Contains (Of_Tree, Id)
                  and then Kind (Of_Tree, Id)
@@ -619,7 +624,24 @@ package Landin.Syntax is
                              in Function_Declaration | Anonymous_Function
                                 | Function_Type
                   and then Index <= Parameter_Count (Of_Tree, Id),
-          Post => Contains (Of_Tree, Nth_Parameter'Result);
+          Post => Contains (Of_Tree, Nth_Parameter'Result)
+                  and then Kind (Of_Tree, Nth_Parameter'Result) = Parameter;
+
+   --  D138's compile-time-only routine formals, in their source order. They
+   --  are deliberately separate from Parameter_Count so no runtime consumer
+   --  can accidentally treat one as an ABI position.
+   function Generic_Formal_Count (Of_Tree : Tree; Id : Node_Id) return Natural
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id) = Function_Declaration;
+
+   function Nth_Generic_Formal
+     (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
+     with Pre  => Contains (Of_Tree, Id)
+                  and then Kind (Of_Tree, Id) = Function_Declaration
+                  and then Index <= Generic_Formal_Count (Of_Tree, Id),
+          Post => Contains (Of_Tree, Nth_Generic_Formal'Result)
+                  and then Kind (Of_Tree, Nth_Generic_Formal'Result)
+                             in Type_Formal | Fixed_Formal;
 
    --  `else` [1810].  No_Node when the branch has none.
    function Else_Body (Of_Tree : Tree; Id : Node_Id) return Node_Id
