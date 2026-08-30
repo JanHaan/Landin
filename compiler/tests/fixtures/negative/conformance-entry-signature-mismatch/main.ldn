@@ -1,0 +1,9 @@
+ordered: type = concept (t: type)
+    less: (left: t, right: t) -> (yes: bool)
+end ordered
+
+wrong: (left: i32, right: i32) -> (yes: i32) =
+    yes = left
+end wrong
+
+i32 is ordered (less: wrong)

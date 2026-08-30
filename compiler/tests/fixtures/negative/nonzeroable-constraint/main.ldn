@@ -1,0 +1,5 @@
+cell: type (t: type is zeroable) = struct
+    value: t
+end cell
+
+bad: type = cell(ptr i32)

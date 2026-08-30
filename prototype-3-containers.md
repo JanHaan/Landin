@@ -369,9 +369,11 @@ small(ptr node, 4) does not exist until a raw-storage type does
 [0510]. The current R2.40 resolution now gives an unconstrained fully applied
 struct instance the nominal identity `(template, normalized actual tuple)` and
 substitutes fixed bounds, nested ordinary structs and existing variants without
-runtime formals or a synthetic declaration. This sketch still waits on R2.60's
-`is zeroable` constraint and R3.20's raw storage; those exclusions, rather than
-nominal parameterization, are what keep `small` itself from the enabled kernel.
+runtime formals or a synthetic declaration. R2.60 now checks the `is zeroable`
+constraint through its closed compiler conformance family. R3.20's raw storage
+still decides why `small(ptr node, 4)` cannot exist; that representation
+boundary, rather than nominal parameterization or constraint lookup, is what
+this sketch continues to wait on.
 
 ```landin
 public small: type (T: type is zeroable, fixed N: u32) = struct

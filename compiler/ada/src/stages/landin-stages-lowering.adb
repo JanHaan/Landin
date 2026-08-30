@@ -8468,7 +8468,11 @@ package body Landin.Stages.Lowering is
            (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
          is
             Src : constant Landin.Source.Source_Id := Syn.Source_Of (Of_Tree);
-            Id : constant Res.Declaration_Id := Declaration_At (Src, Node);
+            Id : constant Res.Declaration_Id :=
+              (if Syn.Kind (Of_Tree, Node)
+                    in Syn.Concept_Declaration
+                       | Syn.Conformance_Declaration
+               then Res.No_Declaration else Declaration_At (Src, Node));
             Made : IR.Item_Id;
          begin
             case Syn.Kind (Of_Tree, Node) is

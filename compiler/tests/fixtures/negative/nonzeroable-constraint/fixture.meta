@@ -1,0 +1,5 @@
+class: negative
+summary: pointers are outside the compiler's closed zeroable family
+program: main.ldn
+codes: L0318
+constructs: 0540, 0550, 1290

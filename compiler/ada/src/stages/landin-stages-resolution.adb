@@ -11,10 +11,13 @@ with Landin.Syntax;
 package body Landin.Stages.Resolution is
 
    package Names renames Landin.Diagnostics.Resolution;
+   package Res renames Landin.Resolution;
    package Syn renames Landin.Syntax;
 
    use type Landin.Provenance.Declaration_Id;
    use type Landin.Resolution.Application_Class;
+   use type Landin.Resolution.Declaration_Sort;
+   use type Landin.Resolution.Verdict;
    use type Landin.Resolution.Argument_Role;
    use type Landin.Resolution.Scope_Id;
    use type Landin.Source.Names.Name_Id;
@@ -528,7 +531,9 @@ package body Landin.Stages.Resolution is
          if Syn.Kind (Of_Tree, Node) = Syn.Anonymous_Function then
             Resolve_Anonymous (Of_Tree, Node);
             return;
-         elsif Syn.Kind (Of_Tree, Node) = Syn.Function_Type then
+         elsif Syn.Kind (Of_Tree, Node)
+           in Syn.Function_Type | Syn.Concept_Entry
+         then
             Associate_Return_Sources (Of_Tree, Node);
          end if;
 
@@ -660,7 +665,7 @@ package body Landin.Stages.Resolution is
          end if;
 
          if Syn.Kind (Of_Tree, Node)
-            in Syn.Name_Reference | Syn.Type_Reference
+            in Syn.Name_Reference | Syn.Type_Reference | Syn.Concept_Reference
          then
             declare
                Named : constant Landin.Source.Names.Name_Id :=
@@ -677,7 +682,13 @@ package body Landin.Stages.Resolution is
                   --  tour writes and [1790] omits from a name nobody
                   --  declared.  Reporting here would put the weaker of
                   --  the two answers first.
-                  if Syn.Kind (Of_Tree, Node) = Syn.Type_Reference then
+                  if Syn.Kind (Of_Tree, Node) = Syn.Type_Reference
+                    or else
+                      (Syn.Kind (Of_Tree, Node) = Syn.Concept_Reference
+                       and then Spelled (Named) = "zeroable")
+                  then
+                     --  Scalar type names and R2.60's closed compiler
+                     --  concept have no source declaration to bind.
                      null;
                   elsif Named /= Landin.Source.Names.No_Name then
                      Names.Report
@@ -788,6 +799,171 @@ package body Landin.Stages.Resolution is
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) is
       begin
          case Syn.Kind (Of_Tree, Node) is
+            when Syn.Concept_Declaration =>
+               declare
+                  Formal_Scope : constant Landin.Resolution.Scope_Id :=
+                    Landin.Resolution.Open_Scope
+                      (Meanings.all, Landin.Resolution.Concept_Declaration,
+                       Landin.Resolution.Program_Scope);
+               begin
+                  Landin.Resolution.Record_Scope
+                    (Meanings.all, Of_Tree, Node, Formal_Scope);
+
+                  for Which in 1 .. Syn.Concept_Formal_Count
+                    (Of_Tree, Node)
+                  loop
+                     Declare_One
+                       (Of_Tree,
+                        Syn.Nth_Concept_Formal (Of_Tree, Node, Which),
+                        Formal_Scope, Resolve_Declared => False);
+                  end loop;
+
+                  for Which in 1 .. Syn.Concept_Formal_Count
+                    (Of_Tree, Node)
+                  loop
+                     declare
+                        Formal : constant Syn.Node_Id :=
+                          Syn.Nth_Concept_Formal (Of_Tree, Node, Which);
+                     begin
+                        if Syn.Kind (Of_Tree, Formal) = Syn.Fixed_Formal then
+                           Resolve
+                             (Of_Tree, Syn.Declared_Type (Of_Tree, Formal),
+                              Formal_Scope);
+                        else
+                           Resolve
+                             (Of_Tree, Syn.Constraint_Of (Of_Tree, Formal),
+                              Formal_Scope);
+                        end if;
+                     end;
+                  end loop;
+
+                  for Which in 1 .. Syn.Concept_Parent_Count
+                    (Of_Tree, Node)
+                  loop
+                     Resolve
+                       (Of_Tree,
+                        Syn.Nth_Concept_Parent (Of_Tree, Node, Which),
+                        Formal_Scope);
+                  end loop;
+                  for Which in 1 .. Syn.Concept_Entry_Count
+                    (Of_Tree, Node)
+                  loop
+                     Resolve
+                       (Of_Tree,
+                        Syn.Nth_Concept_Entry (Of_Tree, Node, Which),
+                        Formal_Scope);
+                  end loop;
+               end;
+
+            when Syn.Conformance_Declaration =>
+               declare
+                  Formal_Scope : constant Landin.Resolution.Scope_Id :=
+                    Landin.Resolution.Open_Scope
+                      (Meanings.all, Landin.Resolution.Conformance_Declaration,
+                       Landin.Resolution.Program_Scope);
+                  Concept_Node : constant Syn.Node_Id :=
+                    Syn.Conforming_Concept (Of_Tree, Node);
+               begin
+                  Landin.Resolution.Record_Scope
+                    (Meanings.all, Of_Tree, Node, Formal_Scope);
+
+                  for Which in 1 .. Syn.Conformance_Binder_Count
+                    (Of_Tree, Node)
+                  loop
+                     Declare_One
+                       (Of_Tree,
+                        Syn.Nth_Conformance_Binder (Of_Tree, Node, Which),
+                        Formal_Scope, Resolve_Declared => False);
+                  end loop;
+                  for Which in 1 .. Syn.Conformance_Binder_Count
+                    (Of_Tree, Node)
+                  loop
+                     declare
+                        Formal : constant Syn.Node_Id :=
+                          Syn.Nth_Conformance_Binder
+                            (Of_Tree, Node, Which);
+                     begin
+                        if Syn.Kind (Of_Tree, Formal) = Syn.Fixed_Formal then
+                           Resolve
+                             (Of_Tree, Syn.Declared_Type (Of_Tree, Formal),
+                              Formal_Scope);
+                        else
+                           Resolve
+                             (Of_Tree, Syn.Constraint_Of (Of_Tree, Formal),
+                              Formal_Scope);
+                        end if;
+                     end;
+                  end loop;
+
+                  Resolve
+                    (Of_Tree, Syn.Conforming_Type (Of_Tree, Node),
+                     Formal_Scope);
+                  Resolve (Of_Tree, Concept_Node, Formal_Scope);
+
+                  --  The concept decides whether a labelled RHS is a type
+                  --  input or a supplying function.  Resolve only that view,
+                  --  as labelled applications do, so a scalar type input is
+                  --  not misreported as an unresolved runtime value.
+                  declare
+                     Concept_Decl : constant
+                       Landin.Resolution.Declaration_Id :=
+                       (if Res.Verdict_Of
+                          (Meanings.all, Of_Tree, Concept_Node) = Res.Bound
+                        then Res.Bound_To
+                          (Meanings.all, Of_Tree, Concept_Node)
+                        else Res.No_Declaration);
+                  begin
+                     for Which in 1 .. Syn.Conformance_Entry_Count
+                       (Of_Tree, Node)
+                     loop
+                        declare
+                           Item : constant Syn.Node_Id :=
+                             Syn.Nth_Conformance_Entry
+                               (Of_Tree, Node, Which);
+                           RHS : constant Syn.Node_Id :=
+                             Syn.Conformance_RHS (Of_Tree, Item);
+                           Is_Type_Input : Boolean := False;
+                        begin
+                           if Concept_Decl /= Res.No_Declaration
+                             and then Res.Sort_Of
+                               (Meanings.all, Concept_Decl)
+                                 = Res.Module_Concept
+                           then
+                              declare
+                                 Concept_Tree : constant
+                                   not null access constant Syn.Tree :=
+                                     Trees.Tree_Of
+                                       (Res.Source_Of
+                                          (Meanings.all, Concept_Decl));
+                                 Concept : constant Syn.Node_Id :=
+                                   Res.Node_Of (Meanings.all, Concept_Decl);
+                              begin
+                                 for Input in 2 .. Syn.Concept_Formal_Count
+                                   (Concept_Tree.all, Concept)
+                                 loop
+                                    if Syn.Name (Of_Tree, Item)
+                                      = Syn.Name
+                                        (Concept_Tree.all,
+                                         Syn.Nth_Concept_Formal
+                                           (Concept_Tree.all, Concept, Input))
+                                    then
+                                       Is_Type_Input := True;
+                                       exit;
+                                    end if;
+                                 end loop;
+                              end;
+                           end if;
+
+                           if Is_Type_Input then
+                              Resolve_Type_View (Of_Tree, RHS, Formal_Scope);
+                           else
+                              Resolve (Of_Tree, RHS, Formal_Scope);
+                           end if;
+                        end;
+                     end loop;
+                  end;
+               end;
+
             when Syn.Type_Declaration =>
                --  D135: formals belong to this declaration, not to
                --  the module.  Collect every one before resolving
@@ -837,6 +1013,10 @@ package body Landin.Stages.Resolution is
                                 (Of_Tree,
                                  Syn.Declared_Type
                                    (Of_Tree, Formal),
+                                 Formal_Scope);
+                           else
+                              Resolve
+                                (Of_Tree, Syn.Constraint_Of (Of_Tree, Formal),
                                  Formal_Scope);
                            end if;
                         end;
@@ -922,6 +1102,10 @@ package body Landin.Stages.Resolution is
                         if Syn.Kind (Of_Tree, Formal) = Syn.Fixed_Formal then
                            Resolve
                              (Of_Tree, Syn.Declared_Type (Of_Tree, Formal),
+                              Signature);
+                        else
+                           Resolve
+                             (Of_Tree, Syn.Constraint_Of (Of_Tree, Formal),
                               Signature);
                         end if;
                      end;

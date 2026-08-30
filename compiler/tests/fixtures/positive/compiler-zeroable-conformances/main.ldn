@@ -1,0 +1,15 @@
+plain: type = struct
+    value: i32
+end plain
+
+cell: type (t: type is zeroable) = struct
+    value: t
+end cell
+
+scalar_cell: type = cell(i32)
+array_cell: type = cell([2]i32)
+struct_cell: type = cell(plain)
+
+public main: () -> (code: i32) =
+    code = 42
+end main

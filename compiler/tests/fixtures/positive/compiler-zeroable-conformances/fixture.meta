@@ -1,0 +1,4 @@
+class: positive
+summary: the compiler supplies the closed scalar array and aggregate zeroable families
+program: main.ldn
+constructs: 0550, 1290, 1350

@@ -1,0 +1,5 @@
+class: negative
+summary: a supplied function has the concept entry's concrete signature
+program: main.ldn
+codes: L0301
+constructs: 1230, 1240, 1260

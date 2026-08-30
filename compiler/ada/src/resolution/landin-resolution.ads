@@ -81,14 +81,17 @@ package Landin.Resolution is
    No_Declaration : constant Declaration_Id :=
      Landin.Provenance.No_Declaration;
 
-   --  [1840]'s program, signature and block scopes, plus D135's type
-   --  declaration scope.  The module is one scope for the whole compilation,
+   --  [1840]'s program, signature and block scopes, plus compile-time
+   --  declaration scopes for parameterized types, concepts and conformances.
+   --  The module is one scope for the whole compilation,
    --  because a file is a set of declarations and there are no modules until
    --  [1410]'s directories arrive; the signature holds parameters and named
    --  returns; a type declaration holds its formals; and a block is a
    --  statement run, which is a function's body, an arm of an `if`, or an
    --  `else`.
-   type Scope_Sort is (Program, Signature, Type_Declaration, Block);
+   type Scope_Sort is
+     (Program, Signature, Type_Declaration, Concept_Declaration,
+      Conformance_Declaration, Block);
 
    --  Visible and an ordinary integer, the same bargain Node_Id and
    --  Declaration_Id already struck: a caller can invent one, which is
@@ -106,7 +109,8 @@ package Landin.Resolution is
    --  used by [1740] and by [1810], and which of the two it is, is which
    --  scope it is in.
    type Declaration_Sort is
-     (Module_Function, Module_Atom, Module_Type, Module_Binding, Case_Name,
+     (Module_Function, Module_Atom, Module_Type, Module_Concept,
+      Module_Binding, Case_Name,
       Type_Parameter, Fixed_Parameter, Parameter, Named_Return,
       Local_Binding, Pattern_Binding, Result_Binding, Error_Binding);
 
@@ -117,6 +121,7 @@ package Landin.Resolution is
      is (Of_Kind in Landin.Syntax.Function_Declaration
                     | Landin.Syntax.Atom_Declaration
                     | Landin.Syntax.Type_Declaration
+                    | Landin.Syntax.Concept_Declaration
                     | Landin.Syntax.Type_Formal
                     | Landin.Syntax.Fixed_Formal
                     | Landin.Syntax.Binding
@@ -393,6 +398,7 @@ package Landin.Resolution is
                   and then Landin.Syntax.Kind (Of_Tree, Node)
                            in Landin.Syntax.Name_Reference
                               | Landin.Syntax.Type_Reference
+                              | Landin.Syntax.Concept_Reference
                   and then Contains (Into, To)
                   and then Verdict_Of (Into, Of_Tree, Node) = Unresolved,
           Post => Verdict_Of (Into, Of_Tree, Node) = Bound

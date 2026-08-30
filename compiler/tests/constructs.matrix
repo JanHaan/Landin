@@ -11,7 +11,7 @@
 #
 #  A construct with no evidence and no refusal is this
 #  item's to answer for; see ROADMAP.md R1.90.
-#  199 constructs, 127 with evidence, 72 with neither.
+#  199 constructs, 135 with evidence, 64 with neither.
 #
 #  id    defined in  evidence
 0010   tour        accepted emitted                   Line comment, to end of line
@@ -68,7 +68,7 @@
 0520   tour        accepted emitted executed refused  Array: a value
 0530   tour        accepted emitted executed refused  The length may be inferred from the literal
 0540   tour        accepted emitted executed refused  zeroed is the all-bits-zero image of a type
-0550   tour        -                                  The first of those two properties is also a concept
+0550   tour        accepted emitted refused           The first of those two properties is also a concept
 0560   tour        accepted emitted executed refused refused-by-name Repetition, for static patterns that live in flash
 0570   tour        accepted emitted executed refused refused-by-name Slice: a view
 0580   tour        accepted emitted executed refused  An empty slice still has a base
@@ -136,18 +136,18 @@
 1200   tour        -                                  Because entries are registered where control reaches
 1210   tour        accepted emitted executed refused  Pattern matching
 1220   tour        accepted emitted executed refused  A pattern binding carries a parameter convention
-1230   tour        -                                  A concept names a bundle of requirements on a type
-1240   tour        -                                  A conformance registers one type against one concept
-1250   tour        -                                  A conformance for a parameterised type binds its variables
-1260   tour        -                                  A concept entry's error set has to be concrete
-1270   tour        -                                  The register is keyed by (type
-1280   tour        -                                  Conformances may be declared anywhere
+1230   tour        accepted emitted refused           A concept names a bundle of requirements on a type
+1240   tour        accepted emitted refused           A conformance registers one type against one concept
+1250   tour        accepted emitted refused           A conformance for a parameterised type binds its variables
+1260   tour        accepted emitted refused           A concept entry's error set has to be concrete
+1270   tour        refused                            The register is keyed by (type
+1280   tour        accepted emitted refused           Conformances may be declared anywhere
 1290   tour        accepted emitted executed refused refused-by-name A generic function takes the type as an ordinary parameter
 1300   tour        accepted emitted executed          At the call site the type is inferred from the arguments
 1310   tour        -                                  Generic code can always be compiled once and handed a table
 1320   tour        -                                  Traversal is a concept
 1330   tour        -                                  A range is not a concept
-1340   tour        -                                  Concepts compose
+1340   tour        accepted emitted refused           Concepts compose
 1350   tour        accepted emitted executed refused refused-by-name Types take parameters through a declaration form of their
 1360   tour        -                                  Allocation is an ordinary concept
 1370   tour        -                                  'any C' is a value of some type satisfying concept C

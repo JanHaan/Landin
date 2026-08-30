@@ -1,0 +1,5 @@
+left: type = concept (t: type) is right
+end left
+
+right: type = concept (t: type) is left
+end right

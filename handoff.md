@@ -190,9 +190,11 @@ elements and lexical `defer`/failure-only `undo` cleanup are complete. R2.40's
 fixed parameters, compile-time substitution, generic routine instances and
 fixed conditional declarations are complete. R2.50's pointers, slices,
 conventions, local origins and borrows, `escaping`, `from`, consume checking
-and target reference carriers are complete.
+and target reference carriers are complete. R2.60's concepts, constraints,
+whole-program conformance register and closed compiler `zeroable` family are
+complete.
 
-**Current roadmap work: R2.60 — Implement concepts and conformance collection.**
+**Current roadmap work: R2.70 — Implement the generic evidence schema.**
 
 `refine` runs the frontend, lowers and
 verifies target-neutral IR, emits Linux x86-64 assembly, and can assemble and

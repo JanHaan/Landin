@@ -11,6 +11,7 @@ with Landin.Source.Names;
 with Landin.Source.Sets;
 with Landin.Source;
 with Landin.Syntax.Parser;
+with Landin.Syntax.Dump;
 with Landin.Syntax;
 with Landin.Testing.Fixtures;
 with Landin.Tokens.Lexer;
@@ -1747,6 +1748,151 @@ package body Landin.Tests.Parser_Suite is
       end;
    end Reference_Signature_Syntax_Is_Represented;
 
+   --  R2.60 begins at syntax only.  This holds the complete contextual
+   --  source shape -- including names that remain ordinary outside it --
+   --  without asking resolution or checking to validate a conformance.
+   procedure Concepts_And_Conformances_Are_Represented
+     (Item : in out Landin.Testing.Context);
+
+   procedure Concepts_And_Conformances_Are_Represented
+     (Item : in out Landin.Testing.Context)
+   is
+      Sources : Landin.Source.Sets.Source_Set;
+      Names   : Landin.Source.Names.Table;
+      Stream  : Landin.Tokens.Token_Stream;
+      Found   : Landin.Diagnostics.Diagnostic_List;
+      Id      : constant Landin.Source.Source_Id :=
+        Sources.Add
+          ("concepts.ldn",
+           "ordered: type = concept (t: type)" & ASCII.LF
+           & "  less: (left: t, right: t) -> (yes: bool)" & ASCII.LF
+           & "  equal: (left: t, right: t) -> (yes: bool)" & ASCII.LF
+           & "end ordered" & ASCII.LF
+           & "sortable: type = concept (t: type is ordered) is ordered"
+           & ASCII.LF
+           & "  sort: (data: []mut t) -> none" & ASCII.LF
+           & "end sortable" & ASCII.LF
+           & "(t: type is ordered, fixed n: u32) list(t) is iterable"
+           & " (cur: usize, item: t, first: list_first(t), next: list_next)"
+           & ASCII.LF
+           & "i32 is ordered (less: less_i32, equal: equal_i32)" & ASCII.LF);
+   begin
+      Landin.Tokens.Lexer.Lex (Sources.Get (Id), Names, Stream);
+      Landin.Diagnostics.Lexical.Report (Stream, Found);
+
+      declare
+         Parsed : constant Landin.Syntax.Tree :=
+           Landin.Syntax.Parser.Parse (Stream, Names, Found);
+         Ordered : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Nth_Declaration (Parsed, 1);
+         Sortable : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Nth_Declaration (Parsed, 2);
+         Parameterized : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Nth_Declaration (Parsed, 3);
+         Direct : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Nth_Declaration (Parsed, 4);
+         Formal : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Nth_Concept_Formal (Parsed, Sortable, 1);
+         Requirement_Node : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Nth_Concept_Entry (Parsed, Ordered, 1);
+         Bound : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Nth_Conformance_Binder
+             (Parsed, Parameterized, 1);
+         First : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Nth_Conformance_Entry
+             (Parsed, Parameterized, 1);
+         Printed : constant String := Landin.Syntax.Dump.Text (Parsed, Names);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Landin.Diagnostics.Count (Found), 0,
+            "concepts and conformances are syntax-only clean input");
+         Landin.Testing.Check
+           (Item,
+            Landin.Syntax.Kind (Parsed, Ordered)
+              = Landin.Syntax.Concept_Declaration
+            and then Landin.Syntax.Concept_Formal_Count (Parsed, Ordered) = 1
+            and then Landin.Syntax.Concept_Parent_Count (Parsed, Ordered) = 0
+            and then Landin.Syntax.Concept_Entry_Count (Parsed, Ordered) = 2,
+            "a concept retains ordered formals, parents and requirements");
+         Landin.Testing.Check
+           (Item,
+            Landin.Syntax.Kind (Parsed, Formal) = Landin.Syntax.Type_Formal
+            and then Landin.Syntax.Kind
+              (Parsed, Landin.Syntax.Constraint_Of (Parsed, Formal))
+                = Landin.Syntax.Concept_Reference
+            and then Landin.Syntax.Kind
+              (Parsed, Landin.Syntax.Nth_Concept_Parent
+                 (Parsed, Sortable, 1)) = Landin.Syntax.Concept_Reference,
+            "direct type constraints and composition retain concept names");
+         Landin.Testing.Check
+           (Item,
+            Landin.Syntax.Kind (Parsed, Requirement_Node)
+              = Landin.Syntax.Concept_Entry
+            and then Landin.Syntax.Parameter_Count
+              (Parsed, Requirement_Node) = 2
+            and then Landin.Syntax.Return_Count
+              (Parsed, Requirement_Node) = 1,
+            "a requirement has a complete signature but no function body");
+         Landin.Testing.Check
+           (Item,
+            Landin.Syntax.Kind (Parsed, Parameterized)
+              = Landin.Syntax.Conformance_Declaration
+            and then Landin.Syntax.Conformance_Binder_Count
+              (Parsed, Parameterized) = 2
+            and then Landin.Syntax.Kind
+              (Parsed,
+               Landin.Syntax.Conforming_Type (Parsed, Parameterized))
+                = Landin.Syntax.Type_Application
+            and then Landin.Syntax.Kind
+              (Parsed,
+               Landin.Syntax.Conforming_Concept (Parsed, Parameterized))
+                = Landin.Syntax.Concept_Reference
+            and then Landin.Syntax.Kind (Parsed, Bound)
+              = Landin.Syntax.Type_Formal
+            and then Landin.Syntax.Conformance_Entry_Count
+              (Parsed, Parameterized) = 4
+            and then Landin.Syntax.Kind
+              (Parsed, Landin.Syntax.Conformance_RHS (Parsed, First))
+                = Landin.Syntax.Name_Reference,
+            "a parameterized conformance preserves its binder and RHS run");
+         Landin.Testing.Check
+           (Item,
+            Landin.Syntax.Kind (Parsed, Direct)
+              = Landin.Syntax.Conformance_Declaration
+            and then Landin.Syntax.Conformance_Binder_Count (Parsed, Direct)
+              = 0
+            and then Landin.Syntax.Conformance_Entry_Count (Parsed, Direct)
+              = 2
+            and then Contains (Printed, "CONCEPT_DECLARATION")
+            and then Contains (Printed, "CONFORMANCE_ENTRY"),
+            "the generic syntax dump includes the new node kinds and slots");
+      end;
+
+      declare
+         Codes : Unbounded.Unbounded_String;
+         Total : Natural;
+         Nodes : Natural;
+         Held  : Boolean;
+      begin
+         Read_And_Parse
+           ("bad: type = concept (T: type)" & ASCII.LF
+            & "  less: (left: T) -> none" & ASCII.LF
+            & "next: type = u8" & ASCII.LF,
+            Codes, Total, Nodes, Held);
+         Landin.Testing.Check
+           (Item, Held and then Nodes > 0,
+            "an unclosed concept keeps a postorder sound tree");
+
+         Read_And_Parse
+           ("concept: u8 = 1" & ASCII.LF
+            & "is: u8 = concept" & ASCII.LF,
+            Codes, Total, Nodes, Held);
+         Landin.Testing.Check
+           (Item, Held and then Nodes > 0 and then Total = 0,
+            "concept and is remain ordinary identifiers outside context");
+      end;
+   end Concepts_And_Conformances_Are_Represented;
+
    procedure Parameterized_Alias_Errors_Keep_Grammar_Boundaries
      (Item : in out Landin.Testing.Context)
    is
@@ -1856,6 +2002,9 @@ package body Landin.Tests.Parser_Suite is
       Landin.Testing.Register
         (Into, "parser", "parses parameterized struct type declarations",
          Parameterized_Structs_Are_Parsed'Access);
+      Landin.Testing.Register
+        (Into, "parser", "represents concepts and conformances",
+         Concepts_And_Conformances_Are_Represented'Access);
       Landin.Testing.Register
         (Into, "parser", "parameterized aliases keep grammar boundaries",
          Parameterized_Alias_Errors_Keep_Grammar_Boundaries'Access);

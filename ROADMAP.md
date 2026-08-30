@@ -2267,8 +2267,9 @@ It accepts unconstrained type formals and fixed integer formals, substitutes a
 fixed value into an array length, and refuses partial application, a wrong
 actual kind, a non-fixed bound and recursive expansion. Symbolic declaration
 validation rejects invalid free names, decidable formal or result kind errors,
-and unconditional expansion cycles even when a template is unused. Constraints
-remain R2.60's work.
+and unconditional expansion cycles even when a template is unused. That
+increment admitted only unconstrained formals; R2.60's D142 now adds direct
+concept constraints without changing D135's substitution.
 
 D136's next increment now gives fixed-array bounds one closed fixed-expression
 fold. Direct bounds such as `[64 * 1024]u8` and alias-template bounds such as
@@ -2520,22 +2521,57 @@ cases and 8,181 checks, including every runtime fixture.
 
 ### R2.60 — Implement concepts and conformance collection
 
-Status: active
+Status: complete
 Depends on: R2.20, R2.40
 
-Implement concepts, parameterized conformances, whole-program collision
-checking and a closed named set of compiler-supplied conformances. Reconcile
-compiler-supplied `zeroable` with ordinary declared conformances without
-opening reflection.
+Concept declarations now retain their collected type formals, complete
+signature-only entries and finite named composition graph. Type formals in
+parameterized types, declared routines, concepts and conformance binders may
+carry one direct constraint. Conformance declarations retain an optional
+static binder, normalized target, direct concept identity, labelled concept
+inputs and supplying functions. Concrete functions are checked against the
+substituted entry signature; composed conformances require every parent
+explicitly.
 
-Sources: legacy A6; `[0550]`, `[1280]`.
+The checker owns a whole-program register keyed by normalized represented type,
+concept identity and ordered input-type tuple. It collects concrete keys before
+body checking, reports cross-file collisions without precedence, override or
+an orphan rule, and interns a selected parameterized key when a constrained
+application supplies its tuple. D142 makes that parameterized source form one
+complete positional nominal family: this admits the container conformances
+that forced [1250] while keeping unrequested collision collection finite and
+introducing no specialization search. A second family or concrete exception in
+that target-template/concept space is a collision. Supplying generic functions
+and their selected binder tuple are retained for R2.70's evidence schema; no
+table or dispatch operation is emitted here.
 
-Exit evidence: lookup and collision tests pass; users cannot synthesize or
-override compiler-supplied entries; the supplied set is closed and documented.
+D143 makes `zeroable` the sole closed compiler concept identity. Programs need
+no declaration for it and cannot declare either that identity or one of its
+conformances. Its supplied family is the enabled scalars, fixed arrays exactly
+when their element is zeroable (including length zero), and recursively
+zero-imaged nominal aggregates; atoms, functions, pointers and slices are
+excluded. The same recursive predicate checks contextual aggregate `zeroed`,
+so ordinary image checking and generic lookup cannot drift, and no reflection
+surface or synthetic source declaration is opened.
+
+Sources: legacy A6; `[0550]`, `[1230]`--`[1290]`, `[1340]`; D142, D143.
+
+Exit evidence: parser and resolution cases retain contextual words, collected
+scopes and neutral labelled RHS forms; the checker register case pins closed
+concept identity and normalized lookup. `positive/concepts-and-conformances`,
+`positive/parameterized-conformance-lookup` and
+`positive/compiler-zeroable-conformances` pass through emission. Ordinary and
+unrequested parameterized collisions, a cyclic composition graph, missing
+direct and composed constraints,
+entry-signature disagreement, non-zeroable pointer and zero-length aggregate
+elements, and attempted compiler conformance are pinned by their corresponding
+negative fixtures. The complete pinned Linux x86-64 debug and release loops
+pass 376 cases and 8,569 checks with the generated grammar, diagnostic, lexical
+and IR records current.
 
 ### R2.70 — Implement the generic evidence schema
 
-Status: planned
+Status: active
 Depends on: R2.10, R2.30, R2.60, R1.80
 
 Define target-neutral entry ordering and semantics for concept functions, size
@@ -3216,7 +3252,7 @@ and record the reopening explicitly.
 | C5 — SoA collections | Deferred design record. Trigger: a simulation prototype needing one field contiguous. Source: `[0620]`. | Parked; transfer to Language evolution if untriggered. |
 | C6 — `unchecked` | Already normative but not first; optimizer assumptions wait for a measurable compiler. Sources: `[1120]`, `[1720]`, `H§5`. | Implement Linux semantics in R4.10; prove applicable target parity in R5 and R6. |
 | D1 — Integer indexing of UTF-8 | Keep linear codepoint-ordinal indexing for ergonomics despite three independent objections. Source: `[0610]`. | Implement in R4.10; reopen only with new program/measurement evidence. |
-| D2 — No weak conformances or orphan rule yet | Weak conformances let applications silently change generic library behavior. Collisions remain errors; use `distinct` or explicit functions. Ecosystem-scale composition remains the trigger. Sources: `[1280]`, `R§11`. | Implement in R2.60; reopen only on concrete ecosystem evidence. |
+| D2 — No weak conformances or orphan rule yet | Weak conformances let applications silently change generic library behavior. Collisions remain errors; use `distinct` or explicit functions. Ecosystem-scale composition remains the trigger. Sources: `[1280]`, `R§11`. | Implemented in R2.60; reopen only on concrete ecosystem evidence. |
 | D3 — No comptime or macros | Generated tables, SoA and SVD bindings move to programs, making build/generator design load-bearing. Two cases exist; a third is the review trigger. Source: `[1540]`. | Held throughout; generator work follows B4 or Companion tool and ecosystem. |
 | D4 — Write `escaping` and `from` | Preserve local compilation and the allocator counterexample to inferred `from`. Sources: `[0790]`, `[0900]`. | Implement in R2.50; reopen only with evidence preserving both properties. |
 | D5 — Own backend | Assembly out, with QBE as design influence; not LLVM due dependency size and not C due calling convention, traps and debug precision. The historical handoff proposed C/LLVM and was declined. Sources: archived `HANDOFF.md` (declined C/LLVM first-host proposal); current `handoff.md` and `[1550]` (settled native-backend position). | Implement across R1.80, R5.30 and R6.50. |
