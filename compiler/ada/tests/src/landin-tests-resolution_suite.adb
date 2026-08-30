@@ -20,6 +20,8 @@ with Landin.Targets;
 
 package body Landin.Tests.Resolution_Suite is
 
+   use type Landin.Resolution.Application_Class;
+   use type Landin.Resolution.Argument_Role;
    use type Landin.Resolution.Scope_Id;
    use type Landin.Resolution.Scope_Sort;
    use type Landin.Resolution.Declaration_Sort;
@@ -27,6 +29,7 @@ package body Landin.Tests.Resolution_Suite is
    use type Landin.Resolution.Declaration_Id;
    use type Landin.Source.Source_Id;
    use type Landin.Syntax.Node_Id;
+   use type Landin.Syntax.Node_Kind;
 
    Frontend : aliased Landin.Stages.Syntax.Instance;
    Names    : aliased Landin.Stages.Resolution.Instance;
@@ -515,6 +518,134 @@ package body Landin.Tests.Resolution_Suite is
       end;
    end Parameterized_Struct_Formals_Have_One_Collected_Scope;
 
+   procedure Labeled_Applications_Are_Classified_Callee_First
+     (Item : in out Landin.Testing.Context);
+
+   procedure Labeled_Applications_Are_Classified_Callee_First
+     (Item : in out Landin.Testing.Context)
+   is
+      Work  : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Ran   : Natural;
+      Id    : Landin.Source.Source_Id;
+      Calls : Natural := 0;
+      Types : Natural := 0;
+      Cases : Natural := 0;
+   begin
+      Id := Landin.Stages.Add_Source
+        (Work, "label-resolution.ldn",
+         "apply: (t: type, fixed count: usize, first: t, value: t)"
+         & " -> none =" & LF
+         & "end apply" & LF
+         & "box: type = struct" & LF
+         & "    value: i32" & LF
+         & "    kind: variant" & LF
+         & "        leaf: (value: i32)" & LF
+         & "    end kind" & LF
+         & "end box" & LF
+         & "run: (source: i32) -> none =" & LF
+         & "    apply(1, t: i32, count: 4, value: source)" & LF
+         & "    _ = box(value: source)" & LF
+         & "    _ = leaf(value: source)" & LF
+         & "end run" & LF);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Configurer'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+
+      Landin.Testing.Check_Equal (Item, Ran, 3, "the resolver ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "neutral applications resolve without checking either spare view");
+
+      declare
+         Meanings : constant not null access Landin.Resolution.Table :=
+           Landin.Stages.Meanings (Work);
+         Of_Tree : constant not null access constant Landin.Syntax.Tree :=
+           Landin.Syntax.Forest.Tree_Of
+             (Landin.Stages.Trees (Work).all, Id);
+      begin
+         for Node in Landin.Syntax.Node_Id'(1)
+                     .. Landin.Syntax.Last_Node (Of_Tree.all)
+         loop
+            if Landin.Syntax.Kind (Of_Tree.all, Node)
+                 = Landin.Syntax.Labeled_Application
+            then
+               case Landin.Resolution.Class_Of
+                 (Meanings.all, Of_Tree.all, Node)
+               is
+                  when Landin.Resolution.Function_Call =>
+                     Calls := Calls + 1;
+                     Landin.Testing.Check
+                       (Item,
+                        Landin.Resolution.Role_Of
+                          (Meanings.all, Of_Tree.all,
+                           Landin.Syntax.Nth_Argument
+                             (Of_Tree.all, Node, 1)) =
+                               Landin.Resolution.Runtime_Argument
+                        and then Landin.Resolution.Position_Of
+                          (Meanings.all, Of_Tree.all,
+                           Landin.Syntax.Nth_Argument
+                             (Of_Tree.all, Node, 1)) = 1,
+                        "a leading positional maps to runtime position one");
+                     Landin.Testing.Check
+                       (Item,
+                        Landin.Resolution.Role_Of
+                          (Meanings.all, Of_Tree.all,
+                           Landin.Syntax.Nth_Argument
+                             (Of_Tree.all, Node, 2)) =
+                               Landin.Resolution.Type_Argument
+                        and then Landin.Resolution.Formal_Of
+                          (Meanings.all, Of_Tree.all,
+                           Landin.Syntax.Nth_Argument
+                             (Of_Tree.all, Node, 2)) /=
+                               Landin.Resolution.No_Declaration,
+                        "a type label maps to its collected signature formal");
+                     Landin.Testing.Check
+                       (Item,
+                        Landin.Resolution.Role_Of
+                          (Meanings.all, Of_Tree.all,
+                           Landin.Syntax.Nth_Argument
+                             (Of_Tree.all, Node, 3)) =
+                               Landin.Resolution.Fixed_Argument
+                        and then Landin.Resolution.Position_Of
+                          (Meanings.all, Of_Tree.all,
+                           Landin.Syntax.Nth_Argument
+                             (Of_Tree.all, Node, 4)) = 2,
+                        "fixed and runtime labels retain distinct roles");
+                  when Landin.Resolution.Type_Construction =>
+                     Types := Types + 1;
+                     Landin.Testing.Check
+                       (Item,
+                        Landin.Resolution.Role_Of
+                          (Meanings.all, Of_Tree.all,
+                           Landin.Syntax.Nth_Argument
+                             (Of_Tree.all, Node, 1)) =
+                               Landin.Resolution.Field_Argument,
+                        "a type callee selects the field expression view");
+                  when Landin.Resolution.Case_Construction =>
+                     Cases := Cases + 1;
+                     Landin.Testing.Check
+                       (Item,
+                        Landin.Resolution.Role_Of
+                          (Meanings.all, Of_Tree.all,
+                           Landin.Syntax.Nth_Argument
+                             (Of_Tree.all, Node, 1)) =
+                               Landin.Resolution.Payload_Argument,
+                        "a case callee selects the payload expression view");
+                  when Landin.Resolution.Unclassified_Application =>
+                     null;
+               end case;
+            end if;
+         end loop;
+      end;
+
+      Landin.Testing.Check_Equal (Item, Calls, 1, "one function call");
+      Landin.Testing.Check_Equal (Item, Types, 1, "one type construction");
+      Landin.Testing.Check_Equal (Item, Cases, 1, "one case construction");
+   end Labeled_Applications_Are_Classified_Callee_First;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -526,6 +657,9 @@ package body Landin.Tests.Resolution_Suite is
       Landin.Testing.Register
         (Into, "resolution", "variant cases are module visible identities",
          Variant_Cases_Are_Module_Visible_Identities'Access);
+      Landin.Testing.Register
+        (Into, "resolution", "classifies labelled applications callee first",
+         Labeled_Applications_Are_Classified_Callee_First'Access);
       Landin.Testing.Register
         (Into, "resolution", "type formals have one collected scope",
          Type_Formals_Have_One_Collected_Scope'Access);
