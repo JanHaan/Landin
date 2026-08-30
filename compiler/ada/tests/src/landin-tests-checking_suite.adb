@@ -1474,6 +1474,38 @@ package body Landin.Tests.Checking_Suite is
                (Types.all, Right_Signature, 1).Nominal = Left_Id,
             "mutual signature references retain both finite identities");
       end;
+
+      declare
+         Abi_Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Abi_Order : Landin.Stages.Pipeline;
+         Abi_Ran : Natural;
+         Abi_Source : constant Landin.Source.Source_Id :=
+           Landin.Stages.Add_Source
+             (Abi_Work, "multiple-nominal-results.ldn",
+              "cell: type (item: type) = struct" & LF
+              & "    value: item" & LF
+              & "end cell" & LF
+              & "pair: () -> (one: cell(u8), many: [2]cell(u8)," & LF
+              & "            first: node, second: node) =" & LF
+              & "    one = (value: 1)" & LF
+              & "    many = zeroed" & LF
+              & "    first = zeroed" & LF
+              & "    second = zeroed" & LF
+              & "end pair" & LF
+              & "node: type = struct" & LF
+              & "    value: u8" & LF
+              & "end node" & LF);
+      begin
+         Landin.Stages.Append (Abi_Order, Frontend'Access);
+         Landin.Stages.Append (Abi_Order, Names'Access);
+         Landin.Stages.Append (Abi_Order, Checker'Access);
+         Abi_Ran := Landin.Stages.Run (Abi_Order, Abi_Work);
+         Landin.Testing.Check
+           (Item, Abi_Source /= Landin.Source.No_Source and then Abi_Ran = 3
+             and then not Landin.Stages.Failed (Abi_Work),
+            "multiple nominal results materialize their ABI layouts");
+      end;
    end Ordinary_Function_Signatures_Use_Identity_Only;
 
    procedure Parameterized_Aliases_Normalize_To_Existing_Descriptors
@@ -2137,6 +2169,14 @@ package body Landin.Tests.Checking_Suite is
          & "bad: wrapper([18446744073709551615]cell(u64))" & LF,
          "L0300",
          "a used array actual materializes its nominal element before D18");
+      Check_Failure
+        ("huge: type (fixed count: u64) = struct" & LF
+         & "    bytes: [count]u64" & LF
+         & "end huge" & LF
+         & "bad: () -> (result: huge(18446744073709551615)) =" & LF
+         & "end bad" & LF,
+         "L0300",
+         "one invalid nominal result application reports one layout failure");
    end Nominal_Layout_Requirements_Distinguish_Identity_And_Value;
 
    procedure Repeated_Invalid_Instances_Report_Each_Application

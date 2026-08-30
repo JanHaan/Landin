@@ -7582,9 +7582,14 @@ ordinary signature lookup may therefore take the canonical empty-actual nominal
 identity before that struct's layout is ready and follows ordinary alias chains
 without settling them by value. Mutually recursive ordinary structs connected
 only by such signature references each have a finite pointer-carrier layout,
-independent of declaration order. A zero-length nominal array at a field or
-payload still validates its element identity and is not an escape from the
-recursion rule.
+independent of declaration order. When a declared or anonymous routine's
+multiple named results form D128's caller-owned aggregate, its direct result
+parts materialize before their target placement is measured; that ABI use does
+not promote a nested callback signature into a by-value edge. A failed replay
+is cached at its application node, so one written application has one primary
+while a second written application still receives its own dependent report. A
+zero-length nominal array at a field or payload still validates its element
+identity and is not an escape from the recursion rule.
 
 **Why the complete tuple:** dropping an unused actual makes adding the first
 field that uses it silently change existing type identity. Structuralizing the
@@ -7600,8 +7605,9 @@ or leak compile-time binders into runtime representation. All were declined.
 `positive/parameterized-struct-lazy-value-layout`;
 `positive/ordinary-struct-function-signature-recursion`,
 `positive/ordinary-struct-function-signature-alias-first`,
-`positive/ordinary-struct-function-signature-alias-last`, and the two
-`positive/ordinary-struct-mutual-function-signatures-*` order fixtures; the
+`positive/ordinary-struct-function-signature-alias-last`, the two
+`positive/ordinary-struct-mutual-function-signatures-*` order fixtures, and
+`positive/multiple-named-generic-nominal-results`; the
 `negative/parameterized-struct-*` (including the unused indirect, mutual and
 multi-wrapper recursion cases) and `negative/nominal-struct-recursive-layout`
 fixtures; the generated IR and

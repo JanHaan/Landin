@@ -2585,7 +2585,12 @@ package body Landin.Stages.Checking is
                   --  Identity-only normalization already recorded this
                   --  source type.  The replay above exists solely to fulfill
                   --  the later layout requirement, so it must not overwrite
-                  --  that immutable node answer or its descriptor.
+                  --  that immutable node answer or its descriptor.  A failed
+                  --  replay belongs to this application node: retain that
+                  --  outcome so a later ABI walk does not report it again.
+                  if Result.Kind = Ty.Ill_Typed then
+                     Landin.Checking.Refuse (Types.all, Of_Tree, Written);
+                  end if;
                   return Result.Kind;
                end if;
 
@@ -3415,6 +3420,27 @@ package body Landin.Stages.Checking is
                  Part_At (Returned, Syn.Origin (Of_Tree, Returned));
             end;
          end loop;
+
+         --  D128's multiple named returns form one ABI aggregate, whose
+         --  placement needs each value result's layout now.  A function type
+         --  nested in a callback remains identity-only: it is one code
+         --  carrier in its enclosing layout and has no routine ABI here.
+         if Valid and then Results'Length > 1
+           and then Syn.Kind (Of_Tree, Node)
+             in Syn.Function_Declaration | Syn.Anonymous_Function
+         then
+            for Index in Results'Range loop
+               declare
+                  Returned : constant Syn.Node_Id :=
+                    Syn.Nth_Return (Of_Tree, Node, Index);
+                  Held : constant Ty.Type_Kind := Type_At
+                    (Of_Tree, Syn.Declared_Type (Of_Tree, Returned),
+                     Requirement => Value_Layout);
+               begin
+                  Valid := Valid and then Held /= Ty.Ill_Typed;
+               end;
+            end loop;
+         end if;
 
          --  A written function type opens no scope, but two equal result
          --  labels would still make [0990]'s structural field lookup

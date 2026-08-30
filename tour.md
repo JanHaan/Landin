@@ -948,8 +948,11 @@ function signature or as another template's type actual needs that identity but
 does not place its value inline. The same is true for an ordinary struct that
 names itself, an alias of itself, or another ordinary struct in a function
 parameter or result: each function field remains one pointer carrier, so even a
-mutual signature-only cycle has finite layout. If the receiving template later uses that
-actual as a field, payload or nominal array element, its layout is materialized
+mutual signature-only cycle has finite layout. A declared or anonymous
+routine materializes its direct multiple-result parts when it forms their
+caller-owned result aggregate, not by traversing a nested callback signature.
+If the receiving template later uses that actual as a field, payload or nominal
+array element, its layout is materialized
 there, recursively through nested nominal and nominal-array actuals. A
 zero-length array still validates that element edge. Target widths, offsets and
 padding are layout facts, not identity.
