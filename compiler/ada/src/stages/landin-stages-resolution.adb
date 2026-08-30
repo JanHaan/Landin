@@ -729,6 +729,32 @@ package body Landin.Stages.Resolution is
          procedure Resolve_Selected
            (Of_Tree : Syn.Tree; Node : Syn.Node_Id) is
          begin
+            if Syn.Kind (Of_Tree, Node) = Syn.Fixed_Conditional then
+               for Arm in 1 .. Syn.Fixed_Arm_Count (Of_Tree, Node) loop
+                  declare
+                     This : constant Syn.Node_Id :=
+                       Syn.Nth_Fixed_Arm (Of_Tree, Node, Arm);
+                  begin
+                     for Which in 1 .. Syn.Fixed_Declaration_Count
+                       (Of_Tree, This)
+                     loop
+                        declare
+                           Child : constant Syn.Node_Id :=
+                             Syn.Nth_Fixed_Declaration
+                               (Of_Tree, This, Which);
+                        begin
+                           if Landin.Configuration.Is_Active
+                             (Activity.all, Syn.Source_Of (Of_Tree), Child)
+                           then
+                              Resolve_Selected (Of_Tree, Child);
+                           end if;
+                        end;
+                     end loop;
+                  end;
+               end loop;
+               return;
+            end if;
+
             case Syn.Kind (Of_Tree, Node) is
                when Syn.Type_Declaration =>
                   Resolve (Of_Tree, Syn.Declared_Type (Of_Tree, Node),
@@ -759,42 +785,7 @@ package body Landin.Stages.Resolution is
                   begin
                      if Syn.Kind (Of_Tree.all, Node) = Syn.Fixed_Conditional
                      then
-                        for Arm in 1 .. Syn.Fixed_Arm_Count (Of_Tree.all, Node)
-                        loop
-                           declare
-                              This : constant Syn.Node_Id :=
-                                Syn.Nth_Fixed_Arm (Of_Tree.all, Node, Arm);
-                           begin
-                              for Which in 1 .. Syn.Fixed_Declaration_Count
-                                (Of_Tree.all, This)
-                              loop
-                                 declare
-                                    Child : constant Syn.Node_Id :=
-                                      Syn.Nth_Fixed_Declaration
-                                        (Of_Tree.all, This, Which);
-                                 begin
-                                    if Landin.Configuration.Is_Active
-                                      (Activity.all,
-                                       Syn.Source_Of (Of_Tree.all), Child)
-                                    then
-                                       if Syn.Kind (Of_Tree.all, Child)
-                                            = Syn.Fixed_Conditional
-                                       then
-                                          --  The generic walker starts at a
-                                          --  program root; nested selection
-                                          --  is already represented by the
-                                          --  activity table and is handled
-                                          --  by this direct recursion later.
-                                          null;
-                                       else
-                                          Resolve_Selected
-                                            (Of_Tree.all, Child);
-                                       end if;
-                                    end if;
-                                 end;
-                              end loop;
-                           end;
-                        end loop;
+                        Resolve_Selected (Of_Tree.all, Node);
                      end if;
                   end;
                end loop;
