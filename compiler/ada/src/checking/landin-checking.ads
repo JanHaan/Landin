@@ -107,6 +107,53 @@ package Landin.Checking is
    function No_Nominal_Type return Nominal_Type_Id
      renames Nominal_Identities.None;
 
+   --  A generic routine instance is checker-owned identity, keyed by its
+   --  source template and complete normalized actual tuple.  It is distinct
+   --  from both the source declaration and nominal type identity.  Ordinary
+   --  routines remain declaration-backed and therefore use None here.
+   package Routine_Identities is
+      type Id is private;
+
+      function None return Id;
+      function Nth (Of_Table : Table; Position : Positive) return Id;
+      function Holds (Of_Table : Table; Of_Id : Id) return Boolean;
+      function Position (Of_Table : Table; Of_Id : Id) return Positive
+        with Pre => Holds (Of_Table, Of_Id);
+   private
+      type Id is range 0 .. Integer'Last;
+      function From_Position (Position : Positive) return Id;
+   end Routine_Identities;
+
+   subtype Routine_Instance_Id is Routine_Identities.Id;
+   use type Routine_Instance_Id;
+
+   function No_Routine_Instance return Routine_Instance_Id
+     renames Routine_Identities.None;
+
+   function Holds (Of_Table : Table; Id : Routine_Instance_Id)
+     return Boolean;
+
+   --  Selects the fact layer used by every node and declaration query/write.
+   --  Activating an instance never mutates the global module/nongeneric facts;
+   --  an unwritten instance fact falls back to that global layer.  Nested
+   --  checking and lowering must restore the returned previous view.
+   function Current_Routine_View (Of_Table : Table)
+     return Routine_Instance_Id;
+
+   procedure Activate_Routine_View
+     (Into     : in out Table;
+      Instance : Routine_Instance_Id;
+      Previous : out Routine_Instance_Id)
+     with Pre  => Holds (Into, Instance),
+          Post => Current_Routine_View (Into) = Instance;
+
+   procedure Restore_Routine_View
+     (Into     : in out Table;
+      Previous : Routine_Instance_Id)
+     with Pre  => Previous = No_Routine_Instance
+                  or else Holds (Into, Previous),
+          Post => Current_Routine_View (Into) = Previous;
+
    --  Where a declaration's type has got to.  Untouched and Settled are
    --  the two states a caller wants; Underway exists because of the module
    --  scope and nothing else, and it is public because the stage that
@@ -667,6 +714,98 @@ package Landin.Checking is
                   and then Position <= Instance_Actual_Count (Of_Table, Id),
           Post => Holds (Of_Table, Nth_Instance_Actual'Result);
 
+   function Intern_Routine_Instance
+     (Into     : in out Table;
+      Template : Declaration_Id;
+      Actuals  : Actual_Tuple) return Routine_Instance_Id
+     with Pre  => Is_Prepared (Into)
+                  and then Template /= No_Declaration
+                  and then Natural (Template) <= Declaration_Limit (Into)
+                  and then Holds (Into, Actuals),
+          Post => Holds (Into, Intern_Routine_Instance'Result);
+
+   function Routine_Instance_Count (Of_Table : Table) return Natural
+     with Pre => Is_Prepared (Of_Table);
+
+   function Routine_Template_Of
+     (Of_Table : Table; Id : Routine_Instance_Id) return Declaration_Id
+     with Pre => Holds (Of_Table, Id);
+
+   function Routine_Actual_Count
+     (Of_Table : Table; Id : Routine_Instance_Id) return Natural
+     with Pre => Holds (Of_Table, Id);
+
+   function Nth_Routine_Actual
+     (Of_Table : Table;
+      Id       : Routine_Instance_Id;
+      Position : Positive) return Actual_Key
+     with Pre  => Holds (Of_Table, Id)
+                  and then Position <= Routine_Actual_Count (Of_Table, Id),
+          Post => Holds (Of_Table, Nth_Routine_Actual'Result);
+
+   type Routine_Instance_State is
+     (Routine_Unseen, Routine_Building, Routine_Ready, Routine_Invalid);
+
+   function Routine_State_Of
+     (Of_Table : Table; Id : Routine_Instance_Id)
+      return Routine_Instance_State
+     with Pre => Holds (Of_Table, Id);
+
+   procedure Begin_Routine_Instance
+     (Into : in out Table; Id : Routine_Instance_Id)
+     with Pre  => Holds (Into, Id)
+                  and then Routine_State_Of (Into, Id) = Routine_Unseen,
+          Post => Routine_State_Of (Into, Id) = Routine_Building;
+
+   procedure Publish_Routine_Signature
+     (Into      : in out Table;
+      Id        : Routine_Instance_Id;
+      Signature : Signature_Id)
+     with Pre  => Holds (Into, Id)
+                  and then Routine_State_Of (Into, Id) = Routine_Building
+                  and then Holds (Into, Signature)
+                  and then Routine_Signature_Of (Into, Id) = No_Signature,
+          Post => Routine_Signature_Of (Into, Id) = Signature;
+
+   function Routine_Signature_Of
+     (Of_Table : Table; Id : Routine_Instance_Id) return Signature_Id
+     with Pre => Holds (Of_Table, Id);
+
+   procedure Finish_Routine_Instance
+     (Into : in out Table; Id : Routine_Instance_Id)
+     with Pre  => Holds (Into, Id)
+                  and then Routine_State_Of (Into, Id) = Routine_Building
+                  and then Routine_Signature_Of (Into, Id) /= No_Signature,
+          Post => Routine_State_Of (Into, Id) = Routine_Ready;
+
+   procedure Invalidate_Routine_Instance
+     (Into : in out Table; Id : Routine_Instance_Id)
+     with Pre  => Holds (Into, Id)
+                  and then Routine_State_Of (Into, Id) = Routine_Building,
+          Post => Routine_State_Of (Into, Id) = Routine_Invalid;
+
+   --  A direct generic call records its chosen target in its caller's fact
+   --  view.  A nongeneric caller writes the global layer; a generic caller
+   --  writes only that routine instance's overlay.
+   function Routine_Target_Of
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Call     : Landin.Syntax.Node_Id) return Routine_Instance_Id
+     with Pre => Is_Prepared (Of_Table)
+                 and then Covers (Of_Table, Of_Tree)
+                 and then Landin.Syntax.Contains (Of_Tree, Call);
+
+   procedure Note_Routine_Target
+     (Into    : in out Table;
+      Of_Tree : Landin.Syntax.Tree;
+      Call    : Landin.Syntax.Node_Id;
+      Target  : Routine_Instance_Id)
+     with Pre  => Is_Prepared (Into)
+                  and then Covers (Into, Of_Tree)
+                  and then Landin.Syntax.Contains (Of_Tree, Call)
+                  and then Holds (Into, Target),
+          Post => Routine_Target_Of (Into, Of_Tree, Call) = Target;
+
    --  Instance construction and target-dependent layout share one state
    --  slot.  Interning alone leaves a new instance Unseen.  Building is the
    --  recursion guard for a parameterized body; Ready retains the completed
@@ -1215,6 +1354,9 @@ private
       Element_Type => Declaration_Id,
       "="          => Landin.Provenance."=");
 
+   package Routine_Id_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Routine_Instance_Id);
+
    type Actual_Key is record
       Kind      : Actual_Kind := Type_Actual_Kind;
       Type_Form : Actual_Type_Form := Scalar_Actual_Type;
@@ -1233,6 +1375,16 @@ private
    type Actual_Tuple is record
       Members : Actual_Key_Vectors.Vector;
    end record;
+
+   type Routine_Instance_Record is record
+      Template  : Declaration_Id := No_Declaration;
+      Actuals   : Run;
+      State     : Routine_Instance_State := Routine_Unseen;
+      Signature : Signature_Id := No_Signature;
+   end record;
+
+   package Routine_Instance_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Routine_Instance_Record);
 
    package Atom_Set_Id_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Atom_Set_Id);
@@ -1311,6 +1463,54 @@ private
      (Index_Type   => Positive,
       Element_Type => Aggregate_Layout);
 
+   type Node_Overlay is record
+      Instance : Routine_Instance_Id := No_Routine_Instance;
+      Where    : Positive := 1;
+      Has_Type : Boolean := False;
+      Answer   : Landin.Types.Type_Kind := Landin.Types.Undecided;
+      Has_Nominal : Boolean := False;
+      Nominal  : Nominal_Type_Id := No_Nominal_Type;
+      Has_Atoms : Boolean := False;
+      Atoms    : Atom_Set_Id := No_Atom_Set;
+      Has_Signature : Boolean := False;
+      Signature : Signature_Id := No_Signature;
+      Has_Result_Shape : Boolean := False;
+      Result_Shape : Signature_Id := No_Signature;
+      Has_Field : Boolean := False;
+      Field     : Natural := 0;
+      Has_Array : Boolean := False;
+      Shape     : Array_Shape;
+      Has_Array_Nominal : Boolean := False;
+      Array_Nominal : Nominal_Type_Id := No_Nominal_Type;
+      Has_Routine_Target : Boolean := False;
+      Routine_Target : Routine_Instance_Id := No_Routine_Instance;
+   end record;
+
+   package Node_Overlay_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Node_Overlay);
+
+   type Declaration_Overlay is record
+      Instance : Routine_Instance_Id := No_Routine_Instance;
+      Declared : Declaration_Id := No_Declaration;
+      Has_Settlement : Boolean := False;
+      Settlement_Fact : Settlement;
+      Has_Nominal : Boolean := False;
+      Nominal  : Nominal_Type_Id := No_Nominal_Type;
+      Has_Atoms : Boolean := False;
+      Atoms    : Atom_Set_Id := No_Atom_Set;
+      Has_Signature : Boolean := False;
+      Signature : Signature_Id := No_Signature;
+      Has_Result_Shape : Boolean := False;
+      Result_Shape : Signature_Id := No_Signature;
+      Has_Array : Boolean := False;
+      Shape     : Array_Shape;
+      Has_Array_Nominal : Boolean := False;
+      Array_Nominal : Nominal_Type_Id := No_Nominal_Type;
+   end record;
+
+   package Declaration_Overlay_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Declaration_Overlay);
+
    type Table is tagged limited record
       Ready        : Boolean := False;
       Node_Types   : Type_Vectors.Vector;
@@ -1320,6 +1520,7 @@ private
       Node_Atom_Sets : Atom_Set_Id_Vectors.Vector;
       Node_Signatures : Signature_Id_Vectors.Vector;
       Node_Result_Shapes : Signature_Id_Vectors.Vector;
+      Node_Routine_Targets : Routine_Id_Vectors.Vector;
       --  Which field a selection node names, in the same run.
       Node_Fields  : Index_Vectors.Vector;
       Node_Shapes  : Shape_Vectors.Vector;
@@ -1331,6 +1532,11 @@ private
       Nominal_Templates : Nominal_Template_Vectors.Vector;
       Nominal_Actual_Runs : Run_Vectors.Vector;
       Nominal_Actuals : Actual_Key_Vectors.Vector;
+      Routine_Instances : Routine_Instance_Vectors.Vector;
+      Routine_Actuals : Actual_Key_Vectors.Vector;
+      Current_Routine : Routine_Instance_Id := No_Routine_Instance;
+      Node_Overlays : Node_Overlay_Vectors.Vector;
+      Declaration_Overlays : Declaration_Overlay_Vectors.Vector;
       Declaration_Atom_Sets : Atom_Set_Id_Vectors.Vector;
       Atom_Sets    : Atom_Set_Vectors.Vector;
       Atoms        : Atom_Vectors.Vector;

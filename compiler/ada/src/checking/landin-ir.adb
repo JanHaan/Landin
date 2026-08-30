@@ -364,6 +364,44 @@ package body Landin.IR is
       return Item_Id (Into.Items.Last_Index);
    end Add_Item;
 
+   function Item_For_Instance
+     (Of_Unit : Unit; Instance_Position : Positive) return Item_Id
+   is
+   begin
+      for Mapping of Of_Unit.Routine_Instance_Items loop
+         if Mapping.Position = Instance_Position then
+            return Mapping.Item;
+         end if;
+      end loop;
+      return No_Item;
+   end Item_For_Instance;
+
+   function Add_Routine_Instance_Item
+     (Into              : in out Unit;
+      Instance_Position : Positive;
+      Template          : Declaration_Id;
+      Result            : Landin.Types.Type_Kind;
+      Site              : Landin.Provenance.Origin;
+      Nominal           : Nominal_Type_Id := No_Nominal_Type) return Item_Id
+   is
+      Made : constant Item_Id :=
+        Add_Item (Into, Routine, No_Declaration, Result, Site, Nominal);
+      Held : Item_Record := Element (Into, Made);
+   begin
+      Held.Generic_Template := Template;
+      Into.Items (Positive (Made)) := Held;
+      Into.Routine_Instance_Items.Append
+        (Routine_Instance_Item'
+           (Position => Instance_Position,
+            Template => Template,
+            Item     => Made));
+      return Made;
+   end Add_Routine_Instance_Item;
+
+   function Generic_Template_Of (Of_Unit : Unit; Id : Item_Id)
+     return Declaration_Id
+     is (Element (Of_Unit, Id).Generic_Template);
+
    function Kind_Of (Of_Unit : Unit; Id : Item_Id) return Item_Kind
      is (Element (Of_Unit, Id).Kind);
 
