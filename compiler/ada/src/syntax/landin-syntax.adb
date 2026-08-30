@@ -7,6 +7,7 @@ package body Landin.Syntax is
      is (case Of_Kind is
             when Program                  => 0,
             when Error_Declaration        => 0,
+            when Fixed_Conditional        => 0,
             when Function_Declaration     => 3,
             when Atom_Declaration         => 0,
             --  The first slot is the type it names [1795]; D135's
@@ -65,6 +66,9 @@ package body Landin.Syntax is
                | Destructured_Field => 1,
             when Type_Formal => 0,
             when If_Arm | Match_Arm       => 2,
+            --  A D138 arm's condition is slot one (No_Node for `else`);
+            --  its declaration list is the trailing run.
+            when Fixed_Arm                => 1,
             when Return_List              => 0,
             when Recovery_Clause           => 1,
             --  The fixed slot is [1080]'s optional final expression; the
@@ -232,6 +236,24 @@ package body Landin.Syntax is
 
    function Nth_Arm (Of_Tree : Tree; Id : Node_Id; Index : Positive)
      return Node_Id
+     is (Nth_Item (Of_Tree, Id, Index));
+
+   function Fixed_Arm_Count (Of_Tree : Tree; Id : Node_Id) return Natural
+     is (Run_Length (Of_Tree, Id));
+
+   function Nth_Fixed_Arm
+     (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
+     is (Nth_Item (Of_Tree, Id, Index));
+
+   function Fixed_Condition (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     is (Slot (Of_Tree, Id, 1));
+
+   function Fixed_Declaration_Count
+     (Of_Tree : Tree; Id : Node_Id) return Natural
+     is (Run_Length (Of_Tree, Id));
+
+   function Nth_Fixed_Declaration
+     (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
      is (Nth_Item (Of_Tree, Id, Index));
 
    function Match_Subject (Of_Tree : Tree; Id : Node_Id) return Node_Id
