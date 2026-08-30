@@ -266,7 +266,10 @@ inverted and is folded only after another relation or an explicit tuple binds
 its formals. Parameterized nominal patterns require the same source template and
 match the complete stored tuple, including phantom actuals. Parameterized alias
 patterns expand symbolically, and function patterns recurse through ordered
-parts and error forms while ignoring labels. Repeated relations agree exactly;
+parts and error forms while ignoring labels. One checked descriptor-to-signature
+conversion preserves a fixed array's nominal element identity even at length
+zero, and the public signature seam rejects malformed descriptor combinations.
+Repeated relations agree exactly;
 a saturated explicit tuple binds nothing and validates every pattern. Each
 identity owns a layered view of the original source nodes and declarations,
 publishes its substituted signature before its body, and records generic call

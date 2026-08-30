@@ -2421,8 +2421,10 @@ separation on one source node, equal-key reuse, unequal scalar items, deduced
 `u8`/`i32`, context-free literal `i32`, unequal atom-set/function-signature/
 nominal descriptors with aggregate transport and layout, exact `[n]t`
 fixed/element deduction, nested nominal tuples, phantom actuals, parameterized
-alias expansion, recursive function-signature matching, a fixed formal bound in
-one relation followed by an exact computed-bound check in another, explicit
+alias expansion, recursive function-signature matching, zero-length nominal
+array element identity through direct, aliased and nested function signature
+parts, a fixed formal bound in one relation followed by an exact computed-bound
+check in another, explicit
 computed checks, same-key recursion, repeated nested type/fixed-formal
 conflicts, no-inversion undeduced formals, wrong nominal templates, non-finite
 unequal-key recursion, declared error propagation/recovery/failure cleanup,

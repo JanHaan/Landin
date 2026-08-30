@@ -426,6 +426,16 @@ package Landin.Checking is
 
    No_Signature_Parts : constant Signature_Part_Array (1 .. 0) := [];
 
+   --  A signature part carries exactly the descriptor selected by Kind.
+   --  In particular, Fixed_Array.Nominal is its element nominal identity;
+   --  Aggregate.Nominal is the aggregate itself.  Reject stray or missing
+   --  descriptor IDs at this public seam rather than letting a later
+   --  structural walk dereference a malformed part.
+   function Holds (Of_Table : Table; Part : Signature_Part) return Boolean;
+
+   function Holds
+     (Of_Table : Table; Parts : Signature_Part_Array) return Boolean;
+
    function Signature_Count (Of_Table : Table) return Natural
      with Pre => Is_Prepared (Of_Table);
 
@@ -443,6 +453,8 @@ package Landin.Checking is
       Error_Form : Error_Set_Form := Infallible) return Signature_Id
      with Pre  => Is_Prepared (Into)
                   and then Landin.Provenance.Is_Known (Site)
+                  and then Holds (Into, Parameters)
+                  and then Holds (Into, Results)
                   and then
                     (if Error_Form = Concrete then Holds (Into, Errors)
                      else Errors = No_Atom_Set),
@@ -460,6 +472,10 @@ package Landin.Checking is
       Error_Form : Error_Set_Form := Infallible) return Signature_Id
      with Pre  => Is_Prepared (Into)
                   and then Landin.Provenance.Is_Known (Site)
+                  and then Holds (Into, Parameters)
+                  and then
+                    (Result.Kind = Landin.Types.No_Value
+                     or else Holds (Into, Result))
                   and then
                     (if Error_Form = Concrete then Holds (Into, Errors)
                      else Errors = No_Atom_Set),

@@ -633,6 +633,12 @@ package body Landin.Stages.Checking is
       function Descriptor_For
         (Actual : Landin.Checking.Actual_Key) return Type_Descriptor;
 
+      function Signature_Part_For
+        (Descriptor : Type_Descriptor;
+         Name       : Landin.Source.Names.Name_Id;
+         Site       : Landin.Provenance.Origin)
+         return Landin.Checking.Signature_Part;
+
       function Remember_Symbolic_Nominal
         (Template : Res.Declaration_Id;
          Actuals  : Formal_Actual_Array) return Symbolic_Layout_Id;
@@ -1156,6 +1162,48 @@ package body Landin.Stages.Checking is
          end case;
       end Descriptor_For;
 
+      function Signature_Part_For
+        (Descriptor : Type_Descriptor;
+         Name       : Landin.Source.Names.Name_Id;
+         Site       : Landin.Provenance.Origin)
+         return Landin.Checking.Signature_Part
+      is
+         Part : Landin.Checking.Signature_Part :=
+           (Kind    => Descriptor.Kind,
+            Length  => Descriptor.Length,
+            Element => Descriptor.Element,
+            Name    => Name,
+            Site    => Site,
+            others  => <>);
+      begin
+         case Descriptor.Kind is
+            when Ty.Atom_Value =>
+               Part.Atoms := Descriptor.Atoms;
+            when Ty.Fixed_Array =>
+               --  Signature_Part.Nominal is the element identity for an
+               --  array, not the array descriptor's unused Nominal field.
+               --  Length zero does not erase this type identity or its
+               --  validation edge.
+               Part.Nominal := Descriptor.Element_Nominal;
+            when Ty.Aggregate =>
+               Part.Nominal := Descriptor.Nominal;
+            when Ty.Function_Value =>
+               Part.Signature := Descriptor.Signature;
+            when others =>
+               null;
+         end case;
+
+         if Descriptor.Kind in
+           Ty.Scalar_Name | Ty.Atom_Value | Ty.Fixed_Array
+              | Ty.Aggregate | Ty.Function_Value
+           and then not Landin.Checking.Holds (Types.all, Part)
+         then
+            raise Landin.Compiler_Defect with
+              "a normalized descriptor made a malformed signature part";
+         end if;
+         return Part;
+      end Signature_Part_For;
+
       function Remember_Symbolic_Nominal
         (Template : Res.Declaration_Id;
          Actuals  : Formal_Actual_Array) return Symbolic_Layout_Id
@@ -1631,18 +1679,9 @@ package body Landin.Stages.Checking is
                   then
                      Valid := False;
                   end if;
-                  return
-                    (Kind      => Descriptor.Kind,
-                     Nominal   =>
-                       (if Descriptor.Kind = Ty.Fixed_Array
-                        then Descriptor.Element_Nominal
-                        else Descriptor.Nominal),
-                     Length    => Descriptor.Length,
-                     Element   => Descriptor.Element,
-                     Signature => Descriptor.Signature,
-                     Name      => Syn.Name (Of_Tree, Node),
-                     Atoms     => Descriptor.Atoms,
-                     Site      => Syn.Origin (Of_Tree, Node));
+                  return Signature_Part_For
+                    (Descriptor, Syn.Name (Of_Tree, Node),
+                     Syn.Origin (Of_Tree, Node));
                end Part_At;
             begin
                for Index in Parameters'Range loop
@@ -6192,15 +6231,9 @@ package body Landin.Stages.Checking is
                      then
                         Valid := False;
                      end if;
-                     return
-                       (Kind      => Descriptor.Kind,
-                        Nominal   => Descriptor.Nominal,
-                        Length    => Descriptor.Length,
-                        Element   => Descriptor.Element,
-                        Signature => Descriptor.Signature,
-                        Name      => Syn.Name (Template_Tree.all, Node),
-                        Atoms     => Descriptor.Atoms,
-                        Site      => Syn.Origin (Template_Tree.all, Node));
+                     return Signature_Part_For
+                       (Descriptor, Syn.Name (Template_Tree.all, Node),
+                        Syn.Origin (Template_Tree.all, Node));
                   end Part_For;
                begin
                   Landin.Checking.Activate_Routine_View
