@@ -26,6 +26,7 @@ L0108  Live     [1740]: `public` rides on a declaration, not a statement
 L0109  Live     [1800]: the name on `end` is not the name declared
 L0110  Live     [1740]: a run of tokens beginning no declaration or statement
 L0111  Live     an implementation limit on how deeply a construct nests
+L0112  Live     [0980]: a positional call argument precedes every named argument
 L0200  Live     [1850]: one scope gives one name to one thing
 L0201  Live     [1860]: a name used and declared in no visible scope
 L0300  Live     a compile-time magnitude its context or target does not hold

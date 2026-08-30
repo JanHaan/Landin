@@ -46,6 +46,7 @@ package Landin.Diagnostics.Syntactic is
       End_Name_Mismatch,
       Stray_Token,
       Nesting_Too_Deep,
+      Positional_After_Named,
       Construct_Not_Enabled);
 
    function Code_For (Item : Failure)
@@ -73,6 +74,8 @@ package Landin.Diagnostics.Syntactic is
                Catalogue.End_Name_Mismatch,
             when Stray_Token          =>
                Catalogue.Stray_Token,
+            when Positional_After_Named =>
+               Catalogue.Positional_After_Named,
             when Nesting_Too_Deep     =>
                Catalogue.Nesting_Too_Deep,
             when Construct_Not_Enabled =>
