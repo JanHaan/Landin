@@ -29,7 +29,9 @@ package body Landin.Tests.Checking_Suite is
    use type Landin.IR.Nominal_Type_Id;
    use type Landin.Provenance.Declaration_Id;
    use type Landin.Source.Span;
+   use type Landin.Resolution.Application_Class;
    use type Landin.Resolution.Declaration_Sort;
+   use type Landin.Resolution.Verdict;
    use type Landin.Source.Source_Id;
    use type Landin.Syntax.Node_Id;
    use type Landin.Syntax.Node_Kind;
@@ -5468,8 +5470,9 @@ package body Landin.Tests.Checking_Suite is
         (Item, Seen, 4, "all contextual struct literals were checked");
    end Struct_Literals_Carry_Body_And_Field_Identities;
 
-   --  D72 keeps construction on the existing literal node and carries the
-   --  leading type's nominal body into both typed and inferred contexts.
+   --  D72 keeps a labelled application neutral until resolution selects its
+   --  construction projection, then carries the type's nominal body into
+   --  both typed and inferred contexts.
    procedure Constructions_Carry_Their_Nominal_Body
      (Item : in out Landin.Testing.Context);
 
@@ -5515,35 +5518,40 @@ package body Landin.Tests.Checking_Suite is
              (Landin.Stages.Trees (Work).all, Src);
          Types : constant not null access Landin.Checking.Table :=
            Landin.Stages.Types (Work);
+         Meanings : constant not null access Landin.Resolution.Table :=
+           Landin.Stages.Meanings (Work);
       begin
          for Node in Landin.Syntax.Node_Id'(1)
                    .. Landin.Syntax.Last_Node (Of_Tree.all)
          loop
             if Landin.Syntax.Kind (Of_Tree.all, Node)
-                 = Landin.Syntax.Struct_Literal
-              and then Landin.Syntax.Constructed_Type (Of_Tree.all, Node)
-                         /= Landin.Syntax.No_Node
+                 = Landin.Syntax.Labeled_Application
+              and then Landin.Resolution.Class_Of
+                (Meanings.all, Of_Tree.all, Node)
+                  = Landin.Resolution.Type_Construction
             then
                Seen := Seen + 1;
                declare
                   Nominal : constant Landin.Syntax.Node_Id :=
-                    Landin.Syntax.Constructed_Type (Of_Tree.all, Node);
+                    Landin.Syntax.Callee_Of (Of_Tree.all, Node);
                begin
                   Landin.Testing.Check
                     (Item,
                      Landin.Syntax.Kind (Of_Tree.all, Nominal)
-                       = Landin.Syntax.Type_Reference,
-                     "construction carries its leading name as a type");
+                       = Landin.Syntax.Name_Reference,
+                     "construction keeps its leading name neutral");
                   Landin.Testing.Check
                     (Item,
                      Landin.Checking.Type_Of
                        (Types.all, Of_Tree.all, Node)
                          = Landin.Types.Aggregate
+                     and then Landin.Resolution.Verdict_Of
+                       (Meanings.all, Of_Tree.all, Nominal)
+                         = Landin.Resolution.Bound
                      and then Landin.Checking.Nominal_Of
                        (Types.all, Of_Tree.all, Node)
-                         = Landin.Checking.Nominal_Of
-                           (Types.all, Of_Tree.all, Nominal),
-                     "the construction and nominal type carry one body");
+                         /= Landin.Checking.No_Nominal_Type,
+                     "the construction carries its resolved nominal body");
                end;
             end if;
          end loop;

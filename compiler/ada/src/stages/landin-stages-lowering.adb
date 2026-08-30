@@ -47,6 +47,8 @@ package body Landin.Stages.Lowering is
    use type Landin.Source.Names.Name_Id;
    use type Landin.Targets.Bit_Width;
    use type Landin.Targets.Byte_Count;
+   use type Res.Application_Class;
+   use type Res.Argument_Role;
    use type Res.Declaration_Id;
    use type Res.Declaration_Sort;
    use type Res.Verdict;
@@ -130,6 +132,107 @@ package body Landin.Stages.Lowering is
         return not null access constant Syn.Tree
         is (Landin.Syntax.Forest.Tree_Of
               (Landin.Stages.Trees (Context).all, Id));
+
+      --  Resolution selects this view; the source's neutral application
+      --  never becomes an alternate construction tree.
+      function Is_Struct_Construction
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
+      function Is_Case_Construction
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
+      function Construction_Field_Count
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Natural;
+      function Nth_Construction_Field
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id; Index : Positive)
+         return Syn.Node_Id;
+      function Construction_Field_Value
+        (Of_Tree : Syn.Tree; Field : Syn.Node_Id) return Syn.Node_Id;
+      function Construction_Fill
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Syn.Node_Id;
+
+      function Is_Struct_Construction
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
+        is (Syn.Kind (Of_Tree, Node) = Syn.Struct_Literal
+            or else
+              (Syn.Kind (Of_Tree, Node) = Syn.Labeled_Application
+               and then Res.Class_Of (Meanings.all, Of_Tree, Node)
+                          = Res.Type_Construction));
+
+      function Is_Case_Construction
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
+        is (Syn.Kind (Of_Tree, Node) = Syn.Labeled_Application
+            and then Res.Class_Of (Meanings.all, Of_Tree, Node)
+                       = Res.Case_Construction);
+
+      function Construction_Field_Count
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Natural is
+         Count : Natural := 0;
+      begin
+         if Syn.Kind (Of_Tree, Node) = Syn.Struct_Literal then
+            return Syn.Field_Value_Count (Of_Tree, Node);
+         end if;
+         for Index in 1 .. Syn.Argument_Count (Of_Tree, Node) loop
+            if Res.Role_Of
+              (Meanings.all, Of_Tree, Syn.Nth_Argument (Of_Tree, Node, Index))
+                in Res.Field_Argument | Res.Payload_Argument
+            then
+               Count := Count + 1;
+            end if;
+         end loop;
+         return Count;
+      end Construction_Field_Count;
+
+      function Nth_Construction_Field
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id; Index : Positive)
+         return Syn.Node_Id is
+         Found : Natural := 0;
+      begin
+         if Syn.Kind (Of_Tree, Node) = Syn.Struct_Literal then
+            return Syn.Nth_Field_Value (Of_Tree, Node, Index);
+         end if;
+         for At_Index in 1 .. Syn.Argument_Count (Of_Tree, Node) loop
+            declare
+               Argument : constant Syn.Node_Id :=
+                 Syn.Nth_Argument (Of_Tree, Node, At_Index);
+            begin
+               if Res.Role_Of (Meanings.all, Of_Tree, Argument)
+                    in Res.Field_Argument | Res.Payload_Argument
+               then
+                  Found := Found + 1;
+                  if Found = Index then
+                     return Argument;
+                  end if;
+               end if;
+            end;
+         end loop;
+         raise Landin.Compiler_Defect;
+      end Nth_Construction_Field;
+
+      function Construction_Field_Value
+        (Of_Tree : Syn.Tree; Field : Syn.Node_Id) return Syn.Node_Id
+        is (if Syn.Kind (Of_Tree, Field) = Syn.Field_Value
+            then Syn.Value_Of (Of_Tree, Field)
+            else Syn.Expression_Projection (Of_Tree, Field));
+
+      function Construction_Fill
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Syn.Node_Id is
+      begin
+         if Syn.Kind (Of_Tree, Node) = Syn.Struct_Literal then
+            return Syn.Struct_Fill (Of_Tree, Node);
+         end if;
+         for Index in 1 .. Syn.Argument_Count (Of_Tree, Node) loop
+            declare
+               Argument : constant Syn.Node_Id :=
+                 Syn.Nth_Argument (Of_Tree, Node, Index);
+            begin
+               if Res.Role_Of (Meanings.all, Of_Tree, Argument)
+                    = Res.Fill_Argument
+               then
+                  return Syn.Expression_Projection (Of_Tree, Argument);
+               end if;
+            end;
+         end loop;
+         return Syn.No_Node;
+      end Construction_Fill;
 
       --  Which declaration a declaring node is.  A scan, for the reason
       --  Landin.Stages.Checking gives for its own: Landin.Resolution
@@ -2173,8 +2276,7 @@ package body Landin.Stages.Lowering is
                            (Kind => IR.Frame_Slot, Slot => Temporary),
                            Site_Of (Of_Tree, Argument));
                      end;
-                  elsif Syn.Kind (Of_Tree, Argument) = Syn.Struct_Literal
-                  then
+                  elsif Is_Struct_Construction (Of_Tree, Argument) then
                      declare
                         Parameter : constant
                           Landin.Checking.Signature_Part :=
@@ -2341,18 +2443,16 @@ package body Landin.Stages.Lowering is
                               Field, Variant_Case,
                               Site_Of (Of_Tree, Value));
 
-                           if Syn.Kind (Of_Tree, Value)
-                                /= Syn.Struct_Literal
-                           then
+                           if not Is_Case_Construction (Of_Tree, Value) then
                               return;
                            end if;
 
                            for Position in
-                             1 .. Syn.Field_Value_Count (Of_Tree, Value)
+                             1 .. Construction_Field_Count (Of_Tree, Value)
                            loop
                               declare
                                  Label : constant Syn.Node_Id :=
-                                   Syn.Nth_Field_Value
+                                   Nth_Construction_Field
                                      (Of_Tree, Value, Position);
                                  Payload_Field : constant Positive := Positive
                                    (Landin.Checking.Field_Index
@@ -2363,7 +2463,8 @@ package body Landin.Stages.Lowering is
                                        (Types.all, Id, Field, Variant_Case,
                                         Payload_Field);
                                  Payload : constant Syn.Node_Id :=
-                                   Syn.Value_Of (Of_Tree, Label);
+                                   Construction_Field_Value
+                                     (Of_Tree, Label);
                               begin
                                  case Shape.Kind is
                                     when Landin.Checking.Scalar_Field =>
@@ -2401,17 +2502,17 @@ package body Landin.Stages.Lowering is
                         end loop;
 
                         for Position in
-                          1 .. Syn.Field_Value_Count (Of_Tree, Argument)
+                          1 .. Construction_Field_Count (Of_Tree, Argument)
                         loop
                            declare
                               Label : constant Syn.Node_Id :=
-                                Syn.Nth_Field_Value
+                                Nth_Construction_Field
                                   (Of_Tree, Argument, Position);
                               Field : constant Positive := Positive
                                 (Landin.Checking.Field_Index
                                    (Types.all, Of_Tree, Label));
                               Value : constant Syn.Node_Id :=
-                                Syn.Value_Of (Of_Tree, Label);
+                                Construction_Field_Value (Of_Tree, Label);
                            begin
                               Seen (Field) := True;
                               case Landin.Checking.Field_Kind_Of
@@ -2445,8 +2546,8 @@ package body Landin.Stages.Lowering is
                                          (Kind => IR.Frame_Slot,
                                           Slot => Temporary);
                                     begin
-                                       if Syn.Kind (Of_Tree, Value)
-                                            = Syn.Struct_Literal
+                                       if Is_Struct_Construction
+                                         (Of_Tree, Value)
                                        then
                                           --  The child begins as its padded
                                           --  zero image; labels then commit
@@ -2456,12 +2557,12 @@ package body Landin.Stages.Lowering is
                                              Site_Of (Of_Tree, Value),
                                              Field => Field);
                                           for Child_Position in
-                                            1 .. Syn.Field_Value_Count
+                                            1 .. Construction_Field_Count
                                                    (Of_Tree, Value)
                                           loop
                                              declare
                                                 Label : constant Syn.Node_Id :=
-                                                  Syn.Nth_Field_Value
+                                                  Nth_Construction_Field
                                                     (Of_Tree, Value,
                                                      Child_Position);
                                                 Child_Field : constant
@@ -2472,7 +2573,7 @@ package body Landin.Stages.Lowering is
                                                           Label));
                                                 Child_Value : constant
                                                   Syn.Node_Id :=
-                                                    Syn.Value_Of
+                                                    Construction_Field_Value
                                                       (Of_Tree, Label);
                                              begin
                                                 case Landin.Checking
@@ -2701,7 +2802,7 @@ package body Landin.Stages.Lowering is
                         end loop;
 
                         if Current /= IR.No_Block
-                          and then Syn.Struct_Fill (Of_Tree, Argument)
+                          and then Construction_Fill (Of_Tree, Argument)
                              /= Syn.No_Node
                         then
                            for Field in Seen'Range loop
@@ -4959,16 +5060,16 @@ package body Landin.Stages.Lowering is
                     (Unit.all, Filling, Destination, Base, Which, Site,
                      Nested => Steps);
 
-                  if Syn.Kind (Of_Tree, Value) /= Syn.Struct_Literal then
+                  if not Is_Case_Construction (Of_Tree, Value) then
                      return;
                   end if;
 
                   for Position in
-                    1 .. Syn.Field_Value_Count (Of_Tree, Value)
+                    1 .. Construction_Field_Count (Of_Tree, Value)
                   loop
                      declare
                         Label : constant Syn.Node_Id :=
-                          Syn.Nth_Field_Value (Of_Tree, Value, Position);
+                          Nth_Construction_Field (Of_Tree, Value, Position);
                         Payload_Field : constant Positive := Positive
                           (Landin.Checking.Field_Index
                              (Types.all, Of_Tree, Label));
@@ -4983,7 +5084,8 @@ package body Landin.Stages.Lowering is
                                  Held : constant IR.Value_Id :=
                                    Lower_Expression
                                      (Of_Tree,
-                                      Syn.Value_Of (Of_Tree, Label), Scope);
+                                      Construction_Field_Value
+                                        (Of_Tree, Label), Scope);
                               begin
                                  if Current /= IR.No_Block then
                                     IR.Emit_Variant_Field_Store
@@ -4999,7 +5101,8 @@ package body Landin.Stages.Lowering is
                               --  no-op because selecting the case cleared the
                               --  complete padded part before any label ran.
                               Write_Array_Value
-                                (Syn.Value_Of (Of_Tree, Label), Destination,
+                                (Construction_Field_Value
+                                   (Of_Tree, Label), Destination,
                                  Base, Path => Steps,
                                  Variant_Case => Which,
                                  Variant_Payload_Field => Payload_Field);
@@ -5017,10 +5120,10 @@ package body Landin.Stages.Lowering is
                                      Payload_Steps
                                        (Steps, Which, Payload_Field);
                                  Given : constant Syn.Node_Id :=
-                                   Syn.Value_Of (Of_Tree, Label);
+                                   Construction_Field_Value
+                                     (Of_Tree, Label);
                               begin
-                                 if Syn.Kind (Of_Tree, Given)
-                                      = Syn.Struct_Literal
+                                 if Is_Struct_Construction (Of_Tree, Given)
                                  then
                                     Write_Struct_Literal
                                       (Given, Child, Destination,
@@ -5122,17 +5225,17 @@ package body Landin.Stages.Lowering is
                   --  [0410]/D29: named fields are evaluated and committed in
                   --  source order, irrespective of declaration/layout order.
                   for Position in
-                    1 .. Syn.Field_Value_Count (Of_Tree, Literal)
+                    1 .. Construction_Field_Count (Of_Tree, Literal)
                   loop
                      declare
                         Field_Node : constant Syn.Node_Id :=
-                          Syn.Nth_Field_Value
+                          Nth_Construction_Field
                             (Of_Tree, Literal, Position);
                         Field : constant Natural :=
                           Landin.Checking.Field_Index
                             (Types.all, Of_Tree, Field_Node);
                         Value : constant Syn.Node_Id :=
-                          Syn.Value_Of (Of_Tree, Field_Node);
+                          Construction_Field_Value (Of_Tree, Field_Node);
                      begin
                         pragma Assert (Field > 0);
                         Seen (Field) := True;
@@ -5170,8 +5273,7 @@ package body Landin.Stages.Lowering is
                                    constant IR.Path_Step_Array :=
                                      Descended_Steps (Base, Steps, Field);
                               begin
-                                 if Syn.Kind (Of_Tree, Value)
-                                      = Syn.Struct_Literal
+                                 if Is_Struct_Construction (Of_Tree, Value)
                                  then
                                     Write_Struct_Literal
                                       (Value, Child, Destination,
@@ -5232,7 +5334,7 @@ package body Landin.Stages.Lowering is
                   --  D64's deliberately narrow fill is all-bits zero.  It is
                   --  written after every labelled value, in declaration
                   --  order, without forming one heterogeneously typed value.
-                  if Syn.Struct_Fill (Of_Tree, Literal) /= Syn.No_Node then
+                  if Construction_Fill (Of_Tree, Literal) /= Syn.No_Node then
                      for Field in Seen'Range loop
                         if not Seen (Field) then
                            case Landin.Checking.Field_Kind_Of
@@ -5719,8 +5821,7 @@ package body Landin.Stages.Lowering is
                           (Stmt, (Kind => IR.Frame_Slot, Slot => Target),
                            Destination_Field, Path => Destination_Path);
                      elsif Held = Ty.Aggregate
-                       and then Syn.Kind (Of_Tree, Stmt)
-                                  = Syn.Struct_Literal
+                       and then Is_Struct_Construction (Of_Tree, Stmt)
                      then
                         Write_Struct_Literal
                           (Stmt,
@@ -5972,9 +6073,7 @@ package body Landin.Stages.Lowering is
                            then
                               Lower_Stored_Expression
                                 (Of_Tree, Value, Scope, Where);
-                           elsif Syn.Kind (Of_Tree, Value)
-                                   = Syn.Struct_Literal
-                           then
+                           elsif Is_Struct_Construction (Of_Tree, Value) then
                               Write_Struct_Literal
                                 (Value,
                                  Landin.Checking.Nominal_Of (Types.all, Id),
@@ -6322,6 +6421,7 @@ package body Landin.Stages.Lowering is
                                                | Syn.Match_Statement
                                                | Syn.Bare_Block
                                                | Syn.Struct_Literal
+                                               | Syn.Labeled_Application
                                                | Syn.Zeroed_Literal
                                        then
                                           declare
@@ -6344,10 +6444,18 @@ package body Landin.Stages.Lowering is
                                                    Lower_Stored_Expression
                                                      (Of_Tree, From, Scope,
                                                       Temporary);
-                                                when Syn.Struct_Literal =>
-                                                   Write_Struct_Literal
-                                                     (From, Wrote,
-                                                      Temporary_Storage);
+                                                when Syn.Struct_Literal
+                                                   | Syn.Labeled_Application =>
+                                                   if Is_Struct_Construction
+                                                     (Of_Tree, From)
+                                                   then
+                                                      Write_Struct_Literal
+                                                        (From, Wrote,
+                                                         Temporary_Storage);
+                                                   else
+                                                      raise
+                                                        Landin.Compiler_Defect;
+                                                   end if;
                                                 when Syn.Zeroed_Literal =>
                                                    IR.Emit_Array_Clear
                                                      (Unit.all, Filling,
@@ -6471,9 +6579,7 @@ package body Landin.Stages.Lowering is
                                     pragma Unreferenced (Ignored);
                                  end;
                               end if;
-                           elsif Syn.Kind (Of_Tree, From)
-                                   = Syn.Struct_Literal
-                           then
+                           elsif Is_Struct_Construction (Of_Tree, From) then
                               Write_Struct_Literal
                                 (From,
                                  Landin.Checking.Nominal_Of
@@ -8925,7 +9031,7 @@ package body Landin.Stages.Lowering is
                       Count  => 0,
                       Value  => 0,
                       others => <>));
-               elsif Syn.Kind (Of_Tree, Given) = Syn.Struct_Literal then
+               elsif Is_Struct_Construction (Of_Tree, Given) then
                   declare
                      Count : constant Natural :=
                        IR.Aggregate_Field_Count (Unit.all, Shape);
@@ -8938,18 +9044,19 @@ package body Landin.Stages.Lowering is
                        [others => Syn.No_Node];
                   begin
                      for Written in
-                       1 .. Syn.Field_Value_Count (Of_Tree, Given)
+                       1 .. Construction_Field_Count (Of_Tree, Given)
                      loop
                         declare
                            Label : constant Syn.Node_Id :=
-                             Syn.Nth_Field_Value
+                             Nth_Construction_Field
                                (Of_Tree, Given, Written);
                         begin
                            Nodes
                              (Positive
                                 (Landin.Checking.Field_Index
                                    (Types.all, Of_Tree, Label))) :=
-                                     Syn.Value_Of (Of_Tree, Label);
+                                     Construction_Field_Value
+                                       (Of_Tree, Label);
                         end;
                      end loop;
                      for Child in 1 .. Count loop
@@ -9012,20 +9119,21 @@ package body Landin.Stages.Lowering is
                      Nodes : Node_Array (1 .. Count) :=
                        [others => Syn.No_Node];
                   begin
-                     if Syn.Kind (Of_Tree, Given) = Syn.Struct_Literal then
+                     if Is_Case_Construction (Of_Tree, Given) then
                         for Written in
-                          1 .. Syn.Field_Value_Count (Of_Tree, Given)
+                          1 .. Construction_Field_Count (Of_Tree, Given)
                         loop
                            declare
                               Label : constant Syn.Node_Id :=
-                                Syn.Nth_Field_Value
+                                Nth_Construction_Field
                                   (Of_Tree, Given, Written);
                            begin
                               Nodes
                                 (Positive
                                    (Landin.Checking.Field_Index
                                       (Types.all, Of_Tree, Label))) :=
-                                        Syn.Value_Of (Of_Tree, Label);
+                                        Construction_Field_Value
+                                          (Of_Tree, Label);
                            end;
                         end loop;
                      end if;
@@ -9104,17 +9212,17 @@ package body Landin.Stages.Lowering is
                  [others => Syn.No_Node];
             begin
                for Written in
-                 1 .. Syn.Field_Value_Count (Of_Tree, Literal)
+                 1 .. Construction_Field_Count (Of_Tree, Literal)
                loop
                   declare
                      Label : constant Syn.Node_Id :=
-                       Syn.Nth_Field_Value (Of_Tree, Literal, Written);
+                       Nth_Construction_Field (Of_Tree, Literal, Written);
                   begin
                      Nodes
                        (Positive
                           (Landin.Checking.Field_Index
                              (Types.all, Of_Tree, Label))) :=
-                               Syn.Value_Of (Of_Tree, Label);
+                               Construction_Field_Value (Of_Tree, Label);
                   end;
                end loop;
 
@@ -9216,11 +9324,11 @@ package body Landin.Stages.Lowering is
             end if;
 
             for Position in
-              1 .. Syn.Field_Value_Count (Of_Tree, Literal)
+              1 .. Construction_Field_Count (Of_Tree, Literal)
             loop
                declare
                   Field : constant Syn.Node_Id :=
-                    Syn.Nth_Field_Value (Of_Tree, Literal, Position);
+                    Nth_Construction_Field (Of_Tree, Literal, Position);
                   Which : constant Positive :=
                     Landin.Checking.Field_Index
                       (Types.all, Of_Tree, Field);
@@ -9232,7 +9340,7 @@ package body Landin.Stages.Lowering is
                   then
                      declare
                         Value : constant Syn.Node_Id :=
-                          Syn.Value_Of (Of_Tree, Field);
+                          Construction_Field_Value (Of_Tree, Field);
                         Selected : constant Positive :=
                           Positive
                             (Landin.Checking.Field_Index
@@ -9249,13 +9357,13 @@ package body Landin.Stages.Lowering is
                         --  their prefix folds to the same item-owned image
                         --  run as D67's top-level array fields.  Count them
                         --  before opening that single run below.
-                        if Syn.Kind (Of_Tree, Value) = Syn.Struct_Literal then
+                        if Is_Case_Construction (Of_Tree, Value) then
                            for Payload_Position in
-                             1 .. Syn.Field_Value_Count (Of_Tree, Value)
+                             1 .. Construction_Field_Count (Of_Tree, Value)
                            loop
                               declare
                                  Label : constant Syn.Node_Id :=
-                                   Syn.Nth_Field_Value
+                                   Nth_Construction_Field
                                      (Of_Tree, Value, Payload_Position);
                                  Payload : constant Positive := Positive
                                    (Landin.Checking.Field_Index
@@ -9267,7 +9375,8 @@ package body Landin.Stages.Lowering is
                                         (Unit.all, Item, Which),
                                       Selected, Payload);
                                  Given : constant Syn.Node_Id :=
-                                   Syn.Value_Of (Of_Tree, Label);
+                                   Construction_Field_Value
+                                     (Of_Tree, Label);
                               begin
                                  if Leaf.Kind = IR.Array_Field_Shape
                                    and then Syn.Kind (Of_Tree, Given)
@@ -9327,14 +9436,15 @@ package body Landin.Stages.Lowering is
                         end if;
                      end;
                   elsif Syn.Kind
-                       (Of_Tree, Syn.Value_Of (Of_Tree, Field))
+                       (Of_Tree, Construction_Field_Value (Of_Tree, Field))
                        in Syn.Array_Literal | Syn.Mixed_Array_Repetition
                   then
                      Element_Count := Element_Count
                        + Syn.Element_Count
-                           (Of_Tree, Syn.Value_Of (Of_Tree, Field));
+                           (Of_Tree, Construction_Field_Value
+                              (Of_Tree, Field));
                   elsif Syn.Kind
-                    (Of_Tree, Syn.Value_Of (Of_Tree, Field))
+                    (Of_Tree, Construction_Field_Value (Of_Tree, Field))
                       = Syn.Name_Reference
                     and then IR.Nth_Field_Shape
                       (Unit.all, Item, Which).Kind
@@ -9342,7 +9452,7 @@ package body Landin.Stages.Lowering is
                   then
                      declare
                         Value : constant Syn.Node_Id :=
-                          Syn.Value_Of (Of_Tree, Field);
+                          Construction_Field_Value (Of_Tree, Field);
                         Source_Id : constant Res.Declaration_Id :=
                           Res.Bound_To (Meanings.all, Of_Tree, Value);
                      begin
@@ -9365,7 +9475,7 @@ package body Landin.Stages.Lowering is
                         end if;
                      end;
                   elsif Syn.Kind
-                    (Of_Tree, Syn.Value_Of (Of_Tree, Field))
+                    (Of_Tree, Construction_Field_Value (Of_Tree, Field))
                       = Syn.Member_Selection
                     and then IR.Nth_Field_Shape
                       (Unit.all, Item, Which).Kind
@@ -9373,7 +9483,7 @@ package body Landin.Stages.Lowering is
                   then
                      declare
                         Value : constant Syn.Node_Id :=
-                          Syn.Value_Of (Of_Tree, Field);
+                          Construction_Field_Value (Of_Tree, Field);
                         From : constant Syn.Node_Id :=
                           Syn.Target_Of (Of_Tree, Value);
                         Source_Id : constant Res.Declaration_Id :=
@@ -9417,7 +9527,8 @@ package body Landin.Stages.Lowering is
                   if Nodes (Which) /= Syn.No_Node then
                      declare
                         Value : constant Syn.Node_Id :=
-                          Syn.Value_Of (Of_Tree, Nodes (Which));
+                          Construction_Field_Value
+                            (Of_Tree, Nodes (Which));
                         Shape : constant IR.Field_Shape :=
                           IR.Nth_Field_Shape (Unit.all, Item, Which);
                      begin
@@ -9461,16 +9572,14 @@ package body Landin.Stages.Lowering is
                                  Value  => Ty.Folded (Selected),
                                  others => <>);
 
-                              if Syn.Kind (Of_Tree, Value)
-                                   = Syn.Struct_Literal
-                              then
+                              if Is_Case_Construction (Of_Tree, Value) then
                                  for Position in
-                                   1 .. Syn.Field_Value_Count
+                                   1 .. Construction_Field_Count
                                           (Of_Tree, Value)
                                  loop
                                     declare
                                        Label : constant Syn.Node_Id :=
-                                         Syn.Nth_Field_Value
+                                         Nth_Construction_Field
                                            (Of_Tree, Value, Position);
                                        Payload : constant Positive :=
                                          Positive
@@ -9499,7 +9608,7 @@ package body Landin.Stages.Lowering is
                                     then
                                        declare
                                           Given : constant Syn.Node_Id :=
-                                            Syn.Value_Of
+                                            Construction_Field_Value
                                               (Of_Tree,
                                                Payload_Nodes (Payload));
                                        begin
@@ -9535,7 +9644,7 @@ package body Landin.Stages.Lowering is
                                     then
                                        declare
                                           Given : constant Syn.Node_Id :=
-                                            Syn.Value_Of
+                                            Construction_Field_Value
                                               (Of_Tree,
                                                Payload_Nodes (Payload));
                                        begin
@@ -10156,7 +10265,7 @@ package body Landin.Stages.Lowering is
                null;
             elsif Syn.Kind (Their_Tree.all, Value) = Syn.Array_Literal then
                Set_Image_From_Literal (Id, Their_Tree.all, Value);
-            elsif Syn.Kind (Their_Tree.all, Value) = Syn.Struct_Literal then
+            elsif Is_Struct_Construction (Their_Tree.all, Value) then
                Set_Image_From_Struct_Literal (Id, Their_Tree.all, Value);
             elsif Syn.Kind (Their_Tree.all, Value) = Syn.Array_Repetition then
                Set_Image_From_Repetition (Id, Their_Tree.all, Value);
