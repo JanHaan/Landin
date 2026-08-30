@@ -24,6 +24,10 @@ package Landin.Targets is
 
    type Endianness is (Little, Big);
 
+   --  Compiler-owned target identity for fixed configuration.  This is not
+   --  parsed from the target label: a future constructor must choose it.
+   type Architecture is (X86_64, Arm64, Cortex_M0, Synthetic_32_Architecture);
+
    --  The scalar sizes a backend has to lay out.  Sizes, not types: a
    --  four-byte scalar aligns the same way whether a program called it an
    --  integer, a float or a pointer.
@@ -47,6 +51,8 @@ package Landin.Targets is
    function Synthetic_32 return Target_Facts;
 
    function Name (Facts : Target_Facts) return String;
+
+   function Architecture_Of (Facts : Target_Facts) return Architecture;
 
    function Pointer_Width (Facts : Target_Facts) return Bit_Width;
 
@@ -176,6 +182,7 @@ private
 
    type Target_Facts is record
       Label             : String (1 .. Name_Length);
+      Machine           : Architecture;
       Pointer           : Bit_Width;
       Pointer_Align     : Byte_Alignment;
       Stack_Align       : Byte_Alignment;
