@@ -1562,7 +1562,13 @@ Early exit: return and fail, each with an optional
 
 ### [0980] Calls: positional first, then named
 
-Calls: positional first, then named. No default values.
+Calls: positional first, then named. No default values. The positional prefix
+fills parameters in order; the named suffix may reorder the rest. Every runtime
+parameter is filled exactly once, and an unknown or repeated label is an error.
+Arguments still run in written order before their checked values are passed in
+formal order. A call through a stored or selected function uses the parameter
+labels of that value's static function type; changing those labels does not
+change function-type identity [1000].
 
 ```landin
 r1 := divide(10, 3)

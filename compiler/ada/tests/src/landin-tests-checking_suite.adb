@@ -30,6 +30,8 @@ package body Landin.Tests.Checking_Suite is
    use type Landin.Provenance.Declaration_Id;
    use type Landin.Source.Span;
    use type Landin.Resolution.Application_Class;
+   use type Landin.Resolution.Argument_Role;
+   use type Landin.Resolution.Call_Match_State;
    use type Landin.Resolution.Declaration_Sort;
    use type Landin.Resolution.Verdict;
    use type Landin.Source.Source_Id;
@@ -6149,8 +6151,161 @@ package body Landin.Tests.Checking_Suite is
          Accepted => True);
    end Undo_Reads_Use_Only_Failure_States;
 
+   procedure Named_Runtime_Calls_Record_One_Formal_Match
+     (Item : in out Landin.Testing.Context);
+
+   procedure Named_Runtime_Calls_Record_One_Formal_Match
+     (Item : in out Landin.Testing.Context)
+   is
+      Work  : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Ran   : Natural;
+      Src   : Landin.Source.Source_Id;
+      Seen  : Natural := 0;
+   begin
+      Src := Landin.Stages.Add_Source
+        (Work, "named-runtime-seam.ldn",
+         "callback: type = (left: i32, middle: i32, right: i32)"
+         & " -> (answer: i32)" & LF
+         & "box: type = struct" & LF
+         & "    invoke: callback" & LF
+         & "end box" & LF
+         & "combine: (a: i32, b: i32, c: i32) -> (r: i32) ="
+         & " a * 100 + b * 10 + c end combine" & LF
+         & "run: () -> (r: i32) =" & LF
+         & "    direct := combine(c: 3, a: 1, b: 2)" & LF
+         & "    indirect: callback = combine" & LF
+         & "    via_value := indirect(right: 3, left: 1, middle: 2)" & LF
+         & "    holder: box = (invoke: combine)" & LF
+         & "    via_field := holder.invoke(middle: 2, right: 3, left: 1)"
+         & LF
+         & "    r = direct + via_value + via_field" & LF
+         & "end run" & LF);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Configurer'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Landin.Stages.Append (Order, Checker'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "direct, function-valued and selected named calls check");
+
+      declare
+         Of_Tree : constant not null access constant Landin.Syntax.Tree :=
+           Landin.Syntax.Forest.Tree_Of
+             (Landin.Stages.Trees (Work).all, Src);
+         Meanings : constant not null access Landin.Resolution.Table :=
+           Landin.Stages.Meanings (Work);
+      begin
+         for Node in Landin.Syntax.Node_Id'(1)
+                   .. Landin.Syntax.Last_Node (Of_Tree.all)
+         loop
+            if Landin.Syntax.Kind (Of_Tree.all, Node)
+                 = Landin.Syntax.Labeled_Application
+              and then Landin.Resolution.Class_Of
+                (Meanings.all, Of_Tree.all, Node)
+                  = Landin.Resolution.Function_Call
+            then
+               Seen := Seen + 1;
+               Landin.Testing.Check
+                 (Item,
+                  Landin.Resolution.Match_Of
+                    (Meanings.all, Of_Tree.all, Node)
+                      = Landin.Resolution.Call_Matched,
+                  "checking publishes one accepted call match");
+               for Written in 1 .. Landin.Syntax.Argument_Count
+                 (Of_Tree.all, Node)
+               loop
+                  declare
+                     Argument : constant Landin.Syntax.Node_Id :=
+                       Landin.Syntax.Nth_Argument
+                         (Of_Tree.all, Node, Written);
+                     Position : constant Natural :=
+                       Landin.Resolution.Position_Of
+                         (Meanings.all, Of_Tree.all, Argument);
+                  begin
+                     Landin.Testing.Check
+                       (Item,
+                        Landin.Resolution.Role_Of
+                          (Meanings.all, Of_Tree.all, Argument)
+                            = Landin.Resolution.Runtime_Argument
+                        and then Position in 1 .. 3,
+                        "every written argument has one runtime formal"
+                        & " position");
+                  end;
+               end loop;
+            end if;
+         end loop;
+      end;
+
+      Landin.Testing.Check_Equal
+        (Item, Seen, 3, "all ordinary named call forms were matched");
+
+      declare
+         Rejected : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Rejected_Order : Landin.Stages.Pipeline;
+         Rejected_Source : Landin.Source.Source_Id;
+         Rejected_Ran : Natural;
+         Found_Call : Boolean := False;
+      begin
+         Rejected_Source := Landin.Stages.Add_Source
+           (Rejected, "rejected-named-runtime-seam.ldn",
+            "add: (a: i32, b: i32) -> (r: i32) = a + b end add" & LF
+            & "f: () -> (r: i32) = add(a: 1, a: 2) end f" & LF);
+         Landin.Stages.Append (Rejected_Order, Frontend'Access);
+         Landin.Stages.Append (Rejected_Order, Configurer'Access);
+         Landin.Stages.Append (Rejected_Order, Names'Access);
+         Landin.Stages.Append (Rejected_Order, Checker'Access);
+         Rejected_Ran := Landin.Stages.Run (Rejected_Order, Rejected);
+         Landin.Testing.Check_Equal
+           (Item, Rejected_Ran, 4, "the rejecting checker ran");
+         Landin.Testing.Check
+           (Item, Landin.Stages.Failed (Rejected),
+            "a duplicate named argument is rejected");
+
+         declare
+            Of_Tree : constant not null access constant Landin.Syntax.Tree :=
+              Landin.Syntax.Forest.Tree_Of
+                (Landin.Stages.Trees (Rejected).all, Rejected_Source);
+            Meanings : constant not null access Landin.Resolution.Table :=
+              Landin.Stages.Meanings (Rejected);
+            Types : constant not null access Landin.Checking.Table :=
+              Landin.Stages.Types (Rejected);
+         begin
+            for Node in Landin.Syntax.Node_Id'(1)
+                      .. Landin.Syntax.Last_Node (Of_Tree.all)
+            loop
+               if Landin.Syntax.Kind (Of_Tree.all, Node)
+                    = Landin.Syntax.Labeled_Application
+               then
+                  Found_Call := True;
+                  Landin.Testing.Check
+                    (Item,
+                     Landin.Resolution.Match_Of
+                       (Meanings.all, Of_Tree.all, Node)
+                         = Landin.Resolution.Call_Rejected
+                     and then Landin.Checking.Routine_Target_Of
+                       (Types.all, Of_Tree.all, Node)
+                         = Landin.Checking.No_Routine_Instance,
+                     "a failed match records rejection and no lowering"
+                     & " target");
+               end if;
+            end loop;
+         end;
+         Landin.Testing.Check
+           (Item, Found_Call, "the rejected application remains queryable");
+      end;
+   end Named_Runtime_Calls_Record_One_Formal_Match;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "checking", "named runtime calls record formal positions",
+         Named_Runtime_Calls_Record_One_Formal_Match'Access);
       Landin.Testing.Register
         (Into, "checking", "declarations give structs their identity",
          Declarations_Give_Structs_Their_Identity'Access);

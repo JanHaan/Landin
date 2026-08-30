@@ -439,7 +439,7 @@ array_repetition ::= "[" integer "of" expression "]"
 struct_literal ::= "(" field_value ("," field_value)*
                    ("," "of" expression)? ")"
 field_value ::= identifier ":" expression
-labeled_application ::= identifier "(" labeled_arguments ")" recovery?
+labeled_application ::= indexed "(" labeled_arguments ")" recovery?
 labeled_arguments ::= (expression ",")* labeled_argument
                       ("," labeled_argument)* ("," "of" expression)?
 labeled_argument ::= identifier ":" argument_rhs
@@ -707,11 +707,17 @@ refused rather than the declaration.
 ### [1920] What a call means
 
 What a call means.
-[0980] gives no parameter a default value, so a call names
-every parameter exactly once and in order, and [1820]'s
-argument list is positional only. Each argument has its
-parameter's type [0310], and the call has the type of the
-named return.
+[0980] gives no parameter a default value, so a call names every runtime
+parameter exactly once. A positional prefix fills runtime parameters in order;
+a named suffix may write the remaining parameters in any order, but may not
+repeat one or name one the callable signature does not have. Matching uses the
+labels of the static callable signature for a stored or selected function value.
+Those labels are retained call-shape facts but remain excluded from [1000]'s
+structural function-type identity. Each runtime argument is synthesized and
+checked in written order, then its checked value is placed at the matched formal
+position for the ABI. A static-role label is not a runtime argument of a
+nongeneric or indirect callable. Each argument has its parameter's type [0310],
+and the call has the type of the named return.
 A call of a function returning none has no successful-result type. It is a
 statement [1810] and nothing else: nothing binds it, no argument is one, and
 [1930] cannot discard it, because there is no result there to discard. A call

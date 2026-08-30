@@ -1,0 +1,2 @@
+add: (a: i32, b: i32) -> (r: i32) = a + b end add
+f: () -> (r: i32) = add(a: 1) end f

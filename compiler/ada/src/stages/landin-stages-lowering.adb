@@ -49,6 +49,7 @@ package body Landin.Stages.Lowering is
    use type Landin.Targets.Byte_Count;
    use type Res.Application_Class;
    use type Res.Argument_Role;
+   use type Res.Call_Match_State;
    use type Res.Declaration_Id;
    use type Res.Declaration_Sort;
    use type Res.Verdict;
@@ -2139,7 +2140,13 @@ package body Landin.Stages.Lowering is
                Landin.Checking.Routine_Identities.Position
                  (Types.all, Generic_Target))
             else IR.Item_For (Unit.all, Means));
-         Count : constant Natural := Syn.Argument_Count (Of_Tree, Node);
+         Written_Count : constant Natural :=
+           Syn.Argument_Count (Of_Tree, Node);
+         Count : constant Natural :=
+           (if Source_Signature = Landin.Checking.No_Signature
+            then 0
+            else Landin.Checking.Signature_Parameter_Count
+              (Types.all, Source_Signature));
          Returns_Stored : constant Boolean :=
            Type_At (Of_Tree, Node)
              in Ty.Aggregate | Ty.Fixed_Array;
@@ -2160,9 +2167,13 @@ package body Landin.Stages.Lowering is
       begin
          if Source_Signature = Landin.Checking.No_Signature
            or else Signature = IR.No_Signature
+           or else
+             (Syn.Kind (Of_Tree, Node) = Syn.Labeled_Application
+              and then Res.Match_Of (Meanings.all, Of_Tree, Node)
+                         /= Res.Call_Matched)
          then
             raise Landin.Compiler_Defect with
-              "a call reached lowering without a checked signature";
+              "a call reached lowering without a complete checked match";
          end if;
 
          if Error_Set /= IR.No_Atom_Set then
@@ -2210,10 +2221,16 @@ package body Landin.Stages.Lowering is
          --  expression runs: a short circuit there can change blocks, and
          --  operands are block-local.  The last argument is already in the
          --  block where the call will be emitted.
-         for Which in 1 .. Count loop
+         for Written in 1 .. Written_Count loop
             declare
                Raw_Argument : constant Syn.Node_Id :=
-                 Syn.Nth_Argument (Of_Tree, Node, Which);
+                 Syn.Nth_Argument (Of_Tree, Node, Written);
+               Formal_Position : constant Positive :=
+                 (if Syn.Kind (Of_Tree, Raw_Argument) = Syn.Call_Argument
+                  then Positive
+                    (Res.Position_Of
+                       (Meanings.all, Of_Tree, Raw_Argument))
+                  else Written);
                Argument : constant Syn.Node_Id :=
                  (if Syn.Kind (Of_Tree, Raw_Argument) = Syn.Call_Argument
                   then Syn.Expression_Projection (Of_Tree, Raw_Argument)
@@ -2233,7 +2250,7 @@ package body Landin.Stages.Lowering is
                         Lower_Stored_Expression
                           (Of_Tree, Argument, Scope, Temporary);
                         if Current /= IR.No_Block then
-                           Given (Which) := IR.Emit_Storage_Address
+                           Given (Formal_Position) := IR.Emit_Storage_Address
                              (Unit.all, Filling,
                               (Kind => IR.Frame_Slot, Slot => Temporary),
                               Site_Of (Of_Tree, Argument));
@@ -2246,7 +2263,8 @@ package body Landin.Stages.Lowering is
                         Parameter : constant
                           Landin.Checking.Signature_Part :=
                             Landin.Checking.Nth_Signature_Parameter
-                              (Types.all, Source_Signature, Which);
+                              (Types.all, Source_Signature,
+                               Formal_Position);
                         Temporary : IR.Slot_Id;
                      begin
                         if Type_At (Of_Tree, Argument) = Ty.Aggregate then
@@ -2275,7 +2293,7 @@ package body Landin.Stages.Lowering is
                           (Unit.all, Filling,
                            (Kind => IR.Frame_Slot, Slot => Temporary),
                            Site_Of (Of_Tree, Argument));
-                        Given (Which) := IR.Emit_Storage_Address
+                        Given (Formal_Position) := IR.Emit_Storage_Address
                           (Unit.all, Filling,
                            (Kind => IR.Frame_Slot, Slot => Temporary),
                            Site_Of (Of_Tree, Argument));
@@ -2285,7 +2303,8 @@ package body Landin.Stages.Lowering is
                         Parameter : constant
                           Landin.Checking.Signature_Part :=
                             Landin.Checking.Nth_Signature_Parameter
-                              (Types.all, Source_Signature, Which);
+                              (Types.all, Source_Signature,
+                               Formal_Position);
                         Id : constant Landin.Checking.Nominal_Type_Id :=
                           Parameter.Nominal;
                         Count : constant Natural :=
@@ -2863,7 +2882,7 @@ package body Landin.Stages.Lowering is
                         end if;
 
                         if Current /= IR.No_Block then
-                           Given (Which) := IR.Emit_Storage_Address
+                           Given (Formal_Position) := IR.Emit_Storage_Address
                              (Unit.all, Filling,
                               (Kind => IR.Frame_Slot, Slot => Temporary),
                               Site_Of (Of_Tree, Argument));
@@ -2877,7 +2896,8 @@ package body Landin.Stages.Lowering is
                         Parameter : constant
                           Landin.Checking.Signature_Part :=
                             Landin.Checking.Nth_Signature_Parameter
-                              (Types.all, Source_Signature, Which);
+                              (Types.all, Source_Signature,
+                               Formal_Position);
                         Temporary : constant IR.Slot_Id :=
                           IR.Add_Array_Slot
                             (Unit.all, Filling,
@@ -2941,7 +2961,7 @@ package body Landin.Stages.Lowering is
                            end;
                         end if;
 
-                        Given (Which) := IR.Emit_Storage_Address
+                        Given (Formal_Position) := IR.Emit_Storage_Address
                           (Unit.all, Filling,
                            (Kind => IR.Frame_Slot, Slot => Temporary),
                            Site_Of (Of_Tree, Argument));
@@ -2963,7 +2983,7 @@ package body Landin.Stages.Lowering is
                                    Neutral_Value_Shape (Of_Tree, Argument),
                                    Site_Of (Of_Tree, Argument));
                            begin
-                              Given (Which) :=
+                              Given (Formal_Position) :=
                                 IR.Emit_Storage_Address
                                   (Unit.all, Filling, Place,
                                    Site_Of (Of_Tree, Argument));
@@ -2976,7 +2996,7 @@ package body Landin.Stages.Lowering is
                            Child_Steps : constant IR.Path_Step_Array :=
                              Rooted_Steps (Of_Tree, Argument);
                         begin
-                           Given (Which) :=
+                           Given (Formal_Position) :=
                              IR.Emit_Storage_Address
                                (Unit.all, Filling, Rooted_Storage
                                   (Of_Tree, Argument),
@@ -2986,7 +3006,7 @@ package body Landin.Stages.Lowering is
                      end if;
                   end if;
                else
-                  Given (Which) :=
+                  Given (Formal_Position) :=
                     Lower_Expression (Of_Tree, Argument, Scope);
                end if;
 
@@ -2994,8 +3014,8 @@ package body Landin.Stages.Lowering is
                   return IR.No_Value;
                end if;
 
-               if Which < Count then
-                  Saved (Which) :=
+               if Written < Written_Count then
+                  Saved (Formal_Position) :=
                     IR.Add_Slot
                       (Unit.all, Filling,
                        (if Type_At (Of_Tree, Argument)
@@ -3015,8 +3035,8 @@ package body Landin.Stages.Lowering is
                                (Types.all, Of_Tree, Argument))
                           else IR.No_Atom_Set));
                   IR.Emit_Store
-                    (Unit.all, Filling, Saved (Which), Given (Which),
-                     Site_Of (Of_Tree, Argument));
+                    (Unit.all, Filling, Saved (Formal_Position),
+                     Given (Formal_Position), Site_Of (Of_Tree, Argument));
                end if;
             end;
          end loop;
@@ -3024,7 +3044,7 @@ package body Landin.Stages.Lowering is
          --  Every argument must precede the call, because Add_Argument
          --  requires the call to remain the last instruction emitted.
          for Which in 1 .. Count loop
-            if Which < Count then
+            if Saved (Which) /= IR.No_Slot then
                Given (Which) :=
                  IR.Emit_Load (Unit.all, Filling, Saved (Which), Site);
             end if;
@@ -5771,7 +5791,8 @@ package body Landin.Stages.Lowering is
                      end if;
 
                      if Held = Ty.No_Value
-                       and then Syn.Kind (Of_Tree, Stmt) = Syn.Call
+                       and then Syn.Kind (Of_Tree, Stmt)
+                                  in Syn.Call | Syn.Labeled_Application
                      then
                         --  Calls overlap statement and expression syntax.
                         --  The parser can only know that a final call is the
@@ -5815,7 +5836,10 @@ package body Landin.Stages.Lowering is
                           (Of_Tree, Stmt, Scope, Result, Target,
                            Destination_Field, Destination_Path);
                      elsif Syn.Kind (Of_Tree, Stmt)
-                             in Syn.Call | Syn.Try_Expression
+                             in Syn.Call | Syn.Labeled_Application
+                                | Syn.Try_Expression
+                       and then not Is_Struct_Construction
+                         (Of_Tree, Stmt)
                      then
                         Lower_Stored_Expression
                           (Of_Tree, Stmt, Scope, Target,
@@ -6801,7 +6825,7 @@ package body Landin.Stages.Lowering is
                            or else Current = IR.No_Block);
                      end;
 
-                  when Syn.Call =>
+                  when Syn.Call | Syn.Labeled_Application =>
                      declare
                         Ignored : constant IR.Value_Id :=
                           Lower_Call (Of_Tree, Stmt, Scope);

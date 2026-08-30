@@ -1,0 +1,5 @@
+class: negative
+summary: a runtime formal cannot be filled by two written arguments
+constructs: 0980, 1920
+program: program.ldn
+codes: L0301, L0301

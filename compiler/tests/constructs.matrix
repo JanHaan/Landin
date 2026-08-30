@@ -111,7 +111,7 @@
 0950   tour        -                                  Not everything that goes wrong belongs in that channel
 0960   tour        accepted emitted executed refused  Propagating: try, visible at the call site
 0970   tour        accepted emitted executed refused  Early exit
-0980   tour        refused                            Calls: positional first, then named
+0980   tour        accepted emitted executed refused  Calls: positional first, then named
 0990   tour        accepted emitted executed refused  A return list is an anonymous struct
 1000   tour        accepted emitted executed refused  A function type is an ordinary type
 1010   tour        accepted emitted executed refused  Anonymous functions

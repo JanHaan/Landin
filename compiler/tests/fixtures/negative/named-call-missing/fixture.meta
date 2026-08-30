@@ -1,0 +1,5 @@
+class: negative
+summary: an omitted named runtime formal has no default value
+constructs: 0980, 1920
+program: program.ldn
+codes: L0301

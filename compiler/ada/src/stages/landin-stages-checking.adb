@@ -45,6 +45,7 @@ package body Landin.Stages.Checking is
    use type Res.Verdict;
    use type Res.Application_Class;
    use type Res.Argument_Role;
+   use type Res.Call_Match_State;
    use type Res.Declaration_Sort;
    use type Landin.Source.Source_Id;
    use type Landin.Source.Names.Name_Id;
@@ -3618,11 +3619,34 @@ package body Landin.Stages.Checking is
             end loop;
          end if;
 
-         --  A written function type opens no scope, but two equal result
-         --  labels would still make [0990]'s structural field lookup
-         --  ambiguous.  Declared routines get the equivalent [1850]
-         --  diagnosis from resolution before checking reaches them.
+         --  A written function type opens no scope.  Its parameter labels
+         --  nevertheless drive [0980]'s named matching and therefore must be
+         --  unique.  Labels remain absent from structural signature identity.
+         --  Declared and anonymous routines get the equivalent [1850]
+         --  diagnosis from their signature scope during resolution.
          if Syn.Kind (Of_Tree, Node) = Syn.Function_Type then
+            for Right in 2 .. Syn.Parameter_Count (Of_Tree, Node) loop
+               for Left in 1 .. Right - 1 loop
+                  if Parts (Left).Name = Parts (Right).Name then
+                     Bad.Report
+                       (Item    => Bad.Type_Mismatch,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Anchor
+                          (Of_Tree, Syn.Nth_Parameter (Of_Tree, Node, Right)),
+                        Message => "this function type gives two parameters"
+                                   & " the same call label",
+                        Note    => "[0980]: a named argument must identify"
+                                   & " one formal parameter",
+                        Related => Syn.Origin
+                          (Of_Tree, Syn.Nth_Parameter
+                             (Of_Tree, Node, Left)),
+                        Because => "the first parameter with that label",
+                        Into    => Found);
+                     Valid := False;
+                  end if;
+               end loop;
+            end loop;
+
             for Right in 2 .. Syn.Return_Count (Of_Tree, Node) loop
                for Left in 1 .. Right - 1 loop
                   if Results (Left).Name = Results (Right).Name then
@@ -4525,6 +4549,11 @@ package body Landin.Stages.Checking is
          Good : Boolean := True;
          Conflict_Reported : Boolean := False;
 
+         function Match_Generic_Runtime_Arguments return Boolean;
+
+         function Runtime_Argument_At
+           (Position : Positive) return Syn.Node_Id;
+
          function Descriptor_At
            (Of_Tree : Syn.Tree;
             Node    : Syn.Node_Id;
@@ -4542,6 +4571,152 @@ package body Landin.Stages.Checking is
            (Argument : Syn.Node_Id;
             Position : Positive;
             What     : String);
+
+         function Match_Generic_Runtime_Arguments return Boolean
+         is
+            Wanted : constant Natural :=
+              Syn.Parameter_Count (Template_Tree.all, Function_Node);
+            Seen : array (1 .. Positive'Max (1, Wanted)) of Boolean :=
+              [others => False];
+            First : array (1 .. Positive'Max (1, Wanted)) of Syn.Node_Id :=
+              [others => Syn.No_Node];
+            Valid : Boolean := True;
+         begin
+            if Syn.Kind (Caller_Tree, Call) = Syn.Call then
+               if Syn.Argument_Count (Caller_Tree, Call) /= Wanted then
+                  Bad.Report
+                    (Item    => Bad.Type_Mismatch,
+                     Source  => Syn.Source_Of (Caller_Tree),
+                     Where   => Syn.Where (Caller_Tree, Call),
+                     Message => "this generic call gives "
+                                & Counted
+                                  (Syn.Argument_Count (Caller_Tree, Call),
+                                   "argument") & " and the template takes "
+                                & Counted (Wanted, "argument"),
+                     Note    => "D138: deduction first matches every"
+                                & " runtime argument position",
+                     Related => Syn.Origin
+                       (Template_Tree.all, Function_Node),
+                     Because => "the generic routine template",
+                     Into    => Found);
+                  return False;
+               end if;
+               return True;
+            end if;
+
+            for Written in 1 .. Syn.Argument_Count (Caller_Tree, Call) loop
+               declare
+                  Argument : constant Syn.Node_Id :=
+                    Syn.Nth_Argument (Caller_Tree, Call, Written);
+                  Role : constant Res.Argument_Role :=
+                    Res.Role_Of (Meanings.all, Caller_Tree, Argument);
+                  Position : constant Natural :=
+                    Res.Position_Of (Meanings.all, Caller_Tree, Argument);
+               begin
+                  if Role = Res.Runtime_Argument
+                    and then Position in 1 .. Wanted
+                  then
+                     if Seen (Position) then
+                        Bad.Report
+                          (Item    => Bad.Type_Mismatch,
+                           Source  => Syn.Source_Of (Caller_Tree),
+                           Where   => Syn.Anchor (Caller_Tree, Argument),
+                           Message => "this argument fills `"
+                                      & Spelled
+                                        (Syn.Name
+                                           (Template_Tree.all,
+                                            Syn.Nth_Parameter
+                                              (Template_Tree.all,
+                                               Function_Node, Position)))
+                                      & "` more than once",
+                           Note    => "[1920]: every runtime parameter is"
+                                      & " filled exactly once",
+                           Related => Syn.Origin
+                             (Caller_Tree, First (Position)),
+                           Because => "the first argument for this formal",
+                           Into    => Found);
+                        Valid := False;
+                     else
+                        Seen (Position) := True;
+                        First (Position) := Argument;
+                     end if;
+                     if Syn.Expression_Projection (Caller_Tree, Argument)
+                          = Syn.No_Node
+                     then
+                        Valid := False;
+                     end if;
+                  else
+                     Bad.Report
+                       (Item    => Bad.Type_Mismatch,
+                        Source  => Syn.Source_Of (Caller_Tree),
+                        Where   => Syn.Where (Caller_Tree, Argument),
+                        Message => "this is not a matched runtime argument"
+                                   & " of the generic callable",
+                        Note    => "R2.40: explicit static call arguments"
+                                   & " are the next generic increment",
+                        Related => Syn.Origin
+                          (Template_Tree.all, Function_Node),
+                        Because => "the generic routine template",
+                        Into    => Found);
+                     Valid := False;
+                  end if;
+               end;
+            end loop;
+
+            for Position in 1 .. Wanted loop
+               if not Seen (Position) then
+                  declare
+                     Formal : constant Syn.Node_Id :=
+                       Syn.Nth_Parameter
+                         (Template_Tree.all, Function_Node, Position);
+                  begin
+                     Bad.Report
+                       (Item    => Bad.Type_Mismatch,
+                        Source  => Syn.Source_Of (Caller_Tree),
+                        Where   => Syn.Where (Caller_Tree, Call),
+                        Message => "this call does not fill parameter `"
+                                   & Spelled
+                                     (Syn.Name (Template_Tree.all, Formal))
+                                   & "`",
+                        Note    => "[1920]: every runtime parameter is"
+                                   & " filled exactly once",
+                        Related => Syn.Origin (Template_Tree.all, Formal),
+                        Because => "the missing formal parameter",
+                        Into    => Found);
+                     Valid := False;
+                  end;
+               end if;
+            end loop;
+
+            Res.Finish_Call_Match
+              (Meanings.all, Caller_Tree, Call, Accepted => Valid);
+            return Valid;
+         end Match_Generic_Runtime_Arguments;
+
+         function Runtime_Argument_At
+           (Position : Positive) return Syn.Node_Id
+         is
+         begin
+            if Syn.Kind (Caller_Tree, Call) = Syn.Call then
+               return Syn.Nth_Argument (Caller_Tree, Call, Position);
+            end if;
+            for Written in 1 .. Syn.Argument_Count (Caller_Tree, Call) loop
+               declare
+                  Argument : constant Syn.Node_Id :=
+                    Syn.Nth_Argument (Caller_Tree, Call, Written);
+               begin
+                  if Res.Role_Of (Meanings.all, Caller_Tree, Argument)
+                       = Res.Runtime_Argument
+                    and then Res.Position_Of
+                      (Meanings.all, Caller_Tree, Argument) = Position
+                  then
+                     return Syn.Expression_Projection
+                       (Caller_Tree, Argument);
+                  end if;
+               end;
+            end loop;
+            return Syn.No_Node;
+         end Runtime_Argument_At;
 
          function Descriptor_At
            (Of_Tree : Syn.Tree;
@@ -4699,26 +4874,7 @@ package body Landin.Stages.Checking is
               (Types.all, Declaration, Descriptor.Kind);
          end Publish_Descriptor;
       begin
-         if Syn.Argument_Count (Caller_Tree, Call)
-              /= Syn.Parameter_Count (Template_Tree.all, Function_Node)
-         then
-            Bad.Report
-              (Item    => Bad.Type_Mismatch,
-               Source  => Syn.Source_Of (Caller_Tree),
-               Where   => Syn.Where (Caller_Tree, Call),
-               Message => "this generic call gives "
-                          & Counted
-                            (Syn.Argument_Count (Caller_Tree, Call),
-                             "argument") & " and the template takes "
-                          & Counted
-                            (Syn.Parameter_Count
-                               (Template_Tree.all, Function_Node),
-                             "argument"),
-               Note    => "D138: deduction first matches every runtime"
-                          & " argument position",
-               Related => Syn.Origin (Template_Tree.all, Function_Node),
-               Because => "the generic routine template",
-               Into    => Found);
+         if not Match_Generic_Runtime_Arguments then
             Landin.Checking.Refuse (Types.all, Caller_Tree, Call);
             return Landin.Checking.No_Signature;
          end if;
@@ -4743,7 +4899,7 @@ package body Landin.Stages.Checking is
                Written : constant Syn.Node_Id :=
                  Syn.Declared_Type (Template_Tree.all, Parameter);
                Argument : constant Syn.Node_Id :=
-                 Syn.Nth_Argument (Caller_Tree, Call, Index);
+                 Runtime_Argument_At (Index);
                Formal : Res.Declaration_Id := Res.No_Declaration;
             begin
                if Syn.Kind (Template_Tree.all, Written) = Syn.Type_Reference
@@ -5362,7 +5518,9 @@ package body Landin.Stages.Checking is
             --  Anonymous bodies are roots of their own and are discovered
             --  after every anonymous signature has been materialized.
             return;
-         elsif Syn.Kind (Of_Tree, Node) = Syn.Call then
+         elsif Syn.Kind (Of_Tree, Node)
+                 in Syn.Call | Syn.Labeled_Application
+         then
             declare
                Callee : constant Syn.Node_Id :=
                  Syn.Callee_Of (Of_Tree, Node);
@@ -5728,9 +5886,10 @@ package body Landin.Stages.Checking is
         (Left, Right : Landin.Checking.Signature_Id) return Boolean
         is (Landin.Checking.Signatures_Agree (Types.all, Left, Right));
 
-      --  [1920]: a call names every parameter exactly once and in order,
-      --  each argument has its parameter's type, and the call has the type
-      --  of the named return.
+      --  [0980]/[1920]: the positional prefix fills the runtime formals in
+      --  order and the named suffix may reorder the rest.  Matching records
+      --  resolution-owned roles and formal positions once; checking and
+      --  lowering then share that answer without changing written order.
       function Check_Call
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
@@ -5739,7 +5898,8 @@ package body Landin.Stages.Checking is
          Wanted : constant Natural :=
            Landin.Checking.Signature_Parameter_Count
              (Types.all, Signature);
-         Given  : constant Natural := Syn.Argument_Count (Of_Tree, Node);
+         Written_Count : constant Natural :=
+           Syn.Argument_Count (Of_Tree, Node);
          Result_Count : constant Natural :=
            Landin.Checking.Signature_Result_Count (Types.all, Signature);
          Result : constant Landin.Checking.Signature_Part :=
@@ -5747,33 +5907,218 @@ package body Landin.Stages.Checking is
             then Landin.Checking.Nth_Signature_Result
               (Types.all, Signature, 1)
             else (Kind => Ty.No_Value, others => <>));
+
+         function Match_Runtime_Arguments return Boolean;
+
+         function Match_Runtime_Arguments return Boolean is
+            Seen : array (1 .. Positive'Max (1, Wanted)) of Boolean :=
+              [others => False];
+            First : array (1 .. Positive'Max (1, Wanted)) of Syn.Node_Id :=
+              [others => Syn.No_Node];
+            Next_Positional : Natural := 0;
+            Valid : Boolean := True;
+         begin
+            if Syn.Kind (Of_Tree, Node) = Syn.Call then
+               if Written_Count /= Wanted then
+                  Bad.Report
+                    (Item    => Bad.Type_Mismatch,
+                     Source  => Syn.Source_Of (Of_Tree),
+                     Where   => Syn.Where (Of_Tree, Node),
+                     Message => "this call gives "
+                                & Counted (Written_Count, "argument")
+                                & " and the function takes "
+                                & Counted (Wanted, "argument"),
+                     Note    => "[1920]: a call names every parameter"
+                                & " exactly once",
+                     Related => Landin.Checking.Signature_Origin
+                                  (Types.all, Signature),
+                     Because => "the signature written here",
+                     Into    => Found);
+                  return False;
+               end if;
+               return True;
+            end if;
+
+            if Res.Match_Of (Meanings.all, Of_Tree, Node)
+                 = Res.Call_Matched
+            then
+               return True;
+            elsif Res.Match_Of (Meanings.all, Of_Tree, Node)
+                    = Res.Call_Rejected
+            then
+               return False;
+            end if;
+
+            for Written in 1 .. Written_Count loop
+               declare
+                  Argument : constant Syn.Node_Id :=
+                    Syn.Nth_Argument (Of_Tree, Node, Written);
+                  Label : constant Landin.Source.Names.Name_Id :=
+                    Syn.Argument_Label (Of_Tree, Argument);
+                  Position : Natural := 0;
+               begin
+                  if Res.Role_Of (Meanings.all, Of_Tree, Argument)
+                       in Res.Type_Argument | Res.Fixed_Argument
+                  then
+                     Bad.Report
+                       (Item    => Bad.Type_Mismatch,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Where (Of_Tree, Argument),
+                        Message => "an explicit static argument is not"
+                                   & " enabled for this call",
+                        Note    => "R2.40: ordinary calls have runtime"
+                                   & " parameter positions only",
+                        Related => Landin.Checking.Signature_Origin
+                                     (Types.all, Signature),
+                        Because => "this callable signature",
+                        Into    => Found);
+                     Valid := False;
+                  elsif Label = Landin.Source.Names.No_Name then
+                     Next_Positional := Next_Positional + 1;
+                     Position := Next_Positional;
+                     if Position > Wanted then
+                        Bad.Report
+                          (Item    => Bad.Type_Mismatch,
+                           Source  => Syn.Source_Of (Of_Tree),
+                           Where   => Syn.Where (Of_Tree, Argument),
+                           Message => "this positional argument has no"
+                                      & " runtime parameter to fill",
+                           Note    => "[1920]: every runtime parameter is"
+                                      & " filled exactly once",
+                           Related => Landin.Checking.Signature_Origin
+                                        (Types.all, Signature),
+                           Because => "the callable signature",
+                           Into    => Found);
+                        Valid := False;
+                     end if;
+                  else
+                     for Formal in 1 .. Wanted loop
+                        if Landin.Checking.Nth_Signature_Parameter
+                          (Types.all, Signature, Formal).Name = Label
+                        then
+                           Position := Formal;
+                           exit;
+                        end if;
+                     end loop;
+                     if Position = 0 then
+                        Bad.Report
+                          (Item    => Bad.Type_Mismatch,
+                           Source  => Syn.Source_Of (Of_Tree),
+                           Where   => Syn.Anchor (Of_Tree, Argument),
+                           Message => "`" & Spelled (Label)
+                                      & "` is not a runtime parameter of"
+                                      & " this callable",
+                           Note    => "[0980]: a named argument names one"
+                                      & " parameter",
+                           Related => Landin.Checking.Signature_Origin
+                                        (Types.all, Signature),
+                           Because => "the callable signature",
+                           Into    => Found);
+                        Valid := False;
+                     end if;
+                  end if;
+
+                  if Position in 1 .. Wanted then
+                     declare
+                        Parameter : constant Landin.Checking.Signature_Part :=
+                          Landin.Checking.Nth_Signature_Parameter
+                            (Types.all, Signature, Position);
+                     begin
+                        if Seen (Position) then
+                           Bad.Report
+                             (Item    => Bad.Type_Mismatch,
+                              Source  => Syn.Source_Of (Of_Tree),
+                              Where   => Syn.Anchor (Of_Tree, Argument),
+                              Message => "this argument fills `"
+                                         & Spelled (Parameter.Name)
+                                         & "` more than once",
+                              Note    => "[1920]: every runtime parameter"
+                                         & " is filled exactly once",
+                              Related => Syn.Origin
+                                (Of_Tree, First (Position)),
+                              Because => "the first argument for this"
+                                         & " parameter",
+                              Into    => Found);
+                           Valid := False;
+                        else
+                           Seen (Position) := True;
+                           First (Position) := Argument;
+                        end if;
+
+                        if Syn.Expression_Projection (Of_Tree, Argument)
+                             = Syn.No_Node
+                        then
+                           Bad.Report
+                             (Item    => Bad.Type_Mismatch,
+                              Source  => Syn.Source_Of (Of_Tree),
+                              Where   => Syn.Where (Of_Tree, Argument),
+                              Message => "a type-valued static argument"
+                                         & " cannot fill this runtime"
+                                         & " parameter",
+                              Note    => "R2.40: static roles are not"
+                                         & " runtime values",
+                              Related => Parameter.Site,
+                              Because => "the runtime parameter",
+                              Into    => Found);
+                           Valid := False;
+                        end if;
+                        Res.Match_Runtime_Argument
+                          (Meanings.all, Of_Tree, Argument,
+                           Positive (Position));
+                     end;
+                  end if;
+               end;
+            end loop;
+
+            for Position in 1 .. Wanted loop
+               if not Seen (Position) then
+                  declare
+                     Parameter : constant Landin.Checking.Signature_Part :=
+                       Landin.Checking.Nth_Signature_Parameter
+                         (Types.all, Signature, Position);
+                  begin
+                     Bad.Report
+                       (Item    => Bad.Type_Mismatch,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Where (Of_Tree, Node),
+                        Message => "this call does not fill parameter `"
+                                   & Spelled (Parameter.Name) & "`",
+                        Note    => "[1920]: every runtime parameter is"
+                                   & " filled exactly once",
+                        Related => Parameter.Site,
+                        Because => "the missing formal parameter",
+                        Into    => Found);
+                     Valid := False;
+                  end;
+               end if;
+            end loop;
+
+            Res.Finish_Call_Match
+              (Meanings.all, Of_Tree, Node, Accepted => Valid);
+            return Valid;
+         end Match_Runtime_Arguments;
       begin
-         if Given /= Wanted then
-            Bad.Report
-              (Item    => Bad.Type_Mismatch,
-               Source  => Syn.Source_Of (Of_Tree),
-               Where   => Syn.Where (Of_Tree, Node),
-               Message => "this call gives " & Counted (Given, "argument")
-                          & " and the function takes "
-                          & Counted (Wanted, "argument"),
-               Note    => "[1920]: a call names every parameter exactly"
-                          & " once and in order",
-               Related => Landin.Checking.Signature_Origin
-                            (Types.all, Signature),
-               Because => "the signature written here",
-               Into    => Found);
+         if not Match_Runtime_Arguments then
             return Ty.Ill_Typed;
          end if;
 
-         for Which in 1 .. Wanted loop
+         --  Type-check in written order even when names reorder the ABI.
+         --  Control expressions and short-circuiting therefore retain their
+         --  source order; Position selects only the parameter context.
+         for Written in 1 .. Written_Count loop
             declare
+               Raw_Argument : constant Syn.Node_Id :=
+                 Syn.Nth_Argument (Of_Tree, Node, Written);
+               Position : constant Positive :=
+                 (if Syn.Kind (Of_Tree, Raw_Argument) = Syn.Call_Argument
+                  then Positive
+                    (Res.Position_Of
+                       (Meanings.all, Of_Tree, Raw_Argument))
+                  else Written);
                Parameter : constant Landin.Checking.Signature_Part :=
                  Landin.Checking.Nth_Signature_Parameter
-                   (Types.all, Signature, Which);
-               Wants : constant Ty.Type_Kind :=
-                 Parameter.Kind;
-               Raw_Argument : constant Syn.Node_Id :=
-                 Syn.Nth_Argument (Of_Tree, Node, Which);
+                   (Types.all, Signature, Position);
+               Wants : constant Ty.Type_Kind := Parameter.Kind;
                Argument : constant Syn.Node_Id :=
                  (if Syn.Kind (Of_Tree, Raw_Argument) = Syn.Call_Argument
                   then Syn.Expression_Projection (Of_Tree, Raw_Argument)
@@ -5925,10 +6270,12 @@ package body Landin.Stages.Checking is
                  and then Syn.Kind (Of_Tree, Argument)
                             in Syn.Name_Reference | Syn.Member_Selection
                                | Syn.Element_Index | Syn.Call
+                               | Syn.Labeled_Application
                then
                   declare
                      Got : constant Ty.Type_Kind :=
-                       (if Syn.Kind (Of_Tree, Argument) = Syn.Call
+                       (if Syn.Kind (Of_Tree, Argument)
+                             in Syn.Call | Syn.Labeled_Application
                         then Synthesise (Of_Tree, Argument)
                         elsif Wants = Ty.Fixed_Array
                           and then Syn.Kind (Of_Tree, Argument)
@@ -7645,11 +7992,9 @@ package body Landin.Stages.Checking is
                     Syn.Operand_Of (Of_Tree, Node);
                   Held : Ty.Type_Kind;
                begin
-                  if Syn.Kind (Of_Tree, Operand) /= Syn.Call
-                    or else
-                      (Syn.Kind (Of_Tree, Operand) = Syn.Call
-                       and then Syn.Recovery_Of (Of_Tree, Operand)
-                                  /= Syn.No_Node)
+                  if Syn.Kind (Of_Tree, Operand)
+                       not in Syn.Call | Syn.Labeled_Application
+                    or else Syn.Recovery_Of (Of_Tree, Operand) /= Syn.No_Node
                   then
                      Bad.Report
                        (Item    => Bad.Type_Mismatch,
@@ -7764,7 +8109,28 @@ package body Landin.Stages.Checking is
                      else Landin.Checking.Signature_Of
                        (Types.all, Of_Tree, Callee));
                begin
-                  if Is_Generic
+                  if Syn.Kind (Of_Tree, Node) = Syn.Labeled_Application
+                    and then Res.Class_Of (Meanings.all, Of_Tree, Node)
+                               /= Res.Function_Call
+                  then
+                     Bad.Report
+                       (Item    => Bad.Unsupported_Use,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Where (Of_Tree, Node),
+                        Message =>
+                          (if Res.Class_Of (Meanings.all, Of_Tree, Node)
+                                 = Res.Case_Construction
+                           then "a variant case construction needs its"
+                                & " variant destination"
+                           else "a struct construction needs an explicitly"
+                                & " typed initializer or whole assignment"),
+                        Refused =>
+                          (if Res.Class_Of (Meanings.all, Of_Tree, Node)
+                                 = Res.Case_Construction
+                           then Bad.Variant_Value else Bad.Struct_Value),
+                        Into    => Found);
+                     return Kept (Ty.Ill_Typed);
+                  elsif Is_Generic
                     and then Signature = Landin.Checking.No_Signature
                   then
                      return Kept (Ty.Ill_Typed);
@@ -8171,7 +8537,7 @@ package body Landin.Stages.Checking is
                   Syn.Origin (Of_Tree, Label),
                   "the ordinary-struct payload field");
                return;
-            elsif Syn.Kind (Of_Tree, Given) = Syn.Struct_Literal then
+            elsif Is_Struct_Construction (Of_Tree, Given) then
                if Construction_Agrees
                     (Of_Tree, Given, Expected,
                      Syn.Origin (Of_Tree, Label),
@@ -11216,7 +11582,7 @@ package body Landin.Stages.Checking is
                   pragma Unreferenced (Got);
                end;
 
-            when Syn.Call =>
+            when Syn.Call | Syn.Labeled_Application =>
                --  [1920]: a call standing alone is a statement, and one
                --  that hands a value back is [1020]'s omitted discard --
                --  which R2 will refuse; the kernel accepts it because
@@ -14903,7 +15269,7 @@ package body Landin.Stages.Checking is
                      end;
                   end if;
 
-               when Syn.Call =>
+               when Syn.Call | Syn.Labeled_Application =>
                   declare
                      Signature : constant Landin.Checking.Signature_Id :=
                        Signature_For_Call (Of_Tree, Node);
@@ -15006,7 +15372,8 @@ package body Landin.Stages.Checking is
                      Call : constant Syn.Node_Id :=
                        Syn.Operand_Of (Of_Tree, Node);
                   begin
-                     if Syn.Kind (Of_Tree, Call) = Syn.Call
+                     if Syn.Kind (Of_Tree, Call)
+                          in Syn.Call | Syn.Labeled_Application
                        and then Syn.Recovery_Of (Of_Tree, Call) = Syn.No_Node
                      then
                         declare
@@ -15021,20 +15388,52 @@ package body Landin.Stages.Checking is
                         for Index in 1 .. Syn.Argument_Count
                           (Of_Tree, Call)
                         loop
-                           Scan
-                             (Of_Tree,
-                              Syn.Nth_Argument (Of_Tree, Call, Index),
-                              Caller);
+                           declare
+                              Argument : constant Syn.Node_Id :=
+                                Syn.Nth_Argument (Of_Tree, Call, Index);
+                           begin
+                              if Syn.Kind (Of_Tree, Argument)
+                                   /= Syn.Call_Argument
+                                or else Res.Role_Of
+                                  (Meanings.all, Of_Tree, Argument)
+                                    = Res.Runtime_Argument
+                              then
+                                 Scan
+                                   (Of_Tree,
+                                    (if Syn.Kind (Of_Tree, Argument)
+                                          = Syn.Call_Argument
+                                     then Syn.Expression_Projection
+                                       (Of_Tree, Argument)
+                                     else Argument),
+                                    Caller);
+                              end if;
+                           end;
                         end loop;
                      end if;
                   end;
                   return;
 
-               when Syn.Call =>
+               when Syn.Call | Syn.Labeled_Application =>
                   for Index in 1 .. Syn.Argument_Count (Of_Tree, Node) loop
-                     Scan
-                       (Of_Tree, Syn.Nth_Argument (Of_Tree, Node, Index),
-                        Caller);
+                     declare
+                        Argument : constant Syn.Node_Id :=
+                          Syn.Nth_Argument (Of_Tree, Node, Index);
+                     begin
+                        if Syn.Kind (Of_Tree, Argument) /= Syn.Call_Argument
+                          or else Res.Role_Of
+                            (Meanings.all, Of_Tree, Argument)
+                              = Res.Runtime_Argument
+                        then
+                           Scan
+                             (Of_Tree,
+                              (if Syn.Kind (Of_Tree, Argument)
+                                    = Syn.Call_Argument
+                               then Syn.Expression_Projection
+                                 (Of_Tree, Argument)
+                               else Argument),
+                              Caller);
+                        end if;
+                     end;
                   end loop;
 
                   declare

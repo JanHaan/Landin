@@ -1,0 +1,5 @@
+class: negative
+summary: a written callable signature needs unique runtime parameter labels
+constructs: 0980, 1000, 1800
+program: program.ldn
+codes: L0301
