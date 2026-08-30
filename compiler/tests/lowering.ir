@@ -1049,6 +1049,12 @@ item 1 DATUM selected result i32 params 0 slots 0 blocks 1 values 2
   block 1 scope 1 PROGRAM length 2
     1 NUMBER i32 42
     2 LEAVE <- 1
+file positive/fixed-conditional-symmetric-boundaries/main.ldn
+unit signatures 0 items 1
+item 1 DATUM selected result i32 params 0 slots 0 blocks 1 values 2
+  block 1 scope 1 PROGRAM length 2
+    1 NUMBER i32 42
+    2 LEAVE <- 1
 file positive/function-end-unnamed/program.ldn
 unit signatures 1 items 1
 signature 1 () -> i32

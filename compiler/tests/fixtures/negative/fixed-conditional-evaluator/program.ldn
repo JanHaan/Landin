@@ -6,7 +6,10 @@ end if
 fixed if 1 / 0 == 0 then
 end if
 
-fixed if -18446744073709551615 / -1 == 0 then
+fixed if -18446744073709551615 / -1 == 18446744073709551615 then
+end if
+
+fixed if -18446744073709551615 * -2 == 0 then
 end if
 
 fixed if f() == 0 then
