@@ -9,6 +9,7 @@ with Landin.Source;
 with Landin.Source.Names;
 with Landin.Stages;
 with Landin.Stages.Checking;
+with Landin.Stages.Configuration;
 with Landin.Stages.Lowering;
 with Landin.Stages.Resolution;
 with Landin.Stages.Syntax;
@@ -39,6 +40,7 @@ package body Landin.Driver is
    --  pipeline must not be able to outlive a stage.
    Frontend : aliased Landin.Stages.Syntax.Instance;
    Names    : aliased Landin.Stages.Resolution.Instance;
+   Configurer : aliased Landin.Stages.Configuration.Instance;
    Checker  : aliased Landin.Stages.Checking.Instance;
    Lowerer  : aliased Landin.Stages.Lowering.Instance;
 
@@ -488,6 +490,7 @@ package body Landin.Driver is
                Ran  : Natural;
             begin
                Landin.Stages.Append (Line, Frontend'Access);
+               Landin.Stages.Append (Line, Configurer'Access);
                Landin.Stages.Append (Line, Names'Access);
                Landin.Stages.Append (Line, Checker'Access);
                Landin.Stages.Append (Line, Lowerer'Access);
@@ -501,7 +504,7 @@ package body Landin.Driver is
                --  since R1.70: the lowering is the last, and it refuses to
                --  run on a refused program itself rather than relying on
                --  being queued after the checker.
-               if Ran not in 1 .. 4 then
+               if Ran not in 1 .. 5 then
                   raise Compiler_Defect
                     with "the frontend pipeline did not run";
                end if;
