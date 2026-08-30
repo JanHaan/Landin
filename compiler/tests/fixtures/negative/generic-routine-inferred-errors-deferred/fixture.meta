@@ -1,0 +1,6 @@
+class: negative
+summary: per-instance inferred generic errors remain explicitly and safely deferred
+constructs: 0940, 0960, 1290, 1920
+program: program.ldn
+targets: linux-x86-64, macos-arm64
+codes: L0301

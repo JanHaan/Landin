@@ -37,11 +37,13 @@ package body Landin.Tests.Checking_Suite is
    use type Landin.Checking.Array_Element_Form;
    use type Landin.Checking.Atom_Set_Id;
    use type Landin.Checking.Element_Count;
+   use type Landin.Checking.Error_Set_Form;
    use type Landin.Checking.Field_Kind;
    use type Landin.Checking.Instance_State;
    use type Landin.Checking.Nominal_Type_Id;
    use type Landin.Checking.Progress;
    use type Landin.Checking.Routine_Instance_Id;
+   use type Landin.Checking.Routine_Instance_State;
    use type Landin.Checking.Signature_Id;
    use type Landin.Types.Magnitude;
    use type Landin.Types.Type_Kind;
@@ -96,6 +98,9 @@ package body Landin.Tests.Checking_Suite is
      (Item : in out Landin.Testing.Context);
 
    procedure Failed_Generic_Deduction_Has_No_Target
+     (Item : in out Landin.Testing.Context);
+
+   procedure Generic_Instances_Carry_Declared_Errors
      (Item : in out Landin.Testing.Context);
 
    procedure Declared_Structs_Follow_Target_Layout
@@ -1188,6 +1193,59 @@ package body Landin.Tests.Checking_Suite is
             "a refused deduction has neither a target nor an instance");
       end;
    end Failed_Generic_Deduction_Has_No_Target;
+
+   procedure Generic_Instances_Carry_Declared_Errors
+     (Item : in out Landin.Testing.Context)
+   is
+      Text : constant String :=
+        "problem: atom" & LF
+        & "problems: type = problem" & LF
+        & "choose: (t: type, value: t, stop: bool) -> (result: t)"
+        & " ! problems =" & LF
+        & "    fail problem when stop" & LF
+        & "    result = value" & LF
+        & "end choose" & LF
+        & "use: () -> (result: i32) =" & LF
+        & "    result = choose(42, false) else 0" & LF
+        & "end use" & LF;
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Ran : Natural;
+      Src : Landin.Source.Source_Id;
+   begin
+      Src := Landin.Stages.Add_Source
+        (Work, "generic-errors.ldn", Text);
+      pragma Unreferenced (Src);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Landin.Stages.Append (Order, Checker'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+
+      Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work), "the program is accepted");
+      declare
+         Types : constant not null access Landin.Checking.Table :=
+           Landin.Stages.Types (Work);
+         Instance : constant Landin.Checking.Routine_Instance_Id :=
+           Landin.Checking.Routine_Identities.Nth (Types.all, 1);
+         Signature : constant Landin.Checking.Signature_Id :=
+           Landin.Checking.Routine_Signature_Of (Types.all, Instance);
+         Errors : constant Landin.Checking.Atom_Set_Id :=
+           Landin.Checking.Signature_Errors (Types.all, Signature);
+      begin
+         Landin.Testing.Check
+           (Item,
+            Landin.Checking.Routine_Instance_Count (Types.all) = 1
+              and then Landin.Checking.Routine_State_Of (Types.all, Instance)
+                = Landin.Checking.Routine_Ready
+              and then Landin.Checking.Signature_Error_Form
+                (Types.all, Signature) = Landin.Checking.Concrete
+              and then Landin.Checking.Atom_Count (Types.all, Errors) = 1,
+            "the public instance signature carries its concrete error set");
+      end;
+   end Generic_Instances_Carry_Declared_Errors;
 
    procedure Declared_Structs_Follow_Target_Layout
      (Item : in out Landin.Testing.Context)
@@ -5971,6 +6029,9 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Register
         (Into, "checking", "failed generic deduction has no target",
          Failed_Generic_Deduction_Has_No_Target'Access);
+      Landin.Testing.Register
+        (Into, "checking", "generic instances carry declared errors",
+         Generic_Instances_Carry_Declared_Errors'Access);
       Landin.Testing.Register
         (Into, "checking", "ordinary signatures use nominal identity only",
          Ordinary_Function_Signatures_Use_Identity_Only'Access);

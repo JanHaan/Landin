@@ -1,0 +1,6 @@
+class: runtime
+summary: generic declared errors use ordinary fail, try, recovery and failure cleanup paths
+constructs: 0940, 0960, 1030, 1110, 1290, 1920, 1970
+program: main.ldn
+status: 42
+targets: linux-x86-64
