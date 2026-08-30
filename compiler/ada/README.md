@@ -78,7 +78,7 @@ replaced.
 | `Landin.Stages.Syntax` | running the scan and the parse over a compilation | keep anything of its own, or decide reporting policy |
 | `Landin.Stages.Configuration` | validate and select D139 fixed declaration arms before resolution | execute code, mutate syntax, or add a runtime declaration |
 | `Landin.Stages.Resolution` | the order the trees are walked in through the D139 activity view | own the resolution table, or a code |
-| `Landin.Stages.Checking` | the three type passes, compile-time-only positional substitution, D136's closed target-independent fixed-expression evaluator, scalar/fixed-array normalization of parameterized aliases, symbolic validation of unused nominal and routine templates, canonical `(template, normalized actual tuple)` struct and routine interning, D138 context-free direct-call type-formal deduction, per-instance substituted signatures/bodies and fact views, same-key recursion and finite-expansion refusal, identity-only versus value-layout requirements for generic and ordinary signature recursion, ordinary alias-chain identity lookup, transient symbolic nominal obligations across used-formal wrappers, lazy recursive promotion from interned concrete actual tuples, substituted per-instance layout, bounded repeated-invalid replay, D137/L0313 by-value recursion separation, and checking-stage diagnostic order | own a table, a code, execute user code, synthesize a declaration, or choose a target-dependent operator width |
+| `Landin.Stages.Checking` | the three type passes, compile-time-only positional substitution, D136's closed target-independent fixed-expression evaluator, scalar/fixed-array normalization of parameterized aliases, symbolic validation of unused nominal and routine templates, canonical `(template, normalized actual tuple)` struct and routine interning, D138 context-free recursive structural direct-call deduction with deferred exact computed-bound checks, per-instance substituted signatures/bodies and fact views, same-key recursion and finite-expansion refusal, identity-only versus value-layout requirements for generic and ordinary signature recursion, ordinary alias-chain identity lookup, transient symbolic nominal obligations across used-formal wrappers, lazy recursive promotion from interned concrete actual tuples, substituted per-instance layout, bounded repeated-invalid replay, D137/L0313 by-value recursion separation, and checking-stage diagnostic order | own a table, a code, execute user code, synthesize a declaration, or choose a target-dependent operator width |
 
 | `Landin.Stages.Checking.Flow` | definite assignment, explicit fallthrough/return-compatible edge facts, and lexical cleanup execution states | decide a type, believe a condition, or lower a value |
 | `Landin.Stages.Lowering` | the walk that eagerly maps checker nominal identities and ready routine instances into deterministic IR order, activates each routine fact view, then builds and verifies the IR without creating items for templates or static formals; including caller-owned scalar and shaped control joins, checked computed-element address slots, plus reverse-order cleanup calls on selected exits, and refusing to run on a refused program | own the Unit, work out a scope, derive target layout, synthesize a declaration, or raise a diagnostic |
@@ -256,14 +256,21 @@ structs. D138 direct generic calls instead intern one checker routine identity p
 complete normalized tuple. A direct generic call either deduces every static
 formal from positional runtime arguments or names every static formal in the
 same named call list; static entries have no evaluation, IR value or ABI
-position. Direct type-formal positions deduce every enabled
-normalized descriptor: scalar, structural atom set, exact fixed array, nominal
-aggregate identity, or structural function signature whose error set is already
-concrete. An exact `[n]t` array
-parameter also binds its fixed length and element descriptor without arithmetic
-inversion; other nested patterns remain deferred. Each identity owns a layered view of the original
-source nodes and declarations, publishes its substituted signature before its
-body, and records generic call targets in the caller's view. A concrete
+position. The checker recursively unifies each runtime parameter's written type with the
+independently synthesized argument descriptor. Direct type formals bind every
+enabled normalized descriptor: scalar, structural atom set, exact fixed array,
+nominal aggregate identity, or structural function signature whose error set is
+already concrete. Fixed-array patterns recurse through exact bounds and
+elements; a direct fixed bound binds its length, while a computed bound is never
+inverted and is folded only after another relation or an explicit tuple binds
+its formals. Parameterized nominal patterns require the same source template and
+match the complete stored tuple, including phantom actuals. Parameterized alias
+patterns expand symbolically, and function patterns recurse through ordered
+parts and error forms while ignoring labels. Repeated relations agree exactly;
+a saturated explicit tuple binds nothing and validates every pattern. Each
+identity owns a layered view of the original source nodes and declarations,
+publishes its substituted signature before its body, and records generic call
+targets in the caller's view. A concrete
 declared atom error set is carried by that instance signature through ordinary
 call, recovery, propagation, failure and cleanup paths; per-instance inferred
 error sets remain source-diagnosed and deferred. Same-key recursion
@@ -271,7 +278,8 @@ reuses the building instance; a different tuple of the same active template is
 refused as non-finite expansion. Lowering activates each ready view and emits
 one deterministic local routine item. Templates and static formals create no
 IR, slot or ABI position, and no instantiation-specific answer is written to
-syntax.
+syntax. The only known remaining R2.40 generic-routine semantic gap is
+per-instance inferred errors; the roadmap therefore remains active.
 
 A width is a function of a type and a target description, never a property of
 either alone, and `Landin.Types.Width` is the only place one is formed.
