@@ -1019,9 +1019,15 @@ GUIDE_CSS = """
   border-left:2px solid var(--accent-soft); background:var(--panel-2);
   color:var(--ink-soft); font-size:.93rem;
 }
-.hero .status p{margin:0 0 .65rem; color:var(--ink-soft); font-size:1em}
-.hero .status p.brief{color:var(--ink); font-weight:600}
-.hero .status p:last-of-type{margin-bottom:0}
+.hero .status .status-meta{
+  margin:0 0 .35rem; color:var(--ink-faint); font-size:.7rem;
+  font-weight:700; letter-spacing:.08em; text-transform:uppercase;
+}
+.hero .status h2{
+  margin:0 0 .55rem; color:var(--ink); font-size:1.05rem;
+  line-height:1.35; text-wrap:balance;
+}
+.hero .status p{margin:0; color:var(--ink-soft); font-size:1em}
 .roadmap-track{
   display:grid; grid-template-columns:1.4fr 1fr 1fr; gap:1.35rem;
   margin-top:1.25rem; padding-top:1.2rem; border-top:1px solid var(--rule);
@@ -1533,21 +1539,17 @@ def readme_status(text):
 
 
 def status_parts(text):
-    """The lead and supporting sentences in the README's status."""
+    """The version, plain-language headline and detail in README's status."""
     prefix = f"Status: {VERSION_LINE}."
     if not text.startswith(prefix):
         raise SystemExit("render_html: README.md's status does not begin with "
                          f"{prefix!r}")
     remainder = text[len(prefix):].strip()
-    if not remainder:
-        return prefix, ""
-    m = re.match(r"^(.+?\.)(?:\s+(.+))$", remainder)
-    if m:
-        return f"{prefix} {m.group(1)}", m.group(2)
-    if remainder.endswith("."):
-        return f"{prefix} {remainder}", ""
-    raise SystemExit("render_html: status_parts cannot find a complete "
-                     f"compiler-status sentence after {prefix!r} in README.md")
+    m = re.match(r"^(.+?\.)(?:\s+(.+))?$", remainder)
+    if not m:
+        raise SystemExit("render_html: README.md's status needs a complete "
+                         f"plain-language headline after {prefix!r}")
+    return VERSION_LINE, m.group(1), m.group(2) or ""
 
 
 def roadmap_progress(text, recent_count=3):
@@ -1754,9 +1756,10 @@ def index_page(docs, counts, intro, status, progress, samples, symbols):
              '<a class="primary" href="tour.html">read the tour</a>'
              '<a href="spec.html">browse the specification</a></div>')
     if status:
-        brief, detail = status_parts(status)
+        version, headline, detail = status_parts(status)
         hero += ('<aside class="status" aria-label="Project status">'
-                 f'<p class="brief">{prose_html(brief, lambda ref: None)}</p>')
+                 f'<p class="status-meta">Status · {esc(version)}.</p>'
+                 f'<h2>{prose_html(headline, lambda ref: None)}</h2>')
         if detail:
             hero += f'<p>{prose_html(detail, lambda ref: None)}</p>'
         if progress:
