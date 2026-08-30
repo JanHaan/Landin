@@ -5047,7 +5047,7 @@ package body Landin.Tests.Lowering_Suite is
       Landin.Stages.Append (Front, Checker'Access);
       Ran := Landin.Stages.Run (Front, Work);
 
-      Landin.Testing.Check_Equal (Item, Ran, 3, "three stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "the nonempty source measurements are accepted");

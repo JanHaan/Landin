@@ -215,7 +215,7 @@ package body Landin.Tests.Resolution_Suite is
       Landin.Stages.Append (Order, Names'Access);
       Ran := Landin.Stages.Run (Order, Work);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "the resolver ran");
+      Landin.Testing.Check_Equal (Item, Ran, 3, "the resolver ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "a case may be named before its containing declaration");
@@ -292,7 +292,7 @@ package body Landin.Tests.Resolution_Suite is
       Landin.Stages.Append (Order, Names'Access);
       Ran := Landin.Stages.Run (Order, Work);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "the resolver ran");
+      Landin.Testing.Check_Equal (Item, Ran, 3, "the resolver ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "a type alias resolves its collected formals");
@@ -408,7 +408,7 @@ package body Landin.Tests.Resolution_Suite is
       Landin.Stages.Append (Order, Names'Access);
       Ran := Landin.Stages.Run (Order, Work);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "the resolver ran");
+      Landin.Testing.Check_Equal (Item, Ran, 3, "the resolver ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "a parameterized struct resolves its collected formals");

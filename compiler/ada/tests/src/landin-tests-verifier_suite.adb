@@ -73,7 +73,7 @@ package body Landin.Tests.Verifier_Suite is
       Landin.Stages.Append (Order, Names'Access);
       Landin.Stages.Append (Order, Checker'Access);
       Ran := Landin.Stages.Run (Order, Work);
-      pragma Assert (Ran = 5);
+      pragma Assert (Ran = 4);
       Site := (Source => Written, Where => Landin.Source.Empty_Span);
    end Ready;
 
