@@ -2319,18 +2319,21 @@ variants then use the ordinary nominal shape path. Templates and formals make
 no IR item, slot or ABI position.
 
 D138's first executable routine increment now extends substitution to direct
-scalar generic calls. The checker interns `(template, normalized actual tuple)`
+generic calls across every enabled normalized descriptor. The checker interns `(template, normalized actual tuple)`
 routine identities, checks and lowers each through a fact overlay on the shared
 source, publishes a signature before same-key recursion, rejects active
 same-template unequal-tuple expansion, and maps each ready key to one local IR
 routine item. Deduction synthesizes runtime arguments without parameter context,
-binds direct type-formal occurrences exactly, requires repeats and all formals
-to agree, and then performs ordinary call checking; a context-free literal
-therefore deduces `i32`. An exact `[n]t` runtime parameter additionally binds
+binds direct type-formal occurrences exactly as scalar, structural atom-set,
+exact fixed-array, nominal aggregate or already-concrete structural
+function-signature descriptors, requires repeats and all formals to agree, and then performs
+ordinary call checking; a context-free literal therefore deduces `i32`. An exact `[n]t` runtime parameter additionally binds
 `n` from the argument's normalized array length and `t` from its element
 descriptor, without arithmetic inversion. Static formals remain outside
-signatures, slots and the ABI. Explicit static call syntax, computed fixed
-patterns, and fixed conditional declaration lists remain the next increments.
+signatures, slots and the ABI. Other nested type patterns, function descriptors
+whose error sets are still inferred, explicit static call syntax, computed
+fixed patterns, and fixed conditional declaration lists remain
+the next increments.
 Deduction does not use return context or constraint lookup. Concrete declared
 atom error sets are substituted onto each instance signature and use the
 ordinary call, recovery, `try`, `fail`, `defer`, and `undo` machinery;
@@ -2351,8 +2354,9 @@ nominal and nominal-array results, and nominal recursion including unused
 order-permuted, mutual and multi-wrapper symbolic formal paths plus direct
 field, payload and zero-length array edges. Routine evidence covers overlay
 separation on one source node, equal-key reuse, unequal scalar items, deduced
-`u8`/`i32`, context-free literal `i32`, exact `[n]t` fixed/element deduction,
-same-key recursion, repeated type/fixed-formal conflicts, undeduced formals,
+`u8`/`i32`, context-free literal `i32`, unequal atom-set/function-signature/
+nominal descriptors with aggregate transport and layout, exact `[n]t`
+fixed/element deduction, same-key recursion, repeated type/fixed-formal conflicts, undeduced formals,
 non-finite unequal-key recursion, declared error propagation/recovery/failure
 cleanup, safe refusal of inferred generic errors, unconditional unused-template
 defects, and absence of static ABI positions. Direct and

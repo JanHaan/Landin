@@ -7638,8 +7638,10 @@ may participate in deduction.
 item. A direct call first synthesizes each runtime argument without an expected
 parameter type. A context-free integer literal therefore takes [0200]'s `i32`.
 A type formal occurring directly as a runtime parameter type binds that
-argument's complete normalized descriptor; repeated direct occurrences must
-agree exactly, and every type formal must be bound. Deduction uses no return
+argument's complete normalized descriptor: an enabled scalar, structural atom
+set, exact fixed array, nominal aggregate identity, or structural function
+signature whose error set is already concrete. Repeated direct occurrences must agree exactly, and every type
+formal must be bound. Deduction uses no return
 context, conversion, constraint search, arithmetic inversion or user-code
 execution. One exact runtime array pattern `[n]t` may additionally bind `n`
 from the argument's normalized length and `t` from its normalized element
@@ -7668,11 +7670,13 @@ Lowering selects that same view and creates one deterministic local routine
 item per ready identity in checker interning order. A generic call records its
 target identity in its caller's view, so nested and recursive calls remain
 stable. The template, type formals and fixed formals create no item, slot,
-runtime signature part or ABI position. This first executable increment pins
-scalar and exact fixed-array routine parameters, results, locals and calls; the
-identity key and fact view already carry the normalized descriptor forms shared with D137. Exact
-`[n]t` shape deduction is enabled; explicit static call syntax and deduction
-through computed fixed expressions remain later R2.40 increments.
+runtime signature part or ABI position. This executable increment carries every
+enabled direct-formal descriptor through routine parameters, results, locals
+and calls, including atom sets, function signatures and nominal aggregate
+transport/layout. Exact `[n]t` shape deduction is additionally enabled.
+Deduction through other nested type patterns, a function descriptor whose error
+set is still inferred, computed fixed expressions, or explicit static call
+syntax remains deferred.
 
 **Why an instance view:** writing `t = u8` on the template declaration or its
 nodes makes a later `t = i32` call overwrite the first. Resetting shared tables
@@ -7689,5 +7693,6 @@ facts`, the lowering case `generic routines lower once per key`,
 `negative/generic-routine-unused-unconditional-defect`, and
 `runtime/generic-identity-deduction`,
 `runtime/generic-fixed-array-deduction`,
+`runtime/generic-direct-descriptor-deduction`,
 `runtime/generic-declared-errors`, and
 `runtime/generic-same-key-recursion` on Linux x86-64.
