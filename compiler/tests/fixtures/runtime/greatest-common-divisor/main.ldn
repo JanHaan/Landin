@@ -1,0 +1,22 @@
+--  Euclid's algorithm repeatedly replaces a pair by the divisor and remainder.
+--  The recursion terminates when that remainder reaches zero.
+gcd: (a: u32, b: u32) -> (result: u32) =
+    if b == 0 then
+        result = a
+    else
+        result = gcd(b, a % b)
+    end if
+end gcd
+
+public main: () -> (code: i32) =
+    if gcd(1071, 462) == 21
+      and gcd(54, 24) == 6
+      and gcd(42, 0) == 42
+      and gcd(0, 42) == 42
+      and gcd(37, 600) == 1
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

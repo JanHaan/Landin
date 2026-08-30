@@ -936,8 +936,8 @@ def render_sample(lines, hl, links):
 GUIDES = [
     dict(key="examples", src="examples.md", out="examples.html",
          nav="running examples", group="the language",
-         blurb="Four complete programs the compiler emits and the Linux "
-               "gate runs: recursive Fibonacci and three sorting algorithms."),
+         blurb="Seven complete programs the compiler emits and the Linux gate "
+               "runs, from FizzBuzz and Euclid to searching and encoding."),
     dict(key="readme", src="README.md", out="readme.html",
          nav="the project", group="the project",
          blurb="What Landin is, what is in the repository, and how to build "
@@ -1726,8 +1726,8 @@ def index_page(docs, counts, intro, status, progress, samples, symbols):
          "The design in one page, the principles behind it, and which "
          "decisions must not be quietly reversed."),
         ("examples.html", "run real programs",
-         "Recursive Fibonacci, insertion sort, selection sort and merge "
-         "sort: complete sources the Linux gate builds and executes."),
+         "FizzBuzz, Euclid, searching, a prime sieve, run-length encoding and "
+         "sorting: complete sources the Linux gate builds and executes."),
     ]
     cards = "".join(
         f'<a class="route" href="{href}"><strong>{esc(head)}</strong>'

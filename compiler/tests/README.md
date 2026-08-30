@@ -64,34 +64,30 @@ the complete local gate.
 ## Complete programs to try
 
 The runtime fixtures include small, complete programs rather than only
-single-construct probes.  Four of them are collected in `examples.md` and use
+single-construct probes. Seven of them are collected in `examples.md` and use
 only the kernel the compiler implements today:
 
-- [recursive Fibonacci](fixtures/runtime/recursive-fibonacci/main.ldn) calls
-  itself twice per recursive step;
-- [insertion sort](fixtures/runtime/insertion-sort/main.ldn) uses recursive
-  adjacent swaps;
-- [selection sort](fixtures/runtime/selection-sort/main.ldn) recursively finds
-  each remaining minimum;
+- [FizzBuzz](fixtures/runtime/fizzbuzz/main.ldn) classifies one through 100
+  with atoms and tallies the result;
+- [greatest common divisor](fixtures/runtime/greatest-common-divisor/main.ldn)
+  implements Euclid's remainder reduction;
+- [insertion sort](fixtures/runtime/insertion-sort/main.ldn) sorts
+  caller-owned storage through `inout` and a writable slice;
+- [binary search](fixtures/runtime/binary-search/main.ldn) searches a read-only
+  slice and returns a found-or-missing variant;
+- [the sieve of Eratosthenes](fixtures/runtime/sieve-of-eratosthenes/main.ldn)
+  marks composites in caller-owned fixed storage;
+- [run-length encoding](fixtures/runtime/run-length-encoding/main.ldn)
+  transforms a read-only slice into caller-owned structured output;
 - [merge sort](fixtures/runtime/merge-sort/main.ldn) divides recursively and
   merges through a second fixed array.
 
-The kernel still does not have loops, so these examples deliberately use
-recursion and module-level arrays. R2.30 now also accepts internal aggregate
-parameters and results, whole aggregate elements at checked computed indexes,
-expression-valued `if`, exhaustive `match`, bare `begin` blocks, lexical
-`defer`, failure-only `undo`, and recursively folded module images whose
-ordinary children or ordinary variant payloads retain independent
-target-laid-out storage. Their dedicated fixtures exercise caller-owned scalar,
-fixed-array and struct join storage, nested computed-element addresses,
-reverse-order cleanup across normal, successful-return and declared-failure
-edges with traps excluded, and recursive static images on 32- and 64-bit target
-facts. `runtime/r230-composition` combines errors, anonymous multiple results,
-function-field calls, control values, register and stack arguments, defer/undo
-and every enabled non-trap exit; `runtime/r230-composition-trap` covers the
-remaining stop edge. On Linux x86-64,
-compile one of the
-recursive examples from the repository root with:
+The kernel still has no loops, text or hosted output, so these examples use
+recursion and verify their results through status 42. Together they exercise
+aggregate parameters, fixed arrays, slices, `inout`, atoms, variants, pattern
+matching and computed indexing. The narrower runtime fixtures retain the
+single-construct and composition coverage behind those examples. On Linux
+x86-64, compile one from the repository root with:
 
 ```sh
 refine --target=linux-x86-64 --emit=exe \
@@ -101,9 +97,9 @@ refine --target=linux-x86-64 --emit=exe \
 test $? -eq 42
 ```
 
-Each program returns 42 when its result is the expected one.  They are runtime
+Each program returns 42 when its result is the expected one. They are runtime
 fixtures as well as examples, so the authoritative Linux gate compiles, runs
-and checks all four on every push.
+and checks all seven on every push.
 
 ## Metadata
 

@@ -1,0 +1,6 @@
+class: runtime
+summary: binary search recursively narrows a read-only slice and returns an explicit found-or-missing variant
+constructs: 0290, 0520, 0570, 0680, 0690, 1210, 1800, 1810, 1820, 1920, 1970
+program: main.ldn
+status: 42
+targets: linux-x86-64

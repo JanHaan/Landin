@@ -59,12 +59,18 @@ LIVE_DOCS = FILES + ["AGENTS.md", "README.md", "handoff.md", "examples.md",
                      "docs/site/README.md"]
 
 RUNNING_EXAMPLES = [
-    ("Recursive Fibonacci",
-     "compiler/tests/fixtures/runtime/recursive-fibonacci/main.ldn"),
+    ("FizzBuzz",
+     "compiler/tests/fixtures/runtime/fizzbuzz/main.ldn"),
+    ("Greatest common divisor",
+     "compiler/tests/fixtures/runtime/greatest-common-divisor/main.ldn"),
     ("Insertion sort",
      "compiler/tests/fixtures/runtime/insertion-sort/main.ldn"),
-    ("Selection sort",
-     "compiler/tests/fixtures/runtime/selection-sort/main.ldn"),
+    ("Binary search",
+     "compiler/tests/fixtures/runtime/binary-search/main.ldn"),
+    ("Sieve of Eratosthenes",
+     "compiler/tests/fixtures/runtime/sieve-of-eratosthenes/main.ldn"),
+    ("Run-length encoding",
+     "compiler/tests/fixtures/runtime/run-length-encoding/main.ldn"),
     ("Merge sort",
      "compiler/tests/fixtures/runtime/merge-sort/main.ldn"),
 ]

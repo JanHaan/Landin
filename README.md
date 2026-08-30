@@ -16,9 +16,9 @@ at the other.
 **Status: specification 0.1.0. The compiler can build and run Landin programs
 for 64-bit Linux. It already handles functions, user-defined data types,
 generic routines, pointers, errors and control flow. The repository includes
-complete Fibonacci and sorting programs that are compiled and tested
-automatically. Support for macOS, microcontrollers and a standard library is
-still to come.**
+complete FizzBuzz, number-theory, searching and sorting programs that are
+compiled and tested automatically. Support for macOS, microcontrollers and a
+standard library is still to come.**
 
 ## What is here
 
@@ -27,7 +27,7 @@ still to come.**
 | `handoff.md` | start here. The design in one page, the principles behind it, how the work is done, and which decisions must not be quietly reversed. |
 | `spec.md` | the normative specification: the grammar of the enabled kernel, the rules the tour left unsaid, and the register of decisions taken while implementing them. |
 | `tour.md` | the language explained, as a numbered "learn X in Y minutes". Teaches; does not decide. |
-| `examples.md` | complete programs the compiler emits and the Linux gate runs today: recursive Fibonacci and three sorting algorithms. |
+| `examples.md` | seven complete programs the compiler emits and the Linux gate runs today: FizzBuzz, greatest common divisor, insertion sort, binary search, a prime sieve, run-length encoding and merge sort. |
 | `ROADMAP.md` | the sole durable authority for open work, implementation dependencies, phase gates, and dispositions. Read it before proposing or scheduling work. |
 | `AGENTS.md` | how to work in this repository: the authority order, the commands, and the rules the chassis already keeps. |
 | `check.py` | mechanical checks over the live documents, grammar and fixture corpus. Run it after touching any of them. |

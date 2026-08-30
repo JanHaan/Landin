@@ -1,0 +1,6 @@
+class: runtime
+summary: Euclid's recursive algorithm computes greatest common divisors through remainder reduction
+constructs: 0290, 1800, 1810, 1820, 1920, 1970
+program: main.ldn
+status: 42
+targets: linux-x86-64

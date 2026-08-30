@@ -1,28 +1,31 @@
---  The current kernel has recursion and fixed arrays, but no loops or
---  aggregate parameters yet.  This insertion sort therefore works recursively
---  over module storage.  The array literal is its static initial image.
-mut values: [8]i32 = [9, -4, 7, 7, 0, -9, 42, 1]
+--  The public operation accepts caller-owned storage through inout; recursive
+--  helpers work through a writable slice because loops are not implemented yet.
+insert_at: (values: []mut i32, index: usize) -> none =
+    return when index == 0
 
-insert_at: (at: usize) -> none =
-    return when at == 0
-
-    previous: usize = at - 1
-    if values[previous] > values[at] then
+    previous: usize = index - 1
+    if values[previous] > values[index] then
         saved: i32 = values[previous]
-        values[previous] = values[at]
-        values[at] = saved
-        insert_at(previous)
+        values[previous] = values[index]
+        values[index] = saved
+        insert_at(values, previous)
     end if
 end insert_at
 
-insertion_sort_from: (at: usize) -> none =
-    return when at >= lenof values
-    insert_at(at)
-    insertion_sort_from(at + 1)
+insertion_sort_from: (values: []mut i32, index: usize) -> none =
+    return when index >= lenof values
+    insert_at(values, index)
+    insertion_sort_from(values, index + 1)
 end insertion_sort_from
 
+insertion_sort: (inout values: [8]i32) -> none =
+    view: []mut i32 = values[0..<lenof values]
+    insertion_sort_from(view, 1)
+end insertion_sort
+
 public main: () -> (code: i32) =
-    insertion_sort_from(1)
+    mut values: [8]i32 = [9, -4, 7, 7, 0, -9, 42, 1]
+    insertion_sort(values)
 
     if values[0] == -9
         and values[1] == -4

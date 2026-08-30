@@ -1,0 +1,6 @@
+class: runtime
+summary: a recursive sieve marks composites through a writable slice over caller-owned fixed storage
+constructs: 0290, 0520, 0570, 0900, 1800, 1810, 1820, 1920, 1970
+program: main.ldn
+status: 42
+targets: linux-x86-64

@@ -1,0 +1,53 @@
+--  The sieve mutates caller-owned storage through a writable slice.  Computed
+--  indexing marks composites, while recursion supplies the two traversals.
+mark_multiples: (composite: []mut bool,
+                 multiple: usize, step: usize) -> none =
+    return when multiple >= lenof composite
+    composite[multiple] = true
+    mark_multiples(composite, multiple + step, step)
+end mark_multiples
+
+sieve_from: (composite: []mut bool, candidate: usize) -> none =
+    return when candidate >= lenof composite
+
+    if not composite[candidate] then
+        mark_multiples(composite, candidate + candidate, candidate)
+    end if
+    sieve_from(composite, candidate + 1)
+end sieve_from
+
+count_primes: (values: []bool, index: usize) -> (result: u32) =
+    if index >= lenof values then
+        result = 0
+    elsif values[index] then
+        result = count_primes(values, index + 1)
+    else
+        result = 1 + count_primes(values, index + 1)
+    end if
+end count_primes
+
+sieve: (inout composite: [101]bool) -> none =
+    view: []mut bool = composite[0..<lenof composite]
+    view[0] = true
+    view[1] = true
+    sieve_from(view, 2)
+end sieve
+
+public main: () -> (code: i32) =
+    mut composite: [101]bool = zeroed
+    sieve(composite)
+    view: []bool = composite[0..<lenof composite]
+
+    if count_primes(view, 0) == 25
+      and not composite[2]
+      and not composite[3]
+      and composite[4]
+      and not composite[97]
+      and composite[99]
+      and composite[100]
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main
