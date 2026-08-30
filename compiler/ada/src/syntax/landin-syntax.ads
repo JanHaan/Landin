@@ -133,8 +133,16 @@ package Landin.Syntax is
       --  the lexical scope and the value-bearing fallthrough edge remain
       --  distinct nodes.
       Bare_Block,
-      --  A call is a statement as well as an expression [1810].  Its second
-      --  fixed slot is an optional Recovery_Clause; arguments follow it.
+      --  A direct application with at least one labelled argument remains
+      --  neutral until resolution has classified its callee.  Its first slot
+      --  is the direct name reference and its trailing run is Call_Argument;
+      --  the optional Recovery_Clause is carried beside the slots just as it
+      --  is for Call.  The parser neither guesses construction from `name:`
+      --  nor guesses a runtime call from the callee's spelling.
+      Labeled_Application,
+      --  A purely positional call is the existing node unchanged [1810].
+      --  Its first fixed slot is the callee; arguments follow it, and its
+      --  optional Recovery_Clause is carried beside those slots.
       Call,
       --  [0960]'s explicit propagation expression.
       Try_Expression,
@@ -212,6 +220,12 @@ package Landin.Syntax is
       --  by an expression rather than an expression on its own, so it sits
       --  outside Expression_Kind while its one child remains ordinary.
       Field_Value,
+      --  One source argument of Labeled_Application.  Its own name is the
+      --  optional label (No_Name for a leading positional argument) and its
+      --  one child is a compact, immutable RHS.  Projection accessors below
+      --  can expose that same child as expression syntax, type syntax, or
+      --  both; no second semantic subtree is inserted into the post-order.
+      Call_Argument,
       --  Types [1790].  A name, not a closed set: see the header.
       Error_Type,
       Type_Name,
@@ -313,7 +327,7 @@ package Landin.Syntax is
                     | Fixed_Formal | Field | Variant_Part | Variant_Case
                     | Destructured_Field
                     | Destructured_Name | Recovery_Clause | Match_Binding
-                    | Member_Selection | Field_Value);
+                    | Member_Selection | Field_Value | Call_Argument);
 
    ------------------------------------------------------------------
    --  Trees
@@ -640,10 +654,11 @@ package Landin.Syntax is
                             in Function_Declaration | Anonymous_Function
                                | Function_Type;
 
-   --  A call's optional [1030] clause; No_Node when none was written.
+   --  An application's optional [1030] clause; No_Node when none was written.
    function Recovery_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
      with Pre => Contains (Of_Tree, Id)
-                 and then Kind (Of_Tree, Id) = Call;
+                 and then Kind (Of_Tree, Id)
+                            in Call | Labeled_Application;
 
    --  Runtime parameters only. D138's type and fixed formals share the
    --  declaration's trailing signature run but never enter this ABI-facing
@@ -779,21 +794,66 @@ package Landin.Syntax is
 
    --  `call ::= indexed "(" arguments? ")"` [1820].  A direct callee stays
    --  one Name_Reference; D131 also carries a complete field selection here.
+   --  Labeled_Application deliberately shares this slot while resolution
+   --  decides whether that direct name denotes a callable or a type.
    function Callee_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
      with Pre  => Contains (Of_Tree, Id)
-                  and then Kind (Of_Tree, Id) = Call,
+                  and then Kind (Of_Tree, Id)
+                             in Call | Labeled_Application,
           Post => Contains (Of_Tree, Callee_Of'Result);
 
    function Argument_Count (Of_Tree : Tree; Id : Node_Id) return Natural
      with Pre => Contains (Of_Tree, Id)
-                 and then Kind (Of_Tree, Id) = Call;
+                 and then Kind (Of_Tree, Id)
+                            in Call | Labeled_Application;
 
+   --  A positional Call returns its expression child unchanged.  A labelled
+   --  application returns the Call_Argument wrapper, preserving its label and
+   --  both projections for callee-first classification.
    function Nth_Argument
      (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
      with Pre  => Contains (Of_Tree, Id)
-                  and then Kind (Of_Tree, Id) = Call
+                  and then Kind (Of_Tree, Id)
+                             in Call | Labeled_Application
                   and then Index <= Argument_Count (Of_Tree, Id),
-          Post => Contains (Of_Tree, Nth_Argument'Result);
+          Post => Contains (Of_Tree, Nth_Argument'Result)
+                  and then
+                    (if Kind (Of_Tree, Id) = Labeled_Application
+                     then Kind (Of_Tree, Nth_Argument'Result) = Call_Argument);
+
+   function Argument_Label (Of_Tree : Tree; Id : Node_Id)
+     return Landin.Source.Names.Name_Id
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id) = Call_Argument;
+
+   --  True only for [0720]'s colonless trailing `of expression`.  Keeping
+   --  this lexical fact on the same neutral argument node lets resolution
+   --  assign the fill role after it has classified construction, while
+   --  `of: expression` remains an ordinary labelled call argument.
+   function Is_Fill_Argument (Of_Tree : Tree; Id : Node_Id) return Boolean
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id) = Call_Argument;
+
+   --  The source RHS, before either semantic interpretation is selected.
+   function Argument_RHS (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     with Pre  => Contains (Of_Tree, Id)
+                  and then Kind (Of_Tree, Id) = Call_Argument,
+          Post => Contains (Of_Tree, Argument_RHS'Result);
+
+   --  These are projections, not owned children.  When both are present they
+   --  are the same Node_Id: an identifier, integer, or direct positional
+   --  application has one compact syntax tree and resolution selects how to
+   --  read it.  This preserves the global post-order and prevents a labelled
+   --  argument from duplicating every semantic descendant merely to retain
+   --  two possible views.  No_Node means the RHS cannot have that grammar.
+   function Expression_Projection (Of_Tree : Tree; Id : Node_Id)
+     return Node_Id
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id) = Call_Argument;
+
+   function Type_Projection (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id) = Call_Argument;
 
    --  D135's applied alias and its positional type/fixed argument run.
    function Applied_Type (Of_Tree : Tree; Id : Node_Id) return Node_Id
@@ -977,6 +1037,7 @@ private
       Sound      : Boolean := True;
       Exported   : Boolean := False;
       Mutable    : Boolean := False;
+      Fill       : Boolean := False;
       Recovery   : Node_Id := No_Node;
    end record;
 

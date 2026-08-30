@@ -71,6 +71,7 @@ package Landin.Diagnostics.Catalogue is
       End_Name_Mismatch,
       Stray_Token,
       Nesting_Too_Deep,
+      Positional_After_Named,
       --  The resolver, assigned at R1.50.  Two rules and not more: a name
       --  declared twice in one scope, and a name used and never declared.
       Duplicate_Declaration,
@@ -135,6 +136,7 @@ package Landin.Diagnostics.Catalogue is
             when End_Name_Mismatch        => "L0109",
             when Stray_Token              => "L0110",
             when Nesting_Too_Deep         => "L0111",
+            when Positional_After_Named   => "L0112",
             when Duplicate_Declaration    => "L0200",
             when Unresolved_Name          => "L0201",
             when Literal_Out_Of_Range     => "L0300",
@@ -169,7 +171,7 @@ package Landin.Diagnostics.Catalogue is
             when Unknown_Bytes         => Error,
             when Unterminated_Comment  => Error,
             when Unterminated_Literal  => Error,
-            when Name_Expected .. Nesting_Too_Deep => Error,
+            when Name_Expected .. Positional_After_Named => Error,
             when Duplicate_Declaration => Error,
             when Unresolved_Name       => Error,
             when Literal_Out_Of_Range
@@ -195,7 +197,7 @@ package Landin.Diagnostics.Catalogue is
             when Unknown_Bytes         => Live,
             when Unterminated_Comment  => Live,
             when Unterminated_Literal  => Live,
-            when Name_Expected .. Nesting_Too_Deep => Live,
+            when Name_Expected .. Positional_After_Named => Live,
             when Duplicate_Declaration => Live,
             when Unresolved_Name       => Live,
             when Literal_Out_Of_Range
@@ -251,6 +253,9 @@ package Landin.Diagnostics.Catalogue is
             when Stray_Token           =>
                "[1740]: a run of tokens beginning no declaration or"
                & " statement",
+            when Positional_After_Named =>
+               "[0980]: a positional call argument precedes every named"
+               & " argument",
             when Nesting_Too_Deep      =>
                "an implementation limit on how deeply a construct nests",
             when Duplicate_Declaration =>
@@ -324,7 +329,7 @@ package Landin.Diagnostics.Catalogue is
             when Unknown_Bytes         => True,
             when Unterminated_Comment  => True,
             when Unterminated_Literal  => True,
-            when Name_Expected .. Nesting_Too_Deep => True,
+            when Name_Expected .. Positional_After_Named => True,
             when Duplicate_Declaration => True,
             when Unresolved_Name       => True,
             when Literal_Out_Of_Range
@@ -351,7 +356,7 @@ package Landin.Diagnostics.Catalogue is
             when Unterminated_Comment  => False,
             when Unterminated_Literal  => True,
             when Name_Expected .. Unclosed_Construct => False,
-            when Assignment_In_Expression .. Nesting_Too_Deep => True,
+            when Assignment_In_Expression .. Positional_After_Named => True,
             --  A name that is duplicated or unknown is written down: there
             --  is a lexeme to point at, and it is the name itself.
             when Duplicate_Declaration => True,
@@ -425,7 +430,7 @@ package Landin.Diagnostics.Catalogue is
             when Construct_Not_Enabled => 2,
             when Malformed_Integer     => 1,
             when Unknown_Bytes         => 1,
-            when Name_Expected .. Nesting_Too_Deep => 1,
+            when Name_Expected .. Positional_After_Named => 1,
             when Duplicate_Declaration => 1,
             when Unresolved_Name       => 1,
             when Literal_Out_Of_Range  => 1,

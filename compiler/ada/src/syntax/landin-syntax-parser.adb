@@ -170,6 +170,11 @@ package body Landin.Syntax.Parser is
             --  end of a then/elsif arm the enclosing branch wins; wrapping a
             --  recovered call in parentheses makes its inner `else` explicit.
             Else_Closes_Arm : Boolean := False;
+            --  A labelled RHS keeps direct positional applications neutral:
+            --  their own arguments may recursively be type-only syntax.
+            --  Outside that one parse, positional Call uses the unchanged
+            --  expression-only argument production.
+            In_Argument_RHS : Boolean := False;
 
             --  Set by Parse_Type when it refused a construct rather than
             --  failing to read one.  A binding whose type is a construct
@@ -256,6 +261,7 @@ package body Landin.Syntax.Parser is
                Digits_At : Landin.Source.Span := Landin.Source.Empty_Span;
                Exported  : Boolean := False;
                Mutable   : Boolean := False;
+               Fills     : Boolean := False;
                Recovers  : Node_Id := No_Node) return Node_Id;
 
             function Extent_Of (Nodes : Slot_List)
@@ -361,6 +367,8 @@ package body Landin.Syntax.Parser is
             function Parse_Struct_Literal
               (Nominal : Node_Id;
                Starts  : Landin.Source.Span) return Node_Id;
+            function Begins_Argument_Type return Boolean;
+            function Parse_Argument_RHS return Node_Id;
             function Parse_Call
               (Name_At : Landin.Source.Span;
                Named   : Landin.Source.Names.Name_Id) return Node_Id;
@@ -408,6 +416,39 @@ package body Landin.Syntax.Parser is
                end loop;
                return False;
             end Starts_Signature;
+
+            --  Whether a labelled argument's RHS begins one of the type-only
+            --  shapes that ordinary expression parsing cannot consume.  This
+            --  lookahead only balances the outer brackets; it creates no
+            --  nodes, interprets no identifiers, and never moves Index.  The
+            --  RHS itself is consequently parsed exactly once, without a
+            --  failed expression parse, rewind, or scalar-name heuristic.
+            function Begins_Argument_Type return Boolean is
+               Step  : Tok.Token_Index := 1;
+               Level : Natural := 0;
+            begin
+               if Peek = Tok.Left_Paren then
+                  return Starts_Signature;
+               elsif Peek /= Tok.Left_Bracket then
+                  return False;
+               end if;
+
+               Level := 1;
+               while Ahead (Step) /= Tok.End_Of_Input loop
+                  if Ahead (Step) = Tok.Left_Bracket then
+                     Level := Level + 1;
+                  elsif Ahead (Step) = Tok.Right_Bracket then
+                     Level := Level - 1;
+                     if Level = 0 then
+                        return Ahead (Step + 1)
+                          in Tok.Identifier | Tok.Left_Bracket
+                             | Tok.Left_Paren;
+                     end if;
+                  end if;
+                  Step := Step + 1;
+               end loop;
+               return False;
+            end Begins_Argument_Type;
 
             --  [0990]'s destructuring binding is the only statement that
             --  begins with `(`.  Its contents are labels and optional local
@@ -561,6 +602,7 @@ package body Landin.Syntax.Parser is
                Digits_At : Landin.Source.Span := Landin.Source.Empty_Span;
                Exported  : Boolean := False;
                Mutable   : Boolean := False;
+               Fills     : Boolean := False;
                Recovers  : Node_Id := No_Node) return Node_Id
             is
                Total : Landin.Source.Span :=
@@ -597,6 +639,7 @@ package body Landin.Syntax.Parser is
                    Sound      => Sound,
                    Exported   => Exported,
                    Mutable    => Mutable,
+                   Fill       => Fills,
                    Recovery   => Recovers));
 
                return Node_Id (Result.Items.Last_Index);
@@ -4757,43 +4800,38 @@ package body Landin.Syntax.Parser is
                end;
             end Parse_Struct_Literal;
 
+            --  A labelled argument RHS has one compact syntax tree.  The
+            --  only alternatives outside expression grammar are fixed-array
+            --  and function types; all identifiers and positional direct
+            --  applications first use the ordinary expression nodes, and
+            --  Syntax.Type_Projection exposes those ambiguous roots without
+            --  cloning their descendants.
+            function Parse_Argument_RHS return Node_Id is
+               Saved  : constant Boolean := In_Argument_RHS;
+               Result : Node_Id;
+            begin
+               In_Argument_RHS := True;
+               if Begins_Argument_Type then
+                  Result := Parse_Type (False, Here);
+               else
+                  Result := Parse_Expression;
+               end if;
+               In_Argument_RHS := Saved;
+               return Result;
+            end Parse_Argument_RHS;
+
             --  call ::= indexed "(" arguments? ")"                [1820]
             --
             --  A direct callee remains a Name_Reference.  D131 also lets the
             --  complete selection be a function value, without resolving a
             --  field name in lexical scope or selecting from the call itself.
+            --  Unlike D72's old parser split, this entry never decides that a
+            --  labelled application is construction merely from its colon.
             function Parse_Call
               (Name_At : Landin.Source.Span;
                Named   : Landin.Source.Names.Name_Id) return Node_Id
             is
             begin
-               --  D72: a labelled argument run is [0700]'s construction,
-               --  not a call.  The leading name is resolved as a type and
-               --  the existing Struct_Literal carries every field rule.
-               if Peek = Tok.Left_Paren
-                 and then Ahead (1) = Tok.Identifier
-                 and then Ahead (2) = Tok.Colon
-               then
-                  declare
-                     Nominal : Node_Id := No_Node;
-                  begin
-                     for Item in Scalar_Name loop
-                        if Scalar_Id (Item) = Named then
-                           Nominal :=
-                             Add (Type_Name, Name_At, Named => Named);
-                           exit;
-                        end if;
-                     end loop;
-
-                     if Nominal = No_Node then
-                        Nominal :=
-                          Add (Type_Reference, Name_At, Named => Named);
-                     end if;
-
-                     return Parse_Struct_Literal (Nominal, Name_At);
-                  end;
-               end if;
-
                return Parse_Call
                  (Add (Name_Reference, Name_At, Named => Named), Name_At);
             end Parse_Call;
@@ -4802,8 +4840,12 @@ package body Landin.Syntax.Parser is
               (Callee : Node_Id;
                Starts : Landin.Source.Span) return Node_Id
             is
-               Recovery : Node_Id := No_Node;
-               Args     : Slot_Vectors.Vector;
+               Recovery         : Node_Id := No_Node;
+               Args             : Slot_Vectors.Vector;
+               Named_Seen       : Boolean := False;
+               Order_Complained : Boolean := False;
+               Direct           : constant Boolean :=
+                 Kind (Result, Callee) = Name_Reference;
             begin
                if not Expect
                         (Wanted  => Tok.Left_Paren,
@@ -4846,7 +4888,97 @@ package body Landin.Syntax.Parser is
                      declare
                         Before : constant Tok.Token_Index := Index;
                      begin
-                        Args.Append (Parse_Expression);
+                        if Direct
+                          and then Peek = Tok.Identifier
+                          and then
+                            (Ahead (1) = Tok.Colon
+                             or else
+                               (Named_Seen
+                                and then Named_Here = Of_Id
+                                and then Pre.Begins_Expression (Ahead (1))))
+                        then
+                           declare
+                              At_Label : constant Landin.Source.Span := Here;
+                              Label : constant
+                                Landin.Source.Names.Name_Id := Named_Here;
+                              Is_Fill : constant Boolean :=
+                                Ahead (1) /= Tok.Colon;
+                              RHS : Node_Id;
+                           begin
+                              if not Named_Seen then
+                                 --  Once a label appears every earlier
+                                 --  positional child acquires the same
+                                 --  argument wrapper.  The original child is
+                                 --  moved under that wrapper, not copied, so
+                                 --  post-order still visits it exactly once.
+                                 for Position in 1 .. Natural (Args.Length)
+                                 loop
+                                    declare
+                                       Existing : constant Node_Id :=
+                                         Args.Element (Position);
+                                    begin
+                                       Args.Replace_Element
+                                         (Position,
+                                          Add
+                                            (Of_Kind  => Call_Argument,
+                                             At_Token => Anchor
+                                               (Result, Existing),
+                                             Extent   => Where
+                                               (Result, Existing),
+                                             Children => [1 => Existing]));
+                                    end;
+                                 end loop;
+                                 Named_Seen := True;
+                              end if;
+
+                              Advance;
+                              if not Is_Fill then
+                                 Advance;
+                              end if;
+                              RHS := Parse_Argument_RHS;
+                              Args.Append
+                                (Add
+                                   (Of_Kind  => Call_Argument,
+                                    At_Token => At_Label,
+                                    Extent   => Join
+                                      (At_Label, Where (Result, RHS)),
+                                    Children => [1 => RHS],
+                                    Named    => Label,
+                                    Fills    => Is_Fill));
+                           end;
+                        else
+                           declare
+                              At_Argument : constant Landin.Source.Span :=
+                                Here;
+                              RHS : constant Node_Id :=
+                                (if In_Argument_RHS
+                                 then Parse_Argument_RHS
+                                 else Parse_Expression);
+                           begin
+                              if Named_Seen then
+                                 if not Order_Complained then
+                                    Complain
+                                      (Item    => Syn.Positional_After_Named,
+                                       Where   => At_Argument,
+                                       Message => "a positional argument"
+                                                  & " cannot follow a named"
+                                                  & " argument",
+                                       Note    => "[0980]: positional"
+                                                  & " arguments come first");
+                                    Order_Complained := True;
+                                 end if;
+
+                                 Args.Append
+                                   (Add
+                                      (Of_Kind  => Call_Argument,
+                                       At_Token => At_Argument,
+                                       Extent   => Where (Result, RHS),
+                                       Children => [1 => RHS]));
+                              else
+                                 Args.Append (RHS);
+                              end if;
+                           end;
+                        end if;
                         exit when Index = Before;
                      end;
 
@@ -4943,7 +5075,8 @@ package body Landin.Syntax.Parser is
                   Head : constant Slot_List (1 .. 1) := [1 => Callee];
                begin
                   return Add
-                    (Of_Kind  => Call,
+                    (Of_Kind  =>
+                       (if Named_Seen then Labeled_Application else Call),
                      At_Token => Starts,
                      Extent   => Join (Starts, After_Previous),
                      Children => Head & To_List (Args),
