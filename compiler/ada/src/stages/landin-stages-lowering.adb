@@ -2164,6 +2164,26 @@ package body Landin.Stages.Lowering is
          Failure_Slot : IR.Slot_Id := IR.No_Slot;
          Success_Slot : IR.Slot_Id := IR.No_Slot;
          Made : IR.Value_Id;
+
+         function Has_Runtime_After (Written : Natural) return Boolean;
+
+         function Has_Runtime_After (Written : Natural) return Boolean is
+         begin
+            for Later in Written + 1 .. Written_Count loop
+               declare
+                  Argument : constant Syn.Node_Id :=
+                    Syn.Nth_Argument (Of_Tree, Node, Later);
+               begin
+                  if Syn.Kind (Of_Tree, Argument) /= Syn.Call_Argument
+                    or else Res.Role_Of (Meanings.all, Of_Tree, Argument)
+                      not in Res.Type_Argument | Res.Fixed_Argument
+                  then
+                     return True;
+                  end if;
+               end;
+            end loop;
+            return False;
+         end Has_Runtime_After;
       begin
          if Source_Signature = Landin.Checking.No_Signature
            or else Signature = IR.No_Signature
@@ -2222,6 +2242,16 @@ package body Landin.Stages.Lowering is
          --  operands are block-local.  The last argument is already in the
          --  block where the call will be emitted.
          for Written in 1 .. Written_Count loop
+            if Syn.Kind
+                 (Of_Tree, Syn.Nth_Argument (Of_Tree, Node, Written))
+                   = Syn.Call_Argument
+              and then Res.Role_Of
+                (Meanings.all, Of_Tree,
+                 Syn.Nth_Argument (Of_Tree, Node, Written))
+                   in Res.Type_Argument | Res.Fixed_Argument
+            then
+               goto Next_Runtime_Argument;
+            end if;
             declare
                Raw_Argument : constant Syn.Node_Id :=
                  Syn.Nth_Argument (Of_Tree, Node, Written);
@@ -3014,7 +3044,7 @@ package body Landin.Stages.Lowering is
                   return IR.No_Value;
                end if;
 
-               if Written < Written_Count then
+               if Has_Runtime_After (Written) then
                   Saved (Formal_Position) :=
                     IR.Add_Slot
                       (Unit.all, Filling,
@@ -3039,6 +3069,8 @@ package body Landin.Stages.Lowering is
                      Given (Formal_Position), Site_Of (Of_Tree, Argument));
                end if;
             end;
+            <<Next_Runtime_Argument>>
+            null;
          end loop;
 
          --  Every argument must precede the call, because Add_Argument

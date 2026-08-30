@@ -7663,10 +7663,13 @@ formal must be bound. Deduction uses no return
 context, conversion, constraint search, arithmetic inversion or user-code
 execution. One exact runtime array pattern `[n]t` may additionally bind `n`
 from the argument's normalized length and `t` from its normalized element
-descriptor; this is shape matching, not arithmetic inversion. Other fixed
-formals remain undeduced until explicit static call syntax is enabled. After
-deduction, substitution builds the concrete runtime signature and ordinary
-call checking applies that signature. A generic routine may write a concrete
+descriptor; this is shape matching, not arithmetic inversion. A call either
+leaves all static formals for deduction or names every type/fixed formal in its
+one named call list; a partial explicit tuple is refused. Type actuals are
+resolved as type views, while a fixed actual is an integer literal or a
+forwarded caller fixed formal and must fit its substituted declared integer
+type. After deduction or explicit saturation, substitution builds the concrete
+runtime signature and ordinary call checking applies that signature. A generic routine may write a concrete
 declared atom error set; substitution carries it on the instance signature,
 and call recovery, `try`, `fail`, `defer`, and `undo` use the ordinary error
 and cleanup machinery. Per-instance `! ...` inference is explicitly deferred
@@ -7693,8 +7696,9 @@ enabled direct-formal descriptor through routine parameters, results, locals
 and calls, including atom sets, function signatures and nominal aggregate
 transport/layout. Exact `[n]t` shape deduction is additionally enabled.
 Deduction through other nested type patterns, a function descriptor whose error
-set is still inferred, computed fixed expressions, or explicit static call
-syntax remains deferred.
+set is still inferred, and computed fixed expressions remains deferred. Static
+arguments have no synthesis, evaluation, flow fact, cleanup, IR value or ABI
+position; lowering maps only written runtime arguments to runtime formals.
 
 **Why an instance view:** writing `t = u8` on the template declaration or its
 nodes makes a later `t = i32` call overwrite the first. Resetting shared tables

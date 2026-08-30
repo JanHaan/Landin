@@ -38,11 +38,12 @@ Two conventions this file adopts, because calls could not be written
 without deciding them, and both follow the tour rather than inventing:
 
 A type parameter that appears in the type of a value parameter is
-deduced and left out at the call, as sort(values) does at [1300]. One
-that appears only in the return type cannot be deduced and is named,
-as sort(T: i32, data: values) does in the same place. Explicit type
-arguments are therefore always named, never positional, which keeps
-positional arguments to ordinary values.
+deduced and left out at the call, as sort(values) does at [1300]. An
+explicit generic call names every static formal in the one call list,
+as `copy(t: u8, n: 4, source: bytes)` does; it never mixes an explicit
+static actual with deduction. Explicit type arguments are therefore
+always named, never positional, which keeps positional arguments to
+ordinary runtime values.
 
 Where a spelling had to be invented, the line is marked [Zn] and the
 question is written out at the end.

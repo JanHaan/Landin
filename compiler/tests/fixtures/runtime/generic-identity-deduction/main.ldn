@@ -3,8 +3,8 @@ identity: (t: type, value: t) -> (result: t) = value end identity
 public main: () -> (code: i32) =
     small: u8 = 7
     wide: i32 = 13
-    small_copy: u8 = identity(small)
-    wide_copy: i32 = identity(wide)
+    small_copy: u8 = identity(t: u8, value: small)
+    wide_copy: i32 = identity(t: i32, value: wide)
     literal_copy: i32 = identity(22)
     if small_copy == 7 and wide_copy == 13 and literal_copy == 22 then
         code = 42
