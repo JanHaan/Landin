@@ -1,0 +1,6 @@
+class: negative
+summary: an unused generic routine template rejects an unconditional impossible operand
+constructs: 1290, 1950
+program: program.ldn
+targets: linux-x86-64, macos-arm64
+codes: L0306

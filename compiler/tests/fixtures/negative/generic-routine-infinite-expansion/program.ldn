@@ -1,0 +1,7 @@
+expand: (t: type, value: t) -> (result: t) = expand(1) end expand
+
+public main: () -> (code: i32) =
+    small: u8 = 7
+    _ = expand(small)
+    code = 0
+end main

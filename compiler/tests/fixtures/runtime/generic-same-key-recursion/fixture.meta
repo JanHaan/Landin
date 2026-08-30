@@ -1,0 +1,6 @@
+class: runtime
+summary: recursive generic calls at the same normalized key reuse the active routine instance
+constructs: 0410, 0870, 1290, 1800, 1920, 1970
+program: main.ldn
+status: 42
+targets: linux-x86-64

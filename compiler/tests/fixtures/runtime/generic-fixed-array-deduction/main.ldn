@@ -1,0 +1,9 @@
+identity: (fixed n: u32, t: type, value: [n]t) -> (result: [n]t) =
+    result = value
+end identity
+
+public main: () -> (code: i32) =
+    source: [2]i32 = [20, 22]
+    copy: [2]i32 = identity(source)
+    code = copy[0] + copy[1]
+end main

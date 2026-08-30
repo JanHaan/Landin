@@ -1,0 +1,6 @@
+class: negative
+summary: repeated direct occurrences of one type formal must deduce the same descriptor
+constructs: 1290, 1920
+program: program.ldn
+targets: linux-x86-64, macos-arm64
+codes: L0301

@@ -1,0 +1,3 @@
+phantom: (t: type, value: i32) -> (result: i32) = value end phantom
+
+public main: () -> (code: i32) = phantom(7) end main

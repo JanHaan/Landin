@@ -38,6 +38,8 @@ package body Landin.Stages.Checking is
    use type Landin.Checking.Field_Kind;
    use type Landin.Checking.Instance_State;
    use type Landin.Checking.Nominal_Type_Id;
+   use type Landin.Checking.Routine_Instance_Id;
+   use type Landin.Checking.Routine_Instance_State;
    use type Landin.Checking.Signature_Id;
    use type Res.Verdict;
    use type Res.Declaration_Sort;
@@ -183,6 +185,41 @@ package body Landin.Stages.Checking is
 
          return Res.No_Declaration;
       end Declaration_At;
+
+      function Generic_Routine_Owner
+        (Id : Res.Declaration_Id) return Res.Declaration_Id;
+
+      function Generic_Routine_Owner
+        (Id : Res.Declaration_Id) return Res.Declaration_Id
+      is
+         Member_Tree : constant not null access constant Syn.Tree :=
+           Tree_For (Res.Source_Of (Meanings.all, Id));
+         Member_Node : constant Syn.Node_Id := Res.Node_Of (Meanings.all, Id);
+      begin
+         for Candidate in Res.Declaration_Id'(1)
+           .. Res.Declaration_Id (Res.Declaration_Count (Meanings.all))
+         loop
+            if Res.Sort_Of (Meanings.all, Candidate) = Res.Module_Function
+              and then Res.Source_Of (Meanings.all, Candidate)
+                = Res.Source_Of (Meanings.all, Id)
+            then
+               declare
+                  Function_Node : constant Syn.Node_Id :=
+                    Res.Node_Of (Meanings.all, Candidate);
+               begin
+                  if Syn.Generic_Formal_Count
+                       (Member_Tree.all, Function_Node) /= 0
+                    and then Landin.Source.Contains
+                      (Syn.Where (Member_Tree.all, Function_Node),
+                       Syn.Where (Member_Tree.all, Member_Node))
+                  then
+                     return Candidate;
+                  end if;
+               end;
+            end if;
+         end loop;
+         return Res.No_Declaration;
+      end Generic_Routine_Owner;
 
       --  How a type is named in a sentence a user reads.  The five that are
       --  not one of [1790]'s eleven are described and not spelled, because
@@ -345,6 +382,11 @@ package body Landin.Stages.Checking is
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
          Signature : Landin.Checking.Signature_Id) return Ty.Type_Kind;
+      function Instantiate_Generic_Call
+        (Caller_Tree : Syn.Tree;
+         Call        : Syn.Node_Id;
+         Template    : Res.Declaration_Id)
+         return Landin.Checking.Signature_Id;
       procedure Require
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
@@ -2556,6 +2598,19 @@ package body Landin.Stages.Checking is
             return Landin.Checking.No_Nominal_Type;
          end Identity_Nominal;
       begin
+         --  A routine instance publishes substituted type-position facts in
+         --  its active overlay before checking the shared source body.  Read
+         --  that concrete answer instead of following the template formal's
+         --  global Not_Typed declaration.
+         if Landin.Checking.Current_Routine_View (Types.all)
+              /= Landin.Checking.No_Routine_Instance
+           and then Syn.Kind (Of_Tree, Written) /= Syn.Type_Application
+           and then Landin.Checking.Type_Of (Types.all, Of_Tree, Written)
+             /= Ty.Undecided
+         then
+            return Landin.Checking.Type_Of (Types.all, Of_Tree, Written);
+         end if;
+
          if Syn.Kind (Of_Tree, Written) = Syn.Type_Application then
             if Landin.Checking.Type_Of (Types.all, Of_Tree, Written)
                  /= Ty.Undecided
@@ -4331,6 +4386,688 @@ package body Landin.Stages.Checking is
                        else Ty.Ill_Typed);
          end case;
       end Settled_Type;
+
+      function Instantiate_Generic_Call
+        (Caller_Tree : Syn.Tree;
+         Call        : Syn.Node_Id;
+         Template    : Res.Declaration_Id)
+         return Landin.Checking.Signature_Id
+      is
+         Template_Tree : constant not null access constant Syn.Tree :=
+           Tree_For (Res.Source_Of (Meanings.all, Template));
+         Function_Node : constant Syn.Node_Id :=
+           Res.Node_Of (Meanings.all, Template);
+         Formal_Count : constant Natural :=
+           Syn.Generic_Formal_Count (Template_Tree.all, Function_Node);
+         Bound : Formal_Actual_Array (1 .. Formal_Count) :=
+           [others => (others => <>)];
+         Good : Boolean := True;
+
+         function Descriptor_At
+           (Of_Tree : Syn.Tree;
+            Node    : Syn.Node_Id;
+            Kind    : Ty.Type_Kind) return Type_Descriptor;
+
+         function Descriptors_Agree (Left, Right : Type_Descriptor)
+           return Boolean;
+
+         procedure Publish_Descriptor
+           (Node       : Syn.Node_Id;
+            Declaration : Res.Declaration_Id;
+            Descriptor : Type_Descriptor);
+
+         function Descriptor_At
+           (Of_Tree : Syn.Tree;
+            Node    : Syn.Node_Id;
+            Kind    : Ty.Type_Kind) return Type_Descriptor
+         is
+         begin
+            case Kind is
+               when Ty.Scalar_Name =>
+                  return (Kind => Kind, others => <>);
+               when Ty.Atom_Value =>
+                  return
+                    (Kind => Kind,
+                     Atoms => Landin.Checking.Atom_Set_Of
+                       (Types.all, Of_Tree, Node),
+                     others => <>);
+               when Ty.Fixed_Array =>
+                  return
+                    (Kind => Kind,
+                     Length => Landin.Checking.Array_Length
+                       (Types.all, Of_Tree, Node),
+                     Element => Landin.Checking.Array_Element
+                       (Types.all, Of_Tree, Node),
+                     Element_Nominal =>
+                       Landin.Checking.Array_Element_Nominal
+                         (Types.all, Of_Tree, Node),
+                     others => <>);
+               when Ty.Aggregate =>
+                  return
+                    (Kind => Kind,
+                     Nominal => Landin.Checking.Nominal_Of
+                       (Types.all, Of_Tree, Node),
+                     others => <>);
+               when Ty.Function_Value =>
+                  return
+                    (Kind => Kind,
+                     Signature => Landin.Checking.Signature_Of
+                       (Types.all, Of_Tree, Node),
+                     others => <>);
+               when others =>
+                  return (Kind => Ty.Ill_Typed, others => <>);
+            end case;
+         end Descriptor_At;
+
+         function Descriptors_Agree (Left, Right : Type_Descriptor)
+           return Boolean
+         is
+         begin
+            if Left.Kind /= Right.Kind then
+               return False;
+            end if;
+            case Left.Kind is
+               when Ty.Scalar_Name =>
+                  return True;
+               when Ty.Atom_Value =>
+                  return Landin.Checking.Atom_Sets_Agree
+                    (Types.all, Left.Atoms, Right.Atoms);
+               when Ty.Fixed_Array =>
+                  return Left.Length = Right.Length
+                    and then Left.Element = Right.Element
+                    and then Left.Element_Nominal = Right.Element_Nominal;
+               when Ty.Aggregate =>
+                  return Left.Nominal = Right.Nominal;
+               when Ty.Function_Value =>
+                  return Landin.Checking.Signatures_Agree
+                    (Types.all, Left.Signature, Right.Signature);
+               when others =>
+                  return False;
+            end case;
+         end Descriptors_Agree;
+
+         procedure Publish_Descriptor
+           (Node        : Syn.Node_Id;
+            Declaration : Res.Declaration_Id;
+            Descriptor  : Type_Descriptor) is
+         begin
+            if Landin.Checking.Type_Of
+                 (Types.all, Template_Tree.all, Node) = Ty.Undecided
+            then
+               Landin.Checking.Note
+                 (Types.all, Template_Tree.all, Node, Descriptor.Kind);
+            end if;
+            case Descriptor.Kind is
+               when Ty.Atom_Value =>
+                  Landin.Checking.Note_Atom_Set
+                    (Types.all, Template_Tree.all, Node, Descriptor.Atoms);
+                  Landin.Checking.Note_Atom_Set
+                    (Types.all, Declaration, Descriptor.Atoms);
+               when Ty.Fixed_Array =>
+                  Landin.Checking.Note_Array
+                    (Types.all, Template_Tree.all, Node,
+                     Descriptor.Length, Descriptor.Element);
+                  Landin.Checking.Note_Array
+                    (Types.all, Declaration,
+                     Descriptor.Length, Descriptor.Element);
+                  if Descriptor.Element_Nominal
+                    /= Landin.Checking.No_Nominal_Type
+                  then
+                     Landin.Checking.Note_Array_Element_Nominal
+                       (Types.all, Template_Tree.all, Node,
+                        Descriptor.Element_Nominal);
+                     Landin.Checking.Note_Array_Element_Nominal
+                       (Types.all, Declaration, Descriptor.Element_Nominal);
+                  end if;
+               when Ty.Aggregate =>
+                  Landin.Checking.Note_Nominal
+                    (Types.all, Template_Tree.all, Node,
+                     Descriptor.Nominal);
+                  Landin.Checking.Note_Nominal
+                    (Types.all, Declaration, Descriptor.Nominal);
+               when Ty.Function_Value =>
+                  Landin.Checking.Note_Signature
+                    (Types.all, Template_Tree.all, Node,
+                     Descriptor.Signature);
+                  Landin.Checking.Note_Signature
+                    (Types.all, Declaration, Descriptor.Signature);
+               when others =>
+                  null;
+            end case;
+            Landin.Checking.Settle
+              (Types.all, Declaration, Descriptor.Kind);
+         end Publish_Descriptor;
+      begin
+         if Syn.Argument_Count (Caller_Tree, Call)
+              /= Syn.Parameter_Count (Template_Tree.all, Function_Node)
+         then
+            Bad.Report
+              (Item    => Bad.Type_Mismatch,
+               Source  => Syn.Source_Of (Caller_Tree),
+               Where   => Syn.Where (Caller_Tree, Call),
+               Message => "this generic call gives "
+                          & Counted
+                            (Syn.Argument_Count (Caller_Tree, Call),
+                             "argument") & " and the template takes "
+                          & Counted
+                            (Syn.Parameter_Count
+                               (Template_Tree.all, Function_Node),
+                             "argument"),
+               Note    => "D138: deduction first matches every runtime"
+                          & " argument position",
+               Related => Syn.Origin (Template_Tree.all, Function_Node),
+               Because => "the generic routine template",
+               Into    => Found);
+            return Landin.Checking.No_Signature;
+         end if;
+
+         for Index in Bound'Range loop
+            Bound (Index).Formal := Declaration_At
+              (Syn.Source_Of (Template_Tree.all),
+               Syn.Nth_Generic_Formal
+                 (Template_Tree.all, Function_Node, Index));
+         end loop;
+
+         --  Deduction is deliberately context-free.  A literal therefore
+         --  takes [0200]'s i32 default before any concrete parameter context
+         --  exists; only after the complete tuple is known does Check_Call
+         --  apply ordinary literal context and argument agreement.
+         for Index in 1 .. Syn.Parameter_Count
+           (Template_Tree.all, Function_Node)
+         loop
+            declare
+               Parameter : constant Syn.Node_Id := Syn.Nth_Parameter
+                 (Template_Tree.all, Function_Node, Index);
+               Written : constant Syn.Node_Id :=
+                 Syn.Declared_Type (Template_Tree.all, Parameter);
+               Argument : constant Syn.Node_Id :=
+                 Syn.Nth_Argument (Caller_Tree, Call, Index);
+               Formal : Res.Declaration_Id := Res.No_Declaration;
+            begin
+               if Syn.Kind (Template_Tree.all, Written) = Syn.Type_Reference
+                 and then Res.Verdict_Of
+                   (Meanings.all, Template_Tree.all, Written) = Res.Bound
+                 and then Res.Sort_Of
+                   (Meanings.all,
+                    Res.Bound_To (Meanings.all, Template_Tree.all, Written))
+                      = Res.Type_Parameter
+               then
+                  Formal := Res.Bound_To
+                    (Meanings.all, Template_Tree.all, Written);
+               end if;
+
+               if Formal /= Res.No_Declaration then
+                  declare
+                     Got : Ty.Type_Kind :=
+                       (if Syn.Kind (Caller_Tree, Argument)
+                            in Syn.Name_Reference | Syn.Member_Selection
+                               | Syn.Element_Index
+                        then Selected_From (Caller_Tree, Argument)
+                        else Synthesise (Caller_Tree, Argument));
+                     Actual : Type_Descriptor;
+                     Position : Natural := 0;
+                  begin
+                     if Got = Ty.Untyped_Integer then
+                        Commit_To (Caller_Tree, Argument, Ty.Default_Integer);
+                        Got := Ty.Default_Integer;
+                     end if;
+                     Actual := Descriptor_At (Caller_Tree, Argument, Got);
+                     for Which in Bound'Range loop
+                        if Bound (Which).Formal = Formal then
+                           Position := Which;
+                           exit;
+                        end if;
+                     end loop;
+                     if Position = 0 or else Actual.Kind = Ty.Ill_Typed then
+                        Good := False;
+                     elsif Bound (Position).Value.Kind = Ty.Ill_Typed then
+                        Bound (Position).Value := Actual;
+                     elsif not Descriptors_Agree
+                       (Bound (Position).Value, Actual)
+                     then
+                        Bad.Report
+                          (Item    => Bad.Type_Mismatch,
+                           Source  => Syn.Source_Of (Caller_Tree),
+                           Where   => Syn.Where (Caller_Tree, Argument),
+                           Message => "this argument deduces a different"
+                                      & " type for the repeated formal",
+                           Note    => "D138: every direct occurrence of one"
+                                      & " type formal must agree exactly",
+                           Related => Syn.Origin
+                             (Template_Tree.all, Written),
+                           Because => "the repeated direct type formal",
+                           Into    => Found);
+                        Good := False;
+                     end if;
+                  end;
+               elsif Syn.Kind (Template_Tree.all, Written) = Syn.Array_Type
+               then
+                  declare
+                     Bound_Node : constant Syn.Node_Id :=
+                       Syn.Bound_Of (Template_Tree.all, Written);
+                     Element_Node : constant Syn.Node_Id :=
+                       Syn.Element_Of (Template_Tree.all, Written);
+                     Fixed_Formal : Res.Declaration_Id := Res.No_Declaration;
+                     Type_Formal : Res.Declaration_Id := Res.No_Declaration;
+                     Got : constant Ty.Type_Kind :=
+                       (if Syn.Kind (Caller_Tree, Argument)
+                            in Syn.Name_Reference | Syn.Member_Selection
+                               | Syn.Element_Index
+                        then Selected_From (Caller_Tree, Argument)
+                        else Synthesise (Caller_Tree, Argument));
+                  begin
+                     if Syn.Kind (Template_Tree.all, Bound_Node)
+                          = Syn.Name_Reference
+                       and then Res.Verdict_Of
+                         (Meanings.all, Template_Tree.all, Bound_Node)
+                           = Res.Bound
+                       and then Res.Sort_Of
+                         (Meanings.all,
+                          Res.Bound_To
+                            (Meanings.all, Template_Tree.all, Bound_Node))
+                           = Res.Fixed_Parameter
+                     then
+                        Fixed_Formal := Res.Bound_To
+                          (Meanings.all, Template_Tree.all, Bound_Node);
+                     end if;
+                     if Syn.Kind (Template_Tree.all, Element_Node)
+                          = Syn.Type_Reference
+                       and then Res.Verdict_Of
+                         (Meanings.all, Template_Tree.all, Element_Node)
+                           = Res.Bound
+                       and then Res.Sort_Of
+                         (Meanings.all,
+                          Res.Bound_To
+                            (Meanings.all, Template_Tree.all, Element_Node))
+                           = Res.Type_Parameter
+                     then
+                        Type_Formal := Res.Bound_To
+                          (Meanings.all, Template_Tree.all, Element_Node);
+                     end if;
+
+                     if Fixed_Formal /= Res.No_Declaration
+                       and then Type_Formal /= Res.No_Declaration
+                     then
+                        if Got /= Ty.Fixed_Array then
+                           Good := False;
+                        else
+                           declare
+                              Actual : constant Type_Descriptor :=
+                                Descriptor_At (Caller_Tree, Argument, Got);
+                              Element : constant Type_Descriptor :=
+                                (if Actual.Element_Nominal
+                                      /= Landin.Checking.No_Nominal_Type
+                                 then (Kind => Ty.Aggregate,
+                                       Nominal => Actual.Element_Nominal,
+                                       others => <>)
+                                 else (Kind => Actual.Element, others => <>));
+                              Fixed_Position, Type_Position : Natural := 0;
+                           begin
+                              for Which in Bound'Range loop
+                                 if Bound (Which).Formal = Fixed_Formal then
+                                    Fixed_Position := Which;
+                                 elsif Bound (Which).Formal = Type_Formal then
+                                    Type_Position := Which;
+                                 end if;
+                              end loop;
+                              if Fixed_Position = 0 or else Type_Position = 0
+                              then
+                                 Good := False;
+                              else
+                                 if Bound (Fixed_Position).Fixed_Known
+                                   and then Bound (Fixed_Position).Fixed
+                                     /= Ty.Magnitude (Actual.Length)
+                                 then
+                                    Good := False;
+                                 else
+                                    Bound (Fixed_Position).Fixed :=
+                                      Ty.Magnitude (Actual.Length);
+                                    Bound (Fixed_Position).Fixed_Known := True;
+                                 end if;
+                                 if Bound (Type_Position).Value.Kind
+                                      = Ty.Ill_Typed
+                                 then
+                                    Bound (Type_Position).Value := Element;
+                                 elsif not Descriptors_Agree
+                                   (Bound (Type_Position).Value, Element)
+                                 then
+                                    Good := False;
+                                 end if;
+                              end if;
+                           end;
+                        end if;
+                     end if;
+                  end;
+               end if;
+            end;
+         end loop;
+
+         for Index in Bound'Range loop
+            declare
+               Formal_Node : constant Syn.Node_Id := Syn.Nth_Generic_Formal
+                 (Template_Tree.all, Function_Node, Index);
+            begin
+               if Syn.Kind (Template_Tree.all, Formal_Node) = Syn.Type_Formal
+                 and then Bound (Index).Value.Kind = Ty.Ill_Typed
+               then
+                  Bad.Report
+                    (Item    => Bad.Type_Mismatch,
+                     Source  => Syn.Source_Of (Caller_Tree),
+                     Where   => Syn.Where (Caller_Tree, Call),
+                     Message => "this call cannot deduce every type formal",
+                     Note    => "D138: deduction uses direct runtime"
+                                & " parameter occurrences only, never a"
+                                & " return context",
+                     Related => Syn.Origin
+                       (Template_Tree.all, Formal_Node),
+                     Because => "the undeduced type formal",
+                     Into    => Found);
+                  Good := False;
+               elsif Syn.Kind (Template_Tree.all, Formal_Node)
+                 = Syn.Fixed_Formal
+                 and then not Bound (Index).Fixed_Known
+               then
+                  Bad.Report
+                    (Item    => Bad.Type_Mismatch,
+                     Source  => Syn.Source_Of (Caller_Tree),
+                     Where   => Syn.Where (Caller_Tree, Call),
+                     Message => "this call cannot deduce a fixed formal",
+                     Note    => "D138: only an exact `[n]t` runtime shape"
+                                & " binds a fixed formal; deduction performs"
+                                & " no arithmetic inversion",
+                     Related => Syn.Origin
+                       (Template_Tree.all, Formal_Node),
+                     Because => "the undeduced fixed formal",
+                     Into    => Found);
+                  Good := False;
+               end if;
+            end;
+         end loop;
+
+         if Good then
+            for Index in Bound'Range loop
+               declare
+                  Formal_Node : constant Syn.Node_Id :=
+                    Syn.Nth_Generic_Formal
+                      (Template_Tree.all, Function_Node, Index);
+               begin
+                  if Syn.Kind (Template_Tree.all, Formal_Node)
+                       = Syn.Fixed_Formal
+                  then
+                     declare
+                        Expected : constant Type_Descriptor := Normalized_Type
+                          (Template_Tree.all,
+                           Syn.Declared_Type
+                             (Template_Tree.all, Formal_Node),
+                           Bound, Syn.Origin (Caller_Tree, Call),
+                           Identity_Only);
+                     begin
+                        if Expected.Kind not in Ty.Integer_Name
+                          or else not Ty.Fits
+                            (Bound (Index).Fixed,
+                             Ty.Scalar_Name (Expected.Kind), Facts,
+                             Negated => False)
+                        then
+                           Bad.Report
+                             (Item    => Bad.Type_Mismatch,
+                              Source  => Syn.Source_Of (Caller_Tree),
+                              Where   => Syn.Where (Caller_Tree, Call),
+                              Message => "the deduced fixed value does not"
+                                         & " fit its formal type",
+                              Note    => "D138 reuses the normalized fixed"
+                                         & " descriptor and its declared"
+                                         & " integer range",
+                              Related => Syn.Origin
+                                (Template_Tree.all, Formal_Node),
+                              Because => "the fixed formal",
+                              Into    => Found);
+                           Good := False;
+                        end if;
+                     end;
+                  end if;
+               end;
+            end loop;
+         end if;
+
+         if not Good then
+            return Landin.Checking.No_Signature;
+         end if;
+
+         declare
+            Key : Landin.Checking.Actual_Tuple :=
+              Landin.Checking.Empty_Actuals;
+         begin
+            for Each of Bound loop
+               if Res.Sort_Of (Meanings.all, Each.Formal)
+                    = Res.Type_Parameter
+               then
+                  Landin.Checking.Append_Actual
+                    (Key, Actual_For (Each.Value));
+               else
+                  Landin.Checking.Append_Actual
+                    (Key, Landin.Checking.Fixed_Actual (Each.Fixed));
+               end if;
+            end loop;
+            declare
+               Instance : constant Landin.Checking.Routine_Instance_Id :=
+                 Landin.Checking.Intern_Routine_Instance
+                   (Types.all, Template, Key);
+            begin
+               Landin.Checking.Note_Routine_Target
+                 (Types.all, Caller_Tree, Call, Instance);
+
+               if Landin.Checking.Routine_State_Of (Types.all, Instance)
+                    in Landin.Checking.Routine_Building
+                       | Landin.Checking.Routine_Ready
+               then
+                  return Landin.Checking.Routine_Signature_Of
+                    (Types.all, Instance);
+               elsif Landin.Checking.Routine_State_Of (Types.all, Instance)
+                 = Landin.Checking.Routine_Invalid
+               then
+                  return Landin.Checking.No_Signature;
+               end if;
+
+               for Position in 1 .. Landin.Checking.Routine_Instance_Count
+                 (Types.all)
+               loop
+                  declare
+                     Other : constant Landin.Checking.Routine_Instance_Id :=
+                       Landin.Checking.Routine_Identities.Nth
+                         (Types.all, Position);
+                  begin
+                     if Other /= Instance
+                       and then Landin.Checking.Routine_Template_Of
+                         (Types.all, Other) = Template
+                       and then Landin.Checking.Routine_State_Of
+                         (Types.all, Other) = Landin.Checking.Routine_Building
+                     then
+                        Bad.Report
+                          (Item    => Bad.Type_Mismatch,
+                           Source  => Syn.Source_Of (Caller_Tree),
+                           Where   => Syn.Where (Caller_Tree, Call),
+                           Message => "this recursive generic call expands"
+                                      & " the same template at a different"
+                                      & " actual tuple",
+                           Note    => "D138: recursive same-key calls are"
+                                      & " finite; a different active tuple"
+                                      & " is not",
+                           Related => Syn.Origin
+                             (Template_Tree.all, Function_Node),
+                           Because => "the active generic template",
+                           Into    => Found);
+                        return Landin.Checking.No_Signature;
+                     end if;
+                  end;
+               end loop;
+
+               Landin.Checking.Begin_Routine_Instance
+                 (Types.all, Instance);
+               declare
+                  Previous : Landin.Checking.Routine_Instance_Id;
+                  Parameters : Landin.Checking.Signature_Part_Array
+                    (1 .. Syn.Parameter_Count
+                      (Template_Tree.all, Function_Node)) :=
+                        [others => (others => <>)];
+                  Results : Landin.Checking.Signature_Part_Array
+                    (1 .. Syn.Return_Count
+                      (Template_Tree.all, Function_Node)) :=
+                        [others => (others => <>)];
+                  Valid : Boolean := True;
+                  Signature : Landin.Checking.Signature_Id :=
+                    Landin.Checking.No_Signature;
+                  Reports_Before : constant Natural :=
+                    Landin.Diagnostics.Count (Found);
+
+                  function Part_For
+                    (Node : Syn.Node_Id) return Landin.Checking.Signature_Part;
+
+                  function Part_For
+                    (Node : Syn.Node_Id)
+                     return Landin.Checking.Signature_Part
+                  is
+                     Descriptor : constant Type_Descriptor := Normalized_Type
+                       (Template_Tree.all,
+                        Syn.Declared_Type (Template_Tree.all, Node), Bound,
+                        Syn.Origin (Caller_Tree, Call), Identity_Only);
+                  begin
+                     if Descriptor.Kind not in
+                       Ty.Scalar_Name | Ty.Atom_Value | Ty.Fixed_Array
+                          | Ty.Aggregate | Ty.Function_Value
+                     then
+                        Valid := False;
+                     end if;
+                     return
+                       (Kind      => Descriptor.Kind,
+                        Nominal   => Descriptor.Nominal,
+                        Length    => Descriptor.Length,
+                        Element   => Descriptor.Element,
+                        Signature => Descriptor.Signature,
+                        Name      => Syn.Name (Template_Tree.all, Node),
+                        Atoms     => Descriptor.Atoms,
+                        Site      => Syn.Origin (Template_Tree.all, Node));
+                  end Part_For;
+               begin
+                  Landin.Checking.Activate_Routine_View
+                    (Types.all, Instance, Previous);
+                  for Index in Parameters'Range loop
+                     Parameters (Index) := Part_For
+                       (Syn.Nth_Parameter
+                         (Template_Tree.all, Function_Node, Index));
+                  end loop;
+                  for Index in Results'Range loop
+                     Results (Index) := Part_For
+                       (Syn.Nth_Return
+                         (Template_Tree.all, Function_Node, Index));
+                  end loop;
+
+                  if Valid
+                    and then Syn.Error_Set_Of
+                      (Template_Tree.all, Function_Node) = Syn.No_Node
+                  then
+                     Signature := Landin.Checking.Add_Signature
+                       (Types.all, Parameters, Results,
+                        Syn.Origin (Template_Tree.all, Function_Node));
+                  else
+                     Bad.Report
+                       (Item    => Bad.Type_Mismatch,
+                        Source  => Syn.Source_Of (Template_Tree.all),
+                        Where   => Syn.Where
+                          (Template_Tree.all, Function_Node),
+                        Message => "this generic routine signature is not"
+                                   & " concrete after deduction",
+                        Note    => "D138: every runtime signature part must"
+                                   & " substitute to an enabled type",
+                        Into    => Found);
+                  end if;
+
+                  if Signature /= Landin.Checking.No_Signature then
+                     Landin.Checking.Publish_Routine_Signature
+                       (Types.all, Instance, Signature);
+                     Landin.Checking.Note_Signature
+                       (Types.all, Template_Tree.all, Function_Node,
+                        Signature);
+                     if Landin.Checking.Type_Of
+                       (Types.all, Template_Tree.all, Function_Node)
+                         = Ty.Undecided
+                     then
+                        Landin.Checking.Note
+                          (Types.all, Template_Tree.all, Function_Node,
+                           Ty.Function_Value);
+                     end if;
+
+                     for Id in Res.Declaration_Id'(1)
+                       .. Res.Declaration_Id
+                         (Res.Declaration_Count (Meanings.all))
+                     loop
+                        if Id /= Template
+                          and then Generic_Routine_Owner (Id) = Template
+                          and then Res.Sort_Of (Meanings.all, Id)
+                            in Res.Parameter | Res.Named_Return
+                               | Res.Local_Binding
+                        then
+                           declare
+                              Declaring : constant Syn.Node_Id :=
+                                Res.Node_Of (Meanings.all, Id);
+                              Written : constant Syn.Node_Id :=
+                                Syn.Declared_Type
+                                  (Template_Tree.all, Declaring);
+                           begin
+                              if Written /= Syn.No_Node then
+                                 declare
+                                    Descriptor : constant Type_Descriptor :=
+                                      Normalized_Type
+                                        (Template_Tree.all, Written, Bound,
+                                         Syn.Origin (Caller_Tree, Call));
+                                 begin
+                                    if Descriptor.Kind = Ty.Ill_Typed then
+                                       Valid := False;
+                                    else
+                                       Publish_Descriptor
+                                         (Written, Id, Descriptor);
+                                    end if;
+                                 end;
+                              end if;
+                           end;
+                        end if;
+                     end loop;
+                  end if;
+
+                  if Valid
+                    and then Signature /= Landin.Checking.No_Signature
+                  then
+                     Check_Routine_Body
+                       (Template_Tree.all, Function_Node);
+                  end if;
+                  Landin.Checking.Restore_Routine_View
+                    (Types.all, Previous);
+
+                  if not Valid
+                    or else Signature = Landin.Checking.No_Signature
+                    or else Landin.Diagnostics.Count (Found) > Reports_Before
+                  then
+                     Landin.Checking.Invalidate_Routine_Instance
+                       (Types.all, Instance);
+                  else
+                     Landin.Checking.Finish_Routine_Instance
+                       (Types.all, Instance);
+                  end if;
+                  return Signature;
+               exception
+                  when others =>
+                     Landin.Checking.Restore_Routine_View
+                       (Types.all, Previous);
+                     if Landin.Checking.Routine_State_Of
+                       (Types.all, Instance) = Landin.Checking.Routine_Building
+                     then
+                        Landin.Checking.Invalidate_Routine_Instance
+                          (Types.all, Instance);
+                     end if;
+                     raise;
+               end;
+            end;
+         end;
+      end Instantiate_Generic_Call;
 
       ------------------------------------------------------------
       --  A literal's value, and whether the type holds it
@@ -6670,16 +7407,30 @@ package body Landin.Stages.Checking is
                     (if Named
                      then Res.Bound_To (Meanings.all, Of_Tree, Callee)
                      else Res.No_Declaration);
+                  Is_Generic : constant Boolean :=
+                    Named
+                    and then Res.Sort_Of (Meanings.all, Means)
+                      = Res.Module_Function
+                    and then Syn.Generic_Formal_Count
+                      (Tree_For (Res.Source_Of (Meanings.all, Means)).all,
+                       Res.Node_Of (Meanings.all, Means)) /= 0;
                   Held : constant Ty.Type_Kind :=
-                    (if Named then Settled_Type (Means)
+                    (if Is_Generic then Ty.Function_Value
+                     elsif Named then Settled_Type (Means)
                      else Synthesise (Of_Tree, Callee));
                   Signature : constant Landin.Checking.Signature_Id :=
-                    (if Named
+                    (if Is_Generic
+                     then Instantiate_Generic_Call (Of_Tree, Node, Means)
+                     elsif Named
                      then Landin.Checking.Signature_Of (Types.all, Means)
                      else Landin.Checking.Signature_Of
                        (Types.all, Of_Tree, Callee));
                begin
-                  if Held = Ty.Ill_Typed then
+                  if Is_Generic
+                    and then Signature = Landin.Checking.No_Signature
+                  then
+                     return Kept (Ty.Ill_Typed);
+                  elsif Held = Ty.Ill_Typed then
                      return Kept (Ty.Ill_Typed);
                   end if;
 
@@ -14336,6 +15087,31 @@ package body Landin.Stages.Checking is
          end if;
       end loop;
 
+      --  Generic routine templates are source declarations even before one
+      --  call supplies actuals.  Reject body defects that are unconditional
+      --  on those actuals (the closed impossible-operand walk needs no
+      --  guessed type), while dependent operations wait for an instance.
+      for Id in Res.Declaration_Id'(1)
+                .. Res.Declaration_Id (Res.Declaration_Count (Meanings.all))
+      loop
+         if Res.Sort_Of (Meanings.all, Id) = Res.Module_Function
+           and then Syn.Generic_Formal_Count
+             (Tree_For (Res.Source_Of (Meanings.all, Id)).all,
+              Res.Node_Of (Meanings.all, Id)) /= 0
+         then
+            declare
+               Of_Tree : constant not null access constant Syn.Tree :=
+                 Tree_For (Res.Source_Of (Meanings.all, Id));
+               Node : constant Syn.Node_Id :=
+                 Res.Node_Of (Meanings.all, Id);
+            begin
+               Check_Operands
+                 (Of_Tree.all, Syn.Body_Of (Of_Tree.all, Node),
+                  Whole_Fold => False);
+            end;
+         end if;
+      end loop;
+
       --  Pass one: every declaration that writes its type down, over every
       --  tree, before any body is read.  [1840]'s module scope is a set and
       --  crosses files, so this cannot wait for the walk that meets it.
@@ -14343,7 +15119,10 @@ package body Landin.Stages.Checking is
                 .. Res.Declaration_Id (Res.Declaration_Count (Meanings.all))
       loop
          if Landin.Checking.State_Of (Types.all, Id)
-            = Landin.Checking.Untouched
+              = Landin.Checking.Untouched
+           and then
+             (Generic_Routine_Owner (Id) = Res.No_Declaration
+              or else Generic_Routine_Owner (Id) = Id)
          then
             if Res.Sort_Of (Meanings.all, Id) = Res.Module_Type then
                --  A parameterized alias is compile-time-only template
@@ -14417,7 +15196,8 @@ package body Landin.Stages.Checking is
                 .. Res.Declaration_Id (Res.Declaration_Count (Meanings.all))
       loop
          if Landin.Checking.State_Of (Types.all, Id)
-            = Landin.Checking.Untouched
+              = Landin.Checking.Untouched
+           and then Generic_Routine_Owner (Id) = Res.No_Declaration
            and then Res.Sort_Of (Meanings.all, Id)
              not in Res.Pattern_Binding | Res.Result_Binding
                 | Res.Error_Binding
