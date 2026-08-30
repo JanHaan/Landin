@@ -1,0 +1,15 @@
+identity: type (t: type) = t
+
+box: type (t: type) = struct
+    value: t
+end box
+
+pass: (t: type, value: t) -> (result: t) = value end pass
+phantom: (t: type, value: i32) -> (result: i32) = value end phantom
+
+public main: () -> (code: i32) =
+    deduced: i32 = pass(20)
+    explicit: i32 = pass(t: identity(i32), value: 22)
+    nominal: i32 = phantom(t: box(identity(i32)), value: 0)
+    code = deduced + explicit + nominal
+end main
