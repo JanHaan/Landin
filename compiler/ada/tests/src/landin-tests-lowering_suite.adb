@@ -11,6 +11,7 @@
 --  lets a lowering violate it: Emit_Jump has no precondition against a
 --  mid-block terminator, on purpose, so that it can be tested.
 
+with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 
 with Landin.Checking;
@@ -76,20 +77,27 @@ package body Landin.Tests.Lowering_Suite is
    LF : constant Character := Character'Val (10);
 
    procedure Lower
-     (Work : in out Landin.Stages.Compilation;
-      Text : String;
-      Ran  : out Natural);
+     (Work       : in out Landin.Stages.Compilation;
+      Text       : String;
+      Ran        : out Natural;
+      Additional : String := "");
 
    procedure Lower
-     (Work : in out Landin.Stages.Compilation;
-      Text : String;
-      Ran  : out Natural)
+     (Work       : in out Landin.Stages.Compilation;
+      Text       : String;
+      Ran        : out Natural;
+      Additional : String := "")
    is
       Order   : Landin.Stages.Pipeline;
       Written : constant Landin.Source.Source_Id :=
         Landin.Stages.Add_Source (Work, "low.ldn", Text);
    begin
       pragma Assert (Written /= Landin.Source.No_Source);
+      if Additional /= "" then
+         pragma Assert
+           (Landin.Stages.Add_Source (Work, "with.ldn", Additional)
+              /= Landin.Source.No_Source);
+      end if;
       Landin.Stages.Append (Order, Frontend'Access);
          Landin.Stages.Append (Order, Configurer'Access);
       Landin.Stages.Append (Order, Names'Access);
@@ -5584,6 +5592,46 @@ package body Landin.Tests.Lowering_Suite is
 
       Found : Fixtures.Catalogue;
       Text  : Unbounded.Unbounded_String;
+
+      function Additional_For (Each : Fixtures.Fixture) return String;
+
+      function Additional_For (Each : Fixtures.Fixture) return String is
+         Rest : constant String := Fixtures.With_Sources (Each);
+         Extra : Unbounded.Unbounded_String;
+         First : Integer := Rest'First;
+         Complete : Boolean := True;
+
+         procedure Append_One (Named : String);
+
+         procedure Append_One (Named : String) is
+            Trimmed : constant String :=
+              Ada.Strings.Fixed.Trim (Named, Ada.Strings.Both);
+            Contents : Unbounded.Unbounded_String;
+            Status : Landin.Platform.Read_Status;
+         begin
+            if Trimmed /= "" then
+               Host.Read_File
+                 (Fixture_Root & "/positive/" & Fixtures.Name (Each)
+                  & "/" & Trimmed, Contents, Status);
+               if Status = Landin.Platform.Read_Ok then
+                  Unbounded.Append (Extra, Unbounded.To_String (Contents));
+               else
+                  Complete := False;
+               end if;
+            end if;
+         end Append_One;
+      begin
+         for Index in Rest'Range loop
+            if Rest (Index) = ',' then
+               Append_One (Rest (First .. Index - 1));
+               First := Index + 1;
+            end if;
+         end loop;
+         if First <= Rest'Last then
+            Append_One (Rest (First .. Rest'Last));
+         end if;
+         return (if Complete then Unbounded.To_String (Extra) else "");
+      end Additional_For;
    begin
       Fixtures.Discover (Found, Fixture_Root, Host);
 
@@ -5619,7 +5667,8 @@ package body Landin.Tests.Lowering_Suite is
                         Ran : Natural;
                      begin
                         Lower
-                          (Work, Unbounded.To_String (Body_Text), Ran);
+                          (Work, Unbounded.To_String (Body_Text), Ran,
+                           Additional_For (Each));
 
                         if not Landin.Stages.Failed (Work) then
                            Unbounded.Append
