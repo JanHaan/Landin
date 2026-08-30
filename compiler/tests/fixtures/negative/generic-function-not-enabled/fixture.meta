@@ -1,6 +1,0 @@
-class: negative
-summary: a lowercase type parameter belongs only to parameterized type aliases, not functions
-constructs: 1290, 1830
-program: program.ldn
-targets: linux-x86-64, macos-arm64
-codes: L0010

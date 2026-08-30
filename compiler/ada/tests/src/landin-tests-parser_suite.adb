@@ -1283,12 +1283,13 @@ package body Landin.Tests.Parser_Suite is
          Held  : Boolean;
       begin
          Read_And_Parse
-           ("f: (fixed n: u32) -> none = end f" & ASCII.LF,
+           ("f: (value: t, fixed n: u32, t: type) -> none = end f"
+            & ASCII.LF,
             Codes, Total, Nodes, Held);
          Landin.Testing.Check
            (Item, Held and then Nodes > 0
-             and then Unbounded.To_String (Codes) = "L0010",
-            "fixed function parameters remain refused");
+             and then Unbounded.To_String (Codes) = "",
+            "generic routine formals parse with no static-call spelling");
       end;
 
       declare

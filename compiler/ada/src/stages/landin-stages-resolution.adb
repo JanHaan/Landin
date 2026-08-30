@@ -624,6 +624,20 @@ package body Landin.Stages.Resolution is
                            Landin.Resolution.Record_Scope
                              (Meanings.all, Of_Tree.all, Node, Signature);
 
+                           --  D138: one signature scope owns all static,
+                           --  runtime and result binders. Collect it before
+                           --  resolving a single written type, so source
+                           --  order has no visibility meaning and static
+                           --  formals can be written after their uses.
+                           for Which in
+                             1 .. Syn.Generic_Formal_Count (Of_Tree.all, Node)
+                           loop
+                              Declare_One
+                                (Of_Tree.all,
+                                 Syn.Nth_Generic_Formal
+                                   (Of_Tree.all, Node, Which),
+                                 Signature, Resolve_Declared => False);
+                           end loop;
                            for Which in
                              1 .. Syn.Parameter_Count (Of_Tree.all, Node)
                            loop
@@ -631,7 +645,7 @@ package body Landin.Stages.Resolution is
                                 (Of_Tree.all,
                                  Syn.Nth_Parameter
                                    (Of_Tree.all, Node, Which),
-                                 Signature);
+                                 Signature, Resolve_Declared => False);
                            end loop;
 
                            --  Named returns are declared here and not in
@@ -645,6 +659,47 @@ package body Landin.Stages.Resolution is
                                 (Of_Tree.all,
                                  Syn.Nth_Return
                                    (Of_Tree.all, Node, Which),
+                                 Signature, Resolve_Declared => False);
+                           end loop;
+
+                           for Which in
+                             1 .. Syn.Generic_Formal_Count (Of_Tree.all, Node)
+                           loop
+                              declare
+                                 Formal : constant Syn.Node_Id :=
+                                   Syn.Nth_Generic_Formal
+                                     (Of_Tree.all, Node, Which);
+                              begin
+                                 if Syn.Kind (Of_Tree.all, Formal)
+                                      = Syn.Fixed_Formal
+                                 then
+                                    Resolve
+                                      (Of_Tree.all,
+                                       Syn.Declared_Type (Of_Tree.all, Formal),
+                                       Signature);
+                                 end if;
+                              end;
+                           end loop;
+                           for Which in
+                             1 .. Syn.Parameter_Count (Of_Tree.all, Node)
+                           loop
+                              Resolve
+                                (Of_Tree.all,
+                                 Syn.Declared_Type
+                                   (Of_Tree.all,
+                                    Syn.Nth_Parameter
+                                      (Of_Tree.all, Node, Which)),
+                                 Signature);
+                           end loop;
+                           for Which in
+                             1 .. Syn.Return_Count (Of_Tree.all, Node)
+                           loop
+                              Resolve
+                                (Of_Tree.all,
+                                 Syn.Declared_Type
+                                   (Of_Tree.all,
+                                    Syn.Nth_Return
+                                      (Of_Tree.all, Node, Which)),
                                  Signature);
                            end loop;
 
