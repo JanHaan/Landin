@@ -1,0 +1,6 @@
+class: runtime
+summary: per-instance generic inference closes direct, ordinary and generic call graphs with recovery and cleanup
+constructs: 0940, 0960, 1030, 1100, 1110, 1290, 1920, 1970
+program: main.ldn
+status: 42
+targets: linux-x86-64

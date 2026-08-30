@@ -6070,9 +6070,9 @@ package body Landin.Stages.Checking is
                         Where   => Syn.Where (Caller_Tree, Call),
                         Message => "this call cannot deduce a function type"
                                    & " whose error set is still inferred",
-                        Note    => "D138 direct function descriptors must"
-                                   & " already be concrete; per-instance"
-                                   & " inference remains deferred",
+                        Note    => "D138 routine keys use finalized function"
+                                   & " descriptors; a generic template is"
+                                   & " not a standalone function value",
                         Related => Syn.Origin
                           (Template_Tree.all, Formal_Node),
                         Because => "the direct function type formal",
@@ -6260,22 +6260,14 @@ package body Landin.Stages.Checking is
                         if Syn.Kind (Template_Tree.all, Written)
                              = Syn.Inferred_Error_Set
                         then
-                           Bad.Report
-                             (Item    => Bad.Type_Mismatch,
-                              Source  => Syn.Source_Of (Template_Tree.all),
-                              Where   => Syn.Where
-                                (Template_Tree.all, Written),
-                              Message => "generic `! ...` inference is not"
-                                         & " enabled in this increment",
-                              Note    => "D138 enables concrete declared"
-                                         & " error sets for instances;"
-                                         & " per-instance inference remains"
-                                         & " deferred",
-                              Related => Syn.Origin
-                                (Template_Tree.all, Function_Node),
-                              Because => "the generic routine signature",
-                              Into    => Found);
-                           Valid := False;
+                           --  The template has no signature of its own.  Each
+                           --  interned routine identity publishes this
+                           --  provisional descriptor before its body is
+                           --  checked, so recursive calls target this exact
+                           --  instance and whole-program inference can close
+                           --  the concrete graph later without changing the
+                           --  shared syntax tree.
+                           Error_Form := Landin.Checking.Inferred;
                         else
                            declare
                               Descriptor : constant Type_Descriptor :=
@@ -6391,8 +6383,15 @@ package body Landin.Stages.Checking is
                   if Valid
                     and then Signature /= Landin.Checking.No_Signature
                   then
-                     Check_Routine_Body
-                       (Template_Tree.all, Function_Node);
+                     --  Materialize nested instance targets while this
+                     --  concrete overlay is active, but do not run the full
+                     --  body checker against an inferred No_Atom_Set.  The
+                     --  whole-program graph finalizes every signature first;
+                     --  the ordinary body pass below then checks this view
+                     --  exactly once with its concrete error descriptor.
+                     Discover_Generic_Calls
+                       (Template_Tree.all,
+                        Syn.Body_Of (Template_Tree.all, Function_Node));
                   end if;
                   Landin.Checking.Restore_Routine_View
                     (Types.all, Previous);
@@ -8570,6 +8569,27 @@ package body Landin.Stages.Checking is
                         Message => "a variant case used as a value is not"
                                    & " enabled yet",
                         Refused => Bad.Variant_Value,
+                        Into    => Found);
+                     return Kept (Ty.Ill_Typed);
+                  elsif Res.Sort_Of (Meanings.all, Means)
+                          = Res.Module_Function
+                    and then Syn.Generic_Formal_Count
+                      (Tree_For (Res.Source_Of (Meanings.all, Means)).all,
+                       Res.Node_Of (Meanings.all, Means)) /= 0
+                  then
+                     Bad.Report
+                       (Item    => Bad.Type_Mismatch,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Where (Of_Tree, Node),
+                        Message => "a generic routine template has no"
+                                   & " standalone function value",
+                        Note    => "D138: a direct call selects a concrete"
+                                   & " routine instance and signature",
+                        Related => Syn.Origin
+                          (Tree_For
+                             (Res.Source_Of (Meanings.all, Means)).all,
+                           Res.Node_Of (Meanings.all, Means)),
+                        Because => "this generic template",
                         Into    => Found);
                      return Kept (Ty.Ill_Typed);
                   end if;
@@ -16059,6 +16079,12 @@ package body Landin.Stages.Checking is
          Declaration_Last : constant Positive :=
            Positive'Max (1, Declaration_Total);
 
+         --  Signature_Id is the concrete routine key in this graph.  An
+         --  ordinary declaration owns its published signature, while every
+         --  interned generic identity owns the distinct signature created
+         --  for that key; bare templates own none.  Structural function-type
+         --  signatures may share the table but never Owns_Body, so they are
+         --  descriptors or concrete boundaries rather than guessed routines.
          type Effect_Matrix is array
            (Positive range <>, Positive range <>) of Boolean;
          Effects : Effect_Matrix
@@ -16081,6 +16107,12 @@ package body Landin.Stages.Checking is
             Node : Syn.Node_Id := Syn.No_Node;
             Signature : Landin.Checking.Signature_Id :=
               Landin.Checking.No_Signature;
+            --  One syntax call can denote a different target in each
+            --  generic fact overlay.  Retain that concrete caller view for
+            --  deferred recovery checking; No_Routine_Instance is the
+            --  ordinary declaration-backed view.
+            View : Landin.Checking.Routine_Instance_Id :=
+              Landin.Checking.No_Routine_Instance;
          end record;
 
          function Total_Nodes return Natural;
@@ -16385,7 +16417,9 @@ package body Landin.Stages.Checking is
                            Deferred_Recoveries (Deferred_Recovery_Count) :=
                              (Source => Syn.Source_Of (Of_Tree),
                               Node => Node,
-                              Signature => Signature);
+                              Signature => Signature,
+                              View => Landin.Checking.Current_Routine_View
+                                (Types.all));
                         end if;
                         if Syn.Name (Of_Tree, Recovery)
                              /= Landin.Source.Names.No_Name
@@ -16424,7 +16458,9 @@ package body Landin.Stages.Checking is
                         Issues (Issue_Count) :=
                           (Source => Syn.Source_Of (Of_Tree),
                            Node => Node,
-                           Signature => Signature);
+                           Signature => Signature,
+                           View => Landin.Checking.Current_Routine_View
+                             (Types.all));
                      end if;
                   end;
                   return;
@@ -16676,14 +16712,74 @@ package body Landin.Stages.Checking is
 
          for Index in 1 .. Deferred_Recovery_Count loop
             declare
+               Issue : Call_Issue renames Deferred_Recoveries (Index);
                Of_Tree : constant not null access constant Syn.Tree :=
-                 Tree_For (Deferred_Recoveries (Index).Source);
-               Checked : constant Ty.Type_Kind :=
-                 Check_Call
-                   (Of_Tree.all, Deferred_Recoveries (Index).Node,
-                    Deferred_Recoveries (Index).Signature);
+                 Tree_For (Issue.Source);
+               Previous : Landin.Checking.Routine_Instance_Id :=
+                 Landin.Checking.Current_Routine_View (Types.all);
             begin
-               pragma Unreferenced (Checked);
+               if Issue.View /= Landin.Checking.No_Routine_Instance then
+                  Landin.Checking.Activate_Routine_View
+                    (Types.all, Issue.View, Previous);
+               end if;
+               declare
+                  Recovery : constant Syn.Node_Id :=
+                    Syn.Recovery_Of (Of_Tree.all, Issue.Node);
+               begin
+                  --  Ordinary recovery bindings were settled by the
+                  --  declaration-order loop above.  A generic binding belongs
+                  --  to its instance overlay instead, so materialize it here
+                  --  from that instance's now-final signature before the
+                  --  ordinary call checker reads the recovery body.
+                  if Syn.Name (Of_Tree.all, Recovery)
+                       /= Landin.Source.Names.No_Name
+                  then
+                     declare
+                        Id : constant Res.Declaration_Id :=
+                          Declaration_At (Issue.Source, Recovery);
+                        Errors : constant Landin.Checking.Atom_Set_Id :=
+                          Landin.Checking.Signature_Errors
+                            (Types.all, Issue.Signature);
+                     begin
+                        if Landin.Checking.State_Of (Types.all, Id)
+                             = Landin.Checking.Untouched
+                        then
+                           Landin.Checking.Begin_Inference (Types.all, Id);
+                           if Errors = Landin.Checking.No_Atom_Set then
+                              Landin.Checking.Settle
+                                (Types.all, Id, Ty.Ill_Typed);
+                           else
+                              Landin.Checking.Note_Atom_Set
+                                (Types.all, Id, Errors);
+                              Landin.Checking.Settle
+                                (Types.all, Id, Ty.Atom_Value);
+                           end if;
+                        end if;
+                     end;
+                  end if;
+
+                  --  Pass two may already have cached an ordinary call's
+                  --  result while inferring a local or module binding; its
+                  --  later body walk will then prune at that node, so finish
+                  --  its deferred recovery now.  Generic bodies were not
+                  --  checked during instance discovery and must instead be
+                  --  visited exactly once by their finalized view below.
+                  if Issue.View = Landin.Checking.No_Routine_Instance then
+                     declare
+                        Checked : constant Ty.Type_Kind :=
+                          Check_Call
+                            (Of_Tree.all, Issue.Node, Issue.Signature);
+                     begin
+                        pragma Unreferenced (Checked);
+                     end;
+                  end if;
+               end;
+               Landin.Checking.Restore_Routine_View (Types.all, Previous);
+            exception
+               when others =>
+                  Landin.Checking.Restore_Routine_View
+                    (Types.all, Previous);
+                  raise;
             end;
          end loop;
 
@@ -17087,10 +17183,11 @@ package body Landin.Stages.Checking is
 
       Finalize_Error_Sets;
 
-      --  Concrete generic recovery clauses were intentionally postponed
-      --  until the error graph had settled their per-instance recovery
-      --  bindings. Rechecking a ready instance now exercises the same call,
-      --  fail and cleanup machinery used by every ordinary routine.
+      --  Instance discovery published signatures and nested targets but did
+      --  not check a generic body against provisional errors.  Every ready
+      --  view now has a finalized concrete set and any inferred recovery
+      --  binding in that same overlay, so check its call, fail and cleanup
+      --  paths exactly once through the ordinary machinery.
       for Position in 1 .. Landin.Checking.Routine_Instance_Count
         (Types.all)
       loop

@@ -118,6 +118,9 @@ package body Landin.Tests.Checking_Suite is
    procedure Generic_Instances_Carry_Declared_Errors
      (Item : in out Landin.Testing.Context);
 
+   procedure Generic_Instances_Infer_Errors_Per_Key
+     (Item : in out Landin.Testing.Context);
+
    procedure Declared_Structs_Follow_Target_Layout
      (Item : in out Landin.Testing.Context);
 
@@ -1528,6 +1531,82 @@ package body Landin.Tests.Checking_Suite is
             "the public instance signature carries its concrete error set");
       end;
    end Generic_Instances_Carry_Declared_Errors;
+
+   procedure Generic_Instances_Infer_Errors_Per_Key
+     (Item : in out Landin.Testing.Context)
+   is
+      Text : constant String :=
+        "missing, denied: atom" & LF
+        & "missing_set: type = missing" & LF
+        & "denied_set: type = denied" & LF
+        & "miss: (stop: bool) -> none ! missing_set =" & LF
+        & "    fail missing when stop" & LF
+        & "end miss" & LF
+        & "deny: (stop: bool) -> none ! denied_set =" & LF
+        & "    fail denied when stop" & LF
+        & "end deny" & LF
+        & "invoke: (f: type, action: f, stop: bool) -> none ! ... =" & LF
+        & "    try action(stop)" & LF
+        & "end invoke" & LF
+        & "use: () -> none =" & LF
+        & "    invoke(miss, true) else 0" & LF
+        & "    invoke(deny, true) else 0" & LF
+        & "    invoke(miss, false) else 0" & LF
+        & "end use" & LF;
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Ran : Natural;
+      Src : Landin.Source.Source_Id;
+   begin
+      Src := Landin.Stages.Add_Source
+        (Work, "generic-inferred-errors.ldn", Text);
+      pragma Unreferenced (Src);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Configurer'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Landin.Stages.Append (Order, Checker'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work), "the program is accepted");
+      declare
+         Types : constant not null access Landin.Checking.Table :=
+           Landin.Stages.Types (Work);
+         First : constant Landin.Checking.Routine_Instance_Id :=
+           Landin.Checking.Routine_Identities.Nth (Types.all, 1);
+         Second : constant Landin.Checking.Routine_Instance_Id :=
+           Landin.Checking.Routine_Identities.Nth (Types.all, 2);
+         First_Signature : constant Landin.Checking.Signature_Id :=
+           Landin.Checking.Routine_Signature_Of (Types.all, First);
+         Second_Signature : constant Landin.Checking.Signature_Id :=
+           Landin.Checking.Routine_Signature_Of (Types.all, Second);
+         First_Errors : constant Landin.Checking.Atom_Set_Id :=
+           Landin.Checking.Signature_Errors (Types.all, First_Signature);
+         Second_Errors : constant Landin.Checking.Atom_Set_Id :=
+           Landin.Checking.Signature_Errors (Types.all, Second_Signature);
+      begin
+         Landin.Testing.Check
+           (Item,
+            Landin.Checking.Routine_Instance_Count (Types.all) = 2
+              and then First /= Second
+              and then Landin.Checking.Signature_Error_Form
+                (Types.all, First_Signature) = Landin.Checking.Concrete
+              and then Landin.Checking.Signature_Error_Form
+                (Types.all, Second_Signature) = Landin.Checking.Concrete
+              and then Landin.Checking.Atom_Count
+                (Types.all, First_Errors) = 1
+              and then Landin.Checking.Atom_Count
+                (Types.all, Second_Errors) = 1
+              and then Landin.Checking.Nth_Atom
+                (Types.all, First_Errors, 1)
+                  /= Landin.Checking.Nth_Atom
+                    (Types.all, Second_Errors, 1),
+            "equal keys reuse one instance while unequal function"
+            & " descriptors retain distinct finalized inferred sets");
+      end;
+   end Generic_Instances_Infer_Errors_Per_Key;
 
    procedure Declared_Structs_Follow_Target_Layout
      (Item : in out Landin.Testing.Context)
@@ -6535,6 +6614,9 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Register
         (Into, "checking", "generic instances carry declared errors",
          Generic_Instances_Carry_Declared_Errors'Access);
+      Landin.Testing.Register
+        (Into, "checking", "generic instances infer errors per key",
+         Generic_Instances_Infer_Errors_Per_Key'Access);
       Landin.Testing.Register
         (Into, "checking", "ordinary signatures use nominal identity only",
          Ordinary_Function_Signatures_Use_Identity_Only'Access);

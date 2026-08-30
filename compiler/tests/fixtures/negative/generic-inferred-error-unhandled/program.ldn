@@ -1,0 +1,10 @@
+problem: atom
+
+stop: (t: type, value: t) -> (result: t) ! ... =
+    fail problem
+    result = value
+end stop
+
+use: () -> (result: i32) =
+    result = stop(42)
+end use
