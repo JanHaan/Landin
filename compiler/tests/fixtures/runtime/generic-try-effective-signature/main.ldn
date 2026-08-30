@@ -1,0 +1,29 @@
+problem: atom
+problems: type = problem
+
+stop: (t: type, value: t, halt: bool) -> (result: t) ! ... =
+    fail problem when halt
+    result = value
+end stop
+
+deduced_forward: (t: type, value: t, halt: bool) -> (result: t) ! ... =
+    result = try stop(halt: halt, value: value)
+end deduced_forward
+
+explicit_forward: (t: type, value: t, halt: bool) -> (result: t) ! ... =
+    result = try stop(halt: halt, value: value, t: t)
+end explicit_forward
+
+public main: () -> (code: i32) =
+    first := deduced_forward(20, false) else 0
+    second := explicit_forward(value: 22, halt: false) else 0
+    failed_deduced := deduced_forward(0, true) else 1
+    failed_explicit := explicit_forward(halt: true, value: 0) else 1
+    if first + second == 42 and failed_deduced == 1
+       and failed_explicit == 1
+    then
+        code = 42
+    else
+        code = 2
+    end if
+end main

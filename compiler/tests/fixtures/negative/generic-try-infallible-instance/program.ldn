@@ -1,0 +1,11 @@
+identity: (t: type, value: t) -> (result: t) ! ... =
+    result = value
+end identity
+
+deduced: () -> (result: i32) ! ... =
+    result = try identity(1)
+end deduced
+
+explicit: () -> (result: i32) ! ... =
+    result = try identity(value: 2, t: i32)
+end explicit
