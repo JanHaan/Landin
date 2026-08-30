@@ -1791,15 +1791,34 @@ package body Landin.Stages.Checking is
             end;
          end if;
 
-         if Syn.Kind (Of_Tree, Written) /= Syn.Type_Application then
+         if Syn.Kind (Of_Tree, Written)
+              not in Syn.Type_Application | Syn.Call
+         then
             Report_Application
               (Of_Tree, Written, "this positional argument must be a type");
             return Invalid;
          end if;
 
          declare
-            Target : constant Syn.Node_Id :=
-              Syn.Applied_Type (Of_Tree, Written);
+            --  The neutral labelled-call RHS keeps `identity(i32)` as a
+            --  compact Call.  It is a type application only on the selected
+            --  type view; a runtime call never reaches this normalizer.
+            function Applied return Syn.Node_Id
+            is (if Syn.Kind (Of_Tree, Written) = Syn.Type_Application
+                then Syn.Applied_Type (Of_Tree, Written)
+                else Syn.Callee_Of (Of_Tree, Written));
+
+            function Argument_Count return Natural
+            is (if Syn.Kind (Of_Tree, Written) = Syn.Type_Application
+                then Syn.Type_Argument_Count (Of_Tree, Written)
+                else Syn.Argument_Count (Of_Tree, Written));
+
+            function Argument_At (Index : Positive) return Syn.Node_Id
+            is (if Syn.Kind (Of_Tree, Written) = Syn.Type_Application
+                then Syn.Nth_Type_Argument (Of_Tree, Written, Index)
+                else Syn.Nth_Argument (Of_Tree, Written, Index));
+
+            Target : constant Syn.Node_Id := Applied;
             This_Application : constant Landin.Provenance.Origin :=
               (if Landin.Provenance.Is_Known (Application)
                then Application else Syn.Origin (Of_Tree, Written));
@@ -1851,8 +1870,7 @@ package body Landin.Stages.Checking is
                      return Invalid;
                   end if;
 
-                  if Syn.Type_Argument_Count (Of_Tree, Written)
-                       /= Formal_Count
+                  if Argument_Count /= Formal_Count
                   then
                      Bad.Report
                        (Item    => Bad.Type_Mismatch,
@@ -1860,9 +1878,7 @@ package body Landin.Stages.Checking is
                         Where   => Syn.Where (Of_Tree, Written),
                         Message => "this alias application has "
                                    & Counted
-                                     (Syn.Type_Argument_Count
-                                        (Of_Tree, Written),
-                                      "argument") & ", but `"
+                                     (Argument_Count, "argument") & ", but `"
                                    & Spelled
                                      (Syn.Name (Template.all, Declaration))
                                    & "` needs "
@@ -1953,7 +1969,7 @@ package body Landin.Stages.Checking is
                              Syn.Nth_Type_Formal
                                (Template.all, Declaration, Index);
                            Argument : constant Syn.Node_Id :=
-                             Syn.Nth_Type_Argument (Of_Tree, Written, Index);
+                             Argument_At (Index);
                         begin
                            if Syn.Kind (Template.all, Formal_Node)
                                 = Syn.Type_Formal
@@ -1980,7 +1996,7 @@ package body Landin.Stages.Checking is
                              Syn.Nth_Type_Formal
                                (Template.all, Declaration, Index);
                            Argument : constant Syn.Node_Id :=
-                             Syn.Nth_Type_Argument (Of_Tree, Written, Index);
+                             Argument_At (Index);
                         begin
                            if Syn.Kind (Template.all, Formal_Node)
                                 = Syn.Fixed_Formal
