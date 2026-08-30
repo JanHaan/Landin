@@ -237,8 +237,9 @@ requires one. Function-signature and type-actual normalization retain identity
 without creating a by-value edge. Ordinary signature parameters and results
 likewise use a struct's preallocated empty-actual identity through aliases, so
 self and mutual signature-only recursion never enters the ordinary layout
-recursion guard; routine ABI positions request any needed concrete layout only
-when checking the body. Substituting a generic descriptor at a value use
+recursion guard; routine ABI positions request any needed concrete layout when
+checking the body, with direct multiple results materialized before their
+caller-owned aggregate is placed. Substituting a generic descriptor at a value use
 reconstructs its canonical binding and recursively materializes nested nominal
 or nominal-array layout there, including D18 checks. Symbolic declaration
 validation retains a checker-local template and binding obligation for a

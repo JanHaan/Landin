@@ -1,0 +1,6 @@
+huge: type (fixed count: u64) = struct
+    bytes: [count]u64
+end huge
+
+bad: () -> (result: huge(18446744073709551615)) =
+end bad

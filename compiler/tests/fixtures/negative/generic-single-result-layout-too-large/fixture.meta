@@ -1,0 +1,6 @@
+class: negative
+summary: one invalid generic nominal single result reports its value-layout failure once
+constructs: 0520, 0670, 0710, 1350, 1795
+program: program.ldn
+targets: linux-x86-64, macos-arm64
+codes: L0300

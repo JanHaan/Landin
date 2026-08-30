@@ -1,0 +1,15 @@
+cell: type (item: type) = struct
+    value: item
+end cell
+
+pair: () -> (one: cell(u8), many: [2]cell(u8),
+            first: node, second: node) =
+    one = (value: 1)
+    many = zeroed
+    first = zeroed
+    second = zeroed
+end pair
+
+node: type = struct
+    value: u8
+end node
