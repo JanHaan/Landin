@@ -90,7 +90,10 @@ package body Landin.IR.Dump is
                   "struct " & Named (Template_Of (Of_Unit, Part.Nominal)),
                when Landin.Types.Fixed_Array =>
                   "[" & Trimmed (Element_Total'Image (Part.Length)) & "]"
-                  & Landin.Types.Spelling (Part.Element),
+                  & (if Part.Nominal = No_Nominal_Type
+                     then Landin.Types.Spelling (Part.Element)
+                     else "struct "
+                       & Named (Template_Of (Of_Unit, Part.Nominal))),
                when Landin.Types.Function_Value =>
                   "function signature "
                   & Trimmed (Signature_Id'Image (Part.Signature)),

@@ -7739,11 +7739,13 @@ facts`, the lowering case `generic routines lower once per key`,
 `negative/generic-explicit-computed-pattern-mismatch`,
 `negative/generic-structural-repeated-conflict`,
 `negative/generic-wrong-nominal-template`,
-`positive/generic-structural-deduction`, and
+`positive/generic-structural-deduction`,
+`positive/generic-zero-nominal-array-signatures`, and
 `runtime/generic-identity-deduction`,
 `runtime/generic-fixed-array-deduction`,
 `runtime/generic-direct-descriptor-deduction`,
 `runtime/generic-structural-deduction`,
+`runtime/generic-zero-nominal-array-signatures`,
 `runtime/generic-declared-errors`, and
 `runtime/generic-same-key-recursion` on Linux x86-64.
 
