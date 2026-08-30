@@ -398,6 +398,85 @@ package Landin.Resolution is
           Post => Verdict_Of (Into, Of_Tree, Node) = Bound
                   and then Bound_To (Into, Of_Tree, Node) = To;
 
+   ------------------------------------------------------------------
+   --  Direct labelled applications
+   ------------------------------------------------------------------
+
+   --  Resolution classifies the callee before touching an argument RHS.
+   --  Unclassified is retained data: checking can then diagnose a scalar,
+   --  non-callable value, or unresolved alias without resolution guessing.
+   type Application_Class is
+     (Unclassified_Application, Function_Call, Type_Construction,
+      Case_Construction);
+
+   type Argument_Role is
+     (Unmatched_Argument, Runtime_Argument, Type_Argument, Fixed_Argument,
+      Field_Argument, Payload_Argument, Fill_Argument);
+
+   function Class_Of
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id) return Application_Class
+     with Pre => Is_Prepared (Of_Table)
+                 and then Covers (Of_Table, Of_Tree)
+                 and then Landin.Syntax.Kind (Of_Tree, Node)
+                            = Landin.Syntax.Labeled_Application;
+
+   function Role_Of
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Argument : Landin.Syntax.Node_Id) return Argument_Role
+     with Pre => Is_Prepared (Of_Table)
+                 and then Covers (Of_Table, Of_Tree)
+                 and then Landin.Syntax.Kind (Of_Tree, Argument)
+                            = Landin.Syntax.Call_Argument;
+
+   function Formal_Of
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Argument : Landin.Syntax.Node_Id) return Declaration_Id
+     with Pre => Is_Prepared (Of_Table)
+                 and then Covers (Of_Table, Of_Tree)
+                 and then Landin.Syntax.Kind (Of_Tree, Argument)
+                            = Landin.Syntax.Call_Argument;
+
+   function Position_Of
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Argument : Landin.Syntax.Node_Id) return Natural
+     with Pre => Is_Prepared (Of_Table)
+                 and then Covers (Of_Table, Of_Tree)
+                 and then Landin.Syntax.Kind (Of_Tree, Argument)
+                            = Landin.Syntax.Call_Argument;
+
+   procedure Classify
+     (Into    : in out Table;
+      Of_Tree : Landin.Syntax.Tree;
+      Node    : Landin.Syntax.Node_Id;
+      As_Kind : Application_Class)
+     with Pre => Is_Prepared (Into)
+                 and then Covers (Into, Of_Tree)
+                 and then Landin.Syntax.Kind (Of_Tree, Node)
+                            = Landin.Syntax.Labeled_Application
+                 and then Class_Of (Into, Of_Tree, Node)
+                            = Unclassified_Application;
+
+   procedure Match_Argument
+     (Into     : in out Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Argument : Landin.Syntax.Node_Id;
+      As_Role  : Argument_Role;
+      Position : Natural;
+      Formal   : Declaration_Id := No_Declaration)
+     with Pre => Is_Prepared (Into)
+                 and then Covers (Into, Of_Tree)
+                 and then Landin.Syntax.Kind (Of_Tree, Argument)
+                            = Landin.Syntax.Call_Argument
+                 and then Role_Of (Into, Of_Tree, Argument)
+                            = Unmatched_Argument
+                 and then (Formal = No_Declaration
+                           or else Contains (Into, Formal));
+
 private
 
    type Declaration is record
@@ -439,6 +518,16 @@ private
    package Opened_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Scope_Id);
 
+   type Application_Fact is record
+      Class    : Application_Class := Unclassified_Application;
+      Role     : Argument_Role := Unmatched_Argument;
+      Formal   : Declaration_Id := No_Declaration;
+      Position : Natural := 0;
+   end record;
+
+   package Application_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Application_Fact);
+
    --  Lookup is hashed and never iterated.  Landin.Source.Names publishes
    --  Hash for exactly this and states the other half of the rule: report
    --  order is never identity order.  Every report this stage's caller
@@ -464,6 +553,7 @@ private
       Runs         : Run_Vectors.Vector;
       Bound        : Binding_Vectors.Vector;
       Opened       : Opened_Vectors.Vector;
+      Applications : Application_Vectors.Vector;
       Index        : Key_Maps.Map;
    end record;
 

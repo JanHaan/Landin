@@ -13,6 +13,9 @@ package body Landin.Stages.Resolution is
    package Syn renames Landin.Syntax;
 
    use type Landin.Provenance.Declaration_Id;
+   use type Landin.Resolution.Application_Class;
+   use type Landin.Resolution.Argument_Role;
+   use type Landin.Resolution.Scope_Id;
    use type Landin.Source.Names.Name_Id;
    use type Landin.Syntax.Node_Id;
    use type Landin.Syntax.Node_Kind;
@@ -55,6 +58,16 @@ package body Landin.Stages.Resolution is
          Resolve_Declared : Boolean := True);
 
       procedure Resolve
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Inside  : Landin.Resolution.Scope_Id);
+
+      procedure Resolve_Type_View
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Inside  : Landin.Resolution.Scope_Id);
+
+      procedure Resolve_Labeled_Application
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
          Inside  : Landin.Resolution.Scope_Id);
@@ -176,6 +189,219 @@ package body Landin.Stages.Resolution is
          end if;
       end Resolve_Anonymous;
 
+      --  Resolve an ambiguous compact projection as type syntax.  A bare
+      --  Name_Reference is intentionally quiet when no declaration matches:
+      --  it may be one of the predeclared scalar names, exactly as a parsed
+      --  Type_Name would be.  A match is still bound once so declared type
+      --  actuals and forwarded fixed formals retain their identity.
+      procedure Resolve_Type_View
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Inside  : Landin.Resolution.Scope_Id) is
+      begin
+         if Node = Syn.No_Node then
+            return;
+         end if;
+
+         if Syn.Kind (Of_Tree, Node) = Syn.Name_Reference then
+            declare
+               Named : constant Landin.Source.Names.Name_Id :=
+                 Syn.Name (Of_Tree, Node);
+               Meant : constant Landin.Resolution.Declaration_Id :=
+                 (if Named = Landin.Source.Names.No_Name
+                  then Landin.Resolution.No_Declaration
+                  else Landin.Resolution.Visible
+                    (Meanings.all, Inside, Named));
+            begin
+               if Meant /= Landin.Resolution.No_Declaration then
+                  Landin.Resolution.Bind
+                    (Meanings.all, Of_Tree, Node, Meant);
+               end if;
+            end;
+            return;
+         elsif Syn.Kind (Of_Tree, Node) = Syn.Call then
+            Resolve_Type_View
+              (Of_Tree, Syn.Callee_Of (Of_Tree, Node), Inside);
+            for Which in 1 .. Syn.Argument_Count (Of_Tree, Node) loop
+               Resolve_Type_View
+                 (Of_Tree, Syn.Nth_Argument (Of_Tree, Node, Which), Inside);
+            end loop;
+            return;
+         end if;
+
+         Resolve (Of_Tree, Node, Inside);
+      end Resolve_Type_View;
+
+      --  [0980]/D72: bind and classify the direct callee first.  Only the
+      --  projection selected by a matched formal or construction role is
+      --  then resolved; the other projection remains immutable syntax, not a
+      --  second set of name uses.  Position is role-local: runtime positions
+      --  are ABI positions, while static formal positions are source order.
+      procedure Resolve_Labeled_Application
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Inside  : Landin.Resolution.Scope_Id)
+      is
+         Callee : constant Syn.Node_Id := Syn.Callee_Of (Of_Tree, Node);
+         Named  : constant Landin.Source.Names.Name_Id :=
+           Syn.Name (Of_Tree, Callee);
+         Meant  : constant Landin.Resolution.Declaration_Id :=
+           (if Named = Landin.Source.Names.No_Name
+            then Landin.Resolution.No_Declaration
+            else Landin.Resolution.Visible (Meanings.all, Inside, Named));
+         Class : Landin.Resolution.Application_Class :=
+           Landin.Resolution.Unclassified_Application;
+      begin
+         if Meant /= Landin.Resolution.No_Declaration then
+            Landin.Resolution.Bind (Meanings.all, Of_Tree, Callee, Meant);
+            case Landin.Resolution.Sort_Of (Meanings.all, Meant) is
+               when Landin.Resolution.Module_Function =>
+                  Class := Landin.Resolution.Function_Call;
+               when Landin.Resolution.Module_Type =>
+                  Class := Landin.Resolution.Type_Construction;
+               when Landin.Resolution.Case_Name =>
+                  Class := Landin.Resolution.Case_Construction;
+               when others =>
+                  null;
+            end case;
+         end if;
+
+         Landin.Resolution.Classify
+           (Meanings.all, Of_Tree, Node, Class);
+
+         if Class = Landin.Resolution.Function_Call then
+            declare
+               Callee_Tree : constant not null access constant Syn.Tree :=
+                 Trees.Tree_Of
+                   (Landin.Resolution.Source_Of (Meanings.all, Meant));
+               Declaration : constant Syn.Node_Id :=
+                 Landin.Resolution.Node_Of (Meanings.all, Meant);
+               Runtime_Position : Natural := 0;
+               Signature : constant Landin.Resolution.Scope_Id :=
+                 Landin.Resolution.Scope_At
+                   (Meanings.all, Callee_Tree.all, Declaration);
+            begin
+               for Which in 1 .. Syn.Argument_Count (Of_Tree, Node) loop
+                  declare
+                     Argument : constant Syn.Node_Id :=
+                       Syn.Nth_Argument (Of_Tree, Node, Which);
+                     Label : constant Landin.Source.Names.Name_Id :=
+                       Syn.Argument_Label (Of_Tree, Argument);
+                     Role : Landin.Resolution.Argument_Role :=
+                       Landin.Resolution.Unmatched_Argument;
+                     Position : Natural := 0;
+                     Formal_Node : Syn.Node_Id := Syn.No_Node;
+                     Formal : Landin.Resolution.Declaration_Id :=
+                       Landin.Resolution.No_Declaration;
+                  begin
+                     if Syn.Is_Fill_Argument (Of_Tree, Argument) then
+                        Role := Landin.Resolution.Fill_Argument;
+                     elsif Label = Landin.Source.Names.No_Name then
+                        Runtime_Position := Runtime_Position + 1;
+                        if Runtime_Position <=
+                          Syn.Parameter_Count (Callee_Tree.all, Declaration)
+                        then
+                           Role := Landin.Resolution.Runtime_Argument;
+                           Position := Runtime_Position;
+                           Formal_Node := Syn.Nth_Parameter
+                             (Callee_Tree.all, Declaration, Position);
+                        end if;
+                     else
+                        for Static in 1 .. Syn.Generic_Formal_Count
+                          (Callee_Tree.all, Declaration)
+                        loop
+                           declare
+                              Candidate : constant Syn.Node_Id :=
+                                Syn.Nth_Generic_Formal
+                                  (Callee_Tree.all, Declaration, Static);
+                           begin
+                              if Syn.Name (Callee_Tree.all, Candidate) = Label
+                              then
+                                 Position := Static;
+                                 Formal_Node := Candidate;
+                                 Role :=
+                                   (if Syn.Kind (Callee_Tree.all, Candidate)
+                                         = Syn.Type_Formal
+                                    then Landin.Resolution.Type_Argument
+                                    else Landin.Resolution.Fixed_Argument);
+                                 exit;
+                              end if;
+                           end;
+                        end loop;
+
+                        if Role = Landin.Resolution.Unmatched_Argument then
+                           for Runtime in 1 .. Syn.Parameter_Count
+                             (Callee_Tree.all, Declaration)
+                           loop
+                              declare
+                                 Candidate : constant Syn.Node_Id :=
+                                   Syn.Nth_Parameter
+                                     (Callee_Tree.all, Declaration, Runtime);
+                              begin
+                                 if Syn.Name (Callee_Tree.all, Candidate)
+                                      = Label
+                                 then
+                                    Role :=
+                                      Landin.Resolution.Runtime_Argument;
+                                    Position := Runtime;
+                                    Formal_Node := Candidate;
+                                    exit;
+                                 end if;
+                              end;
+                           end loop;
+                        end if;
+                     end if;
+
+                     if Formal_Node /= Syn.No_Node
+                       and then Signature /= Landin.Resolution.No_Scope
+                     then
+                        Formal := Landin.Resolution.Declared_Here
+                          (Meanings.all, Signature,
+                           Syn.Name (Callee_Tree.all, Formal_Node));
+                     end if;
+
+                     if Role /= Landin.Resolution.Unmatched_Argument then
+                        Landin.Resolution.Match_Argument
+                          (Meanings.all, Of_Tree, Argument, Role, Position,
+                           Formal);
+                        if Role = Landin.Resolution.Type_Argument then
+                           Resolve_Type_View
+                             (Of_Tree,
+                              Syn.Type_Projection (Of_Tree, Argument), Inside);
+                        else
+                           Resolve
+                             (Of_Tree,
+                              Syn.Expression_Projection
+                                (Of_Tree, Argument), Inside);
+                        end if;
+                     end if;
+                  end;
+               end loop;
+            end;
+         elsif Class in Landin.Resolution.Type_Construction
+                          | Landin.Resolution.Case_Construction
+         then
+            for Which in 1 .. Syn.Argument_Count (Of_Tree, Node) loop
+               declare
+                  Argument : constant Syn.Node_Id :=
+                    Syn.Nth_Argument (Of_Tree, Node, Which);
+                  Role : constant Landin.Resolution.Argument_Role :=
+                    (if Syn.Is_Fill_Argument (Of_Tree, Argument)
+                     then Landin.Resolution.Fill_Argument
+                     elsif Class = Landin.Resolution.Case_Construction
+                     then Landin.Resolution.Payload_Argument
+                     else Landin.Resolution.Field_Argument);
+               begin
+                  Landin.Resolution.Match_Argument
+                    (Meanings.all, Of_Tree, Argument, Role, Which);
+                  Resolve
+                    (Of_Tree,
+                     Syn.Expression_Projection (Of_Tree, Argument), Inside);
+               end;
+            end loop;
+         end if;
+      end Resolve_Labeled_Application;
+
       --  Every use of a name is a Name_Reference node, so resolution is a
       --  walk looking for one kind rather than for identifiers in seven
       --  positions.  A Type_Name is not a use: [1790] gives the kernel
@@ -200,6 +426,10 @@ package body Landin.Stages.Resolution is
          --  form could only be a statement.  Keep that rule here, in the
          --  general expression walk, rather than at one statement caller.
          case Syn.Kind (Of_Tree, Node) is
+            when Syn.Labeled_Application =>
+               Resolve_Labeled_Application (Of_Tree, Node, Inside);
+               return;
+
             when Syn.Call =>
                Resolve (Of_Tree, Syn.Callee_Of (Of_Tree, Node), Inside);
                for Argument in 1 .. Syn.Argument_Count (Of_Tree, Node) loop
