@@ -1,0 +1,6 @@
+class: negative
+summary: repeated exact array patterns must deduce the same fixed magnitude once
+constructs: 0520, 1290, 1920
+program: program.ldn
+targets: linux-x86-64, macos-arm64
+codes: L0301
