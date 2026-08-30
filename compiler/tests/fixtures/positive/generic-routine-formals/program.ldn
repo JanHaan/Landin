@@ -1,1 +1,3 @@
-f: (value: t, fixed n: u32, t: type) -> none = end f
+f: (fixed n: u32, t: type) -> none = end f
+
+main: () -> (code: u8) = 0 end main

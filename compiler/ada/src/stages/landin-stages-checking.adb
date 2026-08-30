@@ -14366,6 +14366,15 @@ package body Landin.Stages.Checking is
                      pragma Unreferenced (Written);
                   end;
                end if;
+            elsif Res.Sort_Of (Meanings.all, Id) = Res.Module_Function
+              and then Syn.Generic_Formal_Count
+                (Tree_For (Res.Source_Of (Meanings.all, Id)).all,
+                 Res.Node_Of (Meanings.all, Id)) /= 0
+            then
+               --  D138's routine template has no standalone function value
+               --  or signature. A later direct call supplies its checker
+               --  owned instance; until then it is only symbolic syntax.
+               Landin.Checking.Settle (Types.all, Id, Ty.Not_Typed);
             elsif Res.Sort_Of (Meanings.all, Id)
                     in Res.Type_Parameter | Res.Fixed_Parameter
             then
@@ -14505,7 +14514,10 @@ package body Landin.Stages.Checking is
                            Whole_Fold => True);
 
                      when Syn.Function_Declaration =>
-                        Check_Routine_Body (Of_Tree.all, Node);
+                        if Syn.Generic_Formal_Count (Of_Tree.all, Node) = 0
+                        then
+                           Check_Routine_Body (Of_Tree.all, Node);
+                        end if;
 
                      when others =>
                         null;

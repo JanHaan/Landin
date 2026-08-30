@@ -7189,49 +7189,56 @@ package body Landin.Stages.Lowering is
                begin
                   case Syn.Kind (Of_Tree.all, Node) is
                      when Syn.Function_Declaration =>
-                        declare
-                           Count : constant Natural :=
-                             Syn.Return_Count (Of_Tree.all, Node);
-                           Gives : constant Syn.Node_Id :=
-                             (if Count = 1
-                              then Syn.Nth_Return (Of_Tree.all, Node, 1)
-                              else Syn.No_Node);
-                           Held : constant Ty.Type_Kind :=
-                             (if Count = 0 then Ty.No_Value
-                              elsif Count > 1 then Ty.Aggregate
-                              else Landin.Checking.Type_Of
-                                     (Types.all,
-                                      Declaration_At (Src, Gives)));
-                        begin
-                           Made :=
-                             IR.Add_Item
-                               (Unit.all, IR.Routine, Id,
-                                (if Held = Ty.Function_Value
-                                 then Ty.Usize
-                                 elsif Held = Ty.Atom_Value
-                                 then Ty.U32 else Held),
-                                Site_Of (Of_Tree.all, Node),
-                                Nominal =>
-                                  (if Held = Ty.Aggregate and then Count = 1
-                                   then Nominal_For
-                                     (Landin.Checking.Nominal_Of
+                        if Syn.Generic_Formal_Count (Of_Tree.all, Node) /= 0
+                        then
+                           --  D138 templates are compile-time syntax only.
+                           --  A direct deduced instance owns the routine item.
+                           Made := IR.No_Item;
+                        else
+                           declare
+                              Count : constant Natural :=
+                                Syn.Return_Count (Of_Tree.all, Node);
+                              Gives : constant Syn.Node_Id :=
+                                (if Count = 1
+                                 then Syn.Nth_Return (Of_Tree.all, Node, 1)
+                                 else Syn.No_Node);
+                              Held : constant Ty.Type_Kind :=
+                                (if Count = 0 then Ty.No_Value
+                                 elsif Count > 1 then Ty.Aggregate
+                                 else Landin.Checking.Type_Of
                                         (Types.all,
-                                         Declaration_At (Src, Gives)))
-                                   else IR.No_Nominal_Type));
-                           if Held = Ty.Atom_Value then
-                              IR.Set_Atom_Set
+                                         Declaration_At (Src, Gives)));
+                           begin
+                              Made :=
+                                IR.Add_Item
+                                  (Unit.all, IR.Routine, Id,
+                                   (if Held = Ty.Function_Value
+                                    then Ty.Usize
+                                    elsif Held = Ty.Atom_Value
+                                    then Ty.U32 else Held),
+                                   Site_Of (Of_Tree.all, Node),
+                                   Nominal =>
+                                     (if Held = Ty.Aggregate and then Count = 1
+                                      then Nominal_For
+                                        (Landin.Checking.Nominal_Of
+                                           (Types.all,
+                                            Declaration_At (Src, Gives)))
+                                      else IR.No_Nominal_Type));
+                              if Held = Ty.Atom_Value then
+                                 IR.Set_Atom_Set
+                                   (Unit.all, Made,
+                                    Atom_Set_For
+                                      (Landin.Checking.Atom_Set_Of
+                                         (Types.all,
+                                          Declaration_At (Src, Gives))));
+                              end if;
+                              IR.Set_Signature
                                 (Unit.all, Made,
-                                 Atom_Set_For
-                                   (Landin.Checking.Atom_Set_Of
-                                      (Types.all,
-                                       Declaration_At (Src, Gives))));
-                           end if;
-                           IR.Set_Signature
-                             (Unit.all, Made,
-                              Signature_For
-                                (Landin.Checking.Signature_Of
-                                   (Types.all, Id)));
-                        end;
+                                 Signature_For
+                                   (Landin.Checking.Signature_Of
+                                      (Types.all, Id)));
+                           end;
+                        end if;
 
                      when Syn.Binding =>
                         declare
@@ -7393,7 +7400,10 @@ package body Landin.Stages.Lowering is
                begin
                   case Syn.Kind (Of_Tree.all, Node) is
                      when Syn.Function_Declaration =>
-                        Lower_Routine (Of_Tree.all, Node);
+                        if Syn.Generic_Formal_Count (Of_Tree.all, Node) = 0
+                        then
+                           Lower_Routine (Of_Tree.all, Node);
+                        end if;
 
                      when Syn.Binding =>
                         Lower_Datum (Of_Tree.all, Node);
