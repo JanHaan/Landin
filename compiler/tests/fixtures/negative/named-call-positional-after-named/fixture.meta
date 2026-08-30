@@ -1,0 +1,6 @@
+class: negative
+summary: [0980] diagnoses one positional run after a named call argument
+constructs: 0980, 1820
+targets: linux-x86-64, macos-arm64
+program: program.ldn
+codes: L0112

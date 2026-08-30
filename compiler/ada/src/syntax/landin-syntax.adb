@@ -25,7 +25,7 @@ package body Landin.Syntax is
             when If_Statement             => 1,
             when Match_Statement          => 1,
             when Bare_Block               => 1,
-            when Call                     => 1,
+            when Labeled_Application | Call => 1,
             when Try_Expression            => 1,
             when Anonymous_Function       => 3,
             when Error_Expression         => 0,
@@ -44,7 +44,7 @@ package body Landin.Syntax is
             when Size_Of | Align_Of       => 1,
             when Unary_Kind               => 1,
             when Binary_Kind              => 2,
-            when Field_Value              => 1,
+            when Field_Value | Call_Argument => 1,
             when Error_Type | Type_Name
                | Type_Reference           => 0,
             --  The applied alias, then its positional argument run.
@@ -391,6 +391,77 @@ package body Landin.Syntax is
    function Nth_Argument
      (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
      is (Nth_Item (Of_Tree, Id, Index));
+
+   function Argument_Label (Of_Tree : Tree; Id : Node_Id)
+     return Landin.Source.Names.Name_Id
+     is (Name (Of_Tree, Id));
+
+   function Is_Fill_Argument (Of_Tree : Tree; Id : Node_Id) return Boolean
+     is (Element (Of_Tree, Id).Fill);
+
+   function Argument_RHS (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     is (Slot (Of_Tree, Id, 1));
+
+   function Expression_Projection (Of_Tree : Tree; Id : Node_Id)
+     return Node_Id
+     is (if Kind (Of_Tree, Argument_RHS (Of_Tree, Id)) in Expression_Kind
+         then Argument_RHS (Of_Tree, Id) else No_Node);
+
+   function Type_Projection (Of_Tree : Tree; Id : Node_Id) return Node_Id is
+      function Projects_As_Fixed (Node : Node_Id) return Boolean;
+      function Projects_As_Static_Argument (Node : Node_Id) return Boolean;
+      function Projects_As_Type (Node : Node_Id) return Boolean;
+
+      function Projects_As_Fixed (Node : Node_Id) return Boolean is
+      begin
+         case Kind (Of_Tree, Node) is
+            when Integer_Literal | Name_Reference =>
+               return True;
+            when Negation =>
+               return Projects_As_Fixed (Operand_Of (Of_Tree, Node));
+            when Multiply | Divide | Remainder | Add | Subtract =>
+               return Projects_As_Fixed (Left_Of (Of_Tree, Node))
+                 and then Projects_As_Fixed (Right_Of (Of_Tree, Node));
+            when others =>
+               return False;
+         end case;
+      end Projects_As_Fixed;
+
+      function Projects_As_Static_Argument (Node : Node_Id) return Boolean
+        is (Projects_As_Type (Node) or else Projects_As_Fixed (Node));
+
+      function Projects_As_Type (Node : Node_Id) return Boolean is
+      begin
+         case Kind (Of_Tree, Node) is
+            when Type_Reference_Kind =>
+               return True;
+            when Name_Reference =>
+               return True;
+            when Call =>
+               if Recovery_Of (Of_Tree, Node) /= No_Node
+                 or else Kind (Of_Tree, Callee_Of (Of_Tree, Node))
+                           /= Name_Reference
+               then
+                  return False;
+               end if;
+
+               for Index in 1 .. Argument_Count (Of_Tree, Node) loop
+                  if not Projects_As_Static_Argument
+                    (Nth_Argument (Of_Tree, Node, Index))
+                  then
+                     return False;
+                  end if;
+               end loop;
+               return True;
+            when others =>
+               return False;
+         end case;
+      end Projects_As_Type;
+
+      RHS : constant Node_Id := Argument_RHS (Of_Tree, Id);
+   begin
+      return (if Projects_As_Type (RHS) then RHS else No_Node);
+   end Type_Projection;
 
    function Applied_Type (Of_Tree : Tree; Id : Node_Id) return Node_Id
      is (Slot (Of_Tree, Id, 1));

@@ -21886,6 +21886,46 @@ file negative/name-from-another-arm/program.ldn tokens 33
   101 103 if
   104 107 end
   108 109 f
+file negative/named-call-positional-after-named/program.ldn tokens 39
+  0 4 take
+  4 5 :
+  6 7 (
+  7 12 first
+  12 13 :
+  14 17 i32
+  17 18 ,
+  19 25 second
+  25 26 :
+  27 30 i32
+  30 31 ,
+  32 37 third
+  37 38 :
+  39 42 i32
+  42 43 )
+  44 46 ->
+  47 51 none
+  52 53 =
+  54 57 end
+  58 62 take
+  64 67 bad
+  67 68 :
+  69 70 (
+  70 71 )
+  72 74 ->
+  75 79 none
+  80 81 =
+  86 90 take
+  90 91 (
+  91 96 first
+  96 97 :
+  98 99 1
+  99 100 ,
+  101 102 2
+  102 103 ,
+  104 105 3
+  105 106 )
+  107 110 end
+  111 114 bad
 file negative/named-return-not-assigned/program.ldn tokens 27
   0 13 returns_early
   13 14 :

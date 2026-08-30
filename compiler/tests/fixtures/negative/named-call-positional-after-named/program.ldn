@@ -1,0 +1,6 @@
+take: (first: i32, second: i32, third: i32) -> none =
+end take
+
+bad: () -> none =
+    take(first: 1, 2, 3)
+end bad

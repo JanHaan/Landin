@@ -410,8 +410,11 @@ selection as its callee, which is how a function-valued field is called;
 the call itself still cannot be selected or indexed.
 An ordinary-struct literal is [0710]'s nonempty run of labelled field values,
 optionally followed by [0720]'s contextual fill. D64--D71 state the contexts
-that admit it. D72's construction prefixes the same run with the ordinary
-struct type it builds; the all-fill spelling remains refused by name.
+that admit it. D72's construction and [0980]'s direct named call have one
+`labeled_application` syntax: the parser retains each argument's label and
+neutral RHS, and resolution classifies the callee before selecting type or
+expression projections. A construction may then use the optional trailing
+fill; the all-fill spelling remains refused by name.
 A call-site `else` binds to the call except where that same token directly
 closes an enclosing `then` or `elsif` arm; parentheses around the recovered
 call make the inner use explicit.
@@ -426,7 +429,7 @@ decides what binds, never what runs first.
 
 ```landin-grammar
 primary     ::= literal | array_literal | array_repetition | struct_literal
-              | construction | anonymous_function | indexed | call
+              | labeled_application | anonymous_function | indexed | call
               | measurement | try
               | if | match | bare_block | "(" expression ")"
 array_literal ::= "[" expression ("," expression)* "]"
@@ -436,8 +439,11 @@ array_repetition ::= "[" integer "of" expression "]"
 struct_literal ::= "(" field_value ("," field_value)*
                    ("," "of" expression)? ")"
 field_value ::= identifier ":" expression
-construction ::= identifier "(" field_value ("," field_value)*
-                 ("," "of" expression)? ")"
+labeled_application ::= identifier "(" labeled_arguments ")" recovery?
+labeled_arguments ::= (expression ",")* labeled_argument
+                      ("," labeled_argument)* ("," "of" expression)?
+labeled_argument ::= identifier ":" argument_rhs
+argument_rhs ::= expression | type
 indexed     ::= selection (("[" expression "]") | ("." identifier))*
 selection   ::= identifier ("." identifier)*
 call        ::= indexed "(" arguments? ")" recovery?

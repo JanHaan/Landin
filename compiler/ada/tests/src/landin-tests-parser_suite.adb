@@ -22,6 +22,7 @@ package body Landin.Tests.Parser_Suite is
    package Fixtures renames Landin.Testing.Fixtures;
 
    use type Landin.Platform.Read_Status;
+   use type Landin.Source.Names.Name_Id;
    use type Landin.Source.Source_Id;
    use type Landin.Syntax.Node_Id;
    use type Landin.Syntax.Node_Kind;
@@ -406,6 +407,166 @@ package body Landin.Tests.Parser_Suite is
          & "end f" & ASCII.LF,
          "", "ordinary parentheses, calls and a binding named `of`");
    end Struct_Literal_Shapes_Are_Refused_Once;
+
+   ------------------------------------------------------------------
+   --  Neutral direct labelled applications
+   ------------------------------------------------------------------
+
+   procedure Labeled_Applications_Keep_Both_Projections
+     (Item : in out Landin.Testing.Context);
+
+   procedure Labeled_Applications_Keep_Both_Projections
+     (Item : in out Landin.Testing.Context)
+   is
+      Sources : Landin.Source.Sets.Source_Set;
+      Names   : Landin.Source.Names.Table;
+      Stream  : Landin.Tokens.Token_Stream;
+      Found   : Landin.Diagnostics.Diagnostic_List;
+      Id      : constant Landin.Source.Source_Id :=
+        Sources.Add
+          ("labelled.ldn",
+           "f: () -> none =" & ASCII.LF
+           & "  _ = target(" & ASCII.LF
+           & "    scalar: u8," & ASCII.LF
+           & "    nominal: packet," & ASCII.LF
+           & "    nested: outer(inner(u8, 4), [2][3]u16)," & ASCII.LF
+           & "    array: [4]u32," & ASCII.LF
+           & "    signature: (x: i32) -> (r: u32)," & ASCII.LF
+           & "    count: 4," & ASCII.LF
+           & "    value: source(1 + 2))" & ASCII.LF
+           & "  _ = target(1, named: 2)" & ASCII.LF
+           & "  _ = target(named: 1, 2, 3)" & ASCII.LF
+           & "  _ = target(1)" & ASCII.LF
+           & "  _ = (x: 1)" & ASCII.LF
+           & "end f" & ASCII.LF);
+      Applications : Natural := 0;
+      Pure_Calls   : Natural := 0;
+      Bare_Structs : Natural := 0;
+   begin
+      Landin.Tokens.Lexer.Lex (Sources.Get (Id), Names, Stream);
+      Landin.Diagnostics.Lexical.Report (Stream, Found);
+
+      declare
+         Parsed : constant Landin.Syntax.Tree :=
+           Landin.Syntax.Parser.Parse (Stream, Names, Found);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Landin.Diagnostics.Count (Found), 1,
+            "positionals after a label diagnose once across the run");
+         Landin.Testing.Check_Equal
+           (Item,
+            Landin.Diagnostics.Code
+              (Landin.Diagnostics.Get
+                 (Landin.Diagnostics.Sorted (Found), 1)),
+            "L0112", "argument ordering owns its syntax diagnostic");
+
+         for Node in Landin.Syntax.Node_Id'(1)
+                     .. Landin.Syntax.Last_Node (Parsed)
+         loop
+            case Landin.Syntax.Kind (Parsed, Node) is
+               when Landin.Syntax.Labeled_Application =>
+                  Applications := Applications + 1;
+                  Landin.Testing.Check
+                    (Item,
+                     Landin.Syntax.Kind
+                       (Parsed, Landin.Syntax.Callee_Of (Parsed, Node))
+                         = Landin.Syntax.Name_Reference,
+                     "a labelled application retains its direct callee");
+
+                  if Landin.Syntax.Argument_Count (Parsed, Node) = 7 then
+                     declare
+                        Scalar    : constant Landin.Syntax.Node_Id :=
+                          Landin.Syntax.Nth_Argument (Parsed, Node, 1);
+                        Nested    : constant Landin.Syntax.Node_Id :=
+                          Landin.Syntax.Nth_Argument (Parsed, Node, 3);
+                        Array_Arg : constant Landin.Syntax.Node_Id :=
+                          Landin.Syntax.Nth_Argument (Parsed, Node, 4);
+                        Signature : constant Landin.Syntax.Node_Id :=
+                          Landin.Syntax.Nth_Argument (Parsed, Node, 5);
+                        Fixed     : constant Landin.Syntax.Node_Id :=
+                          Landin.Syntax.Nth_Argument (Parsed, Node, 6);
+                        Value     : constant Landin.Syntax.Node_Id :=
+                          Landin.Syntax.Nth_Argument (Parsed, Node, 7);
+                     begin
+                        Landin.Testing.Check
+                          (Item,
+                           Landin.Syntax.Expression_Projection
+                             (Parsed, Scalar) =
+                               Landin.Syntax.Type_Projection (Parsed, Scalar),
+                           "a bare reference shares its two projections");
+                        Landin.Testing.Check
+                          (Item,
+                           Landin.Syntax.Expression_Projection
+                             (Parsed, Nested) =
+                               Landin.Syntax.Type_Projection (Parsed, Nested),
+                           "a nested positional application is one subtree");
+                        Landin.Testing.Check
+                          (Item,
+                           Landin.Syntax.Expression_Projection
+                             (Parsed, Array_Arg) = Landin.Syntax.No_Node
+                           and then Landin.Syntax.Kind
+                             (Parsed,
+                              Landin.Syntax.Type_Projection
+                                (Parsed, Array_Arg)) =
+                                  Landin.Syntax.Array_Type,
+                           "a fixed array has only its type projection");
+                        Landin.Testing.Check
+                          (Item,
+                           Landin.Syntax.Expression_Projection
+                             (Parsed, Signature) = Landin.Syntax.No_Node
+                           and then Landin.Syntax.Kind
+                             (Parsed,
+                              Landin.Syntax.Type_Projection
+                                (Parsed, Signature)) =
+                                  Landin.Syntax.Function_Type,
+                           "a full signature has only its type projection");
+                        Landin.Testing.Check
+                          (Item,
+                           Landin.Syntax.Expression_Projection
+                             (Parsed, Fixed) /= Landin.Syntax.No_Node
+                           and then Landin.Syntax.Type_Projection
+                             (Parsed, Fixed) = Landin.Syntax.No_Node,
+                           "a fixed integer remains expression syntax");
+                        Landin.Testing.Check
+                          (Item,
+                           Landin.Syntax.Expression_Projection
+                             (Parsed, Value) =
+                               Landin.Syntax.Type_Projection (Parsed, Value),
+                           "a direct call with a fixed expression remains"
+                           & " neutral until its callee is known");
+                     end;
+                  elsif Landin.Syntax.Argument_Count (Parsed, Node) = 2 then
+                     declare
+                        First : constant Landin.Syntax.Node_Id :=
+                          Landin.Syntax.Nth_Argument (Parsed, Node, 1);
+                     begin
+                        Landin.Testing.Check
+                          (Item,
+                           Landin.Syntax.Argument_Label (Parsed, First) =
+                             Landin.Source.Names.No_Name,
+                           "a leading positional argument keeps no label");
+                     end;
+                  end if;
+               when Landin.Syntax.Call =>
+                  Pure_Calls := Pure_Calls + 1;
+               when Landin.Syntax.Struct_Literal =>
+                  Bare_Structs := Bare_Structs + 1;
+               when others =>
+                  null;
+            end case;
+         end loop;
+      end;
+
+      Landin.Testing.Check_Equal
+        (Item, Applications, 3,
+         "every direct argument list containing a label stays neutral");
+      Landin.Testing.Check
+        (Item, Pure_Calls >= 3,
+         "pure positional calls, including nested calls, stay Call nodes");
+      Landin.Testing.Check_Equal
+        (Item, Bare_Structs, 1,
+         "a bare labelled parenthesis stays a struct literal");
+   end Labeled_Applications_Keep_Both_Projections;
 
    ------------------------------------------------------------------
    --  Contextual ordinary-struct variant-part refusal
@@ -1491,6 +1652,9 @@ package body Landin.Tests.Parser_Suite is
       Landin.Testing.Register
         (Into, "parser", "parses struct literals and names refusals once",
          Struct_Literal_Shapes_Are_Refused_Once'Access);
+      Landin.Testing.Register
+        (Into, "parser", "keeps neutral labelled applications",
+         Labeled_Applications_Keep_Both_Projections'Access);
       Landin.Testing.Register
         (Into, "parser", "parses contextual variant parts",
          Variant_Parts_Are_Parsed'Access);
