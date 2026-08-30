@@ -163,11 +163,11 @@
 1470   tour        -                                  A package is a named collection of modules with a version
 1480   tour        -                                  The roots are the project
 1490   tour        -                                  'fixed' marks what is known at compile time
-1500   tour        accepted emitted refused           Conditional compilation
+1500   tour        accepted emitted executed refused  Conditional compilation
 1510   tour        -                                  Compile-time assertion
 1520   tour        -                                  A compile-time value parameter
 1530   tour        -                                  Your own build switches
-1540   tour        refused                            There are no compile-time loops and no compile-time
+1540   tour        accepted emitted refused           There are no compile-time loops and no compile-time
 1550   tour        -                                  Landin has its own native backends
 1560   tour        -                                  Three builtin modules are the way to the tools
 1570   tour        -                                  Calling conventions are a growing set of atoms behind one
@@ -199,7 +199,7 @@
 1820   spec        accepted emitted executed refused  Precedence, tightest first, and comparison does not chain
 1830   spec        accepted emitted executed refused  What is not enabled is refused, and named
 1840   spec        accepted emitted executed refused  The kernel's scopes, outermost first
-1850   spec        refused                            One scope gives one name to one thing
+1850   spec        accepted emitted refused           One scope gives one name to one thing
 1860   spec        refused                            A name that names nothing is refused
 1870   spec        accepted emitted executed refused  The kernel's types, and what each of them holds
 1880   spec        accepted emitted executed refused  Where a literal's type comes from, and what a context is

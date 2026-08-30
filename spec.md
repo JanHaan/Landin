@@ -7660,9 +7660,15 @@ R4.30. A selected immutable view preserves the whole-program declaration set
 without pulling options, build modes, widths, byte order or general builtin
 modules forward.
 
-**Pinned by** the target-description constructor case;
-`positive/fixed-conditional-selects-declarations`;
-`negative/fixed-conditional-evaluator`; and the generated lexical and construct
-records. Further parser seam,
-cross-file, runtime, lowering and target-identity evidence belongs to the same
-D138 completion work and is not yet claimed.
+**Pinned by** the target-description constructor and configuration-stage
+public-seam cases; `positive/fixed-conditional-selects-declarations`,
+`positive/fixed-conditional-nested-inactive`,
+`positive/fixed-conditional-exclusive-duplicates`, and
+`positive/fixed-conditional-cross-file-forward`; the arithmetic and
+short-circuit/later-`elsif` call boundary case
+`negative/fixed-conditional-evaluator`; the active duplicate and
+active-reference-to-inactive cases
+`negative/fixed-conditional-active-duplicate` and
+`negative/fixed-conditional-active-reference-inactive`; the lowering and
+verifier cases, generated lexical, construct and IR records; and
+`runtime/fixed-conditional-runtime` on Linux x86-64.

@@ -14,6 +14,7 @@ with Landin.Provenance;
 with Landin.Resolution;
 with Landin.Source;
 with Landin.Stages.Checking;
+with Landin.Stages.Configuration;
 with Landin.Stages.Resolution;
 with Landin.Stages.Syntax;
 with Landin.Syntax;
@@ -45,6 +46,7 @@ package body Landin.Tests.Checking_Suite is
 
    Frontend : aliased Landin.Stages.Syntax.Instance;
    Names    : aliased Landin.Stages.Resolution.Instance;
+   Configurer : aliased Landin.Stages.Configuration.Instance;
    Checker  : aliased Landin.Stages.Checking.Instance;
 
    LF : constant Character := Character'Val (10);
@@ -103,11 +105,12 @@ package body Landin.Tests.Checking_Suite is
    begin
       Src := Landin.Stages.Add_Source (Work, "identity.ldn", Program);
       Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
       Landin.Stages.Append (Order, Names'Access);
       Landin.Stages.Append (Order, Checker'Access);
       Ran := Landin.Stages.Run (Order, Work);
 
-      Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+      Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "the declarations are accepted");
@@ -275,11 +278,12 @@ package body Landin.Tests.Checking_Suite is
    begin
       Src := Landin.Stages.Add_Source (Work, "instances.ldn", Source_Text);
       Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
       Landin.Stages.Append (Order, Names'Access);
       Landin.Stages.Append (Order, Checker'Access);
       Ran := Landin.Stages.Run (Order, Work);
 
-      Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+      Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "the ordinary templates are accepted");
@@ -719,11 +723,12 @@ package body Landin.Tests.Checking_Suite is
             Foreign_Src := Landin.Stages.Add_Source
               (Foreign_Work, "foreign-instances.ldn", Source_Text);
             Landin.Stages.Append (Foreign_Order, Frontend'Access);
+            Landin.Stages.Append (Foreign_Order, Configurer'Access);
             Landin.Stages.Append (Foreign_Order, Names'Access);
             Landin.Stages.Append (Foreign_Order, Checker'Access);
             Foreign_Ran := Landin.Stages.Run (Foreign_Order, Foreign_Work);
             Landin.Testing.Check_Equal
-              (Item, Foreign_Ran, 3, "the foreign checker ran");
+              (Item, Foreign_Ran, 4, "the foreign checker ran");
             Landin.Testing.Check
               (Item, not Landin.Stages.Failed (Foreign_Work),
                "the foreign collision templates are accepted");
@@ -852,11 +857,12 @@ package body Landin.Tests.Checking_Suite is
                & "    value: usize" & LF
                & "end machine" & LF);
             Landin.Stages.Append (Target_Order, Frontend'Access);
+            Landin.Stages.Append (Target_Order, Configurer'Access);
             Landin.Stages.Append (Target_Order, Names'Access);
             Landin.Stages.Append (Target_Order, Checker'Access);
             Target_Ran := Landin.Stages.Run (Target_Order, Target_Work);
             Landin.Testing.Check_Equal
-              (Item, Target_Ran, 3, "the target checker ran");
+              (Item, Target_Ran, 4, "the target checker ran");
             Landin.Testing.Check
               (Item, not Landin.Stages.Failed (Target_Work),
                "the target comparison template is accepted");
@@ -933,11 +939,12 @@ package body Landin.Tests.Checking_Suite is
       begin
          Src := Landin.Stages.Add_Source (Work, "layout.ldn", Layout_Program);
          Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
          Landin.Stages.Append (Order, Names'Access);
          Landin.Stages.Append (Order, Checker'Access);
          Ran := Landin.Stages.Run (Order, Work);
 
-         Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+         Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
          Landin.Testing.Check
            (Item, not Landin.Stages.Failed (Work),
             "the scalar-only structs are accepted");
@@ -1169,11 +1176,12 @@ package body Landin.Tests.Checking_Suite is
       begin
          Src := Landin.Stages.Add_Source (Work, "arrays.ldn", Source_Text);
          Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
          Landin.Stages.Append (Order, Names'Access);
          Landin.Stages.Append (Order, Checker'Access);
          Ran := Landin.Stages.Run (Order, Work);
 
-         Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+         Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
          Landin.Testing.Check
            (Item, not Landin.Stages.Failed (Work),
             "the array declarations are accepted");
@@ -1387,11 +1395,12 @@ package body Landin.Tests.Checking_Suite is
          & "    exchange: (value: left) -> (result: left)" & LF
          & "end right" & LF);
       Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
       Landin.Stages.Append (Order, Names'Access);
       Landin.Stages.Append (Order, Checker'Access);
       Ran := Landin.Stages.Run (Order, Work);
       Landin.Testing.Check
-        (Item, Ran = 3 and then not Landin.Stages.Failed (Work),
+        (Item, Ran = 4 and then not Landin.Stages.Failed (Work),
          "ordinary self, alias and mutual signature recursion is accepted");
 
       declare
@@ -1498,11 +1507,12 @@ package body Landin.Tests.Checking_Suite is
               & "end node" & LF);
       begin
          Landin.Stages.Append (Abi_Order, Frontend'Access);
+         Landin.Stages.Append (Abi_Order, Configurer'Access);
          Landin.Stages.Append (Abi_Order, Names'Access);
          Landin.Stages.Append (Abi_Order, Checker'Access);
          Abi_Ran := Landin.Stages.Run (Abi_Order, Abi_Work);
          Landin.Testing.Check
-           (Item, Abi_Source /= Landin.Source.No_Source and then Abi_Ran = 3
+           (Item, Abi_Source /= Landin.Source.No_Source and then Abi_Ran = 4
              and then not Landin.Stages.Failed (Abi_Work),
             "multiple nominal results materialize their ABI layouts");
       end;
@@ -1529,11 +1539,12 @@ package body Landin.Tests.Checking_Suite is
          & "mut direct: bytes(u8, 7)" & LF
          & "large: type = [64 * 1024]u8" & LF);
       Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
       Landin.Stages.Append (Order, Names'Access);
       Landin.Stages.Append (Order, Checker'Access);
       Ran := Landin.Stages.Run (Order, Work);
 
-      Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+      Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "scalar, fixed and nested substitutions are accepted");
@@ -1692,11 +1703,12 @@ package body Landin.Tests.Checking_Suite is
          & "short: packet(u16, 2)" & LF
          & "long: packet(u16, 4)" & LF);
       Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
       Landin.Stages.Append (Order, Names'Access);
       Landin.Stages.Append (Order, Checker'Access);
       Ran := Landin.Stages.Run (Order, Work);
       Landin.Testing.Check
-        (Item, Ran = 3 and then not Landin.Stages.Failed (Work),
+        (Item, Ran = 4 and then not Landin.Stages.Failed (Work),
          "the checker materializes every applied nominal instance");
 
       declare
@@ -1820,11 +1832,12 @@ package body Landin.Tests.Checking_Suite is
          & " (value: (value: (value: 2)))" & LF
          & "row: wrapper([2]cell(u8)) = zeroed" & LF);
       Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
       Landin.Stages.Append (Order, Names'Access);
       Landin.Stages.Append (Order, Checker'Access);
       Ran := Landin.Stages.Run (Order, Work);
       Landin.Testing.Check
-        (Item, Ran = 3 and then not Landin.Stages.Failed (Work),
+        (Item, Ran = 4 and then not Landin.Stages.Failed (Work),
          "identity-only descriptors are promoted at substituted value uses");
 
       declare
@@ -1932,6 +1945,7 @@ package body Landin.Tests.Checking_Suite is
       begin
          Src := Landin.Stages.Add_Source (Work, "nominal-edge.ldn", Text);
          Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
          Landin.Stages.Append (Order, Names'Access);
          Landin.Stages.Append (Order, Checker'Access);
          Ran := Landin.Stages.Run (Order, Work);
@@ -1940,7 +1954,7 @@ package body Landin.Tests.Checking_Suite is
               Landin.Stages.Report (Work);
          begin
             Landin.Testing.Check
-              (Item, Src /= Landin.Source.No_Source and then Ran = 3
+              (Item, Src /= Landin.Source.No_Source and then Ran = 4
                 and then Landin.Diagnostics.Count (Reports) = 1
                 and then Landin.Diagnostics.Code
                   (Landin.Diagnostics.Get (Reports, 1)) = Code
@@ -1979,11 +1993,12 @@ package body Landin.Tests.Checking_Suite is
          & "huge_is_only_an_actual:"
          & " phantom(huge(18446744073709551615)) = zeroed" & LF);
       Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
       Landin.Stages.Append (Order, Names'Access);
       Landin.Stages.Append (Order, Checker'Access);
       Ran := Landin.Stages.Run (Order, Work);
       Landin.Testing.Check
-        (Item, Ran = 3 and then not Landin.Stages.Failed (Work),
+        (Item, Ran = 4 and then not Landin.Stages.Failed (Work),
          "signature and phantom references need identity but not child"
          & " layout");
 
@@ -2196,6 +2211,7 @@ package body Landin.Tests.Checking_Suite is
          & "first: huge(18446744073709551615)" & LF
          & "second: huge(18446744073709551615)" & LF);
       Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
       Landin.Stages.Append (Order, Names'Access);
       Landin.Stages.Append (Order, Checker'Access);
       Ran := Landin.Stages.Run (Order, Work);
@@ -2217,7 +2233,7 @@ package body Landin.Tests.Checking_Suite is
               Landin.Syntax.Nth_Declaration (Of_Tree.all, 3));
       begin
          Landin.Testing.Check
-           (Item, Ran = 3 and then Landin.Diagnostics.Count (Reports) = 2
+           (Item, Ran = 4 and then Landin.Diagnostics.Count (Reports) = 2
              and then Landin.Diagnostics.Code
                (Landin.Diagnostics.Get (Reports, 1)) = "L0300"
              and then Landin.Diagnostics.Code
@@ -2263,11 +2279,12 @@ package body Landin.Tests.Checking_Suite is
       begin
          Src := Landin.Stages.Add_Source (Work, "unused.ldn", Text);
          Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
          Landin.Stages.Append (Order, Names'Access);
          Landin.Stages.Append (Order, Checker'Access);
          Ran := Landin.Stages.Run (Order, Work);
          Landin.Testing.Check
-           (Item, Src /= Landin.Source.No_Source and then Ran = 3
+           (Item, Src /= Landin.Source.No_Source and then Ran = 4
              and then Landin.Stages.Failed (Work),
             What);
       end Check_Rejected;
@@ -2283,6 +2300,7 @@ package body Landin.Tests.Checking_Suite is
       begin
          Src := Landin.Stages.Add_Source (Work, "nonfixed-name.ldn", Text);
          Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
          Landin.Stages.Append (Order, Names'Access);
          Landin.Stages.Append (Order, Checker'Access);
          Ran := Landin.Stages.Run (Order, Work);
@@ -2291,7 +2309,7 @@ package body Landin.Tests.Checking_Suite is
               Landin.Stages.Report (Work);
          begin
             Landin.Testing.Check
-              (Item, Src /= Landin.Source.No_Source and then Ran = 3
+              (Item, Src /= Landin.Source.No_Source and then Ran = 4
                 and then Landin.Diagnostics.Count (Reports) = 1
                 and then Landin.Diagnostics.Message
                   (Landin.Diagnostics.Primary
@@ -2325,6 +2343,7 @@ package body Landin.Tests.Checking_Suite is
                "outer: type (t: type) = inner(t)" & LF);
          end if;
          Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
          Landin.Stages.Append (Order, Names'Access);
          Landin.Stages.Append (Order, Checker'Access);
          Ran := Landin.Stages.Run (Order, Work);
@@ -2337,7 +2356,7 @@ package body Landin.Tests.Checking_Suite is
             Landin.Testing.Check
               (Item, Outer /= Landin.Source.No_Source
                 and then Inner /= Landin.Source.No_Source
-                and then Ran = 3
+                and then Ran = 4
                 and then Landin.Diagnostics.Count (Reports) = 1
                 and then Landin.Diagnostics.Code (Report) = "L0306"
                 and then Landin.Diagnostics.Source_Of
@@ -2357,11 +2376,12 @@ package body Landin.Tests.Checking_Suite is
         (Work, "unused-unknown.ldn",
          "bad: type (t: type) = missing" & LF);
       Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
       Landin.Stages.Append (Order, Names'Access);
       Landin.Stages.Append (Order, Checker'Access);
       Ran := Landin.Stages.Run (Order, Work);
       Landin.Testing.Check
-        (Item, Ran = 3 and then Landin.Stages.Failed (Work),
+        (Item, Ran = 4 and then Landin.Stages.Failed (Work),
          "an unused template still rejects an unresolved free type");
 
       declare
@@ -2456,6 +2476,7 @@ package body Landin.Tests.Checking_Suite is
       procedure Append_Checking (Into : in out Landin.Stages.Pipeline) is
       begin
          Landin.Stages.Append (Into, Frontend'Access);
+         Landin.Stages.Append (Into, Configurer'Access);
          Landin.Stages.Append (Into, Names'Access);
          Landin.Stages.Append (Into, Checker'Access);
       end Append_Checking;
@@ -2480,7 +2501,7 @@ package body Landin.Tests.Checking_Suite is
          Append_Checking (Order);
          Ran := Landin.Stages.Run (Order, Work);
          Landin.Testing.Check
-           (Item, Ran = 3 and then not Landin.Stages.Failed (Work),
+           (Item, Ran = 4 and then not Landin.Stages.Failed (Work),
             "exact folded boundaries and negative quotient rules are valid");
 
          declare
@@ -2554,7 +2575,7 @@ package body Landin.Tests.Checking_Suite is
               Landin.Stages.Report (Work);
          begin
             Landin.Testing.Check
-              (Item, Src /= Landin.Source.No_Source and then Ran = 3
+              (Item, Src /= Landin.Source.No_Source and then Ran = 4
                 and then Landin.Diagnostics.Count (Reports) = 2
                 and then Landin.Diagnostics.Code
                   (Landin.Diagnostics.Get (Reports, 1)) = "L0300"
@@ -2602,7 +2623,7 @@ package body Landin.Tests.Checking_Suite is
                  Landin.Syntax.Nth_Declaration (Use_Tree.all, 1));
          begin
             Landin.Testing.Check
-              (Item, Ran = 3 and then Landin.Diagnostics.Count (Reports) = 3,
+              (Item, Ran = 4 and then Landin.Diagnostics.Count (Reports) = 3,
                "one valid and three application-dependent folds are checked");
             Landin.Testing.Check
               (Item, Landin.Checking.Type_Of (Types.all, Use_Tree.all, Good)
@@ -2694,7 +2715,7 @@ package body Landin.Tests.Checking_Suite is
               Landin.Diagnostics.Get (Reports, 1);
          begin
             Landin.Testing.Check
-              (Item, Ran = 3
+              (Item, Ran = 4
                 and then Landin.Diagnostics.Count (Reports) = 1
                 and then Landin.Diagnostics.Code (Report) = "L0306"
                 and then Landin.Diagnostics.Source_Of
@@ -2736,11 +2757,12 @@ package body Landin.Tests.Checking_Suite is
          & "    immutable_local := immutable_module" & LF
          & "end f" & LF);
       Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
       Landin.Stages.Append (Order, Names'Access);
       Landin.Stages.Append (Order, Checker'Access);
       Ran := Landin.Stages.Run (Order, Work);
 
-      Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+      Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
       Landin.Testing.Check
         (Item, Src /= Landin.Source.No_Source, "the source was recorded");
       Landin.Testing.Check
@@ -2804,11 +2826,12 @@ package body Landin.Tests.Checking_Suite is
          & "    row: [3]u16 = [1, 2 + 3, 4]" & LF
          & "end f" & LF);
       Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
       Landin.Stages.Append (Order, Names'Access);
       Landin.Stages.Append (Order, Checker'Access);
       Ran := Landin.Stages.Run (Order, Work);
 
-      Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+      Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work), "the literal is accepted");
 
@@ -2883,11 +2906,12 @@ package body Landin.Tests.Checking_Suite is
          "mut buffer: [3]u32 = [base, base + 1, 12]" & LF
          & "base: u32 = 100" & LF);
       Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
       Landin.Stages.Append (Order, Names'Access);
       Landin.Stages.Append (Order, Checker'Access);
       Ran := Landin.Stages.Run (Order, Work);
 
-      Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+      Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "the module literal is accepted");
@@ -2955,11 +2979,12 @@ package body Landin.Tests.Checking_Suite is
          & "    local: [4]u64 = [of seed]" & LF
          & "end f" & LF);
       Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
       Landin.Stages.Append (Order, Names'Access);
       Landin.Stages.Append (Order, Checker'Access);
       Ran := Landin.Stages.Run (Order, Work);
 
-      Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+      Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "module and local typed repetitions are accepted");
@@ -3013,11 +3038,12 @@ package body Landin.Tests.Checking_Suite is
          & "    row: [4]u16 = [first, first + 1, of repeated]" & LF
          & "end f" & LF);
       Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
       Landin.Stages.Append (Order, Names'Access);
       Landin.Stages.Append (Order, Checker'Access);
       Ran := Landin.Stages.Run (Order, Work);
 
-      Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+      Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "explicitly typed local and module mixed repetitions are accepted");
@@ -3078,11 +3104,12 @@ package body Landin.Tests.Checking_Suite is
          & "    state = [first, of repeated]" & LF
          & "end f" & LF);
       Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
       Landin.Stages.Append (Order, Names'Access);
       Landin.Stages.Append (Order, Checker'Access);
       Ran := Landin.Stages.Run (Order, Work);
 
-      Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+      Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "local and module mixed-repetition assignments are accepted");
@@ -3146,11 +3173,12 @@ package body Landin.Tests.Checking_Suite is
          & "    defaulted := [2 of 1]" & LF
          & "end f" & LF);
       Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
       Landin.Stages.Append (Order, Names'Access);
       Landin.Stages.Append (Order, Checker'Access);
       Ran := Landin.Stages.Run (Order, Work);
 
-      Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+      Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "both inferred repetitions are accepted");
@@ -3222,11 +3250,12 @@ package body Landin.Tests.Checking_Suite is
          & "typed := [3 of seed + 2]" & LF
          & "defaulted := [2 of 1]" & LF);
       Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
       Landin.Stages.Append (Order, Names'Access);
       Landin.Stages.Append (Order, Checker'Access);
       Ran := Landin.Stages.Run (Order, Work);
 
-      Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+      Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "both inferred module repetitions are accepted");
@@ -3290,11 +3319,12 @@ package body Landin.Tests.Checking_Suite is
          & "number: word = zeroed" & LF
          & "flag: bool = zeroed" & LF);
       Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
       Landin.Stages.Append (Order, Names'Access);
       Landin.Stages.Append (Order, Checker'Access);
       Ran := Landin.Stages.Run (Order, Work);
 
-      Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+      Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "typed module scalar zeroed initializers are accepted");
@@ -3357,11 +3387,12 @@ package body Landin.Tests.Checking_Suite is
          & "    end if" & LF
          & "end f" & LF);
       Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
       Landin.Stages.Append (Order, Names'Access);
       Landin.Stages.Append (Order, Checker'Access);
       Ran := Landin.Stages.Run (Order, Work);
 
-      Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+      Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "typed local scalar zeroed initializers are accepted and assigned");
@@ -3418,11 +3449,12 @@ package body Landin.Tests.Checking_Suite is
          & "    number = zeroed" & LF
          & "end f" & LF);
       Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
       Landin.Stages.Append (Order, Names'Access);
       Landin.Stages.Append (Order, Checker'Access);
       Ran := Landin.Stages.Run (Order, Work);
 
-      Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+      Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "a module scalar destination gives zeroed its type");
@@ -3478,11 +3510,12 @@ package body Landin.Tests.Checking_Suite is
          & "    result = flag" & LF
          & "end f" & LF);
       Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
       Landin.Stages.Append (Order, Names'Access);
       Landin.Stages.Append (Order, Checker'Access);
       Ran := Landin.Stages.Run (Order, Work);
 
-      Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+      Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "a local scalar destination types zeroed and becomes assigned");
@@ -3537,11 +3570,12 @@ package body Landin.Tests.Checking_Suite is
          & "    return" & LF
          & "end f" & LF);
       Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
       Landin.Stages.Append (Order, Names'Access);
       Landin.Stages.Append (Order, Checker'Access);
       Ran := Landin.Stages.Run (Order, Work);
 
-      Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+      Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "a named return types zeroed and becomes assigned");
@@ -3599,11 +3633,12 @@ package body Landin.Tests.Checking_Suite is
          & "    state.ready = zeroed" & LF
          & "end f" & LF);
       Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
       Landin.Stages.Append (Order, Names'Access);
       Landin.Stages.Append (Order, Checker'Access);
       Ran := Landin.Stages.Run (Order, Work);
 
-      Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+      Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "a mutable scalar field gives zeroed its type");
@@ -3669,11 +3704,12 @@ package body Landin.Tests.Checking_Suite is
          & "    _ = local.words[0]" & LF
          & "end f" & LF);
       Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
       Landin.Stages.Append (Order, Names'Access);
       Landin.Stages.Append (Order, Checker'Access);
       Ran := Landin.Stages.Run (Order, Work);
 
-      Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+      Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "direct and array-field elements give zeroed their scalar type");
@@ -3735,11 +3771,12 @@ package body Landin.Tests.Checking_Suite is
          & "    result = local.row[at]" & LF
          & "end f" & LF);
       Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
       Landin.Stages.Append (Order, Names'Access);
       Landin.Stages.Append (Order, Checker'Access);
       Ran := Landin.Stages.Run (Order, Work);
 
-      Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+      Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "a local array field gives zeroed its shape and becomes complete");
@@ -3806,11 +3843,12 @@ package body Landin.Tests.Checking_Suite is
          & "    result = state.row[at] + local.row[at]" & LF
          & "end f" & LF);
       Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
       Landin.Stages.Append (Order, Names'Access);
       Landin.Stages.Append (Order, Checker'Access);
       Ran := Landin.Stages.Run (Order, Work);
 
-      Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+      Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "module and local array fields accept contextual literals");
@@ -3905,11 +3943,12 @@ package body Landin.Tests.Checking_Suite is
          & "    result = state.row[at] + local.row[at]" & LF
          & "end f" & LF);
       Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
       Landin.Stages.Append (Order, Names'Access);
       Landin.Stages.Append (Order, Checker'Access);
       Ran := Landin.Stages.Run (Order, Work);
 
-      Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+      Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "module and local array fields accept both repetition forms");
@@ -4013,11 +4052,12 @@ package body Landin.Tests.Checking_Suite is
          & "    result = destination.row[at]" & LF
          & "end f" & LF);
       Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
       Landin.Stages.Append (Order, Names'Access);
       Landin.Stages.Append (Order, Checker'Access);
       Ran := Landin.Stages.Run (Order, Work);
 
-      Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+      Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "whole copies cross module and local storage after complete reads");
@@ -4098,11 +4138,12 @@ package body Landin.Tests.Checking_Suite is
          & "    result = state.row[at] + local.row[at]" & LF
          & "end f" & LF);
       Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
       Landin.Stages.Append (Order, Names'Access);
       Landin.Stages.Append (Order, Checker'Access);
       Ran := Landin.Stages.Run (Order, Work);
 
-      Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+      Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "module and local struct places accept zeroed and become complete");
@@ -4188,11 +4229,12 @@ package body Landin.Tests.Checking_Suite is
          & " + blank.row[at] + empty.row[at]" & LF
          & "end f" & LF);
       Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
       Landin.Stages.Append (Order, Names'Access);
       Landin.Stages.Append (Order, Checker'Access);
       Ran := Landin.Stages.Run (Order, Work);
 
-      Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+      Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "storage names and zeroed initialize typed locals");
@@ -4269,11 +4311,12 @@ package body Landin.Tests.Checking_Suite is
          & "state: holder = zeroed" & LF
          & "mut aliased: same = zeroed" & LF);
       Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
       Landin.Stages.Append (Order, Names'Access);
       Landin.Stages.Append (Order, Checker'Access);
       Ran := Landin.Stages.Run (Order, Work);
 
-      Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+      Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "typed module structs accept their explicit zero image");
@@ -4352,11 +4395,12 @@ package body Landin.Tests.Checking_Suite is
          & "typed_from_inferred: holder = inferred" & LF
          & "later: holder = zeroed" & LF);
       Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
       Landin.Stages.Append (Order, Names'Access);
       Landin.Stages.Append (Order, Checker'Access);
       Ran := Landin.Stages.Run (Order, Work);
 
-      Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+      Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "module struct image chains are accepted");
@@ -4447,11 +4491,12 @@ package body Landin.Tests.Checking_Suite is
          & " + state.row[at]" & LF
          & "end f" & LF);
       Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
       Landin.Stages.Append (Order, Names'Access);
       Landin.Stages.Append (Order, Checker'Access);
       Ran := Landin.Stages.Run (Order, Work);
 
-      Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+      Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "module and completed local sources infer local structs");
@@ -4538,11 +4583,12 @@ package body Landin.Tests.Checking_Suite is
          & "    result = right.row[at]" & LF
          & "end f" & LF);
       Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
       Landin.Stages.Append (Order, Names'Access);
       Landin.Stages.Append (Order, Checker'Access);
       Ran := Landin.Stages.Run (Order, Work);
 
-      Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+      Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "field and direct-array copy endpoints are accepted");
@@ -4611,11 +4657,12 @@ package body Landin.Tests.Checking_Suite is
          & "    local_inferred := local.row" & LF
          & "end f" & LF);
       Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
       Landin.Stages.Append (Order, Names'Access);
       Landin.Stages.Append (Order, Checker'Access);
       Ran := Landin.Stages.Run (Order, Work);
 
-      Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+      Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "typed and inferred bindings accept either field source");
@@ -4708,11 +4755,12 @@ package body Landin.Tests.Checking_Suite is
            (Work, "extent.ldn",
             "huge: type = [" & Length & "]" & Element & LF);
          Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
          Landin.Stages.Append (Order, Names'Access);
          Landin.Stages.Append (Order, Checker'Access);
          Ran := Landin.Stages.Run (Order, Work);
 
-         Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+         Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
          Landin.Testing.Check
            (Item, Landin.Stages.Failed (Work) /= Accepted,
             "the array extent follows the target's usize");
@@ -4754,11 +4802,12 @@ package body Landin.Tests.Checking_Suite is
             & "end bounded" & LF
             & "answer: usize = sizeof bounded" & LF);
          Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
          Landin.Stages.Append (Order, Names'Access);
          Landin.Stages.Append (Order, Checker'Access);
          Ran := Landin.Stages.Run (Order, Work);
 
-         Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+         Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
          Landin.Testing.Check
            (Item, Landin.Stages.Failed (Work) /= Accepted,
             "the complete struct extent follows the target's usize");
@@ -4792,11 +4841,12 @@ package body Landin.Tests.Checking_Suite is
       begin
          Src := Landin.Stages.Add_Source (Work, "storage.ldn", Source);
          Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
          Landin.Stages.Append (Order, Names'Access);
          Landin.Stages.Append (Order, Checker'Access);
          Ran := Landin.Stages.Run (Order, Work);
 
-         Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+         Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
          Landin.Testing.Check
            (Item, Landin.Stages.Failed (Work) /= Accepted,
             "both declaration-only storage classes accept the shape");
@@ -4850,11 +4900,12 @@ package body Landin.Tests.Checking_Suite is
          & " mixed: [17, of 19])" & LF
          & "end f" & LF);
       Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
       Landin.Stages.Append (Order, Names'Access);
       Landin.Stages.Append (Order, Checker'Access);
       Ran := Landin.Stages.Run (Order, Work);
 
-      Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+      Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "typed module, local and whole-assignment literals are accepted");
@@ -5028,11 +5079,12 @@ package body Landin.Tests.Checking_Suite is
          & "    state = same(x: 9, y: 10)" & LF
          & "end f" & LF);
       Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
       Landin.Stages.Append (Order, Names'Access);
       Landin.Stages.Append (Order, Checker'Access);
       Ran := Landin.Stages.Run (Order, Work);
 
-      Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+      Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "typed, inferred, module, local and assignment construction pass");
@@ -5105,11 +5157,12 @@ package body Landin.Tests.Checking_Suite is
          & "copy: holder = (row: source.row)" & LF
          & "source: holder = (row: [11, 13])" & LF);
       Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
       Landin.Stages.Append (Order, Names'Access);
       Landin.Stages.Append (Order, Checker'Access);
       Ran := Landin.Stages.Run (Order, Work);
 
-      Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+      Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "a selected field supplies a labelled module image");
@@ -5195,11 +5248,12 @@ package body Landin.Tests.Checking_Suite is
          & "    if left then begin 19 + 23 end else 42 end if" & LF
          & "end make_scalar" & LF);
       Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
       Landin.Stages.Append (Order, Names'Access);
       Landin.Stages.Append (Order, Checker'Access);
       Ran := Landin.Stages.Run (Order, Work);
 
-      Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+      Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "scalar, function, fixed-array and nominal controls are accepted");
@@ -5290,10 +5344,11 @@ package body Landin.Tests.Checking_Suite is
       begin
          Src := Landin.Stages.Add_Source (Work, "control-edges.ldn", Text);
          Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
          Landin.Stages.Append (Order, Names'Access);
          Landin.Stages.Append (Order, Checker'Access);
          Ran := Landin.Stages.Run (Order, Work);
-         Landin.Testing.Check_Equal (Item, Ran, 3, "the flow checker ran");
+         Landin.Testing.Check_Equal (Item, Ran, 4, "the flow checker ran");
          Landin.Testing.Check
            (Item, Landin.Stages.Failed (Work) /= Accepted,
             "only fallthrough assignment facts reach the following read");
@@ -5366,11 +5421,12 @@ package body Landin.Tests.Checking_Suite is
          & "    defer make_row()" & LF
          & "end use" & LF);
       Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
       Landin.Stages.Append (Order, Names'Access);
       Landin.Stages.Append (Order, Checker'Access);
       Ran := Landin.Stages.Run (Order, Work);
 
-      Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+      Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "direct stored-result and indirect deferred calls are accepted");
@@ -5455,11 +5511,12 @@ package body Landin.Tests.Checking_Suite is
          & "    undo make_multiple()" & LF
          & "end use" & LF);
       Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
       Landin.Stages.Append (Order, Names'Access);
       Landin.Stages.Append (Order, Checker'Access);
       Ran := Landin.Stages.Run (Order, Work);
 
-      Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+      Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "indirect and stored-result undo calls are accepted");
@@ -5539,10 +5596,11 @@ package body Landin.Tests.Checking_Suite is
       begin
          Src := Landin.Stages.Add_Source (Work, "defer-flow.ldn", Text);
          Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
          Landin.Stages.Append (Order, Names'Access);
          Landin.Stages.Append (Order, Checker'Access);
          Ran := Landin.Stages.Run (Order, Work);
-         Landin.Testing.Check_Equal (Item, Ran, 3, "the flow checker ran");
+         Landin.Testing.Check_Equal (Item, Ran, 4, "the flow checker ran");
          Landin.Testing.Check
            (Item, Landin.Stages.Failed (Work) /= Accepted,
             "deferred reads use assignment facts at their execution edge");
@@ -5594,10 +5652,11 @@ package body Landin.Tests.Checking_Suite is
       begin
          Src := Landin.Stages.Add_Source (Work, "undo-flow.ldn", Text);
          Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
          Landin.Stages.Append (Order, Names'Access);
          Landin.Stages.Append (Order, Checker'Access);
          Ran := Landin.Stages.Run (Order, Work);
-         Landin.Testing.Check_Equal (Item, Ran, 3, "the flow checker ran");
+         Landin.Testing.Check_Equal (Item, Ran, 4, "the flow checker ran");
          Landin.Testing.Check
            (Item, Landin.Stages.Failed (Work) /= Accepted,
             "undo reads use only failure-edge assignment facts");

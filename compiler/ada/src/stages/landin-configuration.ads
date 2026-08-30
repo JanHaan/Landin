@@ -22,6 +22,15 @@ package Landin.Configuration is
       Source : Landin.Source.Source_Id;
       Node : Landin.Syntax.Node_Id) return Boolean;
 
+   --  D138 presents selected declarations as one module declaration run.
+   --  Stages use this instead of walking fixed-conditionals themselves, so
+   --  nesting and inactive arms have one interpretation throughout.
+   generic
+      with procedure Action
+        (Of_Tree : Landin.Syntax.Tree; Node : Landin.Syntax.Node_Id);
+   procedure For_Each_Active_Declaration
+     (In_Table : Table; Of_Tree : Landin.Syntax.Tree);
+
 private
 
    type Inactive_Node is record

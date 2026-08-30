@@ -1,0 +1,5 @@
+class: negative
+summary: D138 selected declarations collide with ordinary declarations in their shared module scope
+program: program.ldn
+codes: L0200
+constructs: 0080, 1500, 1740, 1850
