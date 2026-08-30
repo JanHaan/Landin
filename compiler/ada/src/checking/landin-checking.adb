@@ -1024,6 +1024,55 @@ package body Landin.Checking is
    --  Function signatures
    ------------------------------------------------------------------
 
+   function Holds (Of_Table : Table; Part : Signature_Part) return Boolean is
+      Descriptor_Free : constant Boolean :=
+        Part.Nominal = No_Nominal_Type
+        and then Part.Signature = No_Signature
+        and then Part.Atoms = No_Atom_Set;
+   begin
+      if not Is_Prepared (Of_Table)
+        or else not Landin.Provenance.Is_Known (Part.Site)
+      then
+         return False;
+      end if;
+
+      case Part.Kind is
+         when Landin.Types.Scalar_Name =>
+            return Descriptor_Free;
+         when Landin.Types.Atom_Value =>
+            return Part.Nominal = No_Nominal_Type
+              and then Part.Signature = No_Signature
+              and then Holds (Of_Table, Part.Atoms);
+         when Landin.Types.Fixed_Array =>
+            return Part.Signature = No_Signature
+              and then Part.Atoms = No_Atom_Set
+              and then
+                (Part.Nominal = No_Nominal_Type
+                 or else Holds (Of_Table, Part.Nominal));
+         when Landin.Types.Aggregate =>
+            return Holds (Of_Table, Part.Nominal)
+              and then Part.Signature = No_Signature
+              and then Part.Atoms = No_Atom_Set;
+         when Landin.Types.Function_Value =>
+            return Part.Nominal = No_Nominal_Type
+              and then Holds (Of_Table, Part.Signature)
+              and then Part.Atoms = No_Atom_Set;
+         when others =>
+            return False;
+      end case;
+   end Holds;
+
+   function Holds
+     (Of_Table : Table; Parts : Signature_Part_Array) return Boolean is
+   begin
+      for Part of Parts loop
+         if not Holds (Of_Table, Part) then
+            return False;
+         end if;
+      end loop;
+      return Is_Prepared (Of_Table);
+   end Holds;
+
    function Signature_Count (Of_Table : Table) return Natural
      is (Natural (Of_Table.Signatures.Length));
 
@@ -1057,6 +1106,9 @@ package body Landin.Checking is
          end if;
       end Append;
    begin
+      if not Holds (Into, Parameters) or else not Holds (Into, Results) then
+         raise Landin.Compiler_Defect with "a signature part is malformed";
+      end if;
       Append (Parameters, Made.Parameters);
       Append (Results, Made.Results);
       Into.Signatures.Append (Made);

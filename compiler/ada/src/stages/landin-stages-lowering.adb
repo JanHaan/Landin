@@ -470,7 +470,12 @@ package body Landin.Stages.Lowering is
                  (if Part.Kind = Ty.Atom_Value then Ty.U32 else Part.Kind),
                Nominal => Nominal_For (Part.Nominal),
                Length  => IR.Element_Total (Part.Length),
-               Element => Part.Element,
+               Element =>
+                 (if Part.Kind = Ty.Fixed_Array
+                    and then Part.Nominal
+                      /= Landin.Checking.No_Nominal_Type
+                  then Ty.Bool
+                  else Part.Element),
                Signature =>
                  (if Part.Kind = Ty.Function_Value
                   then Signature_For (Part.Signature)
@@ -1074,6 +1079,9 @@ package body Landin.Stages.Lowering is
       function Neutral_Element
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return IR.Field_Shape;
 
+      function Neutral_Element
+        (Part : Landin.Checking.Signature_Part) return IR.Field_Shape;
+
       function Neutral_Value_Shape
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return IR.Field_Shape;
 
@@ -1160,6 +1168,22 @@ package body Landin.Stages.Lowering is
            (Kind    => IR.Scalar_Field_Shape,
             Element =>
               Landin.Checking.Array_Element (Types.all, Of_Tree, Node),
+            Length  => 1,
+            others  => <>);
+      end Neutral_Element;
+
+      function Neutral_Element
+        (Part : Landin.Checking.Signature_Part) return IR.Field_Shape is
+      begin
+         if Part.Kind /= Ty.Fixed_Array then
+            raise Landin.Compiler_Defect with
+              "a non-array signature part was requested as an element";
+         elsif Part.Nominal /= Landin.Checking.No_Nominal_Type then
+            return Neutral_Body (Part.Nominal);
+         end if;
+         return
+           (Kind    => IR.Scalar_Field_Shape,
+            Element => Part.Element,
             Length  => 1,
             others  => <>);
       end Neutral_Element;
@@ -7397,6 +7421,15 @@ package body Landin.Stages.Lowering is
                      else Landin.Checking.Type_Of
                             (Types.all,
                              Declaration_At (Src, Gives)));
+                  Source_Signature : constant
+                    Landin.Checking.Signature_Id :=
+                      Landin.Checking.Signature_Of (Types.all, Id);
+                  Result_Part : constant Landin.Checking.Signature_Part :=
+                    (if Count = 1
+                       and then Syn.Generic_Formal_Count (Of_Tree, Node) = 0
+                     then Landin.Checking.Nth_Signature_Result
+                       (Types.all, Source_Signature, 1)
+                     else (Kind => Ty.No_Value, others => <>));
                begin
                   if Syn.Generic_Formal_Count (Of_Tree, Node) /= 0 then
                      --  D138 templates are compile-time syntax only; a
@@ -7424,12 +7457,13 @@ package body Landin.Stages.Lowering is
                              (Landin.Checking.Atom_Set_Of
                                 (Types.all,
                                  Declaration_At (Src, Gives))));
+                     elsif Held = Ty.Fixed_Array then
+                        IR.Set_Array
+                          (Unit.all, Made, Neutral_Element (Result_Part),
+                           IR.Element_Total (Result_Part.Length));
                      end if;
                      IR.Set_Signature
-                       (Unit.all, Made,
-                        Signature_For
-                          (Landin.Checking.Signature_Of
-                             (Types.all, Id)));
+                       (Unit.all, Made, Signature_For (Source_Signature));
                   end if;
                end;
 
@@ -7573,6 +7607,15 @@ package body Landin.Stages.Lowering is
                   if Held = Ty.Atom_Value then
                      IR.Set_Atom_Set
                        (Unit.all, Made, Atom_Set_For (Part.Atoms));
+                  elsif Held = Ty.Fixed_Array then
+                     --  A generic item has no declaration-local array fact;
+                     --  its complete substituted result lives in the
+                     --  instance signature.  Preserve the nominal element
+                     --  even at length zero, just as parameter/result slots
+                     --  and the ABI signature do.
+                     IR.Set_Array
+                       (Unit.all, Made, Neutral_Element (Part),
+                        IR.Element_Total (Part.Length));
                   end if;
                   IR.Set_Signature
                     (Unit.all, Made, Signature_For (Source_Signature));

@@ -1,0 +1,5 @@
+class: positive
+summary: generic signatures preserve zero-length nominal array elements through aliases and nested function patterns
+constructs: 0520, 1000, 1290, 1350, 1920
+program: program.ldn
+targets: linux-x86-64, macos-arm64

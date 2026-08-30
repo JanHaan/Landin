@@ -1,0 +1,25 @@
+box: type (item: type) = struct
+    value: item
+end box
+
+empty: type (item: type) = [0]item
+
+copy: (item: type, value: empty(item)) -> (result: empty(item)) =
+    result = value
+end copy
+
+copy_boxes: (value: empty(box(i32))) -> (result: empty(box(i32))) =
+    result = value
+end copy_boxes
+
+through: (item: type,
+          action: (value: empty(item)) -> (result: empty(item)),
+          value: empty(item)) -> (result: empty(item)) =
+    result = action(value)
+end through
+
+values: empty(box(i32))
+use: () -> none =
+    copied: empty(box(i32)) = copy(values)
+    nested: empty(box(i32)) = through(copy_boxes, copied)
+end use

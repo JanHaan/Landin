@@ -109,6 +109,9 @@ package body Landin.Tests.Checking_Suite is
    procedure Structural_Deduction_Interns_Complete_Tuple
      (Item : in out Landin.Testing.Context);
 
+   procedure Generic_Signatures_Keep_Nominal_Array_Elements
+     (Item : in out Landin.Testing.Context);
+
    procedure Discovery_Skips_Refused_Generic_Calls
      (Item : in out Landin.Testing.Context);
 
@@ -1269,6 +1272,145 @@ package body Landin.Tests.Checking_Suite is
             "nested array and phantom tuple relations intern i32 and three");
       end;
    end Structural_Deduction_Interns_Complete_Tuple;
+
+   procedure Generic_Signatures_Keep_Nominal_Array_Elements
+     (Item : in out Landin.Testing.Context)
+   is
+      Text : constant String :=
+        "box: type (item: type) = struct" & LF
+        & "    value: item" & LF
+        & "end box" & LF
+        & "empty: type (item: type) = [0]item" & LF
+        & "copy: (item: type, value: empty(item))"
+        & " -> (result: empty(item)) = value end copy" & LF
+        & "copy_boxes: (value: empty(box(i32)))"
+        & " -> (result: empty(box(i32))) = value end copy_boxes" & LF
+        & "through: (item: type," & LF
+        & "          action: (value: empty(item))"
+        & " -> (result: empty(item))," & LF
+        & "          value: empty(item)) -> (result: empty(item)) ="
+        & LF & "    result = action(value)" & LF
+        & "end through" & LF
+        & "values: empty(box(i32))" & LF
+        & "use: () -> none =" & LF
+        & "    copied: empty(box(i32)) = copy(values)" & LF
+        & "    nested: empty(box(i32)) = through(copy_boxes, copied)"
+        & LF & "end use" & LF;
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Ran : Natural;
+      Src : Landin.Source.Source_Id;
+      pragma Unreferenced (Src);
+   begin
+      Src := Landin.Stages.Add_Source (Work, "nominal-array.ldn", Text);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Configurer'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Landin.Stages.Append (Order, Checker'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "zero-length nominal arrays are accepted in generic signatures");
+      declare
+         Types : constant not null access Landin.Checking.Table :=
+           Landin.Stages.Types (Work);
+         Array_Count : Natural := 0;
+         Parts_Agree : Boolean := True;
+         First_Nominal : Landin.Checking.Nominal_Type_Id :=
+           Landin.Checking.No_Nominal_Type;
+         First_Array : Landin.Checking.Signature_Part;
+         First_Signature : Landin.Checking.Signature_Id :=
+           Landin.Checking.No_Signature;
+
+         procedure Visit (Signature : Landin.Checking.Signature_Id);
+
+         procedure Check_Part
+           (Part : Landin.Checking.Signature_Part;
+            Signature : Landin.Checking.Signature_Id);
+
+         procedure Check_Part
+           (Part : Landin.Checking.Signature_Part;
+            Signature : Landin.Checking.Signature_Id) is
+         begin
+            if Part.Kind = Landin.Types.Fixed_Array then
+               Array_Count := Array_Count + 1;
+               Parts_Agree := Parts_Agree
+                 and then Part.Length = 0
+                 and then Part.Nominal
+                   /= Landin.Checking.No_Nominal_Type
+                 and then Landin.Checking.Holds (Types.all, Part);
+               if First_Nominal = Landin.Checking.No_Nominal_Type then
+                  First_Nominal := Part.Nominal;
+                  First_Array := Part;
+                  First_Signature := Signature;
+               else
+                  Parts_Agree := Parts_Agree
+                    and then Part.Nominal = First_Nominal;
+               end if;
+            elsif Part.Kind = Landin.Types.Function_Value then
+               Visit (Part.Signature);
+            end if;
+         end Check_Part;
+
+         procedure Visit (Signature : Landin.Checking.Signature_Id) is
+         begin
+            for Index in 1 .. Landin.Checking.Signature_Parameter_Count
+              (Types.all, Signature)
+            loop
+               Check_Part
+                 (Landin.Checking.Nth_Signature_Parameter
+                    (Types.all, Signature, Index),
+                  Signature);
+            end loop;
+            for Index in 1 .. Landin.Checking.Signature_Result_Count
+              (Types.all, Signature)
+            loop
+               Check_Part
+                 (Landin.Checking.Nth_Signature_Result
+                    (Types.all, Signature, Index),
+                  Signature);
+            end loop;
+         end Visit;
+      begin
+         for Position in 1 .. Landin.Checking.Routine_Instance_Count
+           (Types.all)
+         loop
+            declare
+               Instance : constant Landin.Checking.Routine_Instance_Id :=
+                 Landin.Checking.Routine_Identities.Nth
+                   (Types.all, Position);
+            begin
+               Visit
+                 (Landin.Checking.Routine_Signature_Of
+                    (Types.all, Instance));
+            end;
+         end loop;
+
+         Landin.Testing.Check
+           (Item, Array_Count = 6 and then Parts_Agree,
+            "aliases and nested signatures retain six zero-length nominal"
+            & " array parts");
+         declare
+            Malformed : Landin.Checking.Signature_Part := First_Array;
+         begin
+            Malformed.Signature := First_Signature;
+            Landin.Testing.Check
+              (Item,
+               not Landin.Checking.Holds (Types.all, Malformed)
+                 and then not Landin.Checking.Holds
+                   (Types.all,
+                    Landin.Checking.Signature_Part'
+                      (Kind => Landin.Types.Aggregate,
+                       Site => First_Array.Site,
+                       others => <>)),
+               "the public signature seam rejects stray and missing"
+               & " descriptor identities");
+         end;
+      end;
+   end Generic_Signatures_Keep_Nominal_Array_Elements;
 
    procedure Discovery_Skips_Refused_Generic_Calls
      (Item : in out Landin.Testing.Context)
@@ -6384,6 +6526,9 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Register
         (Into, "checking", "structural deduction interns complete tuple",
          Structural_Deduction_Interns_Complete_Tuple'Access);
+      Landin.Testing.Register
+        (Into, "checking", "generic signatures keep nominal array elements",
+         Generic_Signatures_Keep_Nominal_Array_Elements'Access);
       Landin.Testing.Register
         (Into, "checking", "discovery skips refused generic calls",
          Discovery_Skips_Refused_Generic_Calls'Access);
