@@ -1,0 +1,14 @@
+box: type (item: type, fixed tag: u32) = struct
+    marker: bool
+end box
+
+same: (item: type, fixed count: u32,
+       left: box([count]item, count),
+       right: box([count]item, count)) -> none =
+end same
+
+left: box([2]i32, 2) = (marker: true)
+right: box([3]i32, 3) = (marker: false)
+use: () -> none =
+    same(left, right)
+end use

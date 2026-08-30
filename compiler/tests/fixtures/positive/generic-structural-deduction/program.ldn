@@ -1,0 +1,22 @@
+box: type (item: type, fixed tag: u32) = struct
+    value: item
+end box
+
+phantom: type (item: type, fixed tag: u32) = struct
+    marker: bool
+end phantom
+
+row: type (item: type, fixed count: u32) = [count]item
+
+nested: (item: type, fixed count: u32, fixed tag: u32,
+         value: box(row(item, count), tag),
+         marker: phantom(item, tag),
+         callback: (input: item) -> (output: item)) -> none =
+end nested
+
+same: (value: i32) -> (result: i32) = value end same
+array_box: box([3]i32, 7)
+marker: phantom(i32, 7)
+use: () -> none =
+    nested(array_box, marker, same)
+end use

@@ -106,6 +106,9 @@ package body Landin.Tests.Checking_Suite is
    procedure Failed_Generic_Deduction_Has_No_Target
      (Item : in out Landin.Testing.Context);
 
+   procedure Structural_Deduction_Interns_Complete_Tuple
+     (Item : in out Landin.Testing.Context);
+
    procedure Discovery_Skips_Refused_Generic_Calls
      (Item : in out Landin.Testing.Context);
 
@@ -1155,12 +1158,16 @@ package body Landin.Tests.Checking_Suite is
      (Item : in out Landin.Testing.Context)
    is
       Text : constant String :=
-        "first: (fixed n: u32, t: type, left: [n]t, right: [n]t)"
-        & " -> (result: t) = left[0] end first" & LF
-        & "use: () -> (result: i32) =" & LF
-        & "    left: [2]i32 = [1, 2]" & LF
-        & "    right: [3]i32 = [3, 4, 5]" & LF
-        & "    result = first(left, right)" & LF
+        "box: type (t: type, fixed n: u32) = struct" & LF
+        & "    marker: bool" & LF
+        & "end box" & LF
+        & "first: (fixed n: u32, t: type," & LF
+        & "        left: box([n]t, n), right: box([n]t, n)) -> none =" & LF
+        & "end first" & LF
+        & "use: () -> none =" & LF
+        & "    left: box([2]i32, 2) = (marker: true)" & LF
+        & "    right: box([3]i32, 3) = (marker: false)" & LF
+        & "    first(left, right)" & LF
         & "end use" & LF;
       Work : Landin.Stages.Compilation :=
         Landin.Stages.Create (Landin.Targets.Linux_X86_64);
@@ -1178,7 +1185,7 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
       Landin.Testing.Check_Equal
         (Item, Landin.Diagnostics.Count (Landin.Stages.Report (Work)), 1,
-         "one repeated deduction conflict is reported for the call");
+         "one nested deduction conflict is reported for the call");
 
       declare
          Of_Tree : constant not null access constant Landin.Syntax.Tree :=
@@ -1206,9 +1213,62 @@ package body Landin.Tests.Checking_Suite is
                 (Types.all, Of_Tree.all, Call)
                   = Landin.Checking.No_Routine_Instance
               and then Landin.Checking.Routine_Instance_Count (Types.all) = 0,
-            "a refused deduction has neither a target nor an instance");
+            "a refused nested deduction has neither a target nor an instance");
       end;
    end Failed_Generic_Deduction_Has_No_Target;
+
+   procedure Structural_Deduction_Interns_Complete_Tuple
+     (Item : in out Landin.Testing.Context)
+   is
+      Text : constant String :=
+        "box: type (t: type, fixed n: u32) = struct" & LF
+        & "    marker: bool" & LF
+        & "end box" & LF
+        & "copy: (t: type, fixed n: u32, value: box([n]t, n)) -> none ="
+        & LF & "end copy" & LF
+        & "value: box([3]i32, 3) = (marker: true)" & LF
+        & "use: () -> none = copy(value) end use" & LF;
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Ran : Natural;
+      Src : Landin.Source.Source_Id;
+      pragma Unreferenced (Src);
+   begin
+      Src := Landin.Stages.Add_Source (Work, "structural.ldn", Text);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Configurer'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Landin.Stages.Append (Order, Checker'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "the nested structural pattern is accepted");
+      declare
+         Types : constant not null access Landin.Checking.Table :=
+           Landin.Stages.Types (Work);
+         Instance : constant Landin.Checking.Routine_Instance_Id :=
+           Landin.Checking.Routine_Identities.Nth (Types.all, 1);
+         Type_Actual : constant Landin.Checking.Actual_Key :=
+           Landin.Checking.Nth_Routine_Actual (Types.all, Instance, 1);
+         Fixed_Actual : constant Landin.Checking.Actual_Key :=
+           Landin.Checking.Nth_Routine_Actual (Types.all, Instance, 2);
+      begin
+         Landin.Testing.Check
+           (Item,
+            Landin.Checking.Routine_Instance_Count (Types.all) = 1
+              and then Landin.Checking.Routine_State_Of (Types.all, Instance)
+                = Landin.Checking.Routine_Ready
+              and then Landin.Checking.Type_Form_Of (Type_Actual)
+                = Landin.Checking.Scalar_Actual_Type
+              and then Landin.Checking.Scalar_Of (Types.all, Type_Actual)
+                = Landin.Types.I32
+              and then Landin.Checking.Fixed_Magnitude_Of (Fixed_Actual) = 3,
+            "nested array and phantom tuple relations intern i32 and three");
+      end;
+   end Structural_Deduction_Interns_Complete_Tuple;
 
    procedure Discovery_Skips_Refused_Generic_Calls
      (Item : in out Landin.Testing.Context)
@@ -6321,6 +6381,9 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Register
         (Into, "checking", "failed generic deduction has no target",
          Failed_Generic_Deduction_Has_No_Target'Access);
+      Landin.Testing.Register
+        (Into, "checking", "structural deduction interns complete tuple",
+         Structural_Deduction_Interns_Complete_Tuple'Access);
       Landin.Testing.Register
         (Into, "checking", "discovery skips refused generic calls",
          Discovery_Skips_Refused_Generic_Calls'Access);
