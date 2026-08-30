@@ -11,7 +11,7 @@
 #
 #  A construct with no evidence and no refusal is this
 #  item's to answer for; see ROADMAP.md R1.90.
-#  199 constructs, 116 with evidence, 83 with neither.
+#  199 constructs, 127 with evidence, 72 with neither.
 #
 #  id    defined in  evidence
 0010   tour        accepted emitted                   Line comment, to end of line
@@ -20,7 +20,7 @@
 0040   tour        accepted emitted executed refused  Full form: name, type, value
 0050   tour        accepted emitted executed refused  Type inferred from the value
 0060   tour        accepted emitted executed refused  Mutable binding
-0070   tour        -                                  Two questions about a reference
+0070   tour        accepted emitted executed          Two questions about a reference
 0080   tour        accepted emitted executed refused  Declaration only
 0090   tour        accepted emitted refused           Exported from the module
 0100   tour        accepted emitted executed          Several names may share one declaration
@@ -49,18 +49,18 @@
 0330   tour        accepted emitted executed refused  Bitwise
 0340   tour        accepted emitted executed refused  Logical: and, or, not
 0350   tour        accepted emitted executed refused  Comparison
-0360   tour        -                                  Ranges
+0360   tour        accepted emitted executed          Ranges
 0370   tour        accepted emitted executed refused  sizeof, alignof and lenof
 0380   tour        -                                  addr takes an address
 0390   tour        accepted emitted executed refused  Assignment is a statement
 0400   tour        accepted emitted refused           No `++` and no `--`
 0410   tour        accepted emitted executed refused  Evaluation order is fixed
 0420   tour        accepted emitted executed refused  The dot is not only field access
-0430   tour        refused                            Pointer type, address, dereference
-0440   tour        -                                  A mut reference satisfies a plain one, never the reverse
-0450   tour        -                                  Permission is shallow
-0460   tour        -                                  Address literal
-0470   tour        -                                  Both directions between a pointer and an integer are the
+0430   tour        accepted emitted executed refused  Pointer type, address, dereference
+0440   tour        accepted emitted executed refused  A mut reference satisfies a plain one, never the reverse
+0450   tour        accepted emitted executed          Permission is shallow
+0460   tour        accepted emitted executed          Address literal
+0470   tour        accepted emitted executed          Both directions between a pointer and an integer are the
 0480   tour        -                                  There is no null
 0490   tour        -                                  Pointers are a system tool
 0500   tour        -                                  Three operations sit between pointers and slices
@@ -90,21 +90,21 @@
 0740   tour        -                                  Access behaviour is data, not keywords
 0750   tour        accepted emitted executed refused  Fields keep the order you wrote them
 0760   tour        -                                  Attributes are prefix words, from a closed set
-0770   tour        accepted emitted executed          There is no borrow checker and there are no lifetime
-0780   tour        -                                  Parameters are non-escaping by default
-0790   tour        -                                  The other direction
-0800   tour        -                                  The borrow of reaches across the call from there
+0770   tour        accepted emitted executed refused  There is no borrow checker and there are no lifetime
+0780   tour        accepted emitted refused           Parameters are non-escaping by default
+0790   tour        accepted emitted refused           The other direction
+0800   tour        accepted emitted refused           The borrow of reaches across the call from there
 0810   tour        -                                  Derivation stops at the three primitives of
 0820   tour        -                                  arena is built in
-0830   tour        -                                  A view derived from a local borrows it
+0830   tour        accepted emitted refused           A view derived from a local borrows it
 0840   tour        -                                  Origins join to the shortest-lived part
 0850   tour        -                                  Volatile is exempt from the borrow rule and from every
 0860   tour        -                                  What this does not catch
 0870   tour        accepted emitted executed refused  A function is a value of a function type
 0880   tour        accepted emitted executed refused  A single-expression body still takes an end
 0890   tour        accepted emitted executed          Nothing returned
-0900   tour        accepted emitted executed refused refused-by-name Three parameter conventions
-0910   tour        -                                  sink takes a place
+0900   tour        accepted emitted executed refused  Three parameter conventions
+0910   tour        accepted emitted refused           sink takes a place
 0920   tour        accepted emitted executed refused  Multiple named returns
 0930   tour        accepted emitted executed refused  Every named return must be assigned before return
 0940   tour        accepted emitted executed refused  Errors: a declared set of atoms in one dedicated register

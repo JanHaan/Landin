@@ -1,0 +1,11 @@
+holder: type = struct
+    pointer: ptr u32
+end holder
+
+consume: (sink pointer: ptr u32) -> none =
+    _ = pointer
+end consume
+
+bad: (inout value: holder) -> none =
+    consume(value.pointer)
+end bad

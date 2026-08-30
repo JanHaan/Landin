@@ -35,6 +35,7 @@ package body Landin.Syntax is
             when Member_Selection         => 1,
             --  What is indexed, and the index.
             when Element_Index            => 2,
+            when Inclusive_Slice | Half_Open_Slice => 3,
             when Array_Literal            => 0,
             when Array_Repetition         => 2,
             when Mixed_Array_Repetition   => 1,
@@ -53,6 +54,8 @@ package body Landin.Syntax is
             when Inferred_Error_Set        => 0,
             --  The bound and the element type.
             when Array_Type               => 2,
+            --  Pointer and slice types each retain their referenced type.
+            when Pointer_Type | Slice_Type => 1,
             --  The named return list and error set; parameters trail them.
             when Function_Type            => 2,
             --  A struct body's fields are its trailing run; a field's
@@ -64,7 +67,7 @@ package body Landin.Syntax is
                | Destructured_Name | Result_Wildcard => 0,
             when Fixed_Formal | Parameter | Named_Return
                | Destructured_Field => 1,
-            when Type_Formal => 0,
+            when Type_Formal | Return_Source => 0,
             when If_Arm | Match_Arm       => 2,
             --  A D139 arm's condition is slot one (No_Node for `else`);
             --  its declaration list is the trailing run.
@@ -130,6 +133,16 @@ package body Landin.Syntax is
    function Is_Mutable (Of_Tree : Tree; Id : Node_Id) return Boolean
      is (Element (Of_Tree, Id).Mutable);
 
+   function Convention_Of (Of_Tree : Tree; Id : Node_Id)
+     return Parameter_Convention
+     is (Element (Of_Tree, Id).Convention);
+
+   function Is_Escaping (Of_Tree : Tree; Id : Node_Id) return Boolean
+     is (Element (Of_Tree, Id).Escaping);
+
+   function Is_Referent_Mutable (Of_Tree : Tree; Id : Node_Id) return Boolean
+     is (Element (Of_Tree, Id).Mutable);
+
    function Is_Sound (Of_Tree : Tree; Id : Node_Id) return Boolean
      is (Element (Of_Tree, Id).Sound);
 
@@ -168,6 +181,15 @@ package body Landin.Syntax is
 
    function Element_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
      is (Slot (Of_Tree, Id, 2));
+
+   function Slice_Lower (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     is (Slot (Of_Tree, Id, 2));
+
+   function Slice_Upper (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     is (Slot (Of_Tree, Id, 3));
+
+   function Referenced_Type (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     is (Slot (Of_Tree, Id, 1));
 
    function Measured_Type (Of_Tree : Tree; Id : Node_Id) return Node_Id
      is (Slot (Of_Tree, Id, 1));
@@ -214,6 +236,14 @@ package body Landin.Syntax is
    function Nth_Return
      (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
      is (Nth_Item (Of_Tree, Returns_Of (Of_Tree, Id), Index));
+
+   function Return_Source_Count
+     (Of_Tree : Tree; Id : Node_Id) return Natural
+     is (Run_Length (Of_Tree, Id));
+
+   function Nth_Return_Source
+     (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
+     is (Nth_Item (Of_Tree, Id, Index));
 
    function Error_Set_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
      is (Slot (Of_Tree, Id, 2));

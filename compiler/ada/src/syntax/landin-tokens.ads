@@ -51,10 +51,11 @@ package Landin.Tokens is
      (End_Of_Input,
       Identifier,
       Integer_Literal,
-      --  The twenty-six words [1760] reserves.
-      Kw_Alignof, Kw_And, Kw_Atom, Kw_Dec, Kw_Else, Kw_Elsif, Kw_End,
-      Kw_Fail, Kw_False, Kw_Fixed, Kw_If, Kw_Inc, Kw_Mut, Kw_None, Kw_Not,
-      Kw_Or, Kw_Public, Kw_Return, Kw_Sizeof, Kw_Struct, Kw_Then, Kw_True,
+      --  The thirty-three words [1760] reserves.
+      Kw_Addr, Kw_Alignof, Kw_And, Kw_Atom, Kw_Dec, Kw_Else, Kw_Elsif,
+      Kw_End, Kw_Escaping, Kw_Fail, Kw_False, Kw_Fixed, Kw_From, Kw_If,
+      Kw_In, Kw_Inc, Kw_Inout, Kw_Mut, Kw_None, Kw_Not, Kw_Or, Kw_Ptr,
+      Kw_Public, Kw_Return, Kw_Sink, Kw_Sizeof, Kw_Struct, Kw_Then, Kw_True,
       Kw_Try, Kw_Type, Kw_When, Kw_Zeroed,
       --  The signs the kernel productions spell.
       Ampersand, Bar, Caret, Colon, Colon_Equal, Comma, Dot, Equal,
@@ -62,9 +63,7 @@ package Landin.Tokens is
       Left_Paren, Less, Less_Equal, Less_Greater, Less_Less, Minus,
       Minus_Greater, Minus_Percent, Percent, Plus, Plus_Percent,
       Right_Bracket, Right_Paren, Slash, Star, Star_Percent, Tilde,
-      Underscore, Bang, Dot_Dot_Dot,
-      --  Signs the tour spells and the kernel omits.
-      Dot_Dot, Dot_Dot_Less,
+      Underscore, Bang, Dot_Dot_Dot, Dot_Dot, Dot_Dot_Less,
       --  Lexemes with more than one spelling that the kernel omits.
       Compound_Assign, Character_Literal, Float_Literal, Raw_Literal,
       Text_Literal,
@@ -73,14 +72,14 @@ package Landin.Tokens is
 
    --  Everything the kernel grammar can derive. A stream of only these is a
    --  stream the parser may take at face value.
-   subtype Kernel_Kind is Token_Kind range End_Of_Input .. Dot_Dot_Dot;
+   subtype Kernel_Kind is Token_Kind range End_Of_Input .. Dot_Dot_Less;
 
-   subtype Reserved_Word is Token_Kind range Kw_Alignof .. Kw_Zeroed;
+   subtype Reserved_Word is Token_Kind range Kw_Addr .. Kw_Zeroed;
 
-   subtype Punctuation is Token_Kind range Ampersand .. Dot_Dot_Dot;
+   subtype Punctuation is Token_Kind range Ampersand .. Dot_Dot_Less;
 
    --  Described by the tour, omitted by the grammar, refused by [1830].
-   subtype Deferred_Kind is Token_Kind range Dot_Dot .. Text_Literal;
+   subtype Deferred_Kind is Token_Kind range Compound_Assign .. Text_Literal;
 
    subtype Malformed_Kind is
      Token_Kind range Malformed_Integer .. Unknown_Bytes;
@@ -88,7 +87,7 @@ package Landin.Tokens is
    --  One spelling each, which is what makes Spelling total here and absent
    --  elsewhere: Compound_Assign covers thirteen spellings [0390], and a
    --  literal has as many as there are programs.
-   subtype Spelled_Kind is Token_Kind range Kw_Alignof .. Dot_Dot_Less;
+   subtype Spelled_Kind is Token_Kind range Kw_Addr .. Dot_Dot_Less;
 
    --  `literal ::= integer | "true" | "false" | "zeroed"` [1770].  The
    --  three words are reserved and literals at once, so this is a predicate
@@ -96,10 +95,10 @@ package Landin.Tokens is
    function Is_Literal (Of_Kind : Token_Kind) return Boolean
      is (Of_Kind in Integer_Literal | Kw_True | Kw_False | Kw_Zeroed);
 
-   --  The bytes of a kind that has only one spelling.  `alignof` is the
-   --  longest, at seven.
+   --  The bytes of a kind that has only one spelling.  `escaping` is the
+   --  longest, at eight.
    function Spelling (Of_Kind : Spelled_Kind) return String
-     with Post => Spelling'Result'Length in 1 .. 7;
+     with Post => Spelling'Result'Length in 1 .. 8;
 
    subtype Construct_Reference is String (1 .. 6);
 

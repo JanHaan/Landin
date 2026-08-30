@@ -142,6 +142,8 @@ package Landin.Syntax.Precedence is
          or else Of_Kind in Landin.Tokens.Identifier
                             | Landin.Tokens.Left_Paren
                             | Landin.Tokens.Left_Bracket
+                            | Landin.Tokens.Kw_Addr
+                            | Landin.Tokens.Kw_Ptr
                             | Landin.Tokens.Kw_If
                             | Landin.Tokens.Kw_Try
                             | Landin.Tokens.Kw_Sizeof

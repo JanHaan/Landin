@@ -399,6 +399,41 @@ package Landin.Resolution is
                   and then Bound_To (Into, Of_Tree, Node) = To;
 
    ------------------------------------------------------------------
+   --  Named-return sources
+   ------------------------------------------------------------------
+
+   --  [0790]'s `from` names parameter labels in a signature, including a
+   --  written function type whose labels declare nothing [1800].  Resolution
+   --  therefore records a runtime position rather than inventing a lexical
+   --  declaration for the label.  Zero means no matching position was found;
+   --  the later R2.50 checker owns that source diagnostic and the body-to-
+   --  signature agreement.
+   function Source_Parameter_Position
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Source   : Landin.Syntax.Node_Id) return Natural
+     with Pre => Is_Prepared (Of_Table)
+                 and then Covers (Of_Table, Of_Tree)
+                 and then Landin.Syntax.Contains (Of_Tree, Source)
+                 and then Landin.Syntax.Kind (Of_Tree, Source)
+                            = Landin.Syntax.Return_Source;
+
+   procedure Associate_Return_Source
+     (Into    : in out Table;
+      Of_Tree : Landin.Syntax.Tree;
+      Source  : Landin.Syntax.Node_Id;
+      Position : Positive)
+     with Pre  => Is_Prepared (Into)
+                  and then Covers (Into, Of_Tree)
+                  and then Landin.Syntax.Contains (Of_Tree, Source)
+                  and then Landin.Syntax.Kind (Of_Tree, Source)
+                             = Landin.Syntax.Return_Source
+                  and then Source_Parameter_Position
+                             (Into, Of_Tree, Source) = 0,
+          Post => Source_Parameter_Position
+                    (Into, Of_Tree, Source) = Position;
+
+   ------------------------------------------------------------------
    --  Direct labelled applications
    ------------------------------------------------------------------
 
@@ -562,6 +597,9 @@ private
    package Opened_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Scope_Id);
 
+   package Position_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Natural);
+
    type Application_Fact is record
       Class    : Application_Class := Unclassified_Application;
       Match    : Call_Match_State := Call_Not_Matched;
@@ -599,6 +637,7 @@ private
       Bound        : Binding_Vectors.Vector;
       Opened       : Opened_Vectors.Vector;
       Applications : Application_Vectors.Vector;
+      Return_Sources : Position_Vectors.Vector;
       Index        : Key_Maps.Map;
    end record;
 

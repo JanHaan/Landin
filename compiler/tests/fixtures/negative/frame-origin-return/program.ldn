@@ -1,0 +1,4 @@
+bad: () -> (pointer: ptr u32) =
+    value: u32 = 1
+    pointer = addr value
+end bad

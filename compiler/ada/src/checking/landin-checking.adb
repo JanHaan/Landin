@@ -73,6 +73,7 @@ package body Landin.Checking is
    use type Landin.Source.Source_Id;
    use type Landin.Source.Names.Name_Id;
    use type Landin.Syntax.Node_Kind;
+   use type Landin.Syntax.Parameter_Convention;
    use type Landin.Targets.Byte_Count;
    use type Landin.Types.Magnitude;
    use type System.Address;
@@ -123,6 +124,11 @@ package body Landin.Checking is
      (Of_Table : Table; Signature : Signature_Id) return Actual_Key
      is (Kind => Type_Actual_Kind, Type_Form => Function_Actual_Type,
          Owner => Of_Table'Address, Signature => Signature, others => <>);
+
+   function Reference_Type_Actual
+     (Of_Table : Table; Reference : Reference_Id) return Actual_Key
+     is (Kind => Type_Actual_Kind, Type_Form => Reference_Actual_Type,
+         Owner => Of_Table'Address, Reference => Reference, others => <>);
 
    function Fixed_Actual (Value : Landin.Types.Magnitude) return Actual_Key
      is (Kind => Fixed_Actual_Kind, Value => Value, others => <>);
@@ -214,6 +220,16 @@ package body Landin.Checking is
       return Key.Signature;
    end Function_Signature_Of;
 
+   function Reference_Of
+     (Of_Table : Table; Key : Actual_Key) return Reference_Id is
+   begin
+      if not Holds (Of_Table, Key) then
+         raise Landin.Compiler_Defect with
+           "a reference actual key belongs to another checking table";
+      end if;
+      return Key.Reference;
+   end Reference_Of;
+
    function Fixed_Magnitude_Of
      (Key : Actual_Key) return Landin.Types.Magnitude
      is (Key.Value);
@@ -244,6 +260,9 @@ package body Landin.Checking is
               and then Holds (Of_Table, Key.Signature)
               and then Signature_Error_Form (Of_Table, Key.Signature)
                            /= Inferred;
+         when Reference_Actual_Type =>
+            return Key.Owner = Of_Table'Address
+              and then Holds (Of_Table, Key.Reference);
       end case;
    end Holds;
 
@@ -292,6 +311,9 @@ package body Landin.Checking is
          when Function_Actual_Type =>
             return Signatures_Agree
               (Of_Table, Left.Signature, Right.Signature);
+         when Reference_Actual_Type =>
+            return References_Agree
+              (Of_Table, Left.Reference, Right.Reference);
       end case;
    end Actuals_Agree;
 
@@ -547,6 +569,7 @@ package body Landin.Checking is
                Into.Node_Nominals.Append (No_Nominal_Type);
                Into.Node_Atom_Sets.Append (No_Atom_Set);
                Into.Node_Signatures.Append (No_Signature);
+               Into.Node_References.Append (No_Reference);
                Into.Node_Result_Shapes.Append (No_Signature);
                Into.Node_Routine_Targets.Append (No_Routine_Instance);
                Into.Node_Fields.Append (0);
@@ -562,6 +585,7 @@ package body Landin.Checking is
          Into.Shapes.Append (Array_Shape'(others => <>));
          Into.Declaration_Atom_Sets.Append (No_Atom_Set);
          Into.Declaration_Signatures.Append (No_Signature);
+         Into.Declaration_References.Append (No_Reference);
          Into.Declaration_Result_Shapes.Append (No_Signature);
       end loop;
 
@@ -870,6 +894,39 @@ package body Landin.Checking is
       end if;
    end Note_Nominal;
 
+   procedure Reference_Union_Extent
+     (Atom_Count : Positive;
+      Facts      : Landin.Targets.Target_Facts;
+      Size       : out Landin.Targets.Byte_Count;
+      Alignment  : out Landin.Targets.Byte_Alignment)
+   is
+      Pointer_Size : constant Landin.Targets.Scalar_Size :=
+        Landin.Targets.Pointer_Size (Facts);
+   begin
+      if Atom_Count = 1 then
+         Size := Landin.Targets.Byte_Count
+           (Landin.Targets.Bytes (Pointer_Size));
+         Alignment := Landin.Targets.Pointer_Alignment (Facts);
+         return;
+      end if;
+
+      declare
+         Cases : constant Natural := Atom_Count + 1;
+         Tag : constant Landin.Targets.Scalar_Size :=
+           (if Cases <= 2 ** 8 then Landin.Targets.Byte_1
+            elsif Cases <= 2 ** 16 then Landin.Targets.Byte_2
+            else Landin.Targets.Byte_4);
+         Placed : Landin.Targets.Placement :=
+           Landin.Targets.Empty_Placement;
+         Ignored : Landin.Targets.Byte_Count;
+      begin
+         Landin.Targets.Place (Placed, Tag, Facts, Ignored);
+         Landin.Targets.Place (Placed, Pointer_Size, Facts, Ignored);
+         Size := Landin.Targets.Size_Of (Placed);
+         Alignment := Landin.Targets.Alignment_Of (Placed);
+      end;
+   end Reference_Union_Extent;
+
    ------------------------------------------------------------------
    --  Atom sets
    ------------------------------------------------------------------
@@ -1021,6 +1078,173 @@ package body Landin.Checking is
    end Note_Atom_Set;
 
    ------------------------------------------------------------------
+   --  References
+   ------------------------------------------------------------------
+
+   function Reference_Count (Of_Table : Table) return Natural
+     is (Natural (Of_Table.References.Length));
+
+   function Add_Reference
+     (Into : in out Table; Item : Reference_Descriptor) return Reference_Id
+   is
+      Made : Reference_Id;
+   begin
+      Into.References.Append (Item);
+      Made := Reference_Id (Into.References.Last_Index);
+      return Made;
+   end Add_Reference;
+
+   function Descriptor_Of
+     (Of_Table : Table; Id : Reference_Id) return Reference_Descriptor
+     is (Of_Table.References (Positive (Id)));
+
+   function Referents_Agree
+     (Of_Table : Table; Left, Right : Reference_Descriptor) return Boolean;
+
+   function Referents_Agree
+     (Of_Table : Table; Left, Right : Reference_Descriptor) return Boolean
+   is
+   begin
+      if Left.Referent /= Right.Referent then
+         return False;
+      end if;
+
+      case Left.Referent is
+         when Landin.Types.Scalar_Name =>
+            return True;
+         when Landin.Types.Pointer_Value | Landin.Types.Slice_Value =>
+            return Holds (Of_Table, Left.Reference)
+              and then Holds (Of_Table, Right.Reference)
+              and then References_Agree
+                (Of_Table, Left.Reference, Right.Reference);
+         when Landin.Types.Atom_Value =>
+            return Holds (Of_Table, Left.Atoms)
+              and then Holds (Of_Table, Right.Atoms)
+              and then Atom_Sets_Agree (Of_Table, Left.Atoms, Right.Atoms);
+         when Landin.Types.Fixed_Array =>
+            return Left.Length = Right.Length
+              and then Left.Element = Right.Element
+              and then Left.Element_Nominal = Right.Element_Nominal;
+         when Landin.Types.Aggregate =>
+            return Left.Nominal = Right.Nominal;
+         when Landin.Types.Function_Value =>
+            return Holds (Of_Table, Left.Signature)
+              and then Holds (Of_Table, Right.Signature)
+              and then Signatures_Agree
+                (Of_Table, Left.Signature, Right.Signature);
+         when others =>
+            return False;
+      end case;
+   end Referents_Agree;
+
+   function References_Agree
+     (Of_Table : Table; Left, Right : Reference_Id) return Boolean
+   is
+      A : constant Reference_Descriptor := Descriptor_Of (Of_Table, Left);
+      B : constant Reference_Descriptor := Descriptor_Of (Of_Table, Right);
+   begin
+      return A.Kind = B.Kind
+        and then A.Mutable = B.Mutable
+        and then Referents_Agree (Of_Table, A, B);
+   end References_Agree;
+
+   function Reference_Satisfies
+     (Of_Table : Table; Actual, Expected : Reference_Id) return Boolean
+   is
+      A : constant Reference_Descriptor := Descriptor_Of (Of_Table, Actual);
+      E : constant Reference_Descriptor := Descriptor_Of (Of_Table, Expected);
+   begin
+      return A.Kind = E.Kind
+        and then (A.Mutable = E.Mutable or else not E.Mutable)
+        and then Referents_Agree (Of_Table, A, E);
+   end Reference_Satisfies;
+
+   function Reference_Of
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id) return Reference_Id
+   is
+      Where : constant Positive := Slot (Of_Table, Of_Tree, Node);
+      Overlay : constant Natural := Node_Overlay_Position (Of_Table, Where);
+   begin
+      if Overlay /= 0
+        and then Of_Table.Node_Overlays (Overlay).Has_Reference
+      then
+         return Of_Table.Node_Overlays (Overlay).Reference;
+      end if;
+      return Of_Table.Node_References (Where);
+   end Reference_Of;
+
+   function Reference_Of
+     (Of_Table : Table; Id : Declaration_Id) return Reference_Id
+   is
+      Overlay : constant Natural :=
+        (if Id = No_Declaration then 0
+         else Declaration_Overlay_Position (Of_Table, Id));
+   begin
+      if Id = No_Declaration then
+         return No_Reference;
+      elsif Overlay /= 0
+        and then Of_Table.Declaration_Overlays (Overlay).Has_Reference
+      then
+         return Of_Table.Declaration_Overlays (Overlay).Reference;
+      end if;
+      return Of_Table.Declaration_References (Positive (Id));
+   end Reference_Of;
+
+   procedure Note_Reference
+     (Into    : in out Table;
+      Of_Tree : Landin.Syntax.Tree;
+      Node    : Landin.Syntax.Node_Id;
+      Reference : Reference_Id)
+   is
+      Where : constant Positive := Slot (Into, Of_Tree, Node);
+   begin
+      if Reference_Of (Into, Of_Tree, Node) /= No_Reference
+        and then not References_Agree
+          (Into, Reference_Of (Into, Of_Tree, Node), Reference)
+      then
+         raise Landin.Compiler_Defect with
+           "one node was assigned two reference descriptors";
+      end if;
+      if Into.Current_Routine = No_Routine_Instance then
+         Into.Node_References (Where) := Reference;
+      else
+         declare
+            Overlay : constant Positive := Ensure_Node_Overlay (Into, Where);
+         begin
+            Into.Node_Overlays (Overlay).Has_Reference := True;
+            Into.Node_Overlays (Overlay).Reference := Reference;
+         end;
+      end if;
+   end Note_Reference;
+
+   procedure Note_Reference
+     (Into     : in out Table;
+      Id       : Declaration_Id;
+      Reference : Reference_Id) is
+   begin
+      if Reference_Of (Into, Id) /= No_Reference
+        and then not References_Agree
+          (Into, Reference_Of (Into, Id), Reference)
+      then
+         raise Landin.Compiler_Defect with
+           "one declaration was assigned two reference descriptors";
+      end if;
+      if Into.Current_Routine = No_Routine_Instance then
+         Into.Declaration_References (Positive (Id)) := Reference;
+      else
+         declare
+            Overlay : constant Positive :=
+              Ensure_Declaration_Overlay (Into, Id);
+         begin
+            Into.Declaration_Overlays (Overlay).Has_Reference := True;
+            Into.Declaration_Overlays (Overlay).Reference := Reference;
+         end;
+      end if;
+   end Note_Reference;
+
+   ------------------------------------------------------------------
    --  Function signatures
    ------------------------------------------------------------------
 
@@ -1028,6 +1252,7 @@ package body Landin.Checking is
       Descriptor_Free : constant Boolean :=
         Part.Nominal = No_Nominal_Type
         and then Part.Signature = No_Signature
+        and then Part.Reference = No_Reference
         and then Part.Atoms = No_Atom_Set;
    begin
       if not Is_Prepared (Of_Table)
@@ -1039,12 +1264,19 @@ package body Landin.Checking is
       case Part.Kind is
          when Landin.Types.Scalar_Name =>
             return Descriptor_Free;
+         when Landin.Types.Pointer_Value | Landin.Types.Slice_Value =>
+            return Part.Nominal = No_Nominal_Type
+              and then Part.Signature = No_Signature
+              and then Part.Atoms = No_Atom_Set
+              and then Holds (Of_Table, Part.Reference);
          when Landin.Types.Atom_Value =>
             return Part.Nominal = No_Nominal_Type
               and then Part.Signature = No_Signature
+              and then Part.Reference = No_Reference
               and then Holds (Of_Table, Part.Atoms);
          when Landin.Types.Fixed_Array =>
             return Part.Signature = No_Signature
+              and then Part.Reference = No_Reference
               and then Part.Atoms = No_Atom_Set
               and then
                 (Part.Nominal = No_Nominal_Type
@@ -1052,15 +1284,106 @@ package body Landin.Checking is
          when Landin.Types.Aggregate =>
             return Holds (Of_Table, Part.Nominal)
               and then Part.Signature = No_Signature
+              and then Part.Reference = No_Reference
               and then Part.Atoms = No_Atom_Set;
          when Landin.Types.Function_Value =>
             return Part.Nominal = No_Nominal_Type
               and then Holds (Of_Table, Part.Signature)
+              and then Part.Reference = No_Reference
               and then Part.Atoms = No_Atom_Set;
          when others =>
             return False;
       end case;
    end Holds;
+
+   function Contains_References
+     (Of_Table : Table; Nominal : Nominal_Type_Id) return Boolean
+   is
+      Seen : array
+        (1 .. Positive'Max (1, Nominal_Type_Count (Of_Table))) of Boolean :=
+          [others => False];
+
+      function Visit (Id : Nominal_Type_Id) return Boolean;
+
+      function Visit (Id : Nominal_Type_Id) return Boolean is
+         Position : constant Positive :=
+           Nominal_Identities.Position (Of_Table, Id);
+      begin
+         if Seen (Position) or else not Has_Layout (Of_Table, Id) then
+            return False;
+         end if;
+         Seen (Position) := True;
+         for Field in 1 .. Layout_Field_Count (Of_Table, Id) loop
+            declare
+               Shape : constant Field_Shape :=
+                 Field_Shape_Of (Of_Table, Id, Field);
+            begin
+               case Shape.Kind is
+                  when Reference_Field =>
+                     return True;
+                  when Aggregate_Field =>
+                     if Visit (Shape.Nominal) then
+                        return True;
+                     end if;
+                  when Fixed_Array_Field =>
+                     if Shape.Nominal /= No_Nominal_Type
+                       and then Visit (Shape.Nominal)
+                     then
+                        return True;
+                     end if;
+                  when Variant_Field =>
+                     for Which in 1 .. Shape.Cases loop
+                        for Part in 1 .. Variant_Case_Field_Count
+                          (Of_Table, Id, Field, Which)
+                        loop
+                           declare
+                              Payload : constant Field_Shape :=
+                                Nth_Variant_Case_Field
+                                  (Of_Table, Id, Field, Which, Part);
+                           begin
+                              if Payload.Kind = Reference_Field
+                                or else
+                                  (Payload.Kind = Aggregate_Field
+                                   and then Visit (Payload.Nominal))
+                                or else
+                                  (Payload.Kind = Fixed_Array_Field
+                                   and then Payload.Nominal
+                                     /= No_Nominal_Type
+                                   and then Visit (Payload.Nominal))
+                              then
+                                 return True;
+                              end if;
+                           end;
+                        end loop;
+                     end loop;
+                  when Scalar_Field =>
+                     null;
+               end case;
+            end;
+         end loop;
+         return False;
+      end Visit;
+   begin
+      return Visit (Nominal);
+   end Contains_References;
+
+   function Contains_References
+     (Of_Table : Table; Part : Signature_Part) return Boolean
+   is
+   begin
+      case Part.Kind is
+         when Landin.Types.Pointer_Value | Landin.Types.Slice_Value =>
+            return True;
+         when Landin.Types.Aggregate =>
+            return Contains_References (Of_Table, Part.Nominal);
+         when Landin.Types.Fixed_Array =>
+            return Part.Length > 0
+              and then Part.Nominal /= No_Nominal_Type
+              and then Contains_References (Of_Table, Part.Nominal);
+         when others =>
+            return False;
+      end case;
+   end Contains_References;
 
    function Holds
      (Of_Table : Table; Parts : Signature_Part_Array) return Boolean is
@@ -1082,11 +1405,14 @@ package body Landin.Checking is
       Results    : Signature_Part_Array;
       Site       : Landin.Provenance.Origin;
       Errors     : Atom_Set_Id := No_Atom_Set;
-      Error_Form : Error_Set_Form := Infallible) return Signature_Id
+      Error_Form : Error_Set_Form := Infallible;
+      Sources    : Return_Source_Array := No_Return_Sources)
+      return Signature_Id
    is
       Made : Signature_Record :=
         (Parameters => (First => 0, Count => 0),
          Results    => (First => 0, Count => 0),
+         Sources    => (First => 0, Count => 0),
          Site       => Site,
          Errors     => Errors,
          Error_Form => Error_Form);
@@ -1111,6 +1437,13 @@ package body Landin.Checking is
       end if;
       Append (Parameters, Made.Parameters);
       Append (Results, Made.Results);
+      if Sources'Length > 0 then
+         Made.Sources.First := Natural (Into.Return_Sources.Length);
+         for Source of Sources loop
+            Into.Return_Sources.Append (Source);
+            Made.Sources.Count := Made.Sources.Count + 1;
+         end loop;
+      end if;
       Into.Signatures.Append (Made);
       return Signature_Id (Into.Signatures.Last_Index);
    end Add_Signature;
@@ -1121,17 +1454,19 @@ package body Landin.Checking is
       Result     : Signature_Part;
       Site       : Landin.Provenance.Origin;
       Errors     : Atom_Set_Id := No_Atom_Set;
-      Error_Form : Error_Set_Form := Infallible) return Signature_Id
+      Error_Form : Error_Set_Form := Infallible;
+      Sources    : Return_Source_Array := No_Return_Sources)
+      return Signature_Id
    is
    begin
       if Result.Kind = Landin.Types.No_Value then
          return Add_Signature
            (Into, Parameters, No_Signature_Parts, Site,
-            Errors, Error_Form);
+            Errors, Error_Form, Sources);
       end if;
       return Add_Signature
         (Into, Parameters, Signature_Part_Array'[1 => Result], Site,
-         Errors, Error_Form);
+         Errors, Error_Form, Sources);
    end Add_Signature;
 
    function Signature_Of
@@ -1245,6 +1580,50 @@ package body Landin.Checking is
       return Of_Table.Signature_Parts (Results.First + Index);
    end Nth_Signature_Result;
 
+   function Signature_Return_Source_Count
+     (Of_Table : Table; Signature : Signature_Id; Result : Positive)
+      return Natural
+   is
+      Sources : constant Run :=
+        Of_Table.Signatures (Positive (Signature)).Sources;
+      Count : Natural := 0;
+   begin
+      for Index in 1 .. Sources.Count loop
+         if Of_Table.Return_Sources (Sources.First + Index).Result = Result
+         then
+            Count := Count + 1;
+         end if;
+      end loop;
+      return Count;
+   end Signature_Return_Source_Count;
+
+   function Nth_Signature_Return_Source
+     (Of_Table : Table;
+      Signature : Signature_Id;
+      Result    : Positive;
+      Index     : Positive) return Positive
+   is
+      Sources : constant Run :=
+        Of_Table.Signatures (Positive (Signature)).Sources;
+      Seen : Natural := 0;
+   begin
+      for Position in 1 .. Sources.Count loop
+         declare
+            Source : constant Return_Source_Association :=
+              Of_Table.Return_Sources (Sources.First + Position);
+         begin
+            if Source.Result = Result then
+               Seen := Seen + 1;
+               if Seen = Index then
+                  return Source.Parameter;
+               end if;
+            end if;
+         end;
+      end loop;
+      raise Landin.Compiler_Defect with
+        "a return source index escaped its checked bound";
+   end Nth_Signature_Return_Source;
+
    function Signature_Result
      (Of_Table : Table; Signature : Signature_Id) return Signature_Part
    is
@@ -1291,7 +1670,10 @@ package body Landin.Checking is
      (Of_Table : Table; A, B : Signature_Part) return Boolean
    is
    begin
-      if A.Kind /= B.Kind then
+      if A.Kind /= B.Kind
+        or else A.Convention /= B.Convention
+        or else A.Escaping /= B.Escaping
+      then
          return False;
       end if;
       case A.Kind is
@@ -1299,6 +1681,11 @@ package body Landin.Checking is
             return True;
          when Landin.Types.Scalar_Name =>
             return True;
+         when Landin.Types.Pointer_Value | Landin.Types.Slice_Value =>
+            return Holds (Of_Table, A.Reference)
+              and then Holds (Of_Table, B.Reference)
+              and then References_Agree
+                (Of_Table, A.Reference, B.Reference);
          when Landin.Types.Atom_Value =>
             return Holds (Of_Table, A.Atoms)
               and then Holds (Of_Table, B.Atoms)
@@ -1359,9 +1746,22 @@ package body Landin.Checking is
            (Of_Table,
             Nth_Signature_Result (Of_Table, Left, Index),
             Nth_Signature_Result (Of_Table, Right, Index))
+           or else Signature_Return_Source_Count (Of_Table, Left, Index)
+             /= Signature_Return_Source_Count (Of_Table, Right, Index)
          then
             return False;
          end if;
+         for Source in
+           1 .. Signature_Return_Source_Count (Of_Table, Left, Index)
+         loop
+            if Nth_Signature_Return_Source
+                 (Of_Table, Left, Index, Source)
+              /= Nth_Signature_Return_Source
+                   (Of_Table, Right, Index, Source)
+            then
+               return False;
+            end if;
+         end loop;
       end loop;
       return True;
    end Signatures_Agree;
@@ -1571,6 +1971,20 @@ package body Landin.Checking is
          if Field.Kind = Scalar_Field then
             Size := Landin.Targets.Byte_Count (Landin.Targets.Bytes (Held));
             Alignment := Landin.Targets.Alignment_Of (Facts, Held);
+         elsif Field.Kind = Reference_Field then
+            declare
+               Descriptor : constant Reference_Descriptor :=
+                 Descriptor_Of (Into, Field.Reference);
+               Pointer_Bytes : constant Landin.Targets.Byte_Count :=
+                 Landin.Targets.Byte_Count
+                   (Landin.Targets.Bytes
+                      (Landin.Targets.Pointer_Size (Facts)));
+            begin
+               Size :=
+                 (if Descriptor.Kind = Landin.Types.Slice_Value
+                  then 2 * Pointer_Bytes else Pointer_Bytes);
+               Alignment := Landin.Targets.Pointer_Alignment (Facts);
+            end;
          elsif Field.Kind = Fixed_Array_Field then
             if Field.Nominal /= No_Nominal_Type then
                if not Holds (Into, Field.Nominal)

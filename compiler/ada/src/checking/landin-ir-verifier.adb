@@ -187,6 +187,11 @@ package body Landin.IR.Verifier is
             --  [0370] carries a type and not an operand.
             when Measure_Size | Measure_Align => 0,
             when Load => 0,
+            when Slice_Address => 4,
+            when Empty_Slice_Base => 0,
+            when Conversion | Pointer_Address => 1,
+            when Load_Indirect => 1,
+            when Store_Indirect => 2,
             when Load_Datum    => 0,
             when Load_Field    => 0,
             when Store_Field   => 1,
@@ -202,7 +207,7 @@ package body Landin.IR.Verifier is
             when Unary_Kind    => 1,
             when Binary_Kind   => 2,
             when Failure_Test  => 1,
-            when Storage_Address | Function_Address | Call
+            when Storage_Address | Place_Address | Function_Address | Call
                | Indirect_Call => 0,
             when Jump          => 0,
             when Branch        => 1,
@@ -1644,6 +1649,7 @@ package body Landin.IR.Verifier is
       --  descriptor any question.
       declare
          Parts : Natural := 0;
+         Sources : Natural := 0;
       begin
          for Which in 1 .. Signature_Count (Of_Unit) loop
             declare
@@ -1702,9 +1708,38 @@ package body Landin.IR.Verifier is
                   end if;
                end loop;
                Parts := Parts + Held.Results.Count;
+
+               if Held.Sources.Count /= 0
+                 and then Held.Sources.First /= Sources
+               then
+                  return (Kind => Signature_Runs_Overlap, others => <>);
+               end if;
+               if Held.Sources.First > Natural (Of_Unit.Return_Sources.Length)
+                 or else Held.Sources.Count
+                   > Natural (Of_Unit.Return_Sources.Length)
+                       - Held.Sources.First
+               then
+                  return (Kind => Signature_Runs_Overlap, others => <>);
+               end if;
+               for Index in 1 .. Held.Sources.Count loop
+                  declare
+                     Source : constant Return_Source_Association :=
+                       Of_Unit.Return_Sources (Held.Sources.First + Index);
+                  begin
+                     if Source.Result > Held.Results.Count
+                       or else Source.Parameter > Held.Parameters.Count
+                     then
+                        return
+                          (Kind => Signature_Part_Malformed, others => <>);
+                     end if;
+                  end;
+               end loop;
+               Sources := Sources + Held.Sources.Count;
             end;
          end loop;
-         if Parts /= Natural (Of_Unit.Signature_Parts.Length) then
+         if Parts /= Natural (Of_Unit.Signature_Parts.Length)
+           or else Sources /= Natural (Of_Unit.Return_Sources.Length)
+         then
             return (Kind => Signature_Runs_Overlap, others => <>);
          end if;
       end;
@@ -2314,11 +2349,43 @@ package body Landin.IR.Verifier is
                        others => <>);
             end if;
 
+            if Has_Slice_Image (Of_Unit, Id) then
+               declare
+                  Source : constant Item_Id :=
+                    Slice_Image_Source (Of_Unit, Id);
+               begin
+                  if Field_Shape_Is_Malformed
+                    (Slice_Image_Element (Of_Unit, Id),
+                     Aggregate_Allowed => True)
+                    or else
+                      (Source /= No_Item
+                       and then
+                      (not Holds (Of_Unit, Source)
+                       or else Kind_Of (Of_Unit, Source) /= Datum
+                       or else Result_Of (Of_Unit, Source)
+                         /= Landin.Types.Fixed_Array
+                       or else not Same_Shape
+                         (Of_Unit,
+                          Slice_Image_Element (Of_Unit, Id),
+                          Array_Element_Shape (Of_Unit, Source))
+                       or else Slice_Image_First (Of_Unit, Id)
+                         > Array_Length (Of_Unit, Source)
+                       or else Slice_Image_Length (Of_Unit, Id)
+                         > Array_Length (Of_Unit, Source)
+                           - Slice_Image_First (Of_Unit, Id)))
+                  then
+                     return (Kind => Array_Image_Length_Disagrees,
+                             Item => Id, others => <>);
+                  end if;
+               end;
+            end if;
+
             --  D24: an array item's image, when it has one, has one value
             --  per declared position.  A datum with no image is D10's zero
             --  storage and this check has nothing to say about it.
             if Result_Of (Of_Unit, Id) = Landin.Types.Fixed_Array
               and then Has_Image (Of_Unit, Id)
+              and then not Has_Slice_Image (Of_Unit, Id)
               and then Image_Length (Of_Unit, Id)
                        /= Array_Length (Of_Unit, Id)
             then
@@ -2335,6 +2402,7 @@ package body Landin.IR.Verifier is
             if Check_Image
               and then Result_Of (Of_Unit, Id) = Landin.Types.Fixed_Array
               and then Has_Image (Of_Unit, Id)
+              and then not Has_Slice_Image (Of_Unit, Id)
               and then Image_Length (Of_Unit, Id)
                        = Array_Length (Of_Unit, Id)
             then
@@ -2462,6 +2530,7 @@ package body Landin.IR.Verifier is
                              or else Image.Form /= Absent
                              or else Image.Count /= 0
                              or else (Top and then Image.Value /= 0)
+                             or else Image.Slice
                            then
                               return Aggregate_Field_Image_On_Scalar_Field;
                            elsif Shape.Signature /= No_Signature
@@ -2488,6 +2557,38 @@ package body Landin.IR.Verifier is
                            return Nothing_Wrong;
 
                         when Array_Field_Shape =>
+                           if Image.Slice then
+                              if Shape.Length /= 2
+                                or else Shape.Element /= Landin.Types.Usize
+                                or else Image.Form /= Absent
+                                or else Image.Count /= 0
+                                or else (Top and then Flat /= 0)
+                                or else
+                                  (Image.Target /= No_Item
+                                   and then
+                                     (not Holds (Of_Unit, Image.Target)
+                                      or else Kind_Of
+                                        (Of_Unit, Image.Target) /= Datum
+                                      or else Result_Of
+                                        (Of_Unit, Image.Target)
+                                          /= Landin.Types.Fixed_Array
+                                      or else not Same_Shape
+                                        (Of_Unit, Image.Slice_Element,
+                                         Array_Element_Shape
+                                           (Of_Unit, Image.Target))
+                                      or else Image.Slice_First
+                                        > Array_Length
+                                          (Of_Unit, Image.Target)
+                                      or else Landin.Types.Folded
+                                        (Array_Length
+                                           (Of_Unit, Image.Target)
+                                         - Image.Slice_First) < Image.Value))
+                              then
+                                 return
+                                   Aggregate_Field_Image_Length_Disagrees;
+                              end if;
+                              return Nothing_Wrong;
+                           end if;
                            if Image.Offset /= Expected_Elements
                              or else (Top and then Flat /= 0)
                              or else Image.Target /= No_Item
@@ -2565,6 +2666,7 @@ package body Landin.IR.Verifier is
                              or else (Top and then Flat /= 0)
                              or else Image.Value /= 0
                              or else Image.Target /= No_Item
+                             or else Image.Slice
                            then
                               return Aggregate_Image_On_Aggregate_Field;
                            elsif Image.Form = Absent then
@@ -2618,6 +2720,7 @@ package body Landin.IR.Verifier is
                            if Image.Offset /= Expected_Descendants
                              or else (Top and then Flat /= 0)
                              or else Image.Target /= No_Item
+                             or else Image.Slice
                            then
                               return Aggregate_Image_On_Variant_Field;
                            elsif Image.Form = Absent then
@@ -2978,7 +3081,38 @@ package body Landin.IR.Verifier is
                               end if;
                            end if;
                         else
-                           if Image.Target /= No_Item then
+                           if Image.Slice then
+                              if Shape.Length /= 2
+                                or else Shape.Element /= Landin.Types.Usize
+                                or else Image.Form /= Absent
+                                or else Image.Count /= 0
+                                or else Held /= 0
+                                or else
+                                  (Image.Target /= No_Item
+                                   and then
+                                     (not Holds (Of_Unit, Image.Target)
+                                      or else Kind_Of
+                                        (Of_Unit, Image.Target) /= Datum
+                                      or else Result_Of
+                                        (Of_Unit, Image.Target)
+                                          /= Landin.Types.Fixed_Array
+                                      or else not Same_Shape
+                                        (Of_Unit, Image.Slice_Element,
+                                         Array_Element_Shape
+                                           (Of_Unit, Image.Target))
+                                      or else Image.Slice_First
+                                        > Array_Length
+                                          (Of_Unit, Image.Target)
+                                      or else Landin.Types.Folded
+                                        (Array_Length
+                                           (Of_Unit, Image.Target)
+                                         - Image.Slice_First) < Image.Value))
+                              then
+                                 return
+                                   (Kind => Field_Length_Fault,
+                                    Item => Id, others => <>);
+                              end if;
+                           elsif Image.Target /= No_Item then
                               return
                                 (Kind => Function_Fault,
                                  Item => Id, others => <>);
@@ -2998,11 +3132,14 @@ package body Landin.IR.Verifier is
 
                            case Image.Form is
                               when Absent =>
-                                 if Image.Count /= 0 then
+                                 if not Image.Slice and then Image.Count /= 0
+                                 then
                                     return
                                       (Kind => Field_Length_Fault,
                                        Item => Id, others => <>);
-                                 elsif Image.Value /= 0 then
+                                 elsif not Image.Slice
+                                   and then Image.Value /= 0
+                                 then
                                     return
                                       (Kind => Field_Pattern_Fault,
                                        Item => Id, others => <>);
@@ -3041,7 +3178,7 @@ package body Landin.IR.Verifier is
                                     Item => Id, others => <>);
                            end case;
 
-                           if Check_Image then
+                           if Check_Image and then not Image.Slice then
                               if Image.Form in Finite | Hybrid then
                                  for Position in 1 .. Image.Count loop
                                     if not Fits
@@ -3135,6 +3272,45 @@ package body Landin.IR.Verifier is
                                          Value => V);
                               end if;
 
+                           when Place_Address =>
+                              declare
+                                 Place : constant Storage :=
+                                   Destination_Of (Of_Unit, Id, V);
+                              begin
+                                 case Place.Kind is
+                                    when Module_Datum =>
+                                       if not Holds (Of_Unit, Place.Datum)
+                                         or else Kind_Of
+                                           (Of_Unit, Place.Datum) /= Datum
+                                       then
+                                          return
+                                            (Kind => Named_Item_Is_Not_A_Datum,
+                                             Item => Id, Block => Block,
+                                             Value => V);
+                                       end if;
+                                    when Frame_Slot =>
+                                       if not Holds (Of_Unit, Id, Place.Slot)
+                                       then
+                                          return
+                                            (Kind => Slot_Out_Of_Range,
+                                             Item => Id, Block => Block,
+                                             Value => V);
+                                       end if;
+                                    when Runtime_Address =>
+                                       if not Holds
+                                         (Of_Unit, Id, Place.Address)
+                                         or else not Is_Address
+                                           (Of_Unit, Id, Place.Address)
+                                       then
+                                          return
+                                            (Kind =>
+                                               Runtime_Address_Is_Not_Valid,
+                                             Item => Id, Block => Block,
+                                             Value => V);
+                                       end if;
+                                 end case;
+                              end;
+
                            when Storage_Address =>
                               declare
                                  Place : constant Storage :=
@@ -3179,6 +3355,11 @@ package body Landin.IR.Verifier is
                                  end if;
                               end;
 
+                           when Slice_Address | Empty_Slice_Base | Conversion
+                              | Pointer_Address | Load_Indirect
+                              | Store_Indirect =>
+                              null;
+
                            when Load | Store =>
                               if not Holds
                                        (Of_Unit, Id,
@@ -3205,13 +3386,17 @@ package body Landin.IR.Verifier is
                                                Value => V);
                                     end if;
 
-                                    if (not Is_Aggregate (Of_Unit, Id, Cell)
-                                        and then not Is_Array
-                                                       (Of_Unit, Id, Cell))
-                                      or else Element_Total
-                                                (Field_Of (Of_Unit, Id, V))
-                                              > Slot_Part_Count
-                                                  (Of_Unit, Id, Cell)
+                                    if not Is_Address
+                                      (Of_Unit, Id, Cell)
+                                      and then
+                                        ((not Is_Aggregate
+                                            (Of_Unit, Id, Cell)
+                                          and then not Is_Array
+                                            (Of_Unit, Id, Cell))
+                                         or else Element_Total
+                                           (Field_Of (Of_Unit, Id, V))
+                                             > Slot_Part_Count
+                                               (Of_Unit, Id, Cell))
                                     then
                                        return (Kind => Field_Out_Of_Range,
                                                Item => Id, Block => Block,
@@ -3219,12 +3404,16 @@ package body Landin.IR.Verifier is
                                     end if;
 
                                     declare
+                                       Place : constant Storage :=
+                                         (if Is_Address (Of_Unit, Id, Cell)
+                                          then (Kind => Runtime_Address,
+                                                Address => Cell)
+                                          else (Kind => Frame_Slot,
+                                                Slot => Cell));
                                        Element : Landin.Types.Scalar_Name;
                                        Bad : constant Fault_Kind :=
                                          Scalar_Field_Of
-                                           (Id,
-                                            (Kind => Frame_Slot,
-                                             Slot => Cell),
+                                           (Id, Place,
                                             Field_Of (Of_Unit, Id, V),
                                             Path_Of
                                               (Of_Unit, Id, V),
@@ -3249,9 +3438,7 @@ package body Landin.IR.Verifier is
                                              Expected : constant
                                                Signature_Id :=
                                                Scalar_Field_Signature
-                                                 (Id,
-                                                  (Kind => Frame_Slot,
-                                                   Slot => Cell),
+                                                 (Id, Place,
                                                   Field_Of (Of_Unit, Id, V),
                                                   Path_Of (Of_Unit, Id, V));
                                              Actual : constant Signature_Id :=
@@ -3260,9 +3447,7 @@ package body Landin.IR.Verifier is
                                              Expected_Atoms : constant
                                                Atom_Set_Id :=
                                                Scalar_Field_Atoms
-                                                 (Id,
-                                                  (Kind => Frame_Slot,
-                                                   Slot => Cell),
+                                                 (Id, Place,
                                                   Field_Of (Of_Unit, Id, V),
                                                   Path_Of (Of_Unit, Id, V));
                                           begin
@@ -4087,6 +4272,107 @@ package body Landin.IR.Verifier is
                                          Value => V);
                               end if;
 
+                           when Pointer_Address =>
+                              if Result_Of (Of_Unit, Id, V)
+                                   /= Landin.Types.Usize
+                                or else Result_Of
+                                  (Of_Unit, Id,
+                                   Nth_Operand (Of_Unit, Id, V, 1))
+                                    /= Landin.Types.Usize
+                              then
+                                 return (Kind => Result_Disagrees,
+                                         Item => Id, Block => Block,
+                                         Value => V);
+                              end if;
+
+                           when Conversion =>
+                              if Result_Of (Of_Unit, Id, V)
+                                   not in Landin.Types.Integer_Name
+                                or else Result_Of
+                                  (Of_Unit, Id,
+                                   Nth_Operand (Of_Unit, Id, V, 1))
+                                    not in Landin.Types.Integer_Name
+                              then
+                                 return (Kind => Result_Disagrees,
+                                         Item => Id, Block => Block,
+                                         Value => V);
+                              end if;
+
+                           when Slice_Address =>
+                              if Field_Shape_Is_Malformed
+                                (Slice_Element_Shape (Of_Unit, Id, V),
+                                 Aggregate_Allowed => True)
+                              then
+                                 return (Kind => Field_Shape_Malformed,
+                                         Item => Id, Block => Block,
+                                         Value => V);
+                              elsif Result_Of (Of_Unit, Id, V)
+                                   /= Landin.Types.Usize
+                              then
+                                 return (Kind => Result_Disagrees,
+                                         Item => Id, Block => Block,
+                                         Value => V);
+                              end if;
+                              for Argument in 1 .. 4 loop
+                                 if Result_Of
+                                      (Of_Unit, Id,
+                                       Nth_Operand
+                                         (Of_Unit, Id, V, Argument))
+                                      /= Landin.Types.Usize
+                                 then
+                                    return (Kind => Result_Disagrees,
+                                            Item => Id, Block => Block,
+                                            Value => V);
+                                 end if;
+                              end loop;
+
+                           when Empty_Slice_Base =>
+                              if Field_Shape_Is_Malformed
+                                (Slice_Element_Shape (Of_Unit, Id, V),
+                                 Aggregate_Allowed => True)
+                              then
+                                 return (Kind => Field_Shape_Malformed,
+                                         Item => Id, Block => Block,
+                                         Value => V);
+                              elsif Result_Of (Of_Unit, Id, V)
+                                   /= Landin.Types.Usize
+                              then
+                                 return (Kind => Result_Disagrees,
+                                         Item => Id, Block => Block,
+                                         Value => V);
+                              end if;
+
+                           when Load_Indirect =>
+                              if Result_Of
+                                   (Of_Unit, Id,
+                                    Nth_Operand (Of_Unit, Id, V, 1))
+                                   /= Landin.Types.Usize
+                              then
+                                 return (Kind => Result_Disagrees,
+                                         Item => Id, Block => Block,
+                                         Value => V);
+                              end if;
+
+                           when Store_Indirect =>
+                              if Result_Of
+                                   (Of_Unit, Id,
+                                    Nth_Operand (Of_Unit, Id, V, 1))
+                                   /= Landin.Types.Usize
+                              then
+                                 return (Kind => Result_Disagrees,
+                                         Item => Id, Block => Block,
+                                         Value => V);
+                              end if;
+
+                           when Place_Address =>
+                              if Result_Of (Of_Unit, Id, V)
+                                   /= Landin.Types.Usize
+                              then
+                                 return (Kind => Result_Disagrees,
+                                         Item => Id, Block => Block,
+                                         Value => V);
+                              end if;
+
                            when Storage_Address =>
                               if Result_Of (Of_Unit, Id, V)
                                 /= Landin.Types.Usize
@@ -4152,14 +4438,32 @@ package body Landin.IR.Verifier is
                                        Bad : Fault_Kind;
                                     begin
                                        if Op_Of (Of_Unit, Id, Source)
+                                            = Slice_Address
+                                       then
+                                          if not Same_Shape
+                                            (Of_Unit,
+                                             Address_Shape (Of_Unit, Id, S),
+                                             Slice_Element_Shape
+                                               (Of_Unit, Id, Source))
+                                          then
+                                             return
+                                               (Kind =>
+                                                  Address_Value_Disagrees,
+                                                Item => Id, Block => Block,
+                                                Value => V);
+                                          end if;
+                                       elsif Op_Of (Of_Unit, Id, Source)
+                                            in Pointer_Address | Place_Address
+                                       then
+                                          null;
+                                       elsif Op_Of (Of_Unit, Id, Source)
                                             /= Storage_Address
                                        then
                                           return
                                             (Kind => Address_Value_Disagrees,
                                              Item => Id, Block => Block,
                                              Value => V);
-                                       end if;
-                                       if Storage_Address_Has_Index
+                                       elsif Storage_Address_Has_Index
                                          (Of_Unit, Id, Source)
                                        then
                                           Bad := Shape_Of
@@ -4409,11 +4713,18 @@ package body Landin.IR.Verifier is
 
                            when Store_Field =>
                               declare
+                                 Slot : constant Slot_Id :=
+                                   (if Reaches_A_Slot (Of_Unit, Id, V)
+                                    then Slot_Of (Of_Unit, Id, V)
+                                    else No_Slot);
                                  Place : constant Storage :=
                                    (if Reaches_A_Slot (Of_Unit, Id, V)
-                                    then (Kind => Frame_Slot,
-                                          Slot => Slot_Of
-                                            (Of_Unit, Id, V))
+                                      and then Is_Address
+                                        (Of_Unit, Id, Slot)
+                                    then (Kind => Runtime_Address,
+                                          Address => Slot)
+                                    elsif Reaches_A_Slot (Of_Unit, Id, V)
+                                    then (Kind => Frame_Slot, Slot => Slot)
                                     else (Kind => Module_Datum,
                                           Datum => Datum_Of
                                             (Of_Unit, Id, V)));

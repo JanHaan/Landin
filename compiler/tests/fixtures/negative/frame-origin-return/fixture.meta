@@ -1,0 +1,5 @@
+class: negative
+summary: a reference to frame storage cannot leave its function
+program: program.ldn
+codes: L0314
+constructs: 0430, 0770, 0790, 1800, 1810

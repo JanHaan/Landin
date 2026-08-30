@@ -26,6 +26,7 @@ package body Landin.Tests.Parser_Suite is
    use type Landin.Source.Source_Id;
    use type Landin.Syntax.Node_Id;
    use type Landin.Syntax.Node_Kind;
+   use type Landin.Syntax.Parameter_Convention;
    use type Fixtures.Fixture_Class;
 
    --  Relative to compiler/ada, which is where the harness runs.
@@ -1344,6 +1345,9 @@ package body Landin.Tests.Parser_Suite is
    procedure Parameterized_Alias_Errors_Keep_Grammar_Boundaries
      (Item : in out Landin.Testing.Context);
 
+   procedure Reference_Signature_Syntax_Is_Represented
+     (Item : in out Landin.Testing.Context);
+
    procedure Parameterized_Type_Aliases_Are_Parsed
      (Item : in out Landin.Testing.Context)
    is
@@ -1576,6 +1580,173 @@ package body Landin.Tests.Parser_Suite is
       end;
    end Parameterized_Structs_Are_Parsed;
 
+   --  R2.50's first increment is representation only.  This case keeps the
+   --  pointer/slice permission bit, parameter modifiers, return-source run,
+   --  generic signature positions, `addr` place and ordinary `.val` member
+   --  selection distinct without asking checking what any of them means.
+   procedure Reference_Signature_Syntax_Is_Represented
+     (Item : in out Landin.Testing.Context)
+   is
+      Sources : Landin.Source.Sets.Source_Set;
+      Names   : Landin.Source.Names.Table;
+      Stream  : Landin.Tokens.Token_Stream;
+      Found   : Landin.Diagnostics.Diagnostic_List;
+      Id      : constant Landin.Source.Source_Id :=
+        Sources.Add
+          ("references.ldn",
+           "item: type = u8" & ASCII.LF
+           & "callback: type = (escaping inout owner: ptr mut item,"
+           & " in source: []item, sink consumed: ptr item) ->"
+           & " (view: []mut item from owner, source)" & ASCII.LF
+           & "project: (t: type, fixed n: usize,"
+           & " escaping inout owner: ptr mut t, source: []t) ->"
+           & " (view: []mut t from owner, source) =" & ASCII.LF
+           & "    view = source" & ASCII.LF
+           & "end project" & ASCII.LF
+           & "pointer_list: type = holder(ptr mut item, []item)" & ASCII.LF
+           & "locate: (in value: item) -> (p: ptr item from value) ="
+           & ASCII.LF
+           & "    p = addr value.field.val" & ASCII.LF
+           & "end locate" & ASCII.LF
+           & "slice_forms: () -> none =" & ASCII.LF
+           & "    mut data: [2]u8 = [1, 2]" & ASCII.LF
+           & "    half: []mut u8 = data[0..<2]" & ASCII.LF
+           & "    full: []mut u8 = data[0..1]" & ASCII.LF
+           & "    empty: []u8 = []" & ASCII.LF
+           & "    pointer: ptr u8 = ptr(1)" & ASCII.LF
+           & "end slice_forms" & ASCII.LF);
+   begin
+      Landin.Tokens.Lexer.Lex (Sources.Get (Id), Names, Stream);
+      Landin.Diagnostics.Lexical.Report (Stream, Found);
+
+      declare
+         Parsed : constant Landin.Syntax.Tree :=
+           Landin.Syntax.Parser.Parse (Stream, Names, Found);
+         Callback : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Declared_Type
+             (Parsed, Landin.Syntax.Nth_Declaration (Parsed, 2));
+         Owner : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Nth_Parameter (Parsed, Callback, 1);
+         Source : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Nth_Parameter (Parsed, Callback, 2);
+         Consumed : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Nth_Parameter (Parsed, Callback, 3);
+         Result_Node : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Nth_Return (Parsed, Callback, 1);
+         Result_Type : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Declared_Type (Parsed, Result_Node);
+         Project : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Nth_Declaration (Parsed, 3);
+         Application : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Declared_Type
+             (Parsed, Landin.Syntax.Nth_Declaration (Parsed, 4));
+         Address : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Nth_Declaration (Parsed, 5);
+         Runs : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Body_Of (Parsed, Address);
+         Assignment : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Nth_Statement (Parsed, Runs, 1);
+         Address_Expression : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Value_Of (Parsed, Assignment);
+         Pointee : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Operand_Of (Parsed, Address_Expression);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Landin.Diagnostics.Count (Found), 0,
+            "reference signature syntax parses without a report");
+         Landin.Testing.Check
+           (Item,
+            Landin.Syntax.Kind (Parsed, Callback)
+              = Landin.Syntax.Function_Type
+            and then Landin.Syntax.Kind
+              (Parsed, Landin.Syntax.Declared_Type (Parsed, Owner))
+                = Landin.Syntax.Pointer_Type
+            and then Landin.Syntax.Is_Referent_Mutable
+              (Parsed, Landin.Syntax.Declared_Type (Parsed, Owner))
+            and then Landin.Syntax.Is_Escaping (Parsed, Owner)
+            and then Landin.Syntax.Convention_Of (Parsed, Owner)
+              = Landin.Syntax.Inout_Convention
+            and then Landin.Syntax.Convention_Of (Parsed, Source)
+              = Landin.Syntax.Explicit_In
+            and then Landin.Syntax.Convention_Of (Parsed, Consumed)
+              = Landin.Syntax.Sink_Convention,
+            "pointer permission and all written parameter modifiers remain");
+         Landin.Testing.Check
+           (Item,
+            Landin.Syntax.Kind (Parsed, Result_Type)
+              = Landin.Syntax.Slice_Type
+            and then Landin.Syntax.Is_Referent_Mutable
+              (Parsed, Result_Type)
+            and then Landin.Syntax.Return_Source_Count
+              (Parsed, Result_Node) = 2,
+            "a mutable slice return retains both ordered source labels");
+         Landin.Testing.Check
+           (Item,
+            Landin.Syntax.Generic_Formal_Count (Parsed, Project) = 2
+            and then Landin.Syntax.Parameter_Count (Parsed, Project) = 2,
+            "generic and runtime signature positions remain separate");
+         Landin.Testing.Check
+           (Item,
+            Landin.Syntax.Kind (Parsed, Application)
+              = Landin.Syntax.Type_Application
+            and then Landin.Syntax.Kind
+              (Parsed,
+               Landin.Syntax.Nth_Type_Argument (Parsed, Application, 1))
+                 = Landin.Syntax.Pointer_Type
+            and then Landin.Syntax.Kind
+              (Parsed,
+               Landin.Syntax.Nth_Type_Argument (Parsed, Application, 2))
+                 = Landin.Syntax.Slice_Type,
+            "pointer and slice types remain positional generic arguments");
+         Landin.Testing.Check
+           (Item,
+            Landin.Syntax.Kind (Parsed, Address_Expression)
+              = Landin.Syntax.Address_Of
+            and then Landin.Syntax.Kind (Parsed, Pointee)
+              = Landin.Syntax.Member_Selection
+            and then Landin.Source.Names.Spelling
+              (Names, Landin.Syntax.Name (Parsed, Pointee)) = "val",
+            "addr retains a place whose val is ordinary member selection");
+         declare
+            Half, Full, Empty, Converted : Natural := 0;
+         begin
+            for Node in Landin.Syntax.Node_Id'(1)
+              .. Landin.Syntax.Last_Node (Parsed)
+            loop
+               case Landin.Syntax.Kind (Parsed, Node) is
+                  when Landin.Syntax.Half_Open_Slice => Half := Half + 1;
+                  when Landin.Syntax.Inclusive_Slice => Full := Full + 1;
+                  when Landin.Syntax.Empty_Slice_Literal => Empty := Empty + 1;
+                  when Landin.Syntax.Pointer_Conversion =>
+                     Converted := Converted + 1;
+                  when others => null;
+               end case;
+            end loop;
+            Landin.Testing.Check
+              (Item,
+               Half = 1 and then Full = 1 and then Empty = 1
+               and then Converted = 1,
+               "slice bounds, empty slice and ptr conversion stay distinct");
+         end;
+      end;
+
+      declare
+         Codes : Unbounded.Unbounded_String;
+         Total : Natural;
+         Nodes : Natural;
+         Held  : Boolean;
+      begin
+         Read_And_Parse
+           ("broken: (escaping inout value: ptr mut) ->"
+            & " (result: []mut u8 from) = end broken" & ASCII.LF
+            & "next: type = ptr u8" & ASCII.LF,
+            Codes, Total, Nodes, Held);
+         Landin.Testing.Check
+           (Item, Held and then Nodes > 0 and then Total >= 1,
+            "missing referents and from names recover into a sound tree");
+      end;
+   end Reference_Signature_Syntax_Is_Represented;
+
    procedure Parameterized_Alias_Errors_Keep_Grammar_Boundaries
      (Item : in out Landin.Testing.Context)
    is
@@ -1688,6 +1859,9 @@ package body Landin.Tests.Parser_Suite is
       Landin.Testing.Register
         (Into, "parser", "parameterized aliases keep grammar boundaries",
          Parameterized_Alias_Errors_Keep_Grammar_Boundaries'Access);
+      Landin.Testing.Register
+        (Into, "parser", "reference signature syntax is represented",
+         Reference_Signature_Syntax_Is_Represented'Access);
       Landin.Testing.Register
         (Into, "parser", "reports carry the pinned codes",
          Reports_Carry_The_Pinned_Codes'Access);

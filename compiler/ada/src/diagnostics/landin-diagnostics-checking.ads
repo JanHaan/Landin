@@ -7,15 +7,15 @@
 --  against that code's row before it leaves, and the stage that found the
 --  fault therefore contains no code at all.
 --
---  Fourteen rules, each with its own paragraph in the specification, because
+--  Seventeen rules, each with its own paragraph in the specification, because
 --  none of them could be read out of the older ones.  [1880] says where a
 --  literal's type comes from and that a value the type does not hold is
 --  refused; [1890] says what each operator takes and gives; [1900] says
 --  what may be written; [1910] says a name must be assigned by every path
 --  that reaches a read; [1920] says what a call means and what a name may
 --  be used as; [1950] says which operand an operation cannot take; [1795]
---  says an alias chain has to reach a type; and [0750] says a struct has
---  the fields it was declared with, which is what a selection may name.
+--  says an alias chain has to reach a type; [0750] says what a struct may
+--  select; and [0770]--[0830] supply escape, borrow and source-drift rules.
 --
 --  Impossible_Operand is the operand half of what Literal_Out_Of_Range is
 --  the result half of, and the two must not be merged.  A literal out of
@@ -75,7 +75,10 @@ package Landin.Diagnostics.Checking is
       Field_Not_Given,
       Variant_Case_Named_Twice,
       Variant_Case_Not_Matched,
-      Recursive_Nominal_Value);
+      Recursive_Nominal_Value,
+      Reference_Escapes,
+      Borrowed_Place,
+      Return_Sources_Disagree);
 
    function Code_For (Item : Failure)
      return Landin.Diagnostics.Catalogue.Code_Name
@@ -107,7 +110,13 @@ package Landin.Diagnostics.Checking is
             when Variant_Case_Not_Matched =>
                Catalogue.Variant_Case_Not_Matched,
             when Recursive_Nominal_Value =>
-               Catalogue.Recursive_Nominal_Value);
+               Catalogue.Recursive_Nominal_Value,
+            when Reference_Escapes =>
+               Catalogue.Reference_Escapes,
+            when Borrowed_Place =>
+               Catalogue.Borrowed_Place,
+            when Return_Sources_Disagree =>
+               Catalogue.Return_Sources_Disagree);
 
    --  The constructs the tour describes, the kernel omits, and only the
    --  checker can recognise, because recognising one means knowing what a

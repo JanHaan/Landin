@@ -1,0 +1,7 @@
+consume: (sink value: u32) -> none =
+    _ = value
+end consume
+
+bad: (pointer: ptr mut u32) -> none =
+    consume(pointer.val)
+end bad

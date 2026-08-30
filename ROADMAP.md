@@ -2447,7 +2447,7 @@ array bound remain covered; no user code executes during compilation.
 
 ### R2.50 — Implement references and local lifetime checks
 
-Status: active
+Status: complete
 Depends on: R2.20, R2.30
 
 Implement pointers, slices, permissions, origins, `escaping`, `from`, local
@@ -2459,12 +2459,68 @@ layout: only the one-atom case may assume the plain-pointer zero encoding
 
 Sources: `[0430]`, `[0470]`, `[0770]`, `[0790]`, `[0830]`, `[0900]`, `[0910]`.
 
-Exit evidence: the origin/borrow corpus includes required spans and notes;
-accepted escape cases and deliberately unchecked boundaries remain explicit.
+The first vertical increment is syntax foundation only. The enabled grammar,
+reserved vocabulary, recovering parser and syntax table represent `ptr [mut]
+T`, `[] [mut] T`, `addr` over a place, ordinary `.val` selection, explicit and
+implicit `in`, `inout`, `sink`, `escaping`, and ordered `from` sources on named
+returns. Resolution associates each retained `from` name with its runtime
+parameter position for declared, anonymous and written function signatures.
+D140 fixes the otherwise unstated modifier order. This increment deliberately
+adds no reference type checking, permission or lifetime rule, origin/borrow
+analysis, consume checking, IR operation, ABI carrier, backend emission, or
+full-pipeline fixture; later R2.50 increments own all of those.
+
+The second increment makes references complete checked types. Pointer and slice
+descriptors retain their recursive referred type and shallow permission through
+aliases, fields, generic actuals and recursive function signatures. `mut`
+relaxes only to read-only. Pointer fields occupy one target pointer carrier;
+slice fields occupy a target-aligned base/length pair. One-atom pointer unions
+measure as the zero-optimized pointer carrier, while two-or-more-atom forms
+replay the ordinary tag-plus-payload placement on both synthetic-32 and Linux
+x86-64 descriptions. `addr`, `.val`, slice ranges, indexing, `lenof`, the
+contextual empty slice, `ptr(integer)` and pointer-to-integer conversion are
+checked without asking the host for a width.
+
+The third increment gives conventions and references their executable carrier.
+`inout` passes one internal address on register or stack and reads and writes
+the caller's scalar, pointer, array or aggregate place; `sink` remains a value
+carrier and kills the exact caller place until assignment. Verified IR carries
+indirect scalar loads/stores, checked slice-address formation, canonical empty
+slice bases, conversions, semantic conventions, `escaping`, and ordered return
+source positions. The Linux x86-64 backend derives every pointer width, slice
+stride, field offset and fit check from target facts. The runtime reference
+composition fixture crosses pointer and aggregate dereference, direct and
+aggregate `inout`, writable and relaxed slices, empty slices and both integer
+conversion directions.
+
+The fourth increment is the local lifetime pass. Values carry only frame and
+symbolic parameter origins plus local derivation identities; integer-created
+pointers explicitly leave that analysis. Every return edge agrees exactly with
+its declared `from` positions, frame origins cannot return or reach an
+`escaping` use, and a live derived view prevents `inout` or `sink` on its source
+until that view is replaced. Sunk binding-rooted paths reject reads until
+assignment, including branch joins, and a part sunk out of `inout` must be live
+again on every return edge. This remains the deliberately local check [0860]
+rather than ownership, regions or an interprocedural borrow checker.
+
+Exit evidence: parser, resolution, checking, flow, lowering, IR, verifier,
+backend, target-layout and fixture suites pass. `negative/frame-origin-return`,
+`returned-reference-missing-from`, `escaping-frame-reference`,
+`borrowed-source-inout`, `use-after-sink`, `sunk-inout-not-restored`,
+`readonly-slice-write` and `sink-through-dereference` pin the diagnostic rules,
+primary spans, related sources and notes. `positive/reference-origins-and-consume`
+pins accepted derivation, unsafe integer origin termination, retaking a view and
+reviving a sunk place. `runtime/r250-references` composes scalar and aggregate
+pointer dereference, direct and aggregate `inout`, writable and relaxed slices,
+inclusive/half-open bounds, empty local and static slices, static pointer and
+slice fields, pointer/integer conversion and pointer/slice size and alignment.
+The checker measures one-atom and two-atom pointer unions under both synthetic
+32-bit and Linux x86-64 facts. The complete pinned Linux x86-64 gate passes 374
+cases and 8,181 checks, including every runtime fixture.
 
 ### R2.60 — Implement concepts and conformance collection
 
-Status: planned
+Status: active
 Depends on: R2.20, R2.40
 
 Implement concepts, parameterized conformances, whole-program collision

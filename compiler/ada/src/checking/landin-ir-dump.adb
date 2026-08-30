@@ -727,10 +727,19 @@ package body Landin.IR.Dump is
                if Index > 1 then
                   Unbounded.Append (Parameters, ", ");
                end if;
-               Unbounded.Append
-                 (Parameters,
-                  Signature_Part_Text
-                    (Nth_Signature_Parameter (Of_Unit, Id, Index)));
+               declare
+                  Part : constant Signature_Part :=
+                    Nth_Signature_Parameter (Of_Unit, Id, Index);
+               begin
+                  Unbounded.Append
+                    (Parameters,
+                     (if Part.Escaping then "escaping " else "")
+                     & (case Part.Convention is
+                           when In_Value => "in ",
+                           when Inout_Place => "inout ",
+                           when Sink_Value => "sink ")
+                     & Signature_Part_Text (Part));
+               end;
             end loop;
             for Index in 1 .. Signature_Result_Count (Of_Unit, Id) loop
                if Index > 1 then
@@ -740,6 +749,21 @@ package body Landin.IR.Dump is
                  (Results,
                   Signature_Part_Text
                     (Nth_Signature_Result (Of_Unit, Id, Index)));
+               if Signature_Return_Source_Count (Of_Unit, Id, Index) > 0
+               then
+                  Unbounded.Append (Results, " from");
+                  for Source in
+                    1 .. Signature_Return_Source_Count (Of_Unit, Id, Index)
+                  loop
+                     Unbounded.Append
+                       (Results,
+                        (if Source = 1 then " " else ", ")
+                        & Trimmed
+                          (Positive'Image
+                             (Nth_Signature_Return_Source
+                                (Of_Unit, Id, Index, Source))));
+                  end loop;
+               end if;
             end loop;
             Put
               ("signature " & Trimmed (Signature_Id'Image (Id))

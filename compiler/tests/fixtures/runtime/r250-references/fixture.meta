@@ -1,0 +1,6 @@
+class: runtime
+summary: pointers, slices, conversions and inout share the target-parametric reference carriers
+constructs: 0070, 0360, 0370, 0430, 0440, 0450, 0460, 0470, 0570, 0580, 0900, 1800, 1810, 1820
+program: main.ldn
+status: 42
+targets: linux-x86-64
