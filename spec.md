@@ -7691,10 +7691,18 @@ declared integer type. Fixed ranges are validated after the complete tuple is
 known. After deduction or explicit saturation, substitution builds the concrete
 runtime signature and ordinary call checking applies that signature. A generic
 routine may write a concrete declared atom error set; substitution carries it
-on the instance signature, and call recovery, `try`, `fail`, `defer`, and `undo`
-use the ordinary error and cleanup machinery. Per-instance `! ...` inference is
-explicitly deferred and refused at the inferred-set syntax with a source
-diagnostic.
+on the instance signature and bounds callers exactly like an ordinary declared
+set. For private `! ...`, the template itself still has no signature. Each
+concrete routine identity instead publishes an initially inferred signature,
+then contributes its directly failed atoms and its instance-view call targets
+to the whole-program least fixed point. Calls from or to ordinary routines and
+same- or different-key generic instances use one graph; direct and mutual
+same-key recursion therefore close without syntax recursion. Equal keys share
+one inferred set, while unequal keys retain separate signatures and may settle
+to different sets. An empty result becomes infallible; a nonempty result becomes
+a concrete atom set before body checking resumes and before lowering. Call
+recovery, `try`, `fail`, `defer`, and `undo` then use only that finalized
+ordinary descriptor.
 
 The checker interns an opaque routine identity from the source template and
 complete normalized actual tuple. Equal keys reuse one identity; unequal keys
@@ -7718,9 +7726,10 @@ and calls, including atom sets, function signatures and nominal aggregate
 transport/layout. Recursive structural deduction changes no descriptor,
 transport, layout or ABI rule: static arguments have no synthesis, evaluation,
 flow fact, cleanup, IR value or ABI position, and lowering maps only written
-runtime arguments to runtime formals. A direct type formal still cannot bind an
-inferred function descriptor, because that descriptor is not yet a complete
-actual key; per-instance error inference remains separate.
+runtime arguments to runtime formals. A direct type formal still cannot bind a
+function descriptor whose error graph is currently inferred, because it is not
+yet a complete actual key. A generic template itself remains unavailable as a
+function value: only a direct call chooses the concrete instance signature.
 
 **Why an instance view:** writing `t = u8` on the template declaration or its
 nodes makes a later `t = i32` call overwrite the first. Resetting shared tables
@@ -7733,7 +7742,8 @@ facts`, the lowering case `generic routines lower once per key`,
 `negative/generic-routine-repeated-deduction-conflict`,
 `negative/generic-routine-undeduced-formal`,
 `negative/generic-routine-infinite-expansion`,
-`negative/generic-routine-inferred-errors-deferred`,
+`negative/generic-inferred-error-unhandled`,
+`negative/generic-inferred-template-not-function-value`,
 `negative/generic-routine-unused-unconditional-defect`,
 `negative/generic-computed-pattern-undeduced`,
 `negative/generic-explicit-computed-pattern-mismatch`,
@@ -7746,8 +7756,11 @@ facts`, the lowering case `generic routines lower once per key`,
 `runtime/generic-direct-descriptor-deduction`,
 `runtime/generic-structural-deduction`,
 `runtime/generic-zero-nominal-array-signatures`,
-`runtime/generic-declared-errors`, and
-`runtime/generic-same-key-recursion` on Linux x86-64.
+`runtime/generic-declared-errors`,
+`runtime/generic-routine-inferred-errors`, and
+`runtime/generic-same-key-recursion` on Linux x86-64. The malformed-error
+verifier case uses a generic-instance item to pin that only the finalized
+concrete signature and ordinary failure opcode reach neutral IR.
 
 ### D139 — Fixed conditionals select module declarations without execution
 

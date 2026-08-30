@@ -1,0 +1,105 @@
+problem, denied: atom
+problems: type = problem | denied
+only_problem: type = problem
+only_denied: type = denied
+
+mut trace: i32 = 0
+
+mark: (value: i32) -> none =
+    trace = trace * 10 + value
+end mark
+
+leaf: (which: i32) -> none ! only_denied =
+    fail denied when which == 2
+end leaf
+
+choose: (t: type, value: t, which: i32) -> (result: t) ! ... =
+    defer mark(1)
+    undo mark(2)
+    fail problem when which == 1
+    try leaf(which)
+    result = value
+end choose
+
+relay: (t: type, value: t, which: i32) -> (result: t) ! ... =
+    result = try choose(value, which)
+end relay
+
+ordinary_forward: (value: i32, which: i32) -> (result: i32) ! ... =
+    result = try relay(value, which)
+end ordinary_forward
+
+recovering: (t: type, value: t) -> (result: t) ! ... =
+    result = choose(value, 1) else (error)
+        match error
+            problem: value
+            _: value
+        end match
+    end
+end recovering
+
+miss: (stop: bool) -> none ! only_problem =
+    fail problem when stop
+end miss
+
+deny: (stop: bool) -> none ! only_denied =
+    fail denied when stop
+end deny
+
+invoke: (f: type, action: f, stop: bool) -> none ! ... =
+    try action(stop)
+end invoke
+
+left: (t: type, value: t, count: i32) -> (result: t) ! ... =
+    fail problem when count == 1
+    result = if count == 0 then value else try right(value, count - 1) end if
+end left
+
+right: (t: type, value: t, count: i32) -> (result: t) ! ... =
+    fail denied when count == 1
+    result = if count == 0 then value else try left(value, count - 1) end if
+end right
+
+countdown: (t: type, value: t, count: i32) -> (result: t) ! ... =
+    fail problem when count < 0
+    result = if count == 0 then value
+             else try countdown(value, count - 1) end if
+end countdown
+
+public main: () -> (code: i32) =
+    trace = 0
+    direct := choose(40, 1) else (error)
+        match error
+            problem: 40
+            _: 0
+        end match
+    end
+    direct_ok: bool = direct == 40 and trace == 21
+
+    trace = 0
+    propagated := ordinary_forward(40, 2) else 40
+    propagated_ok: bool = propagated == 40 and trace == 21
+
+    trace = 0
+    recovered: i32 = recovering(42)
+    recovered_ok: bool = recovered == 42 and trace == 21
+
+    trace = 0
+    successful: bool = relay(false, 0) else true
+    success_ok: bool = not successful and trace == 1
+
+    invoke(miss, true) else 0
+    invoke(deny, true) else 0
+    invoke(miss, false) else 0
+
+    mutual: i32 = left(42, 0) else 0
+    recursive: i32 = countdown(42, 3) else 0
+
+    if direct_ok and propagated_ok and recovered_ok and success_ok
+       and mutual == 42 and recursive == 42
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

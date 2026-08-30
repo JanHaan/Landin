@@ -2249,7 +2249,7 @@ layout facts.
 
 ### R2.40 — Implement fixed parameters and compile-time substitution
 
-Status: active
+Status: complete
 Depends on: R2.10, R1.50
 
 Implement type and fixed parameters, substitution, constant array lengths,
@@ -2346,11 +2346,19 @@ written, every static formal is named and the tuple is ordered by declaration;
 runtime arguments remain [0980]'s positional prefix and named suffix. Fixed
 conditional declaration lists are D139's completed increment.
 Deduction does not use return context or constraint lookup. Concrete declared
-atom error sets are substituted onto each instance signature and use the
-ordinary call, recovery, `try`, `fail`, `defer`, and `undo` machinery;
-per-instance `! ...` inference remains explicitly refused with a source
-diagnostic. No correctness step executes a user routine. R2.70 remains the owner of shared generic
-evidence and R4.50 the owner of choosing specialisation as an optimisation.
+atom error sets are substituted onto each instance signature and bound the
+ordinary call graph. A private generic `! ...` template has no standalone
+signature; every interned routine identity publishes an initially inferred
+signature, scans the shared body through its own fact overlay and joins ordinary
+and generic callees in one deterministic least fixed point. Call targets come
+from that active overlay, including same-key direct and mutual recursion and
+calls across different templates or keys. Equal keys share one node; unequal
+keys retain separate finalized sets when their concrete callees differ. Empty
+sets become infallible and nonempty sets become concrete before body checking,
+recovery, cleanup, lowering, verification or backend emission. No static ABI
+position or generic error operation is introduced. No correctness step executes
+a user routine. R2.70 remains the owner of shared generic evidence and R4.50
+the owner of choosing specialisation as an optimisation.
 
 D139's completed increment now enables target-selected fixed conditional
 declaration lists. It parses every arm immutably, then a compilation-owned
@@ -2392,13 +2400,13 @@ including reordered side effects and differing declaration/type labels; the
 `negative/function-type-parameter-name-duplicate` fixtures pin the refusal
 surface. D72 construction projections remain unchanged.
 
-The structural generic-routine deduction surface is now closed: its known
-remaining semantic gap is per-instance `! ...` inference, whose descriptors
-cannot become routine actual keys until that inference is solved in the
-instance view. R2.40 remains active rather than claiming completion before that
-last increment and its complete evidence set are closed. D138's implemented
-deduction does not use return context, constraint lookup or arithmetic
-inversion. Parameterised nominal types
+The structural generic-routine deduction surface is closed together with its
+per-instance error graph. Inferred instance signatures are finalized in place,
+so body checking and lowering cannot observe a stale `No_Atom_Set`; generic
+recovery bindings are settled in the concrete caller view. A template still has
+no standalone function value or guessed instance, and inactive D139 templates
+remain absent. D138's implemented deduction does not use return context,
+constraint lookup or arithmetic inversion. Parameterised nominal types
 and generic routines already receive identities derived from a template and
 normalised actual tuple rather than reusing one source declaration identity for
 unequal instances. No correctness step executes a user routine. R2.70 remains
@@ -2427,9 +2435,12 @@ parts, a fixed formal bound in one relation followed by an exact computed-bound
 check in another, explicit
 computed checks, same-key recursion, repeated nested type/fixed-formal
 conflicts, no-inversion undeduced formals, wrong nominal templates, non-finite
-unequal-key recursion, declared error propagation/recovery/failure cleanup,
-safe refusal of inferred generic errors, unconditional unused-template defects,
-and absence of static ABI positions. Direct and
+unequal-key recursion, declared and inferred per-instance error propagation,
+call-site recovery, ordinary/generic and generic/generic fixed-point seams,
+direct and mutual same-key recursion, unequal function-signature keys with
+distinct inferred sets, finalized infallible instances, failure cleanup,
+template-not-function-value refusal, unconditional unused-template defects,
+and absence of static ABI positions or generic error IR. Direct and
 expression-folded zero lengths and a syntactically valid rejected call in an
 array bound remain covered; no user code executes during compilation.
 
