@@ -13,18 +13,12 @@ One target range, and the same way of writing code across all of it: a
 Cortex-M0 with 32 KB of flash at one end, a hosted desktop application
 at the other.
 
-**Status: specification 0.1.0. R0, R1, R2.20, R2.30 and R2.40 are complete.
-`refine` scans, parses, resolves names, checks types and definite
-assignment, lowers and verifies target-neutral IR, emits Linux x86-64
-assembly, and can assemble and link a hosted executable. Runtime fixtures run
-those binaries on the native x86-64 gate. The enabled kernel includes scalars,
-fixed arrays, parameterized aliases and nominal structs, exact generic routine
-instances with uniform named arguments and per-instance errors, target-selected
-fixed declarations, recursively nested ordinary structs, unfolded variants,
-checked whole aggregate elements at computed indexes, first-class function
-signatures with declared atom errors, expression-valued non-loop control flow,
-and lexical `defer`/failure-only `undo`; native macOS
-arm64, Cortex-M and the standard library remain future work.**
+**Status: specification 0.1.0. The compiler can build and run Landin programs
+for 64-bit Linux. It already handles functions, user-defined data types,
+generic routines, pointers, errors and control flow. The repository includes
+complete Fibonacci and sorting programs that are compiled and tested
+automatically. Support for macOS, microcontrollers and a standard library is
+still to come.**
 
 ## What is here
 
