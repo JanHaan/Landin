@@ -1,0 +1,46 @@
+red, blue: atom
+colors: type = red | blue
+missing: atom
+problems: type = missing
+
+point: type = struct
+    x: i32
+    y: i32
+end point
+
+other: type = struct
+    x: i32
+    y: i32
+end other
+
+unary: type = (value: i32) -> (result: i32)
+predicate: type = (value: i32) -> (result: bool)
+
+double: (value: i32) -> (result: i32) = value * 2 end double
+positive: (value: i32) -> (result: bool) = value > 0 end positive
+
+identity: (t: type, value: t) -> (result: t) =
+    result = value
+end identity
+
+public main: () -> (code: i32) =
+    color: colors = red
+    copied_color: colors = identity(color)
+    problem: problems = missing
+    copied_problem: problems = identity(problem)
+    operation: unary = identity(double)
+    test: predicate = identity(positive)
+    first: point = point(x: 20, y: 22)
+    copied_first: point = identity(first)
+    second: other = other(x: 19, y: 23)
+    copied_second: other = identity(second)
+    if copied_color == red and copied_problem == missing
+       and operation(20) == 40 and test(1)
+       and copied_first.x + copied_first.y == 42
+       and copied_second.x + copied_second.y == 42
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

@@ -4858,6 +4858,27 @@ package body Landin.Stages.Checking is
                       (Template_Tree.all, Function_Node, Index);
                begin
                   if Syn.Kind (Template_Tree.all, Formal_Node)
+                       = Syn.Type_Formal
+                    and then Bound (Index).Value.Kind = Ty.Function_Value
+                    and then Landin.Checking.Signature_Error_Form
+                      (Types.all, Bound (Index).Value.Signature)
+                        = Landin.Checking.Inferred
+                  then
+                     Bad.Report
+                       (Item    => Bad.Type_Mismatch,
+                        Source  => Syn.Source_Of (Caller_Tree),
+                        Where   => Syn.Where (Caller_Tree, Call),
+                        Message => "this call cannot deduce a function type"
+                                   & " whose error set is still inferred",
+                        Note    => "D138 direct function descriptors must"
+                                   & " already be concrete; per-instance"
+                                   & " inference remains deferred",
+                        Related => Syn.Origin
+                          (Template_Tree.all, Formal_Node),
+                        Because => "the direct function type formal",
+                        Into    => Found);
+                     Good := False;
+                  elsif Syn.Kind (Template_Tree.all, Formal_Node)
                        = Syn.Fixed_Formal
                   then
                      declare
