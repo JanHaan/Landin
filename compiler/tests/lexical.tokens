@@ -16272,6 +16272,50 @@ file negative/generic-routine-inferred-errors-deferred/program.ldn tokens 52
   177 178 0
   179 182 end
   183 187 main
+file negative/generic-routine-inferred-module-conflict/program.ldn tokens 43
+  0 4 same
+  4 5 :
+  6 7 (
+  7 8 t
+  8 9 :
+  10 14 type
+  14 15 ,
+  16 20 left
+  20 21 :
+  22 23 t
+  23 24 ,
+  25 30 right
+  30 31 :
+  32 33 t
+  33 34 )
+  35 37 ->
+  38 39 (
+  39 45 result
+  45 46 :
+  47 48 t
+  48 49 )
+  50 51 =
+  52 56 left
+  57 60 end
+  61 65 same
+  67 72 small
+  72 73 :
+  74 76 u8
+  77 78 =
+  79 80 7
+  81 85 wide
+  85 86 :
+  87 90 i32
+  91 92 =
+  93 94 9
+  95 101 result
+  102 104 :=
+  105 109 same
+  109 110 (
+  110 115 small
+  115 116 ,
+  117 121 wide
+  121 122 )
 file negative/generic-routine-infinite-expansion/program.ldn tokens 52
   0 6 expand
   6 7 :
