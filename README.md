@@ -18,10 +18,12 @@ at the other.
 assignment, lowers and verifies target-neutral IR, emits Linux x86-64
 assembly, and can assemble and link a hosted executable. Runtime fixtures run
 those binaries on the native x86-64 gate. The enabled kernel includes scalars,
-fixed arrays, recursively nested ordinary structs, unfolded variants, checked
-whole aggregate elements at computed indexes, first-class function signatures
-with declared atom errors, expression-valued non-loop control flow, and lexical
-`defer`/failure-only `undo`; native macOS
+fixed arrays, parameterized aliases and nominal structs, exact generic routine
+instances with uniform named arguments and per-instance errors, target-selected
+fixed declarations, recursively nested ordinary structs, unfolded variants,
+checked whole aggregate elements at computed indexes, first-class function
+signatures with declared atom errors, expression-valued non-loop control flow,
+and lexical `defer`/failure-only `undo`; native macOS
 arm64, Cortex-M and the standard library remain future work.**
 
 ## What is here
@@ -148,6 +150,9 @@ R2.30's functions, control-flow expressions, lexical cleanup, declared errors
 and internal aggregate ABI are complete. R2.40's fixed parameters,
 compile-time substitution, generic routine instances, fixed conditional
 selection and per-instance inferred errors are complete.
+
+**Current roadmap work: R2.50 — Implement references and local lifetime checks.**
+
 Language and architecture questions are resolved when the first vertical
 slice needs them.
 

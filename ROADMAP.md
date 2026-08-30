@@ -2447,7 +2447,7 @@ array bound remain covered; no user code executes during compilation.
 
 ### R2.50 — Implement references and local lifetime checks
 
-Status: planned
+Status: active
 Depends on: R2.20, R2.30
 
 Implement pointers, slices, permissions, origins, `escaping`, `from`, local
