@@ -1,0 +1,49 @@
+--  A run is the value together with the number of adjacent copies.  The
+--  caller supplies output storage as large as the input, so it always fits.
+run: type = struct
+    value: i32
+    count: usize
+end run
+
+encode_from: (input: []i32, output: []mut run,
+              read_at: usize, write_at: usize) -> (used: usize) =
+    if read_at >= lenof input then
+        used = write_at
+    elsif write_at > 0
+      and output[write_at - 1].value == input[read_at]
+    then
+        output[write_at - 1].count = output[write_at - 1].count + 1
+        used = encode_from(input, output, read_at + 1, write_at)
+    else
+        output[write_at] = run(value: input[read_at], count: 1)
+        used = encode_from(input, output, read_at + 1, write_at + 1)
+    end if
+end encode_from
+
+encode: (input: []i32, output: []mut run) -> (used: usize) =
+    used = encode_from(input, output, 0, 0)
+end encode
+
+public main: () -> (code: i32) =
+    input: [10]i32 = [1, 1, 1, 2, 2, -5, 4, 4, 4, 4]
+    mut output: [10]run = zeroed
+    input_view: []i32 = input[0..<lenof input]
+    output_view: []mut run = output[0..<lenof output]
+    used: usize = encode(input_view, output_view)
+
+    empty_input: []i32 = []
+    mut empty_output: [0]run = zeroed
+    empty_output_view: []mut run = empty_output[0..<lenof empty_output]
+
+    if used == 4
+      and output[0].value == 1 and output[0].count == 3
+      and output[1].value == 2 and output[1].count == 2
+      and output[2].value == -5 and output[2].count == 1
+      and output[3].value == 4 and output[3].count == 4
+      and encode(empty_input, empty_output_view) == 0
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

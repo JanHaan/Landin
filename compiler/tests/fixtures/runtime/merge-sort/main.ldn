@@ -3,10 +3,10 @@
 mut values: [8]i32 = [-12, 5, 0, 99, 5, 2, -3, 18]
 mut work: [8]i32
 
-copy_to_work: (at: usize, right: usize) -> none =
-    if at < right then
-        work[at] = values[at]
-        copy_to_work(at + 1, right)
+copy_to_work: (index: usize, right: usize) -> none =
+    if index < right then
+        work[index] = values[index]
+        copy_to_work(index + 1, right)
     end if
 end copy_to_work
 

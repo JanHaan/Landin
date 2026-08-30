@@ -1,0 +1,6 @@
+class: runtime
+summary: run-length encoding recursively transforms a read-only slice into caller-owned structured runs
+constructs: 0290, 0520, 0570, 0670, 1800, 1810, 1820, 1920, 1970
+program: main.ldn
+status: 42
+targets: linux-x86-64
