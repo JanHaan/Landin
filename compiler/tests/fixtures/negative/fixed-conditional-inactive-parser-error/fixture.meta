@@ -1,0 +1,5 @@
+class: negative
+summary: D139 still reports a parser error in an inactive fixed arm
+program: program.ldn
+codes: L0103
+constructs: 1500

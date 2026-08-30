@@ -1,0 +1,13 @@
+fixed if compiler.arch == x86_64 then
+    copy: (t: type, value: t) -> (result: t) = value end copy
+else
+    wrong: (t: type, value: t) -> (result: t) =
+        _ = 1 / 0
+        result = value
+    end wrong
+end if
+
+public main: () -> (code: i32) =
+    value: i32 = copy(42)
+    code = value
+end main

@@ -1017,6 +1017,67 @@ item 2 DATUM second result array params 0 slots 0 blocks 1 values 1
   elements 0 of u16
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
+file positive/fixed-conditional-cross-file-forward/main.ldn
+unit signatures 1 items 2
+signature 1 () -> i32
+item 1 ROUTINE main result i32 signature 1 params 0 slots 1 blocks 1 values 4
+  slot 1 code i32 return
+  block 1 scope 3 BLOCK length 4
+    1 LOAD_DATUM i32 datum 2 selected
+    2 STORE slot 1 <- 1
+    3 LOAD i32 slot 1
+    4 LEAVE <- 3
+item 2 DATUM selected result i32 params 0 slots 0 blocks 1 values 2
+  block 1 scope 1 PROGRAM length 2
+    1 NUMBER i32 42
+    2 LEAVE <- 1
+file positive/fixed-conditional-exclusive-duplicates/main.ldn
+unit signatures 0 items 1
+item 1 DATUM choice result i32 params 0 slots 0 blocks 1 values 2
+  block 1 scope 1 PROGRAM length 2
+    1 NUMBER i32 42
+    2 LEAVE <- 1
+file positive/fixed-conditional-generic-activity/main.ldn
+unit signatures 2 items 2
+signature 1 () -> i32
+signature 2 (i32) -> i32
+item 1 ROUTINE main result i32 signature 1 params 0 slots 2 blocks 1 values 7
+  slot 1 code i32 return
+  slot 2 value i32
+  block 1 scope 4 BLOCK length 7
+    1 NUMBER i32 42
+    2 CALL i32 callee 2 - signature 2 <- 1
+    3 STORE slot 2 <- 2
+    4 LOAD i32 slot 2
+    5 STORE slot 1 <- 4
+    6 LOAD i32 slot 1
+    7 LEAVE <- 6
+item 2 ROUTINE - result i32 signature 2 params 1 slots 2 blocks 1 values 4
+  slot 1 value i32 param 1
+  slot 2 result i32 return
+  block 1 scope 2 SIGNATURE length 4
+    1 LOAD i32 slot 1
+    2 STORE slot 2 <- 1
+    3 LOAD i32 slot 2
+    4 LEAVE <- 3
+file positive/fixed-conditional-nested-inactive/main.ldn
+unit signatures 0 items 1
+item 1 DATUM selected result i32 params 0 slots 0 blocks 1 values 2
+  block 1 scope 1 PROGRAM length 2
+    1 NUMBER i32 42
+    2 LEAVE <- 1
+file positive/fixed-conditional-selects-declarations/main.ldn
+unit signatures 0 items 1
+item 1 DATUM selected result i32 params 0 slots 0 blocks 1 values 2
+  block 1 scope 1 PROGRAM length 2
+    1 NUMBER i32 42
+    2 LEAVE <- 1
+file positive/fixed-conditional-symmetric-boundaries/main.ldn
+unit signatures 0 items 1
+item 1 DATUM selected result i32 params 0 slots 0 blocks 1 values 2
+  block 1 scope 1 PROGRAM length 2
+    1 NUMBER i32 42
+    2 LEAVE <- 1
 file positive/function-end-unnamed/program.ldn
 unit signatures 1 items 1
 signature 1 () -> i32

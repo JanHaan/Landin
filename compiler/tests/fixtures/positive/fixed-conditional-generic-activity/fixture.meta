@@ -1,0 +1,4 @@
+class: positive
+summary: D139 recursively selects D138 templates while inactive malformed templates and same names remain semantically silent
+program: main.ldn
+constructs: 1290, 1500, 1800, 1920

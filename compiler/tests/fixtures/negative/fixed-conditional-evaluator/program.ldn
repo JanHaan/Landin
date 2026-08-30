@@ -1,0 +1,20 @@
+f: () -> none = end f
+
+fixed if 18446744073709551615 * 2 == 0 then
+end if
+
+fixed if 1 / 0 == 0 then
+end if
+
+fixed if -18446744073709551615 / -1 == 18446744073709551615 then
+end if
+
+fixed if -18446744073709551615 * -2 == 0 then
+end if
+
+fixed if f() == 0 then
+end if
+
+fixed if true then
+elsif false and f() == 0 then
+end if

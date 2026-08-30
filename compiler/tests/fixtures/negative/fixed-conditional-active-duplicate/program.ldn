@@ -1,0 +1,4 @@
+choice: i32 = 1
+fixed if compiler.arch == x86_64 then
+    choice: i32 = 42
+end if

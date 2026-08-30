@@ -11,6 +11,7 @@
 --  lets a lowering violate it: Emit_Jump has no precondition against a
 --  mid-block terminator, on purpose, so that it can be tested.
 
+with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 
 with Landin.Checking;
@@ -24,6 +25,7 @@ with Landin.Source;
 with Landin.Syntax;
 with Landin.Syntax.Forest;
 with Landin.Stages.Checking;
+with Landin.Stages.Configuration;
 with Landin.Stages.Lowering;
 with Landin.Stages.Resolution;
 with Landin.Stages.Syntax;
@@ -68,27 +70,36 @@ package body Landin.Tests.Lowering_Suite is
 
    Frontend : aliased Landin.Stages.Syntax.Instance;
    Names    : aliased Landin.Stages.Resolution.Instance;
+   Configurer : aliased Landin.Stages.Configuration.Instance;
    Checker  : aliased Landin.Stages.Checking.Instance;
    Lowerer  : aliased Landin.Stages.Lowering.Instance;
 
    LF : constant Character := Character'Val (10);
 
    procedure Lower
-     (Work : in out Landin.Stages.Compilation;
-      Text : String;
-      Ran  : out Natural);
+     (Work       : in out Landin.Stages.Compilation;
+      Text       : String;
+      Ran        : out Natural;
+      Additional : String := "");
 
    procedure Lower
-     (Work : in out Landin.Stages.Compilation;
-      Text : String;
-      Ran  : out Natural)
+     (Work       : in out Landin.Stages.Compilation;
+      Text       : String;
+      Ran        : out Natural;
+      Additional : String := "")
    is
       Order   : Landin.Stages.Pipeline;
       Written : constant Landin.Source.Source_Id :=
         Landin.Stages.Add_Source (Work, "low.ldn", Text);
    begin
       pragma Assert (Written /= Landin.Source.No_Source);
+      if Additional /= "" then
+         pragma Assert
+           (Landin.Stages.Add_Source (Work, "with.ldn", Additional)
+              /= Landin.Source.No_Source);
+      end if;
       Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
       Landin.Stages.Append (Order, Names'Access);
       Landin.Stages.Append (Order, Checker'Access);
       Landin.Stages.Append (Order, Lowerer'Access);
@@ -163,7 +174,7 @@ package body Landin.Tests.Lowering_Suite is
          "f: () -> (r: u32) =" & LF & "    r = 1" & LF & "end f" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work), "the program is accepted");
 
@@ -420,7 +431,7 @@ package body Landin.Tests.Lowering_Suite is
          & "end choose" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work), "the program is accepted");
 
@@ -510,7 +521,7 @@ package body Landin.Tests.Lowering_Suite is
          & "end f" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work), "the program is accepted");
 
@@ -686,7 +697,7 @@ package body Landin.Tests.Lowering_Suite is
          & "end f" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "typed local scalar zeroed initializers lower");
@@ -733,7 +744,7 @@ package body Landin.Tests.Lowering_Suite is
          & "end f" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "scalar zeroed assignments lower");
@@ -779,7 +790,7 @@ package body Landin.Tests.Lowering_Suite is
          & "end f" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "named-return zeroed assignment lowers");
@@ -839,7 +850,7 @@ package body Landin.Tests.Lowering_Suite is
          & "end set_field" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "scalar subobject zeroed assignments lower");
@@ -1021,7 +1032,7 @@ package body Landin.Tests.Lowering_Suite is
          & "end f" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work), "the program is accepted");
 
@@ -1075,7 +1086,7 @@ package body Landin.Tests.Lowering_Suite is
          & "end use" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work), "generic calls are accepted");
 
@@ -1159,7 +1170,7 @@ package body Landin.Tests.Lowering_Suite is
          & "end convert" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work), "the program is accepted");
 
@@ -1233,7 +1244,7 @@ package body Landin.Tests.Lowering_Suite is
          & "end convert" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work), "the program is accepted");
 
@@ -2939,7 +2950,7 @@ package body Landin.Tests.Lowering_Suite is
          & "end set" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
 
       declare
          Unit : IR.Unit renames Landin.Stages.Code (Work).all;
@@ -2999,7 +3010,7 @@ package body Landin.Tests.Lowering_Suite is
          & "bump: (i: usize) -> none = inc words[i] end bump" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
 
       declare
          Unit : IR.Unit renames Landin.Stages.Code (Work).all;
@@ -3070,7 +3081,7 @@ package body Landin.Tests.Lowering_Suite is
          & "end f" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "D22 accepts the computed local read after a whole copy");
@@ -3142,7 +3153,7 @@ package body Landin.Tests.Lowering_Suite is
          & "end f" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
       declare
          Unit : IR.Unit renames Landin.Stages.Code (Work).all;
          Module_Loads, Local_Stores : Natural := 0;
@@ -3213,7 +3224,7 @@ package body Landin.Tests.Lowering_Suite is
          & "end f" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "module and local field literals lower");
@@ -3298,7 +3309,7 @@ package body Landin.Tests.Lowering_Suite is
          & "end f" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "module and local field repetitions lower");
@@ -3398,7 +3409,7 @@ package body Landin.Tests.Lowering_Suite is
          & "end copy" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "all module and local whole-copy endpoint pairs lower");
@@ -3498,7 +3509,7 @@ package body Landin.Tests.Lowering_Suite is
          & "end copy" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "module and local names initialize fresh struct slots");
@@ -3596,7 +3607,7 @@ package body Landin.Tests.Lowering_Suite is
          & "end copy" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "module and local names infer fresh struct slots");
@@ -3682,7 +3693,7 @@ package body Landin.Tests.Lowering_Suite is
          & "align: usize = alignof header" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "direct and aliased struct measurements are accepted");
@@ -3748,7 +3759,7 @@ package body Landin.Tests.Lowering_Suite is
          & "align: usize = alignof header" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "a target-sized fixed-array field is accepted compactly");
@@ -3814,7 +3825,7 @@ package body Landin.Tests.Lowering_Suite is
          & "size: usize = sizeof choice" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "a variant-bearing declaration can be measured");
@@ -3885,7 +3896,7 @@ package body Landin.Tests.Lowering_Suite is
          & "size: usize = sizeof outer" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "a nested-struct declaration can be measured");
@@ -3954,7 +3965,7 @@ package body Landin.Tests.Lowering_Suite is
          & "end clear" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "nested module and local storage are accepted");
@@ -4041,7 +4052,7 @@ package body Landin.Tests.Lowering_Suite is
          & "end use" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "nested scalar reads and writes are accepted");
@@ -4127,7 +4138,7 @@ package body Landin.Tests.Lowering_Suite is
          & "end use" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "nested fixed-array elements are accepted");
@@ -4228,7 +4239,7 @@ package body Landin.Tests.Lowering_Suite is
          & "end use" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "nested contextual array values are accepted");
@@ -4317,7 +4328,7 @@ package body Landin.Tests.Lowering_Suite is
          & "end use" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "nested child construction and copies are accepted");
@@ -4430,7 +4441,7 @@ package body Landin.Tests.Lowering_Suite is
          & "end score" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "a direct ordinary-struct argument is accepted");
@@ -4518,7 +4529,7 @@ package body Landin.Tests.Lowering_Suite is
          & "end take_outer" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "nested aggregate argument paths are accepted");
@@ -4596,7 +4607,7 @@ package body Landin.Tests.Lowering_Suite is
          & "end use" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "a variant-bearing struct parameter is accepted");
@@ -4667,7 +4678,7 @@ package body Landin.Tests.Lowering_Suite is
          & "end use_row" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "a struct result and typed call initializer are accepted");
@@ -4739,7 +4750,7 @@ package body Landin.Tests.Lowering_Suite is
          & "end clear" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "variant-bearing module and local storage are accepted");
@@ -4856,7 +4867,7 @@ package body Landin.Tests.Lowering_Suite is
          & "end construct" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "variant case construction is accepted");
@@ -5060,7 +5071,7 @@ package body Landin.Tests.Lowering_Suite is
          & "end copy" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "typed, inferred and assigned whole copies are accepted");
@@ -5127,11 +5138,12 @@ package body Landin.Tests.Lowering_Suite is
       Ran : Natural;
    begin
       Landin.Stages.Append (Front, Frontend'Access);
+      Landin.Stages.Append (Front, Configurer'Access);
       Landin.Stages.Append (Front, Names'Access);
       Landin.Stages.Append (Front, Checker'Access);
       Ran := Landin.Stages.Run (Front, Work);
 
-      Landin.Testing.Check_Equal (Item, Ran, 3, "three stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "the nonempty source measurements are accepted");
@@ -5258,7 +5270,7 @@ package body Landin.Tests.Lowering_Suite is
          & "end use" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "scalar, function and stored control values are lowered");
@@ -5356,7 +5368,7 @@ package body Landin.Tests.Lowering_Suite is
          & "end use" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "final none calls remain statements in every control form");
@@ -5424,7 +5436,7 @@ package body Landin.Tests.Lowering_Suite is
          & "end match_exit" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "all-return controls are lowered without a placeholder answer");
@@ -5475,7 +5487,7 @@ package body Landin.Tests.Lowering_Suite is
          & "end f" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "nested fallthrough and return cleanups are lowered");
@@ -5559,7 +5571,7 @@ package body Landin.Tests.Lowering_Suite is
          & "end succeeds" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "mixed failure-only and deferred cleanups are lowered");
@@ -5668,6 +5680,46 @@ package body Landin.Tests.Lowering_Suite is
 
       Found : Fixtures.Catalogue;
       Text  : Unbounded.Unbounded_String;
+
+      function Additional_For (Each : Fixtures.Fixture) return String;
+
+      function Additional_For (Each : Fixtures.Fixture) return String is
+         Rest : constant String := Fixtures.With_Sources (Each);
+         Extra : Unbounded.Unbounded_String;
+         First : Integer := Rest'First;
+         Complete : Boolean := True;
+
+         procedure Append_One (Named : String);
+
+         procedure Append_One (Named : String) is
+            Trimmed : constant String :=
+              Ada.Strings.Fixed.Trim (Named, Ada.Strings.Both);
+            Contents : Unbounded.Unbounded_String;
+            Status : Landin.Platform.Read_Status;
+         begin
+            if Trimmed /= "" then
+               Host.Read_File
+                 (Fixture_Root & "/positive/" & Fixtures.Name (Each)
+                  & "/" & Trimmed, Contents, Status);
+               if Status = Landin.Platform.Read_Ok then
+                  Unbounded.Append (Extra, Unbounded.To_String (Contents));
+               else
+                  Complete := False;
+               end if;
+            end if;
+         end Append_One;
+      begin
+         for Index in Rest'Range loop
+            if Rest (Index) = ',' then
+               Append_One (Rest (First .. Index - 1));
+               First := Index + 1;
+            end if;
+         end loop;
+         if First <= Rest'Last then
+            Append_One (Rest (First .. Rest'Last));
+         end if;
+         return (if Complete then Unbounded.To_String (Extra) else "");
+      end Additional_For;
    begin
       Fixtures.Discover (Found, Fixture_Root, Host);
 
@@ -5703,7 +5755,8 @@ package body Landin.Tests.Lowering_Suite is
                         Ran : Natural;
                      begin
                         Lower
-                          (Work, Unbounded.To_String (Body_Text), Ran);
+                          (Work, Unbounded.To_String (Body_Text), Ran,
+                           Additional_For (Each));
 
                         if not Landin.Stages.Failed (Work) then
                            Unbounded.Append
@@ -5795,7 +5848,7 @@ package body Landin.Tests.Lowering_Suite is
          & "end f" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "the contextual struct literal lowers");
@@ -5879,7 +5932,7 @@ package body Landin.Tests.Lowering_Suite is
          & "end f" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "every contextual field form lowers");
@@ -5962,6 +6015,91 @@ package body Landin.Tests.Lowering_Suite is
          Check_Terminators (Item, Unit, "struct literal array labels");
       end;
    end Struct_Literal_Array_Labels_Use_Field_Operations;
+
+   procedure Fixed_Conditional_Selection_Reaches_IR
+     (Item : in out Landin.Testing.Context);
+
+   procedure Fixed_Conditional_Selection_Reaches_IR
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "fixed if compiler.arch == x86_64 then" & LF
+         & "public main: () -> (code: i32) =" & LF
+         & "    code = 42" & LF
+         & "end main" & LF
+         & "else" & LF
+         & "public wrong: () -> (code: i32) =" & LF
+         & "    code = 1" & LF
+         & "end wrong" & LF
+         & "end if" & LF,
+         Ran);
+      Landin.Testing.Check_Equal
+        (Item, Ran, 5, "the configuration pipeline reached lowering");
+      Landin.Testing.Check_Equal
+        (Item, IR.Item_Count (Landin.Stages.Code (Work).all), 1,
+         "only the selected routine reaches target-neutral IR");
+   end Fixed_Conditional_Selection_Reaches_IR;
+
+   procedure Fixed_Conditional_Uses_The_Typed_Target_Architecture
+     (Item : in out Landin.Testing.Context);
+
+   procedure Fixed_Conditional_Uses_The_Typed_Target_Architecture
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Synthetic_32);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "fixed if compiler.arch == synthetic_32 then" & LF
+         & "selected: i32 = 42" & LF
+         & "else" & LF
+         & "wrong: missing = unknown" & LF
+         & "end if" & LF,
+         Ran);
+      Landin.Testing.Check_Equal
+        (Item, Ran, 5,
+         "the synthetic target's typed architecture selects its declaration");
+      Landin.Testing.Check_Equal
+        (Item, IR.Item_Count (Landin.Stages.Code (Work).all), 1,
+         "the synthetic selection does not read a target label");
+   end Fixed_Conditional_Uses_The_Typed_Target_Architecture;
+
+   procedure Fixed_Conditional_Generic_Instance_Reaches_IR
+     (Item : in out Landin.Testing.Context);
+
+   procedure Fixed_Conditional_Generic_Instance_Reaches_IR
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "fixed if compiler.arch == x86_64 then" & LF
+         & "copy: (t: type, value: t) -> (result: t) = value end copy" & LF
+         & "else" & LF
+         & "wrong: (t: type, value: t) -> (result: t) = value end wrong" & LF
+         & "end if" & LF
+         & "public main: () -> (code: i32) =" & LF
+         & "    code = copy(42)" & LF
+         & "end main" & LF,
+         Ran);
+      Landin.Testing.Check_Equal
+        (Item, Ran, 5,
+         "the configuration-selected generic reaches every lowering stage");
+      Landin.Testing.Check_Equal
+        (Item, IR.Item_Count (Landin.Stages.Code (Work).all), 2,
+         "the selected template creates one instance item and no"
+         & " template item");
+   end Fixed_Conditional_Generic_Instance_Reaches_IR;
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
@@ -6214,6 +6352,18 @@ package body Landin.Tests.Lowering_Suite is
         (Into, "lowering",
          "struct literal array labels use field operations",
          Struct_Literal_Array_Labels_Use_Field_Operations'Access);
+      Landin.Testing.Register
+        (Into, "lowering",
+         "a fixed conditional selects the only lowered declaration",
+         Fixed_Conditional_Selection_Reaches_IR'Access);
+      Landin.Testing.Register
+        (Into, "lowering",
+         "a fixed conditional asks the typed target architecture",
+         Fixed_Conditional_Uses_The_Typed_Target_Architecture'Access);
+      Landin.Testing.Register
+        (Into, "lowering",
+         "a fixed conditional lowers its selected generic instance",
+         Fixed_Conditional_Generic_Instance_Reaches_IR'Access);
       Landin.Testing.Register
         (Into, "lowering", "the recorded corpus is current",
          The_Recorded_Corpus_Is_Current'Access);

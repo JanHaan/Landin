@@ -39,6 +39,7 @@
 with Ada.Containers.Vectors;
 
 with Landin.Checking;
+with Landin.Configuration;
 with Landin.IR;
 with Landin.Diagnostics;
 with Landin.Provenance;
@@ -100,6 +101,11 @@ package Landin.Stages is
    --  What every name in those trees means.
    function Meanings (Context : in out Compilation)
      return not null access Landin.Resolution.Table;
+
+   --  D139's immutable active declaration view, built after syntax and
+   --  target selection and read by every semantic traversal.
+   function Configurations (Context : in out Compilation)
+     return not null access Landin.Configuration.Table;
 
    --  What type every node and every declaration has.
    function Types (Context : in out Compilation)
@@ -168,6 +174,7 @@ private
    type Sites_Access      is access Landin.Provenance.Table;
    type Forest_Access     is access Landin.Syntax.Forest.Table;
    type Resolution_Access is access Landin.Resolution.Table;
+   type Configuration_Access is access Landin.Configuration.Table;
    type Checking_Access   is access Landin.Checking.Table;
    type Code_Access       is access Landin.IR.Unit;
 
@@ -179,6 +186,7 @@ private
       Written : Sites_Access      := null;
       Parsed  : Forest_Access     := null;
       Meant   : Resolution_Access := null;
+      Active  : Configuration_Access := null;
       Typed   : Checking_Access   := null;
       Lowered : Code_Access       := null;
    end record;

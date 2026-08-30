@@ -1,0 +1,5 @@
+fixed if compiler.arch == arm64
+    wrong: i32 = 1
+else
+    selected: i32 = 42
+end if

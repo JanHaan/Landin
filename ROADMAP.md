@@ -2331,15 +2331,44 @@ ordinary call checking; a context-free literal therefore deduces `i32`. An exact
 `n` from the argument's normalized array length and `t` from its element
 descriptor, without arithmetic inversion. Static formals remain outside
 signatures, slots and the ABI. Other nested type patterns, function descriptors
-whose error sets are still inferred, explicit static call syntax, computed
-fixed patterns, and fixed conditional declaration lists remain
-the next increments.
+whose error sets are still inferred, explicit static call syntax, and computed
+fixed patterns remain the next increments. Fixed conditional declaration lists
+are D139's completed increment.
 Deduction does not use return context or constraint lookup. Concrete declared
 atom error sets are substituted onto each instance signature and use the
 ordinary call, recovery, `try`, `fail`, `defer`, and `undo` machinery;
 per-instance `! ...` inference remains explicitly refused with a source
 diagnostic. No correctness step executes a user routine. R2.70 remains the owner of shared generic
 evidence and R4.50 the owner of choosing specialisation as an optimisation.
+
+D139's completed increment now enables target-selected fixed conditional
+declaration lists. It parses every arm immutably, then a compilation-owned
+configuration stage selects module declarations after target selection and
+before resolution. The selected view reaches resolution, checking, identity
+interning and lowering; inactive branches retain lexical and parser reports
+but have no semantic effect. Its closed evaluator admits only booleans, D136
+mathematical integers and typed target architecture identity through intrinsic
+`compiler.arch`; no generic formal, option, compiler call or user routine is
+introduced. Linux, synthetic-32 and every future target constructor choose an
+architecture explicitly rather than parsing a target label. D139 leaves the
+full `landin/compiler` module, options and directives to R4.30. Integration
+coverage keeps selected generic templates active through deduction and lowering:
+`runtime/fixed-conditional-generic-runtime` executes one selected instance,
+`positive/fixed-conditional-generic-activity` proves nested selection, inactive
+malformed-template silence and mutually exclusive same-name templates,
+`negative/fixed-conditional-active-generic-error` retains an active template's
+error, `negative/fixed-conditional-inactive-parser-error` retains parser
+reporting, and the lowering seam records that an inactive template creates no
+item while a selected generic instance does.
+
+The next semantic increments extend the substitution layer to generic routine
+instances and exact deduction from ordinary argument types. Deduction does not
+use return context, constraint lookup or arithmetic inversion. Parameterised
+nominal types and generic routines receive identities derived from a template
+and normalised actual tuple rather than reusing one source declaration identity
+for unequal instances. No correctness step executes a user routine. R2.70
+remains the owner of shared generic evidence and R4.50 the owner of choosing
+specialisation as an optimisation.
 
 Exit evidence: generic shape, nominal identity/layout, parser, resolution,
 checking, lowering and verifier seams pass. Positive, negative and runtime

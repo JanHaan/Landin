@@ -1,0 +1,5 @@
+fixed if -18446744073709551615 * -1 == 18446744073709551615 and -18446744073709551615 / -1 == 18446744073709551615 then
+    selected: i32 = 42
+else
+    wrong: missing = unknown
+end if

@@ -11,6 +11,7 @@
 with Landin.Resolution;
 with Landin.Source;
 with Landin.Stages.Checking;
+with Landin.Stages.Configuration;
 with Landin.Stages.Resolution;
 with Landin.Stages.Syntax;
 with Landin.Syntax;
@@ -29,6 +30,7 @@ package body Landin.Tests.Resolution_Suite is
 
    Frontend : aliased Landin.Stages.Syntax.Instance;
    Names    : aliased Landin.Stages.Resolution.Instance;
+   Configurer : aliased Landin.Stages.Configuration.Instance;
    Checker  : aliased Landin.Stages.Checking.Instance;
 
    LF : constant Character := Character'Val (10);
@@ -58,11 +60,12 @@ package body Landin.Tests.Resolution_Suite is
    begin
       Id := Landin.Stages.Add_Source (Work, "scopes.ldn", Program);
       Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
       Landin.Stages.Append (Order, Names'Access);
       Landin.Stages.Append (Order, Checker'Access);
       Ran := Landin.Stages.Run (Order, Work);
 
-      Landin.Testing.Check_Equal (Item, Ran, 3, "the frontend ran");
+      Landin.Testing.Check_Equal (Item, Ran, 4, "the frontend ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "the program is accepted");
@@ -154,10 +157,11 @@ package body Landin.Tests.Resolution_Suite is
    begin
       Id := Landin.Stages.Add_Source (Work, "scopes.ldn", Program);
       Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
       Landin.Stages.Append (Order, Names'Access);
       Landin.Stages.Append (Order, Checker'Access);
       Ran := Landin.Stages.Run (Order, Work);
-      pragma Assert (Ran = 3);
+      pragma Assert (Ran = 4);
 
       declare
          Meanings : constant not null access Landin.Resolution.Table :=
@@ -207,10 +211,11 @@ package body Landin.Tests.Resolution_Suite is
          & "    end kind" & LF
          & "end choice" & LF);
       Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
       Landin.Stages.Append (Order, Names'Access);
       Ran := Landin.Stages.Run (Order, Work);
 
-      Landin.Testing.Check_Equal (Item, Ran, 2, "the resolver ran");
+      Landin.Testing.Check_Equal (Item, Ran, 3, "the resolver ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "a case may be named before its containing declaration");
@@ -283,10 +288,11 @@ package body Landin.Tests.Resolution_Suite is
          "bytes: type (element: type, fixed count: element) = [count]element"
          & LF);
       Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
       Landin.Stages.Append (Order, Names'Access);
       Ran := Landin.Stages.Run (Order, Work);
 
-      Landin.Testing.Check_Equal (Item, Ran, 2, "the resolver ran");
+      Landin.Testing.Check_Equal (Item, Ran, 3, "the resolver ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "a type alias resolves its collected formals");
@@ -398,10 +404,11 @@ package body Landin.Tests.Resolution_Suite is
          & "end buffer" & LF
          & "sample: buffer(2, u8)" & LF);
       Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
       Landin.Stages.Append (Order, Names'Access);
       Ran := Landin.Stages.Run (Order, Work);
 
-      Landin.Testing.Check_Equal (Item, Ran, 2, "the resolver ran");
+      Landin.Testing.Check_Equal (Item, Ran, 3, "the resolver ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "a parameterized struct resolves its collected formals");

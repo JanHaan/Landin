@@ -1,0 +1,5 @@
+class: negative
+summary: D139 still validates an active D138 generic template
+program: program.ldn
+codes: L0306
+constructs: 1290, 1500, 1950
