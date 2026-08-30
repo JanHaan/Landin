@@ -158,10 +158,10 @@ package Landin.Syntax.Precedence is
                     | Landin.Tokens.Kw_Return | Landin.Tokens.Kw_Fail
                     | Landin.Tokens.Kw_Try | Landin.Tokens.Kw_If);
 
-   --  `declaration ::= "public"? (binding | function)` [1740].
+   --  `declaration ::= "public"? (binding | function) | fixed if` [1740].
    function Begins_Declaration (Of_Kind : Landin.Tokens.Token_Kind)
      return Boolean
      is (Of_Kind in Landin.Tokens.Kw_Public | Landin.Tokens.Kw_Mut
-                    | Landin.Tokens.Identifier);
+                    | Landin.Tokens.Kw_Fixed | Landin.Tokens.Identifier);
 
 end Landin.Syntax.Precedence;

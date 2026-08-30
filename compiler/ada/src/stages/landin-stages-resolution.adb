@@ -1,3 +1,4 @@
+with Landin.Configuration;
 with Landin.Diagnostics.Resolution;
 with Landin.Provenance;
 with Landin.Resolution;
@@ -37,6 +38,8 @@ package body Landin.Stages.Resolution is
         Landin.Stages.Trees (Context);
       Meanings  : constant not null access Landin.Resolution.Table :=
         Landin.Stages.Meanings (Context);
+      Activity : constant not null access Landin.Configuration.Table :=
+        Configurations (Context);
 
       Found : Landin.Diagnostics.Diagnostic_List;
 
@@ -416,6 +419,186 @@ package body Landin.Stages.Resolution is
          Walk_Block (Of_Tree, Block, Scope);
       end Walk_Scoped_Block;
 
+      --  The active declaration traversal supplies ordinary and selected
+      --  declarations alike.  The action therefore keeps all declaration
+      --  body rules in one place.
+      procedure Resolve_Declaration
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
+
+      procedure Resolve_Declaration
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) is
+      begin
+         case Syn.Kind (Of_Tree, Node) is
+            when Syn.Type_Declaration =>
+               --  D135: formals belong to this declaration, not to
+               --  the module.  Collect every one before resolving
+               --  any declared fixed-formal type or the alias RHS,
+               --  so their order has no visibility meaning.
+               if Syn.Type_Formal_Count (Of_Tree, Node) = 0 then
+                  Resolve
+                    (Of_Tree,
+                     Syn.Declared_Type (Of_Tree, Node),
+                     Landin.Resolution.Program_Scope);
+               else
+                  declare
+                     Formal_Scope : constant
+                       Landin.Resolution.Scope_Id :=
+                         Landin.Resolution.Open_Scope
+                           (Meanings.all,
+                            Landin.Resolution.Type_Declaration,
+                            Landin.Resolution.Program_Scope);
+                  begin
+                     Landin.Resolution.Record_Scope
+                       (Meanings.all, Of_Tree, Node,
+                        Formal_Scope);
+
+                     for Which in 1 .. Syn.Type_Formal_Count
+                       (Of_Tree, Node)
+                     loop
+                        Declare_One
+                          (Of_Tree,
+                           Syn.Nth_Type_Formal
+                             (Of_Tree, Node, Which),
+                           Formal_Scope,
+                           Resolve_Declared => False);
+                     end loop;
+
+                     for Which in 1 .. Syn.Type_Formal_Count
+                       (Of_Tree, Node)
+                     loop
+                        declare
+                           Formal : constant Syn.Node_Id :=
+                             Syn.Nth_Type_Formal
+                               (Of_Tree, Node, Which);
+                        begin
+                           if Syn.Kind (Of_Tree, Formal)
+                                = Syn.Fixed_Formal
+                           then
+                              Resolve
+                                (Of_Tree,
+                                 Syn.Declared_Type
+                                   (Of_Tree, Formal),
+                                 Formal_Scope);
+                           end if;
+                        end;
+                     end loop;
+
+                     Resolve
+                       (Of_Tree,
+                        Syn.Declared_Type (Of_Tree, Node),
+                        Formal_Scope);
+                  end;
+               end if;
+
+            when Syn.Binding =>
+               --  Both halves are read only after every module name
+               --  exists.  The value and its written type therefore
+               --  obey the same set rule.
+               Resolve
+                 (Of_Tree,
+                  Syn.Declared_Type (Of_Tree, Node),
+                  Landin.Resolution.Program_Scope);
+               Resolve
+                 (Of_Tree,
+                  Syn.Value_Of (Of_Tree, Node),
+                  Landin.Resolution.Program_Scope);
+
+            when Syn.Function_Declaration =>
+               declare
+                  Signature : constant
+                    Landin.Resolution.Scope_Id :=
+                      Landin.Resolution.Open_Scope
+                        (Meanings.all,
+                         Landin.Resolution.Signature,
+                         Landin.Resolution.Program_Scope);
+                  Runs : constant Syn.Node_Id :=
+                    Syn.Body_Of (Of_Tree, Node);
+               begin
+                  Landin.Resolution.Record_Scope
+                    (Meanings.all, Of_Tree, Node, Signature);
+
+                  --  D138: static formals share the routine signature
+                  --  scope and are collected before any written type.
+                  for Which in
+                    1 .. Syn.Generic_Formal_Count (Of_Tree, Node)
+                  loop
+                     Declare_One
+                       (Of_Tree,
+                        Syn.Nth_Generic_Formal (Of_Tree, Node, Which),
+                        Signature, Resolve_Declared => False);
+                  end loop;
+
+                  for Which in
+                    1 .. Syn.Parameter_Count (Of_Tree, Node)
+                  loop
+                     Declare_One
+                       (Of_Tree,
+                        Syn.Nth_Parameter
+                          (Of_Tree, Node, Which),
+                        Signature);
+                  end loop;
+
+                  --  Named returns are declared here and not in
+                  --  the body [1840]: the body assigns each like
+                  --  any other place [0930], and no parameter or
+                  --  sibling return may share its name.
+                  for Which in
+                    1 .. Syn.Return_Count (Of_Tree, Node)
+                  loop
+                     Declare_One
+                       (Of_Tree,
+                        Syn.Nth_Return
+                          (Of_Tree, Node, Which),
+                        Signature);
+                  end loop;
+
+                  for Which in
+                    1 .. Syn.Generic_Formal_Count (Of_Tree, Node)
+                  loop
+                     declare
+                        Formal : constant Syn.Node_Id :=
+                          Syn.Nth_Generic_Formal (Of_Tree, Node, Which);
+                     begin
+                        if Syn.Kind (Of_Tree, Formal) = Syn.Fixed_Formal then
+                           Resolve
+                             (Of_Tree, Syn.Declared_Type (Of_Tree, Formal),
+                              Signature);
+                        end if;
+                     end;
+                  end loop;
+
+                  Resolve
+                    (Of_Tree,
+                     Syn.Error_Set_Of (Of_Tree, Node),
+                     Landin.Resolution.Program_Scope);
+
+                  --  [1800]'s expression body opens no scope,
+                  --  because an expression declares nothing.
+                  if Syn.Kind (Of_Tree, Runs) = Syn.Block then
+                     declare
+                        Body_Scope : constant
+                          Landin.Resolution.Scope_Id :=
+                            Landin.Resolution.Open_Scope
+                              (Meanings.all,
+                               Landin.Resolution.Block,
+                               Signature);
+                     begin
+                        Landin.Resolution.Record_Scope
+                          (Meanings.all, Of_Tree, Runs,
+                           Body_Scope);
+                        Walk_Block
+                          (Of_Tree, Runs, Body_Scope);
+                     end;
+                  else
+                     Resolve (Of_Tree, Runs, Signature);
+                  end if;
+               end;
+
+            when others =>
+               null;
+         end case;
+      end Resolve_Declaration;
+
    begin
       Landin.Resolution.Prepare (Meanings.all, Trees.all);
 
@@ -423,318 +606,111 @@ package body Landin.Stages.Resolution is
       --  is walked.  [1840]'s module is a set, so this is what lets a name
       --  be used above the line that introduces it -- and across a file
       --  boundary, because there is one module until [1410] arrives.
-      for Index in 1 .. Source_Count (Context) loop
-         declare
-            Of_Tree : constant not null access constant Syn.Tree :=
-              Landin.Syntax.Forest.Tree_Of
-                (Trees.all, Nth_Source (Context, Index));
+      declare
+         procedure Collect (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
+
+         procedure Collect (Of_Tree : Syn.Tree; Node : Syn.Node_Id) is
          begin
-            for Position in
-              1 .. Syn.Declaration_Count (Of_Tree.all)
-            loop
-               declare
-                  Node : constant Syn.Node_Id :=
-                    Syn.Nth_Declaration (Of_Tree.all, Position);
-               begin
-                  if Landin.Resolution.Declares
-                       (Syn.Kind (Of_Tree.all, Node))
-                  then
+            if Landin.Resolution.Declares (Syn.Kind (Of_Tree, Node)) then
+               Declare_One
+                 (Of_Tree, Node, Landin.Resolution.Program_Scope,
+                  Resolve_Declared => False);
+               if Syn.Kind (Of_Tree, Node) = Syn.Atom_Declaration then
+                  for Member in 1 .. Syn.Slot_Count (Of_Tree, Node) loop
                      Declare_One
-                       (Of_Tree.all, Node,
+                       (Of_Tree, Syn.Slot (Of_Tree, Node, Member),
                         Landin.Resolution.Program_Scope,
                         Resolve_Declared => False);
-                     if Syn.Kind (Of_Tree.all, Node)
-                          = Syn.Atom_Declaration
-                     then
-                        for Member in 1 .. Syn.Slot_Count
-                          (Of_Tree.all, Node)
-                        loop
-                           Declare_One
-                             (Of_Tree.all,
-                              Syn.Slot (Of_Tree.all, Node, Member),
-                              Landin.Resolution.Program_Scope,
-                              Resolve_Declared => False);
-                        end loop;
-                     end if;
-                  end if;
+                  end loop;
+               end if;
+            end if;
+         end Collect;
+      begin
+         for Index in 1 .. Source_Count (Context) loop
+            declare
+               Of_Tree : constant not null access constant Syn.Tree :=
+                 Landin.Syntax.Forest.Tree_Of
+                   (Trees.all, Nth_Source (Context, Index));
+            begin
+               declare
+                  procedure Walk is new
+                    Landin.Configuration.For_Each_Active_Declaration
+                      (Collect);
+               begin
+                  Walk (Activity.all, Of_Tree.all);
                end;
-            end loop;
-         end;
-      end loop;
+            end;
+         end loop;
+      end;
 
       --  [0690]'s case names are module-visible atoms.  Declare them only
       --  after every ordinary module declaration, so a collision has one
       --  deterministic winner independent of file order and a later case
       --  may be used before the type that contains it is written.
-      for Index in 1 .. Source_Count (Context) loop
-         declare
-            Of_Tree : constant not null access constant Syn.Tree :=
-              Landin.Syntax.Forest.Tree_Of
-                (Trees.all, Nth_Source (Context, Index));
+      declare
+         procedure Collect_Cases (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
+
+         procedure Collect_Cases
+           (Of_Tree : Syn.Tree; Node : Syn.Node_Id) is
          begin
-            for Position in
-              1 .. Syn.Declaration_Count (Of_Tree.all)
-            loop
+            if Syn.Kind (Of_Tree, Node) = Syn.Type_Declaration
+              and then Syn.Kind (Of_Tree, Syn.Declared_Type (Of_Tree, Node))
+                = Syn.Struct_Body
+            then
                declare
-                  Node : constant Syn.Node_Id :=
-                    Syn.Nth_Declaration (Of_Tree.all, Position);
+                  Struct_Node : constant Syn.Node_Id :=
+                    Syn.Declared_Type (Of_Tree, Node);
                begin
-                  if Syn.Kind (Of_Tree.all, Node) = Syn.Type_Declaration
-                    and then Syn.Kind
-                      (Of_Tree.all,
-                       Syn.Declared_Type (Of_Tree.all, Node))
-                        = Syn.Struct_Body
-                  then
+                  for Member in 1 .. Syn.Field_Count (Of_Tree, Struct_Node)
+                  loop
                      declare
-                        Struct_Node : constant Syn.Node_Id :=
-                          Syn.Declared_Type (Of_Tree.all, Node);
+                        Part : constant Syn.Node_Id :=
+                          Syn.Nth_Field (Of_Tree, Struct_Node, Member);
                      begin
-                        for Member in 1 .. Syn.Field_Count
-                          (Of_Tree.all, Struct_Node)
-                        loop
-                           declare
-                              Part : constant Syn.Node_Id :=
-                                Syn.Nth_Field
-                                  (Of_Tree.all, Struct_Node, Member);
-                           begin
-                              if Syn.Kind (Of_Tree.all, Part)
-                                   = Syn.Variant_Part
-                              then
-                                 for Which in 1 .. Syn.Case_Count
-                                   (Of_Tree.all, Part)
-                                 loop
-                                    Declare_One
-                                      (Of_Tree.all,
-                                       Syn.Nth_Case
-                                         (Of_Tree.all, Part, Which),
-                                       Landin.Resolution.Program_Scope,
-                                       Resolve_Declared => False);
-                                 end loop;
-                              end if;
-                           end;
-                        end loop;
+                        if Syn.Kind (Of_Tree, Part) = Syn.Variant_Part then
+                           for Which in 1 .. Syn.Case_Count (Of_Tree, Part)
+                           loop
+                              Declare_One
+                                (Of_Tree, Syn.Nth_Case (Of_Tree, Part, Which),
+                                 Landin.Resolution.Program_Scope,
+                                 Resolve_Declared => False);
+                           end loop;
+                        end if;
                      end;
-                  end if;
+                  end loop;
                end;
-            end loop;
-         end;
-      end loop;
+            end if;
+         end Collect_Cases;
+      begin
+         for Index in 1 .. Source_Count (Context) loop
+            declare
+               Of_Tree : constant not null access constant Syn.Tree :=
+                 Landin.Syntax.Forest.Tree_Of
+                   (Trees.all, Nth_Source (Context, Index));
+            begin
+               declare
+                  procedure Walk is new
+                    Landin.Configuration.For_Each_Active_Declaration
+                      (Collect_Cases);
+               begin
+                  Walk (Activity.all, Of_Tree.all);
+               end;
+            end;
+         end loop;
+      end;
 
-      --  Pass two: the bodies, in the same order, so the report is read
-      --  top to bottom of the file it is about.
+      --  Pass two: bodies in source order through D139's single active
+      --  declaration traversal.
       for Index in 1 .. Source_Count (Context) loop
          declare
             Of_Tree : constant not null access constant Syn.Tree :=
               Landin.Syntax.Forest.Tree_Of
                 (Trees.all, Nth_Source (Context, Index));
+            procedure Walk is new
+              Landin.Configuration.For_Each_Active_Declaration
+                (Resolve_Declaration);
          begin
-            for Position in
-              1 .. Syn.Declaration_Count (Of_Tree.all)
-            loop
-               declare
-                  Node : constant Syn.Node_Id :=
-                    Syn.Nth_Declaration (Of_Tree.all, Position);
-               begin
-                  case Syn.Kind (Of_Tree.all, Node) is
-                     when Syn.Type_Declaration =>
-                        --  D135: formals belong to this declaration, not to
-                        --  the module.  Collect every one before resolving
-                        --  any declared fixed-formal type or the alias RHS,
-                        --  so their order has no visibility meaning.
-                        if Syn.Type_Formal_Count (Of_Tree.all, Node) = 0 then
-                           Resolve
-                             (Of_Tree.all,
-                              Syn.Declared_Type (Of_Tree.all, Node),
-                              Landin.Resolution.Program_Scope);
-                        else
-                           declare
-                              Formal_Scope : constant
-                                Landin.Resolution.Scope_Id :=
-                                  Landin.Resolution.Open_Scope
-                                    (Meanings.all,
-                                     Landin.Resolution.Type_Declaration,
-                                     Landin.Resolution.Program_Scope);
-                           begin
-                              Landin.Resolution.Record_Scope
-                                (Meanings.all, Of_Tree.all, Node,
-                                 Formal_Scope);
-
-                              for Which in 1 .. Syn.Type_Formal_Count
-                                (Of_Tree.all, Node)
-                              loop
-                                 Declare_One
-                                   (Of_Tree.all,
-                                    Syn.Nth_Type_Formal
-                                      (Of_Tree.all, Node, Which),
-                                    Formal_Scope,
-                                    Resolve_Declared => False);
-                              end loop;
-
-                              for Which in 1 .. Syn.Type_Formal_Count
-                                (Of_Tree.all, Node)
-                              loop
-                                 declare
-                                    Formal : constant Syn.Node_Id :=
-                                      Syn.Nth_Type_Formal
-                                        (Of_Tree.all, Node, Which);
-                                 begin
-                                    if Syn.Kind (Of_Tree.all, Formal)
-                                         = Syn.Fixed_Formal
-                                    then
-                                       Resolve
-                                         (Of_Tree.all,
-                                          Syn.Declared_Type
-                                            (Of_Tree.all, Formal),
-                                          Formal_Scope);
-                                    end if;
-                                 end;
-                              end loop;
-
-                              Resolve
-                                (Of_Tree.all,
-                                 Syn.Declared_Type (Of_Tree.all, Node),
-                                 Formal_Scope);
-                           end;
-                        end if;
-
-                     when Syn.Binding =>
-                        --  Both halves are read only after every module name
-                        --  exists.  The value and its written type therefore
-                        --  obey the same set rule.
-                        Resolve
-                          (Of_Tree.all,
-                           Syn.Declared_Type (Of_Tree.all, Node),
-                           Landin.Resolution.Program_Scope);
-                        Resolve
-                          (Of_Tree.all,
-                           Syn.Value_Of (Of_Tree.all, Node),
-                           Landin.Resolution.Program_Scope);
-
-                     when Syn.Function_Declaration =>
-                        declare
-                           Signature : constant
-                             Landin.Resolution.Scope_Id :=
-                               Landin.Resolution.Open_Scope
-                                 (Meanings.all,
-                                  Landin.Resolution.Signature,
-                                  Landin.Resolution.Program_Scope);
-                           Runs : constant Syn.Node_Id :=
-                             Syn.Body_Of (Of_Tree.all, Node);
-                        begin
-                           Landin.Resolution.Record_Scope
-                             (Meanings.all, Of_Tree.all, Node, Signature);
-
-                           --  D138: one signature scope owns all static,
-                           --  runtime and result binders. Collect it before
-                           --  resolving a single written type, so source
-                           --  order has no visibility meaning and static
-                           --  formals can be written after their uses.
-                           for Which in
-                             1 .. Syn.Generic_Formal_Count (Of_Tree.all, Node)
-                           loop
-                              Declare_One
-                                (Of_Tree.all,
-                                 Syn.Nth_Generic_Formal
-                                   (Of_Tree.all, Node, Which),
-                                 Signature, Resolve_Declared => False);
-                           end loop;
-                           for Which in
-                             1 .. Syn.Parameter_Count (Of_Tree.all, Node)
-                           loop
-                              Declare_One
-                                (Of_Tree.all,
-                                 Syn.Nth_Parameter
-                                   (Of_Tree.all, Node, Which),
-                                 Signature, Resolve_Declared => False);
-                           end loop;
-
-                           --  Named returns are declared here and not in
-                           --  the body [1840]: the body assigns each like
-                           --  any other place [0930], and no parameter or
-                           --  sibling return may share its name.
-                           for Which in
-                             1 .. Syn.Return_Count (Of_Tree.all, Node)
-                           loop
-                              Declare_One
-                                (Of_Tree.all,
-                                 Syn.Nth_Return
-                                   (Of_Tree.all, Node, Which),
-                                 Signature, Resolve_Declared => False);
-                           end loop;
-
-                           for Which in
-                             1 .. Syn.Generic_Formal_Count (Of_Tree.all, Node)
-                           loop
-                              declare
-                                 Formal : constant Syn.Node_Id :=
-                                   Syn.Nth_Generic_Formal
-                                     (Of_Tree.all, Node, Which);
-                              begin
-                                 if Syn.Kind (Of_Tree.all, Formal)
-                                      = Syn.Fixed_Formal
-                                 then
-                                    Resolve
-                                      (Of_Tree.all,
-                                       Syn.Declared_Type (Of_Tree.all, Formal),
-                                       Signature);
-                                 end if;
-                              end;
-                           end loop;
-                           for Which in
-                             1 .. Syn.Parameter_Count (Of_Tree.all, Node)
-                           loop
-                              Resolve
-                                (Of_Tree.all,
-                                 Syn.Declared_Type
-                                   (Of_Tree.all,
-                                    Syn.Nth_Parameter
-                                      (Of_Tree.all, Node, Which)),
-                                 Signature);
-                           end loop;
-                           for Which in
-                             1 .. Syn.Return_Count (Of_Tree.all, Node)
-                           loop
-                              Resolve
-                                (Of_Tree.all,
-                                 Syn.Declared_Type
-                                   (Of_Tree.all,
-                                    Syn.Nth_Return
-                                      (Of_Tree.all, Node, Which)),
-                                 Signature);
-                           end loop;
-
-                           Resolve
-                             (Of_Tree.all,
-                              Syn.Error_Set_Of (Of_Tree.all, Node),
-                              Landin.Resolution.Program_Scope);
-
-                           --  [1800]'s expression body opens no scope,
-                           --  because an expression declares nothing.
-                           if Syn.Kind (Of_Tree.all, Runs) = Syn.Block then
-                              declare
-                                 Body_Scope : constant
-                                   Landin.Resolution.Scope_Id :=
-                                     Landin.Resolution.Open_Scope
-                                       (Meanings.all,
-                                        Landin.Resolution.Block,
-                                        Signature);
-                              begin
-                                 Landin.Resolution.Record_Scope
-                                   (Meanings.all, Of_Tree.all, Runs,
-                                    Body_Scope);
-                                 Walk_Block
-                                   (Of_Tree.all, Runs, Body_Scope);
-                              end;
-                           else
-                              Resolve (Of_Tree.all, Runs, Signature);
-                           end if;
-                        end;
-
-                     when others =>
-                        null;
-                  end case;
-               end;
-            end loop;
+            Walk (Activity.all, Of_Tree.all);
          end;
       end loop;
 

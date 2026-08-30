@@ -1,0 +1,6 @@
+class: runtime
+summary: D139 lowers and executes only the Linux x86_64 declaration set
+program: main.ldn
+status: 42
+targets: linux-x86-64
+constructs: 0080, 0130, 1500, 1740, 1970

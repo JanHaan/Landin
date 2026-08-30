@@ -1,0 +1,8 @@
+fixed if compiler.arch == x86_64 then
+    broken: (t: type, value: t) -> (result: t) =
+        _ = 1 / 0
+        result = value
+    end broken
+end if
+
+public main: () -> (code: i32) = 0 end main

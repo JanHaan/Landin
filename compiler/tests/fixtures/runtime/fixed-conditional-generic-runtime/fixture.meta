@@ -1,0 +1,5 @@
+class: runtime
+summary: D139 selects a D138 generic routine whose deduced instance executes
+program: main.ldn
+status: 42
+constructs: 1290, 1500, 1800, 1920, 1970

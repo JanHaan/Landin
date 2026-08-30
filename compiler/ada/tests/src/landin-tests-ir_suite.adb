@@ -22,6 +22,7 @@ with Landin.Provenance;
 with Landin.Resolution;
 with Landin.Source;
 with Landin.Stages.Checking;
+with Landin.Stages.Configuration;
 with Landin.Stages.Resolution;
 with Landin.Stages.Syntax;
 with Landin.Targets;
@@ -46,6 +47,7 @@ package body Landin.Tests.IR_Suite is
    --  compilation.
    Frontend : aliased Landin.Stages.Syntax.Instance;
    Names    : aliased Landin.Stages.Resolution.Instance;
+   Configurer : aliased Landin.Stages.Configuration.Instance;
    Checker  : aliased Landin.Stages.Checking.Instance;
 
    LF : constant Character := Character'Val (10);
@@ -70,10 +72,11 @@ package body Landin.Tests.IR_Suite is
         Landin.Stages.Add_Source (Work, "ir.ldn", Program);
    begin
       Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
       Landin.Stages.Append (Order, Names'Access);
       Landin.Stages.Append (Order, Checker'Access);
       Ran := Landin.Stages.Run (Order, Work);
-      pragma Assert (Ran = 3);
+      pragma Assert (Ran = 4);
       Site := (Source => Written, Where => Landin.Source.Empty_Span);
    end Frontend_Over;
 

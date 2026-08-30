@@ -1,6 +1,7 @@
 with Ada.Containers.Vectors;
 
 with Landin.Checking;
+with Landin.Configuration;
 with Landin.Cleanup;
 with Landin.IR;
 with Landin.IR.Verifier;
@@ -122,6 +123,8 @@ package body Landin.Stages.Lowering is
         Landin.Stages.Code (Context);
       Facts : constant Landin.Targets.Target_Facts :=
         Landin.Stages.Target (Context);
+      Activity : constant not null access Landin.Configuration.Table :=
+        Configurations (Context);
 
       function Tree_For (Id : Landin.Source.Source_Id)
         return not null access constant Syn.Tree
@@ -7173,6 +7176,7 @@ package body Landin.Stages.Lowering is
          Filling := IR.No_Item;
       end Lower_Datum;
 
+
    begin
       --  Nothing that was refused is lowered, and this stage says so
       --  itself rather than trusting the order it was queued in.  R1.70
@@ -7198,160 +7202,162 @@ package body Landin.Stages.Lowering is
          end;
       end loop;
 
-      --  Pass one: every item, over every tree, before any is filled.
-      --  [1740] makes a module a set, so `f` may call `g` written below
-      --  it, and Emit_Call needs `g`'s item to exist by then.
-      for Index in 1 .. Source_Count (Context) loop
-         declare
-            Of_Tree : constant not null access constant Syn.Tree :=
-              Tree_For (Nth_Source (Context, Index));
-            Src : constant Landin.Source.Source_Id :=
-              Syn.Source_Of (Of_Tree.all);
+      --  Pass one: every active item, over every tree, before any is
+      --  filled.  D139's shared declaration traversal flattens selected
+      --  runs before this action sees them.
+      declare
+         procedure Add_Declaration
+           (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
+
+         procedure Add_Declaration
+           (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
+         is
+            Src : constant Landin.Source.Source_Id := Syn.Source_Of (Of_Tree);
+            Id : constant Res.Declaration_Id := Declaration_At (Src, Node);
+            Made : IR.Item_Id;
          begin
-            for Which in
-              1 .. Syn.Declaration_Count (Of_Tree.all)
-            loop
+            case Syn.Kind (Of_Tree, Node) is
+            when Syn.Function_Declaration =>
                declare
-                  Node : constant Syn.Node_Id :=
-                    Syn.Nth_Declaration (Of_Tree.all, Which);
-                  Id : constant Res.Declaration_Id :=
-                    Declaration_At (Src, Node);
-                  Made : IR.Item_Id;
+                  Count : constant Natural :=
+                    Syn.Return_Count (Of_Tree, Node);
+                  Gives : constant Syn.Node_Id :=
+                    (if Count = 1
+                     then Syn.Nth_Return (Of_Tree, Node, 1)
+                     else Syn.No_Node);
+                  Held : constant Ty.Type_Kind :=
+                    (if Count = 0 then Ty.No_Value
+                     elsif Count > 1 then Ty.Aggregate
+                     else Landin.Checking.Type_Of
+                            (Types.all,
+                             Declaration_At (Src, Gives)));
                begin
-                  case Syn.Kind (Of_Tree.all, Node) is
-                     when Syn.Function_Declaration =>
-                        if Syn.Generic_Formal_Count (Of_Tree.all, Node) /= 0
-                        then
-                           --  D138 templates are compile-time syntax only.
-                           --  A direct deduced instance owns the routine item.
-                           Made := IR.No_Item;
-                        else
-                           declare
-                              Count : constant Natural :=
-                                Syn.Return_Count (Of_Tree.all, Node);
-                              Gives : constant Syn.Node_Id :=
-                                (if Count = 1
-                                 then Syn.Nth_Return (Of_Tree.all, Node, 1)
-                                 else Syn.No_Node);
-                              Held : constant Ty.Type_Kind :=
-                                (if Count = 0 then Ty.No_Value
-                                 elsif Count > 1 then Ty.Aggregate
-                                 else Landin.Checking.Type_Of
-                                        (Types.all,
-                                         Declaration_At (Src, Gives)));
-                           begin
-                              Made :=
-                                IR.Add_Item
-                                  (Unit.all, IR.Routine, Id,
-                                   (if Held = Ty.Function_Value
-                                    then Ty.Usize
-                                    elsif Held = Ty.Atom_Value
-                                    then Ty.U32 else Held),
-                                   Site_Of (Of_Tree.all, Node),
-                                   Nominal =>
-                                     (if Held = Ty.Aggregate and then Count = 1
-                                      then Nominal_For
-                                        (Landin.Checking.Nominal_Of
-                                           (Types.all,
-                                            Declaration_At (Src, Gives)))
-                                      else IR.No_Nominal_Type));
-                              if Held = Ty.Atom_Value then
-                                 IR.Set_Atom_Set
-                                   (Unit.all, Made,
-                                    Atom_Set_For
-                                      (Landin.Checking.Atom_Set_Of
-                                         (Types.all,
-                                          Declaration_At (Src, Gives))));
-                              end if;
-                              IR.Set_Signature
-                                (Unit.all, Made,
-                                 Signature_For
-                                   (Landin.Checking.Signature_Of
-                                      (Types.all, Id)));
-                           end;
-                        end if;
-
-                     when Syn.Binding =>
-                        declare
-                           Held : constant Ty.Type_Kind :=
-                             Landin.Checking.Type_Of (Types.all, Id);
-                        begin
-                           Made :=
-                             IR.Add_Item
-                               (Unit.all, IR.Datum, Id,
-                                (if Held = Ty.Function_Value
-                                 then Ty.Usize
-                                 elsif Held = Ty.Atom_Value
-                                 then Ty.U32 else Held),
-                                Site_Of (Of_Tree.all, Node),
-                                Nominal =>
-                                  (if Held = Ty.Aggregate
-                                   then Nominal_For
-                                     (Landin.Checking.Nominal_Of
-                                        (Types.all, Id))
-                                   else IR.No_Nominal_Type));
-
-                           if Held = Ty.Atom_Value then
-                              IR.Set_Atom_Set
-                                (Unit.all, Made,
-                                 Atom_Set_For
-                                   (Landin.Checking.Atom_Set_Of
-                                      (Types.all, Id)));
-                           end if;
-
-                           if Held = Ty.Function_Value then
-                              IR.Set_Signature
-                                (Unit.all, Made,
-                                 Signature_For
-                                   (Landin.Checking.Signature_Of
-                                      (Types.all, Id)));
-                           end if;
-
-                           --  [0520]'s shape: one element and a count,
-                           --  because an array is its element repeated
-                           --  and a run of them would be as long as the
-                           --  count, which reaches four billion.
-                           if Held = Ty.Fixed_Array then
-                              IR.Set_Array
-                                (Unit.all, Made,
-                                 Neutral_Element (Id),
-                                 IR.Element_Total
-                                   (Landin.Checking.Array_Length
-                                      (Types.all, Id)));
-                           end if;
-
-                           --  [0750]'s fields, in the order they were
-                           --  written.  The compact scalar or fixed-array
-                           --  shapes and not the offsets: a backend has a
-                           --  description and works out the same placement
-                           --  the checker did.
-                           if Held = Ty.Aggregate then
-                              declare
-                                 Nominal : constant
-                                   Landin.Checking.Nominal_Type_Id :=
-                                     Landin.Checking.Nominal_Of
-                                       (Types.all, Id);
-                              begin
-                                 for Field in
-                                   1 .. Landin.Checking.Layout_Field_Count
-                                     (Types.all, Nominal)
-                                 loop
-                                    Add_Stored_Field
-                                      (Nominal, Field, Datum => Made);
-                                 end loop;
-                              end;
-                           end if;
-                        end;
-
-                     when others =>
-                        Made := IR.No_Item;
-                  end case;
-
-                  pragma Assert (Made /= IR.No_Item or else True);
+                  if Syn.Generic_Formal_Count (Of_Tree, Node) /= 0 then
+                     --  D138 templates are compile-time syntax only; a
+                     --  concrete instance owns the local routine item.
+                     Made := IR.No_Item;
+                  else
+                     Made :=
+                       IR.Add_Item
+                         (Unit.all, IR.Routine, Id,
+                          (if Held = Ty.Function_Value
+                           then Ty.Usize
+                           elsif Held = Ty.Atom_Value then Ty.U32 else Held),
+                          Site_Of (Of_Tree, Node),
+                          Nominal =>
+                            (if Held = Ty.Aggregate and then Count = 1
+                             then Nominal_For
+                               (Landin.Checking.Nominal_Of
+                                  (Types.all,
+                                   Declaration_At (Src, Gives)))
+                             else IR.No_Nominal_Type));
+                     if Held = Ty.Atom_Value then
+                        IR.Set_Atom_Set
+                          (Unit.all, Made,
+                           Atom_Set_For
+                             (Landin.Checking.Atom_Set_Of
+                                (Types.all,
+                                 Declaration_At (Src, Gives))));
+                     end if;
+                     IR.Set_Signature
+                       (Unit.all, Made,
+                        Signature_For
+                          (Landin.Checking.Signature_Of
+                             (Types.all, Id)));
+                  end if;
                end;
-            end loop;
-         end;
-      end loop;
+
+            when Syn.Binding =>
+               declare
+                  Held : constant Ty.Type_Kind :=
+                    Landin.Checking.Type_Of (Types.all, Id);
+               begin
+                  Made :=
+                    IR.Add_Item
+                      (Unit.all, IR.Datum, Id,
+                       (if Held = Ty.Function_Value
+                        then Ty.Usize
+                        elsif Held = Ty.Atom_Value
+                        then Ty.U32 else Held),
+                       Site_Of (Of_Tree, Node),
+                       Nominal =>
+                         (if Held = Ty.Aggregate
+                          then Nominal_For
+                            (Landin.Checking.Nominal_Of
+                               (Types.all, Id))
+                          else IR.No_Nominal_Type));
+
+                  if Held = Ty.Atom_Value then
+                     IR.Set_Atom_Set
+                       (Unit.all, Made,
+                        Atom_Set_For
+                          (Landin.Checking.Atom_Set_Of
+                             (Types.all, Id)));
+                  end if;
+
+                  if Held = Ty.Function_Value then
+                     IR.Set_Signature
+                       (Unit.all, Made,
+                        Signature_For
+                          (Landin.Checking.Signature_Of
+                             (Types.all, Id)));
+                  end if;
+
+                  --  [0520]'s shape: one element and a count,
+                  --  because an array is its element repeated
+                  --  and a run of them would be as long as the
+                  --  count, which reaches four billion.
+                  if Held = Ty.Fixed_Array then
+                     IR.Set_Array
+                       (Unit.all, Made,
+                        Neutral_Element (Id),
+                        IR.Element_Total
+                          (Landin.Checking.Array_Length
+                             (Types.all, Id)));
+                  end if;
+
+                  --  [0750]'s fields, in the order they were
+                  --  written.  The compact scalar or fixed-array
+                  --  shapes and not the offsets: a backend has a
+                  --  description and works out the same placement
+                  --  the checker did.
+                  if Held = Ty.Aggregate then
+                     declare
+                        Nominal : constant
+                          Landin.Checking.Nominal_Type_Id :=
+                            Landin.Checking.Nominal_Of
+                              (Types.all, Id);
+                     begin
+                        for Field in
+                          1 .. Landin.Checking.Layout_Field_Count
+                            (Types.all, Nominal)
+                        loop
+                           Add_Stored_Field
+                             (Nominal, Field, Datum => Made);
+                        end loop;
+                     end;
+                  end if;
+               end;
+
+            when others =>
+               Made := IR.No_Item;
+            end case;
+
+            pragma Assert (Made /= IR.No_Item or else True);
+         end Add_Declaration;
+      begin
+         for Index in 1 .. Source_Count (Context) loop
+            declare
+               Of_Tree : constant not null access constant Syn.Tree :=
+                 Tree_For (Nth_Source (Context, Index));
+               procedure Walk is new
+                 Landin.Configuration.For_Each_Active_Declaration
+                   (Add_Declaration);
+            begin
+               Walk (Activity.all, Of_Tree.all);
+            end;
+         end loop;
+      end;
 
       --  Ready generic routine instances follow declaration-backed items in
       --  checker interning order.  Their source template remains provenance;
@@ -7421,7 +7427,10 @@ package body Landin.Stages.Lowering is
               Syn.Source_Of (Of_Tree.all);
          begin
             for Node in Syn.Node_Id'(1) .. Syn.Last_Node (Of_Tree.all) loop
-               if Syn.Kind (Of_Tree.all, Node) = Syn.Anonymous_Function then
+               if Syn.Kind (Of_Tree.all, Node) = Syn.Anonymous_Function
+                 and then Landin.Configuration.Is_Active
+                   (Activity.all, Syn.Source_Of (Of_Tree.all), Node)
+               then
                   declare
                      Count : constant Natural :=
                        Syn.Return_Count (Of_Tree.all, Node);
@@ -7470,38 +7479,38 @@ package body Landin.Stages.Lowering is
          end;
       end loop;
 
-      --  Pass two: fill them, one at a time.  An item's slots, blocks and
-      --  instructions are runs in shared vectors, and Landin.IR.Open_Run
-      --  refuses an interleaved fill.
-      for Index in 1 .. Source_Count (Context) loop
-         declare
-            Of_Tree : constant not null access constant Syn.Tree :=
-              Tree_For (Nth_Source (Context, Index));
+      --  Pass two: fill every active item in the same declaration order.
+      declare
+         procedure Lower_Declaration
+           (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
+
+         procedure Lower_Declaration
+           (Of_Tree : Syn.Tree; Node : Syn.Node_Id) is
          begin
-            for Which in
-              1 .. Syn.Declaration_Count (Of_Tree.all)
-            loop
-               declare
-                  Node : constant Syn.Node_Id :=
-                    Syn.Nth_Declaration (Of_Tree.all, Which);
-               begin
-                  case Syn.Kind (Of_Tree.all, Node) is
-                     when Syn.Function_Declaration =>
-                        if Syn.Generic_Formal_Count (Of_Tree.all, Node) = 0
-                        then
-                           Lower_Routine (Of_Tree.all, Node);
-                        end if;
-
-                     when Syn.Binding =>
-                        Lower_Datum (Of_Tree.all, Node);
-
-                     when others =>
-                        null;
-                  end case;
-               end;
-            end loop;
-         end;
-      end loop;
+            case Syn.Kind (Of_Tree, Node) is
+               when Syn.Function_Declaration =>
+                  if Syn.Generic_Formal_Count (Of_Tree, Node) = 0 then
+                     Lower_Routine (Of_Tree, Node);
+                  end if;
+               when Syn.Binding =>
+                  Lower_Datum (Of_Tree, Node);
+               when others =>
+                  null;
+            end case;
+         end Lower_Declaration;
+      begin
+         for Index in 1 .. Source_Count (Context) loop
+            declare
+               Of_Tree : constant not null access constant Syn.Tree :=
+                 Tree_For (Nth_Source (Context, Index));
+               procedure Walk is new
+                 Landin.Configuration.For_Each_Active_Declaration
+                   (Lower_Declaration);
+            begin
+               Walk (Activity.all, Of_Tree.all);
+            end;
+         end loop;
+      end;
 
       for Position in 1 .. Landin.Checking.Routine_Instance_Count (Types.all)
       loop

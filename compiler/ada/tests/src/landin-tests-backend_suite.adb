@@ -23,6 +23,7 @@ with Landin.Provenance;
 with Landin.Resolution;
 with Landin.Source;
 with Landin.Stages.Checking;
+with Landin.Stages.Configuration;
 with Landin.Stages.Lowering;
 with Landin.Stages.Resolution;
 with Landin.Stages.Syntax;
@@ -69,6 +70,7 @@ package body Landin.Tests.Backend_Suite is
 
    Frontend : aliased Landin.Stages.Syntax.Instance;
    Names    : aliased Landin.Stages.Resolution.Instance;
+   Configurer : aliased Landin.Stages.Configuration.Instance;
    Checker  : aliased Landin.Stages.Checking.Instance;
    Lowerer  : aliased Landin.Stages.Lowering.Instance;
 
@@ -91,6 +93,7 @@ package body Landin.Tests.Backend_Suite is
    begin
       pragma Assert (Written /= Landin.Source.No_Source);
       Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
       Landin.Stages.Append (Order, Names'Access);
       Landin.Stages.Append (Order, Checker'Access);
       Landin.Stages.Append (Order, Lowerer'Access);
@@ -150,7 +153,7 @@ package body Landin.Tests.Backend_Suite is
          & "end main" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work), "the program is accepted");
       Landin.Testing.Check_Equal
@@ -175,7 +178,7 @@ package body Landin.Tests.Backend_Suite is
          "f: () -> (r: u32) =" & LF & "    r = 1" & LF & "end f" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
 
       declare
          Text : constant String := Emitted (Work);
@@ -208,7 +211,7 @@ package body Landin.Tests.Backend_Suite is
          & "    r = a" & LF & "end f" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
 
       declare
          Text : constant String := Emitted (Work);
@@ -248,7 +251,7 @@ package body Landin.Tests.Backend_Suite is
          & "end f" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
 
       declare
          Text : constant String := Emitted (Work);
@@ -287,7 +290,7 @@ package body Landin.Tests.Backend_Suite is
          & "    r = a + b" & LF & "end f" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
 
       declare
          Text : constant String := Emitted (Work);
@@ -322,7 +325,7 @@ package body Landin.Tests.Backend_Suite is
          & "    r = a - b" & LF & "end f" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
 
       declare
          Text : constant String := Emitted (Work);
@@ -357,7 +360,7 @@ package body Landin.Tests.Backend_Suite is
          & "    r = a + b" & LF & "end f" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
 
       declare
          Text : constant String := Emitted (Work);
@@ -392,7 +395,7 @@ package body Landin.Tests.Backend_Suite is
          & "    r = a - b" & LF & "end f" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
 
       declare
          Text : constant String := Emitted (Work);
@@ -424,7 +427,7 @@ package body Landin.Tests.Backend_Suite is
          & "    r = ~a" & LF & "end f" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
 
       declare
          Text : constant String := Emitted (Work);
@@ -461,7 +464,7 @@ package body Landin.Tests.Backend_Suite is
          & "    r = -a" & LF & "end f" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
 
       declare
          Text : constant String := Emitted (Work);
@@ -500,7 +503,7 @@ package body Landin.Tests.Backend_Suite is
          & "    r = -a" & LF & "end f" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
 
       declare
          Text : constant String := Emitted (Work);
@@ -536,7 +539,7 @@ package body Landin.Tests.Backend_Suite is
          & "    r = not a" & LF & "end f" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
 
       declare
          Text : constant String := Emitted (Work);
@@ -591,7 +594,7 @@ package body Landin.Tests.Backend_Suite is
                & "    r = a " & Row.Source.all & " b" & LF & "end f" & LF,
                Ran);
 
-            Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+            Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
 
             declare
                Text : constant String := Emitted (Work);
@@ -632,7 +635,7 @@ package body Landin.Tests.Backend_Suite is
          & "    r = a << s" & LF & "end f" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
 
       declare
          Text : constant String := Emitted (Work);
@@ -677,7 +680,7 @@ package body Landin.Tests.Backend_Suite is
          & "    r = a >> s" & LF & "end f" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
 
       declare
          Text : constant String := Emitted (Work);
@@ -721,7 +724,7 @@ package body Landin.Tests.Backend_Suite is
          & "    r = a >> s" & LF & "end f" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
 
       declare
          Text : constant String := Emitted (Work);
@@ -761,7 +764,7 @@ package body Landin.Tests.Backend_Suite is
          & "    r = g(x, x)" & LF & "end f" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
 
       declare
          Text : constant String := Emitted (Work);
@@ -799,7 +802,7 @@ package body Landin.Tests.Backend_Suite is
          & "    g(x)" & LF & "end f" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
 
       declare
          Text : constant String := Emitted (Work);
@@ -835,7 +838,7 @@ package body Landin.Tests.Backend_Suite is
          & "    r = g(1, 2, 3, 4, 5, 6)" & LF & "end f" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
 
       declare
          Text : constant String := Emitted (Work);
@@ -880,7 +883,7 @@ package body Landin.Tests.Backend_Suite is
          & "end f" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
 
       declare
          Text : constant String := Emitted (Work);
@@ -945,7 +948,7 @@ package body Landin.Tests.Backend_Suite is
          & "end use" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
       declare
          Text : constant String := Emitted (Work);
       begin
@@ -980,7 +983,7 @@ package body Landin.Tests.Backend_Suite is
    begin
       Lower (Work, "public answer: i32 = 42" & LF, Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
 
       declare
          Text : constant String := Emitted (Work);
@@ -1023,7 +1026,7 @@ package body Landin.Tests.Backend_Suite is
          & "public mut state: counters" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
 
       declare
          Text : constant String := Emitted (Work);
@@ -1068,7 +1071,7 @@ package body Landin.Tests.Backend_Suite is
          Ran  : Natural;
       begin
          Lower (Work, Source, Ran);
-         Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+         Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
 
          declare
             Text : constant String := Emitted (Work);
@@ -1200,7 +1203,7 @@ package body Landin.Tests.Backend_Suite is
            & HT & ".size state, 16" & LF;
       begin
          Lower (Work, Source, Ran);
-         Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+         Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
          declare
             Text : constant String := Emitted (Work);
          begin
@@ -1523,7 +1526,7 @@ package body Landin.Tests.Backend_Suite is
            & HT & ".size image, 20" & LF;
       begin
          Lower (Work, Source, Ran);
-         Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+         Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
          declare
             Text : constant String := Emitted (Work);
          begin
@@ -1557,7 +1560,7 @@ package body Landin.Tests.Backend_Suite is
            & HT & ".size image, 40" & LF;
       begin
          Lower (Work, Source, Ran);
-         Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+         Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
          declare
             Text : constant String := Emitted (Work);
          begin
@@ -1603,7 +1606,7 @@ package body Landin.Tests.Backend_Suite is
          & "end read" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
 
       declare
          Text : constant String := Emitted (Work);
@@ -1646,7 +1649,7 @@ package body Landin.Tests.Backend_Suite is
          & "end read" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
 
       declare
          Text : constant String := Emitted (Work);
@@ -1684,7 +1687,7 @@ package body Landin.Tests.Backend_Suite is
          & "end read" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
       declare
          Text : constant String := Emitted (Work);
       begin
@@ -1743,7 +1746,7 @@ package body Landin.Tests.Backend_Suite is
          Ran : Natural;
       begin
          Lower (Work, Local, Ran);
-         Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+         Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
          declare
             Text : constant String := Emitted (Work);
          begin
@@ -1761,7 +1764,7 @@ package body Landin.Tests.Backend_Suite is
       Ran : Natural;
    begin
       Lower (Work, Wide, Ran);
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
       declare
          Text : constant String := Emitted (Work);
       begin
@@ -1823,7 +1826,7 @@ package body Landin.Tests.Backend_Suite is
          Ran : Natural;
       begin
          Lower (Work, Local, Ran);
-         Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+         Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
          declare
             Text : constant String := Emitted (Work);
          begin
@@ -1842,7 +1845,7 @@ package body Landin.Tests.Backend_Suite is
       Ran : Natural;
    begin
       Lower (Work, Wide, Ran);
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
       declare
          Text : constant String := Emitted (Work);
       begin
@@ -1913,7 +1916,7 @@ package body Landin.Tests.Backend_Suite is
          Ran : Natural;
       begin
          Lower (Work, Local, Ran);
-         Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+         Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
          declare
             Text : constant String := Emitted (Work);
          begin
@@ -1935,7 +1938,7 @@ package body Landin.Tests.Backend_Suite is
       Ran : Natural;
    begin
       Lower (Work, Wide, Ran);
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
       declare
          Text : constant String := Emitted (Work);
       begin
@@ -1997,7 +2000,7 @@ package body Landin.Tests.Backend_Suite is
          Ran : Natural;
       begin
          Lower (Work, Source, Ran);
-         Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+         Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
          declare
             Text : constant String := Emitted (Work);
          begin
@@ -2063,7 +2066,7 @@ package body Landin.Tests.Backend_Suite is
          Ran : Natural;
       begin
          Lower (Work, Source, Ran);
-         Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+         Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
          declare
             Text : constant String := Emitted (Work);
          begin
@@ -2110,7 +2113,7 @@ package body Landin.Tests.Backend_Suite is
          & "end clear" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
       declare
          Text : constant String := Emitted (Work);
       begin
@@ -2174,7 +2177,7 @@ package body Landin.Tests.Backend_Suite is
          Ran : Natural;
       begin
          Lower (Work, Local, Ran);
-         Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+         Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
          declare
             Text : constant String := Emitted (Work);
          begin
@@ -2196,7 +2199,7 @@ package body Landin.Tests.Backend_Suite is
       Ran : Natural;
    begin
       Lower (Work, Wide, Ran);
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
       declare
          Text : constant String := Emitted (Work);
       begin
@@ -2243,7 +2246,7 @@ package body Landin.Tests.Backend_Suite is
          Ran : Natural;
       begin
          Lower (Work, Source, Ran);
-         Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+         Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
          declare
             Text : constant String := Emitted (Work);
          begin
@@ -2294,7 +2297,7 @@ package body Landin.Tests.Backend_Suite is
          & "end write" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
 
       declare
          Text : constant String := Emitted (Work);
@@ -2344,7 +2347,7 @@ package body Landin.Tests.Backend_Suite is
          & "end use" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
 
       declare
          Text : constant String := Emitted (Work);
@@ -2403,7 +2406,7 @@ package body Landin.Tests.Backend_Suite is
          Ran  : Natural;
       begin
          Lower (Work, Source, Ran);
-         Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+         Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
 
          declare
             Text : constant String := Emitted (Work);
@@ -2452,7 +2455,7 @@ package body Landin.Tests.Backend_Suite is
         (Source => 1, Where => Landin.Source.Empty_Span);
    begin
       Lower (Work, "f: () -> none = end f" & LF, Ran);
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
       IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
       Routine := IR.Add_Item
         (Unit, IR.Routine, 1, Landin.Types.No_Value, Site);
@@ -2526,7 +2529,7 @@ package body Landin.Tests.Backend_Suite is
       Ran : Natural;
    begin
       Lower (Work, "use: () -> none = end use" & LF, Ran);
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
 
       declare
          Unit : IR.Unit;
@@ -2615,7 +2618,7 @@ package body Landin.Tests.Backend_Suite is
          Ran  : Natural;
       begin
          Lower (Work, Source_Text, Ran);
-         Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+         Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
          Landin.Testing.Check
            (Item, not Landin.Stages.Failed (Work), "the copies are accepted");
 
@@ -2687,7 +2690,7 @@ package body Landin.Tests.Backend_Suite is
          Ran  : Natural;
       begin
          Lower (Work, Source_Text, Ran);
-         Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+         Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
 
          declare
             Text : constant String := Emitted (Work);
@@ -2740,7 +2743,7 @@ package body Landin.Tests.Backend_Suite is
          Ran  : Natural;
       begin
          Lower (Work, Source_Text, Ran);
-         Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+         Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
 
          declare
             Text : constant String := Emitted (Work);
@@ -2799,7 +2802,7 @@ package body Landin.Tests.Backend_Suite is
          Ran  : Natural;
       begin
          Lower (Work, Source_Text, Ran);
-         Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+         Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
 
          declare
             Text : constant String := Emitted (Work);
@@ -2863,7 +2866,7 @@ package body Landin.Tests.Backend_Suite is
          Ran  : Natural;
       begin
          Lower (Work, Source_Text, Ran);
-         Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+         Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
 
          declare
             Text : constant String := Emitted (Work);
@@ -2920,7 +2923,7 @@ package body Landin.Tests.Backend_Suite is
          Ran : Natural;
       begin
          Lower (Work, Source_Text, Ran);
-         Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+         Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
          declare
             Text : constant String := Emitted (Work);
             Clear : constant String :=
@@ -2980,7 +2983,7 @@ package body Landin.Tests.Backend_Suite is
          Ran : Natural;
       begin
          Lower (Work, Source_Text, Ran);
-         Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+         Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
          declare
             Text : constant String := Emitted (Work);
             Address : constant String :=
@@ -3043,7 +3046,7 @@ package body Landin.Tests.Backend_Suite is
          Ran : Natural;
       begin
          Lower (Work, Source_Text, Ran);
-         Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+         Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
          declare
             Text : constant String := Emitted (Work);
             Address : constant String :=
@@ -3110,7 +3113,7 @@ package body Landin.Tests.Backend_Suite is
              & HT & "addq %rdx, " & Register & LF);
       begin
          Lower (Work, Source_Text, Ran);
-         Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+         Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
          declare
             Text : constant String := Emitted (Work);
          begin
@@ -3169,7 +3172,7 @@ package body Landin.Tests.Backend_Suite is
          Ran  : Natural;
       begin
          Lower (Work, Source_Text, Ran);
-         Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+         Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
          Landin.Testing.Check
            (Item, not Landin.Stages.Failed (Work), "both fills are accepted");
 
@@ -3232,7 +3235,7 @@ package body Landin.Tests.Backend_Suite is
          & "public answer: i32 = 42" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
 
       declare
          Text : constant String := Emitted (Work);
@@ -3294,7 +3297,7 @@ package body Landin.Tests.Backend_Suite is
          & "flag: bool = zeroed" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
 
       declare
          Text : constant String := Emitted (Work);
@@ -3347,7 +3350,7 @@ package body Landin.Tests.Backend_Suite is
          Ran  : Natural;
       begin
          Lower (Work, Source_Text, Ran);
-         Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+         Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
 
          declare
             Text : constant String := Emitted (Work);
@@ -3416,7 +3419,7 @@ package body Landin.Tests.Backend_Suite is
          & "mut cleared: [3]bool = zeroed" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
 
       declare
          Text : constant String := Emitted (Work);
@@ -3491,7 +3494,7 @@ package body Landin.Tests.Backend_Suite is
          & "mut hybrid_through: [4]u64 = hybrid_quad" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
 
       declare
          Text : constant String := Emitted (Work);
@@ -3586,7 +3589,7 @@ package body Landin.Tests.Backend_Suite is
          & "end use" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
 
       declare
          Text : constant String := Emitted (Work);
@@ -3640,7 +3643,7 @@ package body Landin.Tests.Backend_Suite is
          & "end at" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
 
       declare
          Text : constant String := Emitted (Work);
@@ -3697,7 +3700,7 @@ package body Landin.Tests.Backend_Suite is
          & "end at" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
 
       declare
          Text : constant String := Emitted (Work);
@@ -3759,7 +3762,7 @@ package body Landin.Tests.Backend_Suite is
          & "    r = counter" & LF & "end bump" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
 
       declare
          Text : constant String := Emitted (Work);
@@ -3804,7 +3807,7 @@ package body Landin.Tests.Backend_Suite is
          & "wrapped: u16 = 40000 +% 30000 -% 10000" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
 
       declare
          Text : constant String := Emitted (Work);
@@ -3885,9 +3888,9 @@ package body Landin.Tests.Backend_Suite is
       Ran    : Natural;
    begin
       Lower (First, Source, Ran);
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
       Lower (Second, Source, Ran);
-      Landin.Testing.Check_Equal (Item, Ran, 4, "and four again");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "and five again");
 
       Landin.Testing.Check_Equal
         (Item, Emitted (First), Emitted (Second),
@@ -3932,9 +3935,9 @@ package body Landin.Tests.Backend_Suite is
       Ran : Natural;
    begin
       Lower (Native, Source, Ran);
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
       Lower (Narrow, Source, Ran);
-      Landin.Testing.Check_Equal (Item, Ran, 4, "and four again");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "and five again");
 
       declare
          Wide : constant String := Emitted (Native);
@@ -4039,9 +4042,9 @@ package body Landin.Tests.Backend_Suite is
       Ran    : Natural;
    begin
       Lower (Native, Source, Ran);
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
       Lower (Narrow, Source, Ran);
-      Landin.Testing.Check_Equal (Item, Ran, 4, "and four again");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "and five again");
 
       declare
          Wide : constant String := Emitted (Native);
@@ -4175,7 +4178,7 @@ package body Landin.Tests.Backend_Suite is
          & "    r = a / b" & LF & "end f" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
 
       declare
          Text : constant String := Emitted (Work);
@@ -4218,7 +4221,7 @@ package body Landin.Tests.Backend_Suite is
          & "    r = a / b" & LF & "end f" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
 
       declare
          Text : constant String := Emitted (Work);
@@ -4264,7 +4267,7 @@ package body Landin.Tests.Backend_Suite is
          & "    r = a % b" & LF & "end f" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
 
       declare
          Text : constant String := Emitted (Work);
@@ -4312,7 +4315,7 @@ package body Landin.Tests.Backend_Suite is
          & "    r = a * b" & LF & "end f" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
 
       declare
          Text : constant String := Emitted (Work);
@@ -4352,7 +4355,7 @@ package body Landin.Tests.Backend_Suite is
          & "    r = a * b" & LF & "end f" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
 
       declare
          Text : constant String := Emitted (Work);
@@ -4391,7 +4394,7 @@ package body Landin.Tests.Backend_Suite is
          & "    r = a *% b" & LF & "end f" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
 
       declare
          Text : constant String := Emitted (Work);
@@ -4427,7 +4430,7 @@ package body Landin.Tests.Backend_Suite is
          & "    r = a +% b" & LF & "end f" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
 
       declare
          Text : constant String := Emitted (Work);
@@ -4463,7 +4466,7 @@ package body Landin.Tests.Backend_Suite is
          & "    r = a -% b" & LF & "end f" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
 
       declare
          Text : constant String := Emitted (Work);
@@ -4500,7 +4503,7 @@ package body Landin.Tests.Backend_Suite is
          & "    r = a < b" & LF & "end f" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
 
       declare
          Text : constant String := Emitted (Work);
@@ -4541,7 +4544,7 @@ package body Landin.Tests.Backend_Suite is
          & "end f" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
 
       declare
          Text : constant String := Emitted (Work);
@@ -4593,7 +4596,7 @@ package body Landin.Tests.Backend_Suite is
          & "end g" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
 
       declare
          Text : constant String := Emitted (Work);
@@ -4650,7 +4653,7 @@ package body Landin.Tests.Backend_Suite is
          & "end use" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
       declare
          Whole : constant String := Emitted (Work);
          Use_At : constant Positive :=
@@ -4706,7 +4709,7 @@ package body Landin.Tests.Backend_Suite is
          & "end main" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "checked division with deferred cleanup is lowered");
@@ -4766,7 +4769,7 @@ package body Landin.Tests.Backend_Suite is
          & "end success" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
          "failure-only cleanup reaches backend-ready IR");
@@ -4832,7 +4835,7 @@ package body Landin.Tests.Backend_Suite is
          & "    r = b" & LF & "end f" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
 
       declare
          Unit   : IR.Unit renames Landin.Stages.Code (Work).all;
@@ -4934,7 +4937,7 @@ package body Landin.Tests.Backend_Suite is
          & "end main" & LF,
          Ran);
 
-      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work), "the program is accepted");
       declare

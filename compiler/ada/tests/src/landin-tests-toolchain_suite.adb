@@ -13,6 +13,7 @@ with Landin.IR;
 with Landin.Platform;
 with Landin.Source;
 with Landin.Stages.Checking;
+with Landin.Stages.Configuration;
 with Landin.Stages.Lowering;
 with Landin.Stages.Resolution;
 with Landin.Stages.Syntax;
@@ -27,6 +28,7 @@ package body Landin.Tests.Toolchain_Suite is
 
    Frontend : aliased Landin.Stages.Syntax.Instance;
    Names    : aliased Landin.Stages.Resolution.Instance;
+   Configurer : aliased Landin.Stages.Configuration.Instance;
    Checker  : aliased Landin.Stages.Checking.Instance;
    Lowerer  : aliased Landin.Stages.Lowering.Instance;
 
@@ -48,6 +50,7 @@ package body Landin.Tests.Toolchain_Suite is
    begin
       pragma Assert (Written /= Landin.Source.No_Source);
       Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
       Landin.Stages.Append (Order, Names'Access);
       Landin.Stages.Append (Order, Checker'Access);
       Landin.Stages.Append (Order, Lowerer'Access);

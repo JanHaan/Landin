@@ -200,6 +200,33 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Args    : Landin.Platform.Path_List;
    begin
       Landin.Platform.Add (Args, Source);
+      declare
+         Rest : constant String := With_Sources (Case_Item);
+         First : Integer := Rest'First;
+
+         procedure Add_One (Named : String);
+
+         procedure Add_One (Named : String) is
+            Trimmed : constant String :=
+              Ada.Strings.Fixed.Trim (Named, Ada.Strings.Both);
+         begin
+            if Trimmed /= "" then
+               Landin.Platform.Add
+                 (Args, Fixture_Root & "/positive/" & Name (Case_Item)
+                  & "/" & Trimmed);
+            end if;
+         end Add_One;
+      begin
+         for Index in Rest'Range loop
+            if Rest (Index) = ',' then
+               Add_One (Rest (First .. Index - 1));
+               First := Index + 1;
+            end if;
+         end loop;
+         if First <= Rest'Last then
+            Add_One (Rest (First .. Rest'Last));
+         end if;
+      end;
       Landin.Platform.Add (Args, "--emit=asm");
       Landin.Platform.Add (Args, "-o");
       Landin.Platform.Add (Args, Written);
