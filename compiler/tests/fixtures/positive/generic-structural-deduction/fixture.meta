@@ -1,0 +1,5 @@
+class: positive
+summary: recursive generic-call unification accepts nested nominal, phantom, array, alias and function-signature patterns
+constructs: 0520, 1000, 1290, 1350, 1920
+program: program.ldn
+targets: linux-x86-64, macos-arm64
