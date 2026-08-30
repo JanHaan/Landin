@@ -1,0 +1,6 @@
+class: negative
+summary: an inferred generic template has per-instance signatures but no standalone function value
+constructs: 0960, 1000, 1290
+program: program.ldn
+targets: linux-x86-64, macos-arm64
+codes: L0301

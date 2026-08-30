@@ -3409,8 +3409,12 @@ package body Landin.Tests.Verifier_Suite is
          Signature := IR.Add_Signature
            (Unit, IR.No_Signature_Parts,
             (Kind => Landin.Types.U32, others => <>));
-         Routine := IR.Add_Item
-           (Unit, IR.Routine, 1, Landin.Types.U32, Site);
+         --  A lowered generic instance is an ordinary local routine item.
+         --  Give this malformed failure edge that provenance explicitly: the
+         --  verifier must still reject it from the concrete signature, with
+         --  no generic-only error opcode or static ABI position to inspect.
+         Routine := IR.Add_Routine_Instance_Item
+           (Unit, 1, 1, Landin.Types.U32, Site);
          IR.Set_Signature (Unit, Routine, Signature);
          Result := IR.Add_Slot
            (Unit, Routine, Landin.Types.U32, 2, Site);

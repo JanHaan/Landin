@@ -1544,8 +1544,12 @@ that a change three modules down can rewrite silently is
 not a promise. Inside a module, where the compiler sees
 every caller anyway, '...' is a convenience and stays. Mutually recursive
 private routines are inferred together at their least fixed point; an empty
-inferred set is infallible. Function types and anonymous functions write a
-concrete set because their complete signature is their type.
+inferred set is infallible. A generic template has no error signature of its
+own: each concrete argument tuple joins that same fixed point as a separate
+routine, so equal tuples share one answer and unequal tuples can keep different
+answers. Recovery and propagation see the finalized set for the selected
+instance. Function types and anonymous functions write a concrete set because
+their complete signature is their type.
 
 ```landin
 read_config: (path: utf8) -> (data: []u8) ! ... =
@@ -2193,8 +2197,11 @@ function patterns match parameter and result runs plus their error form while
 ignoring labels. Repeats must agree exactly. A saturated explicit static tuple
 bypasses deduction and validates the same patterns. No return context,
 conversion, constraint search or user code participates. The compile-time
-formals create no runtime parameters or ABI positions. Constraints and evidence
-remain later work.
+formals create no runtime parameters or ABI positions. A generic routine name
+is still template syntax rather than a standalone function value; a direct call
+is what selects an instance. Private `! ...` is inferred for that concrete
+instance before its body is lowered. Constraints and evidence remain later
+work.
 
 ```landin
 sort: (T: type is ordered, data: []mut T) -> none =
