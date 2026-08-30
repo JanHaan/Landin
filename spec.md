@@ -7655,25 +7655,46 @@ may participate in deduction.
 **Chosen:** a generic routine template has no standalone function value or IR
 item. A direct call first synthesizes each runtime argument without an expected
 parameter type. A context-free integer literal therefore takes [0200]'s `i32`.
-A type formal occurring directly as a runtime parameter type binds that
-argument's complete normalized descriptor: an enabled scalar, structural atom
-set, exact fixed array, nominal aggregate identity, or structural function
-signature whose error set is already concrete. Repeated direct occurrences must agree exactly, and every type
-formal must be bound. Deduction uses no return
-context, conversion, constraint search, arithmetic inversion or user-code
-execution. One exact runtime array pattern `[n]t` may additionally bind `n`
-from the argument's normalized length and `t` from its normalized element
-descriptor; this is shape matching, not arithmetic inversion. A call either
+The checker then recursively unifies each written runtime parameter pattern
+with that independently synthesized normalized descriptor. Scalar and atom-set
+constants agree exactly. A direct type formal binds the complete scalar,
+structural atom-set, fixed-array, nominal or concrete function-signature
+descriptor; every repeat must agree exactly.
+
+A fixed-array pattern recursively matches its exact element descriptor and
+bound. A direct fixed formal in the bound binds the argument length. A computed
+D136 bound never contributes an equation to solve: the checker defers it until
+another direct occurrence or an explicit static tuple has bound every formal
+it references, then folds and compares the result exactly. A formal that occurs
+only inside `n * 2` or another computed expression remains undeduced. Nominal
+elements participate by identity.
+
+A parameterized nominal pattern requires an argument instance interned from the
+same source template, then recursively matches every stored normalized actual
+in declaration order. This includes phantom type and fixed actuals that do not
+appear in the struct body. Ordinary aliases erase consistently; a parameterized
+alias pattern is expanded symbolically and its result is unified without
+inventing an actual. A function-signature pattern recursively matches parameter
+and result counts and types plus its infallible, concrete or still-inferred
+error form; parameter and result labels do not participate [1000]. A nested
+type formal may therefore bind from a nominal actual tuple, fixed-array element,
+function parameter, function result or concrete function error set.
+
+Every static formal must be bound. Deduction uses no return context, conversion,
+constraint search, arithmetic inversion or user-code execution. A call either
 leaves all static formals for deduction or names every type/fixed formal in its
-one named call list; a partial explicit tuple is refused. Type actuals are
-resolved as type views, while a fixed actual is an integer literal or a
-forwarded caller fixed formal and must fit its substituted declared integer
-type. After deduction or explicit saturation, substitution builds the concrete
-runtime signature and ordinary call checking applies that signature. A generic routine may write a concrete
-declared atom error set; substitution carries it on the instance signature,
-and call recovery, `try`, `fail`, `defer`, and `undo` use the ordinary error
-and cleanup machinery. Per-instance `! ...` inference is explicitly deferred
-and refused at the inferred-set syntax with a source diagnostic.
+one named call list; a partial explicit tuple is refused. A saturated explicit
+static tuple bypasses binding and runs the same recursive walk as exact
+validation. Type actuals are resolved as type views, while a fixed actual is an
+integer literal or a forwarded caller fixed formal and must fit its substituted
+declared integer type. Fixed ranges are validated after the complete tuple is
+known. After deduction or explicit saturation, substitution builds the concrete
+runtime signature and ordinary call checking applies that signature. A generic
+routine may write a concrete declared atom error set; substitution carries it
+on the instance signature, and call recovery, `try`, `fail`, `defer`, and `undo`
+use the ordinary error and cleanup machinery. Per-instance `! ...` inference is
+explicitly deferred and refused at the inferred-set syntax with a source
+diagnostic.
 
 The checker interns an opaque routine identity from the source template and
 complete normalized actual tuple. Equal keys reuse one identity; unequal keys
@@ -7694,11 +7715,12 @@ stable. The template, type formals and fixed formals create no item, slot,
 runtime signature part or ABI position. This executable increment carries every
 enabled direct-formal descriptor through routine parameters, results, locals
 and calls, including atom sets, function signatures and nominal aggregate
-transport/layout. Exact `[n]t` shape deduction is additionally enabled.
-Deduction through other nested type patterns, a function descriptor whose error
-set is still inferred, and computed fixed expressions remains deferred. Static
-arguments have no synthesis, evaluation, flow fact, cleanup, IR value or ABI
-position; lowering maps only written runtime arguments to runtime formals.
+transport/layout. Recursive structural deduction changes no descriptor,
+transport, layout or ABI rule: static arguments have no synthesis, evaluation,
+flow fact, cleanup, IR value or ABI position, and lowering maps only written
+runtime arguments to runtime formals. A direct type formal still cannot bind an
+inferred function descriptor, because that descriptor is not yet a complete
+actual key; per-instance error inference remains separate.
 
 **Why an instance view:** writing `t = u8` on the template declaration or its
 nodes makes a later `t = i32` call overwrite the first. Resetting shared tables
@@ -7712,10 +7734,16 @@ facts`, the lowering case `generic routines lower once per key`,
 `negative/generic-routine-undeduced-formal`,
 `negative/generic-routine-infinite-expansion`,
 `negative/generic-routine-inferred-errors-deferred`,
-`negative/generic-routine-unused-unconditional-defect`, and
+`negative/generic-routine-unused-unconditional-defect`,
+`negative/generic-computed-pattern-undeduced`,
+`negative/generic-explicit-computed-pattern-mismatch`,
+`negative/generic-structural-repeated-conflict`,
+`negative/generic-wrong-nominal-template`,
+`positive/generic-structural-deduction`, and
 `runtime/generic-identity-deduction`,
 `runtime/generic-fixed-array-deduction`,
 `runtime/generic-direct-descriptor-deduction`,
+`runtime/generic-structural-deduction`,
 `runtime/generic-declared-errors`, and
 `runtime/generic-same-key-recursion` on Linux x86-64.
 
