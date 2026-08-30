@@ -413,10 +413,25 @@ package Landin.Resolution is
      (Unmatched_Argument, Runtime_Argument, Type_Argument, Fixed_Argument,
       Field_Argument, Payload_Argument, Fill_Argument);
 
+   --  Runtime matching is completed once the checker has the callee's
+   --  structural signature.  Resolution can classify a direct declaration
+   --  earlier, but selected and function-valued callees deliberately use the
+   --  same final match rather than reconstructing source declarations.
+   type Call_Match_State is (Call_Not_Matched, Call_Matched, Call_Rejected);
+
    function Class_Of
      (Of_Table : Table;
       Of_Tree  : Landin.Syntax.Tree;
       Node     : Landin.Syntax.Node_Id) return Application_Class
+     with Pre => Is_Prepared (Of_Table)
+                 and then Covers (Of_Table, Of_Tree)
+                 and then Landin.Syntax.Kind (Of_Tree, Node)
+                            = Landin.Syntax.Labeled_Application;
+
+   function Match_Of
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id) return Call_Match_State
      with Pre => Is_Prepared (Of_Table)
                  and then Covers (Of_Table, Of_Tree)
                  and then Landin.Syntax.Kind (Of_Tree, Node)
@@ -477,6 +492,35 @@ package Landin.Resolution is
                  and then (Formal = No_Declaration
                            or else Contains (Into, Formal));
 
+   --  The checker remaps runtime arguments from written order onto ABI formal
+   --  positions.  A direct-resolution formal is retained when it still
+   --  agrees; indirect signatures have no declaration target and keep none.
+   procedure Match_Runtime_Argument
+     (Into     : in out Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Argument : Landin.Syntax.Node_Id;
+      Position : Positive)
+     with Pre  => Is_Prepared (Into)
+                  and then Covers (Into, Of_Tree)
+                  and then Landin.Syntax.Kind (Of_Tree, Argument)
+                             = Landin.Syntax.Call_Argument
+                  and then Role_Of (Into, Of_Tree, Argument)
+                             in Unmatched_Argument | Runtime_Argument,
+          Post => Role_Of (Into, Of_Tree, Argument) = Runtime_Argument
+                  and then Position_Of (Into, Of_Tree, Argument) = Position;
+
+   procedure Finish_Call_Match
+     (Into     : in out Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id;
+      Accepted : Boolean)
+     with Pre  => Is_Prepared (Into)
+                  and then Covers (Into, Of_Tree)
+                  and then Landin.Syntax.Kind (Of_Tree, Node)
+                             = Landin.Syntax.Labeled_Application,
+          Post => Match_Of (Into, Of_Tree, Node)
+                    = (if Accepted then Call_Matched else Call_Rejected);
+
 private
 
    type Declaration is record
@@ -520,6 +564,7 @@ private
 
    type Application_Fact is record
       Class    : Application_Class := Unclassified_Application;
+      Match    : Call_Match_State := Call_Not_Matched;
       Role     : Argument_Role := Unmatched_Argument;
       Formal   : Declaration_Id := No_Declaration;
       Position : Natural := 0;

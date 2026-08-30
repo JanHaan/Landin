@@ -133,12 +133,12 @@ package Landin.Syntax is
       --  the lexical scope and the value-bearing fallthrough edge remain
       --  distinct nodes.
       Bare_Block,
-      --  A direct application with at least one labelled argument remains
-      --  neutral until resolution has classified its callee.  Its first slot
-      --  is the direct name reference and its trailing run is Call_Argument;
-      --  the optional Recovery_Clause is carried beside the slots just as it
-      --  is for Call.  The parser neither guesses construction from `name:`
-      --  nor guesses a runtime call from the callee's spelling.
+      --  An application with at least one labelled argument remains neutral
+      --  until resolution has classified its complete callee.  Its first slot
+      --  is the direct name or indexed selection and its trailing run is
+      --  Call_Argument; the optional Recovery_Clause is carried beside the
+      --  slots just as it is for Call.  Only a direct name can classify as
+      --  construction; stored and selected values are runtime calls.
       Labeled_Application,
       --  A purely positional call is the existing node unchanged [1810].
       --  Its first fixed slot is the callee; arguments follow it, and its
@@ -795,7 +795,8 @@ package Landin.Syntax is
    --  `call ::= indexed "(" arguments? ")"` [1820].  A direct callee stays
    --  one Name_Reference; D131 also carries a complete field selection here.
    --  Labeled_Application deliberately shares this slot while resolution
-   --  decides whether that direct name denotes a callable or a type.
+   --  decides whether a direct name denotes a callable or type, or retains a
+   --  complete selected/function-valued runtime callee.
    function Callee_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
      with Pre  => Contains (Of_Tree, Id)
                   and then Kind (Of_Tree, Id)
