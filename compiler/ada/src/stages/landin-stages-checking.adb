@@ -505,6 +505,9 @@ package body Landin.Stages.Checking is
       function Concept_For
         (Of_Tree : Syn.Tree; Reference : Syn.Node_Id)
          return Landin.Checking.Concept_Id;
+      function Evidence_Selection_Signature
+        (Of_Tree : Syn.Tree; Selection : Syn.Node_Id)
+         return Landin.Checking.Signature_Id;
       procedure Collect_Concepts;
       procedure Collect_Conformances;
       procedure Validate_Composed_Conformances;
@@ -575,9 +578,12 @@ package body Landin.Stages.Checking is
         (Of_Tree : Syn.Tree; Call : Syn.Node_Id)
          return Landin.Checking.Signature_Id;
       function Instantiate_Generic_Call
-        (Caller_Tree : Syn.Tree;
-         Call        : Syn.Node_Id;
-         Template    : Res.Declaration_Id)
+        (Caller_Tree   : Syn.Tree;
+         Call          : Syn.Node_Id;
+         Template      : Res.Declaration_Id;
+         Forced        : Landin.Checking.Actual_Tuple :=
+           Landin.Checking.Empty_Actuals;
+         Record_Target : Boolean := True)
          return Landin.Checking.Signature_Id;
       procedure Discover_Generic_Calls
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
@@ -5059,9 +5065,12 @@ package body Landin.Stages.Checking is
       end Settled_Type;
 
       function Instantiate_Generic_Call
-        (Caller_Tree : Syn.Tree;
-         Call        : Syn.Node_Id;
-         Template    : Res.Declaration_Id)
+        (Caller_Tree   : Syn.Tree;
+         Call          : Syn.Node_Id;
+         Template      : Res.Declaration_Id;
+         Forced        : Landin.Checking.Actual_Tuple :=
+           Landin.Checking.Empty_Actuals;
+         Record_Target : Boolean := True)
          return Landin.Checking.Signature_Id
       is
          Template_Tree : constant not null access constant Syn.Tree :=
@@ -5070,8 +5079,18 @@ package body Landin.Stages.Checking is
            Res.Node_Of (Meanings.all, Template);
          Formal_Count : constant Natural :=
            Syn.Generic_Formal_Count (Template_Tree.all, Function_Node);
+         Is_Forced : constant Boolean :=
+           Landin.Checking.Actual_Count (Forced) > 0;
          Bound : Formal_Actual_Array (1 .. Formal_Count) :=
            [others => (others => <>)];
+         Evidence : array
+           (1 .. Positive'Max
+             (1, Formal_Count * Landin.Checking.Concept_Count (Types.all)))
+           of Landin.Checking.Conformance_Id :=
+             [others => Landin.Checking.No_Conformance];
+         Evidence_Formals : array (Evidence'Range) of Positive :=
+           [others => 1];
+         Evidence_Count : Natural := 0;
          Caller : constant Landin.Checking.Routine_Instance_Id :=
            Landin.Checking.Current_Routine_View (Types.all);
          Caller_Actual_Count : constant Natural :=
@@ -5117,6 +5136,12 @@ package body Landin.Stages.Checking is
 
          function Match_Generic_Runtime_Arguments return Boolean;
 
+         procedure Collect_Evidence
+           (Actual     : Type_Descriptor;
+            Constraint : Syn.Node_Id;
+            Of_Tree    : Syn.Tree;
+            Formal     : Positive);
+
          function Runtime_Argument_At
            (Position : Positive) return Syn.Node_Id;
 
@@ -5137,6 +5162,68 @@ package body Landin.Stages.Checking is
            (Argument : Syn.Node_Id;
             Position : Positive;
             What     : String);
+
+         procedure Collect_Evidence
+           (Actual     : Type_Descriptor;
+            Constraint : Syn.Node_Id;
+            Of_Tree    : Syn.Tree;
+            Formal     : Positive)
+         is
+            Concept : constant Landin.Checking.Concept_Id :=
+              Concept_For (Of_Tree, Constraint);
+            Row : constant Landin.Checking.Conformance_Id :=
+              Landin.Checking.Find_Conformance
+                (Types.all, Concept, Actual_For (Actual),
+                 Landin.Checking.Empty_Actuals);
+         begin
+            if Concept = Landin.Checking.No_Concept
+              or else Row = Landin.Checking.No_Conformance
+            then
+               raise Landin.Compiler_Defect with
+                 "accepted constraint retained no evidence closure";
+            end if;
+            for Position in 1 .. Evidence_Count loop
+               if Evidence_Formals (Position) = Formal
+                 and then Evidence (Position) = Row
+               then
+                  return;
+               end if;
+            end loop;
+            Evidence_Count := Evidence_Count + 1;
+            Evidence (Evidence_Count) := Row;
+            Evidence_Formals (Evidence_Count) := Formal;
+
+            if Landin.Checking.Is_Compiler_Concept (Types.all, Concept) then
+               return;
+            end if;
+            declare
+               Declaration : constant Res.Declaration_Id :=
+                 Landin.Checking.Concept_Declaration (Types.all, Concept);
+               Concept_Tree : constant not null access constant Syn.Tree :=
+                 Tree_For (Res.Source_Of (Meanings.all, Declaration));
+               Concept_Node : constant Syn.Node_Id :=
+                 Res.Node_Of (Meanings.all, Declaration);
+               Represented : constant Syn.Node_Id :=
+                 Syn.Nth_Concept_Formal
+                   (Concept_Tree.all, Concept_Node, 1);
+               Required : constant Syn.Node_Id :=
+                 Syn.Constraint_Of (Concept_Tree.all, Represented);
+            begin
+               if Required /= Syn.No_Node then
+                  Collect_Evidence
+                    (Actual, Required, Concept_Tree.all, Formal);
+               end if;
+               for Parent in 1 .. Syn.Concept_Parent_Count
+                 (Concept_Tree.all, Concept_Node)
+               loop
+                  Collect_Evidence
+                    (Actual,
+                     Syn.Nth_Concept_Parent
+                       (Concept_Tree.all, Concept_Node, Parent),
+                     Concept_Tree.all, Formal);
+               end loop;
+            end;
+         end Collect_Evidence;
 
          function Match_Generic_Runtime_Arguments return Boolean
          is
@@ -6395,7 +6482,40 @@ package body Landin.Stages.Checking is
             end;
          end if;
 
-         if not Match_Generic_Runtime_Arguments then
+         if Is_Forced then
+            if Landin.Checking.Actual_Count (Forced) /= Formal_Count then
+               raise Landin.Compiler_Defect with
+                 "forced generic evidence bindings do not fit the provider";
+            end if;
+            for Index in Bound'Range loop
+               declare
+                  Formal_Node : constant Syn.Node_Id :=
+                    Syn.Nth_Generic_Formal
+                      (Template_Tree.all, Function_Node, Index);
+                  Actual : constant Landin.Checking.Actual_Key :=
+                    Landin.Checking.Nth_Actual (Forced, Index);
+               begin
+                  if Syn.Kind (Template_Tree.all, Formal_Node)
+                       = Syn.Type_Formal
+                    and then Landin.Checking.Actual_Kind_Of (Actual)
+                      = Landin.Checking.Type_Actual_Kind
+                  then
+                     Bound (Index).Value := Descriptor_For (Actual);
+                  elsif Syn.Kind (Template_Tree.all, Formal_Node)
+                          = Syn.Fixed_Formal
+                    and then Landin.Checking.Actual_Kind_Of (Actual)
+                      = Landin.Checking.Fixed_Actual_Kind
+                  then
+                     Bound (Index).Fixed :=
+                       Landin.Checking.Fixed_Magnitude_Of (Actual);
+                     Bound (Index).Fixed_Known := True;
+                  else
+                     raise Landin.Compiler_Defect with
+                       "forced generic evidence binding kind disagrees";
+                  end if;
+               end;
+            end loop;
+         elsif not Match_Generic_Runtime_Arguments then
             Landin.Checking.Refuse (Types.all, Caller_Tree, Call);
             return Landin.Checking.No_Signature;
          end if;
@@ -6405,40 +6525,43 @@ package body Landin.Stages.Checking is
          --  descriptor is unified recursively with the written pattern.
          --  Explicit static tuples arrive already bound and use this same
          --  walk only as exact validation -- no binding is performed.
-         for Index in 1 .. Runtime_Count loop
-            declare
-               Parameter : constant Syn.Node_Id := Syn.Nth_Parameter
-                 (Template_Tree.all, Function_Node, Index);
-               Pattern : constant Syn.Node_Id :=
-                 Syn.Declared_Type (Template_Tree.all, Parameter);
-               Argument : constant Syn.Node_Id := Runtime_Argument_At (Index);
-               Got : Ty.Type_Kind :=
-                 (if Syn.Kind (Caller_Tree, Argument)
-                      in Syn.Name_Reference | Syn.Member_Selection
-                         | Syn.Element_Index
-                  then Selected_From (Caller_Tree, Argument)
-                  else Synthesise (Caller_Tree, Argument));
-            begin
-               if Got = Ty.Untyped_Integer then
-                  Commit_To (Caller_Tree, Argument, Ty.Default_Integer);
-                  Got := Ty.Default_Integer;
-               end if;
-               if Got = Ty.Ill_Typed then
-                  Good := False;
-               else
-                  declare
-                     Actual : constant Type_Descriptor :=
-                       Descriptor_At (Caller_Tree, Argument, Got);
-                     Agrees : constant Boolean := Match_Type_Pattern
-                       (Template_Tree.all, Pattern, Actual, Argument,
-                        Index, 0);
-                     pragma Unreferenced (Agrees);
-                  begin
-                     null;
-                  end;
-               end if;
-            end;
-         end loop;
+         if not Is_Forced then
+            for Index in 1 .. Runtime_Count loop
+               declare
+                  Parameter : constant Syn.Node_Id := Syn.Nth_Parameter
+                    (Template_Tree.all, Function_Node, Index);
+                  Pattern : constant Syn.Node_Id :=
+                    Syn.Declared_Type (Template_Tree.all, Parameter);
+                  Argument : constant Syn.Node_Id :=
+                    Runtime_Argument_At (Index);
+                  Got : Ty.Type_Kind :=
+                    (if Syn.Kind (Caller_Tree, Argument)
+                         in Syn.Name_Reference | Syn.Member_Selection
+                            | Syn.Element_Index
+                     then Selected_From (Caller_Tree, Argument)
+                     else Synthesise (Caller_Tree, Argument));
+               begin
+                  if Got = Ty.Untyped_Integer then
+                     Commit_To (Caller_Tree, Argument, Ty.Default_Integer);
+                     Got := Ty.Default_Integer;
+                  end if;
+                  if Got = Ty.Ill_Typed then
+                     Good := False;
+                  else
+                     declare
+                        Actual : constant Type_Descriptor :=
+                          Descriptor_At (Caller_Tree, Argument, Got);
+                        Agrees : constant Boolean := Match_Type_Pattern
+                          (Template_Tree.all, Pattern, Actual, Argument,
+                           Index, 0);
+                        pragma Unreferenced (Agrees);
+                     begin
+                        null;
+                     end;
+                  end if;
+               end;
+            end loop;
+         end if;
 
          --  A computed bound contributes no equation to solve.  Once another
          --  direct occurrence (or an explicit static tuple) has supplied all
@@ -6603,17 +6726,32 @@ package body Landin.Stages.Checking is
                      else Syn.No_Node);
                begin
                   if Constraint /= Syn.No_Node then
-                     Good := Require_Conformance
-                       (Bound (Index).Value, Constraint, Template_Tree.all,
-                        Syn.Origin (Caller_Tree, Call))
-                       and then Good;
+                     declare
+                        Accepted : constant Boolean := Require_Conformance
+                          (Bound (Index).Value, Constraint,
+                           Template_Tree.all,
+                           Syn.Origin (Caller_Tree, Call));
+                        Concept : constant Landin.Checking.Concept_Id :=
+                          Concept_For (Template_Tree.all, Constraint);
+                     begin
+                        Good := Accepted and then Good;
+                        if Accepted
+                          and then Concept /= Landin.Checking.No_Concept
+                        then
+                           Collect_Evidence
+                             (Bound (Index).Value, Constraint,
+                              Template_Tree.all, Index);
+                        end if;
+                     end;
                   end if;
                end;
             end loop;
          end if;
 
          if not Good then
-            Landin.Checking.Refuse (Types.all, Caller_Tree, Call);
+            if Record_Target then
+               Landin.Checking.Refuse (Types.all, Caller_Tree, Call);
+            end if;
             return Landin.Checking.No_Signature;
          end if;
 
@@ -6636,19 +6774,58 @@ package body Landin.Stages.Checking is
                Instance : constant Landin.Checking.Routine_Instance_Id :=
                  Landin.Checking.Intern_Routine_Instance
                    (Types.all, Template, Key);
+               Expected_Evidence : constant Natural := Evidence_Count;
             begin
+               if Landin.Checking.Routine_Evidence_Count
+                    (Types.all, Instance) = 0
+               then
+                  for Position in 1 .. Evidence_Count loop
+                     Landin.Checking.Add_Routine_Evidence
+                       (Types.all, Instance, Evidence_Formals (Position),
+                        Evidence (Position));
+                  end loop;
+               elsif Landin.Checking.Routine_Evidence_Count
+                       (Types.all, Instance) /= Expected_Evidence
+               then
+                  raise Landin.Compiler_Defect with
+                    "one routine instance selected two evidence runs";
+               else
+                  declare
+                     Which : Natural := 0;
+                  begin
+                     for Position in 1 .. Evidence_Count loop
+                        Which := Which + 1;
+                        if Landin.Checking.Nth_Routine_Evidence
+                             (Types.all, Instance, Which)
+                             /= Evidence (Position)
+                          or else Landin.Checking
+                            .Nth_Routine_Evidence_Formal
+                              (Types.all, Instance, Which)
+                              /= Evidence_Formals (Position)
+                        then
+                           raise Landin.Compiler_Defect with
+                             "one routine instance changed evidence";
+                        end if;
+                     end loop;
+                  end;
+               end if;
+
                if Landin.Checking.Routine_State_Of (Types.all, Instance)
                     in Landin.Checking.Routine_Building
                        | Landin.Checking.Routine_Ready
                then
-                  Landin.Checking.Note_Routine_Target
-                    (Types.all, Caller_Tree, Call, Instance);
+                  if Record_Target then
+                     Landin.Checking.Note_Routine_Target
+                       (Types.all, Caller_Tree, Call, Instance);
+                  end if;
                   return Landin.Checking.Routine_Signature_Of
                     (Types.all, Instance);
                elsif Landin.Checking.Routine_State_Of (Types.all, Instance)
                  = Landin.Checking.Routine_Invalid
                then
-                  Landin.Checking.Refuse (Types.all, Caller_Tree, Call);
+                  if Record_Target then
+                     Landin.Checking.Refuse (Types.all, Caller_Tree, Call);
+                  end if;
                   return Landin.Checking.No_Signature;
                end if;
 
@@ -6680,8 +6857,10 @@ package body Landin.Stages.Checking is
                              (Template_Tree.all, Function_Node),
                            Because => "the active generic template",
                            Into    => Found);
-                        Landin.Checking.Refuse
-                          (Types.all, Caller_Tree, Call);
+                        if Record_Target then
+                           Landin.Checking.Refuse
+                             (Types.all, Caller_Tree, Call);
+                        end if;
                         return Landin.Checking.No_Signature;
                      end if;
                   end;
@@ -6943,13 +7122,18 @@ package body Landin.Stages.Checking is
                   then
                      Landin.Checking.Invalidate_Routine_Instance
                        (Types.all, Instance);
-                     Landin.Checking.Refuse (Types.all, Caller_Tree, Call);
+                     if Record_Target then
+                        Landin.Checking.Refuse
+                          (Types.all, Caller_Tree, Call);
+                     end if;
                      return Landin.Checking.No_Signature;
                   else
                      Landin.Checking.Finish_Routine_Instance
                        (Types.all, Instance);
-                     Landin.Checking.Note_Routine_Target
-                       (Types.all, Caller_Tree, Call, Instance);
+                     if Record_Target then
+                        Landin.Checking.Note_Routine_Target
+                          (Types.all, Caller_Tree, Call, Instance);
+                     end if;
                      return Signature;
                   end if;
                exception
@@ -8389,6 +8573,219 @@ package body Landin.Stages.Checking is
          end;
       end Concept_For;
 
+      function Evidence_Selection_Signature
+        (Of_Tree : Syn.Tree; Selection : Syn.Node_Id)
+         return Landin.Checking.Signature_Id
+      is
+         From : constant Syn.Node_Id := Syn.Target_Of (Of_Tree, Selection);
+         Current : constant Landin.Checking.Routine_Instance_Id :=
+           Landin.Checking.Current_Routine_View (Types.all);
+      begin
+         if Current = Landin.Checking.No_Routine_Instance
+           or else Syn.Kind (Of_Tree, From) /= Syn.Name_Reference
+           or else Res.Verdict_Of (Meanings.all, Of_Tree, From) /= Res.Bound
+         then
+            return Landin.Checking.No_Signature;
+         end if;
+
+         declare
+            Formal : constant Res.Declaration_Id :=
+              Res.Bound_To (Meanings.all, Of_Tree, From);
+         begin
+            if Res.Sort_Of (Meanings.all, Formal) /= Res.Type_Parameter then
+               return Landin.Checking.No_Signature;
+            end if;
+
+            declare
+               Template : constant Res.Declaration_Id :=
+                 Landin.Checking.Routine_Template_Of (Types.all, Current);
+               Template_Tree : constant not null access constant Syn.Tree :=
+                 Tree_For (Res.Source_Of (Meanings.all, Template));
+               Function_Node : constant Syn.Node_Id :=
+                 Res.Node_Of (Meanings.all, Template);
+               Formal_Position : Natural := 0;
+
+               procedure Locate_Entry
+                 (Concept : Landin.Checking.Concept_Id;
+                  Limit   : Natural;
+                  Found   : out Landin.Checking.Concept_Id;
+                  Entry_Position : out Natural);
+
+               procedure Locate_Entry
+                 (Concept : Landin.Checking.Concept_Id;
+                  Limit   : Natural;
+                  Found   : out Landin.Checking.Concept_Id;
+                  Entry_Position : out Natural)
+               is
+               begin
+                  Found := Landin.Checking.No_Concept;
+                  Entry_Position := 0;
+                  if Limit = 0
+                    or else Concept = Landin.Checking.No_Concept
+                    or else Landin.Checking.Is_Compiler_Concept
+                      (Types.all, Concept)
+                  then
+                     return;
+                  end if;
+                  declare
+                     Declaration : constant Res.Declaration_Id :=
+                       Landin.Checking.Concept_Declaration
+                         (Types.all, Concept);
+                     Concept_Tree : constant
+                       not null access constant Syn.Tree :=
+                         Tree_For
+                           (Res.Source_Of (Meanings.all, Declaration));
+                     Concept_Node : constant Syn.Node_Id :=
+                       Res.Node_Of (Meanings.all, Declaration);
+                  begin
+                     for Position in 1 .. Syn.Concept_Entry_Count
+                       (Concept_Tree.all, Concept_Node)
+                     loop
+                        if Syn.Name
+                          (Concept_Tree.all,
+                           Syn.Nth_Concept_Entry
+                             (Concept_Tree.all, Concept_Node, Position))
+                          = Syn.Name (Of_Tree, Selection)
+                        then
+                           Found := Concept;
+                           Entry_Position := Position;
+                           return;
+                        end if;
+                     end loop;
+
+                     declare
+                        Represented : constant Syn.Node_Id :=
+                          Syn.Nth_Concept_Formal
+                            (Concept_Tree.all, Concept_Node, 1);
+                        Required : constant Syn.Node_Id :=
+                          Syn.Constraint_Of
+                            (Concept_Tree.all, Represented);
+                     begin
+                        if Required /= Syn.No_Node then
+                           Locate_Entry
+                             (Concept_For (Concept_Tree.all, Required),
+                              Limit - 1, Found, Entry_Position);
+                           if Found /= Landin.Checking.No_Concept then
+                              return;
+                           end if;
+                        end if;
+                     end;
+                     for Parent in 1 .. Syn.Concept_Parent_Count
+                       (Concept_Tree.all, Concept_Node)
+                     loop
+                        Locate_Entry
+                          (Concept_For
+                             (Concept_Tree.all,
+                              Syn.Nth_Concept_Parent
+                                (Concept_Tree.all, Concept_Node, Parent)),
+                           Limit - 1, Found, Entry_Position);
+                        if Found /= Landin.Checking.No_Concept then
+                           return;
+                        end if;
+                     end loop;
+                  end;
+               end Locate_Entry;
+            begin
+               for Position in 1 .. Syn.Generic_Formal_Count
+                 (Template_Tree.all, Function_Node)
+               loop
+                  declare
+                     Candidate : constant Syn.Node_Id :=
+                       Syn.Nth_Generic_Formal
+                         (Template_Tree.all, Function_Node, Position);
+                  begin
+                     if Declaration_At
+                       (Syn.Source_Of (Template_Tree.all), Candidate) = Formal
+                     then
+                        Formal_Position := Position;
+                        exit;
+                     end if;
+                  end;
+               end loop;
+
+               if Formal_Position = 0 then
+                  return Landin.Checking.No_Signature;
+               end if;
+
+               declare
+                  Formal_Node : constant Syn.Node_Id :=
+                    Syn.Nth_Generic_Formal
+                      (Template_Tree.all, Function_Node, Formal_Position);
+                  Constraint : constant Syn.Node_Id := Syn.Constraint_Of
+                    (Template_Tree.all, Formal_Node);
+                  Root : constant Landin.Checking.Concept_Id :=
+                    (if Constraint = Syn.No_Node
+                     then Landin.Checking.No_Concept
+                     else Concept_For (Template_Tree.all, Constraint));
+                  Concept : Landin.Checking.Concept_Id;
+                  Requirement_Position : Natural;
+                  Evidence : Landin.Checking.Conformance_Id :=
+                    Landin.Checking.No_Conformance;
+               begin
+                  Locate_Entry
+                    (Root, Landin.Checking.Concept_Count (Types.all) + 1,
+                     Concept, Requirement_Position);
+                  if Concept = Landin.Checking.No_Concept
+                    or else Requirement_Position = 0
+                  then
+                     return Landin.Checking.No_Signature;
+                  end if;
+                  for Position in 1 .. Landin.Checking.Routine_Evidence_Count
+                    (Types.all, Current)
+                  loop
+                     declare
+                        Candidate : constant Landin.Checking.Conformance_Id :=
+                          Landin.Checking.Nth_Routine_Evidence
+                            (Types.all, Current, Position);
+                     begin
+                        if Landin.Checking.Nth_Routine_Evidence_Formal
+                             (Types.all, Current, Position) = Formal_Position
+                          and then Landin.Checking.Conformance_Concept
+                            (Types.all, Candidate) = Concept
+                        then
+                           Evidence := Candidate;
+                           exit;
+                        end if;
+                     end;
+                  end loop;
+                  if Evidence = Landin.Checking.No_Conformance then
+                     raise Landin.Compiler_Defect with
+                       "a composed evidence entry has no hidden table";
+                  end if;
+                  declare
+                     Provider_Instance : constant
+                       Landin.Checking.Routine_Instance_Id :=
+                         Landin.Checking.Conformance_Provider_Instance
+                           (Types.all, Evidence,
+                            Positive (Requirement_Position));
+                     Provider : constant Res.Declaration_Id :=
+                       Landin.Checking.Conformance_Provider_Declaration
+                         (Types.all, Evidence,
+                          Positive (Requirement_Position));
+                     Signature : constant Landin.Checking.Signature_Id :=
+                       (if Provider_Instance
+                              /= Landin.Checking.No_Routine_Instance
+                        then Landin.Checking.Routine_Signature_Of
+                          (Types.all, Provider_Instance)
+                        elsif Provider /= Res.No_Declaration
+                        then Landin.Checking.Signature_Of
+                          (Types.all, Provider)
+                        else Landin.Checking.No_Signature);
+                  begin
+                     if Signature /= Landin.Checking.No_Signature then
+                        Landin.Checking.Note_Evidence_Selection
+                          (Types.all, Of_Tree, Selection, Evidence,
+                           Positive (Requirement_Position));
+                        Landin.Checking.Note_Signature
+                          (Types.all, Of_Tree, Selection, Signature);
+                     end if;
+                     return Signature;
+                  end;
+               end;
+            end;
+         end;
+      end Evidence_Selection_Signature;
+
       procedure Collect_Concepts is
          type Visit_State is (Unseen, Visiting, Complete, Invalid);
          States : array
@@ -9626,6 +10023,334 @@ package body Landin.Stages.Checking is
                           (Types.all, Concept, Actual_For (Actual), Inputs,
                            Bindings, Syn.Source_Of (Candidate_Tree), Candidate,
                            Landin.Checking.Declared_Conformance);
+
+                        declare
+                           Concept_Declaration : constant
+                             Res.Declaration_Id :=
+                               Landin.Checking.Concept_Declaration
+                                 (Types.all, Concept);
+                           Concept_Tree : constant
+                             not null access constant Syn.Tree :=
+                               Tree_For
+                                 (Res.Source_Of
+                                    (Meanings.all, Concept_Declaration));
+                           Concept_Node : constant Syn.Node_Id :=
+                             Res.Node_Of
+                               (Meanings.all, Concept_Declaration);
+                           Count : constant Natural :=
+                             Syn.Concept_Entry_Count
+                               (Concept_Tree.all, Concept_Node);
+                        begin
+                           if Count > 0 then
+                              Landin.Checking.Set_Conformance_Entry_Count
+                                (Types.all, Existing, Count);
+                           end if;
+                           for Requirement in 1 .. Count loop
+                              declare
+                                 Requirement_Node : constant Syn.Node_Id :=
+                                   Syn.Nth_Concept_Entry
+                                     (Concept_Tree.all, Concept_Node,
+                                      Requirement);
+                                 Implementation : Res.Declaration_Id :=
+                                   Res.No_Declaration;
+                              begin
+                                 for Given in 1 .. Syn.Conformance_Entry_Count
+                                   (Candidate_Tree, Candidate)
+                                 loop
+                                    declare
+                                       Supplied : constant Syn.Node_Id :=
+                                         Syn.Nth_Conformance_Entry
+                                           (Candidate_Tree, Candidate, Given);
+                                       RHS : constant Syn.Node_Id :=
+                                         Syn.Conformance_RHS
+                                           (Candidate_Tree, Supplied);
+                                    begin
+                                       if Syn.Name (Candidate_Tree, Supplied)
+                                            = Syn.Name
+                                              (Concept_Tree.all,
+                                               Requirement_Node)
+                                         and then Syn.Kind
+                                           (Candidate_Tree, RHS)
+                                             = Syn.Name_Reference
+                                         and then Res.Verdict_Of
+                                           (Meanings.all, Candidate_Tree, RHS)
+                                             = Res.Bound
+                                       then
+                                          Implementation := Res.Bound_To
+                                            (Meanings.all, Candidate_Tree,
+                                             RHS);
+                                       end if;
+                                    end;
+                                 end loop;
+                                 if Implementation = Res.No_Declaration then
+                                    raise Landin.Compiler_Defect with
+                                      "selected conformance lost a provider";
+                                 end if;
+                                 declare
+                                    Implementation_Tree : constant
+                                      not null access constant Syn.Tree :=
+                                        Tree_For
+                                          (Res.Source_Of
+                                             (Meanings.all, Implementation));
+                                    Implementation_Node : constant
+                                      Syn.Node_Id :=
+                                        Res.Node_Of
+                                          (Meanings.all, Implementation);
+                                    Is_Generic : constant Boolean :=
+                                      Syn.Generic_Formal_Count
+                                        (Implementation_Tree.all,
+                                         Implementation_Node) > 0;
+                                    Signature : Landin.Checking.Signature_Id;
+                                    Instance :
+                                      Landin.Checking.Routine_Instance_Id :=
+                                        Landin.Checking.No_Routine_Instance;
+                                 begin
+                                    if Is_Generic then
+                                       if Syn.Generic_Formal_Count
+                                         (Implementation_Tree.all,
+                                          Implementation_Node)
+                                           /= Landin.Checking.Actual_Count
+                                             (Bindings)
+                                       then
+                                          Bad.Report
+                                            (Item => Bad.Type_Mismatch,
+                                             Source => Syn.Source_Of
+                                               (Candidate_Tree),
+                                             Where => Syn.Where
+                                               (Candidate_Tree, Candidate),
+                                             Message => "this generic"
+                                               & " conformance provider does"
+                                               & " not take the selected"
+                                               & " binder tuple",
+                                             Note => "[1250]: instantiating"
+                                               & " the conformance supplies"
+                                               & " its complete binder tuple"
+                                               & " to each generic provider",
+                                             Related => Syn.Origin
+                                               (Implementation_Tree.all,
+                                                Implementation_Node),
+                                             Because =>
+                                               "the generic provider",
+                                             Into => Found);
+                                          return;
+                                       end if;
+                                       Signature := Instantiate_Generic_Call
+                                         (Candidate_Tree, Candidate,
+                                          Implementation, Bindings, False);
+                                       Instance := Landin.Checking
+                                         .Intern_Routine_Instance
+                                           (Types.all, Implementation,
+                                            Bindings);
+                                       if Signature
+                                            = Landin.Checking.No_Signature
+                                         or else Landin.Checking
+                                           .Routine_State_Of
+                                             (Types.all, Instance)
+                                             /= Landin.Checking.Routine_Ready
+                                       then
+                                          return;
+                                       end if;
+                                    else
+                                       Signature :=
+                                         Landin.Checking.Signature_Of
+                                           (Types.all, Implementation);
+                                    end if;
+                                    if Signature
+                                         = Landin.Checking.No_Signature
+                                    then
+                                       return;
+                                    end if;
+                                    declare
+                                       Formal_Count : constant Natural :=
+                                         Syn.Concept_Formal_Count
+                                           (Concept_Tree.all, Concept_Node);
+                                       Concept_Bound : Formal_Actual_Array
+                                         (1 .. Formal_Count) :=
+                                           [others => (others => <>)];
+                                       Parameters :
+                                         Landin.Checking
+                                           .Signature_Part_Array
+                                             (1 .. Syn.Parameter_Count
+                                               (Concept_Tree.all,
+                                                Requirement_Node)) :=
+                                               [others => (others => <>)];
+                                       Results : Landin.Checking
+                                         .Signature_Part_Array
+                                           (1 .. Syn.Return_Count
+                                             (Concept_Tree.all,
+                                              Requirement_Node)) :=
+                                             [others => (others => <>)];
+                                       Errors : Landin.Checking.Atom_Set_Id :=
+                                         Landin.Checking.No_Atom_Set;
+                                       Error_Form :
+                                         Landin.Checking.Error_Set_Form :=
+                                           Landin.Checking.Infallible;
+                                       Valid : Boolean := True;
+                                    begin
+                                       for Position in
+                                         Concept_Bound'Range
+                                       loop
+                                          Concept_Bound (Position).Formal :=
+                                            Declaration_At
+                                              (Syn.Source_Of
+                                                 (Concept_Tree.all),
+                                               Syn.Nth_Concept_Formal
+                                                 (Concept_Tree.all,
+                                                  Concept_Node, Position));
+                                          Concept_Bound (Position).Value :=
+                                            (if Position = 1 then Actual
+                                             else Descriptor_For
+                                               (Landin.Checking.Nth_Actual
+                                                  (Inputs, Position - 1)));
+                                       end loop;
+                                       for Position in Parameters'Range loop
+                                          declare
+                                             Parameter : constant
+                                               Syn.Node_Id :=
+                                                 Syn.Nth_Parameter
+                                                   (Concept_Tree.all,
+                                                    Requirement_Node,
+                                                    Position);
+                                             Descriptor : constant
+                                               Type_Descriptor :=
+                                                 Normalized_Type
+                                                   (Concept_Tree.all,
+                                                    Syn.Declared_Type
+                                                      (Concept_Tree.all,
+                                                       Parameter),
+                                                    Concept_Bound,
+                                                    Requirement =>
+                                                      Identity_Only);
+                                          begin
+                                             Parameters (Position) :=
+                                               Signature_Part_For
+                                                 (Descriptor,
+                                                  Syn.Name
+                                                    (Concept_Tree.all,
+                                                     Parameter),
+                                                  Syn.Origin
+                                                    (Concept_Tree.all,
+                                                     Parameter));
+                                             Parameters (Position).Convention
+                                               := Semantic_Convention
+                                                    (Concept_Tree.all,
+                                                     Parameter);
+                                             Parameters (Position).Escaping :=
+                                               Syn.Is_Escaping
+                                                 (Concept_Tree.all,
+                                                  Parameter);
+                                             Valid := Valid and then
+                                               Descriptor.Kind
+                                                 /= Ty.Ill_Typed;
+                                          end;
+                                       end loop;
+                                       for Position in Results'Range loop
+                                          declare
+                                             Result_Node : constant
+                                               Syn.Node_Id := Syn.Nth_Return
+                                                 (Concept_Tree.all,
+                                                  Requirement_Node,
+                                                  Position);
+                                             Descriptor : constant
+                                               Type_Descriptor :=
+                                                 Normalized_Type
+                                                   (Concept_Tree.all,
+                                                    Syn.Declared_Type
+                                                      (Concept_Tree.all,
+                                                       Result_Node),
+                                                    Concept_Bound,
+                                                    Requirement =>
+                                                      Identity_Only);
+                                          begin
+                                             Results (Position) :=
+                                               Signature_Part_For
+                                                 (Descriptor,
+                                                  Syn.Name
+                                                    (Concept_Tree.all,
+                                                     Result_Node),
+                                                  Syn.Origin
+                                                    (Concept_Tree.all,
+                                                     Result_Node));
+                                             Valid := Valid and then
+                                               Descriptor.Kind
+                                                 /= Ty.Ill_Typed;
+                                          end;
+                                       end loop;
+                                       if Syn.Error_Set_Of
+                                         (Concept_Tree.all,
+                                          Requirement_Node) /= Syn.No_Node
+                                       then
+                                          declare
+                                             Descriptor : constant
+                                               Type_Descriptor :=
+                                                 Normalized_Type
+                                                   (Concept_Tree.all,
+                                                    Syn.Error_Set_Of
+                                                      (Concept_Tree.all,
+                                                       Requirement_Node),
+                                                    Concept_Bound,
+                                                    Requirement =>
+                                                      Identity_Only);
+                                          begin
+                                             Valid := Valid and then
+                                               Descriptor.Kind = Ty.Atom_Value;
+                                             Errors := Descriptor.Atoms;
+                                             Error_Form :=
+                                               Landin.Checking.Concrete;
+                                          end;
+                                       end if;
+                                       if Valid then
+                                          declare
+                                             Expected : constant
+                                               Landin.Checking.Signature_Id :=
+                                                 Landin.Checking.Add_Signature
+                                                   (Types.all, Parameters,
+                                                    Results,
+                                                    Syn.Origin
+                                                      (Concept_Tree.all,
+                                                       Requirement_Node),
+                                                    Errors, Error_Form);
+                                          begin
+                                             if not Landin.Checking
+                                               .Signatures_Agree
+                                                 (Types.all, Expected,
+                                                  Signature)
+                                             then
+                                                Bad.Report
+                                                  (Item => Bad.Type_Mismatch,
+                                                   Source => Syn.Source_Of
+                                                     (Candidate_Tree),
+                                                   Where => Syn.Where
+                                                     (Candidate_Tree,
+                                                      Candidate),
+                                                   Message => "this selected"
+                                                     & " generic conformance"
+                                                     & " function does not"
+                                                     & " have the concept"
+                                                     & " entry's signature",
+                                                   Note => "D144 validates"
+                                                     & " a generic provider"
+                                                     & " after substituting"
+                                                     & " its retained binder"
+                                                     & " tuple",
+                                                   Related => Syn.Origin
+                                                     (Concept_Tree.all,
+                                                      Requirement_Node),
+                                                   Because =>
+                                                     "the required entry",
+                                                   Into => Found);
+                                                return;
+                                             end if;
+                                          end;
+                                       end if;
+                                    end;
+                                    Landin.Checking.Note_Conformance_Provider
+                                      (Types.all, Existing, Requirement,
+                                       Implementation, Instance);
+                                 end;
+                              end;
+                           end loop;
+                        end;
                      else
                         Bad.Report
                           (Item    => Bad.Conformance_Collision,
@@ -9812,6 +10537,10 @@ package body Landin.Stages.Checking is
                     (Of_Tree, Syn.Conforming_Type (Of_Tree, Node),
                      Formal_Actual_Array'(1 .. 0 => (others => <>)),
                      Requirement => Identity_Only);
+                  Inputs : Landin.Checking.Actual_Tuple :=
+                    Landin.Checking.Empty_Actuals;
+                  Conformance : Landin.Checking.Conformance_Id :=
+                    Landin.Checking.No_Conformance;
                begin
                   if Target.Kind = Ty.Ill_Typed or else Formal_Count = 0 then
                      return;
@@ -9851,6 +10580,29 @@ package body Landin.Stages.Checking is
                         end;
                      end loop;
                   end loop;
+
+                  for Position in 2 .. Formal_Count loop
+                     if Bound (Position).Value.Kind /= Ty.Ill_Typed then
+                        Landin.Checking.Append_Actual
+                          (Inputs, Actual_For (Bound (Position).Value));
+                     end if;
+                  end loop;
+                  Conformance := Landin.Checking.Find_Conformance
+                    (Types.all, Concept, Actual_For (Target), Inputs);
+                  if Conformance = Landin.Checking.No_Conformance then
+                     raise Landin.Compiler_Defect with
+                       "a collected conformance lost its normalized key";
+                  end if;
+                  if Syn.Concept_Entry_Count
+                       (Concept_Tree.all, Concept_Node) > 0
+                    and then Landin.Checking.Conformance_Entry_Count
+                      (Types.all, Conformance) = 0
+                  then
+                     Landin.Checking.Set_Conformance_Entry_Count
+                       (Types.all, Conformance,
+                        Syn.Concept_Entry_Count
+                          (Concept_Tree.all, Concept_Node));
+                  end if;
 
                   for Requirement_Index in 1 .. Syn.Concept_Entry_Count
                     (Concept_Tree.all, Concept_Node)
@@ -10020,6 +10772,12 @@ package body Landin.Stages.Checking is
                                              Requirement_Node),
                                           Because => "the required entry",
                                           Into    => Found);
+                                    else
+                                       Landin.Checking
+                                         .Note_Conformance_Provider
+                                           (Types.all, Conformance,
+                                            Requirement_Index,
+                                            Implementation);
                                     end if;
                                  end;
                               end if;
@@ -11403,10 +12161,20 @@ package body Landin.Stages.Checking is
                declare
                   From : constant Syn.Node_Id :=
                     Syn.Target_Of (Of_Tree, Node);
+                  Evidence_Signature : constant
+                    Landin.Checking.Signature_Id :=
+                      Evidence_Selection_Signature (Of_Tree, Node);
                   Held : constant Ty.Type_Kind :=
-                    Selected_From (Of_Tree, From);
+                    (if Evidence_Signature
+                          /= Landin.Checking.No_Signature
+                     then Ty.Function_Value
+                     else Selected_From (Of_Tree, From));
                begin
-                  if Held = Ty.Ill_Typed then
+                  if Evidence_Signature
+                       /= Landin.Checking.No_Signature
+                  then
+                     return Kept (Ty.Function_Value);
+                  elsif Held = Ty.Ill_Typed then
                      return Kept (Ty.Ill_Typed);
                   end if;
 
@@ -20094,6 +20862,12 @@ package body Landin.Stages.Checking is
          end;
       end loop;
 
+      --  R2.70 freezes ordinary conformance providers before a generic body
+      --  discovers `T.entry` calls.  The declarations and anonymous
+      --  signatures they may name are settled above; table order remains the
+      --  concept declaration's rather than the conformance label order.
+      Validate_Conformance_Entries;
+
       --  Generic instances must exist before the whole-module error graph is
       --  closed.  Runtime argument declarations have all been settled by
       --  the first two passes, so this walk performs the same context-free
@@ -20143,7 +20917,6 @@ package body Landin.Stages.Checking is
       end loop;
 
       Finalize_Error_Sets;
-      Validate_Conformance_Entries;
 
       --  Instance discovery published signatures and nested targets but did
       --  not check a generic body against provisional errors.  Every ready

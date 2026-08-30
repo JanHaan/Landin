@@ -26,6 +26,7 @@ package body Landin.Stages.Lowering is
    use type IR.Field_Image_Form;
    use type IR.Field_Shape_Kind;
    use type IR.Atom_Set_Id;
+   use type IR.Evidence_Id;
    use type IR.Item_Id;
    use type IR.Nominal_Type_Id;
    use type IR.Slot_Id;
@@ -35,7 +36,9 @@ package body Landin.Stages.Lowering is
    use type IR.Path_Step;
    use type IR.Path_Step_Array;
    use type IR.Value_Id;
+   use type Landin.Checking.Array_Element_Form;
    use type Landin.Checking.Atom_Set_Id;
+   use type Landin.Checking.Conformance_Id;
    use type Landin.Checking.Element_Count;
    use type Landin.Checking.Error_Set_Form;
    use type Landin.Checking.Field_Kind;
@@ -392,8 +395,45 @@ package body Landin.Stages.Lowering is
         array (Source_Signature) of IR.Signature_Id;
       Signatures : Signature_Map := [others => IR.No_Signature];
 
+      subtype Source_Evidence is Positive range
+        1 .. Positive'Max
+               (1, Landin.Checking.Conformance_Count (Types.all));
+      type Evidence_Map is array (Source_Evidence) of IR.Evidence_Id;
+      type Evidence_Slot_Map is array (Source_Evidence) of IR.Slot_Id;
+      Evidence : Evidence_Map := [others => IR.No_Evidence];
+      Evidence_Slots : Evidence_Slot_Map := [others => IR.No_Slot];
+
+      subtype Source_Routine_Instance is Positive range
+        1 .. Positive'Max
+               (1, Landin.Checking.Routine_Instance_Count (Types.all));
+      type Generic_Signature_Map is
+        array (Source_Routine_Instance) of IR.Signature_Id;
+      Generic_Signatures : Generic_Signature_Map :=
+        [others => IR.No_Signature];
+
+      function Evidence_For
+        (Source : Landin.Checking.Conformance_Id) return IR.Evidence_Id;
+
+      function Evidence_For
+        (Source : Landin.Checking.Conformance_Id) return IR.Evidence_Id
+      is
+         Position : constant Positive :=
+           Landin.Checking.Conformance_Identities.Position
+             (Types.all, Source);
+      begin
+         if Evidence (Position) = IR.No_Evidence then
+            raise Landin.Compiler_Defect with
+              "a checker conformance was not mapped before lowering";
+         end if;
+         return Evidence (Position);
+      end Evidence_For;
+
       function Signature_For
         (Source : Landin.Checking.Signature_Id) return IR.Signature_Id;
+
+      function Signature_For_Instance
+        (Instance : Landin.Checking.Routine_Instance_Id)
+         return IR.Signature_Id;
 
       --  D78's arm bindings are aliases into the selected payload, not
       --  copied frame locals.  The declaration identity is arm-local; the
@@ -553,6 +593,64 @@ package body Landin.Stages.Lowering is
                else Sources (1 .. Source_Count)));
          return Signatures (Positive (Source));
       end Signature_For;
+
+      function Signature_For_Instance
+        (Instance : Landin.Checking.Routine_Instance_Id)
+         return IR.Signature_Id
+      is
+         Position : constant Positive :=
+           Landin.Checking.Routine_Identities.Position
+             (Types.all, Instance);
+         Source : constant IR.Signature_Id := Signature_For
+           (Landin.Checking.Routine_Signature_Of (Types.all, Instance));
+         Hidden : constant Natural :=
+           Landin.Checking.Routine_Evidence_Count (Types.all, Instance);
+         Parameter_Count : constant Natural :=
+           IR.Signature_Parameter_Count (Unit.all, Source);
+         Result_Count : constant Natural :=
+           IR.Signature_Result_Count (Unit.all, Source);
+         Parameters : IR.Signature_Part_Array
+           (1 .. Hidden + Parameter_Count) := [others => (others => <>)];
+         Results : IR.Signature_Part_Array (1 .. Result_Count) :=
+           [others => (others => <>)];
+         Sources : IR.Return_Source_Array
+           (1 .. Positive'Max (1, Result_Count * Parameter_Count)) :=
+             [others => (others => 1)];
+         Source_Count : Natural := 0;
+      begin
+         if Generic_Signatures (Position) /= IR.No_Signature then
+            return Generic_Signatures (Position);
+         end if;
+         for Index in 1 .. Hidden loop
+            Parameters (Index) :=
+              (Kind => Ty.Usize, Convention => IR.In_Value, others => <>);
+         end loop;
+         for Index in 1 .. Parameter_Count loop
+            Parameters (Hidden + Index) :=
+              IR.Nth_Signature_Parameter (Unit.all, Source, Index);
+         end loop;
+         for Index in 1 .. Result_Count loop
+            Results (Index) :=
+              IR.Nth_Signature_Result (Unit.all, Source, Index);
+            for Which in 1 .. IR.Signature_Return_Source_Count
+              (Unit.all, Source, Index)
+            loop
+               Source_Count := Source_Count + 1;
+               Sources (Source_Count) :=
+                 (Result => Index,
+                  Parameter => Hidden
+                    + IR.Nth_Signature_Return_Source
+                        (Unit.all, Source, Index, Which));
+            end loop;
+         end loop;
+         Generic_Signatures (Position) :=
+           IR.Add_Signature_With_Results
+             (Unit.all, Parameters, Results,
+              IR.Signature_Errors (Unit.all, Source),
+              (if Source_Count = 0 then IR.No_Return_Sources
+               else Sources (1 .. Source_Count)));
+         return Generic_Signatures (Position);
+      end Signature_For_Instance;
 
       --  [1820]'s operators onto Landin.IR's opcodes, one to one.  The
       --  two missing are the logical words: [0410] makes them
@@ -1125,6 +1223,9 @@ package body Landin.Stages.Lowering is
       function Neutral_Body
         (Nominal : Landin.Checking.Nominal_Type_Id) return IR.Field_Shape;
 
+      function Evidence_Shape
+        (Actual : Landin.Checking.Actual_Key) return IR.Field_Shape;
+
       --  One field of D128's anonymous result aggregate.  D131 gives a
       --  nominal aggregate the same one `usize` field plus its signature.
       function Neutral_Result_Part
@@ -1324,6 +1425,87 @@ package body Landin.Stages.Lowering is
             Nominal        => Nominal_For (Nominal),
             others         => <>);
       end Neutral_Body;
+
+      function Evidence_Shape
+        (Actual : Landin.Checking.Actual_Key) return IR.Field_Shape
+      is
+         Form : constant Landin.Checking.Actual_Type_Form :=
+           Landin.Checking.Type_Form_Of (Actual);
+      begin
+         case Form is
+            when Landin.Checking.Scalar_Actual_Type =>
+               return
+                 (Kind => IR.Scalar_Field_Shape,
+                  Element => Landin.Checking.Scalar_Of (Types.all, Actual),
+                  Length => 1, others => <>);
+            when Landin.Checking.Atom_Set_Actual_Type =>
+               return
+                 (Kind => IR.Scalar_Field_Shape,
+                  Element => Ty.U32, Length => 1,
+                  Atoms => Atom_Set_For
+                    (Landin.Checking.Atom_Set_Of (Types.all, Actual)),
+                  others => <>);
+            when Landin.Checking.Fixed_Array_Actual_Type =>
+               declare
+                  Nominal_Element : constant Boolean :=
+                    Landin.Checking.Array_Element_Form_Of
+                      (Types.all, Actual)
+                        = Landin.Checking.Nominal_Array_Element;
+                  Element : constant IR.Field_Shape :=
+                    (if Nominal_Element
+                     then Neutral_Body
+                       (Landin.Checking.Array_Nominal_Element_Of
+                          (Types.all, Actual))
+                     else
+                       (Kind => IR.Scalar_Field_Shape,
+                        Element => Landin.Checking.Array_Scalar_Element_Of
+                          (Types.all, Actual),
+                        Length => 1, others => <>));
+                  First : constant Natural :=
+                    (if Nominal_Element
+                     then IR.Add_Shape_Run (Unit.all, [1 => Element]) else 0);
+               begin
+                  return
+                    (Kind => IR.Array_Field_Shape,
+                     Element => Element.Element,
+                     Length => IR.Element_Total
+                       (Landin.Checking.Array_Length_Of
+                          (Types.all, Actual)),
+                     Cases => (if First = 0 then 0 else 1),
+                     Payloads_First => First,
+                     Nominal => Element.Nominal,
+                     others => <>);
+               end;
+            when Landin.Checking.Nominal_Actual_Type =>
+               return Neutral_Body
+                 (Landin.Checking.Nominal_Of (Types.all, Actual));
+            when Landin.Checking.Function_Actual_Type =>
+               return
+                 (Kind => IR.Scalar_Field_Shape, Element => Ty.Usize,
+                  Length => 1,
+                  Signature => Signature_For
+                    (Landin.Checking.Function_Signature_Of
+                       (Types.all, Actual)),
+                  others => <>);
+            when Landin.Checking.Reference_Actual_Type =>
+               declare
+                  Descriptor : constant Landin.Checking.Reference_Descriptor
+                    := Landin.Checking.Descriptor_Of
+                      (Types.all,
+                       Landin.Checking.Reference_Of (Types.all, Actual));
+               begin
+                  return
+                    (Kind =>
+                       (if Descriptor.Kind = Ty.Slice_Value
+                        then IR.Array_Field_Shape
+                        else IR.Scalar_Field_Shape),
+                     Element => Ty.Usize,
+                     Length =>
+                       (if Descriptor.Kind = Ty.Slice_Value then 2 else 1),
+                     others => <>);
+               end;
+         end case;
+      end Evidence_Shape;
 
       function Neutral_Result_Part
         (Part : Landin.Checking.Signature_Part) return IR.Field_Shape
@@ -2373,6 +2555,14 @@ package body Landin.Stages.Lowering is
            [others => IR.No_Value];
          Saved : array (1 .. Positive'Max (1, Count)) of IR.Slot_Id :=
            [others => IR.No_Slot];
+         Evidence_Count : constant Natural :=
+           (if Generic_Target = Landin.Checking.No_Routine_Instance
+            then 0
+            else Landin.Checking.Routine_Evidence_Count
+              (Types.all, Generic_Target));
+         Evidence_Arguments : array
+           (1 .. Positive'Max (1, Evidence_Count)) of IR.Value_Id :=
+             [others => IR.No_Value];
          Hidden : IR.Value_Id := IR.No_Value;
          Callee_Saved : IR.Slot_Id := IR.No_Slot;
          Callee_Value : IR.Value_Id := IR.No_Value;
@@ -3379,6 +3569,17 @@ package body Landin.Stages.Lowering is
               IR.Emit_Load (Unit.all, Filling, Callee_Saved, Site);
          end if;
 
+         for Which in 1 .. Evidence_Count loop
+            declare
+               Source : constant Landin.Checking.Conformance_Id :=
+                 Landin.Checking.Nth_Routine_Evidence
+                   (Types.all, Generic_Target, Which);
+            begin
+               Evidence_Arguments (Which) := IR.Emit_Evidence_Address
+                 (Unit.all, Filling, Evidence_For (Source), Site);
+            end;
+         end loop;
+
          Made :=
            (if Indirect
             then IR.Emit_Indirect_Call
@@ -3407,6 +3608,11 @@ package body Landin.Stages.Lowering is
          if Returns_Stored then
             IR.Add_Argument (Unit.all, Filling, Made, Hidden);
          end if;
+
+         for Which in 1 .. Evidence_Count loop
+            IR.Add_Argument
+              (Unit.all, Filling, Made, Evidence_Arguments (Which));
+         end loop;
 
          for Which in 1 .. Count loop
             IR.Add_Argument (Unit.all, Filling, Made, Given (Which));
@@ -4408,6 +4614,35 @@ package body Landin.Stages.Lowering is
                end;
 
             when Syn.Member_Selection =>
+               if Landin.Checking.Evidence_Of
+                 (Types.all, Of_Tree, Node)
+                    /= Landin.Checking.No_Conformance
+               then
+                  declare
+                     Source : constant Landin.Checking.Conformance_Id :=
+                       Landin.Checking.Evidence_Of
+                         (Types.all, Of_Tree, Node);
+                     Position : constant Positive :=
+                       Landin.Checking.Conformance_Identities.Position
+                         (Types.all, Source);
+                     Slot : constant IR.Slot_Id := Evidence_Slots (Position);
+                     Table : IR.Value_Id;
+                  begin
+                     if Slot = IR.No_Slot then
+                        raise Landin.Compiler_Defect with
+                          "an evidence selection has no hidden parameter";
+                     end if;
+                     Table := IR.Emit_Load
+                       (Unit.all, Filling, Slot, Site);
+                     return IR.Emit_Evidence_Function
+                       (Unit.all, Filling, Table, Evidence_For (Source),
+                        Positive
+                          (Landin.Checking.Evidence_Entry_Of
+                             (Types.all, Of_Tree, Node)),
+                        Site);
+                  end;
+               end if;
+
                declare
                   Cursor : Syn.Node_Id := Node;
                   Through_Pointer : Boolean := False;
@@ -8073,6 +8308,7 @@ package body Landin.Stages.Lowering is
             then Anonymous_Item (Of_Tree, Node)
             else IR.Item_For (Unit.all, Owner));
          Slots := No_Slots;
+         Evidence_Slots := [others => IR.No_Slot];
          pragma Assert (Cleanup_Stack.Is_Empty);
          Cleanup_Stack.Clear;
 
@@ -8088,6 +8324,32 @@ package body Landin.Stages.Lowering is
                pragma Unreferenced (Ignored);
             end;
          end if;
+
+         --  R2.70 evidence pointers are hidden runtime parameters after the
+         --  aggregate destination and before every written parameter.  Their
+         --  order is constrained generic-formal declaration order.
+         declare
+            View : constant Landin.Checking.Routine_Instance_Id :=
+              Landin.Checking.Current_Routine_View (Types.all);
+         begin
+            if View /= Landin.Checking.No_Routine_Instance then
+               for Which in 1 .. Landin.Checking.Routine_Evidence_Count
+                 (Types.all, View)
+               loop
+                  declare
+                     Source : constant Landin.Checking.Conformance_Id :=
+                       Landin.Checking.Nth_Routine_Evidence
+                         (Types.all, View, Which);
+                     Position : constant Positive :=
+                       Landin.Checking.Conformance_Identities.Position
+                         (Types.all, Source);
+                  begin
+                     Evidence_Slots (Position) := IR.Add_Parameter
+                       (Unit.all, Filling, Ty.Usize, Res.No_Declaration, Site);
+                  end;
+               end loop;
+            end if;
+         end;
 
          --  [1920] names the parameters in order, so the run is that
          --  order and the ABI has somewhere to put an argument.
@@ -8701,7 +8963,7 @@ package body Landin.Stages.Lowering is
                         IR.Element_Total (Part.Length));
                   end if;
                   IR.Set_Signature
-                    (Unit.all, Made, Signature_For (Source_Signature));
+                    (Unit.all, Made, Signature_For_Instance (Source));
                end;
             end if;
          end;
@@ -8770,6 +9032,65 @@ package body Landin.Stages.Lowering is
                        (Source => Src, Node => Node, Item => Made);
                   end;
                end if;
+            end loop;
+         end;
+      end loop;
+
+      --  One target-neutral table descriptor per concrete conformance, in
+      --  checker interning order.  Direct entries keep concept source order;
+      --  size and alignment are implicit semantic members whose physical
+      --  positions are derived by Landin.Evidence and Landin.Targets.
+      for Position in 1 .. Landin.Checking.Conformance_Count (Types.all) loop
+         declare
+            Source : constant Landin.Checking.Conformance_Id :=
+              Landin.Checking.Conformance_Identities.Nth
+                (Types.all, Position);
+            Actual : constant Landin.Checking.Actual_Key :=
+              Landin.Checking.Conformance_Target (Types.all, Source);
+         begin
+            Evidence (Position) :=
+              IR.Add_Evidence (Unit.all, Evidence_Shape (Actual));
+            for Provider_Position in
+              1 .. Landin.Checking.Conformance_Entry_Count
+                     (Types.all, Source)
+            loop
+               declare
+                  Provider_Instance : constant
+                    Landin.Checking.Routine_Instance_Id :=
+                      Landin.Checking.Conformance_Provider_Instance
+                        (Types.all, Source, Provider_Position);
+                  Provider : constant Res.Declaration_Id :=
+                    Landin.Checking.Conformance_Provider_Declaration
+                      (Types.all, Source, Provider_Position);
+                  Target : constant IR.Item_Id :=
+                    (if Provider_Instance
+                           /= Landin.Checking.No_Routine_Instance
+                     then IR.Item_For_Instance
+                       (Unit.all,
+                        Landin.Checking.Routine_Identities.Position
+                          (Types.all, Provider_Instance))
+                     elsif Provider /= Res.No_Declaration
+                     then IR.Item_For (Unit.all, Provider)
+                     else IR.No_Item);
+                  Signature : constant Landin.Checking.Signature_Id :=
+                    (if Provider_Instance
+                           /= Landin.Checking.No_Routine_Instance
+                     then Landin.Checking.Routine_Signature_Of
+                       (Types.all, Provider_Instance)
+                     elsif Provider /= Res.No_Declaration
+                     then Landin.Checking.Signature_Of (Types.all, Provider)
+                     else Landin.Checking.No_Signature);
+               begin
+                  if Target = IR.No_Item
+                    or else Signature = Landin.Checking.No_Signature
+                  then
+                     raise Landin.Compiler_Defect with
+                       "a selected evidence provider has no routine item";
+                  end if;
+                  IR.Add_Evidence_Entry
+                    (Unit.all, Evidence (Position), Target,
+                     Signature_For (Signature));
+               end;
             end loop;
          end;
       end loop;

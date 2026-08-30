@@ -1,0 +1,22 @@
+equatable: type = concept (t: type)
+    equal: (left: t, right: t) -> (yes: bool)
+end equatable
+
+box: type (t: type) = struct
+    value: t
+end box
+
+wrong: (t: type, left: box(t), right: box(t)) -> (yes: i32) =
+    yes = 0
+end wrong
+
+(t: type) box(t) is equatable (equal: wrong)
+
+accept: (t: type is equatable, value: t) -> (code: i32) =
+    code = 42
+end accept
+
+public main: () -> (code: i32) =
+    item: box(i32) = (value: 1)
+    code = accept(item)
+end main

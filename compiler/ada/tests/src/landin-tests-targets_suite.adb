@@ -2,6 +2,7 @@ with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 
 with Landin.Backend;
+with Landin.Evidence;
 with Landin.Platform.Native;
 with Landin.Targets;
 with Landin.Targets.Capabilities;
@@ -457,6 +458,40 @@ package body Landin.Tests.Targets_Suite is
             Row ("u64 u8", [Byte_8, Byte_1]);
             Variant_Row;
             Nested_Row;
+            Unbounded.Append
+              (Text,
+               LF & "  evidence functions  size align first-fn bytes align"
+               & LF
+               & "  0                   "
+               & Padded
+                   (Trimmed (Byte_Count'Image
+                      (Evidence_Size_Offset (Facts))), 5)
+               & Padded
+                   (Trimmed (Byte_Count'Image
+                      (Evidence_Alignment_Offset (Facts))), 6)
+               & Padded ("-", 9)
+               & Padded
+                   (Trimmed (Byte_Count'Image
+                      (Evidence_Table_Size (Facts, 0))), 6)
+               & Trimmed
+                   (Byte_Alignment'Image
+                      (Evidence_Table_Alignment (Facts))) & LF
+               & "  2                   "
+               & Padded
+                   (Trimmed (Byte_Count'Image
+                      (Evidence_Size_Offset (Facts))), 5)
+               & Padded
+                   (Trimmed (Byte_Count'Image
+                      (Evidence_Alignment_Offset (Facts))), 6)
+               & Padded
+                   (Trimmed (Byte_Count'Image
+                      (Evidence_Function_Offset (Facts, 1))), 9)
+               & Padded
+                   (Trimmed (Byte_Count'Image
+                      (Evidence_Table_Size (Facts, 2))), 6)
+               & Trimmed
+                   (Byte_Alignment'Image
+                      (Evidence_Table_Alignment (Facts))) & LF);
          end;
       end Describe;
    begin
@@ -647,8 +682,97 @@ package body Landin.Tests.Targets_Suite is
         (Item, Natural (Size_Of (Narrow)), 8, "and the whole is eight");
    end A_Layout_Follows_The_Target_And_Not_The_Host;
 
+   procedure Evidence_Ordering_And_Layout
+     (Item : in out Landin.Testing.Context);
+
+   procedure Evidence_Ordering_And_Layout
+     (Item : in out Landin.Testing.Context)
+   is
+      Linux : constant Target_Facts := Linux_X86_64;
+      Small : constant Target_Facts := Synthetic_32;
+   begin
+      Landin.Testing.Check_Equal
+        (Item, Natural (Landin.Evidence.Size_Position), 0,
+         "size is the first semantic evidence entry");
+      Landin.Testing.Check_Equal
+        (Item, Natural (Landin.Evidence.Alignment_Position), 1,
+         "alignment is the second semantic evidence entry");
+      Landin.Testing.Check_Equal
+        (Item, Natural (Landin.Evidence.Function_Position (1)), 2,
+         "the first concept function follows size and alignment");
+      Landin.Testing.Check_Equal
+        (Item, Natural (Landin.Evidence.Function_Position (2)), 3,
+         "the second concept function follows the first");
+      Landin.Testing.Check_Equal
+        (Item, Natural (Landin.Evidence.Entry_Count (0)), 2,
+         "zero functions still has two semantic entries");
+      Landin.Testing.Check_Equal
+        (Item, Natural (Landin.Evidence.Entry_Count (2)), 4,
+         "two functions have four semantic entries");
+
+      Landin.Testing.Check_Equal
+        (Item, Natural (Evidence_Size_Offset (Linux)), 0,
+         "Linux size cell offset");
+      Landin.Testing.Check_Equal
+        (Item, Natural (Evidence_Alignment_Offset (Linux)), 8,
+         "Linux alignment cell offset");
+      Landin.Testing.Check_Equal
+        (Item, Natural (Evidence_Function_Offset (Linux, 1)), 16,
+         "Linux first function cell offset");
+      Landin.Testing.Check_Equal
+        (Item, Natural (Evidence_Function_Offset (Linux, 2)), 24,
+         "Linux second function cell offset");
+      Landin.Testing.Check_Equal
+        (Item, Natural (Evidence_Table_Size (Linux, 0)), 16,
+         "Linux zero-function table size");
+      Landin.Testing.Check_Equal
+        (Item, Natural (Evidence_Table_Size (Linux, 2)), 32,
+         "Linux two-function table size");
+      Landin.Testing.Check_Equal
+        (Item, Natural (Evidence_Table_Alignment (Linux)), 8,
+         "Linux evidence table alignment");
+
+      Landin.Testing.Check_Equal
+        (Item, Natural (Evidence_Size_Offset (Small)), 0,
+         "synthetic-32 size cell offset");
+      Landin.Testing.Check_Equal
+        (Item, Natural (Evidence_Alignment_Offset (Small)), 4,
+         "synthetic-32 alignment cell offset");
+      Landin.Testing.Check_Equal
+        (Item, Natural (Evidence_Function_Offset (Small, 1)), 8,
+         "synthetic-32 first function cell offset");
+      Landin.Testing.Check_Equal
+        (Item, Natural (Evidence_Function_Offset (Small, 2)), 12,
+         "synthetic-32 second function cell offset");
+      Landin.Testing.Check_Equal
+        (Item, Natural (Evidence_Table_Size (Small, 0)), 8,
+         "synthetic-32 zero-function table size");
+      Landin.Testing.Check_Equal
+        (Item, Natural (Evidence_Table_Size (Small, 2)), 16,
+         "synthetic-32 two-function table size");
+      Landin.Testing.Check_Equal
+        (Item, Natural (Evidence_Table_Alignment (Small)), 4,
+         "synthetic-32 evidence table alignment");
+
+      declare
+         Ignored : Byte_Count;
+      begin
+         Ignored := Evidence_Table_Size (Small, 2 ** 30);
+         Landin.Testing.Fail
+           (Item, "a table beyond target usize should be refused");
+         pragma Assert (Ignored >= 0);
+      exception
+         when Landin.Compiler_Defect =>
+            Landin.Testing.Check
+              (Item, True, "evidence extent is bounded by target usize");
+      end;
+   end Evidence_Ordering_And_Layout;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "targets", "evidence ordering and layout",
+         Evidence_Ordering_And_Layout'Access);
       Landin.Testing.Register
         (Into, "targets", "fields keep the order they were written",
          Fields_Keep_The_Order_They_Were_Written'Access);

@@ -141,6 +141,13 @@ package body Landin.Checking is
       Into.Members.Append (Actual);
    end Append_Actual;
 
+   function Actual_Count (Actuals : Actual_Tuple) return Natural
+     is (Natural (Actuals.Members.Length));
+
+   function Nth_Actual
+     (Actuals : Actual_Tuple; Position : Positive) return Actual_Key
+     is (Actuals.Members (Position));
+
    function Scalar_Type_Actual
      (Scalar : Landin.Types.Scalar_Name) return Actual_Key
      is (Kind => Type_Actual_Kind, Type_Form => Scalar_Actual_Type,
@@ -466,6 +473,7 @@ package body Landin.Checking is
          Inputs   => (First => Natural (Into.Conformance_Actuals.Length),
                       Count => 0),
          Bindings => <>,
+         Providers => <>,
          Source   => Source,
          Node     => Node,
          Origin   => Origin);
@@ -549,6 +557,69 @@ package body Landin.Checking is
      (Of_Table : Table; Id : Conformance_Id) return Conformance_Origin
      is (Of_Table.Conformances
            (Conformance_Identities.Position (Of_Table, Id)).Origin);
+
+   function Conformance_Entry_Count
+     (Of_Table : Table; Id : Conformance_Id) return Natural
+     is (Of_Table.Conformances
+           (Conformance_Identities.Position (Of_Table, Id)).Providers.Count);
+
+   procedure Set_Conformance_Entry_Count
+     (Into : in out Table; Id : Conformance_Id; Count : Natural)
+   is
+      Position : constant Positive :=
+        Conformance_Identities.Position (Into, Id);
+      Held : Conformance_Record := Into.Conformances (Position);
+   begin
+      Held.Providers :=
+        (First => Natural (Into.Conformance_Providers.Length), Count => Count);
+      for Index in 1 .. Count loop
+         Into.Conformance_Providers.Append
+           (Conformance_Provider'(others => <>));
+      end loop;
+      Into.Conformances (Position) := Held;
+   end Set_Conformance_Entry_Count;
+
+   procedure Note_Conformance_Provider
+     (Into        : in out Table;
+      Id          : Conformance_Id;
+      Position    : Positive;
+      Declaration : Declaration_Id;
+      Instance    : Routine_Instance_Id := No_Routine_Instance)
+   is
+      Members : constant Run := Into.Conformances
+        (Conformance_Identities.Position (Into, Id)).Providers;
+      Where : constant Positive := Members.First + Position;
+   begin
+      if Into.Conformance_Providers (Where).Declaration /= No_Declaration
+      then
+         raise Landin.Compiler_Defect with
+           "one evidence entry was assigned two providers";
+      end if;
+      Into.Conformance_Providers (Where) :=
+        (Declaration => Declaration, Instance => Instance);
+   end Note_Conformance_Provider;
+
+   function Conformance_Provider_Declaration
+     (Of_Table : Table; Id : Conformance_Id; Position : Positive)
+      return Declaration_Id
+   is
+      Members : constant Run := Of_Table.Conformances
+        (Conformance_Identities.Position (Of_Table, Id)).Providers;
+   begin
+      return Of_Table.Conformance_Providers
+        (Members.First + Position).Declaration;
+   end Conformance_Provider_Declaration;
+
+   function Conformance_Provider_Instance
+     (Of_Table : Table; Id : Conformance_Id; Position : Positive)
+      return Routine_Instance_Id
+   is
+      Members : constant Run := Of_Table.Conformances
+        (Conformance_Identities.Position (Of_Table, Id)).Providers;
+   begin
+      return Of_Table.Conformance_Providers
+        (Members.First + Position).Instance;
+   end Conformance_Provider_Instance;
 
    function Intern
      (Into     : in out Table;
@@ -677,6 +748,8 @@ package body Landin.Checking is
            (Template => Template,
             Actuals  => (First => Natural (Into.Routine_Actuals.Length),
                          Count => 0),
+            Evidence => (First => Natural (Into.Routine_Evidence.Length),
+                         Count => 0),
             others   => <>);
       begin
          for Actual of Actuals.Members loop
@@ -712,6 +785,58 @@ package body Landin.Checking is
    begin
       return Of_Table.Routine_Actuals (Members.First + Position);
    end Nth_Routine_Actual;
+
+   function Routine_Evidence_Count
+     (Of_Table : Table; Id : Routine_Instance_Id) return Natural
+     is (Of_Table.Routine_Instances
+           (Routine_Identities.Position (Of_Table, Id)).Evidence.Count);
+
+   procedure Add_Routine_Evidence
+     (Into  : in out Table;
+      Id    : Routine_Instance_Id;
+      Formal : Positive;
+      Evidence : Conformance_Id)
+   is
+      Position : constant Positive := Routine_Identities.Position (Into, Id);
+      Held : Routine_Instance_Record := Into.Routine_Instances (Position);
+   begin
+      if Held.Evidence.Count = 0 then
+         Held.Evidence.First := Natural (Into.Routine_Evidence.Length);
+      elsif Held.Evidence.First + Held.Evidence.Count
+              /= Natural (Into.Routine_Evidence.Length)
+      then
+         raise Landin.Compiler_Defect with
+           "routine evidence entries were appended out of order";
+      end if;
+      Into.Routine_Evidence.Append
+        (Routine_Evidence_Record'
+           (Formal => Formal, Conformance => Evidence));
+      Held.Evidence.Count := Held.Evidence.Count + 1;
+      Into.Routine_Instances (Position) := Held;
+   end Add_Routine_Evidence;
+
+   function Nth_Routine_Evidence
+     (Of_Table : Table;
+      Id       : Routine_Instance_Id;
+      Position : Positive) return Conformance_Id
+   is
+      Members : constant Run := Of_Table.Routine_Instances
+        (Routine_Identities.Position (Of_Table, Id)).Evidence;
+   begin
+      return Of_Table.Routine_Evidence
+        (Members.First + Position).Conformance;
+   end Nth_Routine_Evidence;
+
+   function Nth_Routine_Evidence_Formal
+     (Of_Table : Table;
+      Id       : Routine_Instance_Id;
+      Position : Positive) return Positive
+   is
+      Members : constant Run := Of_Table.Routine_Instances
+        (Routine_Identities.Position (Of_Table, Id)).Evidence;
+   begin
+      return Of_Table.Routine_Evidence (Members.First + Position).Formal;
+   end Nth_Routine_Evidence_Formal;
 
    function Routine_State_Of
      (Of_Table : Table; Id : Routine_Instance_Id)
@@ -805,6 +930,8 @@ package body Landin.Checking is
                Into.Node_References.Append (No_Reference);
                Into.Node_Result_Shapes.Append (No_Signature);
                Into.Node_Routine_Targets.Append (No_Routine_Instance);
+               Into.Node_Evidence.Append (No_Conformance);
+               Into.Node_Evidence_Entries.Append (0);
                Into.Node_Fields.Append (0);
                Into.Node_Shapes.Append (Array_Shape'(others => <>));
             end loop;
@@ -2130,6 +2257,63 @@ package body Landin.Checking is
          end;
       end if;
    end Note_Routine_Target;
+
+   function Evidence_Of
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id) return Conformance_Id
+   is
+      Where : constant Positive := Slot (Of_Table, Of_Tree, Node);
+      Overlay : constant Natural := Node_Overlay_Position (Of_Table, Where);
+   begin
+      if Overlay /= 0 and then Of_Table.Node_Overlays (Overlay).Has_Evidence
+      then
+         return Of_Table.Node_Overlays (Overlay).Evidence;
+      end if;
+      return Of_Table.Node_Evidence (Where);
+   end Evidence_Of;
+
+   function Evidence_Entry_Of
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id) return Natural
+   is
+      Where : constant Positive := Slot (Of_Table, Of_Tree, Node);
+      Overlay : constant Natural := Node_Overlay_Position (Of_Table, Where);
+   begin
+      if Overlay /= 0 and then Of_Table.Node_Overlays (Overlay).Has_Evidence
+      then
+         return Of_Table.Node_Overlays (Overlay).Evidence_Entry;
+      end if;
+      return Of_Table.Node_Evidence_Entries (Where);
+   end Evidence_Entry_Of;
+
+   procedure Note_Evidence_Selection
+     (Into      : in out Table;
+      Of_Tree   : Landin.Syntax.Tree;
+      Node      : Landin.Syntax.Node_Id;
+      Evidence  : Conformance_Id;
+      Which     : Positive)
+   is
+      Where : constant Positive := Slot (Into, Of_Tree, Node);
+   begin
+      if Evidence_Of (Into, Of_Tree, Node) /= No_Conformance then
+         raise Landin.Compiler_Defect with
+           "one selection was assigned two evidence entries";
+      end if;
+      if Into.Current_Routine = No_Routine_Instance then
+         Into.Node_Evidence (Where) := Evidence;
+         Into.Node_Evidence_Entries (Where) := Which;
+      else
+         declare
+            Overlay : constant Positive := Ensure_Node_Overlay (Into, Where);
+         begin
+            Into.Node_Overlays (Overlay).Has_Evidence := True;
+            Into.Node_Overlays (Overlay).Evidence := Evidence;
+            Into.Node_Overlays (Overlay).Evidence_Entry := Which;
+         end;
+      end if;
+   end Note_Evidence_Selection;
 
    function Result_Shapes_Agree
      (Of_Table : Table; Left, Right : Signature_Id) return Boolean

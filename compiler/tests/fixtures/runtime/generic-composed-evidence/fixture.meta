@@ -1,0 +1,5 @@
+class: runtime
+summary: a child constraint dispatches through its separately registered parent evidence
+program: main.ldn
+status: 42
+constructs: 1230, 1240, 1290, 1310, 1340

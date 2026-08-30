@@ -930,7 +930,17 @@ privilege is defensible under [0490], but it should be stated
 rather than assumed, because the alternative reading is that the
 language cannot express its own allocator.
 
-Z4  sizeof T and alignof T on a type parameter are constants when the
+Z4  RESOLVED at R2.70. Evidence begins with the represented type's target
+`usize` size and alignment, followed by direct concept functions in declaration
+order. The semantic positions are target-neutral; Linux x86-64 and the
+synthetic 32-bit description derive different physical offsets and extents
+from their own pointer facts. A constrained generic instance receives that
+table as a hidden argument, so the same schema serves a later shared or `any`
+consumer without making a host width part of the language.
+
+The original finding, for the record.
+
+sizeof T and alignof T on a type parameter are constants when the
 call is specialised and are not when it is compiled against a
 table. The evidence therefore has to carry the size and alignment
 of the type as well as the concept's functions. [1310] describes

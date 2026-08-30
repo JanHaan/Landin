@@ -2571,23 +2571,56 @@ and IR records current.
 
 ### R2.70 — Implement the generic evidence schema
 
-Status: active
+Status: complete
 Depends on: R2.10, R2.30, R2.60, R1.80
 
-Define target-neutral entry ordering and semantics for concept functions, size
-and alignment; instantiate the physical Linux x86-64 ABI; and test synthetic
-32-bit physical layouts. Do not freeze an x86-only byte representation as the
-semantic schema.
+D144 gives every concrete conformance one target-neutral evidence identity.
+Its logical run is represented-type size, alignment, then direct concept
+functions in declaration order; parent conformances remain separate. The
+checker retains provider and routine-evidence runs, settles `T.entry` to its
+concrete direct or inherited conformance and substituted signature, and gives
+each constrained routine view hidden table parameters for the separate direct
+constraint/parent closure in deterministic declaration order. Static
+formals remain outside the source signature and ABI.
 
-Sources: legacy A7; `[1310]`, `R§12`.
+IR owns evidence descriptors, static table addresses and verified
+source-order function loads. An evidence function is an ordinary signed
+function value feeding the existing `Indirect_Call`, including its result,
+error and cleanup paths. The verifier checks table partitioning, represented
+shape, entry bounds, routine targets and signatures. Linux x86-64 emits private
+relocation-bearing tables and derives every load offset from target facts. Each
+physical member is one pointer-width cell, so size/alignment/first-function are
+0/8/16 and an N-function table is `(N + 2) * 8` bytes there; synthetic-32
+proves 0/4/8 and `(N + 2) * 4` without acquiring a backend.
 
-Exit evidence: shared generic bodies make indirect evidence calls; table
-layout, entry order, size and alignment are ABI-tested; specialization is not
-required.
+The deterministic baseline keeps concrete D138 views but folds
+representation-compatible evidence-only views onto one emitted machine body
+after a bounded IR/ABI comparison. Evidence identity may differ because the
+hidden argument supplies it; signed arithmetic, aggregates and every operation
+whose physical meaning was not proved prevent folding. Failing that proof
+emits separate bodies and cannot change correctness. No direct-call
+specialization or devirtualization is required or introduced; R4.50 still owns
+that optimization policy.
+
+Sources: legacy A7; `[1310]`, `R§12`; D144.
+
+Exit evidence: `runtime/generic-evidence-indirect` executes two fallible
+conformances through two real tables and one representation-compatible emitted
+body. `runtime/generic-composed-evidence` reaches a separately registered
+parent entry through a child constraint. `runtime/generic-parameterized-evidence`
+instantiates and dispatches a selected generic family provider, while its
+negative counterpart pins the
+post-substitution signature boundary. The backend case pins indirect dispatch,
+table directives and body aliasing; target cases pin semantic order plus Linux
+x86-64 and synthetic-32 offsets, extents, alignments and target-size overflow;
+checker, IR, lowering and verifier suites retain the evidence identity and
+signatures. The complete pinned debug and release loops pass 378 cases and
+8,608 checks with recorded artefacts current; direct specialization is
+not required.
 
 ### R2.80 — Implement `any C`
 
-Status: planned
+Status: active
 Depends on: R2.50, R2.70
 
 Implement explicit construction, the data-pointer/table pair, mutable and
