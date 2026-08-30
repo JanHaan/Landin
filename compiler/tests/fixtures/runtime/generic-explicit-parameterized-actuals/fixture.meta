@@ -1,0 +1,6 @@
+class: runtime
+summary: explicit static type arguments normalize compact parameterized alias and nominal call projections, including nesting
+constructs: 0980, 1290, 1300, 1350, 1800, 1920, 1970
+program: main.ldn
+status: 42
+targets: linux-x86-64
