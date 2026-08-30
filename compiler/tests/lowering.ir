@@ -1246,6 +1246,48 @@ item 1 ROUTINE main result u8 signature 1 params 0 slots 1 blocks 1 values 4
     2 STORE slot 1 <- 1
     3 LOAD u8 slot 1
     4 LEAVE <- 3
+file positive/generic-structural-deduction/program.ldn
+unit signatures 5 items 5
+signature 1 (i32) -> i32
+signature 2 () -> none
+signature 3 (i32) -> i32
+signature 4 (struct box, struct phantom, function signature 3) -> none
+signature 5 (i32) -> i32
+item 1 ROUTINE same result i32 signature 1 params 1 slots 2 blocks 1 values 4
+  slot 1 value i32 param 1
+  slot 2 result i32 return
+  block 1 scope 7 SIGNATURE length 4
+    1 LOAD i32 slot 1
+    2 STORE slot 2 <- 1
+    3 LOAD i32 slot 2
+    4 LEAVE <- 3
+item 2 DATUM array_box result struct params 0 slots 0 blocks 1 values 1
+  field 1 [3]i32
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 3 DATUM marker result struct params 0 slots 0 blocks 1 values 1
+  field 1 bool
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 4 ROUTINE use result none signature 2 params 0 slots 2 blocks 1 values 9
+  slot 1 - usize
+  slot 2 - usize
+  block 1 scope 9 BLOCK length 9
+    1 STORAGE_ADDRESS usize storage datum 2 array_box
+    2 STORE slot 1 <- 1
+    3 STORAGE_ADDRESS usize storage datum 3 marker
+    4 STORE slot 2 <- 3
+    5 FUNCTION_ADDRESS usize target 1 same signature 1
+    6 LOAD usize slot 1
+    7 LOAD usize slot 2
+    8 CALL none callee 5 - signature 4 <- 6 7 5
+    9 LEAVE
+item 5 ROUTINE - result none signature 4 params 3 slots 3 blocks 1 values 1
+  slot 1 value aggregate fields [3]i32 param 1
+  slot 2 marker aggregate fields bool param 2
+  slot 3 callback usize signature 5 param 3
+  block 1 scope 6 BLOCK length 1
+    1 LEAVE
 file positive/identifier-underscore/program.ldn
 unit signatures 0 items 2
 item 1 DATUM _hidden result u32 params 0 slots 0 blocks 1 values 2

@@ -1,0 +1,8 @@
+computed: (fixed count: u32, item: type,
+           value: [count * 2]item) -> none =
+end computed
+
+wrong: [5]i32 = [1, 2, 3, 4, 5]
+use: () -> none =
+    computed(count: 2, item: i32, value: wrong)
+end use

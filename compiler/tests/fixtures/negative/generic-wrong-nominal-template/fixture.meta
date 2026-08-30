@@ -1,0 +1,6 @@
+class: negative
+summary: structural deduction requires a parameterized nominal argument from the pattern's same source template
+constructs: 0710, 1290, 1920
+program: program.ldn
+targets: linux-x86-64, macos-arm64
+codes: L0301

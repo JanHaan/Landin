@@ -1,0 +1,14 @@
+box: type (item: type, fixed tag: u32) = struct
+    marker: bool
+end box
+other: type (item: type, fixed tag: u32) = struct
+    marker: bool
+end other
+
+accept: (item: type, fixed tag: u32, value: box(item, tag)) -> none =
+end accept
+
+wrong: other(i32, 3) = (marker: true)
+use: () -> none =
+    accept(wrong)
+end use

@@ -1,0 +1,75 @@
+box: type (item: type, fixed tag: u32) = struct
+    value: item
+end box
+
+phantom: type (item: type, fixed tag: u32) = struct
+    marker: i32
+end phantom
+
+envelope: type (item: type, fixed tag: u32) = struct
+    held: item
+end envelope
+
+problem: atom
+problems: type = problem
+
+row: type (item: type, fixed count: u32) = [count]item
+double_row: type (item: type, fixed count: u32) = [count * 2]item
+
+copy_box: (item: type, fixed count: u32, fixed tag: u32,
+           value: box([count]item, tag)) -> (result: box([count]item, tag)) =
+    result = value
+end copy_box
+
+copy_phantom: (item: type, fixed tag: u32,
+               value: phantom(item, tag)) -> (result: phantom(item, tag)) =
+    result = value
+end copy_phantom
+
+copy_nested: (item: type, fixed tag: u32,
+              value: envelope(box(item, tag), tag))
+             -> (result: envelope(box(item, tag), tag)) =
+    result = value
+end copy_nested
+
+accept_failing: (item: type,
+                 action: (input: item) -> (output: item) ! problems,
+                 value: item) -> (result: item) =
+    result = value
+end accept_failing
+
+last: (item: type, fixed count: u32, base: row(item, count),
+       doubled: double_row(item, count)) -> (result: item) =
+    result = doubled[3]
+end last
+
+apply: (item: type,
+        action: (input: item) -> (output: item),
+        value: item) -> (result: item) =
+    result = action(value)
+end apply
+
+add_two: (differently_named: i32) -> (also_different: i32) =
+    also_different = differently_named + 2
+end add_two
+
+may_fail: (differently_named: i32) -> (also_different: i32) ! problems =
+    also_different = differently_named
+end may_fail
+
+public main: () -> (code: i32) =
+    packed: box([3]i32, 5) = (value: [10, 20, 12])
+    copied: box([3]i32, 5) = copy_box(packed)
+    marker: phantom(bool, 9) = (marker: 8)
+    copied_marker: phantom(bool, 9) = copy_phantom(marker)
+    wrapped: envelope(box(i32, 4), 4) = (held: (value: 3))
+    copied_wrapped: envelope(box(i32, 4), 4) = copy_nested(wrapped)
+    base: [2]i32 = [1, 2]
+    doubled: [4]i32 = [3, 4, 5, 6]
+    explicit: i32 = last(item: i32, count: 2,
+                         base: base, doubled: doubled)
+    code = copied.value[2] + copied_marker.marker
+           + copied_wrapped.held.value + last(base, doubled)
+           + apply(add_two, 14) + accept_failing(may_fail, 5)
+           + explicit - 14
+end main

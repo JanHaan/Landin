@@ -2753,7 +2753,6 @@ package body Landin.Stages.Checking is
          --  global Not_Typed declaration.
          if Landin.Checking.Current_Routine_View (Types.all)
               /= Landin.Checking.No_Routine_Instance
-           and then Syn.Kind (Of_Tree, Written) /= Syn.Type_Application
            and then Landin.Checking.Type_Of (Types.all, Of_Tree, Written)
              /= Ty.Undecided
          then
@@ -4584,7 +4583,39 @@ package body Landin.Stages.Checking is
            [others => (others => <>)];
          Good : Boolean := True;
          Explicit_Statics : Boolean := False;
-         Conflict_Reported : Boolean := False;
+         Conflict_Reported : array (Bound'Range) of Boolean :=
+           [others => False];
+         Runtime_Count : constant Natural :=
+           Syn.Parameter_Count (Template_Tree.all, Function_Node);
+         Pattern_Failure_Reported : array
+           (1 .. Positive'Max (1, Runtime_Count)) of Boolean :=
+             [others => False];
+
+         --  A parameterized type pattern introduces its own formals.  Their
+         --  actuals are still written patterns in the caller's signature,
+         --  not guessed concrete types.  This append-only stack preserves
+         --  the parent environment for deferred computed bounds.
+         type Pattern_Map is record
+            Formal       : Res.Declaration_Id := Res.No_Declaration;
+            Source       : Landin.Source.Source_Id := Landin.Source.No_Source;
+            Node         : Syn.Node_Id := Syn.No_Node;
+            Parent_Limit : Natural := 0;
+         end record;
+         package Pattern_Map_Vectors is new Ada.Containers.Vectors
+           (Index_Type => Positive, Element_Type => Pattern_Map);
+         Pattern_Maps : Pattern_Map_Vectors.Vector;
+
+         type Deferred_Bound is record
+            Source    : Landin.Source.Source_Id := Landin.Source.No_Source;
+            Node      : Syn.Node_Id := Syn.No_Node;
+            Map_Limit : Natural := 0;
+            Actual    : Ty.Magnitude := 0;
+            Argument  : Syn.Node_Id := Syn.No_Node;
+            Position  : Positive := 1;
+         end record;
+         package Deferred_Bound_Vectors is new Ada.Containers.Vectors
+           (Index_Type => Positive, Element_Type => Deferred_Bound);
+         Deferred_Bounds : Deferred_Bound_Vectors.Vector;
 
          function Match_Generic_Runtime_Arguments return Boolean;
 
@@ -4953,25 +4984,28 @@ package body Landin.Stages.Checking is
             First : constant Landin.Provenance.Origin :=
               Bound (Position).First_Binding;
          begin
-            if not Conflict_Reported then
+            if not Conflict_Reported (Position) then
                Bad.Report
                  (Item    => Bad.Type_Mismatch,
                   Source  => Syn.Source_Of (Caller_Tree),
                   Where   => Syn.Where (Caller_Tree, Argument),
                   Message => "this argument deduces a different " & What
-                             & " for the repeated formal",
-                  Note    => "D138: repeated exact deductions must agree;"
-                             & " this call has no routine target",
+                             & " for repeated formal `"
+                             & Spelled
+                               (Syn.Name (Template_Tree.all, Formal_Node))
+                             & "`",
+                  Note    => "D138: repeated exact structural deductions"
+                             & " must agree; this call has no routine target",
                   Related =>
                     (if Landin.Provenance.Is_Known (First)
                      then First
                      else Syn.Origin (Template_Tree.all, Formal_Node)),
                   Because =>
                     (if Landin.Provenance.Is_Known (First)
-                     then "the first binding of this formal"
-                     else "the repeated formal"),
+                     then "the first argument relation for this formal"
+                     else "the repeated formal pattern"),
                   Into    => Found);
-               Conflict_Reported := True;
+               Conflict_Reported (Position) := True;
             end if;
             Good := False;
             Landin.Checking.Refuse (Types.all, Caller_Tree, Call);
@@ -5028,6 +5062,777 @@ package body Landin.Stages.Checking is
             Landin.Checking.Settle
               (Types.all, Declaration, Descriptor.Kind);
          end Publish_Descriptor;
+
+         function Main_Position
+           (Formal : Res.Declaration_Id) return Natural;
+
+         function Map_Position
+           (Formal : Res.Declaration_Id; Limit : Natural) return Natural;
+
+         procedure Report_Pattern_Failure
+           (Argument     : Syn.Node_Id;
+            Position     : Positive;
+            Pattern_Tree : Syn.Tree;
+            Pattern      : Syn.Node_Id;
+            Message      : String);
+
+         function Bind_Type_Formal
+           (Formal   : Res.Declaration_Id;
+            Actual   : Type_Descriptor;
+            Argument : Syn.Node_Id) return Boolean;
+
+         function Bind_Fixed_Formal
+           (Formal   : Res.Declaration_Id;
+            Actual   : Ty.Magnitude;
+            Argument : Syn.Node_Id) return Boolean;
+
+         function Part_Descriptor
+           (Part : Landin.Checking.Signature_Part) return Type_Descriptor;
+
+         function Main_Position
+           (Formal : Res.Declaration_Id) return Natural is
+         begin
+            for Position in Bound'Range loop
+               if Bound (Position).Formal = Formal then
+                  return Position;
+               end if;
+            end loop;
+            return 0;
+         end Main_Position;
+
+         function Map_Position
+           (Formal : Res.Declaration_Id; Limit : Natural) return Natural is
+         begin
+            if Limit > 0 then
+               for Position in reverse 1 .. Limit loop
+                  if Pattern_Maps (Positive (Position)).Formal = Formal then
+                     return Position;
+                  end if;
+               end loop;
+            end if;
+            return 0;
+         end Map_Position;
+
+         procedure Report_Pattern_Failure
+           (Argument     : Syn.Node_Id;
+            Position     : Positive;
+            Pattern_Tree : Syn.Tree;
+            Pattern      : Syn.Node_Id;
+            Message      : String) is
+         begin
+            if not Pattern_Failure_Reported (Position) then
+               Bad.Report
+                 (Item    => Bad.Type_Mismatch,
+                  Source  => Syn.Source_Of (Caller_Tree),
+                  Where   => Syn.Where (Caller_Tree, Argument),
+                  Message => Message,
+                  Note    => "D138: deduction unifies the written parameter"
+                             & " pattern with the independently synthesized"
+                             & " argument descriptor exactly",
+                  Related => Syn.Origin (Pattern_Tree, Pattern),
+                  Because => "the runtime parameter type pattern",
+                  Into    => Found);
+               Pattern_Failure_Reported (Position) := True;
+            end if;
+            Good := False;
+            Landin.Checking.Refuse (Types.all, Caller_Tree, Call);
+         end Report_Pattern_Failure;
+
+         function Bind_Type_Formal
+           (Formal   : Res.Declaration_Id;
+            Actual   : Type_Descriptor;
+            Argument : Syn.Node_Id) return Boolean
+         is
+            Position : constant Natural := Main_Position (Formal);
+         begin
+            if Position = 0 then
+               return False;
+            elsif Bound (Position).Value.Kind = Ty.Ill_Typed then
+               if Explicit_Statics then
+                  Good := False;
+                  return False;
+               end if;
+               Bound (Position).Value := Actual;
+               Bound (Position).First_Binding :=
+                 Syn.Origin (Caller_Tree, Argument);
+               return True;
+            elsif Descriptors_Agree (Bound (Position).Value, Actual) then
+               return True;
+            end if;
+
+            Report_Deduction_Conflict
+              (Argument, Positive (Position), "type descriptor");
+            return False;
+         end Bind_Type_Formal;
+
+         function Bind_Fixed_Formal
+           (Formal   : Res.Declaration_Id;
+            Actual   : Ty.Magnitude;
+            Argument : Syn.Node_Id) return Boolean
+         is
+            Position : constant Natural := Main_Position (Formal);
+         begin
+            if Position = 0 then
+               return False;
+            elsif not Bound (Position).Fixed_Known then
+               if Explicit_Statics then
+                  Good := False;
+                  return False;
+               end if;
+               Bound (Position).Fixed := Actual;
+               Bound (Position).Fixed_Known := True;
+               Bound (Position).First_Binding :=
+                 Syn.Origin (Caller_Tree, Argument);
+               return True;
+            elsif Bound (Position).Fixed = Actual then
+               return True;
+            end if;
+
+            Report_Deduction_Conflict
+              (Argument, Positive (Position), "fixed value");
+            return False;
+         end Bind_Fixed_Formal;
+
+         function Direct_Fixed_Formal
+           (Pattern_Tree : Syn.Tree;
+            Pattern      : Syn.Node_Id;
+            Map_Limit    : Natural) return Res.Declaration_Id;
+
+         function Direct_Fixed_Formal
+           (Pattern_Tree : Syn.Tree;
+            Pattern      : Syn.Node_Id;
+            Map_Limit    : Natural) return Res.Declaration_Id
+         is
+         begin
+            if Syn.Kind (Pattern_Tree, Pattern)
+                 not in Syn.Name_Reference | Syn.Type_Reference
+              or else Res.Verdict_Of
+                (Meanings.all, Pattern_Tree, Pattern) /= Res.Bound
+            then
+               return Res.No_Declaration;
+            end if;
+
+            declare
+               Formal : constant Res.Declaration_Id :=
+                 Res.Bound_To (Meanings.all, Pattern_Tree, Pattern);
+               Mapped : constant Natural := Map_Position (Formal, Map_Limit);
+            begin
+               if Main_Position (Formal) /= 0
+                 and then Res.Sort_Of (Meanings.all, Formal)
+                            = Res.Fixed_Parameter
+               then
+                  return Formal;
+               elsif Mapped /= 0 then
+                  declare
+                     Item : constant Pattern_Map :=
+                       Pattern_Maps (Positive (Mapped));
+                     Mapped_Tree : constant
+                       not null access constant Syn.Tree :=
+                         Tree_For (Item.Source);
+                  begin
+                     return Direct_Fixed_Formal
+                       (Mapped_Tree.all, Item.Node, Item.Parent_Limit);
+                  end;
+               end if;
+            end;
+            return Res.No_Declaration;
+         end Direct_Fixed_Formal;
+
+         function Evaluate_Pattern_Bound
+           (Pattern_Tree : Syn.Tree;
+            Pattern      : Syn.Node_Id;
+            Map_Limit    : Natural;
+            Valid        : out Boolean;
+            Known        : out Boolean) return Ty.Folded;
+
+         function Evaluate_Pattern_Bound
+           (Pattern_Tree : Syn.Tree;
+            Pattern      : Syn.Node_Id;
+            Map_Limit    : Natural;
+            Valid        : out Boolean;
+            Known        : out Boolean) return Ty.Folded
+         is
+            Kind : constant Syn.Node_Kind := Syn.Kind (Pattern_Tree, Pattern);
+         begin
+            Valid := False;
+            Known := False;
+
+            if Kind = Syn.Integer_Literal then
+               declare
+                  Snap : constant Landin.Source.Snapshot :=
+                    Source (Context, Syn.Source_Of (Pattern_Tree));
+                  Text : constant String := Landin.Source.Slice
+                    (Snap, Syn.Digit_Span (Pattern_Tree, Pattern));
+                  Value : Ty.Magnitude;
+                  Overflowed : Boolean;
+               begin
+                  Ty.Evaluate
+                    (Text, Syn.Base (Pattern_Tree, Pattern), Value,
+                     Overflowed);
+                  if Overflowed then
+                     Report_Fixed_Bound_Range
+                       (Pattern_Tree, Pattern,
+                        Syn.Origin (Caller_Tree, Call),
+                        "this deduced fixed pattern overflows the compiler's"
+                        & " widest enabled integer magnitude",
+                        "D138 evaluates a computed pattern only after its"
+                        & " referenced fixed formals are bound");
+                     return 0;
+                  end if;
+                  Valid := True;
+                  Known := True;
+                  return Ty.Folded (Value);
+               end;
+            end if;
+
+            if Kind in Syn.Name_Reference | Syn.Type_Reference
+              and then Res.Verdict_Of
+                (Meanings.all, Pattern_Tree, Pattern) = Res.Bound
+            then
+               declare
+                  Formal : constant Res.Declaration_Id :=
+                    Res.Bound_To (Meanings.all, Pattern_Tree, Pattern);
+                  Position : constant Natural := Main_Position (Formal);
+                  Mapped : constant Natural :=
+                    Map_Position (Formal, Map_Limit);
+               begin
+                  if Position /= 0
+                    and then Res.Sort_Of (Meanings.all, Formal)
+                               = Res.Fixed_Parameter
+                  then
+                     Valid := True;
+                     Known := Bound (Position).Fixed_Known;
+                     return Ty.Folded (Bound (Position).Fixed);
+                  elsif Mapped /= 0 then
+                     declare
+                        Item : constant Pattern_Map :=
+                          Pattern_Maps (Positive (Mapped));
+                        Mapped_Tree : constant
+                          not null access constant Syn.Tree :=
+                            Tree_For (Item.Source);
+                     begin
+                        return Evaluate_Pattern_Bound
+                          (Mapped_Tree.all, Item.Node, Item.Parent_Limit,
+                           Valid, Known);
+                     end;
+                  end if;
+               end;
+               return 0;
+            end if;
+
+            if Kind = Syn.Negation then
+               declare
+                  Under_Valid, Under_Known : Boolean;
+                  Under : constant Ty.Folded := Evaluate_Pattern_Bound
+                    (Pattern_Tree, Syn.Operand_Of (Pattern_Tree, Pattern),
+                     Map_Limit, Under_Valid, Under_Known);
+               begin
+                  Valid := Under_Valid;
+                  Known := Under_Known;
+                  return (if Under_Known then -Under else 0);
+               end;
+            end if;
+
+            if Kind in Syn.Add | Syn.Subtract | Syn.Multiply
+                         | Syn.Divide | Syn.Remainder
+            then
+               declare
+                  Left_Valid, Right_Valid, Left_Known, Right_Known : Boolean;
+                  Left : constant Ty.Folded := Evaluate_Pattern_Bound
+                    (Pattern_Tree, Syn.Left_Of (Pattern_Tree, Pattern),
+                     Map_Limit, Left_Valid, Left_Known);
+                  Right : constant Ty.Folded := Evaluate_Pattern_Bound
+                    (Pattern_Tree, Syn.Right_Of (Pattern_Tree, Pattern),
+                     Map_Limit, Right_Valid, Right_Known);
+                  Fits : Boolean := True;
+               begin
+                  Valid := Left_Valid and then Right_Valid;
+                  if not Valid then
+                     return 0;
+                  elsif Kind in Syn.Divide | Syn.Remainder
+                    and then Right_Known and then Right = 0
+                  then
+                     Report_Fixed_Bound_Operand
+                       (Pattern_Tree,
+                        Syn.Right_Of (Pattern_Tree, Pattern),
+                        Syn.Origin (Caller_Tree, Call),
+                        "this deduced fixed-pattern divisor is zero");
+                     Valid := False;
+                     return 0;
+                  elsif not Left_Known or else not Right_Known then
+                     return 0;
+                  end if;
+
+                  case Kind is
+                     when Syn.Add =>
+                        Fits := (if Right > 0
+                                 then Left <= Ty.Folded'Last - Right
+                                 else Left >= Ty.Folded'First - Right);
+                     when Syn.Subtract =>
+                        Fits := (if Right > 0
+                                 then Left >= Ty.Folded'First + Right
+                                 else Left <= Ty.Folded'Last + Right);
+                     when Syn.Multiply =>
+                        Fits := Left = 0
+                          or else abs Right <= Ty.Folded'Last / abs Left;
+                     when Syn.Divide | Syn.Remainder =>
+                        null;
+                     when others =>
+                        raise Landin.Compiler_Defect;
+                  end case;
+                  if not Fits then
+                     Report_Fixed_Bound_Range
+                       (Pattern_Tree, Pattern,
+                        Syn.Origin (Caller_Tree, Call),
+                        "this deduced fixed pattern overflows the compiler's"
+                        & " widest enabled integer magnitude",
+                        "D138 evaluates a computed pattern only after its"
+                        & " referenced fixed formals are bound");
+                     Valid := False;
+                     return 0;
+                  end if;
+
+                  Valid := True;
+                  Known := True;
+                  case Kind is
+                     when Syn.Add       => return Left + Right;
+                     when Syn.Subtract  => return Left - Right;
+                     when Syn.Multiply  => return Left * Right;
+                     when Syn.Divide    => return Left / Right;
+                     when Syn.Remainder => return Left rem Right;
+                     when others        => raise Landin.Compiler_Defect;
+                  end case;
+               end;
+            end if;
+            return 0;
+         end Evaluate_Pattern_Bound;
+
+         function Match_Type_Pattern
+           (Pattern_Tree : Syn.Tree;
+            Pattern      : Syn.Node_Id;
+            Actual       : Type_Descriptor;
+            Argument     : Syn.Node_Id;
+            Position     : Positive;
+            Map_Limit    : Natural) return Boolean;
+
+         function Match_Fixed_Pattern
+           (Pattern_Tree : Syn.Tree;
+            Pattern      : Syn.Node_Id;
+            Actual       : Ty.Magnitude;
+            Argument     : Syn.Node_Id;
+            Position     : Positive;
+            Map_Limit    : Natural) return Boolean;
+
+         function Match_Fixed_Pattern
+           (Pattern_Tree : Syn.Tree;
+            Pattern      : Syn.Node_Id;
+            Actual       : Ty.Magnitude;
+            Argument     : Syn.Node_Id;
+            Position     : Positive;
+            Map_Limit    : Natural) return Boolean
+         is
+            Formal : constant Res.Declaration_Id := Direct_Fixed_Formal
+              (Pattern_Tree, Pattern, Map_Limit);
+            Valid, Known : Boolean;
+            Value : Ty.Folded;
+         begin
+            if Formal /= Res.No_Declaration then
+               return Bind_Fixed_Formal (Formal, Actual, Argument);
+            end if;
+
+            Value := Evaluate_Pattern_Bound
+              (Pattern_Tree, Pattern, Map_Limit, Valid, Known);
+            if not Valid then
+               Good := False;
+               return False;
+            elsif not Known then
+               Deferred_Bounds.Append
+                 (Deferred_Bound'
+                    (Source    => Syn.Source_Of (Pattern_Tree),
+                     Node      => Pattern,
+                     Map_Limit => Map_Limit,
+                     Actual    => Actual,
+                     Argument  => Argument,
+                     Position  => Position));
+               return True;
+            elsif Value < 0 or else Ty.Magnitude (Value) /= Actual then
+               Report_Pattern_Failure
+                 (Argument, Position, Pattern_Tree, Pattern,
+                  "this argument does not match the exact fixed value in"
+                  & " its parameter pattern");
+               return False;
+            end if;
+            return True;
+         end Match_Fixed_Pattern;
+
+         function Part_Descriptor
+           (Part : Landin.Checking.Signature_Part) return Type_Descriptor is
+         begin
+            case Part.Kind is
+               when Ty.Scalar_Name =>
+                  return (Kind => Part.Kind, others => <>);
+               when Ty.Atom_Value =>
+                  return (Kind => Part.Kind, Atoms => Part.Atoms,
+                          others => <>);
+               when Ty.Fixed_Array =>
+                  return
+                    (Kind            => Part.Kind,
+                     Length          => Part.Length,
+                     Element         => Part.Element,
+                     Element_Nominal => Part.Nominal,
+                     others          => <>);
+               when Ty.Aggregate =>
+                  return (Kind => Part.Kind, Nominal => Part.Nominal,
+                          others => <>);
+               when Ty.Function_Value =>
+                  return (Kind => Part.Kind, Signature => Part.Signature,
+                          others => <>);
+               when others =>
+                  return (Kind => Ty.Ill_Typed, others => <>);
+            end case;
+         end Part_Descriptor;
+
+         function Match_Type_Pattern
+           (Pattern_Tree : Syn.Tree;
+            Pattern      : Syn.Node_Id;
+            Actual       : Type_Descriptor;
+            Argument     : Syn.Node_Id;
+            Position     : Positive;
+            Map_Limit    : Natural) return Boolean
+         is
+            Kind : constant Syn.Node_Kind := Syn.Kind (Pattern_Tree, Pattern);
+
+            function Constant_Agrees return Boolean;
+
+            function Constant_Agrees return Boolean is
+               Expected : constant Type_Descriptor := Normalized_Type
+                 (Pattern_Tree, Pattern, Bound,
+                  Syn.Origin (Caller_Tree, Call), Identity_Only);
+            begin
+               if Expected.Kind = Ty.Ill_Typed then
+                  Good := False;
+                  return False;
+               elsif Descriptors_Agree (Expected, Actual) then
+                  return True;
+               end if;
+               Report_Pattern_Failure
+                 (Argument, Position, Pattern_Tree, Pattern,
+                  "this argument does not match its exact constant type"
+                  & " pattern");
+               return False;
+            end Constant_Agrees;
+         begin
+            if Actual.Kind = Ty.Ill_Typed then
+               Good := False;
+               return False;
+            end if;
+
+            if Kind in Syn.Type_Reference | Syn.Name_Reference
+              and then Res.Verdict_Of
+                (Meanings.all, Pattern_Tree, Pattern) = Res.Bound
+            then
+               declare
+                  Means : constant Res.Declaration_Id :=
+                    Res.Bound_To (Meanings.all, Pattern_Tree, Pattern);
+                  Mapped : constant Natural := Map_Position (Means, Map_Limit);
+               begin
+                  if Res.Sort_Of (Meanings.all, Means) = Res.Type_Parameter
+                    and then Main_Position (Means) /= 0
+                  then
+                     return Bind_Type_Formal (Means, Actual, Argument);
+                  elsif Res.Sort_Of (Meanings.all, Means)
+                          = Res.Type_Parameter
+                    and then Mapped /= 0
+                  then
+                     declare
+                        Item : constant Pattern_Map :=
+                          Pattern_Maps (Positive (Mapped));
+                        Mapped_Tree : constant
+                          not null access constant Syn.Tree :=
+                            Tree_For (Item.Source);
+                     begin
+                        return Match_Type_Pattern
+                          (Mapped_Tree.all, Item.Node, Actual, Argument,
+                           Position, Item.Parent_Limit);
+                     end;
+                  end if;
+               end;
+            end if;
+
+            if Kind = Syn.Array_Type then
+               if Actual.Kind /= Ty.Fixed_Array then
+                  Report_Pattern_Failure
+                    (Argument, Position, Pattern_Tree, Pattern,
+                     "this argument is not the fixed array required by its"
+                     & " parameter pattern");
+                  return False;
+               end if;
+               if not Match_Fixed_Pattern
+                 (Pattern_Tree, Syn.Bound_Of (Pattern_Tree, Pattern),
+                  Ty.Magnitude (Actual.Length), Argument, Position, Map_Limit)
+               then
+                  return False;
+               end if;
+               declare
+                  Element : constant Type_Descriptor :=
+                    (if Actual.Element_Nominal
+                          /= Landin.Checking.No_Nominal_Type
+                     then (Kind => Ty.Aggregate,
+                           Nominal => Actual.Element_Nominal,
+                           others => <>)
+                     else (Kind => Actual.Element, others => <>));
+               begin
+                  return Match_Type_Pattern
+                    (Pattern_Tree, Syn.Element_Of (Pattern_Tree, Pattern),
+                     Element, Argument, Position, Map_Limit);
+               end;
+            end if;
+
+            if Kind = Syn.Function_Type then
+               if Actual.Kind /= Ty.Function_Value then
+                  Report_Pattern_Failure
+                    (Argument, Position, Pattern_Tree, Pattern,
+                     "this argument is not the function signature required"
+                     & " by its parameter pattern");
+                  return False;
+               end if;
+               declare
+                  Signature : constant Landin.Checking.Signature_Id :=
+                    Actual.Signature;
+                  Pattern_Error : constant Syn.Node_Id :=
+                    Syn.Error_Set_Of (Pattern_Tree, Pattern);
+                  Actual_Form : constant Landin.Checking.Error_Set_Form :=
+                    Landin.Checking.Signature_Error_Form
+                      (Types.all, Signature);
+               begin
+                  if Syn.Parameter_Count (Pattern_Tree, Pattern)
+                       /= Landin.Checking.Signature_Parameter_Count
+                         (Types.all, Signature)
+                    or else Syn.Return_Count (Pattern_Tree, Pattern)
+                       /= Landin.Checking.Signature_Result_Count
+                         (Types.all, Signature)
+                  then
+                     Report_Pattern_Failure
+                       (Argument, Position, Pattern_Tree, Pattern,
+                        "this argument has different function parameter or"
+                        & " result counts from its pattern");
+                     return False;
+                  end if;
+
+                  if Pattern_Error = Syn.No_Node then
+                     if Actual_Form /= Landin.Checking.Infallible then
+                        Report_Pattern_Failure
+                          (Argument, Position, Pattern_Tree, Pattern,
+                           "this argument's function error form differs from"
+                           & " its infallible pattern");
+                        return False;
+                     end if;
+                  elsif Syn.Kind (Pattern_Tree, Pattern_Error)
+                          = Syn.Inferred_Error_Set
+                  then
+                     if Actual_Form /= Landin.Checking.Inferred then
+                        Report_Pattern_Failure
+                          (Argument, Position, Pattern_Tree, Pattern_Error,
+                           "this argument's function error form differs from"
+                           & " the separate inferred pattern");
+                        return False;
+                     end if;
+                  elsif Actual_Form /= Landin.Checking.Concrete
+                    or else not Match_Type_Pattern
+                      (Pattern_Tree, Pattern_Error,
+                       (Kind => Ty.Atom_Value,
+                        Atoms =>
+                          (if Actual_Form = Landin.Checking.Concrete
+                           then Landin.Checking.Signature_Errors
+                             (Types.all, Signature)
+                           else Landin.Checking.No_Atom_Set),
+                        others => <>),
+                       Argument, Position, Map_Limit)
+                  then
+                     if Actual_Form /= Landin.Checking.Concrete then
+                        Report_Pattern_Failure
+                          (Argument, Position, Pattern_Tree, Pattern_Error,
+                           "this argument does not have the concrete error"
+                           & " set required by its function pattern");
+                     end if;
+                     return False;
+                  end if;
+
+                  for Index in 1 .. Syn.Parameter_Count
+                    (Pattern_Tree, Pattern)
+                  loop
+                     if not Match_Type_Pattern
+                       (Pattern_Tree,
+                        Syn.Declared_Type
+                          (Pattern_Tree,
+                           Syn.Nth_Parameter
+                             (Pattern_Tree, Pattern, Index)),
+                        Part_Descriptor
+                          (Landin.Checking.Nth_Signature_Parameter
+                             (Types.all, Signature, Index)),
+                        Argument, Position, Map_Limit)
+                     then
+                        return False;
+                     end if;
+                  end loop;
+                  for Index in 1 .. Syn.Return_Count (Pattern_Tree, Pattern)
+                  loop
+                     if not Match_Type_Pattern
+                       (Pattern_Tree,
+                        Syn.Declared_Type
+                          (Pattern_Tree,
+                           Syn.Nth_Return (Pattern_Tree, Pattern, Index)),
+                        Part_Descriptor
+                          (Landin.Checking.Nth_Signature_Result
+                             (Types.all, Signature, Index)),
+                        Argument, Position, Map_Limit)
+                     then
+                        return False;
+                     end if;
+                  end loop;
+                  return True;
+               end;
+            end if;
+
+            if Kind in Syn.Type_Application | Syn.Call then
+               declare
+                  function Target return Syn.Node_Id is
+                    (if Kind = Syn.Type_Application
+                     then Syn.Applied_Type (Pattern_Tree, Pattern)
+                     else Syn.Callee_Of (Pattern_Tree, Pattern));
+                  function Count return Natural is
+                    (if Kind = Syn.Type_Application
+                     then Syn.Type_Argument_Count (Pattern_Tree, Pattern)
+                     else Syn.Argument_Count (Pattern_Tree, Pattern));
+                  function Nth (Index : Positive) return Syn.Node_Id is
+                    (if Kind = Syn.Type_Application
+                     then Syn.Nth_Type_Argument
+                       (Pattern_Tree, Pattern, Index)
+                     else Syn.Nth_Argument (Pattern_Tree, Pattern, Index));
+                  Applied : constant Syn.Node_Id := Target;
+               begin
+                  if Res.Verdict_Of
+                    (Meanings.all, Pattern_Tree, Applied) /= Res.Bound
+                  then
+                     Good := False;
+                     return False;
+                  end if;
+                  declare
+                     Template : constant Res.Declaration_Id :=
+                       Res.Bound_To (Meanings.all, Pattern_Tree, Applied);
+                     Of_Template : constant
+                       not null access constant Syn.Tree :=
+                         Tree_For (Res.Source_Of (Meanings.all, Template));
+                     Declaration : constant Syn.Node_Id :=
+                       Res.Node_Of (Meanings.all, Template);
+                     Formal_Count : constant Natural :=
+                       Syn.Type_Formal_Count (Of_Template.all, Declaration);
+                     Parent_Limit : constant Natural := Map_Limit;
+                  begin
+                     if Count /= Formal_Count then
+                        Good := False;
+                        return False;
+                     end if;
+                     for Index in 1 .. Formal_Count loop
+                        Pattern_Maps.Append
+                          (Pattern_Map'
+                             (Formal => Declaration_At
+                                (Syn.Source_Of (Of_Template.all),
+                                 Syn.Nth_Type_Formal
+                                   (Of_Template.all, Declaration, Index)),
+                              Source => Syn.Source_Of (Pattern_Tree),
+                              Node => Nth (Index),
+                              Parent_Limit => Parent_Limit));
+                     end loop;
+                     declare
+                        New_Limit : constant Natural :=
+                          Natural (Pattern_Maps.Length);
+                        Result_Type : constant Syn.Node_Id :=
+                          Syn.Declared_Type (Of_Template.all, Declaration);
+                     begin
+                        if Syn.Kind (Of_Template.all, Result_Type)
+                             /= Syn.Struct_Body
+                        then
+                           return Match_Type_Pattern
+                             (Of_Template.all, Result_Type, Actual, Argument,
+                              Position, New_Limit);
+                        elsif Actual.Kind /= Ty.Aggregate
+                          or else Landin.Checking.Template_Of
+                            (Types.all, Actual.Nominal) /= Template
+                          or else Landin.Checking.Instance_Actual_Count
+                            (Types.all, Actual.Nominal) /= Formal_Count
+                        then
+                           Report_Pattern_Failure
+                             (Argument, Position, Pattern_Tree, Pattern,
+                              "this argument is not an instance of the same"
+                              & " nominal source template as its pattern");
+                           return False;
+                        end if;
+
+                        for Index in 1 .. Formal_Count loop
+                           declare
+                              Formal_Node : constant Syn.Node_Id :=
+                                Syn.Nth_Type_Formal
+                                  (Of_Template.all, Declaration, Index);
+                              Stored : constant Landin.Checking.Actual_Key :=
+                                Landin.Checking.Nth_Instance_Actual
+                                  (Types.all, Actual.Nominal, Index);
+                           begin
+                              if Syn.Kind (Of_Template.all, Formal_Node)
+                                   = Syn.Type_Formal
+                              then
+                                 if Landin.Checking.Actual_Kind_Of (Stored)
+                                      /= Landin.Checking.Type_Actual_Kind
+                                   or else not Match_Type_Pattern
+                                     (Pattern_Tree, Nth (Index),
+                                      Descriptor_For (Stored), Argument,
+                                      Position, Parent_Limit)
+                                 then
+                                    if Landin.Checking.Actual_Kind_Of (Stored)
+                                         /= Landin.Checking.Type_Actual_Kind
+                                    then
+                                       Report_Pattern_Failure
+                                         (Argument, Position, Pattern_Tree,
+                                          Nth (Index),
+                                          "this nominal instance stores a"
+                                          & " different actual kind from"
+                                          & " its pattern");
+                                    end if;
+                                    return False;
+                                 end if;
+                              elsif Landin.Checking.Actual_Kind_Of (Stored)
+                                      /= Landin.Checking.Fixed_Actual_Kind
+                                or else not Match_Fixed_Pattern
+                                  (Pattern_Tree, Nth (Index),
+                                   (if Landin.Checking.Actual_Kind_Of (Stored)
+                                      = Landin.Checking.Fixed_Actual_Kind
+                                    then Landin.Checking.Fixed_Magnitude_Of
+                                      (Stored)
+                                    else 0),
+                                   Argument, Position, Parent_Limit)
+                              then
+                                 if Landin.Checking.Actual_Kind_Of (Stored)
+                                      /= Landin.Checking.Fixed_Actual_Kind
+                                 then
+                                    Report_Pattern_Failure
+                                      (Argument, Position, Pattern_Tree,
+                                       Nth (Index),
+                                       "this nominal instance stores a"
+                                       & " different actual kind from its"
+                                       & " pattern");
+                                 end if;
+                                 return False;
+                              end if;
+                           end;
+                        end loop;
+                        return True;
+                     end;
+                  end;
+               end;
+            end if;
+
+            return Constant_Agrees;
+         end Match_Type_Pattern;
       begin
          for Index in Bound'Range loop
             Bound (Index).Formal := Declaration_At
@@ -5082,242 +5887,129 @@ package body Landin.Stages.Checking is
             return Landin.Checking.No_Signature;
          end if;
 
-         --  Deduction is deliberately context-free.  A literal therefore
-         --  takes [0200]'s i32 default before any concrete parameter context
-         --  exists; only after the complete tuple is known does Check_Call
-         --  apply ordinary literal context and argument agreement.
-         for Index in 1 .. Syn.Parameter_Count
-           (Template_Tree.all, Function_Node)
-         loop
+         --  Deduction is deliberately context-free.  Every argument is
+         --  synthesized once without a parameter context, then its complete
+         --  descriptor is unified recursively with the written pattern.
+         --  Explicit static tuples arrive already bound and use this same
+         --  walk only as exact validation -- no binding is performed.
+         for Index in 1 .. Runtime_Count loop
             declare
                Parameter : constant Syn.Node_Id := Syn.Nth_Parameter
                  (Template_Tree.all, Function_Node, Index);
-               Written : constant Syn.Node_Id :=
+               Pattern : constant Syn.Node_Id :=
                  Syn.Declared_Type (Template_Tree.all, Parameter);
-               Argument : constant Syn.Node_Id :=
-                 Runtime_Argument_At (Index);
-               Formal : Res.Declaration_Id := Res.No_Declaration;
+               Argument : constant Syn.Node_Id := Runtime_Argument_At (Index);
+               Got : Ty.Type_Kind :=
+                 (if Syn.Kind (Caller_Tree, Argument)
+                      in Syn.Name_Reference | Syn.Member_Selection
+                         | Syn.Element_Index
+                  then Selected_From (Caller_Tree, Argument)
+                  else Synthesise (Caller_Tree, Argument));
             begin
-               if Syn.Kind (Template_Tree.all, Written) = Syn.Type_Reference
-                 and then Res.Verdict_Of
-                   (Meanings.all, Template_Tree.all, Written) = Res.Bound
-                 and then Res.Sort_Of
-                   (Meanings.all,
-                    Res.Bound_To (Meanings.all, Template_Tree.all, Written))
-                      = Res.Type_Parameter
-               then
-                  Formal := Res.Bound_To
-                    (Meanings.all, Template_Tree.all, Written);
+               if Got = Ty.Untyped_Integer then
+                  Commit_To (Caller_Tree, Argument, Ty.Default_Integer);
+                  Got := Ty.Default_Integer;
                end if;
-
-               if Formal /= Res.No_Declaration then
+               if Got = Ty.Ill_Typed then
+                  Good := False;
+               else
                   declare
-                     Got : Ty.Type_Kind :=
-                       (if Syn.Kind (Caller_Tree, Argument)
-                            in Syn.Name_Reference | Syn.Member_Selection
-                               | Syn.Element_Index
-                        then Selected_From (Caller_Tree, Argument)
-                        else Synthesise (Caller_Tree, Argument));
-                     Actual : Type_Descriptor;
-                     Position : Natural := 0;
+                     Actual : constant Type_Descriptor :=
+                       Descriptor_At (Caller_Tree, Argument, Got);
+                     Agrees : constant Boolean := Match_Type_Pattern
+                       (Template_Tree.all, Pattern, Actual, Argument,
+                        Index, 0);
+                     pragma Unreferenced (Agrees);
                   begin
-                     if Got = Ty.Untyped_Integer then
-                        Commit_To (Caller_Tree, Argument, Ty.Default_Integer);
-                        Got := Ty.Default_Integer;
-                     end if;
-                     Actual := Descriptor_At (Caller_Tree, Argument, Got);
-                     for Which in Bound'Range loop
-                        if Bound (Which).Formal = Formal then
-                           Position := Which;
-                           exit;
-                        end if;
-                     end loop;
-                     if Position = 0 or else Actual.Kind = Ty.Ill_Typed then
-                        Good := False;
-                     elsif Bound (Position).Value.Kind = Ty.Ill_Typed then
-                        Bound (Position).Value := Actual;
-                        Bound (Position).First_Binding :=
-                          Syn.Origin (Caller_Tree, Argument);
-                     elsif not Descriptors_Agree
-                       (Bound (Position).Value, Actual)
-                     then
-                        Report_Deduction_Conflict
-                          (Argument, Positive (Position), "type");
-                     end if;
-                  end;
-               elsif Syn.Kind (Template_Tree.all, Written) = Syn.Array_Type
-               then
-                  declare
-                     Bound_Node : constant Syn.Node_Id :=
-                       Syn.Bound_Of (Template_Tree.all, Written);
-                     Element_Node : constant Syn.Node_Id :=
-                       Syn.Element_Of (Template_Tree.all, Written);
-                     Fixed_Formal : Res.Declaration_Id := Res.No_Declaration;
-                     Type_Formal : Res.Declaration_Id := Res.No_Declaration;
-                     Got : constant Ty.Type_Kind :=
-                       (if Syn.Kind (Caller_Tree, Argument)
-                            in Syn.Name_Reference | Syn.Member_Selection
-                               | Syn.Element_Index
-                        then Selected_From (Caller_Tree, Argument)
-                        else Synthesise (Caller_Tree, Argument));
-                  begin
-                     if Syn.Kind (Template_Tree.all, Bound_Node)
-                          = Syn.Name_Reference
-                       and then Res.Verdict_Of
-                         (Meanings.all, Template_Tree.all, Bound_Node)
-                           = Res.Bound
-                       and then Res.Sort_Of
-                         (Meanings.all,
-                          Res.Bound_To
-                            (Meanings.all, Template_Tree.all, Bound_Node))
-                           = Res.Fixed_Parameter
-                     then
-                        Fixed_Formal := Res.Bound_To
-                          (Meanings.all, Template_Tree.all, Bound_Node);
-                     end if;
-                     if Syn.Kind (Template_Tree.all, Element_Node)
-                          = Syn.Type_Reference
-                       and then Res.Verdict_Of
-                         (Meanings.all, Template_Tree.all, Element_Node)
-                           = Res.Bound
-                       and then Res.Sort_Of
-                         (Meanings.all,
-                          Res.Bound_To
-                            (Meanings.all, Template_Tree.all, Element_Node))
-                           = Res.Type_Parameter
-                     then
-                        Type_Formal := Res.Bound_To
-                          (Meanings.all, Template_Tree.all, Element_Node);
-                     end if;
-
-                     if Fixed_Formal /= Res.No_Declaration
-                       and then Type_Formal /= Res.No_Declaration
-                     then
-                        if Got /= Ty.Fixed_Array then
-                           if Got /= Ty.Ill_Typed then
-                              Bad.Report
-                                (Item    => Bad.Type_Mismatch,
-                                 Source  => Syn.Source_Of (Caller_Tree),
-                                 Where   => Syn.Where
-                                   (Caller_Tree, Argument),
-                                 Message => "this argument is not a fixed"
-                                            & " array and cannot match"
-                                            & " exact `[n]t` deduction",
-                                 Note    => "D138: exact array deduction"
-                                            & " performs no conversion",
-                                 Related => Syn.Origin
-                                   (Template_Tree.all, Written),
-                                 Because => "the exact array parameter",
-                                 Into    => Found);
-                           end if;
-                           Good := False;
-                           Landin.Checking.Refuse
-                             (Types.all, Caller_Tree, Call);
-                        else
-                           declare
-                              Actual : constant Type_Descriptor :=
-                                Descriptor_At (Caller_Tree, Argument, Got);
-                              Element : constant Type_Descriptor :=
-                                (if Actual.Element_Nominal
-                                      /= Landin.Checking.No_Nominal_Type
-                                 then (Kind => Ty.Aggregate,
-                                       Nominal => Actual.Element_Nominal,
-                                       others => <>)
-                                 else (Kind => Actual.Element, others => <>));
-                              Fixed_Position, Type_Position : Natural := 0;
-                           begin
-                              for Which in Bound'Range loop
-                                 if Bound (Which).Formal = Fixed_Formal then
-                                    Fixed_Position := Which;
-                                 elsif Bound (Which).Formal = Type_Formal then
-                                    Type_Position := Which;
-                                 end if;
-                              end loop;
-                              if Fixed_Position = 0 or else Type_Position = 0
-                              then
-                                 Good := False;
-                              else
-                                 if Bound (Fixed_Position).Fixed_Known
-                                   and then Bound (Fixed_Position).Fixed
-                                     /= Ty.Magnitude (Actual.Length)
-                                 then
-                                    Report_Deduction_Conflict
-                                      (Argument, Positive (Fixed_Position),
-                                       "fixed value");
-                                 else
-                                    Bound (Fixed_Position).Fixed :=
-                                      Ty.Magnitude (Actual.Length);
-                                    Bound (Fixed_Position).Fixed_Known := True;
-                                    if not Landin.Provenance.Is_Known
-                                      (Bound (Fixed_Position).First_Binding)
-                                    then
-                                       Bound (Fixed_Position).First_Binding :=
-                                         Syn.Origin (Caller_Tree, Argument);
-                                    end if;
-                                 end if;
-                                 if Bound (Type_Position).Value.Kind
-                                      = Ty.Ill_Typed
-                                 then
-                                    Bound (Type_Position).Value := Element;
-                                    Bound (Type_Position).First_Binding :=
-                                      Syn.Origin (Caller_Tree, Argument);
-                                 elsif not Descriptors_Agree
-                                   (Bound (Type_Position).Value, Element)
-                                 then
-                                    Report_Deduction_Conflict
-                                      (Argument, Positive (Type_Position),
-                                       "type");
-                                 end if;
-                              end if;
-                           end;
-                        end if;
-                     end if;
+                     null;
                   end;
                end if;
             end;
          end loop;
 
-         for Index in Bound'Range loop
+         --  A computed bound contributes no equation to solve.  Once another
+         --  direct occurrence (or an explicit static tuple) has supplied all
+         --  of its referenced fixed formals, evaluate it and compare exactly.
+         --  An obligation still unknown here is left for the ordinary
+         --  undeduced-formal report below.
+         for Obligation of Deferred_Bounds loop
             declare
-               Formal_Node : constant Syn.Node_Id := Syn.Nth_Generic_Formal
-                 (Template_Tree.all, Function_Node, Index);
+               Pattern_Tree : constant not null access constant Syn.Tree :=
+                 Tree_For (Obligation.Source);
+               Valid, Known : Boolean;
+               Value : constant Ty.Folded := Evaluate_Pattern_Bound
+                 (Pattern_Tree.all, Obligation.Node, Obligation.Map_Limit,
+                  Valid, Known);
             begin
-               if Syn.Kind (Template_Tree.all, Formal_Node) = Syn.Type_Formal
-                 and then Bound (Index).Value.Kind = Ty.Ill_Typed
-               then
-                  Bad.Report
-                    (Item    => Bad.Type_Mismatch,
-                     Source  => Syn.Source_Of (Caller_Tree),
-                     Where   => Syn.Where (Caller_Tree, Call),
-                     Message => "this call cannot deduce every type formal",
-                     Note    => "D138: deduction uses direct runtime"
-                                & " parameter occurrences only, never a"
-                                & " return context",
-                     Related => Syn.Origin
-                       (Template_Tree.all, Formal_Node),
-                     Because => "the undeduced type formal",
-                     Into    => Found);
+               if not Valid then
                   Good := False;
-               elsif Syn.Kind (Template_Tree.all, Formal_Node)
-                 = Syn.Fixed_Formal
-                 and then not Bound (Index).Fixed_Known
+               elsif Known
+                 and then
+                   (Value < 0
+                    or else Ty.Magnitude (Value) /= Obligation.Actual)
                then
-                  Bad.Report
-                    (Item    => Bad.Type_Mismatch,
-                     Source  => Syn.Source_Of (Caller_Tree),
-                     Where   => Syn.Where (Caller_Tree, Call),
-                     Message => "this call cannot deduce a fixed formal",
-                     Note    => "D138: only an exact `[n]t` runtime shape"
-                                & " binds a fixed formal; deduction performs"
-                                & " no arithmetic inversion",
-                     Related => Syn.Origin
-                       (Template_Tree.all, Formal_Node),
-                     Because => "the undeduced fixed formal",
-                     Into    => Found);
-                  Good := False;
+                  Report_Pattern_Failure
+                    (Obligation.Argument, Obligation.Position,
+                     Pattern_Tree.all, Obligation.Node,
+                     "this argument does not match the computed fixed bound"
+                     & " in its parameter pattern");
                end if;
             end;
          end loop;
+
+         if Good then
+            for Index in Bound'Range loop
+               declare
+                  Formal_Node : constant Syn.Node_Id := Syn.Nth_Generic_Formal
+                    (Template_Tree.all, Function_Node, Index);
+               begin
+                  if Syn.Kind (Template_Tree.all, Formal_Node)
+                    = Syn.Type_Formal
+                    and then Bound (Index).Value.Kind = Ty.Ill_Typed
+                  then
+                     Bad.Report
+                       (Item    => Bad.Type_Mismatch,
+                        Source  => Syn.Source_Of (Caller_Tree),
+                        Where   => Syn.Where (Caller_Tree, Call),
+                        Message => "this call cannot deduce type formal `"
+                                   & Spelled
+                                     (Syn.Name
+                                        (Template_Tree.all, Formal_Node))
+                                   & "`",
+                        Note    => "D138: structural deduction uses runtime"
+                                   & " parameter patterns, never return"
+                                   & " context, conversions or constraints",
+                        Related => Syn.Origin
+                          (Template_Tree.all, Formal_Node),
+                        Because => "the undeduced type formal",
+                        Into    => Found);
+                     Good := False;
+                  elsif Syn.Kind (Template_Tree.all, Formal_Node)
+                    = Syn.Fixed_Formal
+                    and then not Bound (Index).Fixed_Known
+                  then
+                     Bad.Report
+                       (Item    => Bad.Type_Mismatch,
+                        Source  => Syn.Source_Of (Caller_Tree),
+                        Where   => Syn.Where (Caller_Tree, Call),
+                        Message => "this call cannot deduce fixed formal `"
+                                   & Spelled
+                                     (Syn.Name
+                                        (Template_Tree.all, Formal_Node))
+                                   & "`",
+                        Note    => "D138: a direct structural fixed"
+                                   & " occurrence binds; a computed"
+                                   & " occurrence is checked only after"
+                                   & " another occurrence binds it",
+                        Related => Syn.Origin
+                          (Template_Tree.all, Formal_Node),
+                        Because => "the undeduced fixed formal",
+                        Into    => Found);
+                     Good := False;
+                  end if;
+               end;
+            end loop;
+         end if;
 
          if Good then
             for Index in Bound'Range loop
