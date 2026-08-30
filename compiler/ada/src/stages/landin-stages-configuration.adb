@@ -53,6 +53,10 @@ package body Landin.Stages.Configuration is
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id; Message : String);
       procedure Report_Type
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id; Message : String);
+      procedure Report_Range
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id; Message : String);
+      procedure Report_Impossible
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id; Message : String);
       procedure Mark_Subtree_Inactive
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
       procedure Configure_Declaration
@@ -92,6 +96,32 @@ package body Landin.Stages.Configuration is
             Because => "this fixed conditional condition",
             Into    => Found);
       end Report_Type;
+
+      procedure Report_Range
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id; Message : String) is
+      begin
+         Bad.Report
+           (Item    => Bad.Literal_Out_Of_Range,
+            Source  => Syn.Source_Of (Of_Tree),
+            Where   => Syn.Where (Of_Tree, Node),
+            Message => Message,
+            Note    => "D138: every mathematical fixed-expression"
+                       & " intermediate must remain representable",
+            Into    => Found);
+      end Report_Range;
+
+      procedure Report_Impossible
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id; Message : String) is
+      begin
+         Bad.Report
+           (Item    => Bad.Impossible_Operand,
+            Source  => Syn.Source_Of (Of_Tree),
+            Where   => Syn.Where (Of_Tree, Node),
+            Message => Message,
+            Note    => "[1950]: an operand the operation cannot take is"
+                       & " refused where the compiler knows it",
+            Into    => Found);
+      end Report_Impossible;
 
       procedure Mark_Subtree_Inactive
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) is
@@ -198,7 +228,7 @@ package body Landin.Stages.Configuration is
                   Ty.Evaluate (Text, Syn.Base (Of_Tree, Node), Magnitude,
                                Overflowed);
                   if Overflowed then
-                     Report_Not_Fixed
+                     Report_Range
                        (Of_Tree, Node,
                         "this fixed integer is outside the mathematical"
                         & " fixed-expression range");
@@ -228,7 +258,7 @@ package body Landin.Stages.Configuration is
                if Left.Kind /= Number
                  or else Left.Integer_Value = Ty.Folded'First
                then
-                  Report_Not_Fixed
+                  Report_Range
                     (Of_Tree, Node,
                      "this fixed negation overflows the mathematical range");
                   return (Kind => Bad_Value);
@@ -319,9 +349,19 @@ package body Landin.Stages.Configuration is
                      if Kind in Syn.Divide | Syn.Remainder
                        and then Right.Integer_Value = 0
                      then
-                        Report_Not_Fixed
-                          (Of_Tree, Node,
+                        Report_Impossible
+                          (Of_Tree, Syn.Right_Of (Of_Tree, Node),
                            "this fixed-expression divisor is zero");
+                        return (Kind => Bad_Value);
+                     end if;
+                     if Kind in Syn.Divide | Syn.Remainder
+                       and then Left.Integer_Value = Ty.Folded'First
+                       and then Right.Integer_Value = -1
+                     then
+                        Report_Impossible
+                          (Of_Tree, Node,
+                           "this fixed-expression operation cannot divide"
+                           & " the least integer by minus one");
                         return (Kind => Bad_Value);
                      end if;
                      --  The checked arithmetic below is intentionally
@@ -340,8 +380,22 @@ package body Landin.Stages.Configuration is
                                  or else (Right.Integer_Value < 0 and then
                                           Left.Integer_Value > Ty.Folded'Last
                                           + Right.Integer_Value)))
+                       or else (Kind = Syn.Multiply and then
+                                ((Left.Integer_Value = Ty.Folded'First
+                                  and then Right.Integer_Value not in 0 | 1)
+                                 or else
+                                   (Right.Integer_Value = Ty.Folded'First
+                                    and then Left.Integer_Value not in 0 | 1)
+                                 or else
+                                   (Left.Integer_Value /= Ty.Folded'First
+                                    and then Right.Integer_Value
+                                      /= Ty.Folded'First
+                                    and then Left.Integer_Value /= 0
+                                    and then abs Right.Integer_Value
+                                      > Ty.Folded'Last
+                                        / abs Left.Integer_Value)))
                      then
-                        Report_Not_Fixed
+                        Report_Range
                           (Of_Tree, Node,
                            "this fixed arithmetic result overflows the"
                            & " mathematical range");
@@ -389,7 +443,9 @@ package body Landin.Stages.Configuration is
                   end if;
                elsif Validate (Of_Tree, Condition) then
                   Value := Evaluate (Of_Tree, Condition);
-                  if Value.Kind /= Truth then
+                  if Value.Kind = Bad_Value then
+                     null;
+                  elsif Value.Kind /= Truth then
                      Report_Type
                        (Of_Tree, Condition,
                         "this fixed conditional condition is not bool");

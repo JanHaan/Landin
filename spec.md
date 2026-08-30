@@ -7520,54 +7520,6 @@ contains a valid user call whose body is never run;
 records; and `runtime/fixed-array-bound-expression` and
 `runtime/fixed-array-bound-zero` on Linux x86-64.
 
-### D138 — Fixed conditionals select module declarations without execution
-
-**The tour said** that `fixed` marks compile-time knowledge [1490], showed a
-conditional on `compiler.arch` [1500], and forbade compile-time calls [1540].
-It did not say where a conditional may occur, whether a false arm is parsed,
-or how target selection reaches whole-program resolution.
-
-**Chosen:** `fixed if expression then declaration* (elsif expression then
-declaration*)* (else declaration*)? end if` is a module-declaration form
-only. It may nest, every arm may be empty, and an arm opens no scope: its
-selected declarations splice into the one module scope across all input files.
-It has no `public` modifier or trailing name, and is not a block, struct,
-signature or template-local form.
-
-The parser retains every arm in immutable syntax and reports lexical, parser,
-refusal and recovery faults in false arms. A configuration stage runs after
-target selection and before resolution. It records an activity view rather
-than pruning syntax. Resolution, checking, template validation, identity
-interning and lowering use only that view; a name in an inactive arm has no
-semantic diagnostic or declaration identity, while an active use of it is
-unresolved normally. Nested conditionals in an inactive arm are parsed but
-not evaluated.
-
-The fixed expression is closed. It admits bool and mathematical D136 integers,
-the compiler-owned architecture values `x86_64`, `arm64`, `cortex_m0` and
-`synthetic_32`, literals, parentheses, unary `-`, D136 arithmetic, integer
-comparisons, bool or architecture equality, and `not`, `and`, `or`.
-`compiler.arch` is the only intrinsic and is recognized only by this stage;
-its target identity comes from the selected `Target_Facts` constructor, never
-a target label. Structural validation visits both logical operands even when
-evaluation then short-circuits. Calls, runtime or module names, measurements,
-controls, aggregates, arrays and width-dependent operators are rejected and
-never execute. Every active `if` and `elsif` condition is validated and
-evaluated even after a true arm; the final answer must be bool.
-
-**Why an activity table:** deleting branches would destroy parser diagnostics
-and mutate a shared syntax authority; making ordinary resolution decide the
-condition would introduce a compiler module and runtime execution before
-R4.30. A selected immutable view preserves the whole-program declaration set
-without pulling options, build modes, widths, byte order or general builtin
-modules forward.
-
-**Pinned by** the fixed-conditional parser, configuration, resolution,
-checking and lowering seams; target-constructor cases; cross-file selected and
-inactive declarations; nested selections; duplicate and inactive-name
-fixtures; the generated lexical, construct and IR records; and Linux runtime
-plus synthetic-target cases.
-
 ### D137 — A parameterized struct application is one canonical nominal instance
 
 **The tour said** that ordinary structs are nominal [0710], that type and fixed
@@ -7665,3 +7617,51 @@ multi-wrapper recursion cases) and `negative/nominal-struct-recursive-layout`
 fixtures; the generated IR and
 diagnostic catalogue; and `runtime/parameterized-struct-values` and
 `runtime/parameterized-struct-lazy-value-layout` on Linux x86-64.
+
+### D138 — Fixed conditionals select module declarations without execution
+
+**The tour said** that `fixed` marks compile-time knowledge [1490], showed a
+conditional on `compiler.arch` [1500], and forbade compile-time calls [1540].
+It did not say where a conditional may occur, whether a false arm is parsed,
+or how target selection reaches whole-program resolution.
+
+**Chosen:** `fixed if expression then declaration* (elsif expression then
+declaration*)* (else declaration*)? end if` is a module-declaration form
+only. It may nest, every arm may be empty, and an arm opens no scope: its
+selected declarations splice into the one module scope across all input files.
+It has no `public` modifier or trailing name, and is not a block, struct,
+signature or template-local form.
+
+The parser retains every arm in immutable syntax and reports lexical, parser,
+refusal and recovery faults in false arms. A configuration stage runs after
+target selection and before resolution. It records an activity view rather
+than pruning syntax. Resolution, checking, template validation, identity
+interning and lowering use only that view; a name in an inactive arm has no
+semantic diagnostic or declaration identity, while an active use of it is
+unresolved normally. Nested conditionals in an inactive arm are parsed but
+not evaluated.
+
+The fixed expression is closed. It admits bool and mathematical D136 integers,
+the compiler-owned architecture values `x86_64`, `arm64`, `cortex_m0` and
+`synthetic_32`, literals, parentheses, unary `-`, D136 arithmetic, integer
+comparisons, bool or architecture equality, and `not`, `and`, `or`.
+`compiler.arch` is the only intrinsic and is recognized only by this stage;
+its target identity comes from the selected `Target_Facts` constructor, never
+a target label. Structural validation visits both logical operands even when
+evaluation then short-circuits. Calls, runtime or module names, measurements,
+controls, aggregates, arrays and width-dependent operators are rejected and
+never execute. Every active `if` and `elsif` condition is validated and
+evaluated even after a true arm; the final answer must be bool.
+
+**Why an activity table:** deleting branches would destroy parser diagnostics
+and mutate a shared syntax authority; making ordinary resolution decide the
+condition would introduce a compiler module and runtime execution before
+R4.30. A selected immutable view preserves the whole-program declaration set
+without pulling options, build modes, widths, byte order or general builtin
+modules forward.
+
+**Pinned by** the target-description constructor case; parser/configuration
+public seam cases; `positive/fixed-conditional-selects-declarations` and
+`negative/fixed-conditional-evaluator`; and the generated lexical and construct
+records. Further cross-file, runtime, lowering and target-identity evidence
+belongs to the same D138 completion work and is not yet claimed.

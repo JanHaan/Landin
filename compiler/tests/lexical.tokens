@@ -15588,6 +15588,58 @@ file negative/fixed-array-bound-invalid/program.ldn tokens 64
   199 200 2
   200 201 ]
   201 203 u8
+file negative/fixed-conditional-evaluator/program.ldn tokens 51
+  0 1 f
+  1 2 :
+  3 4 (
+  4 5 )
+  6 8 ->
+  9 13 none
+  14 15 =
+  16 19 end
+  20 21 f
+  23 28 fixed
+  29 31 if
+  32 52 18446744073709551615
+  53 54 *
+  55 56 2
+  57 59 ==
+  60 61 0
+  62 66 then
+  67 70 end
+  71 73 if
+  75 80 fixed
+  81 83 if
+  84 85 1
+  86 87 /
+  88 89 0
+  90 92 ==
+  93 94 0
+  95 99 then
+  100 103 end
+  104 106 if
+  108 113 fixed
+  114 116 if
+  117 118 -
+  118 138 18446744073709551615
+  139 140 /
+  141 142 -
+  142 143 1
+  144 146 ==
+  147 148 0
+  149 153 then
+  154 157 end
+  158 160 if
+  162 167 fixed
+  168 170 if
+  171 172 f
+  172 173 (
+  173 174 )
+  175 177 ==
+  178 179 0
+  180 184 then
+  185 188 end
+  189 191 if
 file negative/float-literal-not-enabled/program.ldn refused no rule spells a float literal
 file negative/float-type-not-enabled/program.ldn tokens 5
   0 5 ratio
