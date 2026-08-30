@@ -1,0 +1,7 @@
+copy: (t: type, fixed n: u32, value: i32) -> (result: i32) = value end copy
+
+forward: (t: type, fixed n: u32, value: i32) -> (result: i32) =
+    copy(t: t, n: n, value: value)
+end forward
+
+public main: () -> (code: i32) = forward(t: i32, n: 4, value: 42) end main
