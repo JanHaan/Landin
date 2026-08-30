@@ -1,0 +1,7 @@
+fixed if compiler.arch == arm64 then
+    ignored: i32 = absent
+elsif compiler.arch == x86_64 then
+    selected: i32 = 42
+else
+    ignored_else: i32 = missing
+end if

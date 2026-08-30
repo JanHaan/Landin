@@ -2318,14 +2318,25 @@ images, construction, copies, calls, control joins, arrays, nested children and
 variants then use the ordinary nominal shape path. Templates and formals make
 no IR item, slot or ABI position.
 
+D138's final increment now enables target-selected fixed conditional
+declaration lists. It parses every arm immutably, then a compilation-owned
+configuration stage selects module declarations after target selection and
+before resolution. The selected view reaches resolution, checking, identity
+interning and lowering; inactive branches retain lexical and parser reports
+but have no semantic effect. Its closed evaluator admits only booleans, D136
+mathematical integers and typed target architecture identity through intrinsic
+`compiler.arch`; no generic formal, option, compiler call or user routine is
+introduced. Linux, synthetic-32 and every future target constructor choose an
+architecture explicitly rather than parsing a target label. D138 leaves the
+full `landin/compiler` module, options and directives to R4.30.
+
 The next semantic increments extend the substitution layer to generic routine
-instances and exact deduction from ordinary argument types, then fixed
-conditional declaration lists. Deduction does not use return context,
-constraint lookup or arithmetic inversion. Parameterised nominal types and
-generic routines receive identities derived from a template and normalised
-actual tuple rather than reusing one source declaration identity for unequal
-instances. No correctness step executes a user routine. R2.70 remains the
-owner of shared generic evidence and R4.50 the owner of choosing
+instances and exact deduction from ordinary argument types. Deduction does not
+use return context, constraint lookup or arithmetic inversion. Parameterised
+nominal types and generic routines receive identities derived from a template
+and normalised actual tuple rather than reusing one source declaration identity
+for unequal instances. No correctness step executes a user routine. R2.70
+remains the owner of shared generic evidence and R4.50 the owner of choosing
 specialisation as an optimisation.
 
 Exit evidence: generic shape, nominal identity/layout, parser, resolution,

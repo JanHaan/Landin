@@ -2502,7 +2502,11 @@ worth more than one that can download things. Arranging
 the roots so that only one version of anything is
 reachable is that tool's job, which is what makes [1470]'s
 one-version rule keepable.
-core and landin are reserved, and both are used. core is
+core and landin are reserved, and both are used. In the enabled R2.40
+slice `compiler` is reserved only as the intrinsic root of an active `fixed
+if` condition; it is not yet an imported module, a callable namespace or a
+way to ask target width, byte order or build mode. R4.30 completes the
+ordinary builtin-module reservation and directives. core is
 the standard library: core/mem, core/text, core/vec. landin
 holds the toolchain modules of [1560] — landin/compiler,
 landin/assembler, landin/linker — which are available
@@ -2521,7 +2525,10 @@ no dispute is fatal.
 
 ### [1500] Conditional compilation
 
-Conditional compilation.
+Conditional compilation selects declarations in the module, not statements
+or a lexical block. Every arm is parsed, but only the selected arm contributes
+declarations to the one whole-program module scope; an inactive arm has no
+name, type, template, identity or IR effect. Arms may nest and may be empty.
 
 ```landin
 fixed if compiler.arch == arm64 then
@@ -2531,6 +2538,16 @@ elsif compiler.arch == cortex_m0 then
 end if
 
 ```
+
+The first slice exposes only `compiler.arch`, whose compiler-owned values are
+`x86_64`, `arm64`, `cortex_m0` and `synthetic_32`. Its conditions use a closed
+no-execution fold: literals, parentheses, unary `-`, mathematical integer
+`+ - * / %`, integer comparisons, equality, `not`, `and` and `or`. Calls,
+runtime names, measurements and target-width or aggregate operations remain
+outside it, including in a short-circuited operand. The selected target's
+constructor, not its label text, supplies the architecture. `public fixed if`,
+a trailing name and fixed conditionals in blocks, structs, signatures and
+templates are not forms of this construct.
 
 ### [1510] Compile-time assertion
 

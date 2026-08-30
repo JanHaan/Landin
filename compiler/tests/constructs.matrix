@@ -11,7 +11,7 @@
 #
 #  A construct with no evidence and no refusal is this
 #  item's to answer for; see ROADMAP.md R1.90.
-#  199 constructs, 113 with evidence, 86 with neither.
+#  199 constructs, 114 with evidence, 85 with neither.
 #
 #  id    defined in  evidence
 0010   tour        accepted emitted                   Line comment, to end of line
@@ -163,7 +163,7 @@
 1470   tour        -                                  A package is a named collection of modules with a version
 1480   tour        -                                  The roots are the project
 1490   tour        -                                  'fixed' marks what is known at compile time
-1500   tour        -                                  Conditional compilation
+1500   tour        accepted emitted                   Conditional compilation
 1510   tour        -                                  Compile-time assertion
 1520   tour        -                                  A compile-time value parameter
 1530   tour        -                                  Your own build switches
