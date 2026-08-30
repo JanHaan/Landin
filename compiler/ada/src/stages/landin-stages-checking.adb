@@ -389,6 +389,8 @@ package body Landin.Stages.Checking is
          Call        : Syn.Node_Id;
          Template    : Res.Declaration_Id)
          return Landin.Checking.Signature_Id;
+      procedure Discover_Generic_Calls
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
       procedure Require
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
@@ -4981,6 +4983,10 @@ package body Landin.Stages.Checking is
                       (Template_Tree.all, Function_Node)) :=
                         [others => (others => <>)];
                   Valid : Boolean := True;
+                  Errors : Landin.Checking.Atom_Set_Id :=
+                    Landin.Checking.No_Atom_Set;
+                  Error_Form : Landin.Checking.Error_Set_Form :=
+                    Landin.Checking.Infallible;
                   Signature : Landin.Checking.Signature_Id :=
                     Landin.Checking.No_Signature;
                   Reports_Before : constant Natural :=
@@ -5030,12 +5036,77 @@ package body Landin.Stages.Checking is
 
                   if Valid
                     and then Syn.Error_Set_Of
-                      (Template_Tree.all, Function_Node) = Syn.No_Node
+                      (Template_Tree.all, Function_Node) /= Syn.No_Node
                   then
+                     declare
+                        Written : constant Syn.Node_Id := Syn.Error_Set_Of
+                          (Template_Tree.all, Function_Node);
+                     begin
+                        if Syn.Kind (Template_Tree.all, Written)
+                             = Syn.Inferred_Error_Set
+                        then
+                           Bad.Report
+                             (Item    => Bad.Type_Mismatch,
+                              Source  => Syn.Source_Of (Template_Tree.all),
+                              Where   => Syn.Where
+                                (Template_Tree.all, Written),
+                              Message => "generic `! ...` inference is not"
+                                         & " enabled in this increment",
+                              Note    => "D138 enables concrete declared"
+                                         & " error sets for instances;"
+                                         & " per-instance inference remains"
+                                         & " deferred",
+                              Related => Syn.Origin
+                                (Template_Tree.all, Function_Node),
+                              Because => "the generic routine signature",
+                              Into    => Found);
+                           Valid := False;
+                        else
+                           declare
+                              Descriptor : constant Type_Descriptor :=
+                                Normalized_Type
+                                  (Template_Tree.all, Written, Bound,
+                                   Syn.Origin (Caller_Tree, Call),
+                                   Identity_Only);
+                           begin
+                              if Descriptor.Kind = Ty.Atom_Value
+                                and then Descriptor.Atoms
+                                  /= Landin.Checking.No_Atom_Set
+                              then
+                                 Errors := Descriptor.Atoms;
+                                 Error_Form := Landin.Checking.Concrete;
+                              else
+                                 Bad.Report
+                                   (Item    => Bad.Type_Mismatch,
+                                    Source  => Syn.Source_Of
+                                      (Template_Tree.all),
+                                    Where   => Syn.Where
+                                      (Template_Tree.all, Written),
+                                    Message => "this generic error set does"
+                                               & " not substitute to an"
+                                               & " enabled atom set",
+                                    Note    => "D138 carries a concrete"
+                                               & " declared set through the"
+                                               & " instance signature",
+                                    Related => Syn.Origin
+                                      (Template_Tree.all, Function_Node),
+                                    Because => "the generic routine"
+                                               & " signature",
+                                    Into    => Found);
+                                 Valid := False;
+                              end if;
+                           end;
+                        end if;
+                     end;
+                  end if;
+
+                  if Valid then
                      Signature := Landin.Checking.Add_Signature
                        (Types.all, Parameters, Results,
-                        Syn.Origin (Template_Tree.all, Function_Node));
-                  else
+                        Syn.Origin (Template_Tree.all, Function_Node),
+                        Errors, Error_Form);
+                  elsif Landin.Diagnostics.Count (Found) = Reports_Before
+                  then
                      Bad.Report
                        (Item    => Bad.Type_Mismatch,
                         Source  => Syn.Source_Of (Template_Tree.all),
@@ -5045,6 +5116,8 @@ package body Landin.Stages.Checking is
                                    & " concrete after deduction",
                         Note    => "D138: every runtime signature part must"
                                    & " substitute to an enabled type",
+                        Related => Syn.Origin (Caller_Tree, Call),
+                        Because => "the application that deduced it",
                         Into    => Found);
                   end if;
 
@@ -5139,6 +5212,56 @@ package body Landin.Stages.Checking is
             end;
          end;
       end Instantiate_Generic_Call;
+
+      procedure Discover_Generic_Calls
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
+      is
+      begin
+         if Node = Syn.No_Node then
+            return;
+         end if;
+         if Syn.Kind (Of_Tree, Node) = Syn.Anonymous_Function then
+            --  Anonymous bodies are roots of their own and are discovered
+            --  after every anonymous signature has been materialized.
+            return;
+         elsif Syn.Kind (Of_Tree, Node) = Syn.Call then
+            declare
+               Callee : constant Syn.Node_Id :=
+                 Syn.Callee_Of (Of_Tree, Node);
+            begin
+               if Syn.Kind (Of_Tree, Callee) = Syn.Name_Reference
+                 and then Res.Verdict_Of (Meanings.all, Of_Tree, Callee)
+                   = Res.Bound
+               then
+                  declare
+                     Means : constant Res.Declaration_Id :=
+                       Res.Bound_To (Meanings.all, Of_Tree, Callee);
+                  begin
+                     if Res.Sort_Of (Meanings.all, Means)
+                          = Res.Module_Function
+                       and then Syn.Generic_Formal_Count
+                         (Tree_For (Res.Source_Of (Meanings.all, Means)).all,
+                          Res.Node_Of (Meanings.all, Means)) /= 0
+                     then
+                        declare
+                           Signature : constant
+                             Landin.Checking.Signature_Id :=
+                               Instantiate_Generic_Call
+                                 (Of_Tree, Node, Means);
+                        begin
+                           pragma Unreferenced (Signature);
+                        end;
+                     end if;
+                  end;
+               end if;
+            end;
+         end if;
+
+         for Index in 1 .. Syn.Slot_Count (Of_Tree, Node) loop
+            Discover_Generic_Calls
+              (Of_Tree, Syn.Slot (Of_Tree, Node, Index));
+         end loop;
+      end Discover_Generic_Calls;
 
       ------------------------------------------------------------
       --  A literal's value, and whether the type holds it
@@ -14534,6 +14657,16 @@ package body Landin.Stages.Checking is
             Callee : constant Syn.Node_Id :=
               Syn.Callee_Of (Of_Tree, Call);
          begin
+            declare
+               Target : constant Landin.Checking.Routine_Instance_Id :=
+                 Landin.Checking.Routine_Target_Of
+                   (Types.all, Of_Tree, Call);
+            begin
+               if Target /= Landin.Checking.No_Routine_Instance then
+                  return Landin.Checking.Routine_Signature_Of
+                    (Types.all, Target);
+               end if;
+            end;
             if Res.Verdict_Of (Meanings.all, Of_Tree, Callee) = Res.Bound
             then
                return Landin.Checking.Signature_Of
@@ -14763,6 +14896,21 @@ package body Landin.Stages.Checking is
                            begin
                               Recovery_Signatures (Positive (Id)) :=
                                 Signature;
+                              if Landin.Checking.Signature_Error_Form
+                                   (Types.all, Signature)
+                                     = Landin.Checking.Concrete
+                                and then Landin.Checking.State_Of
+                                  (Types.all, Id) = Landin.Checking.Untouched
+                              then
+                                 Landin.Checking.Begin_Inference
+                                   (Types.all, Id);
+                                 Landin.Checking.Note_Atom_Set
+                                   (Types.all, Id,
+                                    Landin.Checking.Signature_Errors
+                                      (Types.all, Signature));
+                                 Landin.Checking.Settle
+                                   (Types.all, Id, Ty.Atom_Value);
+                              end if;
                            end;
                         end if;
                         Scan
@@ -14862,6 +15010,49 @@ package body Landin.Stages.Checking is
             end;
          end loop;
 
+         for Position in 1 .. Landin.Checking.Routine_Instance_Count
+           (Types.all)
+         loop
+            declare
+               Instance : constant Landin.Checking.Routine_Instance_Id :=
+                 Landin.Checking.Routine_Identities.Nth
+                   (Types.all, Position);
+            begin
+               if Landin.Checking.Routine_State_Of (Types.all, Instance)
+                    = Landin.Checking.Routine_Ready
+               then
+                  declare
+                     Template : constant Res.Declaration_Id :=
+                       Landin.Checking.Routine_Template_Of
+                         (Types.all, Instance);
+                     Of_Tree : constant not null access constant Syn.Tree :=
+                       Tree_For (Res.Source_Of (Meanings.all, Template));
+                     Signature : constant Landin.Checking.Signature_Id :=
+                       Landin.Checking.Routine_Signature_Of
+                         (Types.all, Instance);
+                     Previous : Landin.Checking.Routine_Instance_Id;
+                  begin
+                     Landin.Checking.Activate_Routine_View
+                       (Types.all, Instance, Previous);
+                     Owns_Body (Positive (Signature)) := True;
+                     Scan
+                       (Of_Tree.all,
+                        Syn.Body_Of
+                          (Of_Tree.all,
+                           Res.Node_Of (Meanings.all, Template)),
+                        Positive (Signature));
+                     Landin.Checking.Restore_Routine_View
+                       (Types.all, Previous);
+                  exception
+                     when others =>
+                        Landin.Checking.Restore_Routine_View
+                          (Types.all, Previous);
+                        raise;
+                  end;
+               end if;
+            end;
+         end loop;
+
          for Signature in 1 .. Signature_Total loop
             if Landin.Checking.Signature_Error_Form
                  (Types.all, Landin.Checking.Signature_Id (Signature))
@@ -14947,7 +15138,11 @@ package body Landin.Stages.Checking is
          for Id in Res.Declaration_Id'(1)
                    .. Res.Declaration_Id (Declaration_Total)
          loop
-            if Res.Sort_Of (Meanings.all, Id) = Res.Error_Binding then
+            if Res.Sort_Of (Meanings.all, Id) = Res.Error_Binding
+              and then Generic_Routine_Owner (Id) = Res.No_Declaration
+              and then Landin.Checking.State_Of (Types.all, Id)
+                = Landin.Checking.Untouched
+            then
                Landin.Checking.Begin_Inference (Types.all, Id);
                declare
                   Signature : constant Landin.Checking.Signature_Id :=
@@ -15298,7 +15493,82 @@ package body Landin.Stages.Checking is
          end;
       end loop;
 
+      --  Generic instances must exist before the whole-module error graph is
+      --  closed.  Runtime argument declarations have all been settled by
+      --  the first two passes, so this walk performs the same context-free
+      --  deduction the later body walk would perform, without borrowing a
+      --  return context.  Calls inside a generic template are discovered by
+      --  checking the selected outer instance, never from bare syntax.
+      for Index in 1 .. Source_Count (Context) loop
+         declare
+            Of_Tree : constant not null access constant Syn.Tree :=
+              Tree_For (Nth_Source (Context, Index));
+         begin
+            for Position in 1 .. Syn.Declaration_Count (Of_Tree.all) loop
+               declare
+                  Node : constant Syn.Node_Id :=
+                    Syn.Nth_Declaration (Of_Tree.all, Position);
+               begin
+                  if Syn.Kind (Of_Tree.all, Node) = Syn.Function_Declaration
+                    and then Syn.Generic_Formal_Count (Of_Tree.all, Node) = 0
+                  then
+                     Discover_Generic_Calls
+                       (Of_Tree.all, Syn.Body_Of (Of_Tree.all, Node));
+                  elsif Syn.Kind (Of_Tree.all, Node) = Syn.Binding then
+                     Discover_Generic_Calls
+                       (Of_Tree.all, Syn.Value_Of (Of_Tree.all, Node));
+                  end if;
+               end;
+            end loop;
+            for Node in Syn.Node_Id'(1) .. Syn.Last_Node (Of_Tree.all) loop
+               if Syn.Kind (Of_Tree.all, Node) = Syn.Anonymous_Function then
+                  Discover_Generic_Calls
+                    (Of_Tree.all, Syn.Body_Of (Of_Tree.all, Node));
+               end if;
+            end loop;
+         end;
+      end loop;
+
       Finalize_Error_Sets;
+
+      --  Concrete generic recovery clauses were intentionally postponed
+      --  until the error graph had settled their per-instance recovery
+      --  bindings. Rechecking a ready instance now exercises the same call,
+      --  fail and cleanup machinery used by every ordinary routine.
+      for Position in 1 .. Landin.Checking.Routine_Instance_Count
+        (Types.all)
+      loop
+         declare
+            Instance : constant Landin.Checking.Routine_Instance_Id :=
+              Landin.Checking.Routine_Identities.Nth
+                (Types.all, Position);
+         begin
+            if Landin.Checking.Routine_State_Of (Types.all, Instance)
+                 = Landin.Checking.Routine_Ready
+            then
+               declare
+                  Template : constant Res.Declaration_Id :=
+                    Landin.Checking.Routine_Template_Of
+                      (Types.all, Instance);
+                  Of_Tree : constant not null access constant Syn.Tree :=
+                    Tree_For (Res.Source_Of (Meanings.all, Template));
+                  Previous : Landin.Checking.Routine_Instance_Id;
+               begin
+                  Landin.Checking.Activate_Routine_View
+                    (Types.all, Instance, Previous);
+                  Check_Routine_Body
+                    (Of_Tree.all, Res.Node_Of (Meanings.all, Template));
+                  Landin.Checking.Restore_Routine_View
+                    (Types.all, Previous);
+               exception
+                  when others =>
+                     Landin.Checking.Restore_Routine_View
+                       (Types.all, Previous);
+                     raise;
+               end;
+            end if;
+         end;
+      end loop;
 
       --  Anonymous bodies can now check calls and `fail` against finalized
       --  concrete sets, including mutually recursive private inference.

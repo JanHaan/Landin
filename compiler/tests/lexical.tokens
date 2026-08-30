@@ -16219,6 +16219,59 @@ file negative/function-variant-payload-signature-mismatch/program.ldn tokens 67
   233 238 wrong
   238 239 )
   239 240 )
+file negative/generic-routine-inferred-errors-deferred/program.ldn tokens 52
+  0 7 problem
+  7 8 :
+  9 13 atom
+  15 22 generic
+  22 23 :
+  24 25 (
+  25 26 t
+  26 27 :
+  28 32 type
+  32 33 ,
+  34 39 value
+  39 40 :
+  41 42 t
+  42 43 )
+  44 46 ->
+  47 48 (
+  48 54 result
+  54 55 :
+  56 57 t
+  57 58 )
+  59 60 !
+  61 64 ...
+  65 66 =
+  71 75 fail
+  76 83 problem
+  88 94 result
+  95 96 =
+  97 102 value
+  103 106 end
+  107 114 generic
+  116 122 public
+  123 127 main
+  127 128 :
+  129 130 (
+  130 131 )
+  132 134 ->
+  135 136 (
+  136 140 code
+  140 141 :
+  142 145 i32
+  145 146 )
+  147 148 =
+  153 157 code
+  158 159 =
+  160 167 generic
+  167 168 (
+  168 170 42
+  170 171 )
+  172 176 else
+  177 178 0
+  179 182 end
+  183 187 main
 file negative/generic-routine-infinite-expansion/program.ldn tokens 52
   0 6 expand
   6 7 :

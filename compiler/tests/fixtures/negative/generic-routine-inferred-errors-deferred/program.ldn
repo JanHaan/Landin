@@ -1,0 +1,10 @@
+problem: atom
+
+generic: (t: type, value: t) -> (result: t) ! ... =
+    fail problem
+    result = value
+end generic
+
+public main: () -> (code: i32) =
+    code = generic(42) else 0
+end main

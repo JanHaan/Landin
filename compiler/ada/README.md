@@ -254,7 +254,10 @@ complete normalized tuple. Direct type-formal positions deduce exact normalized
 descriptors, and an exact `[n]t` array parameter also binds its fixed length and
 element descriptor without arithmetic inversion. Each identity owns a layered view of the original
 source nodes and declarations, publishes its substituted signature before its
-body, and records generic call targets in the caller's view. Same-key recursion
+body, and records generic call targets in the caller's view. A concrete
+declared atom error set is carried by that instance signature through ordinary
+call, recovery, propagation, failure and cleanup paths; per-instance inferred
+error sets remain source-diagnosed and deferred. Same-key recursion
 reuses the building instance; a different tuple of the same active template is
 refused as non-finite expansion. Lowering activates each ready view and emits
 one deterministic local routine item. Templates and static formals create no

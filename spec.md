@@ -7646,7 +7646,11 @@ from the argument's normalized length and `t` from its normalized element
 descriptor; this is shape matching, not arithmetic inversion. Other fixed
 formals remain undeduced until explicit static call syntax is enabled. After
 deduction, substitution builds the concrete runtime signature and ordinary
-call checking applies that signature.
+call checking applies that signature. A generic routine may write a concrete
+declared atom error set; substitution carries it on the instance signature,
+and call recovery, `try`, `fail`, `defer`, and `undo` use the ordinary error
+and cleanup machinery. Per-instance `! ...` inference is explicitly deferred
+and refused at the inferred-set syntax with a source diagnostic.
 
 The checker interns an opaque routine identity from the source template and
 complete normalized actual tuple. Equal keys reuse one identity; unequal keys
@@ -7681,7 +7685,9 @@ facts`, the lowering case `generic routines lower once per key`,
 `negative/generic-routine-repeated-deduction-conflict`,
 `negative/generic-routine-undeduced-formal`,
 `negative/generic-routine-infinite-expansion`,
+`negative/generic-routine-inferred-errors-deferred`,
 `negative/generic-routine-unused-unconditional-defect`, and
 `runtime/generic-identity-deduction`,
-`runtime/generic-fixed-array-deduction`, and
+`runtime/generic-fixed-array-deduction`,
+`runtime/generic-declared-errors`, and
 `runtime/generic-same-key-recursion` on Linux x86-64.

@@ -1,0 +1,24 @@
+problem: atom
+problems: type = problem
+
+mut state: i32 = 0
+
+cleanup: () -> none =
+    state = state + 1
+end cleanup
+
+choose: (t: type, value: t, stop: bool) -> (result: t) ! problems =
+    undo cleanup()
+    fail problem when stop
+    result = value
+end choose
+
+forward: (value: i32) -> (result: i32) ! problems =
+    result = try choose(value, false)
+end forward
+
+public main: () -> (code: i32) =
+    first := forward(40) else 0
+    second := choose(0, true) else 1
+    code = first + second + state
+end main

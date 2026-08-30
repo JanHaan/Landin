@@ -2331,8 +2331,11 @@ therefore deduces `i32`. An exact `[n]t` runtime parameter additionally binds
 descriptor, without arithmetic inversion. Static formals remain outside
 signatures, slots and the ABI. Explicit static call syntax, computed fixed
 patterns, and fixed conditional declaration lists remain the next increments.
-Deduction does not use return context or constraint lookup. No correctness
-step executes a user routine. R2.70 remains the owner of shared generic
+Deduction does not use return context or constraint lookup. Concrete declared
+atom error sets are substituted onto each instance signature and use the
+ordinary call, recovery, `try`, `fail`, `defer`, and `undo` machinery;
+per-instance `! ...` inference remains explicitly refused with a source
+diagnostic. No correctness step executes a user routine. R2.70 remains the owner of shared generic
 evidence and R4.50 the owner of choosing specialisation as an optimisation.
 
 Exit evidence: generic shape, nominal identity/layout, parser, resolution,
@@ -2349,9 +2352,10 @@ order-permuted, mutual and multi-wrapper symbolic formal paths plus direct
 field, payload and zero-length array edges. Routine evidence covers overlay
 separation on one source node, equal-key reuse, unequal scalar items, deduced
 `u8`/`i32`, context-free literal `i32`, exact `[n]t` fixed/element deduction,
-same-key recursion, repeated-formal conflict, undeduced formals, non-finite
-unequal-key recursion, unconditional
-unused-template defects, and absence of static ABI positions. Direct and
+same-key recursion, repeated type/fixed-formal conflicts, undeduced formals,
+non-finite unequal-key recursion, declared error propagation/recovery/failure
+cleanup, safe refusal of inferred generic errors, unconditional unused-template
+defects, and absence of static ABI positions. Direct and
 expression-folded zero lengths and a syntactically valid rejected call in an
 array bound remain covered; no user code executes during compilation.
 
