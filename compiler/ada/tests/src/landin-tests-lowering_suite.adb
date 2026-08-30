@@ -94,9 +94,13 @@ package body Landin.Tests.Lowering_Suite is
    begin
       pragma Assert (Written /= Landin.Source.No_Source);
       if Additional /= "" then
-         pragma Assert
-           (Landin.Stages.Add_Source (Work, "with.ldn", Additional)
-              /= Landin.Source.No_Source);
+         declare
+            Additional_Written : constant Landin.Source.Source_Id :=
+              Landin.Stages.Add_Source (Work, "with.ldn", Additional);
+         begin
+            pragma Assert
+              (Additional_Written /= Landin.Source.No_Source);
+         end;
       end if;
       Landin.Stages.Append (Order, Frontend'Access);
          Landin.Stages.Append (Order, Configurer'Access);
