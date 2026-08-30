@@ -1,0 +1,5 @@
+class: negative
+summary: nongeneric direct and indirect calls have no explicit static argument roles
+constructs: 0980, 1000, 1920
+program: program.ldn
+codes: L0301, L0301

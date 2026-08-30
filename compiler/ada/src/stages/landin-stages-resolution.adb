@@ -251,25 +251,43 @@ package body Landin.Stages.Resolution is
             else Landin.Resolution.Visible (Meanings.all, Inside, Named));
          Class : Landin.Resolution.Application_Class :=
            Landin.Resolution.Unclassified_Application;
+         Direct_Function : Boolean := False;
       begin
-         if Meant /= Landin.Resolution.No_Declaration then
-            Landin.Resolution.Bind (Meanings.all, Of_Tree, Callee, Meant);
-            case Landin.Resolution.Sort_Of (Meanings.all, Meant) is
-               when Landin.Resolution.Module_Function =>
-                  Class := Landin.Resolution.Function_Call;
-               when Landin.Resolution.Module_Type =>
-                  Class := Landin.Resolution.Type_Construction;
-               when Landin.Resolution.Case_Name =>
-                  Class := Landin.Resolution.Case_Construction;
-               when others =>
-                  null;
-            end case;
+         if Syn.Kind (Of_Tree, Callee) = Syn.Name_Reference then
+            if Meant = Landin.Resolution.No_Declaration then
+               --  Keep the ambiguous direct spelling neutral.  Construction
+               --  checking owns the existing source diagnostic for an
+               --  undeclared or nonconstructible name.
+               null;
+            else
+               Landin.Resolution.Bind (Meanings.all, Of_Tree, Callee, Meant);
+               case Landin.Resolution.Sort_Of (Meanings.all, Meant) is
+                  when Landin.Resolution.Module_Function =>
+                     Class := Landin.Resolution.Function_Call;
+                     Direct_Function := True;
+                  when Landin.Resolution.Module_Type =>
+                     Class := Landin.Resolution.Type_Construction;
+                  when Landin.Resolution.Case_Name =>
+                     Class := Landin.Resolution.Case_Construction;
+                  when others =>
+                     --  A binding may hold a function value.  Its structural
+                     --  signature is a checking fact, so runtime matching is
+                     --  deliberately completed there.
+                     Class := Landin.Resolution.Function_Call;
+               end case;
+            end if;
+         else
+            --  Selected and otherwise indirect callees are ordinary
+            --  expressions.  Resolve the complete callee before any written
+            --  argument, preserving [0410]'s semantic walk order.
+            Resolve (Of_Tree, Callee, Inside);
+            Class := Landin.Resolution.Function_Call;
          end if;
 
          Landin.Resolution.Classify
            (Meanings.all, Of_Tree, Node, Class);
 
-         if Class = Landin.Resolution.Function_Call then
+         if Class = Landin.Resolution.Function_Call and Direct_Function then
             declare
                Callee_Tree : constant not null access constant Syn.Tree :=
                  Trees.Tree_Of
@@ -374,10 +392,30 @@ package body Landin.Stages.Resolution is
                               Syn.Expression_Projection
                                 (Of_Tree, Argument), Inside);
                         end if;
+                     else
+                        --  Unknown runtime labels are still expressions.  A
+                        --  type-only RHS stays unvisited and the shared call
+                        --  matcher owns the one source diagnostic.
+                        Resolve
+                          (Of_Tree,
+                           Syn.Expression_Projection (Of_Tree, Argument),
+                           Inside);
                      end if;
                   end;
                end loop;
             end;
+         elsif Class = Landin.Resolution.Function_Call then
+            --  Only checking has the structural signature of a stored or
+            --  selected function value.  Resolve every runtime projection
+            --  now in written order and let that shared matcher assign ABI
+            --  formal positions later.
+            for Which in 1 .. Syn.Argument_Count (Of_Tree, Node) loop
+               Resolve
+                 (Of_Tree,
+                  Syn.Expression_Projection
+                    (Of_Tree, Syn.Nth_Argument (Of_Tree, Node, Which)),
+                  Inside);
+            end loop;
          elsif Class in Landin.Resolution.Type_Construction
                           | Landin.Resolution.Case_Construction
          then
@@ -399,6 +437,32 @@ package body Landin.Stages.Resolution is
                      Syn.Expression_Projection (Of_Tree, Argument), Inside);
                end;
             end loop;
+         end if;
+
+         --  The neutral application carries the same recovery slot as Call.
+         --  Its bound error and body must therefore open and walk the same
+         --  scope after the callee and written arguments have been resolved.
+         if Syn.Recovery_Of (Of_Tree, Node) /= Syn.No_Node then
+            declare
+               Recovery : constant Syn.Node_Id :=
+                 Syn.Recovery_Of (Of_Tree, Node);
+               Runs : constant Syn.Node_Id :=
+                 Syn.Else_Body (Of_Tree, Recovery);
+               Recovery_Scope : constant Landin.Resolution.Scope_Id :=
+                 Landin.Resolution.Open_Scope
+                   (Meanings.all, Landin.Resolution.Block, Inside);
+            begin
+               Landin.Resolution.Record_Scope
+                 (Meanings.all, Of_Tree, Recovery, Recovery_Scope);
+               Declare_One (Of_Tree, Recovery, Recovery_Scope);
+               if Syn.Kind (Of_Tree, Runs) = Syn.Block then
+                  Landin.Resolution.Record_Scope
+                    (Meanings.all, Of_Tree, Runs, Recovery_Scope);
+                  Walk_Block (Of_Tree, Runs, Recovery_Scope);
+               else
+                  Resolve (Of_Tree, Runs, Recovery_Scope);
+               end if;
+            end;
          end if;
       end Resolve_Labeled_Application;
 

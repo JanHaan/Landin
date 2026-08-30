@@ -4862,7 +4862,8 @@ package body Landin.Syntax.Parser is
                --  The all-`of` spelling remains the same named refusal as a
                --  bare all-`of` literal.  It carries no labelled field from
                --  which D72's construction grammar could begin.
-               if Peek = Tok.Identifier
+               if Direct
+                 and then Peek = Tok.Identifier
                  and then Named_Here = Of_Id
                  and then Pre.Begins_Expression (Ahead (1))
                  and then not Pre.Is_Binary (Ahead (1))
@@ -4888,12 +4889,12 @@ package body Landin.Syntax.Parser is
                      declare
                         Before : constant Tok.Token_Index := Index;
                      begin
-                        if Direct
-                          and then Peek = Tok.Identifier
+                        if Peek = Tok.Identifier
                           and then
                             (Ahead (1) = Tok.Colon
                              or else
-                               (Named_Seen
+                               (Direct
+                                and then Named_Seen
                                 and then Named_Here = Of_Id
                                 and then Pre.Begins_Expression (Ahead (1))))
                         then

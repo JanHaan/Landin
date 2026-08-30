@@ -1,0 +1,6 @@
+class: runtime
+summary: named runtime calls preserve written side effects while passing direct, indirect and selected arguments in formal order
+constructs: 0050, 0060, 0410, 0420, 0520, 0670, 0700, 0870, 0930, 0980, 1000, 1790, 1900, 1920
+program: main.ldn
+status: 42
+targets: linux-x86-64

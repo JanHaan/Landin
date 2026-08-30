@@ -1,6 +1,6 @@
 class: negative
-summary: D72 requires construction's leading name to denote an ordinary struct type
-constructs: 0190, 0670, 0700, 1810, 1820
+summary: D72 still rejects scalar and bound callees while [0980] admits the named ordinary function calls
+constructs: 0190, 0670, 0700, 0980, 1810, 1820
 program: program.ldn
 targets: linux-x86-64, macos-arm64
-codes: L0301, L0301, L0301, L0301
+codes: L0304, L0305, L0301

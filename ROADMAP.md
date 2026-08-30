@@ -2361,6 +2361,26 @@ error, `negative/fixed-conditional-inactive-parser-error` retains parser
 reporting, and the lowering seam records that an inactive template creates no
 item while a selected generic instance does.
 
+The ordinary named-call checkpoint is now complete before explicit generic
+statics. One shared checked match records every labelled application's runtime
+argument role and formal position in the resolution table. A positional prefix
+fills runtime formals in order and a named suffix may reorder the remainder;
+duplicate, unknown and missing labels are L0301 with the first occurrence or
+formal as related source. Direct declarations, stored function values and
+selected function fields use the same match, while source-declared callable
+signatures require unique parameter labels and structural signature identity
+continues to ignore them. Checking, flow, error inference, generic discovery,
+cleanup/recovery and lowering visit runtime expressions in written order;
+lowering preserves that order through temporaries and emits ABI arguments in
+formal order without moving hidden aggregate destinations or error carriers.
+A rejected match records no routine target and lowering refuses an incomplete
+match. The Linux `runtime/named-runtime-call-order` fixture covers direct,
+indirect, function-field, indexed-selection and deduced-generic runtime calls,
+including reordered side effects and differing declaration/type labels; the
+`negative/named-call-*`, `negative/indirect-call-static-role-label` and
+`negative/function-type-parameter-name-duplicate` fixtures pin the refusal
+surface. D72 construction projections remain unchanged.
+
 The remaining generic-routine increments settle explicit static-call syntax
 and may extend exact deduction through additional nested type patterns and
 computed fixed patterns. D138's implemented deduction does not use return

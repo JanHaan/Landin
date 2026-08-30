@@ -1,0 +1,7 @@
+signature: type = (value: i32) -> (result: i32)
+identity: (item: i32) -> (answer: i32) = item end identity
+f: () -> (r: i32) =
+    indirect: signature = identity
+    direct := identity(static: (x: i32) -> (y: i32), item: 1)
+    r = direct + indirect(static: (x: i32) -> (y: i32), value: 1)
+end f

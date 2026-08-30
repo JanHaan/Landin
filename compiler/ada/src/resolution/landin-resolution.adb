@@ -292,6 +292,13 @@ package body Landin.Resolution is
      is (Of_Table.Applications.Element
            (Slot (Of_Table, Of_Tree, Node)).Class);
 
+   function Match_Of
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id) return Call_Match_State
+     is (Of_Table.Applications.Element
+           (Slot (Of_Table, Of_Tree, Node)).Match);
+
    function Role_Of
      (Of_Table : Table;
       Of_Tree  : Landin.Syntax.Tree;
@@ -342,5 +349,37 @@ package body Landin.Resolution is
       Fact.Position := Position;
       Into.Applications.Replace_Element (Slot_Index, Fact);
    end Match_Argument;
+
+   procedure Match_Runtime_Argument
+     (Into     : in out Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Argument : Landin.Syntax.Node_Id;
+      Position : Positive)
+   is
+      Slot_Index : constant Positive := Slot (Into, Of_Tree, Argument);
+      Fact : Application_Fact := Into.Applications.Element (Slot_Index);
+   begin
+      if Fact.Role /= Runtime_Argument
+        or else Fact.Position /= Position
+      then
+         Fact.Formal := No_Declaration;
+      end if;
+      Fact.Role := Runtime_Argument;
+      Fact.Position := Position;
+      Into.Applications.Replace_Element (Slot_Index, Fact);
+   end Match_Runtime_Argument;
+
+   procedure Finish_Call_Match
+     (Into     : in out Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id;
+      Accepted : Boolean)
+   is
+      Slot_Index : constant Positive := Slot (Into, Of_Tree, Node);
+      Fact : Application_Fact := Into.Applications.Element (Slot_Index);
+   begin
+      Fact.Match := (if Accepted then Call_Matched else Call_Rejected);
+      Into.Applications.Replace_Element (Slot_Index, Fact);
+   end Finish_Call_Match;
 
 end Landin.Resolution;

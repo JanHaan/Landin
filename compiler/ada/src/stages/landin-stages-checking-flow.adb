@@ -31,6 +31,8 @@ package body Landin.Stages.Checking.Flow is
    use type Landin.Checking.Field_Kind;
    use type Landin.Checking.Signature_Id;
    use type Res.Verdict;
+   use type Res.Application_Class;
+   use type Res.Argument_Role;
    use type Res.Declaration_Sort;
    use type Landin.Source.Source_Id;
 
@@ -1549,27 +1551,50 @@ package body Landin.Stages.Checking.Flow is
                  (Of_Tree, Syn.Body_Of (Of_Tree, Node), Result,
                   Syn.Origin (Of_Tree, Node), State, Edges, Needs_Value);
 
-            when Syn.Call =>
+            when Syn.Call | Syn.Labeled_Application =>
                --  D131: a direct declaration needs no runtime read, but an
                --  indirect callee is an ordinary function value and may be a
                --  field or indexed field with its own DA and control edges.
-               Flow_Expression
-                 (Of_Tree, Syn.Callee_Of (Of_Tree, Node), Result,
-                  State, Edges, Whole_As);
+               Edges := Fallthrough_Edge;
+               if Syn.Kind (Of_Tree, Node) = Syn.Call
+                 or else Res.Class_Of (Meanings.all, Of_Tree, Node)
+                            = Res.Function_Call
+               then
+                  Flow_Expression
+                    (Of_Tree, Syn.Callee_Of (Of_Tree, Node), Result,
+                     State, Edges, Whole_As);
+               end if;
                for Index in 1 .. Syn.Argument_Count (Of_Tree, Node) loop
                   exit when not Edges.Falls_Through;
                   declare
+                     Raw : constant Syn.Node_Id :=
+                       Syn.Nth_Argument (Of_Tree, Node, Index);
+                     Argument : constant Syn.Node_Id :=
+                       (if Syn.Kind (Of_Tree, Raw) = Syn.Call_Argument
+                          and then Res.Role_Of
+                            (Meanings.all, Of_Tree, Raw)
+                              in Res.Runtime_Argument | Res.Field_Argument
+                                 | Res.Payload_Argument | Res.Fill_Argument
+                        then Syn.Expression_Projection (Of_Tree, Raw)
+                        elsif Syn.Kind (Of_Tree, Raw) = Syn.Call_Argument
+                        then Syn.No_Node
+                        else Raw);
                      Part : Edge_Facts;
                   begin
-                     Flow_Expression
-                       (Of_Tree, Syn.Nth_Argument (Of_Tree, Node, Index),
-                        Result, State, Part, Whole_As);
-                     Edges.Returns := Edges.Returns or Part.Returns;
-                     Edges.Falls_Through := Part.Falls_Through;
+                     if Argument /= Syn.No_Node then
+                        Flow_Expression
+                          (Of_Tree, Argument, Result, State, Part, Whole_As);
+                        Edges.Returns := Edges.Returns or Part.Returns;
+                        Edges.Falls_Through := Part.Falls_Through;
+                     end if;
                   end;
                end loop;
 
                if Edges.Falls_Through
+                 and then (Syn.Kind (Of_Tree, Node) = Syn.Call
+                           or else Res.Class_Of
+                             (Meanings.all, Of_Tree, Node)
+                               = Res.Function_Call)
                  and then Syn.Recovery_Of (Of_Tree, Node) /= Syn.No_Node
                then
                   declare
