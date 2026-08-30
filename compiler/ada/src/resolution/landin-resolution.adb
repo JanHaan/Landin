@@ -45,6 +45,9 @@ package body Landin.Resolution is
       --  Verdict already gives without storing it.
       Into.Bound.Append (No_Declaration, Ada.Containers.Count_Type (Next));
       Into.Opened.Append (No_Scope, Ada.Containers.Count_Type (Next));
+      Into.Applications.Append
+        (Application_Fact'(others => <>),
+         Ada.Containers.Count_Type (Next));
 
       --  [1740] gives the compilation one scope and this is it.
       Into.Scopes.Append (Scope'(Sort => Program, Enclosing => No_Scope));
@@ -281,5 +284,63 @@ package body Landin.Resolution is
    begin
       Into.Bound.Replace_Element (Slot (Into, Of_Tree, Node), To);
    end Bind;
+
+   function Class_Of
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id) return Application_Class
+     is (Of_Table.Applications.Element
+           (Slot (Of_Table, Of_Tree, Node)).Class);
+
+   function Role_Of
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Argument : Landin.Syntax.Node_Id) return Argument_Role
+     is (Of_Table.Applications.Element
+           (Slot (Of_Table, Of_Tree, Argument)).Role);
+
+   function Formal_Of
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Argument : Landin.Syntax.Node_Id) return Declaration_Id
+     is (Of_Table.Applications.Element
+           (Slot (Of_Table, Of_Tree, Argument)).Formal);
+
+   function Position_Of
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Argument : Landin.Syntax.Node_Id) return Natural
+     is (Of_Table.Applications.Element
+           (Slot (Of_Table, Of_Tree, Argument)).Position);
+
+   procedure Classify
+     (Into    : in out Table;
+      Of_Tree : Landin.Syntax.Tree;
+      Node    : Landin.Syntax.Node_Id;
+      As_Kind : Application_Class)
+   is
+      Slot_Index : constant Positive := Slot (Into, Of_Tree, Node);
+      Fact : Application_Fact := Into.Applications.Element (Slot_Index);
+   begin
+      Fact.Class := As_Kind;
+      Into.Applications.Replace_Element (Slot_Index, Fact);
+   end Classify;
+
+   procedure Match_Argument
+     (Into     : in out Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Argument : Landin.Syntax.Node_Id;
+      As_Role  : Argument_Role;
+      Position : Natural;
+      Formal   : Declaration_Id := No_Declaration)
+   is
+      Slot_Index : constant Positive := Slot (Into, Of_Tree, Argument);
+      Fact : Application_Fact := Into.Applications.Element (Slot_Index);
+   begin
+      Fact.Role := As_Role;
+      Fact.Formal := Formal;
+      Fact.Position := Position;
+      Into.Applications.Replace_Element (Slot_Index, Fact);
+   end Match_Argument;
 
 end Landin.Resolution;
