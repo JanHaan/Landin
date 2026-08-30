@@ -354,16 +354,6 @@ package body Landin.Stages.Configuration is
                            "this fixed-expression divisor is zero");
                         return (Kind => Bad_Value);
                      end if;
-                     if Kind in Syn.Divide | Syn.Remainder
-                       and then Left.Integer_Value = Ty.Folded'First
-                       and then Right.Integer_Value = -1
-                     then
-                        Report_Impossible
-                          (Of_Tree, Node,
-                           "this fixed-expression operation cannot divide"
-                           & " the least integer by minus one");
-                        return (Kind => Bad_Value);
-                     end if;
                      --  The checked arithmetic below is intentionally
                      --  mathematical, never target-width or wrapping.
                      if (Kind = Syn.Add and then
@@ -381,11 +371,15 @@ package body Landin.Stages.Configuration is
                                           Left.Integer_Value > Ty.Folded'Last
                                           + Right.Integer_Value)))
                        or else (Kind = Syn.Multiply and then
+                                --  Folded is symmetric: -M * -1 is +M.
+                                --  Only every other non-unit factor escapes.
                                 ((Left.Integer_Value = Ty.Folded'First
-                                  and then Right.Integer_Value not in 0 | 1)
+                                  and then Right.Integer_Value
+                                    not in -1 | 0 | 1)
                                  or else
                                    (Right.Integer_Value = Ty.Folded'First
-                                    and then Left.Integer_Value not in 0 | 1)
+                                    and then Left.Integer_Value
+                                      not in -1 | 0 | 1)
                                  or else
                                    (Left.Integer_Value /= Ty.Folded'First
                                     and then Right.Integer_Value

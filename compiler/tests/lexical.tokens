@@ -1804,6 +1804,38 @@ file positive/fixed-conditional-selects-declarations/main.ldn tokens 33
   150 157 missing
   158 161 end
   162 164 if
+file positive/fixed-conditional-symmetric-boundaries/main.ldn tokens 31
+  0 5 fixed
+  6 8 if
+  9 10 -
+  10 30 18446744073709551615
+  31 32 *
+  33 34 -
+  34 35 1
+  36 38 ==
+  39 59 18446744073709551615
+  60 63 and
+  64 65 -
+  65 85 18446744073709551615
+  86 87 /
+  88 89 -
+  89 90 1
+  91 93 ==
+  94 114 18446744073709551615
+  115 119 then
+  124 132 selected
+  132 133 :
+  134 137 i32
+  138 139 =
+  140 142 42
+  143 147 else
+  152 157 wrong
+  157 158 :
+  159 166 missing
+  167 168 =
+  169 176 unknown
+  177 180 end
+  181 183 if
 file positive/function-end-unnamed/program.ldn tokens 13
   0 3 one
   3 4 :
@@ -15739,7 +15771,7 @@ file negative/fixed-conditional-active-reference-inactive/program.ldn tokens 21
   88 99 unavailable
   100 103 end
   104 106 if
-file negative/fixed-conditional-evaluator/program.ldn tokens 66
+file negative/fixed-conditional-evaluator/program.ldn tokens 78
   0 1 f
   1 2 :
   3 4 (
@@ -15777,35 +15809,47 @@ file negative/fixed-conditional-evaluator/program.ldn tokens 66
   141 142 -
   142 143 1
   144 146 ==
-  147 148 0
-  149 153 then
-  154 157 end
-  158 160 if
-  162 167 fixed
-  168 170 if
-  171 172 f
-  172 173 (
-  173 174 )
-  175 177 ==
-  178 179 0
-  180 184 then
-  185 188 end
-  189 191 if
-  193 198 fixed
-  199 201 if
-  202 206 true
-  207 211 then
-  212 217 elsif
-  218 223 false
-  224 227 and
-  228 229 f
-  229 230 (
-  230 231 )
-  232 234 ==
-  235 236 0
-  237 241 then
-  242 245 end
-  246 248 if
+  147 167 18446744073709551615
+  168 172 then
+  173 176 end
+  177 179 if
+  181 186 fixed
+  187 189 if
+  190 191 -
+  191 211 18446744073709551615
+  212 213 *
+  214 215 -
+  215 216 2
+  217 219 ==
+  220 221 0
+  222 226 then
+  227 230 end
+  231 233 if
+  235 240 fixed
+  241 243 if
+  244 245 f
+  245 246 (
+  246 247 )
+  248 250 ==
+  251 252 0
+  253 257 then
+  258 261 end
+  262 264 if
+  266 271 fixed
+  272 274 if
+  275 279 true
+  280 284 then
+  285 290 elsif
+  291 296 false
+  297 300 and
+  301 302 f
+  302 303 (
+  303 304 )
+  305 307 ==
+  308 309 0
+  310 314 then
+  315 318 end
+  319 321 if
 file negative/float-literal-not-enabled/program.ldn refused no rule spells a float literal
 file negative/float-type-not-enabled/program.ldn tokens 5
   0 5 ratio

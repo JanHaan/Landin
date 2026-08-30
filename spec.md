@@ -7663,8 +7663,9 @@ modules forward.
 **Pinned by** the target-description constructor and configuration-stage
 public-seam cases; `positive/fixed-conditional-selects-declarations`,
 `positive/fixed-conditional-nested-inactive`,
-`positive/fixed-conditional-exclusive-duplicates`, and
-`positive/fixed-conditional-cross-file-forward`; the arithmetic and
+`positive/fixed-conditional-exclusive-duplicates`,
+`positive/fixed-conditional-cross-file-forward`, and
+`positive/fixed-conditional-symmetric-boundaries`; the arithmetic and
 short-circuit/later-`elsif` call boundary case
 `negative/fixed-conditional-evaluator`; the active duplicate and
 active-reference-to-inactive cases
