@@ -872,6 +872,11 @@ end draw_all
 
 ```
 
+R2.80 now pins that erased element as D145's direct-concept type and D147's
+two-word data/table pair. Its object-safe `draw` entry receives the hidden data
+pointer first, while the list/slice storage carries the pair and D146's pointee
+origin rather than copying the hidden object.
+
 ---
 
 ## WHAT THIS ONE FOUND

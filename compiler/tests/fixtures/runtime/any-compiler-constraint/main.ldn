@@ -1,0 +1,19 @@
+view: type = concept (t: type is zeroable)
+    read: (self: ptr t) -> (value: i32)
+end view
+
+thing: type = struct
+    value: i32
+end thing
+
+read_thing: (self: ptr thing) -> (value: i32) =
+    value = self.val.value
+end read_thing
+
+thing is view (read: read_thing)
+
+public main: () -> (code: i32) =
+    item: thing = (value: 42)
+    erased: any view = any(addr item)
+    code = erased.read()
+end main

@@ -5033,8 +5033,61 @@ package body Landin.Tests.Backend_Suite is
       end;
    end Generic_Evidence_Is_Ordered_Indirect_And_Shared;
 
+   procedure Any_Dispatch_Uses_A_Flattened_Real_Table
+     (Item : in out Landin.Testing.Context);
+
+   procedure Any_Dispatch_Uses_A_Flattened_Real_Table
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "display: type = concept (t: type)" & LF
+         & "    code: (self: ptr t) -> (value: i32)" & LF
+         & "end display" & LF
+         & "thing: type = struct" & LF
+         & "    value: i32" & LF
+         & "end thing" & LF
+         & "thing_code: (self: ptr thing) -> (value: i32) =" & LF
+         & "    value = self.val.value" & LF
+         & "end thing_code" & LF
+         & "thing is display (code: thing_code)" & LF
+         & "public main: () -> (code: i32) =" & LF
+         & "    item: thing = (value: 42)" & LF
+         & "    erased: any display = any(addr item)" & LF
+         & "    code = erased.code()" & LF
+         & "end main" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work), "the program is accepted");
+      declare
+         Text : constant String := Emitted (Work);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Occurrences (Text, HT & ".quad thing_code"), 2,
+            "direct and flattened tables retain the provider relocation");
+         Landin.Testing.Check
+           (Item, Contains (Text, "movq 16(%rax), %rax"),
+            "the flattened first function uses the target-derived offset");
+         Landin.Testing.Check
+           (Item, Contains (Text, "call *"),
+            "the erased function word feeds an indirect call");
+         Landin.Testing.Check
+           (Item, Contains (Text, "leaq .Llandin_evidence_"),
+            "construction stores a real static table address");
+      end;
+   end Any_Dispatch_Uses_A_Flattened_Real_Table;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "backend", "any dispatch uses a flattened real table",
+         Any_Dispatch_Uses_A_Flattened_Real_Table'Access);
       Landin.Testing.Register
         (Into, "backend", "generic evidence is ordered indirect and shared",
          Generic_Evidence_Is_Ordered_Indirect_And_Shared'Access);

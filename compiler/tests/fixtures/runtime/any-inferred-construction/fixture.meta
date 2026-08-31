@@ -1,0 +1,5 @@
+class: runtime
+summary: one exact conformance supplies the omitted erased concept context
+program: main.ldn
+status: 42
+constructs: 0050, 1230, 1240, 1370, 1380, 1390

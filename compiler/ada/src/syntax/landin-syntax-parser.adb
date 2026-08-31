@@ -473,6 +473,8 @@ package body Landin.Syntax.Parser is
             begin
                if Peek = Tok.Left_Paren then
                   return Starts_Signature;
+               elsif Peek = Tok.Kw_Any then
+                  return True;
                elsif Peek = Tok.Kw_Ptr then
                   return Ahead (1) /= Tok.Left_Paren;
                elsif Peek /= Tok.Left_Bracket then
@@ -488,7 +490,7 @@ package body Landin.Syntax.Parser is
                      if Level = 0 then
                         return Ahead (Step + 1)
                           in Tok.Identifier | Tok.Left_Bracket
-                             | Tok.Left_Paren | Tok.Kw_Ptr;
+                             | Tok.Left_Paren | Tok.Kw_Any | Tok.Kw_Ptr;
                      end if;
                   end if;
                   Step := Step + 1;
@@ -1519,7 +1521,7 @@ package body Landin.Syntax.Parser is
                      end;
                      Advance;
                   elsif Peek in Tok.Identifier | Tok.Left_Bracket
-                               | Tok.Left_Paren | Tok.Kw_Ptr
+                               | Tok.Left_Paren | Tok.Kw_Any | Tok.Kw_Ptr
                   then
                      Arguments.Append (Parse_Type (False, Starts));
                   else
@@ -1685,6 +1687,39 @@ package body Landin.Syntax.Parser is
                   Mark_Reported;
                   Advance;
                   return Add (Error_Type, At_Type);
+               end if;
+
+               --  any_type ::= "any" concept_reference            [1790]
+               if Peek = Tok.Kw_Any then
+                  Advance;
+                  if Peek /= Tok.Identifier then
+                     Complain
+                       (Item    => Syn.Type_Expected,
+                        Where   => (if Peek = Tok.End_Of_Input
+                                    then After_Previous else Here),
+                        Message => "`any` requires one concept name",
+                        Note    => "[1370]: `any C` erases one value behind"
+                                   & " concept C",
+                        Related => At_Type,
+                        Because => "the runtime-dispatch type");
+                     return Add
+                       (Any_Type, At_Type,
+                        Children => [1 => Add (Error_Type, Point)]);
+                  end if;
+                  declare
+                     At_Concept : constant Landin.Source.Span := Here;
+                     Named : constant Landin.Source.Names.Name_Id :=
+                       Named_Here;
+                  begin
+                     Advance;
+                     return Add
+                       (Any_Type, At_Type,
+                        Extent => Join (At_Type, After_Previous),
+                        Children =>
+                          [1 => Add
+                             (Concept_Reference, At_Concept,
+                              Named => Named)]);
+                  end;
                end if;
 
                --  pointer_type ::= "ptr" "mut"? type             [1790]
@@ -4975,6 +5010,41 @@ package body Landin.Syntax.Parser is
                         At_Token  => At_Item,
                         Radix     => Tok.Base (Item),
                         Digits_At => Tok.Digit_Span (Item));
+                  end;
+               end if;
+
+               --  [1380]: `any(pointer)` is explicit but takes its concept
+               --  type from context.  The checker resolves the concrete
+               --  conformance and retains the pointer's origin/permission.
+               if Peek = Tok.Kw_Any then
+                  Advance;
+                  if not Expect
+                    (Wanted  => Tok.Left_Paren,
+                     Message => "`any` opens its pointer with `(`",
+                     Note    => "[1380]: construction is `any(pointer)`",
+                     Related => At_Item,
+                     Because => "the erased value construction")
+                  then
+                     return Add (Error_Expression, At_Item);
+                  end if;
+                  declare
+                     Value : constant Node_Id := Parse_Expression;
+                  begin
+                     if not Expect
+                       (Wanted  => Tok.Right_Paren,
+                        Message => "`any` closes its pointer with `)`",
+                        Note    => "[1380]: the pointer stays between the"
+                                   & " parentheses",
+                        Related => At_Item,
+                        Because => "opened here")
+                     then
+                        return Add
+                          (Any_Construction, At_Item, Children => [Value]);
+                     end if;
+                     return Add
+                       (Any_Construction, At_Item,
+                        Extent => Join (At_Item, After_Previous),
+                        Children => [Value]);
                   end;
                end if;
 

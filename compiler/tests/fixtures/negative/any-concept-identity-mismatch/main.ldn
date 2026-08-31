@@ -1,0 +1,26 @@
+left_view: type = concept (t: type)
+    read: (self: ptr t) -> (value: i32)
+end left_view
+
+right_view: type = concept (t: type)
+    read: (self: ptr t) -> (value: i32)
+end right_view
+
+thing: type = struct
+    value: i32
+end thing
+
+read_thing: (self: ptr thing) -> (value: i32) =
+    value = self.val.value
+end read_thing
+
+thing is left_view (read: read_thing)
+thing is right_view (read: read_thing)
+
+public main: () -> (code: i32) =
+    item: thing = (value: 42)
+    left: any left_view = any(addr item)
+    mut right: any right_view = any(addr item)
+    right = left
+    code = 0
+end main

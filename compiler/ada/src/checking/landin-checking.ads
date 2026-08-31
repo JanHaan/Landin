@@ -471,6 +471,7 @@ package Landin.Checking is
       Element_Nominal : Nominal_Type_Id := No_Nominal_Type;
       Reference : Reference_Id := No_Reference;
       Signature : Signature_Id := No_Signature;
+      Concept   : Concept_Id := No_Concept;
       Atoms     : Atom_Set_Id := No_Atom_Set;
    end record;
 
@@ -558,6 +559,7 @@ package Landin.Checking is
       Element : Landin.Types.Scalar_Name := Landin.Types.Bool;
       Signature : Signature_Id         := No_Signature;
       Reference : Reference_Id         := No_Reference;
+      Concept   : Concept_Id           := No_Concept;
       Convention : Landin.Syntax.Parameter_Convention :=
         Landin.Syntax.Implicit_In;
       Escaping   : Boolean := False;
@@ -798,7 +800,8 @@ package Landin.Checking is
       Fixed_Array_Actual_Type,
       Nominal_Actual_Type,
       Function_Actual_Type,
-      Reference_Actual_Type);
+      Reference_Actual_Type,
+      Any_Actual_Type);
    type Array_Element_Form is
      (Scalar_Array_Element, Nominal_Array_Element);
 
@@ -843,6 +846,10 @@ package Landin.Checking is
    function Reference_Type_Actual
      (Of_Table : Table; Reference : Reference_Id) return Actual_Key
      with Pre => Holds (Of_Table, Reference);
+
+   function Any_Type_Actual
+     (Of_Table : Table; Concept : Concept_Id) return Actual_Key
+     with Pre => Holds (Of_Table, Concept);
 
    function Fixed_Actual (Value : Landin.Types.Magnitude) return Actual_Key;
 
@@ -914,6 +921,12 @@ package Landin.Checking is
                  and then Actual_Kind_Of (Key) = Type_Actual_Kind
                  and then Type_Form_Of (Key) = Reference_Actual_Type;
 
+   function Any_Concept_Of
+     (Of_Table : Table; Key : Actual_Key) return Concept_Id
+     with Pre => Holds (Of_Table, Key)
+                 and then Actual_Kind_Of (Key) = Type_Actual_Kind
+                 and then Type_Form_Of (Key) = Any_Actual_Type;
+
    function Fixed_Magnitude_Of
      (Key : Actual_Key) return Landin.Types.Magnitude
      with Pre => Actual_Kind_Of (Key) = Fixed_Actual_Kind;
@@ -945,6 +958,38 @@ package Landin.Checking is
    function Is_Compiler_Concept
      (Of_Table : Table; Id : Concept_Id) return Boolean
      with Pre => Holds (Of_Table, Id);
+
+   function Any_Concept_Of
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id) return Concept_Id
+     with Pre => Is_Prepared (Of_Table)
+                 and then Covers (Of_Table, Of_Tree)
+                 and then Landin.Syntax.Contains (Of_Tree, Node);
+
+   function Any_Concept_Of
+     (Of_Table : Table; Id : Declaration_Id) return Concept_Id
+     with Pre => Is_Prepared (Of_Table)
+                 and then Natural (Id) <= Declaration_Limit (Of_Table);
+
+   procedure Note_Any_Concept
+     (Into    : in out Table;
+      Of_Tree : Landin.Syntax.Tree;
+      Node    : Landin.Syntax.Node_Id;
+      Concept : Concept_Id)
+     with Pre => Is_Prepared (Into)
+                 and then Covers (Into, Of_Tree)
+                 and then Landin.Syntax.Contains (Of_Tree, Node)
+                 and then Holds (Into, Concept),
+          Post => Any_Concept_Of (Into, Of_Tree, Node) = Concept;
+
+   procedure Note_Any_Concept
+     (Into : in out Table; Id : Declaration_Id; Concept : Concept_Id)
+     with Pre => Is_Prepared (Into)
+                 and then Id /= No_Declaration
+                 and then Natural (Id) <= Declaration_Limit (Into)
+                 and then Holds (Into, Concept),
+          Post => Any_Concept_Of (Into, Id) = Concept;
 
    function Conformance_Count (Of_Table : Table) return Natural
      with Pre => Is_Prepared (Of_Table);
@@ -1244,6 +1289,32 @@ package Landin.Checking is
      with Pre => Is_Prepared (Of_Table)
                  and then Covers (Of_Table, Of_Tree)
                  and then Landin.Syntax.Contains (Of_Tree, Node);
+
+   procedure Note_Any_Construction
+     (Into       : in out Table;
+      Of_Tree    : Landin.Syntax.Tree;
+      Node       : Landin.Syntax.Node_Id;
+      Conformance : Conformance_Id)
+     with Pre  => Is_Prepared (Into)
+                  and then Covers (Into, Of_Tree)
+                  and then Landin.Syntax.Contains (Of_Tree, Node)
+                  and then Holds (Into, Conformance),
+          Post => Evidence_Of (Into, Of_Tree, Node) = Conformance
+                  and then Evidence_Entry_Of (Into, Of_Tree, Node) = 0;
+
+   procedure Note_Any_Dispatch
+     (Into      : in out Table;
+      Of_Tree   : Landin.Syntax.Tree;
+      Node      : Landin.Syntax.Node_Id;
+      Evidence  : Conformance_Id;
+      Which     : Positive)
+     with Pre  => Is_Prepared (Into)
+                  and then Covers (Into, Of_Tree)
+                  and then Landin.Syntax.Contains (Of_Tree, Node)
+                  and then Holds (Into, Evidence),
+          Post => Evidence_Of (Into, Of_Tree, Node) = Evidence
+                  and then Evidence_Entry_Of
+                    (Into, Of_Tree, Node) = Which;
 
    procedure Note_Evidence_Selection
      (Into      : in out Table;
@@ -1823,6 +1894,7 @@ private
       Nominal   : Nominal_Type_Id := No_Nominal_Type;
       Signature : Signature_Id := No_Signature;
       Reference : Reference_Id := No_Reference;
+      Concept   : Concept_Id := No_Concept;
       Value     : Landin.Types.Magnitude := 0;
    end record;
 
@@ -1851,6 +1923,9 @@ private
 
    package Concept_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Concept_Record);
+
+   package Concept_Id_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Concept_Id);
 
    type Conformance_Record is record
       Concept  : Concept_Id := No_Concept;
@@ -1985,6 +2060,8 @@ private
       Signature : Signature_Id := No_Signature;
       Has_Reference : Boolean := False;
       Reference : Reference_Id := No_Reference;
+      Has_Concept : Boolean := False;
+      Concept : Concept_Id := No_Concept;
       Has_Result_Shape : Boolean := False;
       Result_Shape : Signature_Id := No_Signature;
       Has_Field : Boolean := False;
@@ -2016,6 +2093,8 @@ private
       Signature : Signature_Id := No_Signature;
       Has_Reference : Boolean := False;
       Reference : Reference_Id := No_Reference;
+      Has_Concept : Boolean := False;
+      Concept : Concept_Id := No_Concept;
       Has_Result_Shape : Boolean := False;
       Result_Shape : Signature_Id := No_Signature;
       Has_Array : Boolean := False;
@@ -2036,6 +2115,7 @@ private
       Node_Atom_Sets : Atom_Set_Id_Vectors.Vector;
       Node_Signatures : Signature_Id_Vectors.Vector;
       Node_References : Reference_Id_Vectors.Vector;
+      Node_Concepts : Concept_Id_Vectors.Vector;
       Node_Result_Shapes : Signature_Id_Vectors.Vector;
       Node_Routine_Targets : Routine_Id_Vectors.Vector;
       Node_Evidence : Conformance_Id_Vectors.Vector;
@@ -2066,6 +2146,7 @@ private
       Atoms        : Atom_Vectors.Vector;
       Declaration_Signatures : Signature_Id_Vectors.Vector;
       Declaration_References : Reference_Id_Vectors.Vector;
+      Declaration_Concepts : Concept_Id_Vectors.Vector;
       Declaration_Result_Shapes : Signature_Id_Vectors.Vector;
       References   : Reference_Descriptor_Vectors.Vector;
       Signatures   : Signature_Vectors.Vector;

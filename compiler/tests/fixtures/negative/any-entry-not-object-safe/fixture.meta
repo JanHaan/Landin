@@ -1,0 +1,5 @@
+class: negative
+summary: erased entries cannot expose the hidden represented type beyond self
+program: main.ldn
+codes: L0301
+constructs: 1230, 1240, 1370, 1380, 1390

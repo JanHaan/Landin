@@ -1,0 +1,5 @@
+class: negative
+summary: an erased entry is an immediate call operation rather than a bound function value
+program: main.ldn
+codes: L0301
+constructs: 1000, 1370, 1380, 1390
