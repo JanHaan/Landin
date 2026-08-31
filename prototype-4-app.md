@@ -543,6 +543,14 @@ necessary, which was the point of the range from 32 KB to 32 TB.
 What is not stated anywhere is what happens to that frame origin
 when the arena is passed on as a parameter, which it is here. [W7]
 
+R2.80 makes this prototype's `any` pressure executable without changing the
+sketch: construction erases an exact pointer/conformance, every exposed entry
+uses the object-safe first `self` pointer already written here, and the pair
+carries the pointee origin through the config aggregates. Parent conformances
+stay separate identities while an erased table flattens their function words;
+mutable authority is proved when the pair is constructed rather than stored as
+a third runtime field (D145--D147).
+
 ---
 
 ## WHAT THIS ONE FOUND

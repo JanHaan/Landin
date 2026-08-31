@@ -1,0 +1,5 @@
+class: runtime
+summary: an erased concept is an exact generic type actual and stored field
+program: main.ldn
+status: 42
+constructs: 0700, 0750, 1290, 1370, 1380, 1390

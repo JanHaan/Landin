@@ -491,7 +491,18 @@ package body Landin.Tests.Targets_Suite is
                       (Evidence_Table_Size (Facts, 2))), 6)
                & Trimmed
                    (Byte_Alignment'Image
-                      (Evidence_Table_Alignment (Facts))) & LF);
+                      (Evidence_Table_Alignment (Facts))) & LF
+               & LF & "  any data table bytes align" & LF
+               & "  "
+               & Padded
+                   (Trimmed (Byte_Count'Image (Any_Data_Offset (Facts))), 5)
+               & Padded
+                   (Trimmed (Byte_Count'Image (Any_Table_Offset (Facts))), 6)
+               & Padded
+                   (Trimmed (Byte_Count'Image (Any_Value_Size (Facts))), 6)
+               & Trimmed
+                   (Byte_Alignment'Image
+                      (Any_Value_Alignment (Facts))) & LF);
          end;
       end Describe;
    begin
@@ -753,6 +764,72 @@ package body Landin.Tests.Targets_Suite is
       Landin.Testing.Check_Equal
         (Item, Natural (Evidence_Table_Alignment (Small)), 4,
          "synthetic-32 evidence table alignment");
+
+      Landin.Testing.Check_Equal
+        (Item, Natural (Any_Data_Offset (Linux)), 0,
+         "linux any data is the first word");
+      Landin.Testing.Check_Equal
+        (Item, Natural (Any_Table_Offset (Linux)), 8,
+         "linux any table is the second word");
+      Landin.Testing.Check_Equal
+        (Item, Natural (Any_Value_Size (Linux)), 16,
+         "linux any values occupy two words");
+      Landin.Testing.Check_Equal
+        (Item, Natural (Any_Value_Alignment (Linux)), 8,
+         "linux any values align to one word");
+      Landin.Testing.Check_Equal
+        (Item, Natural (Any_Data_Offset (Small)), 0,
+         "synthetic-32 any data is the first word");
+      Landin.Testing.Check_Equal
+        (Item, Natural (Any_Table_Offset (Small)), 4,
+         "synthetic-32 any table is the second word");
+      Landin.Testing.Check_Equal
+        (Item, Natural (Any_Value_Size (Small)), 8,
+         "synthetic-32 any values occupy two words");
+      Landin.Testing.Check_Equal
+        (Item, Natural (Any_Value_Alignment (Small)), 4,
+         "synthetic-32 any values align to one word");
+
+      declare
+         Layout : Placement := Empty_Placement;
+         First, Pair, Last : Byte_Count;
+      begin
+         Place (Layout, Byte_1, Linux, First);
+         Place
+           (Layout, Any_Value_Size (Linux), Any_Value_Alignment (Linux), Pair);
+         Place (Layout, Byte_1, Linux, Last);
+         Landin.Testing.Check_Equal
+           (Item, Natural (First), 0, "linux prefix precedes an any field");
+         Landin.Testing.Check_Equal
+           (Item, Natural (Pair), 8, "linux aligns an any field at eight");
+         Landin.Testing.Check_Equal
+           (Item, Natural (Last), 24, "linux suffix follows both any words");
+         Landin.Testing.Check_Equal
+           (Item, Natural (Size_Of (Layout)), 32,
+            "linux pads an aggregate containing any to 32 bytes");
+      end;
+
+      declare
+         Layout : Placement := Empty_Placement;
+         First, Pair, Last : Byte_Count;
+      begin
+         Place (Layout, Byte_1, Small, First);
+         Place
+           (Layout, Any_Value_Size (Small), Any_Value_Alignment (Small), Pair);
+         Place (Layout, Byte_1, Small, Last);
+         Landin.Testing.Check_Equal
+           (Item, Natural (First), 0,
+            "synthetic-32 prefix precedes an any field");
+         Landin.Testing.Check_Equal
+           (Item, Natural (Pair), 4,
+            "synthetic-32 aligns an any field at four");
+         Landin.Testing.Check_Equal
+           (Item, Natural (Last), 12,
+            "synthetic-32 suffix follows both any words");
+         Landin.Testing.Check_Equal
+           (Item, Natural (Size_Of (Layout)), 16,
+            "synthetic-32 pads an aggregate containing any to 16 bytes");
+      end;
 
       declare
          Ignored : Byte_Count;

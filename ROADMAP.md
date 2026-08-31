@@ -2620,21 +2620,46 @@ not required.
 
 ### R2.80 — Implement `any C`
 
-Status: active
+Status: complete
 Depends on: R2.50, R2.70
 
-Implement explicit construction, the data-pointer/table pair, mutable and
-immutable entries, origin propagation, storage in aggregates and runtime
-dispatch.
+D145 makes `any` reserved and gives `any C` exact direct-concept identity.
+`any(pointer)` selects the contextual exact conformance, including a
+parameterized family/provider, or infers only one unambiguous collected source
+concept. D146 requires every exposed direct/inherited entry to have one first
+object-safe `self: ptr [mut] T`, prevents hidden T from escaping elsewhere in
+the signature, checks construction permission once, and carries the pointee's
+origin through copies, aggregates, calls and results. Pair binding mutability
+controls replacement rather than revoking pointer authority.
 
-Sources: `[1370]`, `[1380]`, `[1390]`.
+D147 fixes the pair as data then table, two target pointer-width cells aligned
+to pointer alignment. Linux x86-64 is 0/8 and 16/8; synthetic-32 is 0/4 and
+8/4. The direct D144 generic tables stay unchanged. A conformance used by
+`any` additionally emits a size/alignment-prefixed erased table whose function
+run flattens direct entries then each distinct represented-formal
+constraint/parent closure in declaration order. Dispatch loads that dynamic
+function, injects data as argument one, and reuses the verified indirect
+result, error and cleanup paths. The pair uses shaped parameter/result/copy
+storage and may occupy aggregate fields; `zeroed` cannot manufacture it.
 
-Exit evidence: at least two heterogeneous conformances dispatch through real
-tables; origin and permission failures are diagnosed.
+Sources: `[1370]`, `[1380]`, `[1390]`; D145--D147.
+
+Exit evidence: `runtime/any-heterogeneous-dispatch` executes immutable and
+mutable entries through two heterogeneous real tables;
+`runtime/any-composed-dispatch` executes direct and separately conformed parent
+entries; `runtime/any-aggregate-storage`, `runtime/any-return-origin`,
+`runtime/any-inferred-construction` and `runtime/any-parameterized-provider`
+pin storage, shaped ABI, origin, inference and family materialization. The
+negative any fixtures pin source shape, exact concept identity, ambiguity,
+object safety, pointer permission and frame-origin escape. Target tests pin
+both physical pair layouts while the existing evidence verifier checks the
+flattened table descriptors. The complete pinned debug and release loops pass
+379 cases and 8,702 checks with generated grammar, lexical, target-layout and
+IR records current.
 
 ### R2.90 — Establish guarantee and semantic coverage registers
 
-Status: planned
+Status: active
 Depends on: R2.30, R2.50, R2.60, R2.70, R2.80
 
 Classify every implemented operation as statically prevented, runtime trapped,

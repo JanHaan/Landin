@@ -1,0 +1,24 @@
+display: type = concept (t: type)
+    code: (self: ptr t) -> (value: i32)
+end display
+
+thing: type = struct
+    value: i32
+end thing
+
+thing_code: (self: ptr thing) -> (value: i32) =
+    value = self.val.value
+end thing_code
+
+thing is display (code: thing_code)
+
+run: (item: any display) -> (value: i32) =
+    value = item.code()
+end run
+
+public main: () -> (code: i32) =
+    item: thing = (value: 42)
+    erased: any display = any(addr item)
+    stored := erased.code
+    code = 0
+end main

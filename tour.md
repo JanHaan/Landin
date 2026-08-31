@@ -2474,6 +2474,23 @@ end paint
 
 ```
 
+The enabled R2.80 form reserves `any` and gives `any C` the identity of that
+direct concept, not of one hidden concrete type or one of C's parents.
+`any(pointer)` uses the contextual C; without one it requires exactly one
+collected exact conformance. Every erased entry has an object-safe first
+`self: ptr T` or `self: ptr mut T`, and hidden T appears nowhere else in the
+entry's runtime signature. Construction from a read-only pointer therefore
+cannot make a table that exposes mutable `self`. Once made, binding mutability
+controls replacing the two-word pair, not the authority already carried by its
+pointer.
+
+Composition keeps its separate conformances while the erased physical table
+flattens their object-safe function words in deterministic declaration order.
+The pair remains exactly data pointer then table pointer on every target. Its
+origin is the pointee's origin, including through copies, aggregate fields,
+arguments and results; the implicit `self` participates in the same `from`,
+`escaping` and local-origin checks as a written pointer argument (D145--D147).
+
 ### [1400] This is what generics cannot do
 
 This is what generics cannot do: one array holding values

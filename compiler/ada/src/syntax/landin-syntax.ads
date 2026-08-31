@@ -212,6 +212,9 @@ package Landin.Syntax is
       Address_Of,
       --  [0460]/[0470]'s context-typed integer-to-pointer conversion.
       Pointer_Conversion,
+      --  [1380]'s explicit erasure of one concrete pointer into contextual
+      --  `any C`; checking supplies the conformance table and origin.
+      Any_Construction,
       Negation,
       Complement,
       Logical_Not,
@@ -271,6 +274,9 @@ package Landin.Syntax is
       --  type and the shallow permission written by their optional `mut`.
       Pointer_Type,
       Slice_Type,
+      --  [1370]'s erased data-pointer/evidence-table pair.  Its child is
+      --  the concept reference that gives this structural type identity.
+      Any_Type,
       --  D117's written infallible function type.  Its first slot is the
       --  named Return_List, or No_Node for `none`; its trailing run is the
       --  parameter descriptions in source order.  It has no body and its
@@ -1206,6 +1212,13 @@ package Landin.Syntax is
                   and then Kind (Of_Tree, Id)
                              in Pointer_Type | Slice_Type,
           Post => Contains (Of_Tree, Referenced_Type'Result);
+
+   function Any_Concept (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     with Pre  => Contains (Of_Tree, Id)
+                  and then Kind (Of_Tree, Id) = Any_Type,
+          Post => Contains (Of_Tree, Any_Concept'Result)
+                  and then Kind (Of_Tree, Any_Concept'Result)
+                    = Concept_Reference;
 
    function Measured_Type (Of_Tree : Tree; Id : Node_Id) return Node_Id
      with Pre  => Contains (Of_Tree, Id)

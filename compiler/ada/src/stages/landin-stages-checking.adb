@@ -106,6 +106,7 @@ package body Landin.Stages.Checking is
         Landin.Provenance.No_Origin;
       Active_Struct_Field : Landin.Provenance.Origin :=
         Landin.Provenance.No_Origin;
+      Checked_Instance_Count : Natural := 0;
 
       --  D137 separates an identity mention from a by-value edge.  Function
       --  signatures and type-actual keys need only the former; a field,
@@ -129,6 +130,8 @@ package body Landin.Stages.Checking is
            Landin.Checking.No_Signature;
          Reference : Landin.Checking.Reference_Id :=
            Landin.Checking.No_Reference;
+         Concept : Landin.Checking.Concept_Id :=
+           Landin.Checking.No_Concept;
          --  A transient declaration-validation obligation.  It belongs to
          --  this Run invocation, never to syntax or the canonical key.
          Symbolic : Symbolic_Layout_Id := No_Symbolic_Layout;
@@ -508,6 +511,9 @@ package body Landin.Stages.Checking is
       function Evidence_Selection_Signature
         (Of_Tree : Syn.Tree; Selection : Syn.Node_Id)
          return Landin.Checking.Signature_Id;
+      function Any_Selection_Signature
+        (Of_Tree : Syn.Tree; Selection : Syn.Node_Id)
+         return Landin.Checking.Signature_Id;
       procedure Collect_Concepts;
       procedure Collect_Conformances;
       procedure Validate_Composed_Conformances;
@@ -550,6 +556,8 @@ package body Landin.Stages.Checking is
            Landin.Checking.No_Signature;
          Reference    : Landin.Checking.Reference_Id :=
            Landin.Checking.No_Reference;
+         Concept      : Landin.Checking.Concept_Id :=
+           Landin.Checking.No_Concept;
          --  Nonzero only for [0990]'s anonymous structural aggregate: the
          --  source signature whose ordered named results form this value.
          Result_Shape : Landin.Checking.Signature_Id :=
@@ -1179,6 +1187,9 @@ package body Landin.Stages.Checking is
                  and then Left.Element_Nominal = Right.Element_Nominal;
             when Ty.Aggregate =>
                return Left.Nominal = Right.Nominal;
+            when Ty.Any_Value =>
+               return Left.Concept /= Landin.Checking.No_Concept
+                 and then Left.Concept = Right.Concept;
             when Ty.Function_Value =>
                return Left.Signature /= Landin.Checking.No_Signature
                  and then Right.Signature /= Landin.Checking.No_Signature
@@ -1224,6 +1235,9 @@ package body Landin.Stages.Checking is
             when Ty.Pointer_Value | Ty.Slice_Value =>
                return Landin.Checking.Reference_Type_Actual
                  (Types.all, Descriptor.Reference);
+            when Ty.Any_Value =>
+               return Landin.Checking.Any_Type_Actual
+                 (Types.all, Descriptor.Concept);
             when others =>
                raise Landin.Compiler_Defect with
                  "a non-concrete type became a nominal actual";
@@ -1282,6 +1296,12 @@ package body Landin.Stages.Checking is
                   Signature => Landin.Checking.Function_Signature_Of
                     (Types.all, Actual),
                   others    => <>);
+            when Landin.Checking.Any_Actual_Type =>
+               return
+                 (Kind => Ty.Any_Value,
+                  Concept => Landin.Checking.Any_Concept_Of
+                    (Types.all, Actual),
+                  others => <>);
             when Landin.Checking.Reference_Actual_Type =>
                declare
                   Reference : constant Landin.Checking.Reference_Id :=
@@ -1323,6 +1343,8 @@ package body Landin.Stages.Checking is
                Part.Nominal := Descriptor.Element_Nominal;
             when Ty.Aggregate =>
                Part.Nominal := Descriptor.Nominal;
+            when Ty.Any_Value =>
+               Part.Concept := Descriptor.Concept;
             when Ty.Function_Value =>
                Part.Signature := Descriptor.Signature;
             when others =>
@@ -1331,7 +1353,7 @@ package body Landin.Stages.Checking is
 
          if Descriptor.Kind in
            Ty.Scalar_Name | Ty.Pointer_Value | Ty.Slice_Value
-              | Ty.Atom_Value | Ty.Fixed_Array | Ty.Aggregate
+              | Ty.Atom_Value | Ty.Fixed_Array | Ty.Aggregate | Ty.Any_Value
               | Ty.Function_Value
            and then not Landin.Checking.Holds (Types.all, Part)
          then
@@ -1651,7 +1673,7 @@ package body Landin.Stages.Checking is
             elsif Got.Kind
               in Ty.Undecided | Ty.Scalar_Name | Ty.Pointer_Value
                  | Ty.Slice_Value | Ty.Atom_Value | Ty.Fixed_Array
-                 | Ty.Aggregate | Ty.Function_Value
+                 | Ty.Aggregate | Ty.Any_Value | Ty.Function_Value
             then
                --  Undecided is one symbolic type formal during declaration
                --  validation.  A concrete application never leaves it so.
@@ -1674,6 +1696,19 @@ package body Landin.Stages.Checking is
                     others => <>);
          end if;
 
+         if Syn.Kind (Of_Tree, Written) = Syn.Any_Type then
+            declare
+               Concept : constant Landin.Checking.Concept_Id :=
+                 Concept_For (Of_Tree, Syn.Any_Concept (Of_Tree, Written));
+            begin
+               if Concept = Landin.Checking.No_Concept then
+                  return Invalid;
+               end if;
+               return
+                 (Kind => Ty.Any_Value, Concept => Concept, others => <>);
+            end;
+         end if;
+
          if Syn.Kind (Of_Tree, Written)
               in Syn.Pointer_Type | Syn.Slice_Type
          then
@@ -1693,12 +1728,13 @@ package body Landin.Stages.Checking is
                   Element_Nominal => Target.Element_Nominal,
                   Reference => Target.Reference,
                   Signature => Target.Signature,
+                  Concept => Target.Concept,
                   Atoms => Target.Atoms);
             begin
                if Target.Kind not in
                  Ty.Scalar_Name | Ty.Pointer_Value | Ty.Slice_Value
                     | Ty.Atom_Value | Ty.Fixed_Array | Ty.Aggregate
-                    | Ty.Function_Value
+                    | Ty.Any_Value | Ty.Function_Value
                then
                   return Invalid;
                end if;
@@ -1856,7 +1892,7 @@ package body Landin.Stages.Checking is
                   elsif Descriptor.Kind
                     not in Ty.Scalar_Name | Ty.Pointer_Value | Ty.Slice_Value
                        | Ty.Atom_Value | Ty.Fixed_Array | Ty.Aggregate
-                       | Ty.Function_Value
+                       | Ty.Any_Value | Ty.Function_Value
                   then
                      Valid := False;
                   end if;
@@ -2051,6 +2087,12 @@ package body Landin.Stages.Checking is
                            Reference => Landin.Checking.Reference_Of
                              (Types.all, Means),
                            others    => <>);
+                     when Ty.Any_Value =>
+                        return
+                          (Kind => Held,
+                           Concept => Landin.Checking.Any_Concept_Of
+                             (Types.all, Means),
+                           others => <>);
                      when others =>
                         return (Kind => Held, others => <>);
                   end case;
@@ -2665,6 +2707,25 @@ package body Landin.Stages.Checking is
                            Element => Ty.Scalar_Name (Descriptor.Kind),
                            Length  => 1,
                            others  => <>);
+               when Ty.Any_Value =>
+                  if Descriptor.Concept = Landin.Checking.No_Concept then
+                     Valid := False;
+                  else
+                     declare
+                        Reference : constant Landin.Checking.Reference_Id :=
+                          Landin.Checking.Add_Reference
+                            (Types.all,
+                             (Kind => Ty.Any_Value,
+                              Referent => Ty.Ill_Typed,
+                              Concept => Descriptor.Concept,
+                              others => <>));
+                     begin
+                        Into :=
+                          (Kind => Landin.Checking.Reference_Field,
+                           Element => Ty.Usize, Length => 1,
+                           Reference => Reference, others => <>);
+                     end;
+                  end if;
                when Ty.Function_Value =>
                   if Descriptor.Signature = Landin.Checking.No_Signature then
                      Valid := False;
@@ -3108,6 +3169,9 @@ package body Landin.Stages.Checking is
                   when Ty.Atom_Value =>
                      Landin.Checking.Note_Atom_Set
                        (Types.all, Of_Tree, Written, Result.Atoms);
+                  when Ty.Any_Value =>
+                     Landin.Checking.Note_Any_Concept
+                       (Types.all, Of_Tree, Written, Result.Concept);
                   when Ty.Function_Value =>
                      Landin.Checking.Note_Signature
                        (Types.all, Of_Tree, Written, Result.Signature);
@@ -3203,6 +3267,41 @@ package body Landin.Stages.Checking is
             end;
          end if;
 
+         if Syn.Kind (Of_Tree, Written) = Syn.Any_Type then
+            if Landin.Checking.Any_Concept_Of
+                 (Types.all, Of_Tree, Written) /= Landin.Checking.No_Concept
+            then
+               return Ty.Any_Value;
+            end if;
+            declare
+               Concept : constant Landin.Checking.Concept_Id :=
+                 Concept_For (Of_Tree, Syn.Any_Concept (Of_Tree, Written));
+            begin
+               if Concept = Landin.Checking.No_Concept
+                 or else Landin.Checking.Is_Compiler_Concept
+                   (Types.all, Concept)
+               then
+                  if Concept /= Landin.Checking.No_Concept then
+                     Bad.Report
+                       (Item => Bad.Type_Mismatch,
+                        Source => Syn.Source_Of (Of_Tree),
+                        Where => Syn.Where (Of_Tree, Written),
+                        Message => "`any` requires a source concept with"
+                                   & " runtime entries",
+                        Note => "[1370]: runtime dispatch carries one"
+                                & " declared concept table",
+                        Related => Syn.Origin (Of_Tree, Written),
+                        Because => "this erased type",
+                        Into => Found);
+                  end if;
+                  return Ty.Ill_Typed;
+               end if;
+               Landin.Checking.Note_Any_Concept
+                 (Types.all, Of_Tree, Written, Concept);
+               return Ty.Any_Value;
+            end;
+         end if;
+
          --  [0430]/[0570]: a reference carries one target-neutral
          --  descriptor.  Pointer width and slice layout remain target facts;
          --  this records only shallow permission and the referred language
@@ -3259,6 +3358,10 @@ package body Landin.Stages.Checking is
                        (Types.all, Of_Tree, Referred);
                      Valid := Item.Nominal
                        /= Landin.Checking.No_Nominal_Type;
+                  when Ty.Any_Value =>
+                     Item.Concept := Landin.Checking.Any_Concept_Of
+                       (Types.all, Of_Tree, Referred);
+                     Valid := Item.Concept /= Landin.Checking.No_Concept;
                   when Ty.Function_Value =>
                      Item.Signature := Landin.Checking.Signature_Of
                        (Types.all, Of_Tree, Referred);
@@ -3417,6 +3520,32 @@ package body Landin.Stages.Checking is
                               Length    => 1,
                               Reference => Reference,
                               others    => <>);
+                        end if;
+                     end;
+                  elsif Held = Ty.Any_Value then
+                     declare
+                        Concept : constant Landin.Checking.Concept_Id :=
+                          Landin.Checking.Any_Concept_Of
+                            (Types.all, Of_Tree,
+                             Syn.Declared_Type (Of_Tree, Each));
+                        Reference : Landin.Checking.Reference_Id :=
+                          Landin.Checking.No_Reference;
+                     begin
+                        if Concept /= Landin.Checking.No_Concept then
+                           Reference := Landin.Checking.Add_Reference
+                             (Types.all,
+                              (Kind => Ty.Any_Value,
+                               Referent => Ty.Ill_Typed,
+                               Concept => Concept,
+                               others => <>));
+                        end if;
+                        if Reference = Landin.Checking.No_Reference then
+                           Can_Lay_Out := False;
+                        else
+                           Into :=
+                             (Kind => Landin.Checking.Reference_Field,
+                              Element => Ty.Usize, Length => 1,
+                              Reference => Reference, others => <>);
                         end if;
                      end;
                   elsif Held = Ty.Function_Value then
@@ -3915,6 +4044,10 @@ package body Landin.Stages.Checking is
                   Landin.Checking.Note_Reference
                     (Types.all, Of_Tree, Written,
                      Landin.Checking.Reference_Of (Types.all, Means));
+               elsif Held = Ty.Any_Value then
+                  Landin.Checking.Note_Any_Concept
+                    (Types.all, Of_Tree, Written,
+                     Landin.Checking.Any_Concept_Of (Types.all, Means));
                elsif Held = Ty.Atom_Value then
                   Landin.Checking.Note_Atom_Set
                     (Types.all, Of_Tree, Written,
@@ -4003,6 +4136,11 @@ package body Landin.Stages.Checking is
                     (Types.all, Of_Tree, Written);
                   Valid := Valid
                     and then Part.Reference /= Landin.Checking.No_Reference;
+               when Ty.Any_Value =>
+                  Part.Concept := Landin.Checking.Any_Concept_Of
+                    (Types.all, Of_Tree, Written);
+                  Valid := Valid
+                    and then Part.Concept /= Landin.Checking.No_Concept;
                when Ty.Function_Value =>
                   --  A function-valued position is one code-address carrier;
                   --  its own structural descriptor remains language type
@@ -4212,7 +4350,7 @@ package body Landin.Stages.Checking is
                              (Landin.Targets.Bytes (Scalar));
                            Alignment := Landin.Targets.Alignment_Of
                              (Facts, Scalar);
-                        when Ty.Slice_Value =>
+                        when Ty.Slice_Value | Ty.Any_Value =>
                            Scalar := Landin.Targets.Pointer_Size (Facts);
                            Size := 2 * Landin.Targets.Byte_Count
                              (Landin.Targets.Bytes (Scalar));
@@ -4968,6 +5106,11 @@ package body Landin.Stages.Checking is
                     (Types.all, Id,
                      Landin.Checking.Reference_Of
                        (Types.all, Of_Tree.all, Written));
+               elsif Held = Ty.Any_Value then
+                  Landin.Checking.Note_Any_Concept
+                    (Types.all, Id,
+                     Landin.Checking.Any_Concept_Of
+                       (Types.all, Of_Tree.all, Written));
                end if;
 
                return Held;
@@ -5533,6 +5676,12 @@ package body Landin.Stages.Checking is
                      Reference => Landin.Checking.Reference_Of
                        (Types.all, Of_Tree, Node),
                      others => <>);
+               when Ty.Any_Value =>
+                  return
+                    (Kind => Kind,
+                     Concept => Landin.Checking.Any_Concept_Of
+                       (Types.all, Of_Tree, Node),
+                     others => <>);
                when others =>
                   return (Kind => Ty.Ill_Typed, others => <>);
             end case;
@@ -5656,6 +5805,12 @@ package body Landin.Stages.Checking is
                      Descriptor.Reference);
                   Landin.Checking.Note_Reference
                     (Types.all, Declaration, Descriptor.Reference);
+               when Ty.Any_Value =>
+                  Landin.Checking.Note_Any_Concept
+                    (Types.all, Template_Tree.all, Node,
+                     Descriptor.Concept);
+                  Landin.Checking.Note_Any_Concept
+                    (Types.all, Declaration, Descriptor.Concept);
                when others =>
                   null;
             end case;
@@ -6083,6 +6238,12 @@ package body Landin.Stages.Checking is
                      others          => <>);
                when Ty.Aggregate =>
                   return (Kind => Part.Kind, Nominal => Part.Nominal,
+                          others => <>);
+               when Ty.Pointer_Value | Ty.Slice_Value =>
+                  return (Kind => Part.Kind, Reference => Part.Reference,
+                          others => <>);
+               when Ty.Any_Value =>
+                  return (Kind => Part.Kind, Concept => Part.Concept,
                           others => <>);
                when Ty.Function_Value =>
                   return (Kind => Part.Kind, Signature => Part.Signature,
@@ -6908,7 +7069,7 @@ package body Landin.Stages.Checking is
                      if Descriptor.Kind not in
                        Ty.Scalar_Name | Ty.Pointer_Value | Ty.Slice_Value
                           | Ty.Atom_Value | Ty.Fixed_Array | Ty.Aggregate
-                          | Ty.Function_Value
+                          | Ty.Any_Value | Ty.Function_Value
                      then
                         Valid := False;
                      end if;
@@ -7540,9 +7701,17 @@ package body Landin.Stages.Checking is
          Node    : Syn.Node_Id;
          Signature : Landin.Checking.Signature_Id) return Ty.Type_Kind
       is
-         Wanted : constant Natural :=
+         Callee : constant Syn.Node_Id := Syn.Callee_Of (Of_Tree, Node);
+         Erased_Self : constant Boolean :=
+           Syn.Kind (Of_Tree, Callee) = Syn.Member_Selection
+           and then Landin.Checking.Type_Of
+             (Types.all, Of_Tree, Syn.Target_Of (Of_Tree, Callee))
+               = Ty.Any_Value;
+         Offset : constant Natural := (if Erased_Self then 1 else 0);
+         Total_Parameters : constant Natural :=
            Landin.Checking.Signature_Parameter_Count
              (Types.all, Signature);
+         Wanted : constant Natural := Total_Parameters - Offset;
          Written_Count : constant Natural :=
            Syn.Argument_Count (Of_Tree, Node);
          Result_Count : constant Natural :=
@@ -7639,7 +7808,7 @@ package body Landin.Stages.Checking is
                   else
                      for Formal in 1 .. Wanted loop
                         if Landin.Checking.Nth_Signature_Parameter
-                          (Types.all, Signature, Formal).Name = Label
+                          (Types.all, Signature, Formal + Offset).Name = Label
                         then
                            Position := Formal;
                            exit;
@@ -7667,7 +7836,7 @@ package body Landin.Stages.Checking is
                      declare
                         Parameter : constant Landin.Checking.Signature_Part :=
                           Landin.Checking.Nth_Signature_Parameter
-                            (Types.all, Signature, Position);
+                            (Types.all, Signature, Position + Offset);
                      begin
                         if Seen (Position) then
                            Bad.Report
@@ -7709,7 +7878,7 @@ package body Landin.Stages.Checking is
                         end if;
                         Res.Match_Runtime_Argument
                           (Meanings.all, Of_Tree, Argument,
-                           Positive (Position));
+                           Positive (Position + Offset));
                      end;
                   end if;
                end;
@@ -7720,7 +7889,7 @@ package body Landin.Stages.Checking is
                   declare
                      Parameter : constant Landin.Checking.Signature_Part :=
                        Landin.Checking.Nth_Signature_Parameter
-                         (Types.all, Signature, Position);
+                         (Types.all, Signature, Position + Offset);
                   begin
                      Bad.Report
                        (Item    => Bad.Type_Mismatch,
@@ -7769,7 +7938,7 @@ package body Landin.Stages.Checking is
                   then Positive
                     (Res.Position_Of
                        (Meanings.all, Of_Tree, Raw_Argument))
-                  else Written);
+                  else Written + Offset);
                Parameter : constant Landin.Checking.Signature_Part :=
                  Landin.Checking.Nth_Signature_Parameter
                    (Types.all, Signature, Position);
@@ -7826,7 +7995,7 @@ package body Landin.Stages.Checking is
 
                if Wants in Ty.Aggregate | Ty.Fixed_Array | Ty.Function_Value
                               | Ty.Pointer_Value | Ty.Slice_Value
-                              | Ty.Atom_Value
+                              | Ty.Atom_Value | Ty.Any_Value
                  and then Syn.Kind (Of_Tree, Argument)
                             in Syn.If_Statement | Syn.Match_Statement
                                | Syn.Bare_Block
@@ -7847,6 +8016,8 @@ package body Landin.Stages.Checking is
                            Expected.Reference := Parameter.Reference;
                         when Ty.Atom_Value =>
                            Expected.Atoms := Parameter.Atoms;
+                        when Ty.Any_Value =>
+                           Expected.Concept := Parameter.Concept;
                         when others =>
                            raise Landin.Compiler_Defect;
                      end case;
@@ -7854,6 +8025,12 @@ package body Landin.Stages.Checking is
                        (Of_Tree, Argument, Expected, Parameter.Site,
                         "this parameter");
                   end;
+               elsif Wants = Ty.Any_Value then
+                  Check_Contextual_Value
+                    (Of_Tree, Argument,
+                     (Kind => Ty.Any_Value, Concept => Parameter.Concept,
+                      others => <>),
+                     Parameter.Site, "this runtime-dispatch parameter");
                elsif Wants in Ty.Pointer_Value | Ty.Slice_Value then
                   declare
                      Got : constant Ty.Type_Kind :=
@@ -8138,6 +8315,8 @@ package body Landin.Stages.Checking is
                         Expected.Signature := Result.Signature;
                      when Ty.Pointer_Value | Ty.Slice_Value =>
                         Expected.Reference := Result.Reference;
+                     when Ty.Any_Value =>
+                        Expected.Concept := Result.Concept;
                      when others =>
                         null;
                   end case;
@@ -8176,6 +8355,9 @@ package body Landin.Stages.Checking is
          elsif Result.Kind = Ty.Fixed_Array then
             Landin.Checking.Note_Array
               (Types.all, Of_Tree, Node, Result.Length, Result.Element);
+         elsif Result.Kind = Ty.Any_Value then
+            Landin.Checking.Note_Any_Concept
+              (Types.all, Of_Tree, Node, Result.Concept);
          elsif Result.Kind = Ty.Function_Value then
             Landin.Checking.Note_Signature
               (Types.all, Of_Tree, Node, Result.Signature);
@@ -8351,6 +8533,12 @@ package body Landin.Stages.Checking is
                  (Types.all, Of_Tree, Node, Part.Length, Part.Element);
                Landin.Checking.Note_Array_Element_Nominal
                  (Types.all, Of_Tree, Node, Part.Nominal);
+            when Ty.Pointer_Value | Ty.Slice_Value =>
+               Landin.Checking.Note_Reference
+                 (Types.all, Of_Tree, Node, Part.Reference);
+            when Ty.Any_Value =>
+               Landin.Checking.Note_Any_Concept
+                 (Types.all, Of_Tree, Node, Part.Concept);
             when Ty.Function_Value =>
                Landin.Checking.Note_Signature
                  (Types.all, Of_Tree, Node, Part.Signature);
@@ -8387,6 +8575,10 @@ package body Landin.Stages.Checking is
                     (Types.all, Of_Tree, Node, Descriptor.Kind);
                   Landin.Checking.Note_Reference
                     (Types.all, Of_Tree, Node, Shape.Reference);
+                  if Descriptor.Kind = Ty.Any_Value then
+                     Landin.Checking.Note_Any_Concept
+                       (Types.all, Of_Tree, Node, Descriptor.Concept);
+                  end if;
                end;
             end if;
             return Landin.Checking.Descriptor_Of
@@ -8445,6 +8637,9 @@ package body Landin.Stages.Checking is
             when Ty.Aggregate =>
                Landin.Checking.Note_Nominal
                  (Types.all, Of_Tree, Node, Item.Nominal);
+            when Ty.Any_Value =>
+               Landin.Checking.Note_Any_Concept
+                 (Types.all, Of_Tree, Node, Item.Concept);
             when Ty.Function_Value =>
                Landin.Checking.Note_Signature
                  (Types.all, Of_Tree, Node, Item.Signature);
@@ -8785,6 +8980,321 @@ package body Landin.Stages.Checking is
             end;
          end;
       end Evidence_Selection_Signature;
+
+      function Any_Selection_Signature
+        (Of_Tree : Syn.Tree; Selection : Syn.Node_Id)
+         return Landin.Checking.Signature_Id
+      is
+         From : constant Syn.Node_Id := Syn.Target_Of (Of_Tree, Selection);
+         Root : Landin.Checking.Concept_Id := Landin.Checking.No_Concept;
+         Declaring : Landin.Checking.Concept_Id :=
+           Landin.Checking.No_Concept;
+         Root_Evidence : Landin.Checking.Conformance_Id :=
+           Landin.Checking.No_Conformance;
+         Declaring_Evidence : Landin.Checking.Conformance_Id :=
+           Landin.Checking.No_Conformance;
+         Direct_Entry : Natural := 0;
+         Flat_Entry : Natural := 0;
+         Cursor : Natural := 0;
+         Matches : Natural := 0;
+         Seen : array
+           (1 .. Positive'Max (1, Landin.Checking.Concept_Count (Types.all)))
+           of Boolean := [others => False];
+
+         procedure Visit (Concept : Landin.Checking.Concept_Id);
+
+         procedure Visit (Concept : Landin.Checking.Concept_Id) is
+         begin
+            if Concept = Landin.Checking.No_Concept
+              or else Landin.Checking.Is_Compiler_Concept
+                (Types.all, Concept)
+            then
+               return;
+            end if;
+            declare
+               Position : constant Positive :=
+                 Landin.Checking.Concept_Identities.Position
+                   (Types.all, Concept);
+            begin
+               if Seen (Position) then
+                  return;
+               end if;
+               Seen (Position) := True;
+            end;
+            declare
+               Declaration : constant Res.Declaration_Id :=
+                 Landin.Checking.Concept_Declaration (Types.all, Concept);
+               Concept_Tree : constant not null access constant Syn.Tree :=
+                 Tree_For (Res.Source_Of (Meanings.all, Declaration));
+               Concept_Node : constant Syn.Node_Id :=
+                 Res.Node_Of (Meanings.all, Declaration);
+            begin
+               for Position in 1 .. Syn.Concept_Entry_Count
+                 (Concept_Tree.all, Concept_Node)
+               loop
+                  Cursor := Cursor + 1;
+                  if Syn.Name
+                    (Concept_Tree.all,
+                     Syn.Nth_Concept_Entry
+                       (Concept_Tree.all, Concept_Node, Position))
+                       = Syn.Name (Of_Tree, Selection)
+                  then
+                     Matches := Matches + 1;
+                     Declaring := Concept;
+                     Direct_Entry := Position;
+                     Flat_Entry := Cursor;
+                  end if;
+               end loop;
+               declare
+                  Represented : constant Syn.Node_Id :=
+                    Syn.Nth_Concept_Formal
+                      (Concept_Tree.all, Concept_Node, 1);
+                  Required : constant Syn.Node_Id :=
+                    Syn.Constraint_Of (Concept_Tree.all, Represented);
+               begin
+                  if Required /= Syn.No_Node then
+                     Visit (Concept_For (Concept_Tree.all, Required));
+                  end if;
+               end;
+               for Parent in 1 .. Syn.Concept_Parent_Count
+                 (Concept_Tree.all, Concept_Node)
+               loop
+                  Visit
+                    (Concept_For
+                       (Concept_Tree.all,
+                        Syn.Nth_Concept_Parent
+                          (Concept_Tree.all, Concept_Node, Parent)));
+               end loop;
+            end;
+         end Visit;
+      begin
+         if Selected_From (Of_Tree, From) /= Ty.Any_Value then
+            return Landin.Checking.No_Signature;
+         end if;
+         declare
+            Immediate : Boolean := False;
+         begin
+            for Candidate in Syn.Node_Id'(1) .. Syn.Last_Node (Of_Tree) loop
+               if Syn.Kind (Of_Tree, Candidate)
+                    in Syn.Call | Syn.Labeled_Application
+                 and then Syn.Callee_Of (Of_Tree, Candidate) = Selection
+               then
+                  Immediate := True;
+                  exit;
+               end if;
+            end loop;
+            if not Immediate then
+               Bad.Report
+                 (Item => Bad.Type_Mismatch,
+                  Source => Syn.Source_Of (Of_Tree),
+                  Where => Syn.Where (Of_Tree, Selection),
+                  Message => "an erased entry is called immediately; it is"
+                             & " not a bound function value",
+                  Note => "D146/D147: the two-word pair has no third"
+                          & " receiver word for a stored method",
+                  Related => Syn.Origin (Of_Tree, From),
+                  Because => "the erased receiver",
+                  Into => Found);
+               Landin.Checking.Refuse (Types.all, Of_Tree, Selection);
+               return Landin.Checking.No_Signature;
+            end if;
+         end;
+         Root := Landin.Checking.Any_Concept_Of (Types.all, Of_Tree, From);
+         if Root = Landin.Checking.No_Concept then
+            return Landin.Checking.No_Signature;
+         end if;
+         Visit (Root);
+         if Matches = 0 then
+            Bad.Report
+              (Item => Bad.Unresolved_Field,
+               Source => Syn.Source_Of (Of_Tree),
+               Where => Syn.Anchor (Of_Tree, Selection),
+               Message => "this runtime concept has no entry called `"
+                          & Spelled (Syn.Name (Of_Tree, Selection)) & "`",
+               Note => "[1390]: an `any` member names one concept entry",
+               Into => Found);
+            Landin.Checking.Refuse (Types.all, Of_Tree, Selection);
+            return Landin.Checking.No_Signature;
+         elsif Matches > 1 then
+            Bad.Report
+              (Item => Bad.Type_Mismatch,
+               Source => Syn.Source_Of (Of_Tree),
+               Where => Syn.Anchor (Of_Tree, Selection),
+               Message => "this runtime entry name is inherited more than"
+                          & " once",
+               Note => "D145: an `any` dispatch name is unique across its"
+                       & " finite concept closure",
+               Related => Syn.Origin (Of_Tree, From),
+               Because => "the runtime-dispatch value",
+               Into => Found);
+            Landin.Checking.Refuse (Types.all, Of_Tree, Selection);
+            return Landin.Checking.No_Signature;
+         end if;
+
+         declare
+            Declaration : constant Res.Declaration_Id :=
+              Landin.Checking.Concept_Declaration (Types.all, Declaring);
+            Concept_Tree : constant not null access constant Syn.Tree :=
+              Tree_For (Res.Source_Of (Meanings.all, Declaration));
+            Concept_Node : constant Syn.Node_Id :=
+              Res.Node_Of (Meanings.all, Declaration);
+            Represented : constant Syn.Node_Id := Syn.Nth_Concept_Formal
+              (Concept_Tree.all, Concept_Node, 1);
+            Formal : constant Res.Declaration_Id := Declaration_At
+              (Syn.Source_Of (Concept_Tree.all), Represented);
+            Entry_Node : constant Syn.Node_Id := Syn.Nth_Concept_Entry
+              (Concept_Tree.all, Concept_Node, Positive (Direct_Entry));
+            Safe : Boolean := True;
+
+            function Uses_Formal (Node : Syn.Node_Id) return Boolean;
+
+            function Uses_Formal (Node : Syn.Node_Id) return Boolean is
+            begin
+               if Node = Syn.No_Node then
+                  return False;
+               end if;
+               if Syn.Kind (Concept_Tree.all, Node)
+                    in Syn.Type_Reference | Syn.Name_Reference
+                 and then Res.Verdict_Of
+                   (Meanings.all, Concept_Tree.all, Node) = Res.Bound
+                 and then Res.Bound_To
+                   (Meanings.all, Concept_Tree.all, Node) = Formal
+               then
+                  return True;
+               end if;
+               for Slot in 1 .. Syn.Slot_Count (Concept_Tree.all, Node) loop
+                  if Uses_Formal
+                    (Syn.Slot (Concept_Tree.all, Node, Slot))
+                  then
+                     return True;
+                  end if;
+               end loop;
+               return False;
+            end Uses_Formal;
+         begin
+            if Syn.Parameter_Count (Concept_Tree.all, Entry_Node) = 0 then
+               Safe := False;
+            else
+               declare
+                  Self : constant Syn.Node_Id := Syn.Nth_Parameter
+                    (Concept_Tree.all, Entry_Node, 1);
+                  Self_Type : constant Syn.Node_Id :=
+                    Syn.Declared_Type (Concept_Tree.all, Self);
+               begin
+                  Safe := Spelled (Syn.Name (Concept_Tree.all, Self)) = "self"
+                    and then Semantic_Convention (Concept_Tree.all, Self)
+                      = Syn.Implicit_In
+                    and then Syn.Kind (Concept_Tree.all, Self_Type)
+                      = Syn.Pointer_Type
+                    and then Syn.Kind
+                      (Concept_Tree.all,
+                       Syn.Referenced_Type (Concept_Tree.all, Self_Type))
+                         in Syn.Type_Reference | Syn.Name_Reference
+                    and then Res.Verdict_Of
+                      (Meanings.all, Concept_Tree.all,
+                       Syn.Referenced_Type (Concept_Tree.all, Self_Type))
+                         = Res.Bound
+                    and then Res.Bound_To
+                      (Meanings.all, Concept_Tree.all,
+                       Syn.Referenced_Type (Concept_Tree.all, Self_Type))
+                         = Formal;
+               end;
+            end if;
+            for Parameter in 2 .. Syn.Parameter_Count
+              (Concept_Tree.all, Entry_Node)
+            loop
+               Safe := Safe and then not Uses_Formal
+                 (Syn.Declared_Type
+                    (Concept_Tree.all,
+                     Syn.Nth_Parameter
+                       (Concept_Tree.all, Entry_Node, Parameter)));
+            end loop;
+            for Result in 1 .. Syn.Return_Count
+              (Concept_Tree.all, Entry_Node)
+            loop
+               Safe := Safe and then not Uses_Formal
+                 (Syn.Declared_Type
+                    (Concept_Tree.all,
+                     Syn.Nth_Return (Concept_Tree.all, Entry_Node, Result)));
+            end loop;
+            if not Safe then
+               Bad.Report
+                 (Item => Bad.Type_Mismatch,
+                  Source => Syn.Source_Of (Of_Tree),
+                  Where => Syn.Where (Of_Tree, Selection),
+                  Message => "this concept entry has no object-safe erased"
+                             & " self signature",
+                  Note => "D146: first `self` is an input `ptr [mut] T` and"
+                          & " hidden T appears nowhere else",
+                  Related => Syn.Origin (Concept_Tree.all, Entry_Node),
+                  Because => "the selected concept entry",
+                  Into => Found);
+               Landin.Checking.Refuse (Types.all, Of_Tree, Selection);
+               return Landin.Checking.No_Signature;
+            end if;
+         end;
+
+         for Position in 1 .. Landin.Checking.Conformance_Count
+           (Types.all)
+         loop
+            declare
+               Candidate : constant Landin.Checking.Conformance_Id :=
+                 Landin.Checking.Conformance_Identities.Nth
+                   (Types.all, Position);
+            begin
+               if Landin.Checking.Conformance_Concept
+                 (Types.all, Candidate) = Root
+               then
+                  Root_Evidence := Candidate;
+                  exit;
+               end if;
+            end;
+         end loop;
+         if Root_Evidence = Landin.Checking.No_Conformance then
+            Bad.Report
+              (Item => Bad.Type_Mismatch,
+               Source => Syn.Source_Of (Of_Tree),
+               Where => Syn.Where (Of_Tree, Selection),
+               Message => "this closed program has no concrete runtime"
+                          & " table for the selected concept",
+               Note => "D145: an erased call dispatches one collected exact"
+                       & " conformance",
+               Related => Syn.Origin (Of_Tree, From),
+               Because => "the erased receiver",
+               Into => Found);
+            Landin.Checking.Refuse (Types.all, Of_Tree, Selection);
+            return Landin.Checking.No_Signature;
+         end if;
+         Declaring_Evidence := Landin.Checking.Find_Conformance
+           (Types.all, Declaring,
+            Landin.Checking.Conformance_Target (Types.all, Root_Evidence),
+            Landin.Checking.Empty_Actuals);
+         if Declaring_Evidence = Landin.Checking.No_Conformance
+           or else Direct_Entry = 0
+         then
+            return Landin.Checking.No_Signature;
+         end if;
+         declare
+            Instance : constant Landin.Checking.Routine_Instance_Id :=
+              Landin.Checking.Conformance_Provider_Instance
+                (Types.all, Declaring_Evidence, Positive (Direct_Entry));
+            Provider : constant Res.Declaration_Id :=
+              Landin.Checking.Conformance_Provider_Declaration
+                (Types.all, Declaring_Evidence, Positive (Direct_Entry));
+            Signature : constant Landin.Checking.Signature_Id :=
+              (if Instance /= Landin.Checking.No_Routine_Instance
+               then Landin.Checking.Routine_Signature_Of
+                 (Types.all, Instance)
+               else Landin.Checking.Signature_Of (Types.all, Provider));
+         begin
+            Landin.Checking.Note_Any_Dispatch
+              (Types.all, Of_Tree, Selection, Root_Evidence,
+               Positive (Flat_Entry));
+            Landin.Checking.Note_Signature
+              (Types.all, Of_Tree, Selection, Signature);
+            return Signature;
+         end;
+      end Any_Selection_Signature;
 
       procedure Collect_Concepts is
          type Visit_State is (Unseen, Visiting, Complete, Invalid);
@@ -11652,7 +12162,7 @@ package body Landin.Stages.Checking is
                      end if;
 
                      if Held in Ty.Scalar_Name | Ty.Fixed_Array
-                        | Ty.Pointer_Value | Ty.Slice_Value
+                        | Ty.Pointer_Value | Ty.Slice_Value | Ty.Any_Value
                        or else
                          (Held = Ty.Aggregate
                           and then Landin.Checking.Nominal_Of
@@ -11903,6 +12413,12 @@ package body Landin.Stages.Checking is
                           (Types.all, Of_Tree, Node,
                            Landin.Checking.Reference_Of (Types.all, Means));
                         return Kept (Held);
+                     elsif Held = Ty.Any_Value then
+                        Landin.Checking.Note_Any_Concept
+                          (Types.all, Of_Tree, Node,
+                           Landin.Checking.Any_Concept_Of
+                             (Types.all, Means));
+                        return Kept (Ty.Any_Value);
                      elsif Held = Ty.Function_Value then
                         Landin.Checking.Note_Signature
                           (Types.all, Of_Tree, Node,
@@ -12164,16 +12680,29 @@ package body Landin.Stages.Checking is
                   Evidence_Signature : constant
                     Landin.Checking.Signature_Id :=
                       Evidence_Selection_Signature (Of_Tree, Node);
+                  Any_Signature : constant Landin.Checking.Signature_Id :=
+                    (if Evidence_Signature
+                           /= Landin.Checking.No_Signature
+                     then Landin.Checking.No_Signature
+                     else Any_Selection_Signature (Of_Tree, Node));
                   Held : constant Ty.Type_Kind :=
                     (if Evidence_Signature
+                          /= Landin.Checking.No_Signature
+                       or else Any_Signature
                           /= Landin.Checking.No_Signature
                      then Ty.Function_Value
                      else Selected_From (Of_Tree, From));
                begin
                   if Evidence_Signature
                        /= Landin.Checking.No_Signature
+                    or else Any_Signature
+                       /= Landin.Checking.No_Signature
                   then
                      return Kept (Ty.Function_Value);
+                  elsif Landin.Checking.Type_Of
+                    (Types.all, Of_Tree, Node) = Ty.Ill_Typed
+                  then
+                     return Ty.Ill_Typed;
                   elsif Held = Ty.Ill_Typed then
                      return Kept (Ty.Ill_Typed);
                   end if;
@@ -12415,6 +12944,11 @@ package body Landin.Stages.Checking is
                           (Types.all, Of_Tree, Operand),
                         Landin.Checking.Array_Element
                           (Types.all, Of_Tree, Operand));
+                  elsif Held = Ty.Any_Value then
+                     Landin.Checking.Note_Any_Concept
+                       (Types.all, Of_Tree, Node,
+                        Landin.Checking.Any_Concept_Of
+                          (Types.all, Of_Tree, Operand));
                   elsif Held = Ty.Function_Value then
                      Landin.Checking.Note_Signature
                        (Types.all, Of_Tree, Node,
@@ -12607,6 +13141,9 @@ package body Landin.Stages.Checking is
                      when Ty.Aggregate =>
                         Item.Nominal := Landin.Checking.Nominal_Of
                           (Types.all, Of_Tree, Place);
+                     when Ty.Any_Value =>
+                        Item.Concept := Landin.Checking.Any_Concept_Of
+                          (Types.all, Of_Tree, Place);
                      when Ty.Function_Value =>
                         Item.Signature := Landin.Checking.Signature_Of
                           (Types.all, Of_Tree, Place);
@@ -12621,6 +13158,86 @@ package body Landin.Stages.Checking is
                        (Types.all, Of_Tree, Node, Made);
                      return Kept (Ty.Pointer_Value);
                   end;
+               end;
+
+            when Syn.Any_Construction =>
+               declare
+                  Value : constant Syn.Node_Id :=
+                    Syn.Operand_Of (Of_Tree, Node);
+                  Got : constant Ty.Type_Kind := Synthesise (Of_Tree, Value);
+                  Candidate : Landin.Checking.Concept_Id :=
+                    Landin.Checking.No_Concept;
+                  Count : Natural := 0;
+               begin
+                  if Got = Ty.Pointer_Value then
+                     declare
+                        Pointer : constant Landin.Checking.Reference_Id :=
+                          Landin.Checking.Reference_Of
+                            (Types.all, Of_Tree, Value);
+                        Descriptor : constant
+                          Landin.Checking.Reference_Descriptor :=
+                            Landin.Checking.Descriptor_Of
+                              (Types.all, Pointer);
+                        Target : constant Type_Descriptor :=
+                          (Kind => Descriptor.Referent,
+                           Nominal => Descriptor.Nominal,
+                           Length => Descriptor.Length,
+                           Element => Descriptor.Element,
+                           Element_Nominal => Descriptor.Element_Nominal,
+                           Atoms => Descriptor.Atoms,
+                           Signature => Descriptor.Signature,
+                           Reference => Descriptor.Reference,
+                           Concept => Descriptor.Concept,
+                           others => <>);
+                     begin
+                        for Position in 1 .. Landin.Checking.Concept_Count
+                          (Types.all)
+                        loop
+                           declare
+                              Concept : constant Landin.Checking.Concept_Id :=
+                                Landin.Checking.Concept_Identities.Nth
+                                  (Types.all, Position);
+                           begin
+                              if not Landin.Checking.Is_Compiler_Concept
+                                (Types.all, Concept)
+                                and then Landin.Checking.Find_Conformance
+                                  (Types.all, Concept, Actual_For (Target),
+                                   Landin.Checking.Empty_Actuals)
+                                    /= Landin.Checking.No_Conformance
+                              then
+                                 Count := Count + 1;
+                                 Candidate := Concept;
+                              end if;
+                           end;
+                        end loop;
+                     end;
+                  end if;
+                  if Count = 1 then
+                     Check_Contextual_Value
+                       (Of_Tree, Node,
+                        (Kind => Ty.Any_Value, Concept => Candidate,
+                         others => <>),
+                        Syn.Origin (Of_Tree, Node),
+                        "the unique exact conformance of this pointer");
+                     return Kept
+                       (Landin.Checking.Type_Of (Types.all, Of_Tree, Node));
+                  end if;
+                  Bad.Report
+                    (Item    => Bad.Type_Mismatch,
+                     Source  => Syn.Source_Of (Of_Tree),
+                     Where   => Syn.Where (Of_Tree, Node),
+                     Message =>
+                       (if Count = 0
+                        then "`any(pointer)` has no exact runtime concept"
+                        else "`any(pointer)` has more than one exact runtime"
+                             & " concept"),
+                     Note    => "[1380]: write an `any C` context when the"
+                                & " concrete pointer does not select exactly"
+                                & " one conformance",
+                     Related => Syn.Origin (Of_Tree, Value),
+                     Because => "the erased pointer",
+                     Into    => Found);
+                  return Kept (Ty.Ill_Typed);
                end;
 
             when Syn.Pointer_Conversion =>
@@ -13582,14 +14199,22 @@ package body Landin.Stages.Checking is
                                  end if;
 
                               when Landin.Checking.Reference_Field =>
-                                 Check_Contextual_Value
-                                   (Of_Tree, Given,
-                                    (Kind => Landin.Checking.Descriptor_Of
-                                       (Types.all, Shape.Reference).Kind,
-                                     Reference => Shape.Reference,
-                                     others => <>),
-                                    Syn.Origin (Of_Tree, Label),
-                                    "the variant payload field named here");
+                                 declare
+                                    Descriptor : constant Landin.Checking
+                                      .Reference_Descriptor :=
+                                        Landin.Checking.Descriptor_Of
+                                          (Types.all, Shape.Reference);
+                                 begin
+                                    Check_Contextual_Value
+                                      (Of_Tree, Given,
+                                       (Kind => Descriptor.Kind,
+                                        Reference => Shape.Reference,
+                                        Concept => Descriptor.Concept,
+                                        others => <>),
+                                       Syn.Origin (Of_Tree, Label),
+                                       "the variant payload field named"
+                                       & " here");
+                                 end;
 
                               when Landin.Checking.Fixed_Array_Field =>
                                  Check_Fixed_Array_Payload
@@ -14291,14 +14916,22 @@ package body Landin.Stages.Checking is
                              Landin.Checking.Field_Shape_Of
                                (Types.all, Wrote, Which);
                         begin
-                           Check_Contextual_Value
-                             (Of_Tree, Value,
-                              (Kind => Landin.Checking.Descriptor_Of
-                                 (Types.all, Shape.Reference).Kind,
-                               Reference => Shape.Reference,
-                               others => <>),
-                              Syn.Origin (Of_Tree, Field),
-                              "the reference struct field named here");
+                           declare
+                              Descriptor : constant
+                                Landin.Checking.Reference_Descriptor :=
+                                  Landin.Checking.Descriptor_Of
+                                    (Types.all, Shape.Reference);
+                           begin
+                              Check_Contextual_Value
+                                (Of_Tree, Value,
+                                 (Kind => Descriptor.Kind,
+                                  Reference => Shape.Reference,
+                                  Concept => Descriptor.Concept,
+                                  others => <>),
+                                 Syn.Origin (Of_Tree, Field),
+                                 "the reference-bearing struct field named"
+                                 & " here");
+                           end;
                         end;
 
                      when Landin.Checking.Fixed_Array_Field =>
@@ -15014,6 +15647,14 @@ package body Landin.Stages.Checking is
                                           Landin.Checking.Note_Reference
                                             (Types.all, Of_Tree, Binding,
                                              Shape.Reference);
+                                          if Kind = Ty.Any_Value then
+                                             Landin.Checking.Note_Any_Concept
+                                               (Types.all, Id,
+                                                Descriptor.Concept);
+                                             Landin.Checking.Note_Any_Concept
+                                               (Types.all, Of_Tree, Binding,
+                                                Descriptor.Concept);
+                                          end if;
                                        end;
                                     when Landin.Checking.Fixed_Array_Field =>
                                        Landin.Checking.Settle
@@ -15398,6 +16039,22 @@ package body Landin.Stages.Checking is
                            end;
                         end if;
                      end;
+                  elsif Wants = Ty.Any_Value then
+                     declare
+                        Written : constant Syn.Node_Id :=
+                          Syn.Declared_Type (Of_Tree, Node);
+                     begin
+                        Check_Contextual_Value
+                          (Of_Tree, Value,
+                           (Kind => Ty.Any_Value,
+                            Concept => Landin.Checking.Any_Concept_Of
+                              (Types.all, Of_Tree, Written),
+                            others => <>),
+                           Syn.Origin (Of_Tree, Written),
+                           "the runtime-dispatch type written here",
+                           Static_Image =>
+                             not Is_Local_Binding (Of_Tree, Node));
+                     end;
                   elsif Wants in Ty.Pointer_Value | Ty.Slice_Value then
                      declare
                         Written : constant Syn.Node_Id :=
@@ -15499,7 +16156,8 @@ package body Landin.Stages.Checking is
                declare
                   Value : constant Syn.Node_Id :=
                     Syn.Destructured_Value (Of_Tree, Node);
-                  Got : constant Ty.Type_Kind := Synthesise (Of_Tree, Value);
+                  Got : constant Ty.Type_Kind :=
+                       Synthesise (Of_Tree, Value);
                   Shape : constant Landin.Checking.Signature_Id :=
                     Landin.Checking.Result_Shape_Of
                       (Types.all, Of_Tree, Value);
@@ -15656,6 +16314,15 @@ package body Landin.Stages.Checking is
                                                     (Types.all, Of_Tree,
                                                      Local,
                                                      Part.Nominal);
+                                             when Ty.Any_Value =>
+                                                Landin.Checking
+                                                  .Note_Any_Concept
+                                                    (Types.all, Id,
+                                                     Part.Concept);
+                                                Landin.Checking
+                                                  .Note_Any_Concept
+                                                    (Types.all, Of_Tree,
+                                                     Local, Part.Concept);
                                              when Ty.Function_Value =>
                                                 Landin.Checking.Note_Signature
                                                   (Types.all, Id,
@@ -15993,6 +16660,18 @@ package body Landin.Stages.Checking is
                           (Types.all, Of_Tree, Place),
                         Syn.Origin (Of_Tree, Place),
                         "the atom place written here");
+                     return;
+                  end if;
+
+                  if Wants = Ty.Any_Value then
+                     Check_Contextual_Value
+                       (Of_Tree, Value,
+                        (Kind => Ty.Any_Value,
+                         Concept => Landin.Checking.Any_Concept_Of
+                           (Types.all, Of_Tree, Place),
+                         others => <>),
+                        Syn.Origin (Of_Tree, Place),
+                        "the runtime-dispatch place written here");
                      return;
                   end if;
 
@@ -16358,6 +17037,9 @@ package body Landin.Stages.Checking is
             elsif Expected.Kind in Ty.Pointer_Value | Ty.Slice_Value then
                Landin.Checking.Note_Reference
                  (Types.all, Of_Tree, Node, Expected.Reference);
+            elsif Expected.Kind = Ty.Any_Value then
+               Landin.Checking.Note_Any_Concept
+                 (Types.all, Of_Tree, Node, Expected.Concept);
             elsif Expected.Kind = Ty.Atom_Value then
                Landin.Checking.Note_Atom_Set
                  (Types.all, Of_Tree, Node, Expected.Atoms);
@@ -16562,6 +17244,422 @@ package body Landin.Stages.Checking is
                   end if;
                end;
 
+            when Ty.Any_Value =>
+               if Syn.Kind (Of_Tree, Node) = Syn.Any_Construction then
+                  if Static_Image then
+                     Bad.Report
+                       (Item => Bad.Not_Known_At_Compile_Time,
+                        Source => Syn.Source_Of (Of_Tree),
+                        Where => Syn.Where (Of_Tree, Node),
+                        Message => "an erased pair is formed at runtime, not"
+                                   & " in a module image",
+                        Note => "D145: the enabled `any(pointer)`"
+                                & " construction is a runtime value",
+                        Related => Site, Because => Because,
+                        Into => Found);
+                     Landin.Checking.Refuse (Types.all, Of_Tree, Node);
+                     return;
+                  end if;
+                  declare
+                     Value : constant Syn.Node_Id :=
+                       Syn.Operand_Of (Of_Tree, Node);
+                     Got : constant Ty.Type_Kind :=
+                       (if Syn.Kind (Of_Tree, Value)
+                             in Syn.Name_Reference | Syn.Member_Selection
+                        then Selected_From (Of_Tree, Value)
+                        else Synthesise (Of_Tree, Value));
+                  begin
+                     if Got /= Ty.Pointer_Value then
+                        if Got /= Ty.Ill_Typed then
+                           Bad.Report
+                             (Item => Bad.Type_Mismatch,
+                              Source => Syn.Source_Of (Of_Tree),
+                              Where => Syn.Where (Of_Tree, Value),
+                              Message => "`any` erases a pointer to the"
+                                         & " represented value",
+                              Note => "[1370]/[1380]: the pair retains the"
+                                      & " pointee; it never copies an"
+                                      & " unknown-sized value",
+                              Related => Site, Because => Because,
+                              Into => Found);
+                        end if;
+                        Landin.Checking.Refuse
+                          (Types.all, Of_Tree, Node);
+                        return;
+                     end if;
+                     declare
+                        function Ensure_Conformance
+                          (Actual : Type_Descriptor) return Boolean;
+
+                        function Ensure_Conformance
+                          (Actual : Type_Descriptor) return Boolean
+                        is
+                        begin
+                           for Source in 1 .. Source_Count (Context) loop
+                              declare
+                                 Candidate_Tree : constant
+                                   not null access constant Syn.Tree :=
+                                     Tree_For (Nth_Source (Context, Source));
+                              begin
+                                 for Candidate in 1 .. Syn.Last_Node
+                                   (Candidate_Tree.all)
+                                 loop
+                                    if Syn.Kind
+                                      (Candidate_Tree.all, Candidate)
+                                        = Syn.Concept_Reference
+                                      and then Concept_For
+                                        (Candidate_Tree.all, Candidate)
+                                          = Expected.Concept
+                                    then
+                                       return Require_Conformance
+                                         (Actual, Candidate,
+                                          Candidate_Tree.all,
+                                          Syn.Origin (Of_Tree, Node));
+                                    end if;
+                                 end loop;
+                              end;
+                           end loop;
+                           raise Landin.Compiler_Defect with
+                             "an any concept has no source reference";
+                        end Ensure_Conformance;
+
+                        function Dispatchable
+                          (Root_Concept : Landin.Checking.Concept_Id;
+                           Root_Row     : Landin.Checking.Conformance_Id;
+                           Pointer      : Landin.Checking.Reference_Id)
+                           return Boolean;
+
+                        function Dispatchable
+                          (Root_Concept : Landin.Checking.Concept_Id;
+                           Root_Row     : Landin.Checking.Conformance_Id;
+                           Pointer      : Landin.Checking.Reference_Id)
+                           return Boolean
+                        is
+                           Seen : array
+                             (1 .. Positive'Max
+                               (1, Landin.Checking.Concept_Count (Types.all)))
+                             of Boolean := [others => False];
+                           Entry_Total : Natural := 0;
+
+                           function Visit
+                             (Concept : Landin.Checking.Concept_Id;
+                              Row     : Landin.Checking.Conformance_Id)
+                              return Boolean;
+
+                           function Visit
+                             (Concept : Landin.Checking.Concept_Id;
+                              Row     : Landin.Checking.Conformance_Id)
+                              return Boolean
+                           is
+                              Concept_Position : constant Positive :=
+                                Landin.Checking.Concept_Identities.Position
+                                  (Types.all, Concept);
+                           begin
+                              if Seen (Concept_Position) then
+                                 return True;
+                              end if;
+                              Seen (Concept_Position) := True;
+                              if Landin.Checking.Is_Compiler_Concept
+                                (Types.all, Concept)
+                              then
+                                 return True;
+                              end if;
+                              declare
+                                 Declaration : constant Res.Declaration_Id :=
+                                   Landin.Checking.Concept_Declaration
+                                     (Types.all, Concept);
+                                 Concept_Tree : constant
+                                   not null access constant Syn.Tree :=
+                                     Tree_For
+                                       (Res.Source_Of
+                                          (Meanings.all, Declaration));
+                                 Concept_Node : constant Syn.Node_Id :=
+                                   Res.Node_Of (Meanings.all, Declaration);
+                                 Represented : constant Syn.Node_Id :=
+                                   Syn.Nth_Concept_Formal
+                                     (Concept_Tree.all, Concept_Node, 1);
+                                 Formal : constant Res.Declaration_Id :=
+                                   Declaration_At
+                                     (Syn.Source_Of (Concept_Tree.all),
+                                      Represented);
+
+                                 function Uses_Formal
+                                   (Node : Syn.Node_Id) return Boolean;
+
+                                 function Uses_Formal
+                                   (Node : Syn.Node_Id) return Boolean is
+                                 begin
+                                    if Node = Syn.No_Node then
+                                       return False;
+                                    end if;
+                                    if Syn.Kind (Concept_Tree.all, Node)
+                                      in Syn.Type_Reference
+                                         | Syn.Name_Reference
+                                      and then Res.Verdict_Of
+                                        (Meanings.all, Concept_Tree.all, Node)
+                                          = Res.Bound
+                                      and then Res.Bound_To
+                                        (Meanings.all, Concept_Tree.all, Node)
+                                          = Formal
+                                    then
+                                       return True;
+                                    end if;
+                                    for Slot in 1 .. Syn.Slot_Count
+                                      (Concept_Tree.all, Node)
+                                    loop
+                                       if Uses_Formal
+                                         (Syn.Slot
+                                            (Concept_Tree.all, Node, Slot))
+                                       then
+                                          return True;
+                                       end if;
+                                    end loop;
+                                    return False;
+                                 end Uses_Formal;
+
+                                 function Add_Parent
+                                   (Reference : Syn.Node_Id) return Boolean;
+
+                                 function Add_Parent
+                                   (Reference : Syn.Node_Id) return Boolean
+                                 is
+                                    Parent : constant
+                                      Landin.Checking.Concept_Id :=
+                                        Concept_For
+                                          (Concept_Tree.all, Reference);
+                                    Parent_Row : constant
+                                      Landin.Checking.Conformance_Id :=
+                                        (if Parent
+                                               = Landin.Checking.No_Concept
+                                         then Landin.Checking.No_Conformance
+                                         else Landin.Checking.Find_Conformance
+                                           (Types.all, Parent,
+                                            Landin.Checking
+                                              .Conformance_Target
+                                                (Types.all, Row),
+                                            Landin.Checking.Empty_Actuals));
+                                 begin
+                                    return Parent
+                                        /= Landin.Checking.No_Concept
+                                      and then Parent_Row
+                                        /= Landin.Checking.No_Conformance
+                                      and then Visit (Parent, Parent_Row);
+                                 end Add_Parent;
+                              begin
+                                 if Syn.Concept_Formal_Count
+                                      (Concept_Tree.all, Concept_Node) /= 1
+                                   or else Formal = Res.No_Declaration
+                                 then
+                                    return False;
+                                 end if;
+                                 for Which in 1 .. Syn.Concept_Entry_Count
+                                   (Concept_Tree.all, Concept_Node)
+                                 loop
+                                    Entry_Total := Entry_Total + 1;
+                                    declare
+                                       Entry_Node : constant Syn.Node_Id :=
+                                         Syn.Nth_Concept_Entry
+                                           (Concept_Tree.all, Concept_Node,
+                                            Which);
+                                    begin
+                                       if Syn.Parameter_Count
+                                            (Concept_Tree.all, Entry_Node) = 0
+                                       then
+                                          return False;
+                                       end if;
+                                       declare
+                                          Self : constant Syn.Node_Id :=
+                                            Syn.Nth_Parameter
+                                              (Concept_Tree.all, Entry_Node,
+                                               1);
+                                          Self_Type : constant Syn.Node_Id :=
+                                            Syn.Declared_Type
+                                              (Concept_Tree.all, Self);
+                                       begin
+                                          if Spelled
+                                               (Syn.Name
+                                                  (Concept_Tree.all, Self))
+                                               /= "self"
+                                            or else Syn.Kind
+                                              (Concept_Tree.all, Self_Type)
+                                                /= Syn.Pointer_Type
+                                            or else Semantic_Convention
+                                              (Concept_Tree.all, Self)
+                                                /= Syn.Implicit_In
+                                            or else Syn.Kind
+                                              (Concept_Tree.all,
+                                               Syn.Referenced_Type
+                                                 (Concept_Tree.all,
+                                                  Self_Type))
+                                                not in Syn.Type_Reference
+                                                   | Syn.Name_Reference
+                                            or else Res.Verdict_Of
+                                              (Meanings.all,
+                                               Concept_Tree.all,
+                                               Syn.Referenced_Type
+                                                 (Concept_Tree.all,
+                                                  Self_Type))
+                                                /= Res.Bound
+                                            or else Res.Bound_To
+                                              (Meanings.all,
+                                               Concept_Tree.all,
+                                               Syn.Referenced_Type
+                                                 (Concept_Tree.all,
+                                                  Self_Type)) /= Formal
+                                            or else
+                                              (Syn.Is_Referent_Mutable
+                                                 (Concept_Tree.all, Self_Type)
+                                               and then not Landin.Checking
+                                                 .Descriptor_Of
+                                                   (Types.all, Pointer)
+                                                 .Mutable)
+                                          then
+                                             return False;
+                                          end if;
+                                       end;
+                                       for Parameter in
+                                         2 .. Syn.Parameter_Count
+                                           (Concept_Tree.all, Entry_Node)
+                                       loop
+                                          if Uses_Formal
+                                            (Syn.Declared_Type
+                                               (Concept_Tree.all,
+                                                Syn.Nth_Parameter
+                                                  (Concept_Tree.all,
+                                                   Entry_Node, Parameter)))
+                                          then
+                                             return False;
+                                          end if;
+                                       end loop;
+                                       for Result in 1 .. Syn.Return_Count
+                                         (Concept_Tree.all, Entry_Node)
+                                       loop
+                                          if Uses_Formal
+                                            (Syn.Declared_Type
+                                               (Concept_Tree.all,
+                                                Syn.Nth_Return
+                                                  (Concept_Tree.all,
+                                                   Entry_Node, Result)))
+                                          then
+                                             return False;
+                                          end if;
+                                       end loop;
+                                    end;
+                                 end loop;
+                                 declare
+                                    Required : constant Syn.Node_Id :=
+                                      Syn.Constraint_Of
+                                        (Concept_Tree.all, Represented);
+                                 begin
+                                    if Required /= Syn.No_Node
+                                      and then not Add_Parent (Required)
+                                    then
+                                       return False;
+                                    end if;
+                                 end;
+                                 for Parent in 1 .. Syn.Concept_Parent_Count
+                                   (Concept_Tree.all, Concept_Node)
+                                 loop
+                                    if not Add_Parent
+                                      (Syn.Nth_Concept_Parent
+                                         (Concept_Tree.all, Concept_Node,
+                                          Parent))
+                                    then
+                                       return False;
+                                    end if;
+                                 end loop;
+                                 return True;
+                              end;
+                           end Visit;
+                        begin
+                           return Visit (Root_Concept, Root_Row)
+                             and then Entry_Total > 0;
+                        end Dispatchable;
+
+                        Pointer : constant Landin.Checking.Reference_Id :=
+                          Landin.Checking.Reference_Of
+                            (Types.all, Of_Tree, Value);
+                        Descriptor : constant
+                          Landin.Checking.Reference_Descriptor :=
+                            Landin.Checking.Descriptor_Of
+                              (Types.all, Pointer);
+                        Target : constant Type_Descriptor :=
+                          (Kind => Descriptor.Referent,
+                           Nominal => Descriptor.Nominal,
+                           Length => Descriptor.Length,
+                           Element => Descriptor.Element,
+                           Element_Nominal => Descriptor.Element_Nominal,
+                           Atoms => Descriptor.Atoms,
+                           Signature => Descriptor.Signature,
+                           Reference => Descriptor.Reference,
+                           Concept => Descriptor.Concept,
+                           others => <>);
+                        Existing : constant Landin.Checking.Conformance_Id :=
+                          Landin.Checking.Find_Conformance
+                            (Types.all, Expected.Concept,
+                             Actual_For (Target),
+                             Landin.Checking.Empty_Actuals);
+                        Satisfied : constant Boolean :=
+                          Existing /= Landin.Checking.No_Conformance
+                          or else Ensure_Conformance (Target);
+                        Evidence : constant Landin.Checking.Conformance_Id :=
+                          (if Satisfied
+                           then Landin.Checking.Find_Conformance
+                             (Types.all, Expected.Concept,
+                              Actual_For (Target),
+                              Landin.Checking.Empty_Actuals)
+                           else Landin.Checking.No_Conformance);
+                        Valid : Boolean := Satisfied
+                          and then Evidence /= Landin.Checking.No_Conformance;
+                     begin
+                        if Valid then
+                           Valid := Dispatchable
+                             (Expected.Concept, Evidence, Pointer);
+                        end if;
+                        if not Valid then
+                           if Satisfied then
+                              Bad.Report
+                                (Item => Bad.Type_Mismatch,
+                                 Source => Syn.Source_Of (Of_Tree),
+                                 Where => Syn.Where (Of_Tree, Node),
+                                 Message => "this conformance is not usable"
+                                            & " behind `any`: every entry"
+                                            & " needs a compatible first"
+                                            & " `self` pointer",
+                                 Note => "[1370]/[1390]: dispatch inserts"
+                                         & " the erased data pointer as"
+                                         & " the first argument",
+                                 Related => Site, Because => Because,
+                                 Into => Found);
+                           end if;
+                           Landin.Checking.Refuse
+                             (Types.all, Of_Tree, Node);
+                           return;
+                        end if;
+                        Landin.Checking.Note
+                          (Types.all, Of_Tree, Node, Ty.Any_Value);
+                        Landin.Checking.Note_Any_Concept
+                          (Types.all, Of_Tree, Node, Expected.Concept);
+                        Landin.Checking.Note_Any_Construction
+                          (Types.all, Of_Tree, Node, Evidence);
+                        return;
+                     end;
+                  end;
+               end if;
+               declare
+                  Got : constant Ty.Type_Kind := Synthesise (Of_Tree, Node);
+               begin
+                  if Got /= Ty.Ill_Typed
+                    and then
+                      (Got /= Ty.Any_Value
+                       or else Landin.Checking.Any_Concept_Of
+                         (Types.all, Of_Tree, Node) /= Expected.Concept)
+                  then
+                     Context_Mismatch
+                       (Of_Tree, Node, Expected, Site, Because);
+                  end if;
+               end;
+
             when Ty.Pointer_Value | Ty.Slice_Value =>
                if Expected.Kind = Ty.Pointer_Value
                  and then Syn.Kind (Of_Tree, Node) = Syn.Pointer_Conversion
@@ -16737,6 +17835,9 @@ package body Landin.Stages.Checking is
             elsif Got in Ty.Pointer_Value | Ty.Slice_Value then
                Expected.Reference := Landin.Checking.Reference_Of
                  (Types.all, Of_Tree, First);
+            elsif Got = Ty.Any_Value then
+               Expected.Concept := Landin.Checking.Any_Concept_Of
+                 (Types.all, Of_Tree, First);
             elsif Got = Ty.Atom_Value then
                Expected.Atoms := Landin.Checking.Atom_Set_Of
                  (Types.all, Of_Tree, First);
@@ -16910,6 +18011,29 @@ package body Landin.Stages.Checking is
             end;
          end Refuse_Unreadable_Subtree;
       begin
+         if Landin.Checking.Type_Of
+              (Types.all,
+               Declaration_At (Syn.Source_Of (Of_Tree), Node)) = Ty.Any_Value
+           and then
+             (Value = Syn.No_Node
+              or else Syn.Kind (Of_Tree, Value) = Syn.Zeroed_Literal)
+         then
+            Bad.Report
+              (Item => Bad.Type_Mismatch,
+               Source => Syn.Source_Of (Of_Tree),
+               Where => Syn.Where (Of_Tree, Node),
+               Message => "a module `any` binding has no implicit null"
+                          & " pair",
+               Note => "D145/D147: runtime construction supplies a non-null"
+                       & " data pointer and compatible table",
+               Related => Syn.Origin
+                 (Of_Tree, (if Written = Syn.No_Node then Node else Written)),
+               Because => "this erased binding",
+               Into => Found);
+            Landin.Checking.Refuse (Types.all, Of_Tree, Node);
+            return;
+         end if;
+
          --  Zero is reserved to the failing-call success carrier and is no
          --  source atom.  Unlike scalar module storage, an atom binding
          --  therefore has no omitted or `zeroed` static image.
@@ -17407,6 +18531,22 @@ package body Landin.Stages.Checking is
                        (Types.all, Of_Tree.all, Value));
                end if;
 
+               if Got = Ty.Any_Value
+                 and then Res.Sort_Of (Meanings.all, Id) = Res.Module_Binding
+               then
+                  Bad.Report
+                    (Item => Bad.Not_Known_At_Compile_Time,
+                     Source => Syn.Source_Of (Of_Tree.all),
+                     Where => Syn.Where (Of_Tree.all, Value),
+                     Message => "an inferred erased pair is not a module"
+                                & " static image",
+                     Note => "D145: form `any(pointer)` in runtime storage",
+                     Related => Syn.Origin (Of_Tree.all, Node),
+                     Because => "this module binding",
+                     Into => Found);
+                  Landin.Checking.Refuse (Types.all, Of_Tree.all, Value);
+               end if;
+
                if Got = Ty.Function_Value then
                   Landin.Checking.Note_Signature
                     (Types.all, Id,
@@ -17416,6 +18556,11 @@ package body Landin.Stages.Checking is
                   Landin.Checking.Note_Reference
                     (Types.all, Id,
                      Landin.Checking.Reference_Of
+                       (Types.all, Of_Tree.all, Value));
+               elsif Got = Ty.Any_Value then
+                  Landin.Checking.Note_Any_Concept
+                    (Types.all, Id,
+                     Landin.Checking.Any_Concept_Of
                        (Types.all, Of_Tree.all, Value));
                elsif Got = Ty.Atom_Value then
                   Landin.Checking.Note_Atom_Set
@@ -20626,6 +21771,10 @@ package body Landin.Stages.Checking is
             Expected.Signature := Landin.Checking.Signature_Of
               (Types.all,
                Declaration_At (Syn.Source_Of (Of_Tree), Result));
+         elsif Gives = Ty.Any_Value then
+            Expected.Concept := Landin.Checking.Any_Concept_Of
+              (Types.all,
+               Declaration_At (Syn.Source_Of (Of_Tree), Result));
          end if;
 
          if Syn.Kind (Of_Tree, Runs) = Syn.Block then
@@ -20957,6 +22106,8 @@ package body Landin.Stages.Checking is
             end if;
          end;
       end loop;
+      Checked_Instance_Count :=
+        Landin.Checking.Routine_Instance_Count (Types.all);
 
       --  Anonymous bodies can now check calls and `fail` against finalized
       --  concrete sets, including mutually recursive private inference.
@@ -20999,6 +22150,47 @@ package body Landin.Stages.Checking is
                 (Check_Declaration);
          begin
             Walk (Configurations (Context).all, Of_Tree.all);
+         end;
+      end loop;
+
+      --  An `any` construction can materialize a parameterized conformance
+      --  provider while the ordinary body pass above is checking its
+      --  contextual target.  Close that late finite frontier before lowering
+      --  so every ready instance has the same checked overlay as instances
+      --  discovered from written generic calls before error finalization.
+      while Checked_Instance_Count
+        < Landin.Checking.Routine_Instance_Count (Types.all)
+      loop
+         Checked_Instance_Count := Checked_Instance_Count + 1;
+         declare
+            Instance : constant Landin.Checking.Routine_Instance_Id :=
+              Landin.Checking.Routine_Identities.Nth
+                (Types.all, Checked_Instance_Count);
+         begin
+            if Landin.Checking.Routine_State_Of (Types.all, Instance)
+                 = Landin.Checking.Routine_Ready
+            then
+               declare
+                  Template : constant Res.Declaration_Id :=
+                    Landin.Checking.Routine_Template_Of
+                      (Types.all, Instance);
+                  Of_Tree : constant not null access constant Syn.Tree :=
+                    Tree_For (Res.Source_Of (Meanings.all, Template));
+                  Previous : Landin.Checking.Routine_Instance_Id;
+               begin
+                  Landin.Checking.Activate_Routine_View
+                    (Types.all, Instance, Previous);
+                  Check_Routine_Body
+                    (Of_Tree.all, Res.Node_Of (Meanings.all, Template));
+                  Landin.Checking.Restore_Routine_View
+                    (Types.all, Previous);
+               exception
+                  when others =>
+                     Landin.Checking.Restore_Routine_View
+                       (Types.all, Previous);
+                     raise;
+               end;
+            end if;
          end;
       end loop;
 

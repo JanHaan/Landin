@@ -107,7 +107,7 @@ that one is the tokeniser's. The other is in the rule itself: a
 name that starts with '_' needs something after it, so the lone
 '_' is the discard of [1020] and nothing may be called it. The
 kernel
-reserves thirty-three words; the reserved set of the whole language is
+reserves thirty-four words; the reserved set of the whole language is
 larger, and each word joins it with the construct that introduces
 it, so a program that avoids a construct never trips over its
 keyword. Type names are not among them: u32 and bool are ordinary
@@ -118,7 +118,7 @@ identifier  ::= lower (lower | digit | "_")*
               | "_" (lower | digit | "_")+
 lower       ::= "a" ... "z"
 digit       ::= "0" ... "9"
-keyword     ::= "addr" | "alignof" | "and" | "atom" | "dec" | "else"
+keyword     ::= "addr" | "alignof" | "and" | "any" | "atom" | "dec" | "else"
               | "elsif" | "end" | "escaping" | "fail" | "false"
               | "fixed" | "from" | "if" | "in" | "inc" | "inout"
               | "mut" | "none" | "not" | "or" | "ptr" | "public"
@@ -189,13 +189,14 @@ A binding names one thing, and says how much it may change.
 The full form, the inferred form and the mutable form are [0040],
 [0050] and [0060]; a binding with no value must be assigned before
 it is read [0080]. The kernel's types are the eleven scalar names, atom sets, fixed arrays,
-pointers, slices, function types with their complete declared error sets, and
-what [1795] declares from them: aliases, named ordinary structs and D74's named
+pointers, slices, D145's `any C`, function types with their complete declared
+error sets, and what [1795] declares from them: aliases, named ordinary structs and D74's named
 variant-bearing structs. `mut` in a pointer or slice type records permission to
 write the pointee or viewed elements [0430] [0570]; it is independent of a
 binding's `mut` [0070].
-Enabled runtime leaves are scalar, reference, function or fixed array; ordinary
-and variant-bearing structs compose those leaves recursively. A pointer is one
+Enabled runtime leaves are scalar, reference, function, fixed array or D147's
+erased pair; ordinary and variant-bearing structs compose those leaves
+recursively. A pointer is one
 target pointer-width carrier and a slice is its non-null base plus a `usize`
 length. Neither has an all-zero value [0540]. A function type is written with
 [1800]'s signature syntax. Its parameter and return names describe positions and
@@ -218,11 +219,12 @@ template and normalized actual tuple, then checks the substituted field shape.
 binding       ::= "mut"? identifier ":" type ("=" expression)?
                 | "mut"? identifier ":=" expression
 type          ::= function_type | array_type | pointer_type | slice_type
-                | type_application | scalar_name | identifier
+                | any_type | type_application | scalar_name | identifier
 function_type ::= signature
 array_type    ::= "[" expression "]" type
 pointer_type  ::= "ptr" "mut"? type
 slice_type    ::= "[" "]" "mut"? type
+any_type      ::= "any" concept_reference
 type_application ::= identifier "(" type_argument
                      ("," type_argument)* ")"
 type_argument ::= type | integer
@@ -465,7 +467,7 @@ decides what binds, never what runs first.
 primary     ::= literal | array_literal | array_repetition | struct_literal
               | empty_slice | labeled_application | anonymous_function
               | indexed | call | address | pointer_conversion
-              | measurement | try
+              | any_construction | measurement | try
               | if | match | bare_block | "(" expression ")"
 array_literal ::= "[" expression ("," expression)* "]"
 array_repetition ::= "[" integer "of" expression "]"
@@ -488,6 +490,7 @@ recovery    ::= "else" expression
               | "else" "(" identifier ")" block "end"
 address     ::= "addr" place
 pointer_conversion ::= "ptr" "(" expression ")"
+any_construction ::= "any" "(" expression ")"
 empty_slice ::= "[" "]"
 measurement ::= ("sizeof" | "alignof") type | "lenof" identifier
               | "lenof" "(" array_literal ")"
@@ -8082,8 +8085,9 @@ Static type and fixed formals still create no runtime position. Inside the
 active routine view, `T.entry(...)` loads the declaration-order function word
 from that hidden table and makes the ordinary verified indirect call. Size and
 alignment remain table members even where the current concrete view can answer
-the same measurement directly, so later shared and `any` consumers use this
-one ABI.
+the same measurement directly, so later shared and `any` consumers use the same semantic measurement and
+provider schema; D147 gives the erased consumer a separate flattened physical
+table without changing these direct generic offsets.
 
 The Linux baseline may alias two concrete generic symbols to one emitted body
 only when a bounded IR comparison proves their signatures, slots, operand graph
@@ -8109,3 +8113,142 @@ bodies would leave a table that no executed path proved. All were declined.
 `evidence ordering and layout`; the backend case `generic evidence is ordered indirect
 and shared`; IR verifier evidence identity, entry and signature checks; and the
 recorded target and lowering artefacts.
+
+### D145 — `any C` has direct-concept identity and explicit pointer erasure
+
+**The tour said** that `any C` is a copyable data-pointer/table pair [1370],
+that construction is explicit and takes its concept from context where it can
+[1380], and that calls select table entries [1390]. It did not state whether
+`any` is reserved, whether parents imply conversions, how an omitted context
+is selected, whether a value may be copied into the pair, or how concepts with
+additional input types are written.
+
+**Chosen:** `any` becomes the thirty-fourth reserved kernel word. `any C` is a
+structural type whose identity is exactly the direct source `Concept_Id` of
+`C`; aliases preserve it, while parent composition creates no subtype or
+conversion. The enabled source form admits a concept with exactly its one
+represented type formal and an empty D142 input tuple. There is no implicit
+conversion either from a concrete value/pointer or between two `any` types.
+
+`any(pointer)` evaluates exactly one pointer expression and never copies the
+unknown-sized pointee. In a destination, argument or result context, that
+context supplies `C` and lookup selects the exact concrete D142 conformance
+key, materializing a parameterized family and generic provider when needed.
+Without a context, construction succeeds only when exactly one already
+collected source concept has an exact conformance for the pointer's referent;
+zero or multiple candidates require an explicit `any C` context. Compiler
+concepts do not participate. The construction node retains its concrete
+conformance solely so lowering can form a static table address; later copies
+carry no static concrete type fact. The enabled construction forms runtime
+storage; a module static image cannot yet carry the two relocations and is
+refused rather than fabricated.
+
+**The alternatives:** erasing a by-value object would either copy an unknown
+size or create hidden storage. Choosing the first conformance by declaration
+order would make unrelated declarations alter meaning. Treating a parent as
+an implicit conversion would add concept subtyping the language has never
+claimed. Encoding input tuples without source syntax would guess part of the
+D142 key. All were declined.
+
+**Pinned by** `runtime/any-inferred-construction`,
+`runtime/any-parameterized-provider`, `negative/any-source-not-pointer`,
+`negative/any-construction-needs-context`, and
+`negative/any-concept-identity-mismatch`.
+
+### D146 — Erased entries have one object-safe `self` pointer
+
+**The tour said** that a mutable entry writes `self: ptr mut T`, that no extra
+permission marker belongs in the pair [1370], and that dispatch inserts the
+data pointer first [1390]. It did not bound other occurrences of hidden `T`,
+say whether binding mutability gates a call, settle inherited-name collisions,
+or state how origin analysis sees the pair.
+
+**Chosen:** every entry exposed by the direct concept's distinct finite
+represented-formal-constraint/parent closure must have first runtime input parameter
+named `self`, of exact direct type `ptr T` or `ptr mut T`, where `T` is that
+entry's concept's represented formal. `inout`, `sink`, `ptr ptr T` and a
+parameterized referent that merely contains T are not that receiver ABI. Hidden `T` may occur nowhere in another runtime
+parameter or result: a caller that knows only `any C` has no source type with
+which to supply or receive it. The concrete provider keeps that substituted
+ordinary signature. `value.entry` is only the immediate callee operation; the
+two-word pair has no bound-method closure representation, so the selection
+cannot be stored as a standalone function value. An entry name must be unique across the closure when it is
+selected; an inherited collision is diagnosed rather than receiving source
+order precedence.
+
+Construction requires its pointer permission to satisfy every exposed `self`:
+a read-only pointer cannot create a capability whose table includes mutable
+`self`. Once created, the pair needs no permission bit. Binding mutability says
+whether the two pair words may be replaced; it does not revoke write authority
+already carried by a valid mutable data pointer, just as an immutable binding
+may hold a `ptr mut T`.
+
+The pair is reference-bearing for local origin/escape analysis. Construction
+copies the complete origin fact of its pointer operand; copies, aggregate
+storage, control joins, arguments and results carry that fact unchanged or
+through the existing conservative join. A dynamic call maps implicit formal
+one to the pair receiver and written argument one to formal two, so `escaping`,
+`from self`, borrow and return checks reuse the ordinary call rules. An integer-
+created untracked pointer remains untracked rather than regaining evidence.
+
+**The alternatives:** storing a mutable bit would make the promised pair a
+third semantic field or give one `any C` two runtime types. Requiring a mutable
+pair binding to call a mutable entry would conflate replacement of the pair
+with authority already inside it. Calling an entry that mentions hidden `T`
+elsewhere based on one arbitrary conformance's signature would make another
+conformance ABI-incompatible. All were declined.
+
+**Pinned by** `runtime/any-heterogeneous-dispatch`,
+`runtime/any-return-origin`, `negative/any-readonly-source-for-mutable-entry`,
+`negative/any-entry-not-object-safe`, `negative/any-entry-not-bound-value`,
+`negative/any-self-not-exact`, `negative/any-self-convention`, and
+`negative/any-frame-origin-escape`.
+
+### D147 — An `any` pair points at a flattened dispatch table
+
+**The tour said** that the pair is two words [1370], that calls go through its
+table with data first [1390], and that erased and generic evidence are one
+semantic mechanism [1690]. D144 deliberately kept parent conformance tables
+separate and fixed direct generic offsets, so it did not say how one erased
+table pointer reaches inherited entries.
+
+**Chosen:** the target-neutral pair order is data pointer then table pointer.
+Both are target pointer-width cells, the pair aligns to pointer alignment, and
+its extent is twice pointer width: data/table offsets are 0/8 and size/alignment
+16/8 on Linux x86-64, and 0/4 with 8/4 on synthetic-32. The pair is transported
+by the existing shaped-value/caller-owned-result ABI and may be copied whole or
+stored as an aggregate field; neither word is a source-selectable field and
+`zeroed` cannot construct it. After D145/D146 checking, target-neutral IR may
+use the same private two-`usize` shaped carrier as a slice uses physically,
+just as it erases a checked pointer to one `usize`; that carrier creates no
+source array/index operation, while evidence descriptors and verifier checks
+still own every table function position and signature.
+
+A concrete conformance used by `any` receives a distinct physical erased table.
+It repeats D144's size/alignment prefix and then flattens object-safe provider
+function words: direct concept entries first, followed depth-first by each
+distinct represented-formal constraint and named parent in declaration order.
+The parent conformance identities and their D144 direct tables remain separate;
+the flattened table repeats relocations rather than flattening semantic
+conformance identity. Consequently D144's generic offsets and hidden arguments
+remain unchanged. An inherited call uses its flattened semantic position.
+
+Construction evaluates and stores the data pointer, then stores the selected
+static flattened-table address. Dispatch loads the pair's table, loads the
+verified function position, loads the data pointer, and makes the ordinary
+indirect call with data as runtime argument one and written arguments after it.
+Concrete provider signatures may differ in the referent identity of `self`,
+but D146 proves that this erased position is uniformly one pointer carrier and
+that every remaining parameter/result has one non-hidden source identity.
+
+**The alternatives:** adding all parent table pointers to the value would break
+the two-word representation. Changing D144's direct table suffix would move
+existing generic ABI positions. Walking parent links would add links and loads
+while still needing an erased receiver rule. A flattened erased table keeps
+those concerns separate and was chosen.
+
+**Pinned by** `runtime/any-heterogeneous-dispatch`,
+`runtime/any-composed-dispatch`, `runtime/any-aggregate-storage`, the target
+case `evidence ordering and layout`, the backend case
+`any dispatch uses a flattened real table`, the existing evidence verifier
+checks, and the generated target/lowering artefacts.

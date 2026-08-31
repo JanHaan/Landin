@@ -143,6 +143,7 @@ package Landin.Syntax.Precedence is
                             | Landin.Tokens.Left_Paren
                             | Landin.Tokens.Left_Bracket
                             | Landin.Tokens.Kw_Addr
+                            | Landin.Tokens.Kw_Any
                             | Landin.Tokens.Kw_Ptr
                             | Landin.Tokens.Kw_If
                             | Landin.Tokens.Kw_Try

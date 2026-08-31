@@ -1,0 +1,5 @@
+class: negative
+summary: a read-only pointer cannot erase a conformance exposing mutable self
+program: main.ldn
+codes: L0301
+constructs: 0430, 1230, 1240, 1370, 1380

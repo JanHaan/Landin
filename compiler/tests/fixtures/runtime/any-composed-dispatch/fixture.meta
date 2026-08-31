@@ -1,0 +1,5 @@
+class: runtime
+summary: an erased child concept dispatches direct and separately conformed parent entries
+program: main.ldn
+status: 42
+constructs: 0670, 1230, 1240, 1340, 1370, 1380, 1390

@@ -1,0 +1,5 @@
+class: negative
+summary: erased values with different direct concept identities do not convert
+program: main.ldn
+codes: L0301
+constructs: 0310, 1230, 1240, 1370, 1380

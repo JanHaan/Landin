@@ -1,0 +1,5 @@
+class: runtime
+summary: explicit erasure materializes and dispatches a selected generic family provider
+program: main.ldn
+status: 42
+constructs: 1230, 1240, 1250, 1290, 1370, 1380, 1390

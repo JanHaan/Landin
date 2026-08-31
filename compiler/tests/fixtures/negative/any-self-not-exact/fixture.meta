@@ -1,0 +1,5 @@
+class: negative
+summary: erased self points directly to the represented type rather than a nested use
+program: main.ldn
+codes: L0301
+constructs: 0430, 1230, 1240, 1370, 1380, 1390

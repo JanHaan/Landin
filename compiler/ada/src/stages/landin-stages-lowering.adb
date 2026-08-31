@@ -38,6 +38,7 @@ package body Landin.Stages.Lowering is
    use type IR.Value_Id;
    use type Landin.Checking.Array_Element_Form;
    use type Landin.Checking.Atom_Set_Id;
+   use type Landin.Checking.Concept_Id;
    use type Landin.Checking.Conformance_Id;
    use type Landin.Checking.Element_Count;
    use type Landin.Checking.Error_Set_Form;
@@ -401,6 +402,7 @@ package body Landin.Stages.Lowering is
       type Evidence_Map is array (Source_Evidence) of IR.Evidence_Id;
       type Evidence_Slot_Map is array (Source_Evidence) of IR.Slot_Id;
       Evidence : Evidence_Map := [others => IR.No_Evidence];
+      Any_Evidence : Evidence_Map := [others => IR.No_Evidence];
       Evidence_Slots : Evidence_Slot_Map := [others => IR.No_Slot];
 
       subtype Source_Routine_Instance is Positive range
@@ -427,6 +429,23 @@ package body Landin.Stages.Lowering is
          end if;
          return Evidence (Position);
       end Evidence_For;
+
+      function Any_Evidence_For
+        (Source : Landin.Checking.Conformance_Id) return IR.Evidence_Id;
+
+      function Any_Evidence_For
+        (Source : Landin.Checking.Conformance_Id) return IR.Evidence_Id
+      is
+         Position : constant Positive :=
+           Landin.Checking.Conformance_Identities.Position
+             (Types.all, Source);
+      begin
+         if Any_Evidence (Position) = IR.No_Evidence then
+            raise Landin.Compiler_Defect with
+              "an any conformance was not mapped before lowering";
+         end if;
+         return Any_Evidence (Position);
+      end Any_Evidence_For;
 
       function Signature_For
         (Source : Landin.Checking.Signature_Id) return IR.Signature_Id;
@@ -515,20 +534,22 @@ package body Landin.Stages.Lowering is
                  (if Part.Convention = Syn.Inout_Convention then Ty.Usize
                   elsif Part.Kind = Ty.Atom_Value then Ty.U32
                   elsif Part.Kind = Ty.Pointer_Value then Ty.Usize
-                  elsif Part.Kind = Ty.Slice_Value then Ty.Fixed_Array
+                  elsif Part.Kind in Ty.Slice_Value | Ty.Any_Value
+                  then Ty.Fixed_Array
                   else Part.Kind),
                Nominal =>
                  (if Part.Convention = Syn.Inout_Convention
-                    or else Part.Kind = Ty.Slice_Value
+                    or else Part.Kind in Ty.Slice_Value | Ty.Any_Value
                   then IR.No_Nominal_Type
                   else Nominal_For (Part.Nominal)),
                Length  =>
                  (if Part.Convention = Syn.Inout_Convention then 0
-                  elsif Part.Kind = Ty.Slice_Value then 2
+                  elsif Part.Kind in Ty.Slice_Value | Ty.Any_Value then 2
                   else IR.Element_Total (Part.Length)),
                Element =>
                  (if Part.Convention = Syn.Inout_Convention then Ty.Bool
-                  elsif Part.Kind = Ty.Slice_Value then Ty.Usize
+                  elsif Part.Kind in Ty.Slice_Value | Ty.Any_Value
+                  then Ty.Usize
                   elsif Part.Kind = Ty.Fixed_Array
                     and then Part.Nominal
                       /= Landin.Checking.No_Nominal_Type
@@ -945,7 +966,9 @@ package body Landin.Stages.Lowering is
          end if;
          if Held not in Ty.Scalar_Name then
             raise Landin.Compiler_Defect with
-              "an expression reached the lowering with no scalar carrier";
+              "an expression reached the lowering with no scalar carrier: "
+              & Ty.Type_Kind'Image (Held)
+              & " at node" & Syn.Node_Id'Image (Node);
          end if;
 
          return Held;
@@ -1378,6 +1401,10 @@ package body Landin.Stages.Lowering is
          if Held = Ty.Aggregate then
             return Neutral_Body
               (Landin.Checking.Nominal_Of (Types.all, Of_Tree, Node));
+         elsif Held in Ty.Slice_Value | Ty.Any_Value then
+            return
+              (Kind => IR.Array_Field_Shape, Element => Ty.Usize,
+               Length => 2, others => <>);
          elsif Held = Ty.Fixed_Array then
             declare
                Element : constant IR.Field_Shape :=
@@ -1504,6 +1531,10 @@ package body Landin.Stages.Lowering is
                        (if Descriptor.Kind = Ty.Slice_Value then 2 else 1),
                      others => <>);
                end;
+            when Landin.Checking.Any_Actual_Type =>
+               return
+                 (Kind => IR.Array_Field_Shape, Element => Ty.Usize,
+                  Length => 2, others => <>);
          end case;
       end Evidence_Shape;
 
@@ -1518,6 +1549,14 @@ package body Landin.Stages.Lowering is
                   Element => Ty.Scalar_Name (Part.Kind),
                   Length => 1,
                   others => <>);
+            when Ty.Pointer_Value =>
+               return
+                 (Kind => IR.Scalar_Field_Shape, Element => Ty.Usize,
+                  Length => 1, others => <>);
+            when Ty.Slice_Value | Ty.Any_Value =>
+               return
+                 (Kind => IR.Array_Field_Shape, Element => Ty.Usize,
+                  Length => 2, others => <>);
             when Ty.Function_Value =>
                return
                  (Kind => IR.Scalar_Field_Shape,
@@ -2127,7 +2166,7 @@ package body Landin.Stages.Lowering is
 
          Held := Landin.Checking.Type_Of (Types.all, Id);
 
-         if Held = Ty.Slice_Value then
+         if Held in Ty.Slice_Value | Ty.Any_Value then
             Slots (Positive (Id)) := IR.Add_Array_Slot
               (Unit.all, Filling, Ty.Usize, 2, Id,
                Site_Of (Of_Tree, Node));
@@ -2262,7 +2301,7 @@ package body Landin.Stages.Lowering is
            Site_Of (Of_Tree, Node);
          Result : IR.Slot_Id;
       begin
-         if Held = Ty.Slice_Value then
+         if Held in Ty.Slice_Value | Ty.Any_Value then
             return IR.Add_Array_Slot
               (Unit.all, Filling, Ty.Usize, 2,
                Res.No_Declaration, Site);
@@ -2450,8 +2489,8 @@ package body Landin.Stages.Lowering is
       begin
          case Syn.Kind (Of_Tree, Node) is
             when Syn.Inclusive_Slice | Syn.Half_Open_Slice
-               | Syn.Empty_Slice_Literal | Syn.Name_Reference
-               | Syn.Member_Selection =>
+               | Syn.Empty_Slice_Literal | Syn.Any_Construction
+               | Syn.Name_Reference | Syn.Member_Selection =>
                if Destination_Field /= 0 or else Destination_Path'Length /= 0
                then
                   raise Landin.Compiler_Defect with
@@ -2520,6 +2559,12 @@ package body Landin.Stages.Lowering is
          Generic_Target : constant Landin.Checking.Routine_Instance_Id :=
            Landin.Checking.Routine_Target_Of
              (Types.all, Of_Tree, Node);
+         Erased_Self : constant Boolean :=
+           Syn.Kind (Of_Tree, Callee) = Syn.Member_Selection
+           and then Type_At
+             (Of_Tree, Syn.Target_Of (Of_Tree, Callee)) = Ty.Any_Value;
+         Parameter_Offset : constant Natural :=
+           (if Erased_Self then 1 else 0);
          Source_Signature : constant Landin.Checking.Signature_Id :=
            (if Generic_Target /= Landin.Checking.No_Routine_Instance
             then Landin.Checking.Routine_Signature_Of
@@ -2550,7 +2595,8 @@ package body Landin.Stages.Lowering is
               (Types.all, Source_Signature));
          Returns_Stored : constant Boolean :=
            Type_At (Of_Tree, Node)
-             in Ty.Aggregate | Ty.Fixed_Array | Ty.Slice_Value;
+             in Ty.Aggregate | Ty.Fixed_Array | Ty.Slice_Value
+                | Ty.Any_Value;
          Given : array (1 .. Positive'Max (1, Count)) of IR.Value_Id :=
            [others => IR.No_Value];
          Saved : array (1 .. Positive'Max (1, Count)) of IR.Slot_Id :=
@@ -2644,6 +2690,10 @@ package body Landin.Stages.Lowering is
                  (Unit.all, Filling, Callee_Saved, Value, Site);
             end;
          end if;
+         if Erased_Self then
+            Given (1) := Lower_Slice
+              (Of_Tree, Syn.Target_Of (Of_Tree, Callee), Scope).Base;
+         end if;
 
          --  [0410] fixes argument evaluation left to right.  Every argument
          --  with another after it crosses through a slot before that later
@@ -2669,7 +2719,7 @@ package body Landin.Stages.Lowering is
                   then Positive
                     (Res.Position_Of
                        (Meanings.all, Of_Tree, Raw_Argument))
-                  else Written);
+                  else Written + Parameter_Offset);
                Argument : constant Syn.Node_Id :=
                  (if Syn.Kind (Of_Tree, Raw_Argument) = Syn.Call_Argument
                   then Syn.Expression_Projection (Of_Tree, Raw_Argument)
@@ -2690,8 +2740,10 @@ package body Landin.Stages.Lowering is
                   end;
                elsif Type_At (Of_Tree, Argument)
                     in Ty.Aggregate | Ty.Fixed_Array | Ty.Slice_Value
+                       | Ty.Any_Value
                then
-                  if Type_At (Of_Tree, Argument) = Ty.Slice_Value
+                  if Type_At (Of_Tree, Argument)
+                       in Ty.Slice_Value | Ty.Any_Value
                     and then Syn.Kind (Of_Tree, Argument)
                       not in Syn.Call | Syn.Try_Expression
                          | Syn.If_Statement | Syn.Match_Statement
@@ -3778,7 +3830,9 @@ package body Landin.Stages.Lowering is
                Length => IR.Element_Total (Descriptor.Length),
                Nominal => Nominal_For (Descriptor.Element_Nominal),
                others => <>);
-         elsif Descriptor.Referent = Ty.Slice_Value then
+         elsif Descriptor.Referent
+           in Ty.Slice_Value | Ty.Any_Value
+         then
             return
               (Kind => IR.Array_Field_Shape, Element => Ty.Usize,
                Length => 2, others => <>);
@@ -3875,6 +3929,28 @@ package body Landin.Stages.Lowering is
          then
             Lower_Stored_Expression
               (Of_Tree, Node, Scope, Destination);
+            return;
+         end if;
+
+         if Syn.Kind (Of_Tree, Node) = Syn.Any_Construction then
+            declare
+               Data : constant IR.Value_Id := Lower_Expression
+                 (Of_Tree, Syn.Operand_Of (Of_Tree, Node), Scope);
+               Evidence : constant Landin.Checking.Conformance_Id :=
+                 Landin.Checking.Evidence_Of (Types.all, Of_Tree, Node);
+               Table : IR.Value_Id;
+            begin
+               if Evidence = Landin.Checking.No_Conformance then
+                  raise Landin.Compiler_Defect with
+                    "an any construction has no selected evidence";
+               end if;
+               Table := IR.Emit_Evidence_Address
+                 (Unit.all, Filling, Any_Evidence_For (Evidence), Site);
+               IR.Emit_Store_Slot_Field
+                 (Unit.all, Filling, Destination, 1, Data, Site);
+               IR.Emit_Store_Slot_Field
+                 (Unit.all, Filling, Destination, 2, Table, Site);
+            end;
             return;
          end if;
 
@@ -4292,7 +4368,7 @@ package body Landin.Stages.Lowering is
                         (if Syn.Kind (Of_Tree, Node) = Syn.Size_Of
                          then IR.Measure_Size else IR.Measure_Align),
                         Ty.Usize, Result, Site);
-                  elsif Held = Ty.Slice_Value then
+                  elsif Held in Ty.Slice_Value | Ty.Any_Value then
                      if Syn.Kind (Of_Tree, Node) = Syn.Align_Of then
                         return IR.Emit_Measurement
                           (Unit.all, Filling, IR.Measure_Align,
@@ -4626,16 +4702,26 @@ package body Landin.Stages.Lowering is
                        Landin.Checking.Conformance_Identities.Position
                          (Types.all, Source);
                      Slot : constant IR.Slot_Id := Evidence_Slots (Position);
+                     Dynamic : constant Boolean := Type_At
+                       (Of_Tree, Syn.Target_Of (Of_Tree, Node))
+                         = Ty.Any_Value;
                      Table : IR.Value_Id;
                   begin
-                     if Slot = IR.No_Slot then
+                     if Dynamic then
+                        Table := Lower_Slice
+                          (Of_Tree, Syn.Target_Of (Of_Tree, Node),
+                           Scope).Length;
+                     elsif Slot = IR.No_Slot then
                         raise Landin.Compiler_Defect with
                           "an evidence selection has no hidden parameter";
+                     else
+                        Table := IR.Emit_Load
+                          (Unit.all, Filling, Slot, Site);
                      end if;
-                     Table := IR.Emit_Load
-                       (Unit.all, Filling, Slot, Site);
                      return IR.Emit_Evidence_Function
-                       (Unit.all, Filling, Table, Evidence_For (Source),
+                       (Unit.all, Filling, Table,
+                        (if Dynamic then Any_Evidence_For (Source)
+                         else Evidence_For (Source)),
                         Positive
                           (Landin.Checking.Evidence_Entry_Of
                              (Types.all, Of_Tree, Node)),
@@ -5860,11 +5946,15 @@ package body Landin.Stages.Lowering is
                       (Types.all, Signature, Field);
                begin
                   case Part.Kind is
-                     when Ty.Scalar_Name | Ty.Function_Value =>
+                     when Ty.Scalar_Name | Ty.Function_Value
+                        | Ty.Pointer_Value | Ty.Atom_Value =>
                         declare
                            Held : constant Ty.Scalar_Name :=
-                             (if Part.Kind = Ty.Function_Value
-                              then Ty.Usize else Ty.Scalar_Name (Part.Kind));
+                             (if Part.Kind in Ty.Function_Value
+                                                | Ty.Pointer_Value
+                              then Ty.Usize
+                              elsif Part.Kind = Ty.Atom_Value
+                              then Ty.U32 else Ty.Scalar_Name (Part.Kind));
                            Function_Signature : constant IR.Signature_Id :=
                              (if Part.Kind = Ty.Function_Value
                               then Signature_For (Part.Signature)
@@ -5903,7 +5993,7 @@ package body Landin.Stages.Lowering is
                            end case;
                         end;
 
-                     when Ty.Fixed_Array =>
+                     when Ty.Fixed_Array | Ty.Slice_Value | Ty.Any_Value =>
                         IR.Emit_Array_Copy
                           (Unit.all, Filling, Source, Destination, Site,
                            Source_Field => Field,
@@ -6011,9 +6101,12 @@ package body Landin.Stages.Lowering is
                                   | Syn.Member_Selection
                                   | Syn.Inclusive_Slice
                                   | Syn.Half_Open_Slice
-                                  | Syn.Empty_Slice_Literal);
+                                  | Syn.Empty_Slice_Literal
+                                  | Syn.Any_Construction);
 
-                  if Type_At (Of_Tree, Value) = Ty.Slice_Value then
+                  if Type_At (Of_Tree, Value)
+                       in Ty.Slice_Value | Ty.Any_Value
+                  then
                      declare
                         Temporary : constant IR.Slot_Id := IR.Add_Array_Slot
                           (Unit.all, Filling, Ty.Usize, 2,
@@ -7167,7 +7260,7 @@ package body Landin.Stages.Lowering is
                         if Value = Syn.No_Node then
                            null;
                         elsif Landin.Checking.Type_Of (Types.all, Id)
-                                = Ty.Slice_Value
+                                in Ty.Slice_Value | Ty.Any_Value
                         then
                            Lower_Slice_Into
                              (Of_Tree, Value, Scope, Where);
@@ -7604,7 +7697,8 @@ package body Landin.Stages.Lowering is
 
                      elsif Landin.Checking.Type_Of
                        (Types.all, Of_Tree,
-                        Syn.Target_Of (Of_Tree, Stmt)) = Ty.Slice_Value
+                        Syn.Target_Of (Of_Tree, Stmt))
+                          in Ty.Slice_Value | Ty.Any_Value
                      then
                         declare
                            Place : constant Syn.Node_Id :=
@@ -8315,7 +8409,9 @@ package body Landin.Stages.Lowering is
          --  D106's first internal parameter is an unspellable pointer to
          --  caller-owned result storage.  Source parameters follow it through
          --  the same register/stack run.
-         if Gives_Type in Ty.Aggregate | Ty.Fixed_Array | Ty.Slice_Value then
+         if Gives_Type in Ty.Aggregate | Ty.Fixed_Array | Ty.Slice_Value
+              | Ty.Any_Value
+         then
             declare
                Ignored : constant IR.Slot_Id :=
                  IR.Add_Parameter
@@ -8391,7 +8487,7 @@ package body Landin.Stages.Lowering is
                               Nominal => Element.Nominal,
                               others => <>);
                         end;
-                     elsif Held = Ty.Slice_Value then
+                     elsif Held in Ty.Slice_Value | Ty.Any_Value then
                         Shape :=
                           (Kind => IR.Array_Field_Shape,
                            Element => Ty.Usize, Length => 2, others => <>);
@@ -8414,7 +8510,7 @@ package body Landin.Stages.Lowering is
                        (IR.Is_Address
                           (Unit.all, Filling, Slots (Positive (Id))));
                   end;
-               elsif Held = Ty.Slice_Value then
+               elsif Held in Ty.Slice_Value | Ty.Any_Value then
                   Slots (Positive (Id)) :=
                     IR.Add_Array_Parameter
                       (Unit.all, Filling, Ty.Usize, 2, Id,
@@ -8532,6 +8628,7 @@ package body Landin.Stages.Lowering is
 
             if Gives_Type
               in Ty.Aggregate | Ty.Fixed_Array | Ty.Slice_Value
+                 | Ty.Any_Value
             then
                Lower_Stored_Expression
                  (Of_Tree, Runs, Signature, Result);
@@ -8634,6 +8731,7 @@ package body Landin.Stages.Lowering is
          if Held not in Ty.Scalar_Name | Ty.Function_Value | Ty.Pointer_Value
               | Ty.Atom_Value
            and then Held not in Ty.Aggregate | Ty.Fixed_Array | Ty.Slice_Value
+              | Ty.Any_Value
          then
             raise Landin.Compiler_Defect with
               "a module binding reached the lowering with no storable type";
@@ -8647,7 +8745,9 @@ package body Landin.Stages.Lowering is
          --  image chain terminates at a D10-zeroed array.  Each declaration
          --  still owns a distinct datum whose storage is described by the
          --  fields or shape the item was given, so its block carries no value.
-         if Held in Ty.Aggregate | Ty.Fixed_Array | Ty.Slice_Value then
+         if Held in Ty.Aggregate | Ty.Fixed_Array | Ty.Slice_Value
+              | Ty.Any_Value
+         then
             Open (Fresh (Of_Tree, Node, Res.Program_Scope));
             IR.Emit_Leave (Unit.all, Filling, IR.No_Value, Site);
             IR.Leave_Block (Unit.all, Filling);
@@ -8773,7 +8873,8 @@ package body Landin.Stages.Lowering is
                           (if Held in Ty.Function_Value | Ty.Pointer_Value
                            then Ty.Usize
                            elsif Held = Ty.Atom_Value then Ty.U32
-                           elsif Held = Ty.Slice_Value then Ty.Fixed_Array
+                           elsif Held in Ty.Slice_Value | Ty.Any_Value
+                           then Ty.Fixed_Array
                            else Held),
                           Site_Of (Of_Tree, Node),
                           Nominal =>
@@ -8794,7 +8895,7 @@ package body Landin.Stages.Lowering is
                         IR.Set_Array
                           (Unit.all, Made, Neutral_Element (Result_Part),
                            IR.Element_Total (Result_Part.Length));
-                     elsif Held = Ty.Slice_Value then
+                     elsif Held in Ty.Slice_Value | Ty.Any_Value then
                         IR.Set_Array
                           (Unit.all, Made, Ty.Usize, 2);
                      end if;
@@ -8815,7 +8916,8 @@ package body Landin.Stages.Lowering is
                         then Ty.Usize
                         elsif Held = Ty.Atom_Value
                         then Ty.U32
-                        elsif Held = Ty.Slice_Value then Ty.Fixed_Array
+                        elsif Held in Ty.Slice_Value | Ty.Any_Value
+                           then Ty.Fixed_Array
                         else Held),
                        Site_Of (Of_Tree, Node),
                        Nominal =>
@@ -8845,7 +8947,7 @@ package body Landin.Stages.Lowering is
                   --  because an array is its element repeated
                   --  and a run of them would be as long as the
                   --  count, which reaches four billion.
-                  if Held = Ty.Slice_Value then
+                  if Held in Ty.Slice_Value | Ty.Any_Value then
                      IR.Set_Array (Unit.all, Made, Ty.Usize, 2);
                   elsif Held = Ty.Fixed_Array then
                      IR.Set_Array
@@ -8939,7 +9041,8 @@ package body Landin.Stages.Lowering is
                        (if Held in Ty.Function_Value | Ty.Pointer_Value
                         then Ty.Usize
                         elsif Held = Ty.Atom_Value then Ty.U32
-                        elsif Held = Ty.Slice_Value then Ty.Fixed_Array
+                        elsif Held in Ty.Slice_Value | Ty.Any_Value
+                           then Ty.Fixed_Array
                         else Held),
                        Site_Of (Of_Tree.all, Node),
                        Nominal =>
@@ -8950,7 +9053,7 @@ package body Landin.Stages.Lowering is
                   if Held = Ty.Atom_Value then
                      IR.Set_Atom_Set
                        (Unit.all, Made, Atom_Set_For (Part.Atoms));
-                  elsif Held = Ty.Slice_Value then
+                  elsif Held in Ty.Slice_Value | Ty.Any_Value then
                      IR.Set_Array (Unit.all, Made, Ty.Usize, 2);
                   elsif Held = Ty.Fixed_Array then
                      --  A generic item has no declaration-local array fact;
@@ -9003,7 +9106,8 @@ package body Landin.Stages.Lowering is
                           (if Held = Ty.Function_Value
                            then Ty.Usize
                            elsif Held = Ty.Atom_Value then Ty.U32
-                           elsif Held = Ty.Slice_Value then Ty.Fixed_Array
+                           elsif Held in Ty.Slice_Value | Ty.Any_Value
+                           then Ty.Fixed_Array
                            else Held),
                           Site_Of (Of_Tree.all, Node),
                           Nominal =>
@@ -9019,7 +9123,7 @@ package body Landin.Stages.Lowering is
                            Atom_Set_For
                              (Landin.Checking.Atom_Set_Of
                                 (Types.all, Declaration_At (Src, Gives))));
-                     elsif Held = Ty.Slice_Value then
+                     elsif Held in Ty.Slice_Value | Ty.Any_Value then
                         IR.Set_Array (Unit.all, Made, Ty.Usize, 2);
                      end if;
                      IR.Set_Signature
@@ -9036,64 +9140,234 @@ package body Landin.Stages.Lowering is
          end;
       end loop;
 
-      --  One target-neutral table descriptor per concrete conformance, in
-      --  checker interning order.  Direct entries keep concept source order;
-      --  size and alignment are implicit semantic members whose physical
-      --  positions are derived by Landin.Evidence and Landin.Targets.
-      for Position in 1 .. Landin.Checking.Conformance_Count (Types.all) loop
-         declare
-            Source : constant Landin.Checking.Conformance_Id :=
-              Landin.Checking.Conformance_Identities.Nth
-                (Types.all, Position);
-            Actual : constant Landin.Checking.Actual_Key :=
-              Landin.Checking.Conformance_Target (Types.all, Source);
+      --  D144's direct generic table and D145's flattened runtime table
+      --  are separate physical objects over the same conformance evidence.
+      --  The latter keeps `any C` two words while parent conformances remain
+      --  separate semantic identities.
+      declare
+         type Boolean_Array is array (Positive range <>) of Boolean;
+
+         function Concept_For
+           (Of_Tree : Syn.Tree; Reference : Syn.Node_Id)
+            return Landin.Checking.Concept_Id;
+
+         function Concept_For
+           (Of_Tree : Syn.Tree; Reference : Syn.Node_Id)
+            return Landin.Checking.Concept_Id
+         is
          begin
-            Evidence (Position) :=
-              IR.Add_Evidence (Unit.all, Evidence_Shape (Actual));
-            for Provider_Position in
-              1 .. Landin.Checking.Conformance_Entry_Count
-                     (Types.all, Source)
-            loop
+            if Res.Verdict_Of (Meanings.all, Of_Tree, Reference) /= Res.Bound
+            then
+               return Landin.Checking.No_Concept;
+            end if;
+            declare
+               Declaration : constant Res.Declaration_Id :=
+                 Res.Bound_To (Meanings.all, Of_Tree, Reference);
+            begin
+               for Position in 1 .. Landin.Checking.Concept_Count
+                 (Types.all)
+               loop
+                  declare
+                     Candidate : constant Landin.Checking.Concept_Id :=
+                       Landin.Checking.Concept_Identities.Nth
+                         (Types.all, Position);
+                  begin
+                     if not Landin.Checking.Is_Compiler_Concept
+                       (Types.all, Candidate)
+                       and then Landin.Checking.Concept_Declaration
+                         (Types.all, Candidate) = Declaration
+                     then
+                        return Candidate;
+                     end if;
+                  end;
+               end loop;
+               return Landin.Checking.No_Concept;
+            end;
+         end Concept_For;
+
+         function Used_By_Any
+           (Concept : Landin.Checking.Concept_Id) return Boolean;
+
+         function Used_By_Any
+           (Concept : Landin.Checking.Concept_Id) return Boolean
+         is
+         begin
+            for Source in 1 .. Source_Count (Context) loop
                declare
-                  Provider_Instance : constant
-                    Landin.Checking.Routine_Instance_Id :=
-                      Landin.Checking.Conformance_Provider_Instance
-                        (Types.all, Source, Provider_Position);
-                  Provider : constant Res.Declaration_Id :=
-                    Landin.Checking.Conformance_Provider_Declaration
-                      (Types.all, Source, Provider_Position);
-                  Target : constant IR.Item_Id :=
-                    (if Provider_Instance
-                           /= Landin.Checking.No_Routine_Instance
-                     then IR.Item_For_Instance
-                       (Unit.all,
-                        Landin.Checking.Routine_Identities.Position
-                          (Types.all, Provider_Instance))
-                     elsif Provider /= Res.No_Declaration
-                     then IR.Item_For (Unit.all, Provider)
-                     else IR.No_Item);
-                  Signature : constant Landin.Checking.Signature_Id :=
-                    (if Provider_Instance
-                           /= Landin.Checking.No_Routine_Instance
-                     then Landin.Checking.Routine_Signature_Of
-                       (Types.all, Provider_Instance)
-                     elsif Provider /= Res.No_Declaration
-                     then Landin.Checking.Signature_Of (Types.all, Provider)
-                     else Landin.Checking.No_Signature);
+                  Of_Tree : constant not null access constant Syn.Tree :=
+                    Tree_For (Nth_Source (Context, Source));
                begin
-                  if Target = IR.No_Item
-                    or else Signature = Landin.Checking.No_Signature
-                  then
-                     raise Landin.Compiler_Defect with
-                       "a selected evidence provider has no routine item";
-                  end if;
-                  IR.Add_Evidence_Entry
-                    (Unit.all, Evidence (Position), Target,
-                     Signature_For (Signature));
+                  for Node in Syn.Node_Id'(1) .. Syn.Last_Node (Of_Tree.all)
+                  loop
+                     if Landin.Checking.Type_Of
+                          (Types.all, Of_Tree.all, Node) = Ty.Any_Value
+                       and then Landin.Checking.Any_Concept_Of
+                         (Types.all, Of_Tree.all, Node) = Concept
+                     then
+                        return True;
+                     end if;
+                  end loop;
                end;
             end loop;
-         end;
-      end loop;
+            return False;
+         end Used_By_Any;
+
+         procedure Add_Provider
+           (To_Evidence : IR.Evidence_Id;
+            Row         : Landin.Checking.Conformance_Id;
+            Position    : Positive);
+
+         procedure Add_Provider
+           (To_Evidence : IR.Evidence_Id;
+            Row         : Landin.Checking.Conformance_Id;
+            Position    : Positive)
+         is
+            Provider_Instance : constant
+              Landin.Checking.Routine_Instance_Id :=
+                Landin.Checking.Conformance_Provider_Instance
+                  (Types.all, Row, Position);
+            Provider : constant Res.Declaration_Id :=
+              Landin.Checking.Conformance_Provider_Declaration
+                (Types.all, Row, Position);
+            Target : constant IR.Item_Id :=
+              (if Provider_Instance /= Landin.Checking.No_Routine_Instance
+               then IR.Item_For_Instance
+                 (Unit.all,
+                  Landin.Checking.Routine_Identities.Position
+                    (Types.all, Provider_Instance))
+               elsif Provider /= Res.No_Declaration
+               then IR.Item_For (Unit.all, Provider)
+               else IR.No_Item);
+            Signature : constant Landin.Checking.Signature_Id :=
+              (if Provider_Instance /= Landin.Checking.No_Routine_Instance
+               then Landin.Checking.Routine_Signature_Of
+                 (Types.all, Provider_Instance)
+               elsif Provider /= Res.No_Declaration
+               then Landin.Checking.Signature_Of (Types.all, Provider)
+               else Landin.Checking.No_Signature);
+         begin
+            if Target = IR.No_Item
+              or else Signature = Landin.Checking.No_Signature
+            then
+               raise Landin.Compiler_Defect with
+                 "a selected evidence provider has no routine item";
+            end if;
+            IR.Add_Evidence_Entry
+              (Unit.all, To_Evidence, Target, Signature_For (Signature));
+         end Add_Provider;
+
+         procedure Add_Closure
+           (To_Evidence : IR.Evidence_Id;
+            Row         : Landin.Checking.Conformance_Id;
+            Seen        : in out Boolean_Array);
+
+         procedure Add_Closure
+           (To_Evidence : IR.Evidence_Id;
+            Row         : Landin.Checking.Conformance_Id;
+            Seen        : in out Boolean_Array)
+         is
+            Concept : constant Landin.Checking.Concept_Id :=
+              Landin.Checking.Conformance_Concept (Types.all, Row);
+            Concept_Position : constant Positive :=
+              Landin.Checking.Concept_Identities.Position
+                (Types.all, Concept);
+         begin
+            if Seen (Concept_Position) then
+               return;
+            end if;
+            Seen (Concept_Position) := True;
+            for Position in 1 .. Landin.Checking.Conformance_Entry_Count
+              (Types.all, Row)
+            loop
+               Add_Provider (To_Evidence, Row, Position);
+            end loop;
+            if Landin.Checking.Is_Compiler_Concept (Types.all, Concept) then
+               return;
+            end if;
+            declare
+               Declaration : constant Res.Declaration_Id :=
+                 Landin.Checking.Concept_Declaration (Types.all, Concept);
+               Concept_Tree : constant not null access constant Syn.Tree :=
+                 Tree_For (Res.Source_Of (Meanings.all, Declaration));
+               Concept_Node : constant Syn.Node_Id :=
+                 Res.Node_Of (Meanings.all, Declaration);
+
+               procedure Add_Parent (Reference : Syn.Node_Id);
+
+               procedure Add_Parent (Reference : Syn.Node_Id) is
+                  Parent : constant Landin.Checking.Concept_Id :=
+                    Concept_For (Concept_Tree.all, Reference);
+                  Parent_Row : Landin.Checking.Conformance_Id :=
+                    Landin.Checking.No_Conformance;
+               begin
+                  if Parent = Landin.Checking.No_Concept then
+                     return;
+                  end if;
+                  Parent_Row := Landin.Checking.Find_Conformance
+                    (Types.all, Parent,
+                     Landin.Checking.Conformance_Target (Types.all, Row),
+                     Landin.Checking.Empty_Actuals);
+                  if Parent_Row = Landin.Checking.No_Conformance then
+                     raise Landin.Compiler_Defect with
+                       "an any conformance closure has no parent table";
+                  end if;
+                  Add_Closure (To_Evidence, Parent_Row, Seen);
+               end Add_Parent;
+            begin
+               declare
+                  Represented : constant Syn.Node_Id :=
+                    Syn.Nth_Concept_Formal
+                      (Concept_Tree.all, Concept_Node, 1);
+                  Required : constant Syn.Node_Id :=
+                    Syn.Constraint_Of (Concept_Tree.all, Represented);
+               begin
+                  if Required /= Syn.No_Node then
+                     Add_Parent (Required);
+                  end if;
+               end;
+               for Parent in 1 .. Syn.Concept_Parent_Count
+                 (Concept_Tree.all, Concept_Node)
+               loop
+                  Add_Parent
+                    (Syn.Nth_Concept_Parent
+                       (Concept_Tree.all, Concept_Node, Parent));
+               end loop;
+            end;
+         end Add_Closure;
+      begin
+         for Position in 1 .. Landin.Checking.Conformance_Count (Types.all)
+         loop
+            declare
+               Source : constant Landin.Checking.Conformance_Id :=
+                 Landin.Checking.Conformance_Identities.Nth
+                   (Types.all, Position);
+               Actual : constant Landin.Checking.Actual_Key :=
+                 Landin.Checking.Conformance_Target (Types.all, Source);
+               Seen : Boolean_Array
+                 (1 .. Positive'Max
+                   (1, Landin.Checking.Concept_Count (Types.all))) :=
+                     [others => False];
+            begin
+               Evidence (Position) :=
+                 IR.Add_Evidence (Unit.all, Evidence_Shape (Actual));
+               for Provider_Position in
+                 1 .. Landin.Checking.Conformance_Entry_Count
+                        (Types.all, Source)
+               loop
+                  Add_Provider
+                    (Evidence (Position), Source, Provider_Position);
+               end loop;
+
+               if Used_By_Any
+                 (Landin.Checking.Conformance_Concept (Types.all, Source))
+               then
+                  Any_Evidence (Position) :=
+                    IR.Add_Evidence (Unit.all, Evidence_Shape (Actual));
+                  Add_Closure (Any_Evidence (Position), Source, Seen);
+               end if;
+            end;
+         end loop;
+      end;
 
       --  Pass two: fill every active item in the same declaration order.
       declare

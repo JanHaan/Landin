@@ -1,0 +1,19 @@
+display: type = concept (t: type)
+    code: (self: ptr t) -> (value: i32)
+end display
+
+box: type (t: type) = struct
+    value: t
+end box
+
+box_code: (t: type, self: ptr box(t)) -> (value: i32) =
+    value = 42
+end box_code
+
+(t: type) box(t) is display (code: box_code)
+
+public main: () -> (code: i32) =
+    item: box(i32) = (value: 1)
+    erased: any display = any(addr item)
+    code = erased.code()
+end main
