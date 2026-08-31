@@ -39,6 +39,9 @@ target linux-x86-64
   0                   0    8     -        16    8
   2                   0    8     16       32    8
 
+  any data table bytes align
+  0    8     16    8
+
 target synthetic-32
   pointer   32 bits, aligned 4
   stack     aligned 8
@@ -74,3 +77,6 @@ target synthetic-32
   evidence functions  size align first-fn bytes align
   0                   0    4     -        8     4
   2                   0    4     8        16    4
+
+  any data table bytes align
+  0    4     8     4

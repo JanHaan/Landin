@@ -1,0 +1,28 @@
+readable: type = concept (t: type)
+    read: (self: ptr t) -> (value: i32)
+end readable
+
+adjustable: type = concept (t: type) is readable
+    extra: (self: ptr t) -> (value: i32)
+end adjustable
+
+thing: type = struct
+    value: i32
+end thing
+
+read_thing: (self: ptr thing) -> (value: i32) =
+    value = self.val.value
+end read_thing
+
+extra_thing: (self: ptr thing) -> (value: i32) =
+    value = 1
+end extra_thing
+
+thing is readable (read: read_thing)
+thing is adjustable (extra: extra_thing)
+
+public main: () -> (code: i32) =
+    item: thing = (value: 41)
+    erased: any adjustable = any(addr item)
+    code = erased.read() + erased.extra()
+end main

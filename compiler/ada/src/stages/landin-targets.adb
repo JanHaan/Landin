@@ -139,6 +139,28 @@ package body Landin.Targets is
      (Facts : Target_Facts) return Byte_Alignment
      is (Pointer_Alignment (Facts));
 
+   function Any_Data_Offset (Facts : Target_Facts) return Byte_Count is
+      pragma Unreferenced (Facts);
+   begin
+      return 0;
+   end Any_Data_Offset;
+
+   function Any_Table_Offset (Facts : Target_Facts) return Byte_Count
+     is (Evidence_Cell_Size (Facts));
+
+   function Any_Value_Size (Facts : Target_Facts) return Byte_Count is
+      Cell : constant Byte_Count := Evidence_Cell_Size (Facts);
+   begin
+      if Cell > Maximum_Object_Size (Facts) / 2 then
+         raise Compiler_Defect with "any-value size overflow";
+      end if;
+      return 2 * Cell;
+   end Any_Value_Size;
+
+   function Any_Value_Alignment
+     (Facts : Target_Facts) return Byte_Alignment
+     is (Pointer_Alignment (Facts));
+
    function Is_Power_Of_Two (Value : Byte_Alignment) return Boolean is
       Remaining : Natural := Natural (Value);
    begin

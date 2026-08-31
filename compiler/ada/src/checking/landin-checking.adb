@@ -187,6 +187,11 @@ package body Landin.Checking is
      is (Kind => Type_Actual_Kind, Type_Form => Reference_Actual_Type,
          Owner => Of_Table'Address, Reference => Reference, others => <>);
 
+   function Any_Type_Actual
+     (Of_Table : Table; Concept : Concept_Id) return Actual_Key
+     is (Kind => Type_Actual_Kind, Type_Form => Any_Actual_Type,
+         Owner => Of_Table'Address, Concept => Concept, others => <>);
+
    function Fixed_Actual (Value : Landin.Types.Magnitude) return Actual_Key
      is (Kind => Fixed_Actual_Kind, Value => Value, others => <>);
 
@@ -287,6 +292,16 @@ package body Landin.Checking is
       return Key.Reference;
    end Reference_Of;
 
+   function Any_Concept_Of
+     (Of_Table : Table; Key : Actual_Key) return Concept_Id is
+   begin
+      if not Holds (Of_Table, Key) then
+         raise Landin.Compiler_Defect with
+           "an any actual key belongs to another checking table";
+      end if;
+      return Key.Concept;
+   end Any_Concept_Of;
+
    function Fixed_Magnitude_Of
      (Key : Actual_Key) return Landin.Types.Magnitude
      is (Key.Value);
@@ -320,6 +335,9 @@ package body Landin.Checking is
          when Reference_Actual_Type =>
             return Key.Owner = Of_Table'Address
               and then Holds (Of_Table, Key.Reference);
+         when Any_Actual_Type =>
+            return Key.Owner = Of_Table'Address
+              and then Holds (Of_Table, Key.Concept);
       end case;
    end Holds;
 
@@ -376,6 +394,8 @@ package body Landin.Checking is
          when Reference_Actual_Type =>
             return References_Agree
               (Of_Table, Left.Reference, Right.Reference);
+         when Any_Actual_Type =>
+            return Left.Concept = Right.Concept;
       end case;
    end Actuals_Agree;
 
@@ -928,6 +948,7 @@ package body Landin.Checking is
                Into.Node_Atom_Sets.Append (No_Atom_Set);
                Into.Node_Signatures.Append (No_Signature);
                Into.Node_References.Append (No_Reference);
+               Into.Node_Concepts.Append (No_Concept);
                Into.Node_Result_Shapes.Append (No_Signature);
                Into.Node_Routine_Targets.Append (No_Routine_Instance);
                Into.Node_Evidence.Append (No_Conformance);
@@ -946,6 +967,7 @@ package body Landin.Checking is
          Into.Declaration_Atom_Sets.Append (No_Atom_Set);
          Into.Declaration_Signatures.Append (No_Signature);
          Into.Declaration_References.Append (No_Reference);
+         Into.Declaration_Concepts.Append (No_Concept);
          Into.Declaration_Result_Shapes.Append (No_Signature);
       end loop;
 
@@ -1494,6 +1516,10 @@ package body Landin.Checking is
               and then Left.Element_Nominal = Right.Element_Nominal;
          when Landin.Types.Aggregate =>
             return Left.Nominal = Right.Nominal;
+         when Landin.Types.Any_Value =>
+            return Holds (Of_Table, Left.Concept)
+              and then Holds (Of_Table, Right.Concept)
+              and then Left.Concept = Right.Concept;
          when Landin.Types.Function_Value =>
             return Holds (Of_Table, Left.Signature)
               and then Holds (Of_Table, Right.Signature)
@@ -1611,6 +1637,86 @@ package body Landin.Checking is
       end if;
    end Note_Reference;
 
+   function Any_Concept_Of
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id) return Concept_Id
+   is
+      Where : constant Positive := Slot (Of_Table, Of_Tree, Node);
+      Overlay : constant Natural := Node_Overlay_Position (Of_Table, Where);
+   begin
+      if Overlay /= 0 and then Of_Table.Node_Overlays (Overlay).Has_Concept
+      then
+         return Of_Table.Node_Overlays (Overlay).Concept;
+      end if;
+      return Of_Table.Node_Concepts (Where);
+   end Any_Concept_Of;
+
+   function Any_Concept_Of
+     (Of_Table : Table; Id : Declaration_Id) return Concept_Id
+   is
+      Overlay : constant Natural :=
+        (if Id = No_Declaration then 0
+         else Declaration_Overlay_Position (Of_Table, Id));
+   begin
+      if Id = No_Declaration then
+         return No_Concept;
+      elsif Overlay /= 0
+        and then Of_Table.Declaration_Overlays (Overlay).Has_Concept
+      then
+         return Of_Table.Declaration_Overlays (Overlay).Concept;
+      end if;
+      return Of_Table.Declaration_Concepts (Positive (Id));
+   end Any_Concept_Of;
+
+   procedure Note_Any_Concept
+     (Into    : in out Table;
+      Of_Tree : Landin.Syntax.Tree;
+      Node    : Landin.Syntax.Node_Id;
+      Concept : Concept_Id)
+   is
+      Where : constant Positive := Slot (Into, Of_Tree, Node);
+   begin
+      if Any_Concept_Of (Into, Of_Tree, Node) /= No_Concept
+        and then Any_Concept_Of (Into, Of_Tree, Node) /= Concept
+      then
+         raise Landin.Compiler_Defect with
+           "one node was assigned two any concepts";
+      end if;
+      if Into.Current_Routine = No_Routine_Instance then
+         Into.Node_Concepts (Where) := Concept;
+      else
+         declare
+            Overlay : constant Positive := Ensure_Node_Overlay (Into, Where);
+         begin
+            Into.Node_Overlays (Overlay).Has_Concept := True;
+            Into.Node_Overlays (Overlay).Concept := Concept;
+         end;
+      end if;
+   end Note_Any_Concept;
+
+   procedure Note_Any_Concept
+     (Into : in out Table; Id : Declaration_Id; Concept : Concept_Id) is
+   begin
+      if Any_Concept_Of (Into, Id) /= No_Concept
+        and then Any_Concept_Of (Into, Id) /= Concept
+      then
+         raise Landin.Compiler_Defect with
+           "one declaration was assigned two any concepts";
+      end if;
+      if Into.Current_Routine = No_Routine_Instance then
+         Into.Declaration_Concepts (Positive (Id)) := Concept;
+      else
+         declare
+            Overlay : constant Positive :=
+              Ensure_Declaration_Overlay (Into, Id);
+         begin
+            Into.Declaration_Overlays (Overlay).Has_Concept := True;
+            Into.Declaration_Overlays (Overlay).Concept := Concept;
+         end;
+      end if;
+   end Note_Any_Concept;
+
    ------------------------------------------------------------------
    --  Function signatures
    ------------------------------------------------------------------
@@ -1620,6 +1726,7 @@ package body Landin.Checking is
         Part.Nominal = No_Nominal_Type
         and then Part.Signature = No_Signature
         and then Part.Reference = No_Reference
+        and then Part.Concept = No_Concept
         and then Part.Atoms = No_Atom_Set;
    begin
       if not Is_Prepared (Of_Table)
@@ -1653,10 +1760,17 @@ package body Landin.Checking is
               and then Part.Signature = No_Signature
               and then Part.Reference = No_Reference
               and then Part.Atoms = No_Atom_Set;
+         when Landin.Types.Any_Value =>
+            return Part.Nominal = No_Nominal_Type
+              and then Part.Signature = No_Signature
+              and then Part.Reference = No_Reference
+              and then Holds (Of_Table, Part.Concept)
+              and then Part.Atoms = No_Atom_Set;
          when Landin.Types.Function_Value =>
             return Part.Nominal = No_Nominal_Type
               and then Holds (Of_Table, Part.Signature)
               and then Part.Reference = No_Reference
+              and then Part.Concept = No_Concept
               and then Part.Atoms = No_Atom_Set;
          when others =>
             return False;
@@ -1739,7 +1853,8 @@ package body Landin.Checking is
    is
    begin
       case Part.Kind is
-         when Landin.Types.Pointer_Value | Landin.Types.Slice_Value =>
+         when Landin.Types.Pointer_Value | Landin.Types.Slice_Value
+            | Landin.Types.Any_Value =>
             return True;
          when Landin.Types.Aggregate =>
             return Contains_References (Of_Table, Part.Nominal);
@@ -2063,6 +2178,8 @@ package body Landin.Checking is
             return A.Length = B.Length
               and then A.Element = B.Element
               and then A.Nominal = B.Nominal;
+         when Landin.Types.Any_Value =>
+            return A.Concept = B.Concept;
          when Landin.Types.Function_Value =>
             return Holds (Of_Table, A.Signature)
               and then Holds (Of_Table, B.Signature)
@@ -2288,6 +2405,59 @@ package body Landin.Checking is
       return Of_Table.Node_Evidence_Entries (Where);
    end Evidence_Entry_Of;
 
+   procedure Note_Any_Construction
+     (Into       : in out Table;
+      Of_Tree    : Landin.Syntax.Tree;
+      Node       : Landin.Syntax.Node_Id;
+      Conformance : Conformance_Id)
+   is
+      Where : constant Positive := Slot (Into, Of_Tree, Node);
+   begin
+      if Evidence_Of (Into, Of_Tree, Node) /= No_Conformance then
+         raise Landin.Compiler_Defect with
+           "one any construction was assigned two conformances";
+      end if;
+      if Into.Current_Routine = No_Routine_Instance then
+         Into.Node_Evidence (Where) := Conformance;
+         Into.Node_Evidence_Entries (Where) := 0;
+      else
+         declare
+            Overlay : constant Positive := Ensure_Node_Overlay (Into, Where);
+         begin
+            Into.Node_Overlays (Overlay).Has_Evidence := True;
+            Into.Node_Overlays (Overlay).Evidence := Conformance;
+            Into.Node_Overlays (Overlay).Evidence_Entry := 0;
+         end;
+      end if;
+   end Note_Any_Construction;
+
+   procedure Note_Any_Dispatch
+     (Into      : in out Table;
+      Of_Tree   : Landin.Syntax.Tree;
+      Node      : Landin.Syntax.Node_Id;
+      Evidence  : Conformance_Id;
+      Which     : Positive)
+   is
+      Where : constant Positive := Slot (Into, Of_Tree, Node);
+   begin
+      if Evidence_Of (Into, Of_Tree, Node) /= No_Conformance then
+         raise Landin.Compiler_Defect with
+           "one any selection was assigned two evidence entries";
+      end if;
+      if Into.Current_Routine = No_Routine_Instance then
+         Into.Node_Evidence (Where) := Evidence;
+         Into.Node_Evidence_Entries (Where) := Which;
+      else
+         declare
+            Overlay : constant Positive := Ensure_Node_Overlay (Into, Where);
+         begin
+            Into.Node_Overlays (Overlay).Has_Evidence := True;
+            Into.Node_Overlays (Overlay).Evidence := Evidence;
+            Into.Node_Overlays (Overlay).Evidence_Entry := Which;
+         end;
+      end if;
+   end Note_Any_Dispatch;
+
    procedure Note_Evidence_Selection
      (Into      : in out Table;
       Of_Tree   : Landin.Syntax.Tree;
@@ -2404,10 +2574,15 @@ package body Landin.Checking is
                    (Landin.Targets.Bytes
                       (Landin.Targets.Pointer_Size (Facts)));
             begin
-               Size :=
-                 (if Descriptor.Kind = Landin.Types.Slice_Value
-                  then 2 * Pointer_Bytes else Pointer_Bytes);
-               Alignment := Landin.Targets.Pointer_Alignment (Facts);
+               if Descriptor.Kind = Landin.Types.Any_Value then
+                  Size := Landin.Targets.Any_Value_Size (Facts);
+                  Alignment := Landin.Targets.Any_Value_Alignment (Facts);
+               else
+                  Size :=
+                    (if Descriptor.Kind = Landin.Types.Slice_Value
+                     then 2 * Pointer_Bytes else Pointer_Bytes);
+                  Alignment := Landin.Targets.Pointer_Alignment (Facts);
+               end if;
             end;
          elsif Field.Kind = Fixed_Array_Field then
             if Field.Nominal /= No_Nominal_Type then

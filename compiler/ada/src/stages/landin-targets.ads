@@ -117,6 +117,21 @@ package Landin.Targets is
      (Facts : Target_Facts) return Byte_Alignment
      with Post => Evidence_Table_Alignment'Result = Pointer_Alignment (Facts);
 
+   ---------------------------------------------------------------------
+   --  `any C` pair representation [1370]
+   ---------------------------------------------------------------------
+
+   function Any_Data_Offset (Facts : Target_Facts) return Byte_Count
+     with Post => Any_Data_Offset'Result = 0;
+
+   function Any_Table_Offset (Facts : Target_Facts) return Byte_Count;
+
+   function Any_Value_Size (Facts : Target_Facts) return Byte_Count;
+
+   function Any_Value_Alignment
+     (Facts : Target_Facts) return Byte_Alignment
+     with Post => Any_Value_Alignment'Result = Pointer_Alignment (Facts);
+
    --  Layout arithmetic that refuses to guess.  Alignment must be a power
    --  of two, and rounding up must not silently wrap.  Both rules are
    --  enforced in the body, in every build mode: a layout that only holds

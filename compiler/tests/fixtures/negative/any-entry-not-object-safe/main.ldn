@@ -1,0 +1,19 @@
+echoable: type = concept (t: type)
+    echo: (self: ptr t, other: t) -> (value: i32)
+end echoable
+
+thing: type = struct
+    value: i32
+end thing
+
+echo_thing: (self: ptr thing, other: thing) -> (value: i32) =
+    value = other.value
+end echo_thing
+
+thing is echoable (echo: echo_thing)
+
+public main: () -> (code: i32) =
+    item: thing = (value: 42)
+    erased: any echoable = any(addr item)
+    code = 0
+end main

@@ -1,0 +1,4 @@
+class: positive
+summary: slices retain erased pair elements and dispatch after indexing
+program: main.ldn
+constructs: 0570, 1230, 1240, 1370, 1390

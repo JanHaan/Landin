@@ -175,7 +175,7 @@ package body Landin.Stages.Checking.References is
          Kind : constant Ty.Type_Kind :=
            Landin.Checking.Type_Of (Types.all, Id);
       begin
-         if Kind in Ty.Pointer_Value | Ty.Slice_Value then
+         if Kind in Ty.Pointer_Value | Ty.Slice_Value | Ty.Any_Value then
             return True;
          elsif Kind = Ty.Aggregate then
             declare
@@ -231,6 +231,16 @@ package body Landin.Stages.Checking.References is
          Formal : Positive) return Syn.Node_Id
       is
       begin
+         if Formal = 1
+           and then Syn.Kind (Tree, Syn.Callee_Of (Tree, Call))
+             = Syn.Member_Selection
+           and then Landin.Checking.Type_Of
+             (Types.all, Tree,
+              Syn.Target_Of (Tree, Syn.Callee_Of (Tree, Call)))
+                = Ty.Any_Value
+         then
+            return Syn.Target_Of (Tree, Syn.Callee_Of (Tree, Call));
+         end if;
          for Written in 1 .. Syn.Argument_Count (Tree, Call) loop
             declare
                Raw : constant Syn.Node_Id :=
@@ -238,6 +248,14 @@ package body Landin.Stages.Checking.References is
                Position : constant Natural :=
                  (if Syn.Kind (Tree, Raw) = Syn.Call_Argument
                   then Res.Position_Of (Meanings.all, Tree, Raw)
+                  elsif Syn.Kind (Tree, Syn.Callee_Of (Tree, Call))
+                          = Syn.Member_Selection
+                    and then Landin.Checking.Type_Of
+                      (Types.all, Tree,
+                       Syn.Target_Of
+                         (Tree, Syn.Callee_Of (Tree, Call)))
+                        = Ty.Any_Value
+                  then Written + 1
                   else Written);
             begin
                if Position = Formal then
@@ -483,6 +501,9 @@ package body Landin.Stages.Checking.References is
                      end if;
                   end;
                end if;
+
+            when Syn.Any_Construction =>
+               return Fact_Of (Tree, Syn.Operand_Of (Tree, Node));
 
             when Syn.Pointer_Conversion =>
                Result.Untracked := True;

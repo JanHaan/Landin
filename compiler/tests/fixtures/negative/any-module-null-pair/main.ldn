@@ -1,0 +1,9 @@
+display: type = concept (t: type)
+    code: (self: ptr t) -> (value: i32)
+end display
+
+saved: any display
+
+public main: () -> (code: i32) =
+    code = 0
+end main

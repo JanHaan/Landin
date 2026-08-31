@@ -11,7 +11,7 @@
 #
 #  A construct with no evidence and no refusal is this
 #  item's to answer for; see ROADMAP.md R1.90.
-#  199 constructs, 136 with evidence, 63 with neither.
+#  199 constructs, 140 with evidence, 59 with neither.
 #
 #  id    defined in  evidence
 0010   tour        accepted emitted                   Line comment, to end of line
@@ -68,7 +68,7 @@
 0520   tour        accepted emitted executed refused  Array: a value
 0530   tour        accepted emitted executed refused  The length may be inferred from the literal
 0540   tour        accepted emitted executed refused  zeroed is the all-bits-zero image of a type
-0550   tour        accepted emitted refused           The first of those two properties is also a concept
+0550   tour        accepted emitted executed refused  The first of those two properties is also a concept
 0560   tour        accepted emitted executed refused refused-by-name Repetition, for static patterns that live in flash
 0570   tour        accepted emitted executed refused refused-by-name Slice: a view
 0580   tour        accepted emitted executed refused  An empty slice still has a base
@@ -92,12 +92,12 @@
 0760   tour        -                                  Attributes are prefix words, from a closed set
 0770   tour        accepted emitted executed refused  There is no borrow checker and there are no lifetime
 0780   tour        accepted emitted refused           Parameters are non-escaping by default
-0790   tour        accepted emitted refused           The other direction
+0790   tour        accepted emitted executed refused  The other direction
 0800   tour        accepted emitted refused           The borrow of reaches across the call from there
 0810   tour        -                                  Derivation stops at the three primitives of
 0820   tour        -                                  arena is built in
 0830   tour        accepted emitted refused           A view derived from a local borrows it
-0840   tour        -                                  Origins join to the shortest-lived part
+0840   tour        accepted emitted executed refused  Origins join to the shortest-lived part
 0850   tour        -                                  Volatile is exempt from the borrow rule and from every
 0860   tour        -                                  What this does not catch
 0870   tour        accepted emitted executed refused  A function is a value of a function type
@@ -150,9 +150,9 @@
 1340   tour        accepted emitted executed refused  Concepts compose
 1350   tour        accepted emitted executed refused refused-by-name Types take parameters through a declaration form of their
 1360   tour        -                                  Allocation is an ordinary concept
-1370   tour        -                                  'any C' is a value of some type satisfying concept C
-1380   tour        -                                  Building one is explicit
-1390   tour        -                                  Calls go through the table
+1370   tour        accepted emitted executed refused  'any C' is a value of some type satisfying concept C
+1380   tour        accepted emitted executed refused  Building one is explicit
+1390   tour        accepted emitted executed refused  Calls go through the table
 1400   tour        -                                  This is what generics cannot do
 1410   tour        -                                  A module is a directory
 1420   tour        -                                  An import path is a directory path, and nothing cleverer

@@ -60,8 +60,9 @@ package body Landin.Syntax is
             when Inferred_Error_Set        => 0,
             --  The bound and the element type.
             when Array_Type               => 2,
-            --  Pointer and slice types each retain their referenced type.
-            when Pointer_Type | Slice_Type => 1,
+            --  Pointer/slice types retain their referenced type; `any`
+            --  retains its referenced concept in the same one-slot shape.
+            when Pointer_Type | Slice_Type | Any_Type => 1,
             --  The named return list and error set; parameters trail them.
             when Function_Type            => 2,
             --  A struct body's fields are its trailing run; a field's
@@ -326,6 +327,9 @@ package body Landin.Syntax is
      is (Slot (Of_Tree, Id, 3));
 
    function Referenced_Type (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     is (Slot (Of_Tree, Id, 1));
+
+   function Any_Concept (Of_Tree : Tree; Id : Node_Id) return Node_Id
      is (Slot (Of_Tree, Id, 1));
 
    function Measured_Type (Of_Tree : Tree; Id : Node_Id) return Node_Id

@@ -1,0 +1,5 @@
+class: negative
+summary: an erased pair retains the frame origin of its hidden pointee
+program: main.ldn
+codes: L0314
+constructs: 0770, 0840, 1230, 1240, 1370, 1380

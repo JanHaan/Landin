@@ -1,0 +1,5 @@
+class: negative
+summary: ambiguous explicit erasure requires a direct concept context
+program: main.ldn
+codes: L0301
+constructs: 0050, 1230, 1240, 1370, 1380

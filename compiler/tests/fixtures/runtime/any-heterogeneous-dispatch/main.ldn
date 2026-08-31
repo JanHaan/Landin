@@ -1,0 +1,45 @@
+counter: type = concept (t: type)
+    read: (self: ptr t) -> (value: i32)
+    bump: (self: ptr mut t) -> (value: i32)
+end counter
+
+first: type = struct
+    value: i32
+end first
+
+second: type = struct
+    value: i32
+end second
+
+read_first: (self: ptr first) -> (value: i32) =
+    value = self.val.value
+end read_first
+
+bump_first: (self: ptr mut first) -> (value: i32) =
+    inc self.val.value
+    value = self.val.value
+end bump_first
+
+read_second: (self: ptr second) -> (value: i32) =
+    value = self.val.value
+end read_second
+
+bump_second: (self: ptr mut second) -> (value: i32) =
+    inc self.val.value
+    value = self.val.value
+end bump_second
+
+first is counter (read: read_first, bump: bump_first)
+second is counter (read: read_second, bump: bump_second)
+
+public main: () -> (code: i32) =
+    mut left: first = (value: 18)
+    mut right: second = (value: 22)
+    a: any counter = any(addr left)
+    b: any counter = any(addr right)
+    mut selected: any counter = a
+    _ = selected.bump()
+    selected = b
+    _ = selected.bump()
+    code = a.read() + selected.read()
+end main

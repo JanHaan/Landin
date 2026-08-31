@@ -1,7 +1,8 @@
 --  The language's types.
 --
 --  `spec.md` [1790] is the authority: the enabled kernel has eleven scalar
---  names plus aggregate, fixed-array and function-value categories.  This
+--  names plus aggregate, fixed-array, erased-any and function-value
+--  categories.  This
 --  package is that rule made addressable, and it is meant to be the only
 --  place in the compiler where the eleven are written down, which is what
 --  lets `check.py` keep comparing the column below with the tour's own
@@ -92,6 +93,9 @@ package Landin.Types is
       --  structural, so its identity is a length and an element type and
       --  those are two more facts than a Type_Kind holds.
       Fixed_Array,
+      --  [1370]: an erased data pointer plus evidence-table pointer.  The
+      --  concept identity lives beside this broad category in Checking.
+      Any_Value,
       --  [0870]/[1000]: a runtime code address.  D117 carries its complete
       --  target-neutral signature descriptor separately in Landin.Checking,
       --  as aggregate nominal identity is carried separately above.
