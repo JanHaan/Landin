@@ -1,0 +1,10 @@
+error[L0202]: this type's representation is module-internal
+  --> ../tests/fixtures/negative/core-mem-private-representation/main.ldn:10:24
+   |
+10 |     code = i32(storage.initialized_count)
+   |                        ^^^^^^^^^^^^^^^^^
+  --> ../../core/mem/mem.ldn:10:1
+   |
+10 | raw: type (item: type) = struct
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ declared without `public` here
+  = note: D150: a private identity may cross a public signature without exposing its fields

@@ -464,40 +464,51 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Args    : Landin.Platform.Path_List;
       Nothing : Landin.Platform.Path_List;
    begin
-      Landin.Platform.Add (Args, Source);
+      if Module_Root (Case_Item) = "" then
+         Landin.Platform.Add (Args, Source);
+      else
+         Landin.Platform.Add
+           (Args,
+            "--root=" & Fixture_Root & "/runtime/" & Name (Case_Item)
+            & "/" & Module_Root (Case_Item));
+         Landin.Platform.Add
+           (Args, Fixture_Root & "/runtime/" & Name (Case_Item));
+      end if;
 
       --  [1840]'s module scope is every file compiled together, so a
       --  fixture that claims something about it hands `refine` more than
       --  one source.
-      declare
-         Rest  : constant String := With_Sources (Case_Item);
-         First : Integer := Rest'First;
+      if Module_Root (Case_Item) = "" then
+         declare
+            Rest  : constant String := With_Sources (Case_Item);
+            First : Integer := Rest'First;
 
-         procedure Add_One (Named : String);
+            procedure Add_One (Named : String);
 
-         procedure Add_One (Named : String) is
-            Trimmed : constant String :=
-              Ada.Strings.Fixed.Trim (Named, Ada.Strings.Both);
+            procedure Add_One (Named : String) is
+               Trimmed : constant String :=
+                 Ada.Strings.Fixed.Trim (Named, Ada.Strings.Both);
+            begin
+               if Trimmed /= "" then
+                  Landin.Platform.Add
+                    (Args,
+                     Fixture_Root & "/runtime/" & Name (Case_Item) & "/"
+                     & Trimmed);
+               end if;
+            end Add_One;
          begin
-            if Trimmed /= "" then
-               Landin.Platform.Add
-                 (Args,
-                  Fixture_Root & "/runtime/" & Name (Case_Item) & "/"
-                  & Trimmed);
-            end if;
-         end Add_One;
-      begin
-         for Index in Rest'Range loop
-            if Rest (Index) = ',' then
-               Add_One (Rest (First .. Index - 1));
-               First := Index + 1;
-            end if;
-         end loop;
+            for Index in Rest'Range loop
+               if Rest (Index) = ',' then
+                  Add_One (Rest (First .. Index - 1));
+                  First := Index + 1;
+               end if;
+            end loop;
 
-         if First <= Rest'Last then
-            Add_One (Rest (First .. Rest'Last));
-         end if;
-      end;
+            if First <= Rest'Last then
+               Add_One (Rest (First .. Rest'Last));
+            end if;
+         end;
+      end if;
 
       Landin.Platform.Add (Args, "--emit=exe");
       Landin.Platform.Add (Args, "-o");

@@ -68,6 +68,11 @@ package Landin.Testing.Fixtures is
    --  named for, and these are handed to `refine` after it.
    function With_Sources (Item : Fixture) return String;
 
+   --  An optional import root, relative to the fixture directory. A runtime
+   --  fixture that names one is compiled as a directory entry module, so it
+   --  can execute the same repository-owned library modules users import.
+   function Module_Root (Item : Fixture) return String;
+
    --  Which stream the expectation is about.  `output` means the bytes
    --  must arrive on standard output and standard error must be empty;
    --  `merged` accepts either, and is only right where a fixture does not
@@ -119,6 +124,7 @@ private
       Traps   : Boolean := False;
       Made_Of : Ada.Strings.Unbounded.Unbounded_String;
       Beside  : Ada.Strings.Unbounded.Unbounded_String;
+      Root    : Ada.Strings.Unbounded.Unbounded_String;
       Stream  : Stream_Choice := Merged;
    end record;
 

@@ -17,6 +17,8 @@ pointer.validity | outside | 0430 | non-guarantee: a permitted pointer may still
 pointer.integer-origin | beyond-lifetime | 0470, 0860, 1690, 1720 | non-guarantee: integer-to-pointer conversion carries no origin through a direct or erased value | `runtime/r250-references`, `runtime/any-untracked-pointer-origin`, `negative/frame-origin-return`
 pointer.integer-width | trap | 0470, 1950, 1960 | trap | `runtime/pointer-to-small-integer-traps`
 arrays.initialization | static | 0520, 0530, 0540, 0550, 0560 | L0300--L0304 or L0313 | `negative/array-initializer-length-mismatch`, `runtime/whole-arrays-copy-between-storage`
+raw.prefix | static | 0420, 0510 | L0202 prevents representation access; `core/mem` reports `raw_full`, `uninitialized`, `raw_empty` or `raw_not_empty` before an invalid transition | `negative/core-mem-private-representation`, `runtime/core-mem-raw-storage`
+raw.backing | outside | 0430, 0470, 0510, 1720 | non-guarantee: the supplied byte pointer may be invalid, misaligned or smaller than the declared capacity | `runtime/core-mem-raw-storage`
 slices.bounds-known | static | 0570, 0580, 1950 | L0300 or L0306 | `negative/index-outside-the-length`, `negative/readonly-slice-write`
 slices.bounds-runtime | trap | 0570, 0580, 1950, 1960 | trap | `runtime/computed-array-index-traps`, `runtime/local-array-computed-store-traps`, `runtime/slice-index-read-traps`, `runtime/slice-index-write-traps`, `runtime/slice-half-open-upper-traps`, `runtime/slice-inclusive-upper-traps`, `runtime/slice-lower-after-upper-traps`
 atoms.sets | static | 0630, 0640 | L0301 or L0312 | `negative/atom-match-not-exhaustive`, `runtime/atom-values-cross-the-abi`
@@ -37,6 +39,7 @@ generics.substitution | static | 1220, 1280, 1290, 1300, 1310, 1350, 1500, 1650,
 concepts.conformance | static | 1230, 1240, 1250, 1260, 1340 | L0301 or L0317--L0319 | `negative/conformance-collision`, `negative/constraint-not-satisfied`, `negative/compiler-concept-reserved`
 any.construction | static | 1370, 1380 | L0301, L0314 or L0318 | `negative/any-source-not-pointer`, `negative/any-readonly-source-for-mutable-entry`
 any.dispatch | static | 1390 | malformed table positions cannot be produced by accepted source; verifier failure is a compiler defect | `negative/any-entry-not-object-safe`, `runtime/any-heterogeneous-dispatch`
+modules.visibility | static | 1410, 1420, 1450, 1480 | L0006 or L0007 for an unresolved root; L0202 for a private member or representation | `negative/module-not-found`, `negative/imported-private-name`, `negative/core-mem-private-representation`, `runtime/core-mem-raw-storage`
 entry.point | static | 1540 | L0502 before executable emission | `runtime/constant-return-exits-with-its-code`
 module.images | static | 1930, 1940 | L0300, L0304 or L0305 | `negative/module-value-from-a-call`, `runtime/recursive-module-images-are-laid-out-and-distinct`
 configuration.fixed | static | 1980 | L0300, L0301, L0305 or L0306 in the selected declaration view | `negative/fixed-conditional-evaluator`, `runtime/fixed-conditional-generic-runtime`

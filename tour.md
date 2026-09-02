@@ -576,14 +576,29 @@ no zero image, and ptr is such a T. So until there is a way
 to say uninitialised in a type, that shape is restricted to
 a T that has a zero image, and general uninitialised
 generic storage is not supported.
-The answer remains a distinct raw-storage type — one that
-tracks capacity apart from the initialised count and admits
-one slot at a time. R3.20's executable pointer-vector pressure
-case derived the required transitions: reserve an empty capacity,
-admit the next slot, expose only the initialised prefix, release
-its tail, dispose only when that prefix is empty, and publish a
-grown replacement only after transfer succeeds. R3.30 owns their
-exact language spelling and enforced representation.
+The answer is `core/mem`'s `raw(T)`. It is an ordinary parameterised
+struct whose identity and fields stay private to that module. A caller may
+hold the inferred result of `reserve`, but it can inspect or change the value
+only through the public operations: `capacity` and `initialized` report the
+two counts, `admit` initializes exactly the next slot, `get` reads only the
+initialized prefix, `release` removes only its tail, and `dispose` returns the
+backing byte pointer only when the prefix is empty. The four invalid requests
+are foreseeable and therefore declared outcomes: `raw_full`, `uninitialized`,
+`raw_empty`, and `raw_not_empty`.
+
+Growth uses two raw values. Allocate and reserve an empty replacement, copy
+the old initialized prefix into it, and roll that private replacement back if
+any admission fails. After every copy succeeds, release the old tail to zero,
+dispose its allocation, and assign the replacement to the published binding.
+That last assignment is the publication point. No slice ever describes the
+spare capacity and no spare byte is read as `T`.
+
+This is not a memory-safety claim. Before `dispose`, save `capacity * sizeof T`
+as the allocator's release extent; the caller still supplies a live, aligned
+allocation large enough for that many slots. Pointer validity, alignment and a
+lying extent remain outside the language guarantees [1720]. The private module
+boundary enforces the state transitions without a `raw` keyword, a new built-in
+type kind, or the dishonest `slice_from` operation.
 
 ## ARRAYS, SLICES AND TEXT
 

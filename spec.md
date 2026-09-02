@@ -7767,8 +7767,9 @@ parameter type. A context-free integer literal therefore takes [0200]'s `i32`.
 The checker then recursively unifies each written runtime parameter pattern
 with that independently synthesized normalized descriptor. Scalar and atom-set
 constants agree exactly. A direct type formal binds the complete scalar,
-structural atom-set, fixed-array, nominal or concrete function-signature
-descriptor; every repeat must agree exactly.
+structural atom-set, fixed-array, nominal, pointer/slice reference,
+`any`-concept or concrete function-signature descriptor; every repeat must
+agree exactly.
 
 A fixed-array pattern recursively matches its exact element descriptor and
 bound. A direct fixed formal in the bound binds the argument length. A computed
@@ -7862,7 +7863,8 @@ facts`, the lowering case `generic routines lower once per key`,
 `negative/generic-structural-repeated-conflict`,
 `negative/generic-wrong-nominal-template`,
 `positive/generic-structural-deduction`,
-`positive/generic-zero-nominal-array-signatures`, and
+`positive/generic-zero-nominal-array-signatures`,
+`runtime/core-mem-raw-storage`, and
 `runtime/generic-identity-deduction`,
 `runtime/generic-fixed-array-deduction`,
 `runtime/generic-direct-descriptor-deduction`,
@@ -8337,6 +8339,8 @@ classified failure boundary before the repository gate can pass.
 | `pointer.integer-origin` | beyond-lifetime | 0470, 0860, 1690, 1720 | non-guarantee: integer-to-pointer conversion carries no origin through a direct or erased value | `runtime/r250-references`, `runtime/any-untracked-pointer-origin`, `negative/frame-origin-return` |
 | `pointer.integer-width` | trap | 0470, 1950, 1960 | trap | `runtime/pointer-to-small-integer-traps` |
 | `arrays.initialization` | static | 0520, 0530, 0540, 0550, 0560 | L0300--L0304 or L0313 | `negative/array-initializer-length-mismatch`, `runtime/whole-arrays-copy-between-storage` |
+| `raw.prefix` | static | 0420, 0510 | L0202 prevents representation access; `core/mem` reports `raw_full`, `uninitialized`, `raw_empty` or `raw_not_empty` before an invalid transition | `negative/core-mem-private-representation`, `runtime/core-mem-raw-storage` |
+| `raw.backing` | outside | 0430, 0470, 0510, 1720 | non-guarantee: the supplied byte pointer may be invalid, misaligned or smaller than the declared capacity | `runtime/core-mem-raw-storage` |
 | `slices.bounds-known` | static | 0570, 0580, 1950 | L0300 or L0306 | `negative/index-outside-the-length`, `negative/readonly-slice-write` |
 | `slices.bounds-runtime` | trap | 0570, 0580, 1950, 1960 | trap | `runtime/computed-array-index-traps`, `runtime/local-array-computed-store-traps`, `runtime/slice-index-read-traps`, `runtime/slice-index-write-traps`, `runtime/slice-half-open-upper-traps`, `runtime/slice-inclusive-upper-traps`, `runtime/slice-lower-after-upper-traps` |
 | `atoms.sets` | static | 0630, 0640 | L0301 or L0312 | `negative/atom-match-not-exhaustive`, `runtime/atom-values-cross-the-abi` |
@@ -8357,6 +8361,7 @@ classified failure boundary before the repository gate can pass.
 | `concepts.conformance` | static | 1230, 1240, 1250, 1260, 1340 | L0301 or L0317--L0319 | `negative/conformance-collision`, `negative/constraint-not-satisfied`, `negative/compiler-concept-reserved` |
 | `any.construction` | static | 1370, 1380 | L0301, L0314 or L0318 | `negative/any-source-not-pointer`, `negative/any-readonly-source-for-mutable-entry` |
 | `any.dispatch` | static | 1390 | malformed table positions cannot be produced by accepted source; verifier failure is a compiler defect | `negative/any-entry-not-object-safe`, `runtime/any-heterogeneous-dispatch` |
+| `modules.visibility` | static | 1410, 1420, 1450, 1480 | L0006 or L0007 for an unresolved root; L0202 for a private member or representation | `negative/module-not-found`, `negative/imported-private-name`, `negative/core-mem-private-representation`, `runtime/core-mem-raw-storage` |
 | `entry.point` | static | 1540 | L0502 before executable emission | `runtime/constant-return-exits-with-its-code` |
 | `module.images` | static | 1930, 1940 | L0300, L0304 or L0305 | `negative/module-value-from-a-call`, `runtime/recursive-module-images-are-laid-out-and-distinct` |
 | `configuration.fixed` | static | 1980 | L0300, L0301, L0305 or L0306 in the selected declaration view | `negative/fixed-conditional-evaluator`, `runtime/fixed-conditional-generic-runtime` |
@@ -8446,7 +8451,8 @@ The namespace's first selection resolves a public declaration in the selected
 module and is available in every declaration-reference position. A private
 member is distinguished from a missing one and related to its declaration.
 Public declarations may mention private identities, but those identities stay
-unnameable across the boundary. Variant cases inherit the containing type's
+unnameable across the boundary, and a value carrying one does not expose that
+private type's fields. Variant cases inherit the containing type's
 visibility. A namespace itself is no runtime or type value. `public` on a
 conformance is refused; every unmarked conformance in the reached graph still
 enters the single D142 register.
@@ -8475,5 +8481,56 @@ choosing a reached library `main` would make the entry depend on traversal.
 Loading by filesystem enumeration or hash order would also make declaration
 identities and diagnostics host-dependent. All were declined.
 
-**Pinned by** `unit/module-graph`, `unit/module-conformance-register`, and the
-parser, resolution, driver and hosted-entry cases.
+**Pinned by** `unit/module-graph`, `unit/module-conformance-register`,
+`negative/core-mem-private-representation`, and the parser, resolution, driver
+and hosted-entry cases.
+
+### D151 — Raw storage is a private library state machine
+
+**The tour said** that `slice_from` lies by describing uninitialized bytes as
+`[]mut T` [0510]. R3.20 derived the necessary transitions with a non-zeroable
+pointer element, but deliberately proposed no spelling.
+
+**Chosen:** the repository-owned `core/mem` module declares a private
+parameterized nominal `raw(item)` with a byte pointer, capacity and initialized
+count. D150 permits public routines to carry that private identity, so callers
+hold it through inferred bindings without being able to name its type or
+select its fields. Cross-module field selection through such a value is L0202,
+related to the private type declaration. Code in the defining module retains
+ordinary field access; no field-visibility syntax or special raw type kind is
+introduced.
+
+`reserve` records a supplied byte pointer and capacity with initialized count
+zero. `capacity` and `initialized` expose only their respective counts.
+`admit` checks for `raw_full`, writes at `base + initialized * sizeof item`,
+then increments the count and returns the admitted index. `get` checks for
+`uninitialized` before reading an index. `release` checks for `raw_empty`,
+decrements first and returns the former tail. `dispose` checks for
+`raw_not_empty`, returns the byte pointer and clears pointer and capacity. The
+caller saves the capacity-derived byte extent before disposal; allocator
+ownership remains R3.40's composition rather than state stored in `raw`.
+
+Growth is transactional by composition: a replacement begins empty; reads of
+the old prefix and admissions to the private replacement may be rolled back by
+tail release without changing the old value. Only after the full copy succeeds
+does the caller drain and dispose the old value and publish the replacement by
+assignment. `raw` never yields a slice over capacity and never gives spare
+storage a `T` image. The public checks are declared atom outcomes, not traps,
+because these are foreseeable container conditions [0940].
+
+The state machine does not validate the allocation behind its byte pointer.
+Supplying insufficient, misaligned, stale or otherwise invalid storage remains
+the unsafe pointer operation [0430]/[1720] says it is. Returned pointer-valued
+items retain the conservative local `from storage` origin, so a caller ends
+that view before mutating the raw value again [0800].
+
+**The alternatives:** a built-in raw-storage kind would add syntax, type-table
+and backend machinery for an invariant a private module can express. A public
+record would let callers forge counts. Reintroducing `slice_from` would make
+the original false value claim. Requiring `zeroable` would reject the pointer
+element that derived the contract. Trapping invalid transitions would turn
+foreseeable container state into process termination. All were declined.
+
+**Pinned by** `negative/core-mem-private-representation`,
+`runtime/core-mem-raw-storage`, the rooted fixture execution path, and the
+`raw.prefix` and `raw.backing` guarantee rows.

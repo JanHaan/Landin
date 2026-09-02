@@ -11,7 +11,7 @@
 #
 #  A construct with no evidence and no refusal is this
 #  item's to answer for; see ROADMAP.md R1.90.
-#  199 constructs, 146 with evidence, 53 with neither.
+#  199 constructs, 149 with evidence, 50 with neither.
 #
 #  id    defined in  evidence
 0010   tour        accepted emitted                   Line comment, to end of line
@@ -64,7 +64,7 @@
 0480   tour        -                                  There is no null
 0490   tour        -                                  Pointers are a system tool
 0500   tour        -                                  Three operations sit between pointers and slices
-0510   tour        -                                  slice_from is where uninitialised storage is smuggled in
+0510   tour        accepted emitted executed refused  slice_from is where uninitialised storage is smuggled in
 0520   tour        accepted emitted executed refused  Array: a value
 0530   tour        accepted emitted executed refused  The length may be inferred from the literal
 0540   tour        accepted emitted executed refused  zeroed is the all-bits-zero image of a type
@@ -154,8 +154,8 @@
 1380   tour        accepted emitted executed refused  Building one is explicit
 1390   tour        accepted emitted executed refused  Calls go through the table
 1400   tour        -                                  This is what generics cannot do
-1410   tour        -                                  A module is a directory
-1420   tour        -                                  An import path is a directory path, and nothing cleverer
+1410   tour        accepted emitted executed refused  A module is a directory
+1420   tour        accepted emitted executed refused  An import path is a directory path, and nothing cleverer
 1430   tour        refused-by-name                    Alias, for collisions
 1440   tour        refused-by-name                    Pull selected names into scope, by name
 1450   tour        -                                  Imports are per file, so every file reads on its own

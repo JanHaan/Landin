@@ -1,0 +1,66 @@
+--  Honest typed storage. The representation stays module-internal: callers
+--  can hold an inferred raw(T), but only these operations can expose a value
+--  or change the initialized-prefix count.
+
+public raw_full: atom
+public uninitialized: atom
+public raw_empty: atom
+public raw_not_empty: atom
+
+raw: type (item: type) = struct
+    base: ptr mut u8
+    capacity_count: usize
+    initialized_count: usize
+end raw
+
+public reserve: (item: type, base: ptr mut u8, slots: usize)
+                -> (storage: raw(item) from base) =
+    storage = (base: base, capacity_count: slots, initialized_count: 0)
+end reserve
+
+public capacity: (item: type, storage: raw(item)) -> (count: usize) =
+    count = storage.capacity_count
+end capacity
+
+public initialized: (item: type, storage: raw(item)) -> (count: usize) =
+    count = storage.initialized_count
+end initialized
+
+public admit: (item: type, inout storage: raw(item), escaping value: item)
+              -> (index: usize) ! raw_full =
+    fail raw_full when storage.initialized_count == storage.capacity_count
+    index = storage.initialized_count
+    address: usize = usize(storage.base)
+                     + storage.initialized_count * sizeof item
+    slot: ptr mut item = ptr(address)
+    slot.val = value
+    inc storage.initialized_count
+end admit
+
+public get: (item: type, storage: raw(item), index: usize)
+            -> (value: item from storage) ! uninitialized =
+    fail uninitialized when index >= storage.initialized_count
+    address: usize = usize(storage.base) + index * sizeof item
+    slot: ptr mut item = ptr(address)
+    value = slot.val
+end get
+
+public release: (item: type, inout storage: raw(item))
+                -> (value: item from storage) ! raw_empty =
+    fail raw_empty when storage.initialized_count == 0
+    dec storage.initialized_count
+    address: usize = usize(storage.base)
+                     + storage.initialized_count * sizeof item
+    slot: ptr mut item = ptr(address)
+    value = slot.val
+end release
+
+public dispose: (item: type, inout storage: raw(item))
+                -> (released: ptr mut u8 from storage) ! raw_not_empty =
+    fail raw_not_empty when not (storage.initialized_count == 0)
+    raw_address: usize = usize(storage.base)
+    released = ptr(raw_address)
+    storage.base = ptr(0)
+    storage.capacity_count = 0
+end dispose
+

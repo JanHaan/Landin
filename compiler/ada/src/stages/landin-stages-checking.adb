@@ -5,6 +5,8 @@ with Ada.Strings.Unbounded;
 with Landin.Checking;
 with Landin.Configuration;
 with Landin.Diagnostics.Checking;
+with Landin.Diagnostics.Resolution;
+with Landin.Modules;
 with Landin.Provenance;
 with Landin.Resolution;
 with Landin.Source.Names;
@@ -19,11 +21,13 @@ with Landin.Types;
 package body Landin.Stages.Checking is
 
    package Bad renames Landin.Diagnostics.Checking;
+   package Name_Bad renames Landin.Diagnostics.Resolution;
    package Res renames Landin.Resolution;
    package Syn renames Landin.Syntax;
    package Ty renames Landin.Types;
 
    use type Landin.Provenance.Declaration_Id;
+   use type Landin.Modules.Module_Id;
    use type Landin.Syntax.Node_Id;
    use type Landin.Syntax.Node_Kind;
    use type Landin.Targets.Bit_Width;
@@ -76,6 +80,8 @@ package body Landin.Stages.Checking is
         Landin.Stages.Trees (Context);
       Meanings  : constant not null access Res.Table :=
         Landin.Stages.Meanings (Context);
+      Grouped   : constant not null access Landin.Modules.Table :=
+        Landin.Stages.Modules (Context);
       Types     : constant not null access Landin.Checking.Table :=
         Landin.Stages.Types (Context);
 
@@ -190,6 +196,24 @@ package body Landin.Stages.Checking is
         (Nominal : Landin.Checking.Nominal_Type_Id)
          return Res.Declaration_Id
         is (Landin.Checking.Template_Of (Types.all, Nominal));
+
+      function Representation_Is_Private
+        (Nominal : Landin.Checking.Nominal_Type_Id;
+         From    : Landin.Source.Source_Id) return Boolean;
+
+      function Representation_Is_Private
+        (Nominal : Landin.Checking.Nominal_Type_Id;
+         From    : Landin.Source.Source_Id) return Boolean
+      is
+         Template : constant Res.Declaration_Id :=
+           Template_Declaration (Nominal);
+      begin
+         return Template /= Res.No_Declaration
+           and then not Res.Is_Public (Meanings.all, Template)
+           and then Landin.Modules.Module_Of
+             (Grouped.all, Res.Source_Of (Meanings.all, Template))
+               /= Landin.Modules.Module_Of (Grouped.all, From);
+      end Representation_Is_Private;
 
       function Spelled (Of_Name : Landin.Source.Names.Name_Id) return String
         is (Landin.Source.Names.Spelling (Spellings.all, Of_Name));
@@ -5594,6 +5618,8 @@ package body Landin.Stages.Checking is
                                  if Actual.Kind not in Ty.Scalar_Name
                                       | Ty.Atom_Value | Ty.Fixed_Array
                                       | Ty.Aggregate | Ty.Function_Value
+                                      | Ty.Pointer_Value | Ty.Slice_Value
+                                      | Ty.Any_Value
                                  then
                                     Report_Static
                                       (Argument, Positive (Position),
@@ -12971,6 +12997,38 @@ package body Landin.Stages.Checking is
                              (Of_Tree, Node, Shape, Positive (Which)));
                      end if;
 
+                     if Shape = Landin.Checking.No_Signature
+                       and then Wrote /= Landin.Checking.No_Nominal_Type
+                       and then Representation_Is_Private
+                         (Wrote, Syn.Source_Of (Of_Tree))
+                     then
+                        declare
+                           Template : constant Res.Declaration_Id :=
+                             Template_Declaration (Wrote);
+                           Template_Tree : constant not null access
+                             constant Syn.Tree :=
+                               Tree_For
+                                 (Res.Source_Of (Meanings.all, Template));
+                        begin
+                           Name_Bad.Report
+                             (Item    => Name_Bad.Inaccessible_Name,
+                              Source  => Syn.Source_Of (Of_Tree),
+                              Where   => Syn.Anchor (Of_Tree, Node),
+                              Message => "this type's representation is"
+                                         & " module-internal",
+                              Note    => "D150: a private identity may cross"
+                                         & " a public signature without"
+                                         & " exposing its fields",
+                              Related => Syn.Origin
+                                (Template_Tree.all,
+                                 Res.Node_Of (Meanings.all, Template)),
+                              Because => "declared without `public` here",
+                              Into    => Found);
+                        end;
+                        Landin.Checking.Refuse (Types.all, Of_Tree, Node);
+                        return Ty.Ill_Typed;
+                     end if;
+
                      if Which = 0 then
                         Bad.Report
                           (Item    => Bad.Unresolved_Field,
@@ -18712,7 +18770,8 @@ package body Landin.Stages.Checking is
             else
                if Got = Ty.Fixed_Array
                  and then (Direct_Array
-                           or else Syn.Kind (Of_Tree.all, Value) = Syn.Call
+                           or else Syn.Kind (Of_Tree.all, Value)
+                                     in Syn.Call | Syn.Labeled_Application
                            or else Control_Source)
                then
                   Landin.Checking.Note_Array
@@ -18767,7 +18826,8 @@ package body Landin.Stages.Checking is
 
                if Got = Ty.Aggregate
                  and then (Direct_Struct
-                           or else Syn.Kind (Of_Tree.all, Value) = Syn.Call
+                           or else Syn.Kind (Of_Tree.all, Value)
+                                     in Syn.Call | Syn.Labeled_Application
                            or else Control_Source)
                then
                   declare
