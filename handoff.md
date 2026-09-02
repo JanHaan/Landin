@@ -205,9 +205,11 @@ registers are complete, mechanically closed over the implementation corpus and
 owned by executable rejection, trap or explicit non-guarantee evidence.
 R3.10's directory modules, file-local import scopes, public qualified lookup,
 ordered roots, deterministic graph closure and entry-module selection are
-complete.
+complete. R3.20's allocator/vector pressure case derives honest raw-storage
+transitions from executable non-zeroable pointer storage, including
+transactional growth and drain-before-free.
 
-**Current roadmap work: R3.20 — Build the allocator and container pressure case.**
+**Current roadmap work: R3.30 — Implement honest raw storage and `core/mem`.**
 
 `refine` runs the frontend, lowers and
 verifies target-neutral IR, emits Linux x86-64 assembly, and can assemble and

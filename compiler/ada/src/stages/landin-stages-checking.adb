@@ -2728,6 +2728,17 @@ package body Landin.Stages.Checking is
                            Reference => Reference, others => <>);
                      end;
                   end if;
+               when Ty.Pointer_Value | Ty.Slice_Value =>
+                  if Descriptor.Reference = Landin.Checking.No_Reference then
+                     Valid := False;
+                  else
+                     Into :=
+                       (Kind      => Landin.Checking.Reference_Field,
+                        Element   => Ty.Usize,
+                        Length    => 1,
+                        Reference => Descriptor.Reference,
+                        others    => <>);
+                  end if;
                when Ty.Function_Value =>
                   if Descriptor.Signature = Landin.Checking.No_Signature then
                      Valid := False;
@@ -3940,9 +3951,107 @@ package body Landin.Stages.Checking is
             Means : constant Res.Declaration_Id :=
               Res.Bound_To (Meanings.all, Of_Tree, Written);
          begin
-            if Res.Sort_Of (Meanings.all, Means) = Res.Type_Parameter
-              or else Res.Sort_Of (Meanings.all, Means) = Res.Fixed_Parameter
-            then
+            if Res.Sort_Of (Meanings.all, Means) = Res.Type_Parameter then
+               --  D138/D144: a generic routine body is checked once for
+               --  each concrete routine identity.  Resolve a type formal
+               --  through that identity just as signature substitution
+               --  does, and publish the complete descriptor in the active
+               --  overlay.  Measurements and nested type positions may
+               --  then use the ordinary checked-type queries without
+               --  changing the shared template syntax facts.
+               declare
+                  Current : constant Landin.Checking.Routine_Instance_Id :=
+                    Landin.Checking.Current_Routine_View (Types.all);
+                  Position : Natural := 0;
+               begin
+                  if Current /= Landin.Checking.No_Routine_Instance then
+                     declare
+                        Template : constant Res.Declaration_Id :=
+                          Landin.Checking.Routine_Template_Of
+                            (Types.all, Current);
+                        Template_Tree : constant
+                          not null access constant Syn.Tree :=
+                            Tree_For (Res.Source_Of (Meanings.all, Template));
+                        Function_Node : constant Syn.Node_Id :=
+                          Res.Node_Of (Meanings.all, Template);
+                     begin
+                        for Index in 1 .. Syn.Generic_Formal_Count
+                          (Template_Tree.all, Function_Node)
+                        loop
+                           if Declaration_At
+                             (Syn.Source_Of (Template_Tree.all),
+                              Syn.Nth_Generic_Formal
+                                (Template_Tree.all, Function_Node, Index))
+                                = Means
+                           then
+                              Position := Index;
+                              exit;
+                           end if;
+                        end loop;
+
+                        if Position /= 0 then
+                           declare
+                              Actual : constant Landin.Checking.Actual_Key :=
+                                Landin.Checking.Nth_Routine_Actual
+                                  (Types.all, Current, Positive (Position));
+                           begin
+                              if Landin.Checking.Actual_Kind_Of (Actual)
+                                   = Landin.Checking.Type_Actual_Kind
+                              then
+                                 declare
+                                    Descriptor : constant Type_Descriptor :=
+                                      Descriptor_For (Actual);
+                                 begin
+                                    Landin.Checking.Note
+                                      (Types.all, Of_Tree, Written,
+                                       Descriptor.Kind);
+                                    case Descriptor.Kind is
+                                       when Ty.Atom_Value =>
+                                          Landin.Checking.Note_Atom_Set
+                                            (Types.all, Of_Tree, Written,
+                                             Descriptor.Atoms);
+                                       when Ty.Fixed_Array =>
+                                          Landin.Checking.Note_Array
+                                            (Types.all, Of_Tree, Written,
+                                             Descriptor.Length,
+                                             Descriptor.Element);
+                                          if Descriptor.Element_Nominal
+                                            /= Landin.Checking.No_Nominal_Type
+                                          then
+                                             Landin.Checking
+                                               .Note_Array_Element_Nominal
+                                                 (Types.all, Of_Tree, Written,
+                                                  Descriptor.Element_Nominal);
+                                          end if;
+                                       when Ty.Aggregate =>
+                                          Landin.Checking.Note_Nominal
+                                            (Types.all, Of_Tree, Written,
+                                             Descriptor.Nominal);
+                                       when Ty.Function_Value =>
+                                          Landin.Checking.Note_Signature
+                                            (Types.all, Of_Tree, Written,
+                                             Descriptor.Signature);
+                                       when Ty.Pointer_Value
+                                          | Ty.Slice_Value =>
+                                          Landin.Checking.Note_Reference
+                                            (Types.all, Of_Tree, Written,
+                                             Descriptor.Reference);
+                                       when Ty.Any_Value =>
+                                          Landin.Checking.Note_Any_Concept
+                                            (Types.all, Of_Tree, Written,
+                                             Descriptor.Concept);
+                                       when others =>
+                                          null;
+                                    end case;
+                                    return Descriptor.Kind;
+                                 end;
+                              end if;
+                           end;
+                        end if;
+                     end;
+                  end if;
+               end;
+
                if Landin.Checking.Type_Of (Types.all, Of_Tree, Written)
                     = Ty.Undecided
                then
@@ -3952,6 +4061,19 @@ package body Landin.Stages.Checking is
                     (Of_Tree, Written,
                      "a type formal is available only while an alias is"
                      & " being applied");
+               end if;
+               return Ty.Ill_Typed;
+            end if;
+
+            if Res.Sort_Of (Meanings.all, Means) = Res.Fixed_Parameter then
+               if Landin.Checking.Type_Of (Types.all, Of_Tree, Written)
+                    = Ty.Undecided
+               then
+                  Landin.Checking.Note (Types.all, Of_Tree, Written,
+                                        Ty.Ill_Typed);
+                  Report_Application
+                    (Of_Tree, Written,
+                     "a fixed formal cannot be used as a type");
                end if;
                return Ty.Ill_Typed;
             end if;
@@ -13021,6 +13143,11 @@ package body Landin.Stages.Checking is
                      Landin.Checking.Note_Signature
                        (Types.all, Of_Tree, Node,
                         Landin.Checking.Signature_Of
+                          (Types.all, Of_Tree, Operand));
+                  elsif Held in Ty.Pointer_Value | Ty.Slice_Value then
+                     Landin.Checking.Note_Reference
+                       (Types.all, Of_Tree, Node,
+                        Landin.Checking.Reference_Of
                           (Types.all, Of_Tree, Operand));
                   end if;
                   return Kept (Held);
