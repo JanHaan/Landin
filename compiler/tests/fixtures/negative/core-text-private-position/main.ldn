@@ -1,0 +1,12 @@
+import core/text
+
+public main: () -> (code: i32) =
+    mut bytes: [1]u8 = [42]
+    zero: usize = 0
+    one: usize = 1
+    source: []u8 = bytes[zero..<one]
+    cursor := text.first(source)
+    leaked := cursor.offset
+    code = 0
+end main
+

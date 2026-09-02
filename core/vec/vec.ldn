@@ -1,0 +1,130 @@
+import core/mem
+
+public empty: atom
+public out_of_bounds: atom
+
+--  The list shape is public as in prototype 3, but its `values` field has the
+--  opaque mem.storage(item) type: clients can inspect the container shape
+--  without reaching raw-storage counters or bytes.
+public list: type (item: type) = struct
+    values: mem.storage(item)
+end list
+
+public new_list: (item: type) -> (result: list(item)) =
+    nothing: usize = 0
+    base: ptr mut u8 = ptr(nothing)
+    store := mem.reserve(item: item, base: base, slots: nothing)
+    result = (values: store)
+end new_list
+
+public length: (item: type, value: list(item)) -> (count: usize) =
+    count = mem.initialized(value.values)
+end length
+
+public capacity: (item: type, value: list(item)) -> (count: usize) =
+    count = mem.capacity(value.values)
+end capacity
+
+copy_prefix: (item: type, source: mem.storage(item),
+              inout target: mem.storage(item), at: usize, count: usize)
+             -> (ok: bool) =
+    if at == count then
+        ok = true
+        return
+    end if
+
+    admitted: usize = mem.transfer(source, at, target) else (problem)
+        _ = problem
+        ok = false
+        return
+    end
+    _ = admitted
+    ok = copy_prefix(source, target, at + 1, count)
+end copy_prefix
+
+drain: (item: type, inout value: mem.storage(item)) -> none =
+    return when mem.initialized(value) == 0
+    discarded: item = mem.release(value) else (problem)
+        _ = problem
+        return
+    end
+    drain(value)
+end drain
+
+free_empty: (item: type, provider: type is mem.allocator,
+             inout value: mem.storage(item), inout state: provider) -> none =
+    slots: usize = mem.capacity(value)
+    return when slots == 0
+    extent: usize = slots * sizeof item
+    block: ptr mut u8 = mem.dispose(value) else (problem)
+        _ = problem
+        return
+    end
+    provider.free(state, block, extent)
+end free_empty
+
+public reserve: (item: type, provider: type is mem.allocator,
+                 inout value: list(item), inout state: provider, want: usize)
+                -> none ! mem.out_of_memory =
+    old_count: usize = mem.initialized(value.values)
+    old_capacity: usize = mem.capacity(value.values)
+    return when want <= old_capacity
+
+    block: ptr mut u8 = try provider.alloc
+        (state, want * sizeof item, alignof item)
+    mut fresh := mem.reserve(item: item, base: block, slots: want)
+    first: usize = 0
+    copied: bool = copy_prefix(value.values, fresh, first, old_count)
+    if not copied then
+        drain(fresh)
+        free_empty(fresh, state)
+        fail mem.out_of_memory
+    end if
+
+    drain(value.values)
+    free_empty(value.values, state)
+    value.values = fresh
+end reserve
+
+grown: (capacity: usize) -> (next: usize) =
+    if capacity == 0 then
+        next = 8
+    else
+        next = capacity * 2
+    end if
+end grown
+
+public push: (item: type, provider: type is mem.allocator,
+              inout value: list(item), inout state: provider,
+              escaping added: item) -> none ! mem.out_of_memory =
+    if length(value) == capacity(value) then
+        try reserve(value, state, grown(capacity(value)))
+    end if
+    admitted: usize = mem.admit(value.values, added) else (problem)
+        _ = problem
+        fail mem.out_of_memory
+    end
+    _ = admitted
+end push
+
+public get: (item: type, value: list(item), at: usize)
+            -> (result: item from value) ! out_of_bounds =
+    result = mem.get(value.values, at) else (problem)
+        _ = problem
+        fail out_of_bounds
+    end
+end get
+
+public pop: (item: type, inout value: list(item))
+            -> (result: item from value) ! empty =
+    result = mem.release(value.values) else (problem)
+        _ = problem
+        fail empty
+    end
+end pop
+
+public release: (item: type, provider: type is mem.allocator,
+                 inout value: list(item), inout state: provider) -> none =
+    drain(value.values)
+    free_empty(value.values, state)
+end release

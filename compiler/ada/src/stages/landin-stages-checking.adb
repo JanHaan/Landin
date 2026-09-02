@@ -2597,12 +2597,13 @@ package body Landin.Stages.Checking is
                                  return Invalid;
                               elsif Result.Kind not in
                                 Ty.Undecided | Ty.Scalar_Name | Ty.Fixed_Array
+                                   | Ty.Aggregate
                               then
                                  Report_Application
                                    (Of_Tree, Written,
                                     "this parameterized alias does not"
-                                    & " normalize to a scalar or fixed-array"
-                                    & " type");
+                                    & " normalize to a scalar, fixed-array"
+                                    & " or nominal aggregate type");
                                  return Invalid;
                               end if;
                               return Result;
@@ -3069,11 +3070,12 @@ package body Landin.Stages.Checking is
                         Template_Invalid (Positive (Id)) := True;
                      elsif Result.Kind not in
                        Ty.Undecided | Ty.Scalar_Name | Ty.Fixed_Array
+                          | Ty.Aggregate
                      then
                         Report_Application
                           (Of_Tree.all, Struct_Node,
-                           "this parameterized alias cannot produce a scalar"
-                           & " or fixed-array type");
+                           "this parameterized alias cannot produce a scalar,"
+                           & " fixed-array or nominal aggregate type");
                         Template_Invalid (Positive (Id)) := True;
                      end if;
                   end;

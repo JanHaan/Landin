@@ -2947,6 +2947,7 @@ def check_coverage_registers(full_run):
             "inout.possible-alias", "pointer.validity",
             "pointer.integer-origin", "pointer.integer-width",
             "arrays.initialization", "raw.prefix", "raw.backing",
+            "allocation.failure", "allocation.backing",
             "slices.bounds-known",
             "slices.bounds-runtime", "atoms.sets", "aggregates.variants",
             "origins.escape", "origins.aliasing-limit", "functions.abi",

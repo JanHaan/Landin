@@ -1,0 +1,44 @@
+--  R3's parser-support text layer is deliberately byte-oriented. Full text
+--  types, literals, UTF-8 scalar decoding and codepoint indexing stay with
+--  R4.10; this module supplies opaque byte positions and bounded byte views.
+
+position_value: type = struct
+    offset: usize
+end position_value
+
+public position: type = position_value
+public past_end: atom
+
+public nowhere: position = (offset: 0)
+
+public first: (source: []u8) -> (result: position) =
+    _ = source
+    result = (offset: 0)
+end first
+
+public at_end: (source: []u8, cursor: position) -> (yes: bool) =
+    yes = cursor.offset >= lenof source
+end at_end
+
+public ordinal: (cursor: position) -> (offset: usize) =
+    offset = cursor.offset
+end ordinal
+
+public next: (cursor: position) -> (result: position) =
+    result = (offset: cursor.offset + 1)
+end next
+
+public advance: (inout cursor: position) -> none =
+    inc cursor.offset
+end advance
+
+public byte: (source: []u8, cursor: position)
+             -> (value: u8) ! past_end =
+    fail past_end when at_end(source, cursor)
+    value = source[cursor.offset]
+end byte
+
+public slice: (source: []u8, begins: position, ends: position)
+              -> (result: []u8 from source) =
+    result = source[begins.offset..<ends.offset]
+end slice

@@ -13,6 +13,29 @@ raw: type (item: type) = struct
     initialized_count: usize
 end raw
 
+--  The alias is the opaque name other core modules can put in fields and
+--  signatures. It still normalizes to raw(item), whose private declaration
+--  keeps the representation inaccessible outside this module.
+public storage: type (item: type) = raw(item)
+public out_of_memory: atom
+
+public allocator: type = concept (provider: type)
+    alloc: (inout state: provider, size: usize, alignment: usize)
+           -> (block: ptr mut u8) ! out_of_memory
+    free: (inout state: provider, block: ptr mut u8, size: usize) -> none
+end allocator
+
+public allocate: (provider: type is allocator, inout state: provider,
+                  size: usize, alignment: usize)
+                 -> (block: ptr mut u8) ! out_of_memory =
+    block = try provider.alloc(state, size, alignment)
+end allocate
+
+public free: (provider: type is allocator, inout state: provider,
+              block: ptr mut u8, size: usize) -> none =
+    provider.free(state, block, size)
+end free
+
 public reserve: (item: type, base: ptr mut u8, slots: usize)
                 -> (storage: raw(item) from base) =
     storage = (base: base, capacity_count: slots, initialized_count: 0)
@@ -45,6 +68,24 @@ public get: (item: type, storage: raw(item), index: usize)
     value = slot.val
 end get
 
+--  Copy one initialized source item into the next destination slot without
+--  exposing a reference-valued item between the two raw values. This is the
+--  primitive transactional containers use while a replacement is private.
+public transfer: (item: type, source: raw(item), index: usize,
+                  inout target: raw(item))
+                 -> (admitted: usize) ! uninitialized | raw_full =
+    fail uninitialized when index >= source.initialized_count
+    fail raw_full when target.initialized_count == target.capacity_count
+    source_address: usize = usize(source.base) + index * sizeof item
+    source_slot: ptr mut item = ptr(source_address)
+    admitted = target.initialized_count
+    target_address: usize = usize(target.base)
+                            + target.initialized_count * sizeof item
+    target_slot: ptr mut item = ptr(target_address)
+    target_slot.val = source_slot.val
+    inc target.initialized_count
+end transfer
+
 public release: (item: type, inout storage: raw(item))
                 -> (value: item from storage) ! raw_empty =
     fail raw_empty when storage.initialized_count == 0
@@ -64,3 +105,87 @@ public dispose: (item: type, inout storage: raw(item))
     storage.capacity_count = 0
 end dispose
 
+align_up: (value: usize, alignment: usize) -> (result: usize) =
+    if alignment <= 1 then
+        result = value
+        return
+    end if
+    remainder: usize = value % alignment
+    if remainder == 0 then
+        result = value
+    else
+        result = value + alignment - remainder
+    end if
+end align_up
+
+--  A library arena is a monotonic allocator over a caller-supplied byte
+--  extent. Individual frees deliberately do nothing; ending the extent ends
+--  all of its allocations together.
+public arena: type = struct
+    base: ptr mut u8
+    size: usize
+    used: usize
+end arena
+
+public arena_over: (base: ptr mut u8, size: usize)
+                   -> (state: arena from base) =
+    state = (base: base, size: size, used: 0)
+end arena_over
+
+arena_alloc: (inout state: arena, size: usize, alignment: usize)
+             -> (block: ptr mut u8) ! out_of_memory =
+    offset: usize = align_up(state.used, alignment)
+    fail out_of_memory when offset > state.size
+    fail out_of_memory when size > state.size - offset
+    address: usize = usize(state.base) + offset
+    block = ptr(address)
+    state.used = offset + size
+end arena_alloc
+
+arena_free: (inout state: arena, block: ptr mut u8, size: usize) -> none =
+    _ = state.used
+    _ = block
+    _ = size
+end arena_free
+
+arena is allocator (alloc: arena_alloc, free: arena_free)
+
+--  The same monotonic allocator with a deterministic allocation budget.
+--  Tests can reach a container's out-of-memory edge without relying on the
+--  host or exhausting an actual address space.
+public failing: type = struct
+    base: ptr mut u8
+    size: usize
+    used: usize
+    remaining: usize
+    allocations: usize
+    frees: usize
+end failing
+
+public fail_over: (base: ptr mut u8, size: usize,
+                   successful_allocations: usize)
+                  -> (state: failing from base) =
+    state = (base: base, size: size, used: 0,
+             remaining: successful_allocations, allocations: 0, frees: 0)
+end fail_over
+
+failing_alloc: (inout state: failing, size: usize, alignment: usize)
+               -> (block: ptr mut u8) ! out_of_memory =
+    fail out_of_memory when state.remaining == 0
+    offset: usize = align_up(state.used, alignment)
+    fail out_of_memory when offset > state.size
+    fail out_of_memory when size > state.size - offset
+    dec state.remaining
+    inc state.allocations
+    address: usize = usize(state.base) + offset
+    block = ptr(address)
+    state.used = offset + size
+end failing_alloc
+
+failing_free: (inout state: failing, block: ptr mut u8, size: usize) -> none =
+    _ = block
+    _ = size
+    inc state.frees
+end failing_free
+
+failing is allocator (alloc: failing_alloc, free: failing_free)

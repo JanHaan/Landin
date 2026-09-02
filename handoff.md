@@ -210,9 +210,12 @@ transitions from executable non-zeroable pointer storage, including
 transactional growth and drain-before-free. R3.30's repository-owned
 `core/mem` enforces that initialized-prefix state machine, keeps its
 representation private and exercises rollback and publication through compiled
-Landin code.
+Landin code. R3.40 adds the allocator interface, explicit and deliberately
+failing arenas, a transactional pointer-capable `core/vec`, and the parser's
+byte-oriented `core/text` positions and subslices, with backing origins and
+failure behavior pinned by compiled fixtures.
 
-**Current roadmap work: R3.40 — Implement parser-support core modules.**
+**Current roadmap work: R3.50 — Implement the minimum hosted ABI and I/O.**
 
 `refine` runs the frontend, lowers and
 verifies target-neutral IR, emits Linux x86-64 assembly, and can assemble and

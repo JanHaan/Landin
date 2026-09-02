@@ -19,6 +19,14 @@ argument — which is principle [1680] doing real work.
 
 ## core/text  —  the parts this file leans on
 
+R3.40 implements the pressure this parser needs without pulling the complete
+R4 text surface forward: `core/text` accepts byte slices, gives byte offsets an
+opaque `position` identity, retains origins through subslices, and reports an
+end read directly. The `utf8` distinct type, literals and scalar decoding in
+the original sketch below remain the later complete hosted-text slice. The R3
+derived parser may classify its ASCII grammar from bytes while preserving
+unknown input as recoverable tokens.
+
 ```landin
 utf8       distinct []u8
 position   an opaque byte offset into a utf8
