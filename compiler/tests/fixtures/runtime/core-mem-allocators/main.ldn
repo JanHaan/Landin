@@ -1,0 +1,40 @@
+import core/mem
+
+public main: () -> (code: i32) =
+    mut bytes: [64]u8 = zeroed
+    base: ptr mut u8 = addr bytes[0]
+    extent: usize = 64
+    mut bump := mem.arena_over(base, extent)
+
+    three: usize = 3
+    one: usize = 1
+    eight: usize = 8
+    first: ptr mut u8 = mem.allocate(bump, three, one) else ptr(0)
+    second: ptr mut u8 = mem.allocate(bump, eight, eight) else ptr(0)
+    too_large: usize = 49
+    refused: ptr mut u8 = mem.allocate(bump, too_large, one) else ptr(0)
+
+    mut limited_bytes: [32]u8 = zeroed
+    limited_base: ptr mut u8 = addr limited_bytes[0]
+    limited_extent: usize = 32
+    allowance: usize = 1
+    mut limited := mem.fail_over(limited_base, limited_extent, allowance)
+    accepted: ptr mut u8 = mem.allocate(limited, eight, eight) else ptr(0)
+    budget_refused: ptr mut u8 =
+        mem.allocate(limited, eight, eight) else ptr(0)
+    mem.free(limited, accepted, eight)
+
+    if usize(first) == usize(base)
+      and usize(second) - usize(base) == eight
+      and bump.used == 16 and usize(refused) == 0
+      and usize(accepted) == usize(limited_base)
+      and usize(budget_refused) == 0
+      and limited.allocations == 1 and limited.remaining == 0
+      and limited.frees == 1
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main
+

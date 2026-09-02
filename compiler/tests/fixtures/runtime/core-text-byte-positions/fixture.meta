@@ -1,0 +1,7 @@
+class: runtime
+summary: core/text keeps byte positions opaque while traversing and slicing parser input
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0520, 0570, 0770, 0790, 0940, 1350, 1410, 1420, 1810, 1920
+targets: linux-x86-64

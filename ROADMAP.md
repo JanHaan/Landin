@@ -2845,19 +2845,49 @@ the L0202 refusal for direct representation access.
 
 ### R3.40 — Implement parser-support core modules
 
-Status: active
+Status: complete
 Depends on: R3.30, R2.70, R2.80
 
-Implement the required Landin `core/mem`, `core/vec` and `core/text` layers,
-arenas and deliberately failing allocators. Add only map/tree pieces the parser
-actually needs; broader container completion belongs to R4.
+`core/mem` now exposes an allocator concept, a caller-backed monotonic arena
+and a budgeted failing allocator. Allocation reports `out_of_memory`; the
+returned arena handle retains the supplied base's origin; and deterministic
+counters pin successful allocation and free calls. This is an ordinary
+library allocator over explicitly unsafe backing, not [0820]'s future lexical
+arena block.
 
-Exit evidence: allocator failure paths, arena-origin behavior and pointer
-vectors pass through compiled Landin code.
+`core/vec` composes D151's opaque raw storage into an allocator-threaded
+`list(item)`. It reserves and grows through an empty replacement, transfers
+only initialized values, drains and frees the old allocation before
+publication, and leaves the old vector unchanged when allocation fails. The
+runtime case uses pointer elements, so the implementation neither assumes a
+zero image nor describes spare capacity as values. `core/text` provides the
+parser's byte-oriented opaque positions, traversal, checked byte access and
+origin-preserving subslices. Full text semantics and the broader vector,
+map/tree and iterable surface remain in R4 because the parser needs none of
+them here.
+
+This composition also settled the general language seams it exercised:
+parameterized aliases may normalize to nominal aggregates; selected calls are
+valid statement calls; qualified declarations may appear in error sets; and
+reference analysis follows selected calls and retains the origins of array
+and slice views across module boundaries. D152 records the boundary and its
+deliberate omissions.
+
+Sources: prototype 2; prototype 3; `[0430]`, `[0470]`, `[0510]`, `[0600]`,
+`[0770]`, `[0820]`, `[0940]`, `[1350]`, `[1360]`; Z3, Z8, Z9, Z10.
+
+Exit evidence: `runtime/core-mem-allocators` exercises aligned arena
+allocation, extent exhaustion and budgeted failure;
+`negative/core-arena-frame-escape` pins L0314 for the retained backing origin;
+`runtime/core-vec-pointer-storage` exercises successful and failed growth,
+pointer values and drain-before-free; `runtime/core-text-byte-positions`
+exercises parser byte traversal and subslicing; and the two text negatives pin
+the subslice origin and private position representation. The complete pinned
+Linux gate passes 389 cases and 9,124 checks.
 
 ### R3.50 — Implement the minimum hosted ABI and I/O
 
-Status: planned
+Status: active
 Depends on: R1.80, R2.30, R3.10
 
 Choose and document the smallest Linux hosted service route needed for

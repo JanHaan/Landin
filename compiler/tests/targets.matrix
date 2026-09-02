@@ -74,7 +74,10 @@ negative/control-expression-fallthrough-does-not-borrow-returned-facts | linux-x
 negative/control-expression-fallthrough-without-value | linux-x86-64, macos-arm64, synthetic-32
 negative/control-expression-function-signature-mismatch | linux-x86-64, macos-arm64, synthetic-32
 negative/control-result-field-name-mismatch | linux-x86-64, macos-arm64, synthetic-32
+negative/core-arena-frame-escape | linux-x86-64, macos-arm64, synthetic-32
 negative/core-mem-private-representation | linux-x86-64, macos-arm64, synthetic-32
+negative/core-text-frame-slice-escape | linux-x86-64, macos-arm64, synthetic-32
+negative/core-text-private-position | linux-x86-64, macos-arm64, synthetic-32
 negative/deep-nested-child-copy-unassigned | linux-x86-64, macos-arm64
 negative/deep-nested-leaf-unassigned | linux-x86-64, macos-arm64
 negative/defer-cannot-see-later-local | linux-x86-64, macos-arm64, synthetic-32
@@ -713,7 +716,10 @@ runtime/control-expression-aggregate-joins | linux-x86-64
 runtime/control-expression-edges-keep-source-order | linux-x86-64
 runtime/control-expression-function-values | linux-x86-64
 runtime/copy-before-sink-remains-live | linux-x86-64
+runtime/core-mem-allocators | linux-x86-64
 runtime/core-mem-raw-storage | linux-x86-64
+runtime/core-text-byte-positions | linux-x86-64
+runtime/core-vec-pointer-storage | linux-x86-64
 runtime/declared-errors-direct-and-inferred | linux-x86-64
 runtime/declared-errors-indirect-abi | linux-x86-64
 runtime/deep-nested-struct-children | linux-x86-64

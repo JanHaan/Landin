@@ -1,0 +1,30 @@
+import core/text
+
+public main: () -> (code: i32) =
+    mut bytes: [5]u8 = [10, 20, 30, 40, 50]
+    zero: usize = 0
+    five: usize = 5
+    source: []u8 = bytes[zero..<five]
+    mut cursor := text.first(source)
+    first_value: u8 = text.byte(source, cursor) else 0
+    text.advance(cursor)
+    begins := cursor
+    text.advance(cursor)
+    text.advance(cursor)
+    ends := cursor
+    middle: []u8 = text.slice(source, begins, ends)
+    text.advance(cursor)
+    text.advance(cursor)
+    missing: u8 = text.byte(source, cursor) else 99
+
+    if first_value == 10 and lenof middle == 2
+      and middle[0] == 20 and middle[1] == 30
+      and text.at_end(source, cursor) and missing == 99
+      and text.ordinal(cursor) == five
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main
+

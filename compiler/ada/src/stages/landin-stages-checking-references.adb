@@ -216,8 +216,7 @@ package body Landin.Stages.Checking.References is
             return Landin.Checking.Routine_Signature_Of (Types.all, Target);
          elsif Node_Signature /= Landin.Checking.No_Signature then
             return Node_Signature;
-         elsif Syn.Kind (Tree, Callee) = Syn.Name_Reference
-           and then Res.Verdict_Of (Meanings.all, Tree, Callee) = Res.Bound
+         elsif Res.Verdict_Of (Meanings.all, Tree, Callee) = Res.Bound
          then
             return Landin.Checking.Signature_Of
               (Types.all, Res.Bound_To (Meanings.all, Tree, Callee));
@@ -554,6 +553,19 @@ package body Landin.Stages.Checking.References is
                begin
                   if Id /= Res.No_Declaration then
                      Result.Derives (Positive (Id)) := True;
+                     if Syn.Kind (Tree, Node)
+                          in Syn.Inclusive_Slice | Syn.Half_Open_Slice
+                       and then Res.Sort_Of (Meanings.all, Id)
+                         in Res.Local_Binding | Res.Named_Return
+                       and then Landin.Checking.Type_Of (Types.all, Id)
+                         = Ty.Fixed_Array
+                     then
+                        --  A view into a local fixed array points into this
+                        --  frame even though the array value itself contains
+                        --  no references. A local slice instead carries its
+                        --  own source fact and must not acquire frame origin.
+                        Result.Frame := True;
+                     end if;
                      if Parameter_Of (Id) > 0
                        and then Landin.Checking.Type_Of
                          (Types.all, Tree, Node)
@@ -569,9 +581,11 @@ package body Landin.Stages.Checking.References is
                               Parameter_Node : constant Syn.Node_Id :=
                                 Res.Node_Of (Meanings.all, Id);
                            begin
-                              if Syn.Convention_Of
-                                (Parameter_Tree.all, Parameter_Node)
-                                  = Syn.Inout_Convention
+                              if Landin.Checking.Type_Of (Types.all, Id)
+                                   = Ty.Slice_Value
+                                or else Syn.Convention_Of
+                                  (Parameter_Tree.all, Parameter_Node)
+                                    = Syn.Inout_Convention
                               then
                                  Result.From (Parameter_Of (Id)) := True;
                               else

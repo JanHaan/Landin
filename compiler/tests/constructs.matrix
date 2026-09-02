@@ -11,7 +11,7 @@
 #
 #  A construct with no evidence and no refusal is this
 #  item's to answer for; see ROADMAP.md R1.90.
-#  199 constructs, 149 with evidence, 50 with neither.
+#  199 constructs, 150 with evidence, 49 with neither.
 #
 #  id    defined in  evidence
 0010   tour        accepted emitted                   Line comment, to end of line
@@ -91,7 +91,7 @@
 0750   tour        accepted emitted executed refused  Fields keep the order you wrote them
 0760   tour        -                                  Attributes are prefix words, from a closed set
 0770   tour        accepted emitted executed refused  There is no borrow checker and there are no lifetime
-0780   tour        accepted emitted refused           Parameters are non-escaping by default
+0780   tour        accepted emitted executed refused  Parameters are non-escaping by default
 0790   tour        accepted emitted executed refused  The other direction
 0800   tour        accepted emitted refused           The borrow of reaches across the call from there
 0810   tour        -                                  Derivation stops at the three primitives of
@@ -149,7 +149,7 @@
 1330   tour        -                                  A range is not a concept
 1340   tour        accepted emitted executed refused  Concepts compose
 1350   tour        accepted emitted executed refused refused-by-name Types take parameters through a declaration form of their
-1360   tour        -                                  Allocation is an ordinary concept
+1360   tour        accepted emitted executed refused  Allocation is an ordinary concept
 1370   tour        accepted emitted executed refused  'any C' is a value of some type satisfying concept C
 1380   tour        accepted emitted executed refused  Building one is explicit
 1390   tour        accepted emitted executed refused  Calls go through the table

@@ -4326,6 +4326,29 @@ package body Landin.Syntax.Parser is
                         end;
                      end if;
 
+                     if After_Selectors = Tok.Left_Paren then
+                        declare
+                           Called : constant Node_Id := Parse_Primary;
+                        begin
+                           if Kind (Result, Called) = Call then
+                              return Called;
+                           end if;
+
+                           Complain
+                             (Item    => Syn.Expression_Expected,
+                              Where   => Where (Result, Called),
+                              Message => "this statement must be a call",
+                              Note    => "[1810]: a selected callee keeps"
+                                         & " the same statement form as a"
+                                         & " direct callee",
+                              Related => Start,
+                              Because => "the statement starts here");
+                           return Add
+                             (Error_Statement, Start,
+                              Join (Start, After_Previous), [Called]);
+                        end;
+                     end if;
+
                      declare
                         At_Name : constant Landin.Source.Span := Here;
                      begin

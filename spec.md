@@ -342,7 +342,8 @@ signature          ::= "(" parameters? ")" "->" returns errors?
 declared_signature ::= "(" routine_formals? ")" "->" returns errors?
 routine_formals    ::= routine_formal ("," routine_formal)*
 routine_formal     ::= parameter | type_formal
-errors             ::= "!" (identifier ("|" identifier)* | "...")
+errors             ::= "!" (declaration_reference
+                             ("|" declaration_reference)* | "...")
 parameters         ::= parameter ("," parameter)*
 parameter          ::= "escaping"? parameter_convention? identifier ":" type
 parameter_convention ::= "in" | "inout" | "sink"
@@ -376,10 +377,10 @@ spellings.
 a function hands back. `fail` is the other early exit [0970]: it carries one
 payload-free atom on the declared channel and does not read the successful
 named return.
-A call is a statement as well as an expression, because a function
-returning none has nothing to bind and [1020] wants a result
-discarded on purpose rather than by omission. A call whose result is dropped
-that way is the one place the kernel accepts an ordinary expression standing
+A direct or selected call is a statement as well as an expression, because a
+function returning none has nothing to bind and [1020] wants a result discarded
+on purpose rather than by omission. A call whose result is dropped that way is
+the one place the kernel accepts an ordinary expression standing
 alone. A standalone `try call` explicitly propagates its failure and discards
 any successful result. `defer` and `undo` each register one call when their
 statement is reached and evaluate the callee and arguments only on applicable
@@ -7548,9 +7549,11 @@ declared type or the declaration right-hand side. Thus a formal may name one
 written later, but the formals do not escape to the module or another
 declaration.
 
-A fully applied alias is normalized during checking. Its enabled result remains
-a scalar or fixed-array descriptor. A fully applied struct instead interns
-D137's nominal instance. A struct type formal accepts every enabled concrete
+A fully applied alias is normalized during checking. Its enabled result is a
+scalar, fixed-array or nominal aggregate descriptor; an alias around a
+parameterized struct instance keeps that instance's identity rather than
+introducing another one. A fully applied struct instead interns D137's nominal
+instance. A struct type formal accepts every enabled concrete
 identity: scalar, structural atom set, exact fixed array, nominal instance or
 structural function signature. The substituted field or payload position then
 decides whether that identity is legal there. A fixed formal has an integer
@@ -7587,7 +7590,8 @@ requires substitution. All were declined.
 **Pinned by** the parameterized-alias and parameterized-struct parser and
 resolution public-seam cases; the checking and lowering public-seam cases;
 `positive/parameterized-type-alias-scalar`,
-`positive/parameterized-type-alias-fixed-array`; the
+`positive/parameterized-type-alias-fixed-array`; the repository `core/vec`
+module and `runtime/core-vec-pointer-storage`; the
 `positive/parameterized-struct-basic`,
 `positive/parameterized-struct-instances`; the `negative/parameterized-alias-*`,
 `negative/parameterized-atom-union`, `negative/parameterized-struct-*` and
@@ -8341,11 +8345,13 @@ classified failure boundary before the repository gate can pass.
 | `arrays.initialization` | static | 0520, 0530, 0540, 0550, 0560 | L0300--L0304 or L0313 | `negative/array-initializer-length-mismatch`, `runtime/whole-arrays-copy-between-storage` |
 | `raw.prefix` | static | 0420, 0510 | L0202 prevents representation access; `core/mem` reports `raw_full`, `uninitialized`, `raw_empty` or `raw_not_empty` before an invalid transition | `negative/core-mem-private-representation`, `runtime/core-mem-raw-storage` |
 | `raw.backing` | outside | 0430, 0470, 0510, 1720 | non-guarantee: the supplied byte pointer may be invalid, misaligned or smaller than the declared capacity | `runtime/core-mem-raw-storage` |
+| `allocation.failure` | static | 0940, 1230, 1280, 1290, 1310, 1360 | `core/mem` reports `out_of_memory`, which a caller must handle or declare; its failing allocator makes the runtime boundary deterministic | `runtime/core-mem-allocators`, `runtime/core-vec-pointer-storage` |
+| `allocation.backing` | outside | 0430, 0470, 0770, 1360, 1720 | non-guarantee: caller-supplied arena storage may be invalid or cease to live after an origin-erasing pointer conversion | `runtime/core-mem-allocators`, `negative/core-arena-frame-escape` |
 | `slices.bounds-known` | static | 0570, 0580, 1950 | L0300 or L0306 | `negative/index-outside-the-length`, `negative/readonly-slice-write` |
 | `slices.bounds-runtime` | trap | 0570, 0580, 1950, 1960 | trap | `runtime/computed-array-index-traps`, `runtime/local-array-computed-store-traps`, `runtime/slice-index-read-traps`, `runtime/slice-index-write-traps`, `runtime/slice-half-open-upper-traps`, `runtime/slice-inclusive-upper-traps`, `runtime/slice-lower-after-upper-traps` |
 | `atoms.sets` | static | 0630, 0640 | L0301 or L0312 | `negative/atom-match-not-exhaustive`, `runtime/atom-values-cross-the-abi` |
 | `aggregates.variants` | static | 0670, 0680, 0690, 0700, 0710, 0720, 0750, 1210 | L0301, L0308--L0312 or L0313 | `negative/struct-literal-field-not-given`, `negative/variant-match-not-exhaustive` |
-| `origins.escape` | static | 0770, 0780, 0790, 0800, 0830, 0840 | L0314--L0316 | `negative/frame-origin-return`, `negative/borrowed-source-inout`, `negative/returned-reference-missing-from` |
+| `origins.escape` | static | 0770, 0780, 0790, 0800, 0830, 0840 | L0314--L0316 | `negative/frame-origin-return`, `negative/borrowed-source-inout`, `negative/returned-reference-missing-from`, `negative/core-arena-frame-escape`, `negative/core-text-frame-slice-escape` |
 | `origins.aliasing-limit` | outside | 0770, 0910 | non-guarantee: a pre-existing copy or indistinguishable arena is not tracked | `positive/reference-origins-and-consume`, `negative/use-after-sink` |
 | `functions.abi` | static | 0870, 0880, 0890, 0900, 0920, 0930, 0980, 1000, 1020, 1030, 1460, 1920, 1970 | L0301, L0302 or L0502 | `negative/call-with-too-few-arguments`, `runtime/r230-composition` |
 | `execution.resource-exhaustion` | outside | 0950, 1770, 1970 | non-guarantee: the kernel sets no recursion-depth, stack, or host-resource bound | `runtime/recursive-fibonacci` |
@@ -8357,11 +8363,11 @@ classified failure boundary before the repository gate can pass.
 | `control.flow` | static | 1050, 1060, 1080, 1090 | L0301 or L0302 at every reachable join and exit | `negative/if-expression-missing-else`, `runtime/control-expression-edges-keep-source-order` |
 | `cleanup.defer` | static | 1100 | the registered call is checked at every ordinary and successful-return edge | `negative/defer-read-not-assigned-on-return`, `runtime/defer-cleanups-follow-control-edges` |
 | `cleanup.undo` | static | 1110 | the registered call is checked at every propagated-failure edge | `negative/undo-read-not-assigned-on-failure`, `runtime/undo-cleanups-follow-failure-edges` |
-| `generics.substitution` | static | 1220, 1280, 1290, 1300, 1310, 1350, 1500, 1650, 1660, 1700 | L0300, L0301, L0306, L0307, L0313 or L0318 | `negative/generic-routine-undeduced-formal`, `runtime/generic-structural-deduction` |
+| `generics.substitution` | static | 1220, 1280, 1290, 1300, 1310, 1350, 1500, 1650, 1660, 1700 | L0300, L0301, L0306, L0307, L0313 or L0318 | `negative/generic-routine-undeduced-formal`, `runtime/generic-structural-deduction`, `runtime/core-vec-pointer-storage` |
 | `concepts.conformance` | static | 1230, 1240, 1250, 1260, 1340 | L0301 or L0317--L0319 | `negative/conformance-collision`, `negative/constraint-not-satisfied`, `negative/compiler-concept-reserved` |
 | `any.construction` | static | 1370, 1380 | L0301, L0314 or L0318 | `negative/any-source-not-pointer`, `negative/any-readonly-source-for-mutable-entry` |
 | `any.dispatch` | static | 1390 | malformed table positions cannot be produced by accepted source; verifier failure is a compiler defect | `negative/any-entry-not-object-safe`, `runtime/any-heterogeneous-dispatch` |
-| `modules.visibility` | static | 1410, 1420, 1450, 1480 | L0006 or L0007 for an unresolved root; L0202 for a private member or representation | `negative/module-not-found`, `negative/imported-private-name`, `negative/core-mem-private-representation`, `runtime/core-mem-raw-storage` |
+| `modules.visibility` | static | 1410, 1420, 1450, 1480 | L0006 or L0007 for an unresolved root; L0202 for a private member or representation | `negative/module-not-found`, `negative/imported-private-name`, `negative/core-mem-private-representation`, `negative/core-text-private-position`, `runtime/core-mem-raw-storage` |
 | `entry.point` | static | 1540 | L0502 before executable emission | `runtime/constant-return-exits-with-its-code` |
 | `module.images` | static | 1930, 1940 | L0300, L0304 or L0305 | `negative/module-value-from-a-call`, `runtime/recursive-module-images-are-laid-out-and-distinct` |
 | `configuration.fixed` | static | 1980 | L0300, L0301, L0305 or L0306 in the selected declaration view | `negative/fixed-conditional-evaluator`, `runtime/fixed-conditional-generic-runtime` |
@@ -8448,7 +8454,8 @@ qualified lookup. Duplicate final-segment bindings are refused. Imports do not
 enter sibling files, inject members or re-export anything.
 
 The namespace's first selection resolves a public declaration in the selected
-module and is available in every declaration-reference position. A private
+module and is available in every declaration-reference position, including a
+concept constraint and a declared error set. A private
 member is distinguished from a missing one and related to its declaration.
 Public declarations may mention private identities, but those identities stay
 unnameable across the boundary, and a value carrying one does not expose that
@@ -8482,8 +8489,9 @@ Loading by filesystem enumeration or hash order would also make declaration
 identities and diagnostics host-dependent. All were declined.
 
 **Pinned by** `unit/module-graph`, `unit/module-conformance-register`,
-`negative/core-mem-private-representation`, and the parser, resolution, driver
-and hosted-entry cases.
+`negative/core-mem-private-representation`,
+`negative/core-text-frame-slice-escape`, `runtime/core-vec-pointer-storage`,
+and the parser, resolution, driver and hosted-entry cases.
 
 ### D151 — Raw storage is a private library state machine
 
@@ -8495,9 +8503,12 @@ pointer element, but deliberately proposed no spelling.
 parameterized nominal `raw(item)` with a byte pointer, capacity and initialized
 count. D150 permits public routines to carry that private identity, so callers
 hold it through inferred bindings without being able to name its type or
-select its fields. Cross-module field selection through such a value is L0202,
-related to the private type declaration. Code in the defining module retains
-ordinary field access; no field-visibility syntax or special raw type kind is
+select its fields. R3.40 adds the public parameterized alias `storage(item)` so
+another core module may name the same identity in a field or signature without
+exposing its representation. D135's alias introduces no second nominal
+identity. Cross-module field selection through such a value is L0202, related
+to the private type declaration. Code in the defining module retains ordinary
+field access; no field-visibility syntax or special raw type kind is
 introduced.
 
 `reserve` records a supplied byte pointer and capacity with initialized count
@@ -8514,9 +8525,12 @@ Growth is transactional by composition: a replacement begins empty; reads of
 the old prefix and admissions to the private replacement may be rolled back by
 tail release without changing the old value. Only after the full copy succeeds
 does the caller drain and dispose the old value and publish the replacement by
-assignment. `raw` never yields a slice over capacity and never gives spare
-storage a `T` image. The public checks are declared atom outcomes, not traps,
-because these are foreseeable container conditions [0940].
+assignment. `transfer` performs the copy as one initialized-source to
+next-destination transition, so a reference-valued item is not exposed as a
+borrow between the two raw values. `raw` never yields a slice over capacity and
+never gives spare storage a `T` image. The public checks are declared atom
+outcomes, not traps, because these are foreseeable container conditions
+[0940].
 
 The state machine does not validate the allocation behind its byte pointer.
 Supplying insufficient, misaligned, stale or otherwise invalid storage remains
@@ -8534,3 +8548,70 @@ foreseeable container state into process termination. All were declined.
 **Pinned by** `negative/core-mem-private-representation`,
 `runtime/core-mem-raw-storage`, the rooted fixture execution path, and the
 `raw.prefix` and `raw.backing` guarantee rows.
+
+### D152 — The parser-support core is raw-backed and byte-oriented
+
+**The prototypes said** that parser support needs allocator-threaded vectors,
+arena allocation and text positions, while Z3, Z9 and Z10 left their exact
+minimum unresolved. R3.20 and D151 established the honest raw-storage
+boundary, but did not compose it into the modules the derived parser can use.
+
+**Chosen:** `core/mem.allocator(provider)` has `alloc` and `free` entries.
+Allocation reports the declared `out_of_memory` atom. `arena_over` builds a
+monotonic allocator over a caller-supplied pointer and byte extent, aligning
+each successful result and refusing a result that does not fit. `fail_over`
+adds a successful-allocation budget and public counters so exhaustion and
+cleanup paths have deterministic executable evidence. Both returned allocator
+handles retain `from base`; returning one over frame storage is L0314. Freeing
+does not reclaim monotonic space. The pointer and extent remain unsafe
+caller-supplied backing under [0430], [0470] and [1720]. This ordinary library
+allocator is not [0820]'s built-in lexical `arena` block, whose exact region
+semantics remain R4.10.
+
+`core/vec.list(item)` contains one D151 `mem.storage(item)`. It threads an
+allocator through `reserve`, `push` and `release`, while `length`, `capacity`,
+`get` and `pop` expose only initialized values. Growth allocates an empty
+replacement, recursively transfers the complete initialized prefix, rolls
+back that replacement on failure, and publishes it only after draining and
+freeing the old storage. The recursive traversal is the kernel spelling until
+loops are enabled. A failing reserve leaves the old list and its values
+unchanged. Pointer elements are valid inputs; no `zeroable` constraint is
+introduced. Internal raw-state errors are mapped to `out_of_memory`, `empty`
+or `out_of_bounds` at the vector boundary.
+
+`core/text` supplies an opaque nominal byte `position`, traversal, bounded
+byte access with `past_end`, and a half-open subslice whose result is `from
+source`. Positions are byte offsets because the parser consumes source bytes.
+This is not the complete [0600] text design: distinct text literals, UTF-8
+scalar decoding, codepoint indexing and the permanent text/string boundary
+remain R4.10.
+
+The composition exposed four language rules needed by ordinary modules. D135
+aliases may normalize to a nominal aggregate, selected calls are statement
+calls under [1810], a qualified declaration reference may appear in a declared
+error set, and origin inference follows selected calls and distinguishes a
+slice of a by-value fixed-array parameter from a retained slice parameter or
+`inout` storage. These are general language rules rather than privileges for
+`core/*`.
+
+Maps and trees are absent because the R3 parser does not need them. A public
+initialized-prefix slice, small-vector storage, iterable integration and the
+broader container surface remain R4.20. Allocator acquisition and ownership
+also remain outside the compiler; the current modules only thread an allocator
+supplied by their caller.
+
+**The alternatives:** expose vector capacity as `[]mut item`, require
+`zeroable`, publish a partially copied replacement, store an allocator in each
+container, treat parser text as codepoints now, or implement the prototype's
+map and tree before a workload needs them. The first two repeat the false raw
+storage model D151 rejected; the third breaks failure atomicity; the fourth
+confuses capability threading with ownership; and the last two settle wider
+library design without parser evidence. All were declined.
+
+**Pinned by** `runtime/core-mem-allocators`,
+`runtime/core-vec-pointer-storage`, `runtime/core-text-byte-positions`,
+`negative/core-arena-frame-escape`,
+`negative/core-text-frame-slice-escape`,
+`negative/core-text-private-position`, and the `allocation.failure`,
+`allocation.backing`, `raw.prefix`, `origins.escape` and
+`modules.visibility` guarantee rows.

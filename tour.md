@@ -548,9 +548,8 @@ indices.
 
 ### [0500] Three operations sit between pointers and slices
 
-Three operations sit between pointers and slices, and core
-has them where nothing else does. Every allocator needs all
-three, and none can be written in the language proper.
+Three operations were proposed between pointers and slices, in core where
+system-tool policy belongs:
 
 ```landin
 mem.offset:     (p: ptr mut u8, n: usize) -> (q: ptr mut u8)
@@ -558,6 +557,15 @@ mem.base_of:    (T: type, s: []T) -> (p: ptr u8)
 mem.base_of:    (T: type, s: []mut T) -> (p: ptr mut u8)
 mem.slice_from: (T: type, p: ptr mut u8, n: usize) -> (s: []mut T)
 ```
+
+Implementation pressure rejected the third one [0510]: no operation may turn
+an arbitrary allocation into a slice that claims every slot already contains
+`T`. The repository `core/mem` instead keeps pointer arithmetic inside its
+private raw-storage operations. It can copy one initialized slot directly into
+the next slot of a private replacement, but it exposes neither spare capacity
+nor a general pointer-to-slice conversion. `offset` and `base_of` remain
+system-layer conveniences for later library slices, not a way around that
+rule.
 
 ### [0510] slice_from is where uninitialised storage is smuggled in
 
@@ -578,12 +586,15 @@ a T that has a zero image, and general uninitialised
 generic storage is not supported.
 The answer is `core/mem`'s `raw(T)`. It is an ordinary parameterised
 struct whose identity and fields stay private to that module. A caller may
-hold the inferred result of `reserve`, but it can inspect or change the value
-only through the public operations: `capacity` and `initialized` report the
-two counts, `admit` initializes exactly the next slot, `get` reads only the
-initialized prefix, `release` removes only its tail, and `dispose` returns the
-backing byte pointer only when the prefix is empty. The four invalid requests
-are foreseeable and therefore declared outcomes: `raw_full`, `uninitialized`,
+hold the inferred result of `reserve`; another core module names the same
+private identity through the public alias `storage(T)`. Neither route exposes
+the representation. `capacity` and `initialized` report the two counts,
+`admit` initializes exactly the next slot, `get` reads only the initialized
+prefix, `release` removes only its tail, and `dispose` returns the backing byte
+pointer only when the prefix is empty. `transfer` copies one initialized source
+slot directly into the next slot of a private replacement, without exposing a
+reference-valued item between the two states. The four invalid requests are
+foreseeable and therefore declared outcomes: `raw_full`, `uninitialized`,
 `raw_empty`, and `raw_not_empty`.
 
 Growth uses two raw values. Allocate and reserve an empty replacement, copy
@@ -795,6 +806,14 @@ Text types are distinct views, not one string type:
 utf8    distinct []u8      text, UTF-8 by convention
 utf16   distinct []u16
 cstring distinct ptr u8    no length, NUL terminated
+
+The parser-support `core/text` slice arrives before those full distinct text
+types. It accepts `[]u8`, gives byte offsets the opaque nominal name
+`text.position`, and supplies first/end, byte, advance, ordinal and subslice
+operations. A byte read at the end reports `past_end`; a returned subslice
+keeps its source origin. UTF-8 scalar decoding, text literals and integer
+codepoint indexing remain the complete hosted-text work, not hidden behavior
+in this byte layer.
 
 ### [0610] Indexing utf8 by an integer yields the bytes of one
 
@@ -1338,6 +1357,14 @@ report: (data: []u8) -> none =
 end report
 
 ```
+
+`core/mem` also has an explicit `arena` allocator over a supplied byte pointer
+and extent. That library value is useful where storage already exists: its
+handle derives from the supplied pointer, aligned allocation advances one
+monotonic offset, and individual `free` calls do nothing. It is not the block
+construct above and receives no stronger pointer guarantee than its unsafe
+backing storage. The paired `failing` arena adds an allocation budget so an
+out-of-memory edge is deterministic in tests.
 
 ### [0830] A view derived from a local borrows it
 
@@ -2425,6 +2452,10 @@ same walk keeps transient symbolic nominal obligations long enough to see a
 used formal pass one recursively by value through another template. A phantom
 formal or function-signature mention does not promote that obligation, and no
 symbolic walk guesses an actual or annotates the template.
+An alias application may also normalize to one of those nominal instances.
+The alias adds no identity of its own; `mem.storage(T)` can therefore publish a
+name for a private `raw(T)` identity while the private template still decides
+whether its fields are accessible.
 
 ### [1360] Allocation is an ordinary concept
 
@@ -2451,6 +2482,16 @@ makes the type list(T, A), so a list in an arena and a list
 on the heap become different types and no function takes
 both. Threading keeps the type parameterised by T alone,
 and costs one argument at every call that can allocate.
+
+The parser-support modules use this exact interface. `core/mem.arena` is a
+monotonic provider over an explicit extent and `core/mem.failing` adds a count
+of allocations allowed before `out_of_memory`. `core/vec.list(T)` stores an
+honest `mem.storage(T)`: reserve copies its initialized prefix into a private
+replacement, rolls that replacement back on failure, drains and frees the old
+allocation only after the copy succeeds, and publishes last. `push`, `pop`,
+indexed `get`, length, capacity and release are the minimum parser slice. A
+non-zeroable pointer element is its executable case. Map, tree, small-vector,
+heap and an initialized-prefix slice accessor remain broader R4 library work.
 
 ## RUNTIME DISPATCH
 

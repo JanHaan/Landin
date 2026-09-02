@@ -1,0 +1,57 @@
+import core/mem
+import core/vec
+
+node: type = struct
+    value: i32
+end node
+
+first: node = (value: 7)
+second: node = (value: 11)
+third: node = (value: 24)
+
+public main: () -> (code: i32) =
+    mut bytes: [256]u8 = zeroed
+    base: ptr mut u8 = addr bytes[0]
+    extent: usize = 256
+    allowance: usize = 2
+    mut state := mem.fail_over(base, extent, allowance)
+    mut values := vec.new_list(item: ptr node)
+
+    vec.push(values, state, addr first) else 0
+    vec.push(values, state, addr second) else 0
+    wanted: usize = 16
+    vec.reserve(values, state, wanted) else 0
+
+    mut failed: bool = false
+    too_many: usize = 32
+    vec.reserve(values, state, too_many) else (problem)
+        _ = problem
+        failed = true
+    end
+
+    first_index: usize = 0
+    second_index: usize = 1
+    vec.push(values, state, addr third) else 0
+    removed: ptr node = vec.pop(values) else addr first
+    removed_value: i32 = removed.val.value
+    left: ptr node = vec.get(values, first_index) else addr third
+    right: ptr node = vec.get(values, second_index) else addr third
+
+    if failed and vec.length(values) == 2 and vec.capacity(values) == wanted
+      and left.val.value == 7 and right.val.value == 11
+      and removed_value == 24 and state.allocations == 2
+      and state.frees == 1
+    then
+        vec.release(values, state)
+        if vec.length(values) == 0 and vec.capacity(values) == 0
+          and state.frees == 2
+        then
+            code = 42
+        else
+            code = 2
+        end if
+    else
+        code = 1
+    end if
+end main
+

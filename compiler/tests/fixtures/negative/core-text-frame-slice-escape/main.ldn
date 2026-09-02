@@ -1,0 +1,17 @@
+import core/text
+
+bad: () -> (result: []u8) =
+    mut bytes: [2]u8 = [1, 2]
+    zero: usize = 0
+    two: usize = 2
+    source: []u8 = bytes[zero..<two]
+    begins := text.first(source)
+    ends := text.next(text.next(begins))
+    result = text.slice(source, begins, ends)
+end bad
+
+public main: () -> (code: i32) =
+    _ = bad()
+    code = 0
+end main
+

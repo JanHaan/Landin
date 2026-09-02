@@ -1,0 +1,7 @@
+class: runtime
+summary: core/mem bump and budgeted arenas align extents and make exhaustion deterministic
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0430, 0470, 0520, 0540, 0770, 0790, 0940, 1230, 1280, 1290, 1310, 1360, 1410, 1420, 1810, 1920
+targets: linux-x86-64

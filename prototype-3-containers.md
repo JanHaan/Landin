@@ -52,6 +52,12 @@ question is written out at the end.
 
 ## core/mem  —  allocation as a capability
 
+R3.40 implements the allocator interface below in repository `core/mem`, plus
+an explicit monotonic arena and a budgeted failing arena. R3.30's private
+`raw(T)` supersedes the later `slice_from` sketch: the public `storage(T)` alias
+lets `core/vec` name that nominal identity without exposing its fields, and a
+checked one-slot transfer copies initialized values during growth.
+
 ```landin
 public out_of_memory: atom
 
@@ -236,6 +242,13 @@ end drop_slice
 ```
 
 ## core/vec  —  a growing array
+
+R3.40 implements the parser-support subset with honest raw storage rather than
+the spare-capacity slice sketched below. It supplies construction, reserve,
+push, pop, indexed get, length, capacity and release. The initialized-prefix
+slice accessor and iterable conformance wait with the broader R4 container
+slice; the executable pointer-vector case already proves allocation rollback
+and publication order.
 
 ```landin
 import core/mem
@@ -931,7 +944,13 @@ value parameter, small: type (T: type, fixed N: u32). [1350] shows
 only a plain type parameter and [1520] shows fixed only on a
 function. Nothing here suggests a difficulty; it needs saying.
 
-Z3  Slices and pointers have no stated way between them, and every
+Z3  RESOLVED by [0500], [0510], D151 and D152. The implemented containers do
+not need a general pointer-to-slice conversion: core/mem performs checked
+pointer arithmetic inside private raw storage and transfers initialized slots
+directly. `slice_from` is declined because it would recreate Z8's false claim.
+The original finding follows.
+
+Slices and pointers have no stated way between them, and every
 allocator needs both directions plus pointer arithmetic. Written
 here as offset, base_of and slice_from in core. A core-only
 privilege is defensible under [0490], but it should be stated
@@ -1040,13 +1059,22 @@ claims more than is true between the allocation and the write.
 Either core's privilege covers this too, or there is a separate
 raw-storage type; one of the two should be said.
 
-Z9  A concept entry must have a concrete error set, because it is
+Z9  RESOLVED by [1360] and D152. `mem.allocator` fixes `out_of_memory` as the
+concrete declared result of every provider, and the arena, failing arena and
+pointer vector execute both sides of that contract. The original finding
+follows.
+
+A concept entry must have a concrete error set, because it is
 reached through a table and [0960] forbids an inferred set there.
 So the allocator concept fixes out_of_memory for every allocator
 that will ever exist. Right for allocation, but it is a general
 constraint on concept design that nobody has written down.
 
-Z10 Threading the allocator rather than storing it holds up, and for a
+Z10 RESOLVED by [1360] and D152. The implemented `vec.list(T)` stores only
+`mem.storage(T)`; every operation that can allocate receives its provider and
+state as ordinary arguments. The original finding follows.
+
+Threading the allocator rather than storing it holds up, and for a
 better reason than visibility. A stored allocator makes the
 container list(T, A), so a list in an arena and a list on the heap
 become different types and no function takes both. Threading keeps
