@@ -1,0 +1,9 @@
+class: negative
+summary: the core/text position alias names a private nominal without exposing its offset field
+expect: expected.txt
+targets: linux-x86-64, macos-arm64, synthetic-32
+args: --root=../.. ../tests/fixtures/negative/core-text-private-position
+codes: L0202
+status: 1
+constructs: 0520, 0570, 1350, 1410, 1420
+

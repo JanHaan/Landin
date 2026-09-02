@@ -1,0 +1,9 @@
+class: negative
+summary: a core/text subslice keeps the frame origin of its source array
+expect: expected.txt
+targets: linux-x86-64, macos-arm64, synthetic-32
+args: --root=../.. ../tests/fixtures/negative/core-text-frame-slice-escape
+codes: L0314
+status: 1
+constructs: 0520, 0570, 0770, 0790, 1410, 1420
+

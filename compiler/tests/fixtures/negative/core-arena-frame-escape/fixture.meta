@@ -1,0 +1,9 @@
+class: negative
+summary: a core/mem arena retains the frame origin of its supplied byte extent
+expect: expected.txt
+targets: linux-x86-64, macos-arm64, synthetic-32
+args: --root=../.. ../tests/fixtures/negative/core-arena-frame-escape
+codes: L0314
+status: 1
+constructs: 0430, 0520, 0540, 0770, 0790, 1360, 1410, 1420
+
