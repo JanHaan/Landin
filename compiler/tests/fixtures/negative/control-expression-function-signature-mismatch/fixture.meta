@@ -3,3 +3,4 @@ summary: every fallthrough function value in a control must retain one recursive
 constructs: 0870, 0880, 0930, 1000, 1050, 1080, 1800, 1810
 program: program.ldn
 codes: L0301
+targets: linux-x86-64, macos-arm64, synthetic-32

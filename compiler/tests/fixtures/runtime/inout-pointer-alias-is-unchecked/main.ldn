@@ -1,0 +1,16 @@
+replace: (inout left: u32, inout right: u32) -> none =
+    left = 1
+    right = 2
+end replace
+
+public main: () -> (code: i32) =
+    mut value: u32 = 0
+    left: ptr mut u32 = addr value
+    right: ptr mut u32 = addr value
+    replace(left.val, right.val)
+    if value == 2 then
+        code = 42
+    else
+        code = 1
+    end if
+end main

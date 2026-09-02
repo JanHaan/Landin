@@ -1,0 +1,8 @@
+double: (n: u8) -> (r: u8) =
+    r = n * 2
+end double
+
+public main: () -> (code: i32) =
+    _ = double(128)
+    code = 42
+end main

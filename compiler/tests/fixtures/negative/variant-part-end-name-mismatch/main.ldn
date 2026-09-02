@@ -1,0 +1,6 @@
+broken: type = struct
+    kind: variant
+        leaf
+    end kinds
+end broken
+after: u8 =

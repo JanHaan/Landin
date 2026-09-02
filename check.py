@@ -16,6 +16,13 @@ import os
 import re
 import sys
 
+#  The compiler's public parser limit is 128 nested constructs.  A negative
+#  fixture must cross it, and the independent grammar recognizer uses Python
+#  recursion to prove that source is underivable.  Leave enough interpreter
+#  depth to reach the language limit rather than Python's smaller call-depth
+#  accident.
+sys.setrecursionlimit(max(sys.getrecursionlimit(), 10_000))
+
 ROOT = os.path.dirname(os.path.abspath(__file__))
 
 #  The normative document, named once.  Every check that reads it goes
@@ -2306,6 +2313,7 @@ def catalogue_rows():
                 value = "".join(re.findall(r'"([^"]*)"', value))
             else:
                 value = value.split("\n")[0].strip()
+            value = value.rstrip(",").strip()
             for one in choices(head):
                 arms[one] = value
         return arms
@@ -2317,7 +2325,10 @@ def catalogue_rows():
     levels = column("Level")
     states = column("State")
     rules = column("Rule")
-    secondaries = column("Required_Secondaries")
+    needs_source = column("Needs_Source")
+    nonempty = column("Needs_Non_Empty_Span")
+    minimum = column("Minimum_Secondaries")
+    maximum = column("Maximum_Secondaries")
     notes = column("Required_Notes")
 
     rows = []
@@ -2328,8 +2339,11 @@ def catalogue_rows():
             level=read(levels, name),
             state=read(states, name),
             rule=read(rules, name),
-            secondaries=read(secondaries, name, "0"),
-            notes=read(notes, name, "0")))
+            source=read(needs_source, name, "?"),
+            nonempty=read(nonempty, name, "?"),
+            minimum=read(minimum, name, "?"),
+            maximum=read(maximum, name, "?"),
+            notes=read(notes, name, "?")))
     return rows
 
 
@@ -2700,6 +2714,512 @@ def check_matrix(full_run):
                  "the construct matrix is stale; regenerate it with "
                  "python3 check.py --matrix")]
     return []
+
+
+def markdown_register(relative, heading, columns):
+    """Read one deliberately plain Markdown register table.
+
+    These tables are source, not rendered guesses: the heading is exact, the
+    first table after it owns fixed columns, and cells contain no unescaped
+    pipe.  check_table_shape separately guards their rendered width.
+    """
+    path = os.path.join(ROOT, relative)
+    if not os.path.exists(path):
+        return None
+    lines = io.open(path, encoding="utf-8").read().splitlines()
+    try:
+        at = lines.index(heading)
+    except ValueError:
+        return None
+    at += 1
+    while at < len(lines) and not lines[at].startswith("|"):
+        at += 1
+    if at + 1 >= len(lines):
+        return None
+
+    def cells(line):
+        return [cell.strip() for cell in line.strip().strip("|").split("|")]
+
+    if cells(lines[at]) != list(columns):
+        return None
+    rows = []
+    for number in range(at + 2, len(lines)):
+        if not lines[number].startswith("|"):
+            break
+        values = cells(lines[number])
+        if len(values) != len(columns):
+            return None
+        rows.append((number + 1, dict(zip(columns, values))))
+    return rows
+
+
+def fixture_records():
+    """The metadata facts the coverage registers are allowed to cite."""
+    records = {}
+    root = os.path.join(ROOT, "compiler/tests/fixtures")
+    if not os.path.isdir(root):
+        return records
+    for kind in sorted(os.listdir(root)):
+        directory = os.path.join(root, kind)
+        if not os.path.isdir(directory):
+            continue
+        for name in sorted(os.listdir(directory)):
+            meta = os.path.join(directory, name, "fixture.meta")
+            if not os.path.exists(meta):
+                continue
+            text = io.open(meta, encoding="utf-8").read()
+            fields = {}
+            for line in text.splitlines():
+                if line.startswith("#") or ":" not in line:
+                    continue
+                key, _, value = line.partition(":")
+                fields[key.strip()] = value.strip()
+            records[kind + "/" + name] = (meta, fields)
+    return records
+
+
+def fixture_names(text):
+    return re.findall(
+        r"`((?:unit|positive|negative|runtime|abi|debugger|end-to-end)"
+        r"/[A-Za-z0-9][A-Za-z0-9._-]*)`", text)
+
+
+def implemented_constructs():
+    """Constructs the current corpus says reach acceptance or emission."""
+    text = construct_matrix()
+    if text is None:
+        return set()
+    out = set()
+    for line in text.splitlines():
+        found = re.match(r"^(\d{4})\s", line)
+        if found and ("accepted" in line or "emitted" in line
+                      or "executed" in line):
+            out.add(found.group(1))
+    return out
+
+
+def guarantee_rows():
+    return markdown_register(
+        SPEC_NAME, "#### Guarantee coverage",
+        ("Operation", "Class", "Constructs", "Behaviour", "Evidence"))
+
+
+def conformance_rows():
+    return markdown_register(
+        SPEC_NAME, "#### Conformance and evidence coverage",
+        ("Mechanism", "Rules", "Evidence"))
+
+
+def prototype_rows():
+    return markdown_register(
+        ROADMAP, "#### Prototype derivation coverage",
+        ("Fixture", "Prototype", "Findings", "Pressure"))
+
+
+def target_scope_rows():
+    return markdown_register(
+        ROADMAP, "#### Target applicability coverage",
+        ("Scope", "Targets"))
+
+
+def coverage_dumps():
+    """Generate R2.90's four non-diagnostic reading copies."""
+    guarantees = guarantee_rows()
+    conformances = conformance_rows()
+    prototypes = prototype_rows()
+    scopes = target_scope_rows()
+    if None in (guarantees, conformances, prototypes, scopes):
+        return None
+
+    g_lines = ["# Generated by check.py from spec.md D148.  Do not edit;",
+               "# regenerate with python3 check.py --coverage.",
+               "# operation | class | constructs | behaviour | evidence"]
+    for _, row in guarantees:
+        g_lines.append(" | ".join((row["Operation"].strip("`"),
+                                   row["Class"], row["Constructs"],
+                                   row["Behaviour"], row["Evidence"])))
+
+    c_lines = ["# Generated by check.py from spec.md D148.  Do not edit;",
+               "# regenerate with python3 check.py --coverage.",
+               "# mechanism | rules | evidence"]
+    for _, row in conformances:
+        c_lines.append(" | ".join((row["Mechanism"].strip("`"),
+                                   row["Rules"], row["Evidence"])))
+
+    finding_sources = {"1": ("prototype-1-driver.md", "X"),
+                       "2": ("prototype-2-parser.md", "Y"),
+                       "3": ("prototype-3-containers.md", "Z"),
+                       "4": ("prototype-4-app.md", "W")}
+    records = fixture_records()
+    p_lines = ["# Generated by check.py from ROADMAP.md's R2.90 register.",
+               "# Do not edit; regenerate with python3 check.py --coverage.",
+               "# fixture | prototype | finding source lines | constructs | targets | pressure"]
+    for _, row in prototypes:
+        number = row["Prototype"].strip("`Pp ")
+        source, _ = finding_sources.get(number, ("?", "?"))
+        source_text = (io.open(os.path.join(ROOT, source), encoding="utf-8")
+                       .read() if source != "?" else "")
+        locations = []
+        for finding in re.findall(r"[XYZW]\d+", row["Findings"]):
+            match = re.search(r"^%s\b" % finding, source_text, re.M)
+            line = source_text.count("\n", 0, match.start()) + 1 if match else 0
+            locations.append("%s:%d" % (finding, line))
+        fixture = row["Fixture"].strip("`")
+        fields = records.get(fixture, (None, {}))[1]
+        p_lines.append(" | ".join((fixture, source, ", ".join(locations),
+                                   fields.get("constructs", "-"),
+                                   fields.get("targets", "-"),
+                                   row["Pressure"])))
+
+    t_lines = ["# Generated by check.py from every fixture's metadata and",
+               "# ROADMAP.md's prototype applicability.  Do not edit;",
+               "# regenerate with python3 check.py --coverage.",
+               "# scope | targets"]
+    for _, row in scopes:
+        t_lines.append("%s | %s" %
+                       (row["Scope"].strip("`"), row["Targets"]))
+    for name, (_, fields) in sorted(fixture_records().items()):
+        t_lines.append("%s | %s" % (name, fields.get("targets", "-")))
+
+    return {"guarantees.matrix": "\n".join(g_lines) + "\n",
+            "conformances.matrix": "\n".join(c_lines) + "\n",
+            "prototypes.matrix": "\n".join(p_lines) + "\n",
+            "targets.matrix": "\n".join(t_lines) + "\n"}
+
+
+def check_coverage_registers(full_run):
+    """R2.90's registers are complete, live cross-references.
+
+    The guarantee inventory closes over what the independent fixture matrix
+    says is implemented.  This does not pretend a heading is implementation:
+    acceptance or emission adds the construct, and only an explicit D148 row
+    can classify its observable failure boundary.
+    """
+    if not full_run:
+        return []
+    out = []
+    fixtures = fixture_records()
+    known_constructs = construct_ids()
+    catalogue = catalogue_rows() or []
+    known_codes = {row["code"] for row in catalogue}
+    guarantees = guarantee_rows()
+    conformances = conformance_rows()
+    prototypes = prototype_rows()
+    scopes = target_scope_rows()
+    where = "spec.md"
+
+    if guarantees is None:
+        out.append((where, 1, "D148's guarantee register cannot be read"))
+    else:
+        keys, covered = set(), set()
+        required_guarantees = {
+            "source.lexical", "source.structure", "declarations.names",
+            "types.values", "arithmetic.known", "arithmetic.runtime",
+            "arithmetic.total", "ranges.measurements", "assignment.flow",
+            "pointer.permission", "inout.exact-alias",
+            "inout.possible-alias", "pointer.validity",
+            "pointer.integer-origin", "pointer.integer-width",
+            "arrays.initialization", "slices.bounds-known",
+            "slices.bounds-runtime", "atoms.sets", "aggregates.variants",
+            "origins.escape", "origins.aliasing-limit", "functions.abi",
+            "execution.resource-exhaustion", "consume.local",
+            "consume.copy-before", "errors.control", "results.destructure",
+            "functions.anonymous", "control.flow", "cleanup.defer",
+            "cleanup.undo", "generics.substitution",
+            "concepts.conformance", "any.construction", "any.dispatch",
+            "entry.point", "module.images", "configuration.fixed"}
+        classes = {"static", "trap", "beyond-lifetime", "outside"}
+        for line, row in guarantees:
+            key = row["Operation"].strip("`")
+            if not re.fullmatch(r"[a-z][a-z0-9.-]*", key):
+                out.append((where, line, "invalid guarantee operation key"))
+            elif key in keys:
+                out.append((where, line, "duplicate guarantee operation %s"
+                            % key))
+            keys.add(key)
+            if row["Class"] not in classes:
+                out.append((where, line, "%s has no guarantee class" % key))
+            constructs = {one.strip() for one in
+                          row["Constructs"].split(",") if one.strip()}
+            for one in sorted(constructs):
+                if one not in known_constructs:
+                    out.append((where, line,
+                                "%s names unknown construct [%s]" %
+                                (key, one)))
+            covered |= constructs
+            for code in re.findall(r"L\d{4}", row["Behaviour"]):
+                if code not in known_codes:
+                    out.append((where, line,
+                                "%s names unknown diagnostic %s" %
+                                (key, code)))
+            names = fixture_names(row["Evidence"])
+            if not names:
+                out.append((where, line, "%s has no test owner" % key))
+            for name in names:
+                if name not in fixtures:
+                    out.append((where, line,
+                                "%s names missing fixture %s" % (key, name)))
+            if row["Class"] == "trap":
+                if not any(fixtures.get(name, (None, {}))[1].get("traps")
+                           == "yes" for name in names):
+                    out.append((where, line,
+                                "%s has no trapping runtime evidence" % key))
+            elif row["Class"] in ("outside", "beyond-lifetime"):
+                if "non-guarantee" not in row["Behaviour"]:
+                    out.append((where, line,
+                                "%s does not state its non-guarantee" % key))
+        for key in sorted(required_guarantees - keys):
+            out.append((where, 1,
+                        "observable guarantee boundary %s is missing" % key))
+        for key in sorted(keys - required_guarantees):
+            out.append((where, 1,
+                        "unregistered guarantee boundary %s" % key))
+        missing = implemented_constructs() - covered
+        for one in sorted(missing):
+            out.append((where, 1,
+                        "implemented construct [%s] has no guarantee row"
+                        % one))
+
+    if conformances is None:
+        out.append((where, 1,
+                    "D148's conformance/evidence register cannot be read"))
+    else:
+        mechanisms = set()
+        required_mechanisms = {
+            "compiler-zeroable", "ordinary-direct", "ordinary-parent",
+            "parameterized-provider", "collision", "constraint-refusal",
+            "generic-direct-table", "generic-parent-tables",
+            "erased-direct-table", "erased-parent-flattening",
+            "erased-parameterized-provider", "verifier-boundaries",
+            "target-layout-64", "target-layout-32"}
+        for line, row in conformances:
+            key = row["Mechanism"].strip("`")
+            if key in mechanisms:
+                out.append((where, line,
+                            "duplicate conformance mechanism %s" % key))
+            mechanisms.add(key)
+            if not fixture_names(row["Evidence"]):
+                out.append((where, line, "%s has no evidence owner" % key))
+            for name in fixture_names(row["Evidence"]):
+                if name not in fixtures:
+                    out.append((where, line,
+                                "%s names missing fixture %s" % (key, name)))
+            for decision in re.findall(r"D\d+", row["Rules"]):
+                text = io.open(os.path.join(ROOT, SPEC_NAME),
+                               encoding="utf-8").read()
+                if not re.search(r"^### %s\b" % decision, text, re.M):
+                    out.append((where, line,
+                                "%s names missing decision %s" %
+                                (key, decision)))
+        for key in sorted(required_mechanisms - mechanisms):
+            out.append((where, 1,
+                        "conformance/evidence mechanism %s is missing" % key))
+        for key in sorted(mechanisms - required_mechanisms):
+            out.append((where, 1,
+                        "unregistered conformance/evidence mechanism %s"
+                        % key))
+
+    finding_sources = {"1": ("prototype-1-driver.md", "X"),
+                       "2": ("prototype-2-parser.md", "Y"),
+                       "3": ("prototype-3-containers.md", "Z"),
+                       "4": ("prototype-4-app.md", "W")}
+    if prototypes is None:
+        out.append((ROADMAP, 1, "the prototype derivation register is absent"))
+    else:
+        seen = set()
+        for line, row in prototypes:
+            fixture = row["Fixture"].strip("`")
+            number = row["Prototype"].strip("`Pp ")
+            identity = (fixture, number)
+            if identity in seen:
+                out.append((ROADMAP, line,
+                            "prototype fixture %s is listed twice for P%s"
+                            % (fixture, number)))
+            seen.add(identity)
+            if fixture not in fixtures:
+                out.append((ROADMAP, line,
+                            "prototype derivation names missing fixture %s"
+                            % fixture))
+            elif fixture.split("/", 1)[0] not in ("runtime", "negative"):
+                out.append((ROADMAP, line,
+                            "%s is not a complete or negative derivation"
+                            % fixture))
+            else:
+                fields = fixtures[fixture][1]
+                if not fields.get("constructs"):
+                    out.append((ROADMAP, line,
+                                "%s names no implemented constructs"
+                                % fixture))
+                if not fields.get("targets"):
+                    out.append((ROADMAP, line,
+                                "%s names no target applicability" % fixture))
+            source, letter = finding_sources.get(number, (None, None))
+            if source is None:
+                out.append((ROADMAP, line, "unknown prototype %s" % number))
+                continue
+            text = io.open(os.path.join(ROOT, source), encoding="utf-8").read()
+            findings = re.findall(r"[XYZW]\d+", row["Findings"])
+            if not findings:
+                out.append((ROADMAP, line,
+                            "%s names no prototype finding" % fixture))
+            for finding in findings:
+                if not finding.startswith(letter) or not re.search(
+                        r"^%s\b" % finding, text, re.M):
+                    out.append((ROADMAP, line,
+                                "%s is not a finding in %s" %
+                                (finding, source)))
+
+    allowed = set()
+    known_targets = {"linux-x86-64", "macos-arm64", "cortex-m",
+                     "synthetic-32"}
+    if scopes is None:
+        out.append((ROADMAP, 1, "the target applicability register is absent"))
+    else:
+        wanted_scopes = {"prototype-1", "prototype-2", "prototype-3",
+                         "prototype-4"}
+        got_scopes = set()
+        for line, row in scopes:
+            scope = row["Scope"].strip("`")
+            if scope in got_scopes:
+                out.append((ROADMAP, line,
+                            "duplicate target applicability scope %s" % scope))
+            got_scopes.add(scope)
+            named = {one.strip("` ") for one in row["Targets"].split(",")}
+            if not named or "" in named:
+                out.append((ROADMAP, line, "%s names no target" % scope))
+            for target in sorted(named - known_targets):
+                out.append((ROADMAP, line,
+                            "%s names unknown target %s" % (scope, target)))
+            allowed |= named
+        for scope in sorted(got_scopes - wanted_scopes):
+            out.append((ROADMAP, 1,
+                        "unknown target applicability scope %s" % scope))
+        for scope in sorted(wanted_scopes - got_scopes):
+            out.append((ROADMAP, 1, "%s has no target applicability row"
+                        % scope))
+        for name, (meta, fields) in fixtures.items():
+            targets = fields.get("targets", "")
+            relative = os.path.relpath(meta, ROOT)
+            if not targets:
+                out.append((relative, 1,
+                            "R2.90 requires every fixture to name targets"))
+                continue
+            for target in (one.strip() for one in targets.split(",")):
+                if target not in allowed:
+                    out.append((relative, 1,
+                                "%s names unknown target %s" %
+                                (name, target)))
+
+    dumps = coverage_dumps()
+    if dumps is not None:
+        for name, fresh in dumps.items():
+            relative = "compiler/tests/" + name
+            path = os.path.join(ROOT, relative)
+            if not os.path.exists(path):
+                out.append((relative, 1,
+                            "coverage matrix is missing; regenerate it with "
+                            "python3 check.py --coverage"))
+            elif io.open(path, encoding="utf-8").read() != fresh:
+                out.append((relative, 1,
+                            "coverage matrix is stale; regenerate it with "
+                            "python3 check.py --coverage"))
+    return out
+
+
+def diagnostic_matrix_dump():
+    """Catalogue contracts crossed with emitter and executable evidence."""
+    rows = catalogue_rows()
+    if rows is None:
+        return None
+    adapters = ("compiler/ada/src/driver/landin-driver.adb",
+                "compiler/ada/src/diagnostics/landin-diagnostics-lexical.adb",
+                "compiler/ada/src/diagnostics/landin-diagnostics-syntactic.ads",
+                "compiler/ada/src/diagnostics/landin-diagnostics-resolution.ads",
+                "compiler/ada/src/diagnostics/landin-diagnostics-checking.ads")
+    contents = {path: io.open(os.path.join(ROOT, path), encoding="utf-8").read()
+                for path in adapters if os.path.exists(os.path.join(ROOT, path))}
+    fixtures = fixture_records()
+    tests = {}
+    test_root = os.path.join(ROOT, "compiler/ada/tests/src")
+    for here, _, files in os.walk(test_root):
+        for name in files:
+            if name.endswith((".ads", ".adb")):
+                path = os.path.join(here, name)
+                tests[os.path.relpath(path, ROOT)] = io.open(
+                    path, encoding="utf-8").read()
+
+    lines = ["# Generated by check.py from the diagnostic catalogue, emitters,",
+             "# fixture metadata and Ada cases.  Do not edit; regenerate with",
+             "# python3 check.py --catalogue.",
+             "# code state source primary labels notes emitters evidence"]
+    for row in rows:
+        emitters = [os.path.basename(path) for path, text in contents.items()
+                    if re.search(r"\b%s\b" % row["name"], text)]
+        evidence = []
+        for fixture, (_, fields) in fixtures.items():
+            codes = [one.strip() for one in fields.get("codes", "").split(",")]
+            if row["code"] in codes:
+                evidence.append(fixture)
+        for path, text in tests.items():
+            if re.search(r'"%s"' % row["code"], text):
+                evidence.append("test:" + os.path.basename(path))
+        maximum = row["maximum"]
+        if not maximum.isdigit():
+            maximum = row["minimum"]
+        lines.append("%-6s %-8s %-5s %-11s %s..%s %-5s %-35s %s" %
+                     (row["code"], row["state"], row["source"].lower(),
+                      ("nonempty" if row["nonempty"] == "True"
+                       else "empty-ok"), row["minimum"], maximum,
+                      row["notes"], ",".join(sorted(set(emitters))) or "-",
+                      ",".join(sorted(set(evidence))) or "-"))
+    return "\n".join(lines) + "\n"
+
+
+def check_diagnostic_matrix(full_run):
+    if not full_run:
+        return []
+    rows = catalogue_rows()
+    fresh = diagnostic_matrix_dump()
+    if rows is None or fresh is None:
+        return []
+    out = []
+    lines = {line[:5]: line for line in fresh.splitlines()
+             if re.match(r"L\d{4}", line)}
+    driver = {"L0002", "L0003", "L0004", "L0005",
+              "L0500", "L0501", "L0502", "L0504"}
+    for row in rows:
+        line = lines.get(row["code"], "")
+        parts = line.split()
+        emitters = parts[-2] if len(parts) >= 2 else "-"
+        evidence = parts[-1] if parts else "-"
+        if row["state"] == "Live":
+            if emitters == "-":
+                out.append(("compiler/tests/diagnostics.matrix", 1,
+                            "%s has no emitter" % row["code"]))
+            if evidence == "-":
+                out.append(("compiler/tests/diagnostics.matrix", 1,
+                            "%s has no test owner" % row["code"]))
+            if row["code"] not in driver and row["code"] != "L0111" \
+                    and not re.search(r"(?:^|,)negative/", evidence):
+                out.append(("compiler/tests/diagnostics.matrix", 1,
+                            "%s has no negative source fixture" % row["code"]))
+            if row["code"] == "L0111" and "unit/parser-nesting-limit" \
+                    not in evidence:
+                out.append(("compiler/tests/diagnostics.matrix", 1,
+                            "L0111 has no parser-limit unit owner"))
+        elif emitters != "-":
+            out.append(("compiler/tests/diagnostics.matrix", 1,
+                        "retired %s still has an emitter" % row["code"]))
+    path = os.path.join(ROOT, "compiler/tests/diagnostics.matrix")
+    if not os.path.exists(path):
+        out.append(("compiler/tests/diagnostics.matrix", 1,
+                    "the diagnostic matrix is missing; regenerate it with "
+                    "python3 check.py --catalogue"))
+    elif io.open(path, encoding="utf-8").read() != fresh:
+        out.append(("compiler/tests/diagnostics.matrix", 1,
+                    "the diagnostic matrix is stale; regenerate it with "
+                    "python3 check.py --catalogue"))
+    return out
 
 
 def present(relative):
@@ -3387,7 +3907,25 @@ def main(argv):
             return 2
         io.open(os.path.join(ROOT, "compiler/tests/diagnostics.catalogue"),
                 "w", encoding="utf-8").write(text)
+        matrix = diagnostic_matrix_dump()
+        if matrix is None:
+            print("the diagnostic matrix could not be read")
+            return 2
+        io.open(os.path.join(ROOT, "compiler/tests/diagnostics.matrix"),
+                "w", encoding="utf-8").write(matrix)
         print("wrote compiler/tests/diagnostics.catalogue")
+        print("wrote compiler/tests/diagnostics.matrix")
+        return 0
+
+    if "--coverage" in argv:
+        dumps = coverage_dumps()
+        if dumps is None:
+            print("the coverage registers could not be read")
+            return 2
+        for name, text in dumps.items():
+            io.open(os.path.join(ROOT, "compiler/tests", name), "w",
+                    encoding="utf-8").write(text)
+            print("wrote compiler/tests/%s" % name)
         return 0
 
     if "--matrix" in argv:
@@ -3453,6 +3991,8 @@ def main(argv):
     extra += check_borrowed_icons(full_run)
     extra += check_named_files(full_run)
     extra += check_catalogue(full_run)
+    extra += check_diagnostic_matrix(full_run)
+    extra += check_coverage_registers(full_run)
     if full_run:
         extra += fixture_constructs()
         extra += fixture_sources()

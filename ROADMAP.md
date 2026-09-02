@@ -2659,7 +2659,7 @@ IR records current.
 
 ### R2.90 — Establish guarantee and semantic coverage registers
 
-Status: active
+Status: complete
 Depends on: R2.30, R2.50, R2.60, R2.70, R2.80
 
 Classify every implemented operation as statically prevented, runtime trapped,
@@ -2671,6 +2671,65 @@ Sources: legacy A5; `[0310]`, `[0430]`, `[0470]`, `[0770]`, `[0910]`, `[1120]`,
 
 Exit evidence: no implemented semantic operation lacks a guarantee class,
 diagnostic behavior and test owner.
+
+Delivered: D148 classifies every accepted semantic boundary as `static`,
+`trap`, `beyond-lifetime` or `outside`, and D149 makes the locally provable
+part of `inout` exclusivity exact without claiming alias analysis. The source
+registers cover guarantee boundaries, conformance/evidence mechanisms,
+prototype derivations and target applicability; `check.py --coverage`
+generates their four reading matrices and fails on stale rows, unknown
+constructs, decisions, findings, fixtures or targets. Every fixture now names
+its applicable targets.
+
+The diagnostic matrix crosses every live catalogue contract with its emitter
+and executable owner. Missing lexical/parser owners gained direct fixtures,
+L0111 gained a bounded nesting-limit unit owner, L0005 gained a deterministic
+fake-host owner, and malformed generic/erased evidence positions gained
+verifier corruption cases. Runtime witnesses now distinguish every arithmetic
+trap family, slice read/write and range trap boundaries, pointer narrowing,
+unchecked pointer aliasing, copied-before-sink state and untracked erased
+origins. That inventory also exposed and fixed shaped `any` results discarded
+without a caller temporary. The pinned Linux debug and release gates pass 381
+cases and 8,749 checks with every generated and recorded artefact current.
+
+#### Prototype derivation coverage
+
+A row means the fixture is a completed executable or negative derivation of
+the named pressure, not merely that it uses a construct the prototype also
+used. Source line numbers in the generated reading copy are recovered from the
+finding labels, so moving prose cannot stale a hand-copied location.
+
+| Fixture | Prototype | Findings | Pressure |
+| --- | --- | --- | --- |
+| `runtime/parameterized-struct-values` | P3 | Z2 | type and fixed parameters on nominal values |
+| `runtime/r250-references` | P3 | Z3, Z18 | pointer/slice carriers and implicit conventions |
+| `negative/borrowed-source-inout` | P3 | Z5, Z16 | a derived view prevents moving its source |
+| `runtime/variant-match-payload-bindings-update-storage` | P3 | Z7, Z14 | pattern conventions and payload-free cases |
+| `runtime/generic-declared-errors` | P3 | Z9 | concept entries retain concrete declared errors |
+| `runtime/generic-composed-evidence` | P3 | Z11 | explicit direct and parent conformances compose |
+| `negative/sink-through-dereference` | P3 | Z12, Z13 | inout/sink place and permission boundary |
+| `runtime/struct-literal-order-and-fill` | P3 | Z17 | contextual anonymous aggregate construction |
+| `runtime/undo-cleanups-follow-failure-edges` | P3 | Z19 | failure cleanup moves its arguments at execution |
+| `runtime/generic-parameterized-evidence` | P3 | Z1, Z4 | parameterized providers receive target-derived evidence |
+| `negative/parameterized-conformance-entry-signature-mismatch` | P3 | Z1, Z4 | substituted provider signatures must agree |
+| `runtime/constant-return-exits-with-its-code` | P4 | W2 | hosted entry uses the ordinary no-argument shape |
+| `runtime/generic-composed-evidence` | P4 | W4 | a narrow concept composes rather than widening |
+| `runtime/any-heterogeneous-dispatch` | P4 | W6 | erased state retains mutable permission and dispatch identity |
+| `negative/any-frame-origin-escape` | P4 | W6 | erased state retains pointee origin |
+
+#### Target applicability coverage
+
+These are applicability assignments, not backend claims. Fixture metadata
+makes the finer assignment and the generated matrix lists every fixture; a
+missing `targets:` is a gate failure. `synthetic-32` is the executable target
+model used before the Cortex-M backend exists.
+
+| Scope | Targets |
+| --- | --- |
+| `prototype-1` | cortex-m |
+| `prototype-2` | linux-x86-64, macos-arm64 |
+| `prototype-3` | linux-x86-64, macos-arm64, cortex-m, synthetic-32 |
+| `prototype-4` | linux-x86-64, macos-arm64 |
 
 ### R2 gate
 
@@ -2688,7 +2747,7 @@ surfaces, and runs a complete parser workload written in Landin.
 
 ### R3.10 — Implement minimum modules and ordered roots
 
-Status: planned
+Status: active
 Depends on: R1.50, R2.40, R2.60, R0.50
 
 Implement module directories, per-file imports, visibility, deterministic

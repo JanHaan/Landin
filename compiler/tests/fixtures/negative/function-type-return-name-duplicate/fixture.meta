@@ -3,3 +3,4 @@ summary: a written multiple-result function type needs unique static field names
 constructs: 0920, 0990, 1000, 1800
 program: program.ldn
 codes: L0301
+targets: linux-x86-64, macos-arm64, synthetic-32

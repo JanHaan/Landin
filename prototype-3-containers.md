@@ -1047,7 +1047,10 @@ The rule is right; the example undercuts it.
 
 Z12 Passing a pointer target where an inout is wanted,
 A.alloc(c.inner.val, size, align). Ordinary and surely intended,
-never shown.
+never shown. RESOLVED by [0900] and D149: the target is an ordinary
+place, one provably identical binding-rooted path cannot be passed
+twice, and aliasing through distinct pointer paths remains outside
+the local guarantee.
 
 Z13 RESOLVED at 0.0.10. sink takes a place, and a field of a binding
 is a place, so every call in this file stands as written. The

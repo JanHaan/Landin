@@ -2,3 +2,4 @@ class: positive
 summary: defer registers a typed call before its arguments become definitely assigned
 program: program.ldn
 constructs: 0080, 0410, 0930, 1080, 1100, 1800, 1810, 1910, 1920
+targets: linux-x86-64, macos-arm64, synthetic-32

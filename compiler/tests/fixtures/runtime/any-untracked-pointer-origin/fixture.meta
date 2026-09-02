@@ -1,0 +1,6 @@
+class: runtime
+summary: erasing an integer-created untracked pointer creates no origin the checker can constrain
+program: main.ldn
+status: 42
+constructs: 0470, 0860, 1690, 1720
+targets: linux-x86-64

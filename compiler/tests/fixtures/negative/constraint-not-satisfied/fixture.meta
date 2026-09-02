@@ -3,3 +3,4 @@ summary: a concrete generic actual must have its required conformance
 program: main.ldn
 codes: L0318
 constructs: 1230, 1290
+targets: linux-x86-64, macos-arm64, synthetic-32

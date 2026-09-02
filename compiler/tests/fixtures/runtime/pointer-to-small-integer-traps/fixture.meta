@@ -1,0 +1,6 @@
+class: runtime
+summary: a runtime pointer address that does not fit its integer target traps
+program: main.ldn
+traps: yes
+constructs: 0430, 0470, 1950, 1960
+targets: linux-x86-64

@@ -3,3 +3,4 @@ summary: two ordinary conformances with one whole-program key collide
 program: main.ldn
 codes: L0317
 constructs: 1240, 1270, 1280
+targets: linux-x86-64, macos-arm64, synthetic-32

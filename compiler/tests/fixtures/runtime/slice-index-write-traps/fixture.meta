@@ -1,0 +1,6 @@
+class: runtime
+summary: a computed write beyond a writable slice length traps
+program: main.ldn
+traps: yes
+constructs: 0570, 1950, 1960
+targets: linux-x86-64

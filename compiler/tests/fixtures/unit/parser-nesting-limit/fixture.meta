@@ -1,0 +1,4 @@
+class: unit
+summary: parser recursion stops at the public nesting limit with L0111 before host exhaustion
+codes: L0111
+targets: linux-x86-64, macos-arm64, synthetic-32

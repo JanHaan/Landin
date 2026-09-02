@@ -1,0 +1,6 @@
+class: runtime
+summary: dynamic signed minimum divided by minus one traps
+program: main.ldn
+traps: yes
+constructs: 0290, 0300, 1950, 1960
+targets: linux-x86-64

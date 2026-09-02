@@ -1,0 +1,13 @@
+consume: (sink value: u32) -> none =
+end consume
+
+public main: () -> (code: i32) =
+    mut original: u32 = 42
+    copy: u32 = original
+    consume(original)
+    if copy == 42 then
+        code = 42
+    else
+        code = 1
+    end if
+end main

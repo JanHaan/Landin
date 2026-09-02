@@ -8252,3 +8252,134 @@ those concerns separate and was chosen.
 case `evidence ordering and layout`, the backend case
 `any dispatch uses a flattened real table`, the existing evidence verifier
 checks, and the generated target/lowering artefacts.
+
+### D148 — Guarantee coverage is classified at observable failure boundaries
+
+**The tour said** that Landin makes a deliberately smaller claim than memory
+or resource safety [1720], and named four kinds of answer for the operation
+table R2.90 would establish. It did not say what counted as one operation, so
+two inventories could both look complete while one listed syntax nodes and
+the other listed only machine instructions.
+
+**Chosen:** one guarantee row is one observable failure boundary. A source
+construct may occur in more than one row: pointer access, for example, has a
+statically checked permission boundary and a separate pointee-validity boundary
+outside the guarantees. `static` means the compiler rejects the stated bad
+case; `trap` means a value not decidable during compilation stops synchronously;
+`beyond-lifetime` means an explicit operation discards origin information and
+later lifetime use is permitted without analysis; `outside` means the operation
+is admitted but the stated property is never claimed. Ordinary accepted
+behaviour is evidence for a row, not a fifth guarantee class.
+
+#### Guarantee coverage
+
+The register below covers every construct for which the current fixture matrix
+claims acceptance or emission. `check.py` compares that set mechanically,
+validates each cited diagnostic and fixture, and generates the reading copy
+`compiler/tests/guarantees.matrix`. A new accepted construct therefore needs a
+classified failure boundary before the repository gate can pass.
+
+| Operation | Class | Constructs | Behaviour | Evidence |
+| --- | --- | --- | --- | --- |
+| `source.lexical` | static | 0010, 0020, 0030, 0220, 1750, 1760, 1770, 1780, 1830 | L0010--L0014 | `negative/malformed-integer-digit`, `negative/unterminated-text-literal`, `negative/unknown-byte` |
+| `source.structure` | static | 1740, 1800, 1810, 1820, 1840 | L0100--L0112 | `negative/variant-part-end-name-mismatch`, `unit/parser-nesting-limit` |
+| `declarations.names` | static | 0040, 0050, 0060, 0080, 0090, 0100, 0110, 0120, 0130, 0140, 1790, 1795, 1850 | L0200 or L0201 | `negative/duplicate-in-a-module`, `negative/local-used-above-its-declaration` |
+| `types.values` | static | 0070, 0160, 0180, 0190, 0200, 1870, 1880, 1890 | L0300, L0301 or L0304 | `negative/literal-above-its-type`, `negative/type-name-is-not-a-type` |
+| `arithmetic.known` | static | 0290, 0300, 1950 | L0300 or L0306 | `negative/divisor-is-zero`, `negative/literal-above-its-type` |
+| `arithmetic.runtime` | trap | 0290, 0300, 0320, 1950, 1960 | trap | `runtime/checked-overflow-traps`, `runtime/checked-subtraction-traps`, `runtime/checked-multiplication-traps`, `runtime/checked-negation-traps`, `runtime/signed-division-overflow-traps`, `runtime/a-zero-divisor-traps`, `runtime/a-zero-remainder-divisor-traps`, `runtime/negative-left-shift-traps`, `runtime/negative-right-shift-traps` |
+| `arithmetic.total` | static | 0320, 0330, 0340, 0350 | L0301 for an inapplicable operand; admitted nonnegative shifts and wrapping operations are total | `negative/condition-is-not-believed`, `runtime/shifts-fill-with-zeros-beyond-the-width` |
+| `ranges.measurements` | static | 0360, 0370 | L0300, L0301 or L0306 | `negative/lenof-scalar`, `runtime/measurements-answer-for-the-target` |
+| `assignment.flow` | static | 0390, 0400, 0410, 0420, 1900, 1910 | L0302 or L0303 | `negative/assigned-on-one-path-only`, `negative/assignment-to-an-immutable-binding` |
+| `pointer.permission` | static | 0430, 0440, 0450, 0460 | L0301 or L0303 | `negative/any-readonly-source-for-mutable-entry`, `negative/sink-through-dereference` |
+| `inout.exact-alias` | static | 0900 | L0301 when one provably identical binding-rooted place fills two inout parameters | `negative/inout-same-place-twice` |
+| `inout.possible-alias` | outside | 0430, 0770, 0900 | non-guarantee: distinct pointer or computed paths may still alias | `runtime/inout-pointer-alias-is-unchecked` |
+| `pointer.validity` | outside | 0430 | non-guarantee: a permitted pointer may still be invalid or stale | `runtime/r250-references` |
+| `pointer.integer-origin` | beyond-lifetime | 0470, 0860, 1690, 1720 | non-guarantee: integer-to-pointer conversion carries no origin through a direct or erased value | `runtime/r250-references`, `runtime/any-untracked-pointer-origin`, `negative/frame-origin-return` |
+| `pointer.integer-width` | trap | 0470, 1950, 1960 | trap | `runtime/pointer-to-small-integer-traps` |
+| `arrays.initialization` | static | 0520, 0530, 0540, 0550, 0560 | L0300--L0304 or L0313 | `negative/array-initializer-length-mismatch`, `runtime/whole-arrays-copy-between-storage` |
+| `slices.bounds-known` | static | 0570, 0580, 1950 | L0300 or L0306 | `negative/index-outside-the-length`, `negative/readonly-slice-write` |
+| `slices.bounds-runtime` | trap | 0570, 0580, 1950, 1960 | trap | `runtime/computed-array-index-traps`, `runtime/local-array-computed-store-traps`, `runtime/slice-index-read-traps`, `runtime/slice-index-write-traps`, `runtime/slice-half-open-upper-traps`, `runtime/slice-inclusive-upper-traps`, `runtime/slice-lower-after-upper-traps` |
+| `atoms.sets` | static | 0630, 0640 | L0301 or L0312 | `negative/atom-match-not-exhaustive`, `runtime/atom-values-cross-the-abi` |
+| `aggregates.variants` | static | 0670, 0680, 0690, 0700, 0710, 0720, 0750, 1210 | L0301, L0308--L0312 or L0313 | `negative/struct-literal-field-not-given`, `negative/variant-match-not-exhaustive` |
+| `origins.escape` | static | 0770, 0780, 0790, 0800, 0830, 0840 | L0314--L0316 | `negative/frame-origin-return`, `negative/borrowed-source-inout`, `negative/returned-reference-missing-from` |
+| `origins.aliasing-limit` | outside | 0770, 0910 | non-guarantee: a pre-existing copy or indistinguishable arena is not tracked | `positive/reference-origins-and-consume`, `negative/use-after-sink` |
+| `functions.abi` | static | 0870, 0880, 0890, 0900, 0920, 0930, 0980, 1000, 1020, 1030, 1460, 1920, 1970 | L0301, L0302 or L0502 | `negative/call-with-too-few-arguments`, `runtime/r230-composition` |
+| `execution.resource-exhaustion` | outside | 0950, 1770, 1970 | non-guarantee: the kernel sets no recursion-depth, stack, or host-resource bound | `runtime/recursive-fibonacci` |
+| `consume.local` | static | 0910 | L0302 or L0315 | `negative/use-after-sink`, `negative/sunk-inout-not-restored` |
+| `consume.copy-before` | static | 0860, 0910, 1720 | a value copied before the sink remains independently usable | `runtime/copy-before-sink-remains-live` |
+| `errors.control` | static | 0940, 0960, 0970 | L0301 for an undeclared or unhandled outcome | `negative/unhandled-declared-error`, `runtime/declared-errors-direct-and-inferred` |
+| `results.destructure` | static | 0990 | L0200, L0301, L0302 or L0308 | `negative/result-destructure-needs-multiple`, `runtime/r230-composition` |
+| `functions.anonymous` | static | 1010 | L0201 for capture; complete signature checks otherwise apply | `negative/anonymous-function-captures-local`, `runtime/inferred-function-values` |
+| `control.flow` | static | 1050, 1060, 1080, 1090 | L0301 or L0302 at every reachable join and exit | `negative/if-expression-missing-else`, `runtime/control-expression-edges-keep-source-order` |
+| `cleanup.defer` | static | 1100 | the registered call is checked at every ordinary and successful-return edge | `negative/defer-read-not-assigned-on-return`, `runtime/defer-cleanups-follow-control-edges` |
+| `cleanup.undo` | static | 1110 | the registered call is checked at every propagated-failure edge | `negative/undo-read-not-assigned-on-failure`, `runtime/undo-cleanups-follow-failure-edges` |
+| `generics.substitution` | static | 1220, 1280, 1290, 1300, 1310, 1350, 1500, 1650, 1660, 1700 | L0300, L0301, L0306, L0307, L0313 or L0318 | `negative/generic-routine-undeduced-formal`, `runtime/generic-structural-deduction` |
+| `concepts.conformance` | static | 1230, 1240, 1250, 1260, 1340 | L0301 or L0317--L0319 | `negative/conformance-collision`, `negative/constraint-not-satisfied`, `negative/compiler-concept-reserved` |
+| `any.construction` | static | 1370, 1380 | L0301, L0314 or L0318 | `negative/any-source-not-pointer`, `negative/any-readonly-source-for-mutable-entry` |
+| `any.dispatch` | static | 1390 | malformed table positions cannot be produced by accepted source; verifier failure is a compiler defect | `negative/any-entry-not-object-safe`, `runtime/any-heterogeneous-dispatch` |
+| `entry.point` | static | 1540 | L0502 before executable emission | `runtime/constant-return-exits-with-its-code` |
+| `module.images` | static | 1930, 1940 | L0300, L0304 or L0305 | `negative/module-value-from-a-call`, `runtime/recursive-module-images-are-laid-out-and-distinct` |
+| `configuration.fixed` | static | 1980 | L0300, L0301, L0305 or L0306 in the selected declaration view | `negative/fixed-conditional-evaluator`, `runtime/fixed-conditional-generic-runtime` |
+
+This is a coverage register, not an optimizer contract. `unchecked` [1120], C
+calls and raw allocation are absent because the current compiler does not
+implement those operations; their enabling work must add rows. Driver and
+backend inability have diagnostic owners in `diagnostics.matrix`, but are host
+failures rather than source semantic operations and therefore are not invented
+as language guarantees here.
+
+#### Conformance and evidence coverage
+
+The conformance/evidence coverage register is separate because one semantic
+operation can travel through several physical mechanisms:
+
+| Mechanism | Rules | Evidence |
+| --- | --- | --- |
+| `compiler-zeroable` | D143 | `positive/compiler-zeroable-conformances`, `negative/nonzeroable-constraint` |
+| `ordinary-direct` | D142 | `positive/concepts-and-conformances`, `negative/conformance-entry-signature-mismatch` |
+| `ordinary-parent` | D142 | `runtime/generic-composed-evidence`, `negative/composed-conformance-missing-parent` |
+| `parameterized-provider` | D142, D144 | `positive/parameterized-conformance-lookup`, `runtime/generic-parameterized-evidence` |
+| `collision` | D142 | `negative/conformance-collision`, `negative/parameterized-conformance-collision` |
+| `constraint-refusal` | D142, D143 | `negative/constraint-not-satisfied`, `negative/nonzeroable-zero-length-constraint` |
+| `generic-direct-table` | D144 | `runtime/generic-evidence-indirect`, `negative/parameterized-conformance-entry-signature-mismatch` |
+| `generic-parent-tables` | D144 | `runtime/generic-composed-evidence` |
+| `erased-direct-table` | D145--D147 | `runtime/any-heterogeneous-dispatch`, `negative/any-concept-identity-mismatch` |
+| `erased-parent-flattening` | D147 | `runtime/any-composed-dispatch` |
+| `erased-parameterized-provider` | D145--D147 | `runtime/any-parameterized-provider` |
+| `verifier-boundaries` | D144, D147 | `unit/evidence-verifier` |
+| `target-layout-64` | D144, D147 | `unit/evidence-layout`, `runtime/any-aggregate-storage` |
+| `target-layout-32` | D144, D147 | `unit/evidence-layout` |
+
+**The alternatives:** classifying syntax-node kinds gives internal recovery
+nodes equal standing with user operations and misses one operation's several
+safety boundaries. Classifying only IR opcodes omits every statically refused
+operation. Treating every accepted operation as “safe” would overstate the
+language exactly where [1720] refuses that claim. Those inventories were
+rejected in favour of observable boundaries plus mechanical construct closure.
+
+**Pinned by** `compiler/tests/guarantees.matrix`,
+`compiler/tests/conformances.matrix`, `compiler/tests/diagnostics.matrix`, the
+prototype and target matrices, and the full `check.py` coverage pass.
+
+### D149 — `inout` exclusivity is checked only for a provably identical place
+
+**The tour said** that `inout` may replace its argument exclusively [0900],
+while [0770], [0860] and [1720] reject a borrow checker or whole-program alias
+claim. It did not state what a caller passing the same storage twice must prove.
+
+**Chosen:** one call may not fill two `inout` parameters with the same provable
+binding-rooted place. Equality follows declaration identity and an identical
+ordinary field path; that case is L0301 at the later argument with the first as
+its related place. Distinct pointer paths and computed indexes may alias at
+runtime, but proving that requires alias analysis Landin does not claim. Such
+possible aliasing is accepted and explicitly outside the guarantees. The
+callee's writes still occur in [0410] source order; acceptance is not a
+non-alias promise.
+
+**The alternatives:** accepting `f(x, x)` would make “exclusively” false in the
+one case the local checker can answer. Rejecting all pairs of pointer or index
+paths would reject ordinary code without proving overlap. Interprocedural alias
+analysis or ownership would reverse [0770]. All were declined.
+
+**Pinned by** `negative/inout-same-place-twice` and
+`runtime/inout-pointer-alias-is-unchecked`.

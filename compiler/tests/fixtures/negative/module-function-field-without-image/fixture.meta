@@ -3,3 +3,4 @@ summary: module storage containing a function field needs an explicit static rou
 constructs: 0060, 0670, 1000, 1460, 1790, 1940
 program: program.ldn
 codes: L0301
+targets: linux-x86-64, macos-arm64, synthetic-32

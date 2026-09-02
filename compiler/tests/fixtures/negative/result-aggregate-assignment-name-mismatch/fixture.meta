@@ -3,3 +3,4 @@ summary: whole result assignment retains the anonymous aggregate field names
 constructs: 0060, 0920, 0990, 1810, 1890, 1920
 program: program.ldn
 codes: L0301
+targets: linux-x86-64, macos-arm64, synthetic-32

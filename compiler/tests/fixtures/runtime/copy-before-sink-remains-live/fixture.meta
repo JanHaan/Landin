@@ -1,0 +1,6 @@
+class: runtime
+summary: sinking one scalar place does not invalidate an earlier copied value
+program: main.ldn
+status: 42
+constructs: 0860, 0910, 1720
+targets: linux-x86-64

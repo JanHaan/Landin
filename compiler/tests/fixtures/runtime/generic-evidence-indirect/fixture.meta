@@ -3,3 +3,4 @@ summary: two scalar conformances share one generic body and dispatch through evi
 program: main.ldn
 status: 42
 constructs: 0940, 0960, 1230, 1240, 1260, 1290, 1310
+targets: linux-x86-64

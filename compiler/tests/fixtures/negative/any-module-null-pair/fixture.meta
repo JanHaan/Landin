@@ -3,3 +3,4 @@ summary: an omitted module initializer cannot manufacture a null erased pair
 program: main.ldn
 codes: L0301
 constructs: 0110, 0540, 1370, 1380
+targets: linux-x86-64, macos-arm64, synthetic-32

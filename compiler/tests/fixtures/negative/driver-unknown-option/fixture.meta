@@ -3,4 +3,5 @@ summary: an unknown option is reported as L0002 and exits with misuse status
 expect: expected.txt
 targets: linux-x86-64, macos-arm64
 args: --wat
+codes: L0002
 status: 2

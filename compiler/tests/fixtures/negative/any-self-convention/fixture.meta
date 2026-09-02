@@ -3,3 +3,4 @@ summary: erased self is an input pointer value rather than an inout or sink plac
 program: main.ldn
 codes: L0301
 constructs: 0900, 1230, 1240, 1370, 1380, 1390
+targets: linux-x86-64, macos-arm64, synthetic-32

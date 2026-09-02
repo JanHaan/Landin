@@ -11,7 +11,7 @@
 #
 #  A construct with no evidence and no refusal is this
 #  item's to answer for; see ROADMAP.md R1.90.
-#  199 constructs, 140 with evidence, 59 with neither.
+#  199 constructs, 144 with evidence, 55 with neither.
 #
 #  id    defined in  evidence
 0010   tour        accepted emitted                   Line comment, to end of line
@@ -99,16 +99,16 @@
 0830   tour        accepted emitted refused           A view derived from a local borrows it
 0840   tour        accepted emitted executed refused  Origins join to the shortest-lived part
 0850   tour        -                                  Volatile is exempt from the borrow rule and from every
-0860   tour        -                                  What this does not catch
+0860   tour        accepted emitted executed          What this does not catch
 0870   tour        accepted emitted executed refused  A function is a value of a function type
 0880   tour        accepted emitted executed refused  A single-expression body still takes an end
 0890   tour        accepted emitted executed          Nothing returned
 0900   tour        accepted emitted executed refused  Three parameter conventions
-0910   tour        accepted emitted refused           sink takes a place
+0910   tour        accepted emitted executed refused  sink takes a place
 0920   tour        accepted emitted executed refused  Multiple named returns
 0930   tour        accepted emitted executed refused  Every named return must be assigned before return
 0940   tour        accepted emitted executed refused  Errors: a declared set of atoms in one dedicated register
-0950   tour        -                                  Not everything that goes wrong belongs in that channel
+0950   tour        accepted emitted executed          Not everything that goes wrong belongs in that channel
 0960   tour        accepted emitted executed refused  Propagating: try, visible at the call site
 0970   tour        accepted emitted executed refused  Early exit
 0980   tour        accepted emitted executed refused  Calls: positional first, then named
@@ -182,10 +182,10 @@
 1660   tour        accepted emitted executed          And this is where capabilities come from
 1670   tour        -                                  A failed check calls a fixed, never-returning symbol
 1680   tour        -                                  Require a capability, do not track an effect
-1690   tour        -                                  One mechanism, two readings, is better than two mechanisms
+1690   tour        accepted emitted executed          One mechanism, two readings, is better than two mechanisms
 1700   tour        accepted emitted executed refused  Atoms are the same idea wherever they appear
 1710   tour        -                                  How a new feature earns its place
-1720   tour        -                                  What the language claims, at this version, plainly
+1720   tour        accepted emitted executed          What the language claims, at this version, plainly
 1730   tour        -                                  Check once, then carry the proof
 1740   spec        accepted emitted executed refused  A program is declarations, in any order
 1750   spec        accepted emitted executed refused  A source file is bytes

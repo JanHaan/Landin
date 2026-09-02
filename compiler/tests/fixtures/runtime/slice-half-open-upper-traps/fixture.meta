@@ -1,0 +1,6 @@
+class: runtime
+summary: a dynamic half-open slice upper beyond the source traps
+program: main.ldn
+traps: yes
+constructs: 0570, 1950, 1960
+targets: linux-x86-64

@@ -958,6 +958,37 @@ package body Landin.Tests.Driver_Suite is
       end;
    end A_Dangling_Output_Is_Misuse;
 
+   --  Output failure is injected through the platform seam: native
+   --  permissions are host policy and cannot make a deterministic case.
+   procedure An_Unwritable_Output_Is_Reported
+     (Item : in out Landin.Testing.Context);
+
+   procedure An_Unwritable_Output_Is_Reported
+     (Item : in out Landin.Testing.Context)
+   is
+      Host  : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+   begin
+      Host.Add_File ("main.ldn", Entry_Program);
+      Host.Refuse_Writes;
+
+      declare
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute
+             (Both ("main.ldn", "--emit=asm"), Host, Tools);
+         Report : constant String := Unbounded.To_String (Result.Report);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Landin.Driver.Status_Reported,
+            "an output write failure is reported");
+         Landin.Testing.Check
+           (Item, Contains (Report, "L0005"), "with the output code");
+         Landin.Testing.Check_Equal
+           (Item, Host.Written (Landin.Driver.Default_Assembly), "",
+            "and no bytes are retained");
+      end;
+   end An_Unwritable_Output_Is_Reported;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -1037,6 +1068,9 @@ package body Landin.Tests.Driver_Suite is
       Landin.Testing.Register
         (Into, "driver", "a dangling output is misuse",
          A_Dangling_Output_Is_Misuse'Access);
+      Landin.Testing.Register
+        (Into, "driver", "an unwritable output is reported",
+         An_Unwritable_Output_Is_Reported'Access);
    end Register;
 
 end Landin.Tests.Driver_Suite;

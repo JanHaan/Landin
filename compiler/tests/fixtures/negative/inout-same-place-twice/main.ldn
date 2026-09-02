@@ -1,0 +1,10 @@
+replace: (inout left: u32, inout right: u32) -> none =
+    left = 1
+    right = 2
+end replace
+
+public main: () -> (code: i32) =
+    mut value: u32 = 0
+    replace(value, value)
+    code = 0
+end main

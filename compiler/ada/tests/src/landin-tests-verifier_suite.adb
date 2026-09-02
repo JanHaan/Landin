@@ -3431,6 +3431,132 @@ package body Landin.Tests.Verifier_Suite is
       end;
    end Malformed_Error_IR_Is_Rejected;
 
+   procedure Malformed_Evidence_Is_Rejected
+     (Item : in out Landin.Testing.Context);
+
+   procedure Malformed_Evidence_Is_Rejected
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Site : Landin.Provenance.Origin;
+   begin
+      Ready (Work, Site);
+      declare
+         Meanings : constant not null access Landin.Resolution.Table :=
+           Landin.Stages.Meanings (Work);
+
+         procedure Build
+           (Unit     : in out IR.Unit;
+            Caller   : out IR.Item_Id;
+            Table    : out IR.Value_Id;
+            Function_Value : out IR.Value_Id;
+            Wrong_Signature : out IR.Signature_Id);
+
+         procedure Build
+           (Unit     : in out IR.Unit;
+            Caller   : out IR.Item_Id;
+            Table    : out IR.Value_Id;
+            Function_Value : out IR.Value_Id;
+            Wrong_Signature : out IR.Signature_Id)
+         is
+            Provider : IR.Item_Id;
+            Provider_Signature : IR.Signature_Id;
+            Evidence : IR.Evidence_Id;
+            Result : IR.Slot_Id;
+            Block : IR.Block_Id;
+            Value : IR.Value_Id;
+         begin
+            IR.Prepare (Unit, Meanings.all);
+            Provider_Signature := IR.Add_Signature
+              (Unit, IR.No_Signature_Parts,
+               (Kind => Landin.Types.U32, others => <>));
+            Wrong_Signature := IR.Add_Signature
+              (Unit, IR.No_Signature_Parts,
+               (Kind => Landin.Types.I32, others => <>));
+            Provider := IR.Add_Item
+              (Unit, IR.Routine, 1, Landin.Types.U32, Site);
+            IR.Set_Signature (Unit, Provider, Provider_Signature);
+            Result := IR.Add_Slot
+              (Unit, Provider, Landin.Types.U32, 2, Site);
+            IR.Set_Result_Slot (Unit, Provider, Result);
+            Block := IR.Add_Block
+              (Unit, Provider, Landin.Resolution.Program_Scope, Site);
+            IR.Enter (Unit, Provider, Block);
+            Value := IR.Emit_Number
+              (Unit, Provider, Landin.Types.U32, 42, False, Site);
+            IR.Emit_Store (Unit, Provider, Result, Value, Site);
+            Value := IR.Emit_Load (Unit, Provider, Result, Site);
+            IR.Emit_Leave (Unit, Provider, Value, Site);
+            IR.Leave_Block (Unit, Provider);
+
+            Evidence := IR.Add_Evidence
+              (Unit,
+               (Kind => IR.Scalar_Field_Shape,
+                Element => Landin.Types.U32,
+                Length => 1, others => <>));
+            IR.Add_Evidence_Entry
+              (Unit, Evidence, Provider, Provider_Signature);
+
+            Caller := IR.Add_Item
+              (Unit, IR.Routine, 2, Landin.Types.Usize, Site);
+            Block := IR.Add_Block
+              (Unit, Caller, Landin.Resolution.Program_Scope, Site);
+            IR.Enter (Unit, Caller, Block);
+            Table := IR.Emit_Evidence_Address
+              (Unit, Caller, Evidence, Site);
+            Function_Value := IR.Emit_Evidence_Function
+              (Unit, Caller, Table, Evidence, 1, Site);
+            IR.Emit_Leave (Unit, Caller, Function_Value, Site);
+            IR.Leave_Block (Unit, Caller);
+         end Build;
+      begin
+         declare
+            Unit : IR.Unit;
+            Caller : IR.Item_Id;
+            Table, Function_Value : IR.Value_Id;
+            Wrong : IR.Signature_Id;
+         begin
+            Build (Unit, Caller, Table, Function_Value, Wrong);
+            Expect (Item, V.Check (Unit), V.Nothing_Wrong,
+                    "a sound evidence descriptor and load are accepted");
+            Landin.IR.Testing_Support.Overwrite_Value_Evidence
+              (Unit, Caller, Table,
+               IR.Evidence_Id (IR.Evidence_Count (Unit) + 1));
+            Expect (Item, V.Check (Unit), V.Evidence_Out_Of_Range,
+                    "an evidence address cannot name an absent table");
+         end;
+
+         declare
+            Unit : IR.Unit;
+            Caller : IR.Item_Id;
+            Table, Function_Value : IR.Value_Id;
+            Wrong : IR.Signature_Id;
+         begin
+            Build (Unit, Caller, Table, Function_Value, Wrong);
+            Landin.IR.Testing_Support.Overwrite_Value_Evidence_Entry
+              (Unit, Caller, Function_Value, 2);
+            Expect (Item, V.Check (Unit), V.Evidence_Entry_Out_Of_Range,
+                    "an evidence function cannot name an absent entry");
+         end;
+
+         declare
+            Unit : IR.Unit;
+            Caller : IR.Item_Id;
+            Table, Function_Value : IR.Value_Id;
+            Wrong : IR.Signature_Id;
+         begin
+            Build (Unit, Caller, Table, Function_Value, Wrong);
+            Landin.IR.Testing_Support.Overwrite_Value_Signature
+              (Unit, Caller, Function_Value, Wrong);
+            Expect
+              (Item, V.Check (Unit),
+               V.Evidence_Entry_Signature_Disagrees,
+               "an evidence function keeps its provider signature");
+         end;
+      end;
+   end Malformed_Evidence_Is_Rejected;
+
    procedure Malformed_Runtime_Addresses_Are_Rejected
      (Item : in out Landin.Testing.Context);
 
@@ -3528,6 +3654,9 @@ package body Landin.Tests.Verifier_Suite is
       Landin.Testing.Register
         (Into, "verifier", "malformed error IR is rejected",
          Malformed_Error_IR_Is_Rejected'Access);
+      Landin.Testing.Register
+        (Into, "verifier", "malformed evidence is rejected",
+         Malformed_Evidence_Is_Rejected'Access);
       Landin.Testing.Register
         (Into, "verifier", "malformed runtime addresses are rejected",
          Malformed_Runtime_Addresses_Are_Rejected'Access);

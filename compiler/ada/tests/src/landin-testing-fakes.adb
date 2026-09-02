@@ -117,6 +117,11 @@ package body Landin.Testing.Fakes is
       end case;
    end Read_File;
 
+   procedure Refuse_Writes (Host : in out Fake_Filesystem) is
+   begin
+      Host.Writes.Refuses_Write := True;
+   end Refuse_Writes;
+
    overriding procedure Write_File
      (Host    : Fake_Filesystem;
       Path    : String;
@@ -124,6 +129,11 @@ package body Landin.Testing.Fakes is
       Status  : out Landin.Platform.Write_Status)
    is
    begin
+      if Host.Writes.Refuses_Write then
+         Status := Landin.Platform.Not_Writable;
+         return;
+      end if;
+
       Host.Writes.Items.Append
         (File_Entry'
            (Path    => Unbounded.To_Unbounded_String (Path),

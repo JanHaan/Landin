@@ -1,0 +1,10 @@
+write_at: (items: []mut u32, index: usize) -> none =
+    items[index] = 1
+end write_at
+
+public main: () -> (code: i32) =
+    mut words: [1]u32 = [42]
+    view: []mut u32 = words[0..<1]
+    write_at(view, 1)
+    code = 42
+end main

@@ -1431,7 +1431,11 @@ vacuous, since [0840] already leaves a value holding no
 references unconstrained; for T = ptr node it is exact.
 The origin travels with the type, so one word covers both.
 An inout argument need not be a binding. A pointer target,
-c.inner.val, is an ordinary one.
+c.inner.val, is an ordinary one. The same provable
+binding-rooted place cannot fill two inout parameters of one
+call. Distinct pointer and computed-index paths may still alias;
+that is beyond the local analysis and is not an exclusivity
+guarantee [1720].
 
 ```landin
 process: (source: []u8, inout target: []u8, sink owned: buffer)
@@ -3006,14 +3010,16 @@ performs local checks: origins and escape, consumption
 arithmetic. It is not a memory-safe language and not a
 resource-safe one. Pointer-to-integer conversion and the C
 boundary leave the checked model altogether [0470], a copy
-taken before a sink is refused nothing [0910], and two
+taken before a sink is refused nothing [0910], distinct pointer
+or computed-index paths may alias across `inout` [0900], and two
 arenas are indistinguishable [0860].
 That is a smaller claim than 'safe' and a larger one than
-C's. The table that lets a reader see exactly which operation
-falls where does not exist yet; ROADMAP.md grows it alongside
-executable cases at R2.90 and closes the matrix at R7.40.
-Until then, read the claim as: deliberately unsafe, with
-static help that is worth having.
+C's. D148's guarantee register now puts every implemented
+observable failure boundary in one of four columns and links it
+to executable evidence. New operations have to enter that
+register as they are implemented, and R7.40 closes the final
+feature-complete matrix. Read the claim as: deliberately unsafe,
+with static help that is worth having.
 Checks stay on by default. unchecked exists in the design
 [1120] and is not implemented first, because defining what
 an optimiser may then assume is a decision that should wait

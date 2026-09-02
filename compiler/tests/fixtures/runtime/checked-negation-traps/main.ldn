@@ -1,0 +1,8 @@
+negate: (n: i8) -> (r: i8) =
+    r = -n
+end negate
+
+public main: () -> (code: i32) =
+    _ = negate(-128)
+    code = 42
+end main
