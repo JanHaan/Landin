@@ -1,0 +1,7 @@
+class: negative
+summary: rooted compilation refuses an entry path that is not a directory as L0007
+expect: expected.txt
+targets: linux-x86-64, macos-arm64
+args: --root=../tests/fixtures/negative/module-directory-invalid/root ../tests/fixtures/negative/module-directory-invalid/entry.ldn
+codes: L0007
+status: 1

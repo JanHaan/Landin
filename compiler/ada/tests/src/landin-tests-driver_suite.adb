@@ -242,6 +242,289 @@ package body Landin.Tests.Driver_Suite is
       end;
    end An_Empty_Source_Is_Accepted;
 
+   ------------------------------------------------------------------
+   --  R3.10: directory modules and ordered roots
+   ------------------------------------------------------------------
+
+   procedure Reachable_Modules_Are_Loaded
+     (Item : in out Landin.Testing.Context);
+
+   procedure Reachable_Modules_Are_Loaded
+     (Item : in out Landin.Testing.Context)
+   is
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Args : Landin.Platform.Path_List;
+   begin
+      Host.Add_Directory ("entry");
+      Host.Add_Directory ("root");
+      Host.Add_Directory ("root/math");
+      Host.Add_File
+        ("entry/main.ldn",
+         "import math" & LF
+         & "public main: () -> (code: i32) =" & LF
+         & "    copy: math.number = math.answer()" & LF
+         & "    made: math.point = math.point(value: copy)" & LF
+         & "    code = made.value" & LF
+         & "end main" & LF);
+      Host.Add_File
+        ("root/math/answer.ldn",
+         "public number: type = i32" & LF
+         & "public point: type = struct" & LF
+         & "    value: number" & LF
+         & "end point" & LF
+         & "public answer: () -> (value: number) =" & LF
+         & "    value = helper()" & LF
+         & "end answer" & LF);
+      Host.Add_File
+        ("root/math/helper.ldn",
+         "helper: () -> (value: i32) =" & LF
+         & "    value = 42" & LF
+         & "end helper" & LF);
+      Args.Append ("--root=root");
+      Args.Append ("entry");
+
+      declare
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute (Args, Host, Tools);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Landin.Driver.Status_Success,
+            "a public function in a reached module is callable");
+         Landin.Testing.Check_Equal
+           (Item, Unbounded.To_String (Result.Report), "",
+            "the reachable program reports nothing");
+      end;
+   end Reachable_Modules_Are_Loaded;
+
+   procedure Roots_Are_Searched_In_Order
+     (Item : in out Landin.Testing.Context);
+
+   procedure Roots_Are_Searched_In_Order
+     (Item : in out Landin.Testing.Context)
+   is
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Args : Landin.Platform.Path_List;
+   begin
+      Host.Add_Directory ("entry");
+      Host.Add_Directory ("first");
+      Host.Add_Directory ("first/lib");
+      Host.Add_Directory ("second");
+      Host.Add_Directory ("second/lib");
+      Host.Add_File
+        ("entry/main.ldn",
+         "import lib" & LF
+         & "public main: () -> (code: i32) =" & LF
+         & "    code = lib.answer()" & LF
+         & "end main" & LF);
+      Host.Add_File
+        ("first/lib/good.ldn",
+         "public answer: () -> (value: i32) =" & LF
+         & "    value = 1" & LF
+         & "end answer" & LF);
+      Host.Add_File ("second/lib/bad.ldn", "if: i32 = 0" & LF);
+      Args.Append ("--root=first");
+      Args.Append ("--root=second");
+      Args.Append ("entry");
+
+      declare
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute (Args, Host, Tools);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Landin.Driver.Status_Success,
+            "the first root wins for one logical module name");
+      end;
+   end Roots_Are_Searched_In_Order;
+
+   procedure Private_Imported_Names_Are_Diagnosed
+     (Item : in out Landin.Testing.Context);
+
+   procedure Private_Imported_Names_Are_Diagnosed
+     (Item : in out Landin.Testing.Context)
+   is
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Args : Landin.Platform.Path_List;
+   begin
+      Host.Add_Directory ("entry");
+      Host.Add_Directory ("root");
+      Host.Add_Directory ("root/lib");
+      Host.Add_File
+        ("entry/main.ldn",
+         "import lib" & LF & "seen: i32 = lib.hidden" & LF);
+      Host.Add_File ("root/lib/private.ldn", "hidden: i32 = 7" & LF);
+      Args.Append ("--root=root");
+      Args.Append ("entry");
+
+      declare
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute (Args, Host, Tools);
+         Report : constant String := Unbounded.To_String (Result.Report);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Landin.Driver.Status_Reported,
+            "a private member is not visible across modules");
+         Landin.Testing.Check
+           (Item, Contains (Report, "L0202"),
+            "the inaccessible-name diagnostic owns the refusal");
+         Landin.Testing.Check
+           (Item, Contains (Report, "root/lib/private.ldn:1"),
+            "the declaration is related to the report");
+      end;
+   end Private_Imported_Names_Are_Diagnosed;
+
+   procedure Missing_Modules_Are_Diagnosed
+     (Item : in out Landin.Testing.Context);
+
+   procedure Missing_Modules_Are_Diagnosed
+     (Item : in out Landin.Testing.Context)
+   is
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Args : Landin.Platform.Path_List;
+   begin
+      Host.Add_Directory ("entry");
+      Host.Add_Directory ("root");
+      Host.Add_File ("entry/main.ldn", "import absent" & LF);
+      Args.Append ("--root=root");
+      Args.Append ("entry");
+
+      declare
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute (Args, Host, Tools);
+         Report : constant String := Unbounded.To_String (Result.Report);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Landin.Driver.Status_Reported,
+            "an absent imported module is reported");
+         Landin.Testing.Check
+           (Item, Contains (Report, "L0006"),
+            "the missing-module diagnostic owns the refusal");
+      end;
+   end Missing_Modules_Are_Diagnosed;
+
+   procedure Invalid_Entry_Modules_Are_Diagnosed
+     (Item : in out Landin.Testing.Context);
+
+   procedure Invalid_Entry_Modules_Are_Diagnosed
+     (Item : in out Landin.Testing.Context)
+   is
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Args : Landin.Platform.Path_List;
+   begin
+      Host.Add_Directory ("root");
+      Host.Add_File ("entry.ldn", "value: i32 = 1" & LF);
+      Args.Append ("--root=root");
+      Args.Append ("entry.ldn");
+
+      declare
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute (Args, Host, Tools);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Landin.Driver.Status_Reported,
+            "a rooted entry must be a directory");
+         Landin.Testing.Check
+           (Item, Contains (Unbounded.To_String (Result.Report), "L0007"),
+            "the invalid-module-directory code is reported");
+      end;
+   end Invalid_Entry_Modules_Are_Diagnosed;
+
+   procedure Imported_Main_Is_Not_The_Entry
+     (Item : in out Landin.Testing.Context);
+
+   procedure Imported_Main_Is_Not_The_Entry
+     (Item : in out Landin.Testing.Context)
+   is
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Args : Landin.Platform.Path_List;
+   begin
+      Host.Add_Directory ("entry");
+      Host.Add_Directory ("root");
+      Host.Add_Directory ("root/lib");
+      Host.Add_File
+        ("entry/start.ldn",
+         "import lib" & LF
+         & "public start: () -> (code: i32) =" & LF
+         & "    code = lib.answer()" & LF
+         & "end start" & LF);
+      Host.Add_File
+        ("root/lib/main.ldn",
+         "public answer: () -> (value: i32) =" & LF
+         & "    value = 1" & LF
+         & "end answer" & LF
+         & "public main: () -> (code: i32) =" & LF
+         & "    code = 42" & LF
+         & "end main" & LF);
+      Args.Append ("--root=root");
+      Args.Append ("--emit=exe");
+      Args.Append ("entry");
+
+      declare
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute (Args, Host, Tools);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Landin.Driver.Status_Reported,
+            "a main outside the entry module is not selected");
+         Landin.Testing.Check
+           (Item, Contains (Unbounded.To_String (Result.Report), "L0502"),
+            "the ordinary missing-entry diagnostic is reported");
+      end;
+   end Imported_Main_Is_Not_The_Entry;
+
+   procedure Reached_Conformances_Share_One_Register
+     (Item : in out Landin.Testing.Context);
+
+   procedure Reached_Conformances_Share_One_Register
+     (Item : in out Landin.Testing.Context)
+   is
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Args : Landin.Platform.Path_List;
+   begin
+      Host.Add_Directory ("entry");
+      Host.Add_Directory ("root");
+      Host.Add_Directory ("root/a");
+      Host.Add_Directory ("root/b");
+      Host.Add_Directory ("root/shared");
+      Host.Add_File
+        ("entry/main.ldn", "import a" & LF & "import b" & LF);
+      Host.Add_File
+        ("root/a/a.ldn",
+         "import shared" & LF & "i32 is shared.ordered ()" & LF);
+      Host.Add_File
+        ("root/b/b.ldn",
+         "import shared" & LF & "i32 is shared.ordered ()" & LF);
+      Host.Add_File
+        ("root/shared/concept.ldn",
+         "public ordered: type = concept (t: type)" & LF
+         & "end ordered" & LF);
+      Args.Append ("--root=root");
+      Args.Append ("entry");
+
+      declare
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute (Args, Host, Tools);
+         Report : constant String := Unbounded.To_String (Result.Report);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Landin.Driver.Status_Reported,
+            "colliding conformances in separate modules are refused");
+         Landin.Testing.Check
+           (Item, Contains (Report, "L0317"),
+            "the whole-program conformance collision is reported");
+         Landin.Testing.Check
+           (Item, Contains (Report, "root/a/a.ldn:2")
+             and then Contains (Report, "root/b/b.ldn:2"),
+            "both module declarations participate in the report");
+      end;
+   end Reached_Conformances_Share_One_Register;
+
    procedure Targets_Are_Selected_By_Name
      (Item : in out Landin.Testing.Context);
 
@@ -1026,6 +1309,27 @@ package body Landin.Tests.Driver_Suite is
       Landin.Testing.Register
         (Into, "driver", "an empty source is accepted",
          An_Empty_Source_Is_Accepted'Access);
+      Landin.Testing.Register
+        (Into, "driver", "reachable modules are loaded",
+         Reachable_Modules_Are_Loaded'Access);
+      Landin.Testing.Register
+        (Into, "driver", "roots are searched in order",
+         Roots_Are_Searched_In_Order'Access);
+      Landin.Testing.Register
+        (Into, "driver", "private imported names are diagnosed",
+         Private_Imported_Names_Are_Diagnosed'Access);
+      Landin.Testing.Register
+        (Into, "driver", "missing modules are diagnosed",
+         Missing_Modules_Are_Diagnosed'Access);
+      Landin.Testing.Register
+        (Into, "driver", "invalid entry modules are diagnosed",
+         Invalid_Entry_Modules_Are_Diagnosed'Access);
+      Landin.Testing.Register
+        (Into, "driver", "imported main is not the entry",
+         Imported_Main_Is_Not_The_Entry'Access);
+      Landin.Testing.Register
+        (Into, "driver", "reached conformances share one register",
+         Reached_Conformances_Share_One_Register'Access);
       Landin.Testing.Register
         (Into, "driver", "assembly is written without a tool",
          Assembly_Is_Written_Without_A_Tool'Access);

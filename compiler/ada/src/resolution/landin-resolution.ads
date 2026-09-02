@@ -59,6 +59,7 @@ private with Ada.Containers.Hashed_Maps;
 private with Ada.Containers.Vectors;
 
 with Landin.Provenance;
+with Landin.Modules;
 with Landin.Source;
 with Landin.Source.Names;
 with Landin.Syntax;
@@ -67,6 +68,7 @@ with Landin.Syntax.Forest;
 package Landin.Resolution is
 
    use type Landin.Provenance.Declaration_Id;
+   use type Landin.Modules.Module_Id;
    use type Landin.Source.Names.Name_Id;
    use type Landin.Source.Source_Id;
    use type Landin.Syntax.Node_Id;
@@ -81,7 +83,8 @@ package Landin.Resolution is
    No_Declaration : constant Declaration_Id :=
      Landin.Provenance.No_Declaration;
 
-   --  [1840]'s program, signature and block scopes, plus compile-time
+   --  [1840]'s program, module, file-import, signature and block scopes,
+   --  plus compile-time
    --  declaration scopes for parameterized types, concepts and conformances.
    --  The module is one scope for the whole compilation,
    --  because a file is a set of declarations and there are no modules until
@@ -90,7 +93,8 @@ package Landin.Resolution is
    --  statement run, which is a function's body, an arm of an `if`, or an
    --  `else`.
    type Scope_Sort is
-     (Program, Signature, Type_Declaration, Concept_Declaration,
+     (Program, Module_Scope, File_Imports, Signature,
+      Type_Declaration, Concept_Declaration,
       Conformance_Declaration, Block);
 
    --  Visible and an ordinary integer, the same bargain Node_Id and
@@ -158,7 +162,9 @@ package Landin.Resolution is
    --  table that grew as trees arrived would be a table whose size depends
    --  on when it was asked.
    procedure Prepare
-     (Into : in out Table; Trees : Landin.Syntax.Forest.Table)
+     (Into   : in out Table;
+      Trees  : Landin.Syntax.Forest.Table;
+      Modules : Landin.Modules.Table)
      with Pre  => not Is_Prepared (Into),
           Post => Is_Prepared (Into)
                   and then Holds (Into, Program_Scope)
@@ -182,13 +188,29 @@ package Landin.Resolution is
      with Pre  => Holds (Of_Table, Scope),
           Post => Enclosing'Result < Scope;
 
+   function Module_Scope_Of
+     (Of_Table : Table; Module : Landin.Modules.Module_Id) return Scope_Id
+     with Pre  => Is_Prepared (Of_Table)
+                  and then Module /= Landin.Modules.No_Module,
+          Post => Holds (Of_Table, Module_Scope_Of'Result)
+                  and then Sort_Of
+                    (Of_Table, Module_Scope_Of'Result) = Module_Scope;
+
+   function File_Scope_Of
+     (Of_Table : Table; Source : Landin.Source.Source_Id) return Scope_Id
+     with Pre  => Is_Prepared (Of_Table)
+                  and then Source /= Landin.Source.No_Source,
+          Post => Holds (Of_Table, File_Scope_Of'Result)
+                  and then Sort_Of
+                    (Of_Table, File_Scope_Of'Result) = File_Imports;
+
    --  A scope inside another.  Program is not openable: [1740] gives the
    --  compilation one and Prepare made it.
    function Open_Scope
      (Into : in out Table; Sort : Scope_Sort; Inside : Scope_Id)
      return Scope_Id
      with Pre  => Is_Prepared (Into)
-                  and then Sort /= Program
+                  and then Sort not in Program | Module_Scope | File_Imports
                   and then Holds (Into, Inside),
           Post => Scope_Count (Into) = Scope_Count (Into)'Old + 1
                   and then Holds (Into, Open_Scope'Result)
@@ -269,6 +291,43 @@ package Landin.Resolution is
                            and then Name_Of (Of_Table, Visible'Result)
                                     = Name);
 
+   function Visible_Public_In_Module
+     (Of_Table : Table;
+      Module   : Landin.Modules.Module_Id;
+      Name     : Landin.Source.Names.Name_Id) return Declaration_Id
+     with Pre => Is_Prepared (Of_Table)
+                 and then Module /= Landin.Modules.No_Module;
+
+   function Imported_Module_Of
+     (Of_Table : Table;
+      Source   : Landin.Source.Source_Id;
+      Name     : Landin.Source.Names.Name_Id)
+      return Landin.Modules.Module_Id
+     with Pre => Is_Prepared (Of_Table)
+                 and then Source /= Landin.Source.No_Source;
+
+   function Import_Origin
+     (Of_Table : Table;
+      Source   : Landin.Source.Source_Id;
+      Name     : Landin.Source.Names.Name_Id) return Landin.Provenance.Origin
+     with Pre => Is_Prepared (Of_Table)
+                 and then Imported_Module_Of (Of_Table, Source, Name)
+                            /= Landin.Modules.No_Module;
+
+   procedure Bind_Imported_Module
+     (Into  : in out Table;
+      Source : Landin.Source.Source_Id;
+      Name   : Landin.Source.Names.Name_Id;
+      Target : Landin.Modules.Module_Id;
+      Origin : Landin.Provenance.Origin)
+     with Pre  => Is_Prepared (Into)
+                  and then Source /= Landin.Source.No_Source
+                  and then Name /= Landin.Source.Names.No_Name
+                  and then Target /= Landin.Modules.No_Module
+                  and then Imported_Module_Of (Into, Source, Name)
+                             = Landin.Modules.No_Module,
+          Post => Imported_Module_Of (Into, Source, Name) = Target;
+
    --  Records one declaration and returns its identity.  It takes the node
    --  that declares it rather than the parts of one, so the name, the
    --  place and the export cannot disagree with the tree it came from.
@@ -287,7 +346,8 @@ package Landin.Resolution is
       Sites   : in out Landin.Provenance.Table;
       Of_Tree : Landin.Syntax.Tree;
       Node    : Landin.Syntax.Node_Id;
-      Inside  : Scope_Id) return Declaration_Id
+      Inside  : Scope_Id;
+      Inherits_Public : Boolean := False) return Declaration_Id
      with Pre  => Is_Prepared (Into)
                   and then Holds (Into, Inside)
                   and then Landin.Syntax.Contains (Of_Tree, Node)
@@ -399,8 +459,13 @@ package Landin.Resolution is
                            in Landin.Syntax.Name_Reference
                               | Landin.Syntax.Type_Reference
                               | Landin.Syntax.Concept_Reference
+                              | Landin.Syntax.Member_Selection
                   and then Contains (Into, To)
-                  and then Verdict_Of (Into, Of_Tree, Node) = Unresolved,
+                  and then
+                    (if Landin.Syntax.Kind (Of_Tree, Node)
+                           = Landin.Syntax.Member_Selection
+                     then Verdict_Of (Into, Of_Tree, Node) = Not_A_Reference
+                     else Verdict_Of (Into, Of_Tree, Node) = Unresolved),
           Post => Verdict_Of (Into, Of_Tree, Node) = Bound
                   and then Bound_To (Into, Of_Tree, Node) = To;
 
@@ -584,6 +649,9 @@ private
    package Scope_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Scope);
 
+   package Scope_Id_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Scope_Id);
+
    --  One run per source, end to end in one vector, which is what
    --  Landin.Syntax does with a node's children.  First is where node 1 of
    --  that source's tree sits, so a reference is one addition.
@@ -605,6 +673,16 @@ private
 
    package Position_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Natural);
+
+   type Import_Binding is record
+      Source : Landin.Source.Source_Id := Landin.Source.No_Source;
+      Name   : Landin.Source.Names.Name_Id := Landin.Source.Names.No_Name;
+      Target : Landin.Modules.Module_Id := Landin.Modules.No_Module;
+      Origin : Landin.Provenance.Origin := Landin.Provenance.No_Origin;
+   end record;
+
+   package Import_Binding_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Import_Binding);
 
    type Application_Fact is record
       Class    : Application_Class := Unclassified_Application;
@@ -639,6 +717,9 @@ private
       Ready        : Boolean := False;
       Declarations : Declaration_Vectors.Vector;
       Scopes       : Scope_Vectors.Vector;
+      Module_Scopes : Scope_Id_Vectors.Vector;
+      File_Scopes   : Scope_Id_Vectors.Vector;
+      Imports       : Import_Binding_Vectors.Vector;
       Runs         : Run_Vectors.Vector;
       Bound        : Binding_Vectors.Vector;
       Opened       : Opened_Vectors.Vector;

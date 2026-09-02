@@ -1,0 +1,4 @@
+class: unit
+summary: reached modules contribute unused conformances to one deterministic collision register
+constructs: 1280, 1410, 1420
+targets: linux-x86-64, macos-arm64, cortex-m, synthetic-32

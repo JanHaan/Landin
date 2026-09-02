@@ -112,7 +112,9 @@ package Landin.Diagnostics.Syntactic is
       --  D64 parses [0710]'s nonempty labelled form and D72 its call-shaped
       --  construction.  [0720]'s all-`of` spelling remains outside [1810]'s
       --  enabled expression grammar.
-      Struct_All_Of);
+      Struct_All_Of,
+      Import_Alias,
+      Selected_Import);
 
    --  Where the tour describes it.  Ordered by construct so that a reader
    --  can check the column against tour.md by running down it, and
@@ -135,7 +137,9 @@ package Landin.Diagnostics.Syntactic is
             when Parameterized_Atom_Union => "[1350]",
             when Array_Repetition     => "[0560]",
             when Indexing             => "[0570]",
-            when Struct_All_Of         => "[0720]")
+            when Struct_All_Of         => "[0720]",
+            when Import_Alias          => "[1430]",
+            when Selected_Import       => "[1440]")
      with Post => Landin.Tokens.Is_Valid_Construct (Construct'Result);
 
    --  What the parser hands over: a rule, a place, and the sentence a user
@@ -181,6 +185,8 @@ private
                | Array_Repetition
                | Indexing
                | Struct_All_Of         => "R2.20",
+            when Import_Alias
+               | Selected_Import       => "R4.30",
             --  R2.40 implements type and fixed parameters.
             when Type_Parameter
                | Parameterized_Atom_Union => "R2.40",

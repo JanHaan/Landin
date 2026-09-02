@@ -1958,6 +1958,85 @@ package body Landin.Tests.Parser_Suite is
          "a parameterized atom union is refused, not parsed as a union");
    end Parameterized_Alias_Errors_Keep_Grammar_Boundaries;
 
+   procedure Imports_Are_A_File_Prelude
+     (Item : in out Landin.Testing.Context);
+
+   procedure Imports_Are_A_File_Prelude
+     (Item : in out Landin.Testing.Context)
+   is
+      Sources : Landin.Source.Sets.Source_Set;
+      Names   : Landin.Source.Names.Table;
+      Stream  : Landin.Tokens.Token_Stream;
+      Found   : Landin.Diagnostics.Diagnostic_List;
+      Id      : constant Landin.Source.Source_Id :=
+        Sources.Add
+          ("imports.ldn",
+           "import core/map" & ASCII.LF
+           & "import io" & ASCII.LF
+           & "value: u8 = 1" & ASCII.LF);
+   begin
+      Landin.Tokens.Lexer.Lex (Sources.Get (Id), Names, Stream);
+      Landin.Diagnostics.Lexical.Report (Stream, Found);
+
+      declare
+         Parsed : constant Landin.Syntax.Tree :=
+           Landin.Syntax.Parser.Parse (Stream, Names, Found);
+         First : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Nth_Import (Parsed, 1);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Landin.Diagnostics.Count (Found), 0,
+            "plain imports are accepted");
+         Landin.Testing.Check_Equal
+           (Item, Landin.Syntax.Import_Count (Parsed), 2,
+            "imports are retained apart from declarations");
+         Landin.Testing.Check_Equal
+           (Item, Landin.Syntax.Declaration_Count (Parsed), 1,
+            "the declaration suffix retains its own count");
+         Landin.Testing.Check_Equal
+           (Item, Landin.Syntax.Import_Segment_Count (Parsed, First), 2,
+            "a logical path retains each segment");
+         Landin.Testing.Check
+           (Item,
+            Landin.Source.Names.Spelling
+              (Names,
+               Landin.Syntax.Name
+                 (Parsed,
+                  Landin.Syntax.Nth_Import_Segment (Parsed, First, 1)))
+              = "core"
+            and then Landin.Source.Names.Spelling
+              (Names,
+               Landin.Syntax.Name
+                 (Parsed,
+                  Landin.Syntax.Nth_Import_Segment (Parsed, First, 2)))
+              = "map",
+            "the logical path spelling is stable");
+      end;
+
+      declare
+         Codes : Unbounded.Unbounded_String;
+         Total : Natural;
+         Nodes : Natural;
+         Held  : Boolean;
+      begin
+         Read_And_Parse
+           ("import core/map as maps" & ASCII.LF,
+            Codes, Total, Nodes, Held);
+         Landin.Testing.Check
+           (Item, Held and then Total = 1
+             and then Unbounded.To_String (Codes) = "L0010",
+            "an import alias is one named deferred construct");
+
+         Read_And_Parse
+           ("import core/map (get)" & ASCII.LF,
+            Codes, Total, Nodes, Held);
+         Landin.Testing.Check
+           (Item, Held and then Total = 1
+             and then Unbounded.To_String (Codes) = "L0010",
+            "a selected import is one named deferred construct");
+      end;
+   end Imports_Are_A_File_Prelude;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -2008,6 +2087,9 @@ package body Landin.Tests.Parser_Suite is
       Landin.Testing.Register
         (Into, "parser", "parameterized aliases keep grammar boundaries",
          Parameterized_Alias_Errors_Keep_Grammar_Boundaries'Access);
+      Landin.Testing.Register
+        (Into, "parser", "imports are a file prelude",
+         Imports_Are_A_File_Prelude'Access);
       Landin.Testing.Register
         (Into, "parser", "reference signature syntax is represented",
          Reference_Signature_Syntax_Is_Represented'Access);

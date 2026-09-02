@@ -18,6 +18,7 @@
 --  asking it for an executable makes the absence a fault.
 
 with Landin.IR;
+with Landin.Modules;
 with Landin.Resolution;
 with Landin.Source.Names;
 
@@ -28,6 +29,7 @@ package Landin.Backend.Entry_Point is
    function Hosted_Main
      (Of_Unit  : Landin.IR.Unit;
       Meanings : Landin.Resolution.Table;
+      Modules  : Landin.Modules.Table;
       Names    : Landin.Source.Names.Table) return Landin.IR.Item_Id;
 
    --  What [1970] requires, spelled once so a diagnostic and this package
