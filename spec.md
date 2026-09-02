@@ -46,9 +46,10 @@ A token is as long as it can be, comments excepted, whose
 opener decides [1780]: 'inc' followed by 'x' with nothing between them is
 the one name 'incx', which is why [1750] says what separates two tokens.
 
-### [1740] A program is declarations, in any order
+### [1740] A source file is an import prelude and declarations in any order
 
-A program is declarations, in any order.
+A source file is a possibly empty import prelude followed by declarations in
+any order. All reached source files together are the program.
 Order inside a module does not matter [0130], so a file is a set of
 declarations rather than a sequence of them, and a name may be used
 above the line that introduces it. 'public' rides on a declaration
@@ -56,10 +57,12 @@ and not on a statement [0090]: what a module exports is decided
 where the module is written, never inside a body.
 
 ```landin-grammar
-program     ::= declaration*
+program     ::= import_declaration* declaration*
+import_declaration ::= "import" import_path
+import_path ::= identifier ("/" identifier)*
 declaration ::= "public"? (atom_declaration | binding | function
-                            | type_declaration | concept_declaration
-                            | conformance_declaration)
+                            | type_declaration | concept_declaration)
+                | conformance_declaration
                 | fixed_conditional
 fixed_conditional ::= "fixed" "if" expression "then" declaration*
                       ("elsif" expression "then" declaration*)*
@@ -107,7 +110,7 @@ that one is the tokeniser's. The other is in the rule itself: a
 name that starts with '_' needs something after it, so the lone
 '_' is the discard of [1020] and nothing may be called it. The
 kernel
-reserves thirty-four words; the reserved set of the whole language is
+reserves thirty-five words; the reserved set of the whole language is
 larger, and each word joins it with the construct that introduces
 it, so a program that avoids a construct never trips over its
 keyword. Type names are not among them: u32 and bool are ordinary
@@ -120,7 +123,7 @@ lower       ::= "a" ... "z"
 digit       ::= "0" ... "9"
 keyword     ::= "addr" | "alignof" | "and" | "any" | "atom" | "dec" | "else"
               | "elsif" | "end" | "escaping" | "fail" | "false"
-              | "fixed" | "from" | "if" | "in" | "inc" | "inout"
+              | "fixed" | "from" | "if" | "import" | "in" | "inc" | "inout"
               | "mut" | "none" | "not" | "or" | "ptr" | "public"
               | "return" | "sink" | "sizeof" | "struct" | "then"
               | "true" | "try" | "type" | "when" | "zeroed"
@@ -219,13 +222,14 @@ template and normalized actual tuple, then checks the substituted field shape.
 binding       ::= "mut"? identifier ":" type ("=" expression)?
                 | "mut"? identifier ":=" expression
 type          ::= function_type | array_type | pointer_type | slice_type
-                | any_type | type_application | scalar_name | identifier
+                | any_type | type_application | scalar_name
+                | declaration_reference
 function_type ::= signature
 array_type    ::= "[" expression "]" type
 pointer_type  ::= "ptr" "mut"? type
 slice_type    ::= "[" "]" "mut"? type
 any_type      ::= "any" concept_reference
-type_application ::= identifier "(" type_argument
+type_application ::= declaration_reference "(" type_argument
                      ("," type_argument)* ")"
 type_argument ::= type | integer
 scalar_name   ::= "u8" | "u16" | "u32" | "u64"
@@ -268,14 +272,17 @@ conformance_declaration ::= type_formals? conformance_target "is"
                           | type_formals? conformance_target "is"
                             concept_reference "(" ")"
 conformance_target ::= array_type | pointer_type | slice_type
-                     | type_application | identifier
+                     | type_application | declaration_reference
 conformance_argument ::= identifier ":" argument_rhs
-concept_reference ::= identifier
+concept_reference ::= declaration_reference
+declaration_reference ::= identifier | qualified_reference
+qualified_reference ::= identifier ("." identifier)+
 type_formals    ::= "(" type_formal ("," type_formal)* ")"
 type_formal     ::= identifier ":" "type" constraint?
                   | "fixed" identifier ":" type
 constraint      ::= "is" concept_reference
-atom_union      ::= identifier "|" identifier ("|" identifier)*
+atom_union      ::= declaration_reference "|" declaration_reference
+                    ("|" declaration_reference)*
 struct_body      ::= "struct" member+ "end" identifier?
 member           ::= field | variant_part
 field            ::= identifier ":" type
@@ -408,7 +415,7 @@ if          ::= "if" expression "then" block
                 ("else" block)?
                 "end" "if"
 match       ::= "match" expression match_arm+ "end" "match"
-match_arm   ::= (identifier | "_")
+match_arm   ::= (declaration_reference | "_")
                 ("(" match_binding ("," match_binding)* ")")?
                 ":" (statement | expression)
 match_binding ::= "inout"? identifier
@@ -436,6 +443,11 @@ a struct field or [0430]'s `val` pointee; that classification belongs to later
 checking. It binds tighter than every operator because it is part of naming a
 thing rather than an operation on one, and it is left to right, so 'a.b.c'
 selects from what 'a.b' named.
+R3.10 uses that same retained selection for a qualified declaration reference.
+When its first name is this file's imported namespace, the first selected name
+is public module lookup and the namespace produces no runtime value. Otherwise
+the selection is the ordinary runtime form above. Later selections from a
+module binding are ordinary fields of the selected value.
 An index or slice selection [0570] binds the same way and for the same
 reason, and takes what a selection named: `a[i]`, `a.b[i]` and
 `a[lower..<upper]` are all written there. The two range spellings are
@@ -518,6 +530,8 @@ names the construct and says which work enables it, so a program
 written against the whole tour fails with a list rather than with a
 parse error. The roadmap owns that list; this grammar owns what is
 already true.
+R3.10 recognizes [1430]'s import alias and [1440]'s selected import shapes and
+refuses each by name; R4.30 owns enabling them.
 
 ### [1840] The kernel's scopes, outermost first
 
@@ -528,11 +542,13 @@ an inner scope means nothing until the inner ones are named.
 
 | scope | what it holds |
 | --- | --- |
-| module | every file compiled together. There is one, until [1410]'s directories arrive. |
-| type declaration | D135's complete ordered formal list. The scope encloses the module and is visible in every fixed formal's declared type, direct concept constraint and in the alias or struct body, regardless of formal order. It closes with that declaration: its names do not enter the module or another type declaration. A type declaration without formals opens no scope. |
-| concept declaration | D142's complete ordered type-formal list. It encloses the module and is visible in every direct constraint, parent name and entry signature. Entry parameter and result labels describe signature positions and declare nothing in this scope. |
-| conformance declaration | D142's optional complete type/fixed binder. It encloses the module and is visible in every binder constraint, the target type and every labelled input or function RHS. The conformance itself declares no module name. |
-| signature | a declared routine's type/fixed formals, runtime parameters and named returns [1800]. Every binder is collected before any signature type or direct concept constraint is resolved, so its source order has no visibility meaning. Named returns are places the body assigns [0930]; all three binder kinds share one namespace, but type/fixed formals are compile-time-only and have no storage. A declared function's signature encloses the module; a no-capture anonymous signature also encloses the module rather than the expression's local scope. A written function type opens no scope and its labels declare nothing. |
+| program | every module reachable from the entry directory after [1420]'s ordered-root selection. This is the outer identity and the one whole-program conformance register; it is not a source namespace. |
+| module | every direct `.ldn` file in one directory [1410]. Its unordered declarations are shared by those files, module-internal by default and public only when written so. |
+| file imports | the final segment of each import in this file's prelude [1420] [1450]. Each binding is a module namespace, not a declaration or value; this scope encloses the module scope for lookups performed from that file. |
+| type declaration | D135's complete ordered formal list. The scope encloses the declaring file's imports and is visible in every fixed formal's declared type, direct concept constraint and in the alias or struct body, regardless of formal order. It closes with that declaration: its names do not enter the module or another type declaration. A type declaration without formals opens no scope. |
+| concept declaration | D142's complete ordered type-formal list. It encloses the declaring file's imports and is visible in every direct constraint, parent name and entry signature. Entry parameter and result labels describe signature positions and declare nothing in this scope. |
+| conformance declaration | D142's optional complete type/fixed binder. It encloses the declaring file's imports and is visible in every binder constraint, the target type and every labelled input or function RHS. The conformance itself declares no module name. |
+| signature | a declared routine's type/fixed formals, runtime parameters and named returns [1800]. Every binder is collected before any signature type or direct concept constraint is resolved, so its source order has no visibility meaning. Named returns are places the body assigns [0930]; all three binder kinds share one namespace, but type/fixed formals are compile-time-only and have no storage. A declared function's signature encloses its file-import scope; a no-capture anonymous signature does the same rather than enclosing the expression's local scope. A written function type opens no scope and its labels declare nothing. |
 | body | what a function runs; one for each arm of an `if` and its `else`; one for each `match` arm; one for every bare `begin` block; and one for a call-site recovery [1810] [1030]. A statement run plus its optional final expression is a block and a block is what scopes [1090], so a name declared in one is not visible in a sibling or after the block closes. Match payload bindings and a recovery error name live only in their block. |
 
 [1800]'s direct final expression opens no additional scope inside its function
@@ -542,6 +558,10 @@ is a set of declarations, so a module name may be used above
 the line that introduces it; [1800]'s block is a sequence, so a local is visible
 to the statements and final expression after it and its own value is read
 before its name exists [0110].
+Lookup proceeds through body and signature scopes, then this source file's
+imports, then its module. An import may therefore shadow a same-named module
+declaration for qualified lookup, and a parameter or local may shadow the
+import. Imports do not enter sibling files and are not re-exported.
 
 ### [1850] One scope gives one name to one thing
 
@@ -554,6 +574,9 @@ it is refused, and the report names both places.
 Shadowing is not this. An inner scope may shadow an outer name
 [0140] and nothing is said about it, because a rule that
 permits something does not also warn about it.
+The file-import scope follows the same rule: two imports with one final segment,
+including a repeated identical import, are refused and both import sites are
+reported.
 
 ### [1860] A name that names nothing is refused
 
@@ -562,6 +585,10 @@ There is no implicit declaration in this language: a name that
 is not in scope is a misspelling and not a new binding [1250].
 The report names the use, because the use is where the mistake
 is and the declaration that was meant is not there to point at.
+An imported namespace whose selected member exists but is not public is a
+different error: the use is refused as inaccessible and the private declaration
+is related evidence. A namespace used without selecting a member names no
+runtime or type value and is likewise refused.
 
 ### [1870] The kernel's types, and what each of them holds
 
@@ -989,6 +1016,9 @@ restriction on every hosted executable: [1650]'s C `argc` and
 use this rule; its build description names the entry [1650]. The first hosted
 entry is infallible: this boundary has no host mapping for a declared Landin
 error.
+In a rooted R3.10 program, only a declaration in the designated entry module
+can satisfy this shape. A reachable imported module's `public main` is an
+ordinary public function and is never selected as the executable entry.
 
 ### [1980] Declared errors are an orthogonal payload-free atom outcome
 
@@ -7977,6 +8007,12 @@ Concrete supplied functions have exactly the substituted concept signature.
 Composed concepts require separate conformances to every named parent; having
 the child never synthesizes a parent.
 
+R3.10 makes the whole program the closed graph of modules reachable from the
+entry directory after first-matching ordered-root selection. Every conformance
+in that graph is collected whether used or public; unreachable directories and
+later root matches contribute nothing. A conformance declares no module name,
+so `public` on one is refused rather than changing registration visibility.
+
 A parameterized conformance quantifies one complete nominal type family. Its
 target is that declaration fully applied to the binder in the same positional
 order and kind, with every binder used once. This closed family form covers the
@@ -8383,3 +8419,57 @@ analysis or ownership would reverse [0770]. All were declined.
 
 **Pinned by** `negative/inout-same-place-twice` and
 `runtime/inout-pointer-alias-is-unchecked`.
+
+### D150 — The reached module graph has one deterministic identity order
+
+**The tour said** that a module is one directory [1410], an import searches
+ordered roots and binds its final segment [1420], imports are per file [1450],
+and the compiler receives roots rather than acquiring packages [1480]. It did
+not settle the file prelude, qualification in non-value positions, discovery
+order, cycles, visibility failures, compatibility invocation, entry selection
+or what “whole program” means to the conformance register.
+
+**Chosen:** `import` is reserved and every source file begins with zero or more
+plain `import a/b` declarations before its module declarations. Each path is a
+nonempty slash-separated identifier tuple. Aliases [1430] and selected imports
+[1440] are recognized refusals owned by R4.30. A plain import binds only the
+last segment in this file's import scope. Locals and signature declarations
+shadow that binding; it shadows the same spelling in the module scope for
+qualified lookup. Duplicate final-segment bindings are refused. Imports do not
+enter sibling files, inject members or re-export anything.
+
+The namespace's first selection resolves a public declaration in the selected
+module and is available in every declaration-reference position. A private
+member is distinguished from a missing one and related to its declaration.
+Public declarations may mention private identities, but those identities stay
+unnameable across the boundary. Variant cases inherit the containing type's
+visibility. A namespace itself is no runtime or type value. `public` on a
+conformance is refused; every unmarked conformance in the reached graph still
+enters the single D142 register.
+
+The request supplies one entry directory and ordered roots. A module contains
+the bytewise-sorted direct regular `.ldn` children; other entries are ignored
+and an empty module is legal. Each import segment must match a listed directory
+entry exactly. Roots are tested in request order and the first complete
+directory wins without merging. Discovery visits the entry first, imports in
+source order and newly selected modules FIFO. A selected directory is loaded
+once, so cycles are legal. Symlink identity and root defaults are outside this
+guarantee. The explicit-file request remains a compatibility mode forming one
+synthetic module when no roots are supplied.
+
+Only after graph closure do configuration, resolution, checking and lowering
+run over that canonical source order. “Whole program” is exactly this reached
+graph, so unused reached conformances collide and unreachable or shadowed-root
+conformances do not participate. Only the designated entry module supplies
+[1970]'s hosted `main`.
+
+**The alternatives:** recursively sweeping subdirectories would erase module
+boundaries; merging roots would replace [1420]'s precedence with accidental
+filesystem composition; injecting imported members would erase [1440]; making
+conformances public would make generic behavior depend on lexical imports; and
+choosing a reached library `main` would make the entry depend on traversal.
+Loading by filesystem enumeration or hash order would also make declaration
+identities and diagnostics host-dependent. All were declined.
+
+**Pinned by** `unit/module-graph`, `unit/module-conformance-register`, and the
+parser, resolution, driver and hosted-entry cases.

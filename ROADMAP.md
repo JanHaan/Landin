@@ -2747,12 +2747,23 @@ surfaces, and runs a complete parser workload written in Landin.
 
 ### R3.10 — Implement minimum modules and ordered roots
 
-Status: active
+Status: complete
 Depends on: R1.50, R2.40, R2.60, R0.50
 
 Implement module directories, per-file imports, visibility, deterministic
 ordered roots and whole-program conformance collection needed by the parser.
 Add the unnamed thin orchestration seam without package acquisition.
+
+Delivered: repeated `--root=DIR` options plus one entry directory close a
+deterministically ordered graph of shallow directory modules before semantic
+stages run. Plain import preludes bind file-local qualified namespaces;
+cross-module lookup enforces public visibility for values, types, concepts and
+inherited variant cases. Cycles load once, first matching roots do not merge,
+only the entry module supplies hosted `main`, and all reached conformances
+share the existing collision register. Legacy explicit-file invocation remains
+the single-module compatibility surface. D150 records the decisions and the
+module diagnostics have dedicated catalogue rows. Import aliases [1430] and
+selected imports [1440] are named refusals assigned to R4.30.
 
 Sources: `[1410]`, `[1420]`, `[1450]`, `[1480]`.
 
@@ -2761,7 +2772,7 @@ ambiguous/colliding conformances.
 
 ### R3.20 — Build the allocator and container pressure case
 
-Status: planned
+Status: active
 Depends on: R2.50, R2.60, R2.70
 
 Implement the minimum allocator protocol and executable `vec` pressure case
@@ -2888,9 +2899,10 @@ Depends on: R3.10, R4.10
 
 Implement the remaining ordered-root, fixed option, `landin/compiler`,
 `landin/assembler` and `landin/linker` behavior needed by hosted programs.
-Preserve whole-program compilation.
+Enable import aliases [1430] and selected imports [1440], and preserve
+whole-program compilation.
 
-Sources: `[1480]`, `[1500]`, `[1530]`, `[1560]`.
+Sources: `[1430]`, `[1440]`, `[1480]`, `[1500]`, `[1530]`, `[1560]`.
 
 Exit evidence: deterministic root and option cases pass; private caches expose
 no stable interface.

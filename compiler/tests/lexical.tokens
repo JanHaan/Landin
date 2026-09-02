@@ -23423,6 +23423,12 @@ file negative/module-array-repetition-index-element/program.ldn tokens 38
   88 89 1
   89 90 ]
   90 91 ]
+file negative/module-directory-invalid/entry.ldn tokens 5
+  0 5 value
+  5 6 :
+  7 10 i32
+  11 12 =
+  13 14 1
 file negative/module-fold-no-type-holds/program.ldn tokens 7
   0 4 over
   4 5 :

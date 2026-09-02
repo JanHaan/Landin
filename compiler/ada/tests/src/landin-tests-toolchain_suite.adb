@@ -196,6 +196,7 @@ package body Landin.Tests.Toolchain_Suite is
             (Landin.Backend.Entry_Point.Hosted_Main
                (Landin.Stages.Code (Work).all,
                 Landin.Stages.Meanings (Work).all,
+                Landin.Stages.Modules (Work).all,
                 Landin.Stages.Identities (Work).all)
              /= Landin.IR.No_Item) = Found,
             Why);

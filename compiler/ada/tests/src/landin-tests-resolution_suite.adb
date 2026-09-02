@@ -102,7 +102,8 @@ package body Landin.Tests.Resolution_Suite is
            Landin.Resolution.Scope_At
              (Meanings.all, Of_Tree.all, Otherwise);
       begin
-         --  [1840]: a function opens a signature inside the module.
+         --  [1840]: a function opens a signature inside its file import
+         --  scope, which in turn sits inside the containing module.
          Landin.Testing.Check
            (Item,
             Landin.Resolution.Sort_Of (Meanings.all, Signature)
@@ -110,9 +111,20 @@ package body Landin.Tests.Resolution_Suite is
             "the function declaration opened its signature");
          Landin.Testing.Check
            (Item,
-            Landin.Resolution.Enclosing (Meanings.all, Signature)
-            = Landin.Resolution.Program_Scope,
-            "the signature sits in the module scope");
+            Landin.Resolution.Sort_Of
+              (Meanings.all,
+               Landin.Resolution.Enclosing (Meanings.all, Signature))
+              = Landin.Resolution.File_Imports,
+            "the signature sits in the file import scope");
+         Landin.Testing.Check
+           (Item,
+            Landin.Resolution.Sort_Of
+              (Meanings.all,
+               Landin.Resolution.Enclosing
+                 (Meanings.all,
+                  Landin.Resolution.Enclosing (Meanings.all, Signature)))
+              = Landin.Resolution.Module_Scope,
+            "the file import scope sits in the module scope");
 
          --  The body is a block inside the signature, so a parameter is
          --  visible in it and a local is not visible outside it.

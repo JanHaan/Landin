@@ -1985,6 +1985,7 @@ package body Landin.Stages.Checking is
 
          if Syn.Kind (Of_Tree, Written)
               in Syn.Type_Reference | Syn.Name_Reference
+                   | Syn.Member_Selection
          then
             if Res.Verdict_Of (Meanings.all, Of_Tree, Written) /= Res.Bound
             then
@@ -2134,6 +2135,7 @@ package body Landin.Stages.Checking is
          begin
             if Syn.Kind (Of_Tree, Target)
                  not in Syn.Type_Reference | Syn.Name_Reference
+                          | Syn.Member_Selection
               or else Res.Verdict_Of
                 (Meanings.all, Of_Tree, Target) /= Res.Bound
             then
@@ -3090,7 +3092,8 @@ package body Landin.Stages.Checking is
 
             if Syn.Kind (Target_Tree.all, Declared) = Syn.Struct_Body then
                return Landin.Checking.Empty_Nominal_Instance (Types.all, Id);
-            elsif Syn.Kind (Target_Tree.all, Declared) = Syn.Type_Reference
+            elsif Syn.Kind (Target_Tree.all, Declared)
+                    in Syn.Type_Reference | Syn.Member_Selection
               and then Res.Verdict_Of
                 (Meanings.all, Target_Tree.all, Declared) = Res.Bound
             then
@@ -3871,6 +3874,7 @@ package body Landin.Stages.Checking is
 
          if Syn.Kind (Of_Tree, Written)
               not in Syn.Type_Reference | Syn.Name_Reference
+                       | Syn.Member_Selection
          then
             --  An Error_Type: the parser refused what stood there and said
             --  so, so this declines to answer.
@@ -7331,7 +7335,8 @@ package body Landin.Stages.Checking is
                Callee : constant Syn.Node_Id :=
                  Syn.Callee_Of (Of_Tree, Node);
             begin
-               if Syn.Kind (Of_Tree, Callee) = Syn.Name_Reference
+               if Syn.Kind (Of_Tree, Callee)
+                    in Syn.Name_Reference | Syn.Member_Selection
                  and then Res.Verdict_Of (Meanings.all, Of_Tree, Callee)
                    = Res.Bound
                then
@@ -7704,6 +7709,8 @@ package body Landin.Stages.Checking is
          Callee : constant Syn.Node_Id := Syn.Callee_Of (Of_Tree, Node);
          Erased_Self : constant Boolean :=
            Syn.Kind (Of_Tree, Callee) = Syn.Member_Selection
+           and then Res.Verdict_Of (Meanings.all, Of_Tree, Callee)
+             /= Res.Bound
            and then Landin.Checking.Type_Of
              (Types.all, Of_Tree, Syn.Target_Of (Of_Tree, Callee))
                = Ty.Any_Value;
@@ -12153,6 +12160,8 @@ package body Landin.Stages.Checking is
 
          function Kept (Item : Ty.Type_Kind) return Ty.Type_Kind;
 
+         function Bound_Value return Ty.Type_Kind;
+
          function Kept (Item : Ty.Type_Kind) return Ty.Type_Kind is
          begin
             if Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
@@ -12163,6 +12172,111 @@ package body Landin.Stages.Checking is
 
             return Landin.Checking.Type_Of (Types.all, Of_Tree, Node);
          end Kept;
+
+         --  A qualified module member is resolution-equivalent to an
+         --  ordinary name after its namespace prefix has selected the
+         --  declaration.  Keep the value rules in one place so imported
+         --  functions and bindings carry exactly the same checked metadata
+         --  as their unqualified spellings.
+         function Bound_Value return Ty.Type_Kind is
+            Means : constant Res.Declaration_Id :=
+              Res.Bound_To (Meanings.all, Of_Tree, Node);
+         begin
+            if Res.Sort_Of (Meanings.all, Means) = Res.Case_Name then
+               Bad.Report
+                 (Item    => Bad.Unsupported_Use,
+                  Source  => Syn.Source_Of (Of_Tree),
+                  Where   => Syn.Where (Of_Tree, Node),
+                  Message => "a variant case used as a value is not"
+                             & " enabled yet",
+                  Refused => Bad.Variant_Value,
+                  Into    => Found);
+               return Kept (Ty.Ill_Typed);
+            elsif Res.Sort_Of (Meanings.all, Means) = Res.Module_Function
+              and then Syn.Generic_Formal_Count
+                (Tree_For (Res.Source_Of (Meanings.all, Means)).all,
+                 Res.Node_Of (Meanings.all, Means)) /= 0
+            then
+               Bad.Report
+                 (Item    => Bad.Type_Mismatch,
+                  Source  => Syn.Source_Of (Of_Tree),
+                  Where   => Syn.Where (Of_Tree, Node),
+                  Message => "a generic routine template has no standalone"
+                             & " function value",
+                  Note    => "D138: a direct call selects a concrete routine"
+                             & " instance and signature",
+                  Related => Syn.Origin
+                    (Tree_For (Res.Source_Of (Meanings.all, Means)).all,
+                     Res.Node_Of (Meanings.all, Means)),
+                  Because => "this generic template",
+                  Into    => Found);
+               return Kept (Ty.Ill_Typed);
+            end if;
+
+            declare
+               Held : constant Ty.Type_Kind := Settled_Type (Means);
+            begin
+               if Held in Ty.Pointer_Value | Ty.Slice_Value then
+                  Landin.Checking.Note_Reference
+                    (Types.all, Of_Tree, Node,
+                     Landin.Checking.Reference_Of (Types.all, Means));
+                  return Kept (Held);
+               elsif Held = Ty.Any_Value then
+                  Landin.Checking.Note_Any_Concept
+                    (Types.all, Of_Tree, Node,
+                     Landin.Checking.Any_Concept_Of (Types.all, Means));
+                  return Kept (Ty.Any_Value);
+               elsif Held = Ty.Function_Value then
+                  Landin.Checking.Note_Signature
+                    (Types.all, Of_Tree, Node,
+                     Landin.Checking.Signature_Of (Types.all, Means));
+                  return Kept (Ty.Function_Value);
+               elsif Held = Ty.Atom_Value then
+                  Landin.Checking.Note_Atom_Set
+                    (Types.all, Of_Tree, Node,
+                     Landin.Checking.Atom_Set_Of (Types.all, Means));
+                  return Kept (Ty.Atom_Value);
+               end if;
+
+               if Held = Ty.Aggregate
+                 and then Landin.Checking.Result_Shape_Of
+                   (Types.all, Means) /= Landin.Checking.No_Signature
+               then
+                  Landin.Checking.Note_Result_Shape
+                    (Types.all, Of_Tree, Node,
+                     Landin.Checking.Result_Shape_Of (Types.all, Means));
+                  return Kept (Ty.Aggregate);
+               end if;
+
+               if Held = Ty.Aggregate then
+                  Bad.Report
+                    (Item    => Bad.Unsupported_Use,
+                     Source  => Syn.Source_Of (Of_Tree),
+                     Where   => Syn.Where (Of_Tree, Node),
+                     Message => "`" & Spelled (Syn.Name (Of_Tree, Node))
+                                & "` names a struct, and a value of one is"
+                                & " not enabled yet",
+                     Refused => Bad.Struct_Value,
+                     Into    => Found);
+                  return Kept (Ty.Ill_Typed);
+               end if;
+
+               if Held = Ty.Fixed_Array then
+                  Bad.Report
+                    (Item    => Bad.Unsupported_Use,
+                     Source  => Syn.Source_Of (Of_Tree),
+                     Where   => Syn.Where (Of_Tree, Node),
+                     Message => "`" & Spelled (Syn.Name (Of_Tree, Node))
+                                & "` names an array, and a value of one is"
+                                & " not enabled yet",
+                     Refused => Bad.Array_Value,
+                     Into    => Found);
+                  return Kept (Ty.Ill_Typed);
+               end if;
+
+               return Kept (Held);
+            end;
+         end Bound_Value;
       begin
          if Already /= Ty.Undecided then
             return Already;
@@ -12425,115 +12539,7 @@ package body Landin.Stages.Checking is
                   return Kept (Ty.Ill_Typed);
                end if;
 
-               declare
-                  Means : constant Res.Declaration_Id :=
-                    Res.Bound_To (Meanings.all, Of_Tree, Node);
-               begin
-                  if Res.Sort_Of (Meanings.all, Means) = Res.Case_Name then
-                     Bad.Report
-                       (Item    => Bad.Unsupported_Use,
-                        Source  => Syn.Source_Of (Of_Tree),
-                        Where   => Syn.Where (Of_Tree, Node),
-                        Message => "a variant case used as a value is not"
-                                   & " enabled yet",
-                        Refused => Bad.Variant_Value,
-                        Into    => Found);
-                     return Kept (Ty.Ill_Typed);
-                  elsif Res.Sort_Of (Meanings.all, Means)
-                          = Res.Module_Function
-                    and then Syn.Generic_Formal_Count
-                      (Tree_For (Res.Source_Of (Meanings.all, Means)).all,
-                       Res.Node_Of (Meanings.all, Means)) /= 0
-                  then
-                     Bad.Report
-                       (Item    => Bad.Type_Mismatch,
-                        Source  => Syn.Source_Of (Of_Tree),
-                        Where   => Syn.Where (Of_Tree, Node),
-                        Message => "a generic routine template has no"
-                                   & " standalone function value",
-                        Note    => "D138: a direct call selects a concrete"
-                                   & " routine instance and signature",
-                        Related => Syn.Origin
-                          (Tree_For
-                             (Res.Source_Of (Meanings.all, Means)).all,
-                           Res.Node_Of (Meanings.all, Means)),
-                        Because => "this generic template",
-                        Into    => Found);
-                     return Kept (Ty.Ill_Typed);
-                  end if;
-
-                  declare
-                     Held : constant Ty.Type_Kind := Settled_Type (Means);
-                  begin
-                     if Held in Ty.Pointer_Value | Ty.Slice_Value then
-                        Landin.Checking.Note_Reference
-                          (Types.all, Of_Tree, Node,
-                           Landin.Checking.Reference_Of (Types.all, Means));
-                        return Kept (Held);
-                     elsif Held = Ty.Any_Value then
-                        Landin.Checking.Note_Any_Concept
-                          (Types.all, Of_Tree, Node,
-                           Landin.Checking.Any_Concept_Of
-                             (Types.all, Means));
-                        return Kept (Ty.Any_Value);
-                     elsif Held = Ty.Function_Value then
-                        Landin.Checking.Note_Signature
-                          (Types.all, Of_Tree, Node,
-                           Landin.Checking.Signature_Of (Types.all, Means));
-                        return Kept (Ty.Function_Value);
-                     elsif Held = Ty.Atom_Value then
-                        Landin.Checking.Note_Atom_Set
-                          (Types.all, Of_Tree, Node,
-                           Landin.Checking.Atom_Set_Of (Types.all, Means));
-                        return Kept (Ty.Atom_Value);
-                     end if;
-
-                     --  [1740]'s state of [0670]'s type is storage a program
-                     --  may declare and not yet reach: reading the whole of
-                     --  one is a value, and carrying one waits for the rest
-                     --  of R2.20 exactly as a binding of one does.
-                     if Held = Ty.Aggregate
-                       and then Landin.Checking.Result_Shape_Of
-                         (Types.all, Means) /= Landin.Checking.No_Signature
-                     then
-                        Landin.Checking.Note_Result_Shape
-                          (Types.all, Of_Tree, Node,
-                           Landin.Checking.Result_Shape_Of
-                             (Types.all, Means));
-                        return Kept (Ty.Aggregate);
-                     end if;
-
-                     if Held = Ty.Aggregate then
-                        Bad.Report
-                          (Item    => Bad.Unsupported_Use,
-                           Source  => Syn.Source_Of (Of_Tree),
-                           Where   => Syn.Where (Of_Tree, Node),
-                           Message => "`"
-                                      & Spelled (Syn.Name (Of_Tree, Node))
-                                      & "` names a struct, and a value of one"
-                                      & " is not enabled yet",
-                           Refused => Bad.Struct_Value,
-                           Into    => Found);
-                        return Kept (Ty.Ill_Typed);
-                     end if;
-
-                     if Held = Ty.Fixed_Array then
-                        Bad.Report
-                          (Item    => Bad.Unsupported_Use,
-                           Source  => Syn.Source_Of (Of_Tree),
-                           Where   => Syn.Where (Of_Tree, Node),
-                           Message => "`"
-                                      & Spelled (Syn.Name (Of_Tree, Node))
-                                      & "` names an array, and a value of one"
-                                      & " is not enabled yet",
-                           Refused => Bad.Array_Value,
-                           Into    => Found);
-                        return Kept (Ty.Ill_Typed);
-                     end if;
-
-                     return Kept (Held);
-                  end;
-               end;
+               return Bound_Value;
 
             when Syn.Inclusive_Slice | Syn.Half_Open_Slice =>
                declare
@@ -12731,6 +12737,11 @@ package body Landin.Stages.Checking is
                end;
 
             when Syn.Member_Selection =>
+               if Res.Verdict_Of (Meanings.all, Of_Tree, Node) = Res.Bound
+               then
+                  return Bound_Value;
+               end if;
+
                declare
                   From : constant Syn.Node_Id :=
                     Syn.Target_Of (Of_Tree, Node);
@@ -13020,7 +13031,8 @@ package body Landin.Stages.Checking is
                   Callee : constant Syn.Node_Id :=
                     Syn.Callee_Of (Of_Tree, Node);
                   Named : constant Boolean :=
-                    Syn.Kind (Of_Tree, Callee) = Syn.Name_Reference
+                    Syn.Kind (Of_Tree, Callee)
+                      in Syn.Name_Reference | Syn.Member_Selection
                     and then Res.Verdict_Of
                       (Meanings.all, Of_Tree, Callee) = Res.Bound;
                   Means : constant Res.Declaration_Id :=

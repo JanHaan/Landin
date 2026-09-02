@@ -1,0 +1,4 @@
+class: unit
+summary: driver cases close directory modules through ordered roots with file-local qualified imports and entry-only main selection
+constructs: 1410, 1420, 1430, 1440, 1450, 1480, 1740, 1840, 1970
+targets: linux-x86-64, macos-arm64, cortex-m, synthetic-32

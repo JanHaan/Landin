@@ -1,0 +1,3 @@
+error[L0007]: entry module is not a directory: ../tests/fixtures/negative/module-directory-invalid/entry.ldn
+  --> <unknown source>
+  = note: [1410]: a module is one directory

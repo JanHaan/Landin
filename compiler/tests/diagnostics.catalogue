@@ -9,6 +9,8 @@ L0002  Live     an option the driver does not define
 L0003  Live     a source that is missing or cannot be read
 L0004  Live     a target no description names
 L0005  Live     an output file that cannot be written
+L0006  Live     [1420]: no ordered import root contains the requested module
+L0007  Live     [1410]: an entry module must be a readable directory
 L0010  Live     [1830]: the tour describes this and the kernel omits it
 L0011  Live     [1770]: a digit outside the base the prefix selected
 L0012  Live     [1750]: a run of bytes no rule spells
@@ -29,6 +31,7 @@ L0111  Live     an implementation limit on how deeply a construct nests
 L0112  Live     [0980]: a positional call argument precedes every named argument
 L0200  Live     [1850]: one scope gives one name to one thing
 L0201  Live     [1860]: a name used and declared in no visible scope
+L0202  Live     [1410]: a module-internal declaration used across modules
 L0300  Live     a compile-time magnitude its context or target does not hold
 L0301  Live     [1890]: two types that must agree and do not
 L0302  Live     [1910]: a name read on a path that does not assign it

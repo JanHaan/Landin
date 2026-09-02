@@ -2545,7 +2545,8 @@ package body Landin.Stages.Lowering is
            Site_Of (Of_Tree, Node);
          Callee : constant Syn.Node_Id := Syn.Callee_Of (Of_Tree, Node);
          Named : constant Boolean :=
-           Syn.Kind (Of_Tree, Callee) = Syn.Name_Reference
+           Syn.Kind (Of_Tree, Callee)
+             in Syn.Name_Reference | Syn.Member_Selection
            and then Res.Verdict_Of (Meanings.all, Of_Tree, Callee)
              = Res.Bound;
          Means : constant Res.Declaration_Id :=
@@ -2561,6 +2562,8 @@ package body Landin.Stages.Lowering is
              (Types.all, Of_Tree, Node);
          Erased_Self : constant Boolean :=
            Syn.Kind (Of_Tree, Callee) = Syn.Member_Selection
+           and then Res.Verdict_Of (Meanings.all, Of_Tree, Callee)
+             /= Res.Bound
            and then Type_At
              (Of_Tree, Syn.Target_Of (Of_Tree, Callee)) = Ty.Any_Value;
          Parameter_Offset : constant Natural :=
@@ -4690,6 +4693,44 @@ package body Landin.Stages.Lowering is
                end;
 
             when Syn.Member_Selection =>
+               --  Resolution binds an imported `module.member` directly to
+               --  the public declaration.  Its namespace target is not a
+               --  runtime value, so lower the selected declaration exactly
+               --  as an unqualified module name before considering ordinary
+               --  field and evidence selections.
+               if Res.Verdict_Of (Meanings.all, Of_Tree, Node) = Res.Bound
+               then
+                  declare
+                     Means : constant Res.Declaration_Id :=
+                       Res.Bound_To (Meanings.all, Of_Tree, Node);
+                  begin
+                     if Res.Sort_Of (Meanings.all, Means) = Res.Module_Atom
+                     then
+                        return IR.Emit_Atom
+                          (Unit.all, Filling, Means,
+                           Atom_Set_For
+                             (Landin.Checking.Atom_Set_Of
+                                (Types.all, Means)),
+                           Site);
+                     elsif Res.Sort_Of (Meanings.all, Means)
+                       = Res.Module_Function
+                     then
+                        return IR.Emit_Function_Address
+                          (Unit.all, Filling, IR.Item_For (Unit.all, Means),
+                           Site);
+                     elsif Res.Sort_Of (Meanings.all, Means)
+                       = Res.Module_Binding
+                     then
+                        return IR.Emit_Load_Datum
+                          (Unit.all, Filling, IR.Item_For (Unit.all, Means),
+                           Site);
+                     end if;
+
+                     raise Landin.Compiler_Defect with
+                       "a non-value imported declaration reached lowering";
+                  end;
+               end if;
+
                if Landin.Checking.Evidence_Of
                  (Types.all, Of_Tree, Node)
                     /= Landin.Checking.No_Conformance

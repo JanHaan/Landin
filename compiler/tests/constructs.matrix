@@ -11,7 +11,7 @@
 #
 #  A construct with no evidence and no refusal is this
 #  item's to answer for; see ROADMAP.md R1.90.
-#  199 constructs, 144 with evidence, 55 with neither.
+#  199 constructs, 146 with evidence, 53 with neither.
 #
 #  id    defined in  evidence
 0010   tour        accepted emitted                   Line comment, to end of line
@@ -156,8 +156,8 @@
 1400   tour        -                                  This is what generics cannot do
 1410   tour        -                                  A module is a directory
 1420   tour        -                                  An import path is a directory path, and nothing cleverer
-1430   tour        -                                  Alias, for collisions
-1440   tour        -                                  Pull selected names into scope, by name
+1430   tour        refused-by-name                    Alias, for collisions
+1440   tour        refused-by-name                    Pull selected names into scope, by name
 1450   tour        -                                  Imports are per file, so every file reads on its own
 1460   tour        accepted emitted executed refused  Values at module level must be known at compile time
 1470   tour        -                                  A package is a named collection of modules with a version
@@ -187,7 +187,7 @@
 1710   tour        -                                  How a new feature earns its place
 1720   tour        accepted emitted executed          What the language claims, at this version, plainly
 1730   tour        -                                  Check once, then carry the proof
-1740   spec        accepted emitted executed refused  A program is declarations, in any order
+1740   spec        accepted emitted executed refused  A source file is an import prelude and declarations in any order
 1750   spec        accepted emitted executed refused  A source file is bytes
 1760   spec        accepted emitted executed refused  Identifiers are lower case, and no identifier is a keyword
 1770   spec        accepted emitted executed refused  The kernel's literals are integers, booleans, and contextual zero

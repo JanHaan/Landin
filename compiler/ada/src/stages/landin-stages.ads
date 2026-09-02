@@ -42,6 +42,7 @@ with Landin.Checking;
 with Landin.Configuration;
 with Landin.IR;
 with Landin.Diagnostics;
+with Landin.Modules;
 with Landin.Provenance;
 with Landin.Resolution;
 with Landin.Source;
@@ -62,6 +63,12 @@ package Landin.Stages is
    function Add_Source
      (Context : in out Compilation; Name : String; Text : String)
      return Landin.Source.Source_Id;
+
+   function Add_Source
+     (Context : in out Compilation;
+      Module  : Landin.Modules.Module_Id;
+      Name    : String;
+      Text    : String) return Landin.Source.Source_Id;
 
    function Source_Count (Context : Compilation) return Natural;
 
@@ -89,6 +96,11 @@ package Landin.Stages is
    --  number outlives the stage that issued it.
    function Identities (Context : in out Compilation)
      return not null access Landin.Source.Names.Table;
+
+   --  The reached source/module topology.  The driver records host choices;
+   --  semantic stages consume this table without consulting the host.
+   function Modules (Context : in out Compilation)
+     return not null access Landin.Modules.Table;
 
    --  Where each declared thing is written.  R1.50 is its first writer.
    function Sites (Context : in out Compilation)
@@ -171,6 +183,7 @@ private
 
    --  Allocated by Create, never freed; see the header.
    type Names_Access      is access Landin.Source.Names.Table;
+   type Modules_Access    is access Landin.Modules.Table;
    type Sites_Access      is access Landin.Provenance.Table;
    type Forest_Access     is access Landin.Syntax.Forest.Table;
    type Resolution_Access is access Landin.Resolution.Table;
@@ -183,6 +196,7 @@ private
       Sources : Landin.Source.Sets.Source_Set;
       Reports : Landin.Diagnostics.Diagnostic_List;
       Named   : Names_Access      := null;
+      Grouped : Modules_Access    := null;
       Written : Sites_Access      := null;
       Parsed  : Forest_Access     := null;
       Meant   : Resolution_Access := null;

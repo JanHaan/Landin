@@ -23,7 +23,9 @@ package body Landin.Resolution is
          = Landin.Syntax.Node_Count (Of_Tree));
 
    procedure Prepare
-     (Into : in out Table; Trees : Landin.Syntax.Forest.Table)
+     (Into   : in out Table;
+      Trees  : Landin.Syntax.Forest.Table;
+      Modules : Landin.Modules.Table)
    is
       Next : Natural := 0;
    begin
@@ -50,8 +52,30 @@ package body Landin.Resolution is
          Ada.Containers.Count_Type (Next));
       Into.Return_Sources.Append (0, Ada.Containers.Count_Type (Next));
 
-      --  [1740] gives the compilation one scope and this is it.
+      --  [1740] gives the reached program one root.  Each selected module
+      --  then gets its unordered declaration scope, and each file a private
+      --  import scope enclosing that module.
       Into.Scopes.Append (Scope'(Sort => Program, Enclosing => No_Scope));
+      for Index in 1 .. Landin.Modules.Module_Count (Modules) loop
+         Into.Scopes.Append
+           (Scope'(Sort => Module_Scope, Enclosing => Program_Scope));
+         Into.Module_Scopes.Append (Scope_Id (Into.Scopes.Length));
+      end loop;
+      for Index in 1 .. Landin.Syntax.Forest.Count (Trees) loop
+         declare
+            Source : constant Landin.Source.Source_Id :=
+              Landin.Source.Source_Id (Index);
+            Module : constant Landin.Modules.Module_Id :=
+              Landin.Modules.Module_Of (Modules, Source);
+         begin
+            Into.Scopes.Append
+              (Scope'
+                 (Sort      => File_Imports,
+                  Enclosing => Into.Module_Scopes.Element
+                    (Positive (Module))));
+            Into.File_Scopes.Append (Scope_Id (Into.Scopes.Length));
+         end;
+      end loop;
       Into.Ready := True;
    end Prepare;
 
@@ -67,6 +91,14 @@ package body Landin.Resolution is
 
    function Enclosing (Of_Table : Table; Scope : Scope_Id) return Scope_Id
      is (Of_Table.Scopes.Element (Positive (Scope)).Enclosing);
+
+   function Module_Scope_Of
+     (Of_Table : Table; Module : Landin.Modules.Module_Id) return Scope_Id
+     is (Of_Table.Module_Scopes.Element (Positive (Module)));
+
+   function File_Scope_Of
+     (Of_Table : Table; Source : Landin.Source.Source_Id) return Scope_Id
+     is (Of_Table.File_Scopes.Element (Positive (Source)));
 
    function Open_Scope
      (Into : in out Table; Sort : Scope_Sort; Inside : Scope_Id)
@@ -157,6 +189,61 @@ package body Landin.Resolution is
       return No_Declaration;
    end Visible;
 
+   function Visible_Public_In_Module
+     (Of_Table : Table;
+      Module   : Landin.Modules.Module_Id;
+      Name     : Landin.Source.Names.Name_Id) return Declaration_Id
+   is
+      Found : constant Declaration_Id :=
+        Declared_Here (Of_Table, Module_Scope_Of (Of_Table, Module), Name);
+   begin
+      return (if Found /= No_Declaration
+                 and then Is_Public (Of_Table, Found)
+              then Found else No_Declaration);
+   end Visible_Public_In_Module;
+
+   function Imported_Module_Of
+     (Of_Table : Table;
+      Source   : Landin.Source.Source_Id;
+      Name     : Landin.Source.Names.Name_Id)
+      return Landin.Modules.Module_Id
+   is
+   begin
+      for Item of Of_Table.Imports loop
+         if Item.Source = Source and then Item.Name = Name then
+            return Item.Target;
+         end if;
+      end loop;
+      return Landin.Modules.No_Module;
+   end Imported_Module_Of;
+
+   function Import_Origin
+     (Of_Table : Table;
+      Source   : Landin.Source.Source_Id;
+      Name     : Landin.Source.Names.Name_Id) return Landin.Provenance.Origin
+   is
+   begin
+      for Item of Of_Table.Imports loop
+         if Item.Source = Source and then Item.Name = Name then
+            return Item.Origin;
+         end if;
+      end loop;
+      return Landin.Provenance.No_Origin;
+   end Import_Origin;
+
+   procedure Bind_Imported_Module
+     (Into  : in out Table;
+      Source : Landin.Source.Source_Id;
+      Name   : Landin.Source.Names.Name_Id;
+      Target : Landin.Modules.Module_Id;
+      Origin : Landin.Provenance.Origin) is
+   begin
+      Into.Imports.Append
+        (Import_Binding'
+           (Source => Source, Name => Name,
+            Target => Target, Origin => Origin));
+   end Bind_Imported_Module;
+
    --  What a declaration declares, from the node and the scope it is in.
    --  [1790]'s binding is one rule that [1740] and [1810] both use, and
    --  the scope is the whole difference.
@@ -179,7 +266,8 @@ package body Landin.Resolution is
             when Landin.Syntax.Parameter            => Parameter,
             when Landin.Syntax.Named_Return         => Named_Return,
             when Landin.Syntax.Binding              =>
-               (if Inside = Program then Module_Binding else Local_Binding),
+               (if Inside = Module_Scope
+                then Module_Binding else Local_Binding),
             when others                             => Local_Binding);
 
    function Declare_Name
@@ -187,7 +275,8 @@ package body Landin.Resolution is
       Sites   : in out Landin.Provenance.Table;
       Of_Tree : Landin.Syntax.Tree;
       Node    : Landin.Syntax.Node_Id;
-      Inside  : Scope_Id) return Declaration_Id
+      Inside  : Scope_Id;
+      Inherits_Public : Boolean := False) return Declaration_Id
    is
       Kind : constant Landin.Syntax.Node_Kind :=
         Landin.Syntax.Kind (Of_Tree, Node);
@@ -221,10 +310,13 @@ package body Landin.Resolution is
             Source => Landin.Syntax.Source_Of (Of_Tree),
             Node   => Node,
             Public =>
-              Kind in Landin.Syntax.Function_Declaration
+              (Kind in Landin.Syntax.Function_Declaration
                       | Landin.Syntax.Atom_Declaration
+                      | Landin.Syntax.Type_Declaration
+                      | Landin.Syntax.Concept_Declaration
                       | Landin.Syntax.Binding
-              and then Landin.Syntax.Is_Public (Of_Tree, Node)));
+               and then Landin.Syntax.Is_Public (Of_Tree, Node))
+              or else Inherits_Public));
 
       Into.Index.Insert (Key'(Scope => Inside, Name => Named), Fresh);
       return Fresh;
@@ -250,6 +342,12 @@ package body Landin.Resolution is
             not in Landin.Syntax.Name_Reference
                    | Landin.Syntax.Type_Reference
                    | Landin.Syntax.Concept_Reference
+                   | Landin.Syntax.Member_Selection
+         then Not_A_Reference
+         elsif Landin.Syntax.Kind (Of_Tree, Node)
+                 = Landin.Syntax.Member_Selection
+           and then Of_Table.Bound.Element (Slot (Of_Table, Of_Tree, Node))
+                      = No_Declaration
          then Not_A_Reference
          elsif Of_Table.Bound.Element (Slot (Of_Table, Of_Tree, Node))
                = No_Declaration
