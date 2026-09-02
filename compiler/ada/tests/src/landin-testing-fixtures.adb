@@ -282,7 +282,48 @@ package body Landin.Testing.Fixtures is
                   return;
                end if;
                Seen_Codes := True;
-               Item.Codes := Unbounded.To_Unbounded_String (Value);
+
+               declare
+                  First : Integer := Value'First;
+                  Ok : Boolean := Value'Length > 0;
+
+                  procedure Consider (Text : String);
+
+                  procedure Consider (Text : String) is
+                     One : constant String := Trimmed (Text);
+                  begin
+                     if One'Length /= 5 or else One (One'First) /= 'L' then
+                        Ok := False;
+                        return;
+                     end if;
+                     for Position in One'First + 1 .. One'Last loop
+                        if One (Position) not in '0' .. '9' then
+                           Ok := False;
+                        end if;
+                     end loop;
+                  end Consider;
+               begin
+                  for Index in Value'Range loop
+                     if Value (Index) = ',' then
+                        Consider (Value (First .. Index - 1));
+                        First := Index + 1;
+                     end if;
+                  end loop;
+                  if First <= Value'Last then
+                     Consider (Value (First .. Value'Last));
+                  else
+                     Ok := False;
+                  end if;
+
+                  if Expected not in Unit | Negative_Program then
+                     Complain ("codes belong only to a negative or unit"
+                               & " fixture");
+                  elsif Ok then
+                     Item.Codes := Unbounded.To_Unbounded_String (Value);
+                  else
+                     Complain ("a code is L and four digits: " & Value);
+                  end if;
+               end;
 
             elsif Key = "lex" then
                if Seen_Lex then
@@ -447,6 +488,10 @@ package body Landin.Testing.Fixtures is
 
       if not Seen_Summary then
          Complain ("missing required key: summary");
+      end if;
+
+      if not Seen_Targets then
+         Complain ("missing required key: targets");
       end if;
 
       --  An expectation nothing can produce is the failure mode this

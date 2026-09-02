@@ -3,3 +3,4 @@ summary: a proof-only compiler constraint contributes no erased runtime entry
 program: main.ldn
 status: 42
 constructs: 0550, 1230, 1240, 1370, 1380, 1390
+targets: linux-x86-64

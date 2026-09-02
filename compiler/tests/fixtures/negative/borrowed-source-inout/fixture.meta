@@ -3,3 +3,4 @@ summary: an inout use cannot move storage while a derived view remains live
 program: program.ldn
 codes: L0315
 constructs: 0430, 0800, 0830, 0900, 1800, 1810
+targets: linux-x86-64, macos-arm64, synthetic-32

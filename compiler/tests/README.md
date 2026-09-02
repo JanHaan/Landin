@@ -12,14 +12,19 @@ compiler/tests/
   harness-cases/malformed/               trees that must be rejected
   constructs.matrix                      generated: every [NNNN] and its evidence
   diagnostics.catalogue                  generated: every code and its rule
+  diagnostics.matrix                     generated: code contracts, emitters and owners
+  guarantees.matrix                      generated: classified semantic boundaries
+  conformances.matrix                    generated: conformance/evidence mechanisms
+  prototypes.matrix                      generated: completed prototype derivations
+  targets.matrix                         generated: applicability of every fixture
   lexical.tokens                         generated: the scanned corpus
   layout.targets                         recorded: what each target measures
   lowering.ir                            recorded: every positive fixture, lowered
 ```
 
 Generated and recorded are not the same word here. `check.py` writes the
-first three and refuses each when it is stale; the last two are written by
-`./scripts/test.sh --record`, because producing them means running compiler
+generated files and refuses each when it is stale; the last two are written
+by `./scripts/test.sh --record`, because producing them means running compiler
 stages and asking the target model, which `check.py` cannot do. It will not
 tell you those two are stale — the harness and the gate will. `constructs.matrix`
 is R1.90's: it lists every construct either document defines against what
@@ -119,7 +124,7 @@ and checks all seven on every push.
 | `lex` | no | the exact complaint the scanner must produce, for a fixture whose fault is lexical |
 | `codes` | yes for a negative with a program | the diagnostic codes the report must carry, in order |
 | `constructs` | yes for a fixture with a program | the `[NNNN]` ids, without brackets, this fixture is evidence about |
-| `targets` | no | comma-separated targets the fixture applies to |
+| `targets` | yes | comma-separated targets the fixture applies to |
 
 `codes` also says which stage refused the fixture, and that is what decides
 whether the grammar must derive its program. The frontend refuses what the
@@ -183,8 +188,9 @@ perfectly good: `negative/convention-not-enabled` names [1830] for the
 refusal and [0900] for the thing being refused, and [0900] is a paragraph
 about a construct no fixture can yet use.
 
-`targets` is checked against the targets `ROADMAP.md` names: `linux-x86-64`,
-`macos-arm64`, `cortex-m`, `synthetic-32`. A fixture may name a target the
+`targets` is required by R2.90 and checked against the targets `ROADMAP.md`
+names: `linux-x86-64`, `macos-arm64`, `cortex-m`, `synthetic-32`. A fixture
+may name a target the
 chassis does not describe yet — `macos-arm64` arrives at R5 — but not one the
 roadmap has never heard of, because that is how a fixture quietly stops
 applying to anything.
@@ -318,15 +324,30 @@ over every program in the corpus. The first thing it caught was real: the
 Ada scanner appended each file's tokens to the previous file's, because a
 limited `out` parameter is passed by reference and `Lex` had not cleared it.
 
-## diagnostics.catalogue
+## Diagnostic and semantic coverage registers
 
-`compiler/tests/diagnostics.catalogue` is generated: `python3 check.py
---catalogue` writes it from `Landin.Diagnostics.Catalogue`, which is the only
-place in the compiler where a code is written. `check.py` regenerates it on
-every full run and fails if the committed copy is stale, and it refuses a code
-literal written anywhere else under `compiler/ada/src`.
+`python3 check.py --catalogue` writes both `diagnostics.catalogue` and
+`diagnostics.matrix`. The compact catalogue comes from
+`Landin.Diagnostics.Catalogue`, which is the only place in the compiler where
+a code is written. The matrix crosses every row's source/span/label/note
+contract with its emitter and fixture or fake-host test owner. A live code with
+no emitter or owner, a retired code still emitted, and a source diagnostic with
+no negative-program owner are gate failures; L0111's deliberate parser limit
+has its implementation-side unit owner instead.
 
-That check earned itself immediately: the driver had held `L0001` to `L0004`
+`python3 check.py --coverage` writes `guarantees.matrix`,
+`conformances.matrix`, `prototypes.matrix` and `targets.matrix`. Their source
+registers are D148 in `spec.md` and R2.90 in `ROADMAP.md`. The checker closes
+the guarantee rows over every construct the independent construct matrix says
+is accepted or emitted, validates every fixture, diagnostic, decision and
+prototype finding they cite, requires every fixture to name applicable targets,
+and recovers prototype finding line numbers from the prototype sources. The
+copies are generated for reading; editing one cannot change its source.
+
+Every full `check.py` run fails if any generated copy is stale, and it refuses
+a code literal written anywhere else under `compiler/ada/src`.
+
+The catalogue check earned itself immediately: the driver had held `L0001` to `L0004`
 as literals since R0.50, and moving them into the catalogue was the first
 thing it demanded.
 

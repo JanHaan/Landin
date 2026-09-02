@@ -3,3 +3,4 @@ summary: a selected generic provider must have the substituted concept entry sig
 program: main.ldn
 codes: L0301
 constructs: 1230, 1240, 1250, 1260, 1290, 1310
+targets: linux-x86-64, macos-arm64, synthetic-32

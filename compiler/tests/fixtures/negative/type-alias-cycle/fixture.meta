@@ -3,3 +3,4 @@ summary: an alias chain that returns to itself reaches no type
 program: program.ldn
 codes: L0307
 constructs: 1795
+targets: linux-x86-64, macos-arm64, synthetic-32

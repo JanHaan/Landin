@@ -3,3 +3,4 @@ summary: D139 still reports a parser error in an inactive fixed arm
 program: program.ldn
 codes: L0103
 constructs: 1500
+targets: linux-x86-64, macos-arm64, synthetic-32

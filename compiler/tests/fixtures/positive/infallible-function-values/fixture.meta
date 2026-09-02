@@ -2,3 +2,4 @@ class: positive
 summary: nested infallible signatures and anonymous functions lower to deterministic routine items
 constructs: 0050, 0870, 0880, 0900, 0930, 1000, 1010, 1790, 1800, 1840, 1920, 1940
 program: program.ldn
+targets: linux-x86-64, macos-arm64, synthetic-32

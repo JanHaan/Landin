@@ -152,9 +152,12 @@ Linux/synthetic-32 table layout, hidden evidence arguments, indirect concept
 calls and representation-compatible shared machine bodies are complete.
 R2.80's exact `any C` identity, explicit/inferred pointer erasure, two-word
 pair, object-safe mutable/immutable dispatch, flattened composed tables,
-origin propagation and aggregate/shaped ABI are complete.
+origin propagation and aggregate/shaped ABI are complete. R2.90's guarantee,
+diagnostic, conformance/evidence, prototype-derivation and target-applicability
+registers are complete and mechanically checked against their executable
+owners.
 
-**Current roadmap work: R2.90 — Establish guarantee and semantic coverage registers.**
+**Current roadmap work: R3.10 — Implement minimum modules and ordered roots.**
 
 Language and architecture questions are resolved when the first vertical
 slice needs them.

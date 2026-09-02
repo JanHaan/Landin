@@ -3,3 +3,4 @@ summary: a read-only slice cannot be used to write an element
 program: program.ldn
 codes: L0303
 constructs: 0440, 0570, 1810, 1820
+targets: linux-x86-64, macos-arm64, synthetic-32

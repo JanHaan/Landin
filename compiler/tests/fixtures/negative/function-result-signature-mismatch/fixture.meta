@@ -3,3 +3,4 @@ summary: a function-valued named result requires its complete nested signature
 constructs: 0880, 0930, 1000, 1800, 1890
 program: program.ldn
 codes: L0301
+targets: linux-x86-64, macos-arm64, synthetic-32

@@ -3,3 +3,4 @@ summary: mutable module function storage rejects a replacement with another sign
 constructs: 0060, 1000, 1790, 1890, 1900, 1940
 program: program.ldn
 codes: L0301
+targets: linux-x86-64, macos-arm64, synthetic-32

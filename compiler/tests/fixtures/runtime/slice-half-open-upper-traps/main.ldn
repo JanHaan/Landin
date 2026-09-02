@@ -1,0 +1,10 @@
+slice_at: (items: []u32, upper: usize) -> (r: usize) =
+    view: []u32 = items[0..<upper]
+    r = lenof view
+end slice_at
+
+public main: () -> (code: i32) =
+    words: [1]u32 = [42]
+    _ = slice_at(words[0..<1], 2)
+    code = 42
+end main

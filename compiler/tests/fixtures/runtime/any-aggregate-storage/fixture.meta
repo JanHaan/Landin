@@ -3,3 +3,4 @@ summary: an erased pair survives storage in and selection from an aggregate
 program: main.ldn
 status: 42
 constructs: 0670, 0700, 0750, 1230, 1240, 1370, 1380, 1390
+targets: linux-x86-64

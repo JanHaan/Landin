@@ -62,4 +62,46 @@ package body Landin.IR.Testing_Support is
       Into.Slots (Position) := Held;
    end Overwrite_Slot_Nominal;
 
+   procedure Overwrite_Value_Evidence
+     (Into     : in out Unit;
+      Item     : Item_Id;
+      Value    : Value_Id;
+      Evidence : Evidence_Id)
+   is
+      Position : constant Positive :=
+        Into.Items (Positive (Item)).Values.First + Positive (Value);
+      Held : Instruction := Into.Code (Position);
+   begin
+      Held.Evidence := Evidence;
+      Into.Code (Position) := Held;
+   end Overwrite_Value_Evidence;
+
+   procedure Overwrite_Value_Evidence_Entry
+     (Into  : in out Unit;
+      Item  : Item_Id;
+      Value : Value_Id;
+      Which : Natural)
+   is
+      Position : constant Positive :=
+        Into.Items (Positive (Item)).Values.First + Positive (Value);
+      Held : Instruction := Into.Code (Position);
+   begin
+      Held.Evidence_Entry := Which;
+      Into.Code (Position) := Held;
+   end Overwrite_Value_Evidence_Entry;
+
+   procedure Overwrite_Value_Signature
+     (Into     : in out Unit;
+      Item     : Item_Id;
+      Value    : Value_Id;
+      Signature : Signature_Id)
+   is
+      Position : constant Positive :=
+        Into.Items (Positive (Item)).Values.First + Positive (Value);
+      Held : Instruction := Into.Code (Position);
+   begin
+      Held.Signature := Signature;
+      Into.Code (Position) := Held;
+   end Overwrite_Value_Signature;
+
 end Landin.IR.Testing_Support;

@@ -3,3 +3,4 @@ summary: an undo argument must be assigned on a failure edge that executes it
 program: program.ldn
 codes: L0302
 constructs: 0080, 0940, 0970, 1110, 1800, 1810, 1910, 1920
+targets: linux-x86-64, macos-arm64, synthetic-32

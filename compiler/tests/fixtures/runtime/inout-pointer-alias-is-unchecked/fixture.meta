@@ -1,0 +1,6 @@
+class: runtime
+summary: possible aliasing through distinct pointer values remains outside local inout checking
+program: main.ldn
+status: 42
+constructs: 0430, 0770, 0900, 1720
+targets: linux-x86-64

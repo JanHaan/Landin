@@ -2,3 +2,4 @@ class: positive
 summary: declared return sources, escaping-independent values and reassignment close local reference obligations
 program: program.ldn
 constructs: 0430, 0440, 0470, 0770, 0780, 0790, 0800, 0830, 0900, 0910, 1800, 1810
+targets: linux-x86-64, macos-arm64, synthetic-32

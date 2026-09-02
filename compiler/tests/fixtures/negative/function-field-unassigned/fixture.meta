@@ -3,3 +3,4 @@ summary: calling an unassigned function-valued field reads that field's independ
 constructs: 0060, 0420, 0670, 0870, 1000, 1790, 1910, 1920
 program: program.ldn
 codes: L0302
+targets: linux-x86-64, macos-arm64, synthetic-32

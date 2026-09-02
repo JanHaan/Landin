@@ -7721,6 +7721,41 @@ package body Landin.Stages.Checking is
             then Landin.Checking.Nth_Signature_Result
               (Types.all, Signature, 1)
             else (Kind => Ty.No_Value, others => <>));
+         Inout_Places : array (1 .. Written_Count) of Syn.Node_Id :=
+           [others => Syn.No_Node];
+         Inout_Count : Natural := 0;
+
+         function Same_Provable_Place
+           (Left, Right : Syn.Node_Id) return Boolean;
+
+         function Same_Provable_Place
+           (Left, Right : Syn.Node_Id) return Boolean is
+         begin
+            if Syn.Kind (Of_Tree, Left) /= Syn.Kind (Of_Tree, Right) then
+               return False;
+            end if;
+            case Syn.Kind (Of_Tree, Left) is
+               when Syn.Name_Reference =>
+                  return Res.Verdict_Of (Meanings.all, Of_Tree, Left)
+                           = Res.Bound
+                    and then Res.Verdict_Of (Meanings.all, Of_Tree, Right)
+                           = Res.Bound
+                    and then Res.Bound_To (Meanings.all, Of_Tree, Left)
+                           = Res.Bound_To (Meanings.all, Of_Tree, Right);
+               when Syn.Member_Selection =>
+                  return Spelled (Syn.Name (Of_Tree, Left))
+                           = Spelled (Syn.Name (Of_Tree, Right))
+                    and then Same_Provable_Place
+                      (Syn.Target_Of (Of_Tree, Left),
+                       Syn.Target_Of (Of_Tree, Right));
+               when others =>
+                  --  Two computed indexes or two distinct pointers may
+                  --  still alias.  [1720] promises local proof, not a
+                  --  whole-program alias analysis, so those remain D148's
+                  --  explicit outside-guarantee boundary.
+                  return False;
+            end case;
+         end Same_Provable_Place;
 
          function Match_Runtime_Arguments return Boolean;
 
@@ -7972,6 +8007,28 @@ package body Landin.Stages.Checking is
                      else
                         Check_Place
                           (Of_Tree, Argument, Stepping => False);
+                        for Previous in 1 .. Inout_Count loop
+                           if Same_Provable_Place
+                             (Argument, Inout_Places (Previous))
+                           then
+                              Bad.Report
+                                (Item    => Bad.Type_Mismatch,
+                                 Source  => Syn.Source_Of (Of_Tree),
+                                 Where   => Syn.Where (Of_Tree, Argument),
+                                 Message => "this place is already passed"
+                                            & " as an `inout` argument",
+                                 Note    => "[0900]: a provably identical"
+                                            & " place is not exclusive",
+                                 Related => Syn.Origin
+                                   (Of_Tree, Inout_Places (Previous)),
+                                 Because => "the first `inout` use",
+                                 Into    => Found);
+                              Landin.Checking.Refuse
+                                (Types.all, Of_Tree, Argument);
+                           end if;
+                        end loop;
+                        Inout_Count := Inout_Count + 1;
+                        Inout_Places (Inout_Count) := Argument;
                      end if;
                   when Syn.Sink_Convention =>
                      if not Sink_Place_Is_Allowed (Of_Tree, Argument) then

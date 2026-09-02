@@ -3,3 +3,4 @@ summary: a read-only pointer cannot erase a conformance exposing mutable self
 program: main.ldn
 codes: L0301
 constructs: 0430, 1230, 1240, 1370, 1380
+targets: linux-x86-64, macos-arm64, synthetic-32

@@ -3,3 +3,4 @@ summary: an erased entry is an immediate call operation rather than a bound func
 program: main.ldn
 codes: L0301
 constructs: 1000, 1370, 1380, 1390
+targets: linux-x86-64, macos-arm64, synthetic-32

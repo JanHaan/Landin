@@ -3,3 +3,4 @@ summary: D139 still validates an active D138 generic template
 program: program.ldn
 codes: L0306
 constructs: 1290, 1500, 1950
+targets: linux-x86-64, macos-arm64, synthetic-32

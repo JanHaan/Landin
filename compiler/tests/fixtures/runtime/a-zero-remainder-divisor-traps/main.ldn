@@ -1,0 +1,8 @@
+remainder: (left: i32, right: i32) -> (r: i32) =
+    r = left % right
+end remainder
+
+public main: () -> (code: i32) =
+    _ = remainder(42, 0)
+    code = 42
+end main

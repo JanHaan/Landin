@@ -1,0 +1,6 @@
+class: runtime
+summary: a dynamic slice lower after its upper traps
+program: main.ldn
+traps: yes
+constructs: 0570, 1950, 1960
+targets: linux-x86-64

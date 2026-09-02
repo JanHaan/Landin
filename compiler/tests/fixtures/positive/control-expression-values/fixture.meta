@@ -2,3 +2,4 @@ class: positive
 summary: non-loop control expressions produce scalar array and struct values
 program: program.ldn
 constructs: 0410, 0710, 0930, 1050, 1080, 1800, 1810, 1820, 1840, 1880, 1910, 1920, 1930
+targets: linux-x86-64, macos-arm64, synthetic-32
