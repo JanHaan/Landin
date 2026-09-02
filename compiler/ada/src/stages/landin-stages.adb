@@ -9,6 +9,8 @@ package body Landin.Stages is
       return Result : Compilation do
          Result.Facts   := For_Target;
          Result.Named   := new Landin.Source.Names.Table;
+         Result.Grouped := new Landin.Modules.Table;
+         Landin.Modules.Initialize (Result.Grouped.all);
          Result.Written := new Landin.Provenance.Table;
          Result.Parsed  := new Landin.Syntax.Forest.Table;
          Result.Meant   := new Landin.Resolution.Table;
@@ -24,7 +26,24 @@ package body Landin.Stages is
    function Add_Source
      (Context : in out Compilation; Name : String; Text : String)
      return Landin.Source.Source_Id
-     is (Context.Sources.Add (Name, Text));
+   is
+   begin
+      return Add_Source
+        (Context, Landin.Modules.Entry_Module, Name, Text);
+   end Add_Source;
+
+   function Add_Source
+     (Context : in out Compilation;
+      Module  : Landin.Modules.Module_Id;
+      Name    : String;
+      Text    : String) return Landin.Source.Source_Id
+   is
+      Added : constant Landin.Source.Source_Id :=
+        Context.Sources.Add (Name, Text);
+   begin
+      Landin.Modules.Attach_Source (Context.Grouped.all, Added, Module);
+      return Added;
+   end Add_Source;
 
    function Source_Count (Context : Compilation) return Natural
      is (Context.Sources.Count);
@@ -40,6 +59,10 @@ package body Landin.Stages is
    function Identities (Context : in out Compilation)
      return not null access Landin.Source.Names.Table
      is (Context.Named);
+
+   function Modules (Context : in out Compilation)
+     return not null access Landin.Modules.Table
+     is (Context.Grouped);
 
    function Sites (Context : in out Compilation)
      return not null access Landin.Provenance.Table

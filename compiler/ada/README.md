@@ -19,6 +19,7 @@ compiler/ada/
     source/             source snapshots, spans, line maps, provenance
     diagnostics/        diagnostic transport and text rendering
     platform/           host adapters and their native implementations
+    modules/            reached module/source/import topology
     stages/             target facts, fixed-configuration activity and seams
     syntax/             the tokens, the scan, the syntax table and the parse
     resolution/         declarations, scopes and what each name means
@@ -50,6 +51,7 @@ replaced.
 | `Landin.Syntax.Parser` | the parse, and the only construction of a tree | assign a diagnostic code, or read a byte |
 | `Landin.Syntax.Dump` | a canonical text for a tree | be a stable interface or a serialisation |
 | `Landin.Syntax.Forest` | one tree per source for the whole compilation, on the heap and never freed | hand out a tree that can be copied or written to |
+| `Landin.Modules` | the deterministic reached graph: module identities, selected directories/root ordinals, source membership and resolved import edges | read the host, parse source, own a scope or depend on a stage |
 | `Landin.Resolution` | declarations, scopes, and which declaration each name means | hold a diagnostic, or decide what a name may be called |
 | `Landin.Types` | the scalar names and value categories, their widths, and ordinary scalar storage size against a target | hold a machine fact of its own, or ask the host for one |
 | `Landin.Evidence` | target-neutral semantic evidence-table positions: size, alignment, then direct concept functions in declaration order | know machine bytes, target offsets, or physical layout |
@@ -84,7 +86,7 @@ replaced.
 | `Landin.Stages.Checking.Flow` | definite assignment, use-after-`sink`, restoration of consumed `inout` parts, explicit fallthrough/return-compatible edge facts, and lexical cleanup execution states | decide a type, believe a condition, or lower a value |
 | `Landin.Stages.Checking.References` | function-local origin and derivation flow, exact `from` agreement, `escaping` obligations and live-view mutation checks; D146 maps an erased construction and implicit self to its pointee fact; integer-created pointers deliberately terminate its evidence | infer a signature across calls, claim ownership, or make an aliasing assumption about volatile storage |
 | `Landin.Stages.Lowering` | the walk that eagerly maps checker nominal, conformance and ready routine-instance identities into deterministic IR order, passes hidden evidence tables, builds direct plus used flattened erased tables, lowers selected generic and any concept entries through ordinary indirect calls with injected data, then builds and verifies the IR without creating items for templates or static formals; including caller-owned scalar and shaped control joins, checked computed-element address slots, plus reverse-order cleanup calls on selected exits, and refusing to run on a refused program | own the Unit, work out a scope, derive target layout, synthesize a declaration, or raise a diagnostic |
-| `Landin.Driver` | argument and `--emit` classification, pipeline orchestration, output/toolchain selection and the result | implement a language rule |
+| `Landin.Driver` | argument and `--emit` classification, R3.10's private ordered-root graph discovery through `Landin.Platform`, pipeline orchestration, output/toolchain selection and the result | implement a language rule, acquire a package or expose a public orchestration protocol |
 | `Refine` | printing and the exit status | contain a decision |
 
 Public specifications stay narrow, and a representation is private wherever a

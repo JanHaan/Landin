@@ -1,5 +1,6 @@
 with Landin.Configuration;
 with Landin.Diagnostics.Resolution;
+with Landin.Modules;
 with Landin.Provenance;
 with Landin.Resolution;
 with Landin.Source.Names;
@@ -15,11 +16,13 @@ package body Landin.Stages.Resolution is
    package Syn renames Landin.Syntax;
 
    use type Landin.Provenance.Declaration_Id;
+   use type Landin.Modules.Module_Id;
    use type Landin.Resolution.Application_Class;
    use type Landin.Resolution.Declaration_Sort;
    use type Landin.Resolution.Verdict;
    use type Landin.Resolution.Argument_Role;
    use type Landin.Resolution.Scope_Id;
+   use type Landin.Resolution.Scope_Sort;
    use type Landin.Source.Names.Name_Id;
    use type Landin.Syntax.Node_Id;
    use type Landin.Syntax.Node_Kind;
@@ -45,6 +48,8 @@ package body Landin.Stages.Resolution is
         Landin.Stages.Trees (Context);
       Meanings  : constant not null access Landin.Resolution.Table :=
         Landin.Stages.Meanings (Context);
+      Graph     : constant not null access Landin.Modules.Table :=
+        Landin.Stages.Modules (Context);
       Activity : constant not null access Landin.Configuration.Table :=
         Configurations (Context);
 
@@ -55,11 +60,24 @@ package body Landin.Stages.Resolution is
       function Spelled (Of_Name : Landin.Source.Names.Name_Id) return String
         is (Landin.Source.Names.Spelling (Spellings.all, Of_Name));
 
+      function File_Base (Of_Tree : Syn.Tree)
+        return Landin.Resolution.Scope_Id
+        is (Landin.Resolution.File_Scope_Of
+              (Meanings.all, Syn.Source_Of (Of_Tree)));
+
+      function Module_Base (Of_Tree : Syn.Tree)
+        return Landin.Resolution.Scope_Id
+        is (Landin.Resolution.Module_Scope_Of
+              (Meanings.all,
+               Landin.Modules.Module_Of
+                 (Graph.all, Syn.Source_Of (Of_Tree))));
+
       procedure Declare_One
         (Of_Tree         : Syn.Tree;
          Node            : Syn.Node_Id;
          Inside          : Landin.Resolution.Scope_Id;
-         Resolve_Declared : Boolean := True);
+         Resolve_Declared : Boolean := True;
+         Inherits_Public  : Boolean := False);
 
       procedure Resolve
         (Of_Tree : Syn.Tree;
@@ -100,7 +118,8 @@ package body Landin.Stages.Resolution is
         (Of_Tree          : Syn.Tree;
          Node             : Syn.Node_Id;
          Inside           : Landin.Resolution.Scope_Id;
-         Resolve_Declared : Boolean := True)
+         Resolve_Declared : Boolean := True;
+         Inherits_Public  : Boolean := False)
       is
          Named : constant Landin.Source.Names.Name_Id :=
            Syn.Name (Of_Tree, Node);
@@ -134,7 +153,8 @@ package body Landin.Stages.Resolution is
             declare
                Made : constant Landin.Resolution.Declaration_Id :=
                  Landin.Resolution.Declare_Name
-                   (Meanings.all, Written.all, Of_Tree, Node, Inside);
+                   (Meanings.all, Written.all, Of_Tree, Node, Inside,
+                    Inherits_Public);
             begin
                pragma Assert (Made /= Landin.Resolution.No_Declaration);
             end;
@@ -204,7 +224,7 @@ package body Landin.Stages.Resolution is
          Signature : constant Landin.Resolution.Scope_Id :=
            Landin.Resolution.Open_Scope
              (Meanings.all, Landin.Resolution.Signature,
-              Landin.Resolution.Program_Scope);
+              File_Base (Of_Tree));
          Runs : constant Syn.Node_Id := Syn.Body_Of (Of_Tree, Node);
       begin
          Landin.Resolution.Record_Scope
@@ -221,7 +241,7 @@ package body Landin.Stages.Resolution is
          Associate_Return_Sources (Of_Tree, Node);
          Resolve
            (Of_Tree, Syn.Error_Set_Of (Of_Tree, Node),
-            Landin.Resolution.Program_Scope);
+            File_Base (Of_Tree));
 
          if Syn.Kind (Of_Tree, Runs) = Syn.Block then
             declare
@@ -294,7 +314,7 @@ package body Landin.Stages.Resolution is
          Callee : constant Syn.Node_Id := Syn.Callee_Of (Of_Tree, Node);
          Named  : constant Landin.Source.Names.Name_Id :=
            Syn.Name (Of_Tree, Callee);
-         Meant  : constant Landin.Resolution.Declaration_Id :=
+         Meant  : Landin.Resolution.Declaration_Id :=
            (if Named = Landin.Source.Names.No_Name
             then Landin.Resolution.No_Declaration
             else Landin.Resolution.Visible (Meanings.all, Inside, Named));
@@ -330,7 +350,29 @@ package body Landin.Stages.Resolution is
             --  expressions.  Resolve the complete callee before any written
             --  argument, preserving [0410]'s semantic walk order.
             Resolve (Of_Tree, Callee, Inside);
-            Class := Landin.Resolution.Function_Call;
+            if Landin.Resolution.Verdict_Of
+                 (Meanings.all, Of_Tree, Callee) = Landin.Resolution.Bound
+            then
+               --  A qualified module member is syntactically a selection,
+               --  but resolution has made its declaration just as direct as
+               --  an unqualified name.  Its declaration sort therefore
+               --  decides between call and construction too [1420].
+               Meant := Landin.Resolution.Bound_To
+                 (Meanings.all, Of_Tree, Callee);
+               case Landin.Resolution.Sort_Of (Meanings.all, Meant) is
+                  when Landin.Resolution.Module_Function =>
+                     Class := Landin.Resolution.Function_Call;
+                     Direct_Function := True;
+                  when Landin.Resolution.Module_Type =>
+                     Class := Landin.Resolution.Type_Construction;
+                  when Landin.Resolution.Case_Name =>
+                     Class := Landin.Resolution.Case_Construction;
+                  when others =>
+                     Class := Landin.Resolution.Function_Call;
+               end case;
+            else
+               Class := Landin.Resolution.Function_Call;
+            end if;
          end if;
 
          Landin.Resolution.Classify
@@ -658,6 +700,80 @@ package body Landin.Stages.Resolution is
                null;
          end case;
 
+         --  A leading name bound by this file's import prelude is a module
+         --  namespace only in a qualified selection.  Locals and signature
+         --  names shadow it; the import in turn shadows a declaration in the
+         --  file's enclosing module scope [0140] [1450].
+         if Syn.Kind (Of_Tree, Node) = Syn.Member_Selection
+           and then Syn.Kind
+             (Of_Tree, Syn.Target_Of (Of_Tree, Node))
+               in Syn.Name_Reference | Syn.Type_Reference
+                    | Syn.Concept_Reference
+         then
+            declare
+               Prefix : constant Syn.Node_Id := Syn.Target_Of (Of_Tree, Node);
+               Prefix_Name : constant Landin.Source.Names.Name_Id :=
+                 Syn.Name (Of_Tree, Prefix);
+               Member_Name : constant Landin.Source.Names.Name_Id :=
+                 Syn.Name (Of_Tree, Node);
+               Lexical : constant Res.Declaration_Id :=
+                 Res.Visible (Meanings.all, Inside, Prefix_Name);
+               Local_Shadow : constant Boolean :=
+                 Lexical /= Res.No_Declaration
+                 and then Res.Sort_Of
+                   (Meanings.all, Res.Scope_Of (Meanings.all, Lexical))
+                     /= Res.Module_Scope;
+               Imported : constant Landin.Modules.Module_Id :=
+                 Res.Imported_Module_Of
+                   (Meanings.all, Syn.Source_Of (Of_Tree), Prefix_Name);
+            begin
+               if not Local_Shadow
+                 and then Imported /= Landin.Modules.No_Module
+               then
+                  declare
+                     Public_Member : constant Res.Declaration_Id :=
+                       Res.Visible_Public_In_Module
+                         (Meanings.all, Imported, Member_Name);
+                     Any_Member : constant Res.Declaration_Id :=
+                       Res.Declared_Here
+                         (Meanings.all,
+                          Res.Module_Scope_Of (Meanings.all, Imported),
+                          Member_Name);
+                  begin
+                     if Public_Member /= Res.No_Declaration then
+                        Res.Bind
+                          (Meanings.all, Of_Tree, Node, Public_Member);
+                     elsif Any_Member /= Res.No_Declaration then
+                        Names.Report
+                          (Item    => Names.Inaccessible_Name,
+                           Source  => Syn.Source_Of (Of_Tree),
+                           Where   => Syn.Anchor (Of_Tree, Node),
+                           Message => "`" & Spelled (Member_Name)
+                                      & "` is module-internal",
+                           Note    => "[1410]: only a public declaration is"
+                                      & " visible across a module boundary",
+                           Related => Landin.Provenance.Site
+                             (Written.all, Any_Member),
+                           Because => "declared without `public` here",
+                           Into    => Found);
+                     elsif Member_Name /= Landin.Source.Names.No_Name then
+                        Names.Report
+                          (Item    => Names.Unresolved_Name,
+                           Source  => Syn.Source_Of (Of_Tree),
+                           Where   => Syn.Anchor (Of_Tree, Node),
+                           Message => "module `" & Spelled (Prefix_Name)
+                                      & "` has no member `"
+                                      & Spelled (Member_Name) & "`",
+                           Note    => "[1420]: a plain import exposes only"
+                                      & " qualified public members",
+                           Into    => Found);
+                     end if;
+                  end;
+                  return;
+               end if;
+            end;
+         end if;
+
          --  One of the eleven the kernel predeclares, which the parser
          --  already recognised: there is no declaration to find.
          if Syn.Kind (Of_Tree, Node) = Syn.Type_Name then
@@ -804,7 +920,7 @@ package body Landin.Stages.Resolution is
                   Formal_Scope : constant Landin.Resolution.Scope_Id :=
                     Landin.Resolution.Open_Scope
                       (Meanings.all, Landin.Resolution.Concept_Declaration,
-                       Landin.Resolution.Program_Scope);
+                       File_Base (Of_Tree));
                begin
                   Landin.Resolution.Record_Scope
                     (Meanings.all, Of_Tree, Node, Formal_Scope);
@@ -860,7 +976,7 @@ package body Landin.Stages.Resolution is
                   Formal_Scope : constant Landin.Resolution.Scope_Id :=
                     Landin.Resolution.Open_Scope
                       (Meanings.all, Landin.Resolution.Conformance_Declaration,
-                       Landin.Resolution.Program_Scope);
+                       File_Base (Of_Tree));
                   Concept_Node : constant Syn.Node_Id :=
                     Syn.Conforming_Concept (Of_Tree, Node);
                begin
@@ -973,7 +1089,7 @@ package body Landin.Stages.Resolution is
                   Resolve
                     (Of_Tree,
                      Syn.Declared_Type (Of_Tree, Node),
-                     Landin.Resolution.Program_Scope);
+                     File_Base (Of_Tree));
                else
                   declare
                      Formal_Scope : constant
@@ -981,7 +1097,7 @@ package body Landin.Stages.Resolution is
                          Landin.Resolution.Open_Scope
                            (Meanings.all,
                             Landin.Resolution.Type_Declaration,
-                            Landin.Resolution.Program_Scope);
+                            File_Base (Of_Tree));
                   begin
                      Landin.Resolution.Record_Scope
                        (Meanings.all, Of_Tree, Node,
@@ -1036,11 +1152,11 @@ package body Landin.Stages.Resolution is
                Resolve
                  (Of_Tree,
                   Syn.Declared_Type (Of_Tree, Node),
-                  Landin.Resolution.Program_Scope);
+                  File_Base (Of_Tree));
                Resolve
                  (Of_Tree,
                   Syn.Value_Of (Of_Tree, Node),
-                  Landin.Resolution.Program_Scope);
+                  File_Base (Of_Tree));
 
             when Syn.Function_Declaration =>
                declare
@@ -1049,7 +1165,7 @@ package body Landin.Stages.Resolution is
                       Landin.Resolution.Open_Scope
                         (Meanings.all,
                          Landin.Resolution.Signature,
-                         Landin.Resolution.Program_Scope);
+                         File_Base (Of_Tree));
                   Runs : constant Syn.Node_Id :=
                     Syn.Body_Of (Of_Tree, Node);
                begin
@@ -1114,7 +1230,7 @@ package body Landin.Stages.Resolution is
                   Resolve
                     (Of_Tree,
                      Syn.Error_Set_Of (Of_Tree, Node),
-                     Landin.Resolution.Program_Scope);
+                     File_Base (Of_Tree));
 
                   --  [1800]'s expression body opens no scope,
                   --  because an expression declares nothing.
@@ -1144,7 +1260,61 @@ package body Landin.Stages.Resolution is
       end Resolve_Declaration;
 
    begin
-      Landin.Resolution.Prepare (Meanings.all, Trees.all);
+      Landin.Resolution.Prepare (Meanings.all, Trees.all, Graph.all);
+
+      --  Each source owns its import bindings.  The final path segment is
+      --  the bound namespace name, and two such names in one prelude are the
+      --  same-scope duplicate [1420] [1450] [1850].
+      for Index in 1 .. Source_Count (Context) loop
+         declare
+            Source_Id : constant Landin.Source.Source_Id :=
+              Nth_Source (Context, Index);
+            Of_Tree : constant not null access constant Syn.Tree :=
+              Landin.Syntax.Forest.Tree_Of (Trees.all, Source_Id);
+         begin
+            for Import_Index in 1 .. Syn.Import_Count (Of_Tree.all) loop
+               declare
+                  Import_Node : constant Syn.Node_Id :=
+                    Syn.Nth_Import (Of_Tree.all, Import_Index);
+                  Last : constant Syn.Node_Id :=
+                    Syn.Nth_Import_Segment
+                      (Of_Tree.all, Import_Node,
+                       Syn.Import_Segment_Count (Of_Tree.all, Import_Node));
+                  Named : constant Landin.Source.Names.Name_Id :=
+                    Syn.Name (Of_Tree.all, Last);
+                  Target : constant Landin.Modules.Module_Id :=
+                    Landin.Modules.Imported_Module
+                      (Graph.all, Source_Id, Import_Node);
+                  Earlier : constant Landin.Modules.Module_Id :=
+                    Res.Imported_Module_Of
+                      (Meanings.all, Source_Id, Named);
+               begin
+                  if Target = Landin.Modules.No_Module
+                    or else Named = Landin.Source.Names.No_Name
+                  then
+                     null;
+                  elsif Earlier /= Landin.Modules.No_Module then
+                     Names.Report
+                       (Item    => Names.Duplicate_Declaration,
+                        Source  => Source_Id,
+                        Where   => Syn.Anchor (Of_Tree.all, Last),
+                        Message => "`" & Spelled (Named)
+                                   & "` is imported twice in one file",
+                        Note    => "[1450] [1850]: a file import scope gives"
+                                   & " one name to one module",
+                        Related => Res.Import_Origin
+                          (Meanings.all, Source_Id, Named),
+                        Because => "the import that keeps the name",
+                        Into    => Found);
+                  else
+                     Res.Bind_Imported_Module
+                       (Meanings.all, Source_Id, Named, Target,
+                        Syn.Origin (Of_Tree.all, Last));
+                  end if;
+               end;
+            end loop;
+         end;
+      end loop;
 
       --  Pass one: every module declaration of every file, before any body
       --  is walked.  [1840]'s module is a set, so this is what lets a name
@@ -1157,13 +1327,13 @@ package body Landin.Stages.Resolution is
          begin
             if Landin.Resolution.Declares (Syn.Kind (Of_Tree, Node)) then
                Declare_One
-                 (Of_Tree, Node, Landin.Resolution.Program_Scope,
+                 (Of_Tree, Node, Module_Base (Of_Tree),
                   Resolve_Declared => False);
                if Syn.Kind (Of_Tree, Node) = Syn.Atom_Declaration then
                   for Member in 1 .. Syn.Slot_Count (Of_Tree, Node) loop
                      Declare_One
                        (Of_Tree, Syn.Slot (Of_Tree, Node, Member),
-                        Landin.Resolution.Program_Scope,
+                        Module_Base (Of_Tree),
                         Resolve_Declared => False);
                   end loop;
                end if;
@@ -1216,8 +1386,10 @@ package body Landin.Stages.Resolution is
                            loop
                               Declare_One
                                 (Of_Tree, Syn.Nth_Case (Of_Tree, Part, Which),
-                                 Landin.Resolution.Program_Scope,
-                                 Resolve_Declared => False);
+                                 Module_Base (Of_Tree),
+                                 Resolve_Declared => False,
+                                 Inherits_Public =>
+                                   Syn.Is_Public (Of_Tree, Node));
                            end loop;
                         end if;
                      end;

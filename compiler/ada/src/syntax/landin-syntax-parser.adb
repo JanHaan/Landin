@@ -24,9 +24,10 @@ package body Landin.Syntax.Parser is
    --  the grammar says a new item may begin.
    ------------------------------------------------------------------
 
-   --  `program ::= declaration*` [1740].
+   --  `source_file ::= import_declaration* declaration*` [1740].
    Declaration_Anchor : constant Tok.Kind_Set :=
-     [Tok.Kw_Public | Tok.Kw_Mut | Tok.Kw_Fixed | Tok.Identifier
+     [Tok.Kw_Import | Tok.Kw_Public | Tok.Kw_Mut | Tok.Kw_Fixed
+        | Tok.Identifier
         | Tok.Left_Paren | Tok.End_Of_Input => True,
       others => False];
 
@@ -207,6 +208,9 @@ package body Landin.Syntax.Parser is
             Is_Id : constant Landin.Source.Names.Name_Id :=
               Landin.Source.Names.Intern (Names, "is");
 
+            As_Id : constant Landin.Source.Names.Name_Id :=
+              Landin.Source.Names.Intern (Names, "as");
+
             --  [1480] takes this bare toolchain root.  D139 recognizes it
             --  only as the fixed-condition intrinsic, not as a declaration.
             Compiler_Id : constant Landin.Source.Names.Name_Id :=
@@ -301,7 +305,9 @@ package body Landin.Syntax.Parser is
 
             function To_List (Items : Slot_Vectors.Vector)
               return Slot_List;
+            procedure Resync_Parentheses;
             function Parse_Program return Node_Id;
+            function Parse_Import (Late : Boolean := False) return Node_Id;
             function Parse_Declaration return Node_Id;
             function Parse_Fixed_Conditional return Node_Id;
             function Parse_Atom_Declaration
@@ -347,6 +353,8 @@ package body Landin.Syntax.Parser is
             function Parse_Declared_Name
               (Named : out Landin.Source.Names.Name_Id)
               return Landin.Source.Span;
+            function Parse_Qualified_Reference
+              (Of_Kind : Node_Kind) return Node_Id;
             function Parse_Place return Node_Id;
             function Parse_Body (Context : Frame) return Node_Id;
             function Parse_Block
@@ -949,17 +957,23 @@ package body Landin.Syntax.Parser is
             end To_List;
 
             ------------------------------------------------------------
-            --  program ::= declaration*                          [1740]
+            --  source_file ::= import_declaration* declaration* [1740]
             ------------------------------------------------------------
 
             function Parse_Program return Node_Id is
                Items : Slot_Vectors.Vector;
             begin
+               while Peek = Tok.Kw_Import loop
+                  Items.Append (Parse_Import);
+               end loop;
+
                while Peek /= Tok.End_Of_Input loop
                   declare
                      Before : constant Tok.Token_Index := Index;
                   begin
-                     if Peek not in Tok.Kernel_Kind
+                     if Peek = Tok.Kw_Import then
+                        Items.Append (Parse_Import (Late => True));
+                     elsif Peek not in Tok.Kernel_Kind
                        and then Ahead (1) not in Tok.Colon
                                   | Tok.Colon_Equal
                      then
@@ -1007,6 +1021,71 @@ package body Landin.Syntax.Parser is
                   Children => To_List (Items));
             end Parse_Program;
 
+            --  import_declaration ::= "import" import_path       [1740]
+            --  import_path ::= identifier ("/" identifier)*      [1740]
+            function Parse_Import (Late : Boolean := False) return Node_Id is
+               At_Import : constant Landin.Source.Span := Here;
+               Segments  : Slot_Vectors.Vector;
+            begin
+               pragma Assert (Peek = Tok.Kw_Import);
+               Advance;
+
+               if Late then
+                  Complain
+                    (Item    => Syn.Token_Expected,
+                     Where   => At_Import,
+                     Message => "an import belongs before every declaration",
+                     Note    => "[1450]: imports are a per-file prelude");
+               end if;
+
+               loop
+                  declare
+                     Named   : Landin.Source.Names.Name_Id;
+                     At_Name : constant Landin.Source.Span :=
+                       Parse_Declared_Name (Named);
+                  begin
+                     Segments.Append
+                       (Add (Import_Segment, At_Name, Named => Named));
+                  end;
+
+                  exit when Peek /= Tok.Slash;
+                  Advance;
+               end loop;
+
+               --  [1430] and [1440] are deliberately still deferred.  Both
+               --  shapes are recognized here so [1830] names the construct
+               --  instead of reporting unrelated trailing tokens.
+               if Peek = Tok.Identifier
+                 and then Named_Here = As_Id
+                 and then Ahead (1) = Tok.Identifier
+               then
+                  Refuse
+                    (Item    => Syn.Import_Alias,
+                     Where   => Here,
+                     Message => "import aliases are not enabled yet");
+                  Advance;
+                  Advance;
+               elsif Peek = Tok.Left_Paren then
+                  Refuse
+                    (Item    => Syn.Selected_Import,
+                     Where   => Here,
+                     Message => "selected imports are not enabled yet");
+                  Advance;
+                  Resync_Parentheses;
+               end if;
+
+               if Late then
+                  return Add
+                    (Error_Declaration, At_Import,
+                     Extent => Join (At_Import, After_Previous));
+               end if;
+
+               return Add
+                 (Import_Declaration, At_Import,
+                  Extent   => Join (At_Import, After_Previous),
+                  Children => To_List (Segments));
+            end Parse_Import;
+
             --  declaration ::= "public"? (binding | function)     [1740]
             --
             --  `identifier ":"` then `(` opens a signature and anything
@@ -1020,6 +1099,16 @@ package body Landin.Syntax.Parser is
                   Exported := True;
                   Public_At := Here;
                   Advance;
+               end if;
+
+               if Peek = Tok.Kw_Import then
+                  Complain
+                     (Item    => Syn.Token_Expected,
+                      Where   => Public_At,
+                      Message => "`public` cannot modify an import",
+                      Note    => "[1450]: an import is a per-file prelude,"
+                                 & " not a declaration");
+                  return Parse_Import (Late => True);
                end if;
 
                --  D139 is deliberately module-declaration syntax.  `fixed`
@@ -1311,6 +1400,34 @@ package body Landin.Syntax.Parser is
                return At_Name;
             end Parse_Declared_Name;
 
+            --  A module qualifier is the same left-to-right selection node
+            --  in value, type and concept positions.  Resolution decides
+            --  whether the leading name is this file's imported namespace;
+            --  the parser only retains each selected spelling.
+            function Parse_Qualified_Reference
+              (Of_Kind : Node_Kind) return Node_Id
+            is
+               Named  : Landin.Source.Names.Name_Id;
+               At_Name : constant Landin.Source.Span :=
+                 Parse_Declared_Name (Named);
+               Result : Node_Id := Add (Of_Kind, At_Name, Named => Named);
+            begin
+               while Peek = Tok.Dot loop
+                  Advance;
+                  declare
+                     Member : Landin.Source.Names.Name_Id;
+                     At_Member : constant Landin.Source.Span :=
+                       Parse_Declared_Name (Member);
+                  begin
+                     Result := Add
+                       (Member_Selection, At_Member,
+                        Children => [1 => Result],
+                        Named    => Member);
+                  end;
+               end loop;
+               return Result;
+            end Parse_Qualified_Reference;
+
             --  [1820]'s `indexed`, read after whatever named the thing:
             --  the dots first and then the brackets, left to right, so
             --  `a.b[i]` indexes what `a.b` named.  A selected name is
@@ -1323,11 +1440,6 @@ package body Landin.Syntax.Parser is
             --  is between them parses as ordinary tokens and only the
             --  nesting says where it ends.
             procedure Resync_Brackets;
-
-            --  Steps from just inside a refused parenthesized construct to
-            --  its matching closer, including nested parentheses.  The
-            --  opener has already been consumed by both callers.
-            procedure Resync_Parentheses;
 
             --  [0570]'s index, wherever one can be written.  Separate
             --  from the selection loop because a call is not a selection
@@ -1707,18 +1819,13 @@ package body Landin.Syntax.Parser is
                         Children => [1 => Add (Error_Type, Point)]);
                   end if;
                   declare
-                     At_Concept : constant Landin.Source.Span := Here;
-                     Named : constant Landin.Source.Names.Name_Id :=
-                       Named_Here;
+                     Concept : constant Node_Id :=
+                       Parse_Qualified_Reference (Concept_Reference);
                   begin
-                     Advance;
                      return Add
                        (Any_Type, At_Type,
                         Extent => Join (At_Type, After_Previous),
-                        Children =>
-                          [1 => Add
-                             (Concept_Reference, At_Concept,
-                              Named => Named)]);
+                        Children => [1 => Concept]);
                   end;
                end if;
 
@@ -1864,10 +1971,9 @@ package body Landin.Syntax.Parser is
                      --  that is not one of the eleven is no longer wrong
                      --  here: whether it names one is resolution's to
                      --  answer, and this stage stops guessing.
-                     Advance;
                      declare
                         Base : constant Node_Id :=
-                          Add (Type_Reference, At_Type, Named => Spelled);
+                          Parse_Qualified_Reference (Type_Reference);
                      begin
                         return
                           (if Peek = Tok.Left_Paren
@@ -2007,10 +2113,8 @@ package body Landin.Syntax.Parser is
                            then
                               Advance;
                               if Peek = Tok.Identifier then
-                                 Constraint := Add
-                                   (Concept_Reference, Here,
-                                    Named => Named_Here);
-                                 Advance;
+                                 Constraint := Parse_Qualified_Reference
+                                   (Concept_Reference);
                               else
                                  Complain
                                    (Item    => Syn.Name_Expected,
@@ -2338,8 +2442,7 @@ package body Landin.Syntax.Parser is
                   loop
                      if Peek = Tok.Identifier then
                         Items.Append
-                          (Add (Concept_Reference, Here, Named => Named_Here));
-                        Advance;
+                          (Parse_Qualified_Reference (Concept_Reference));
                      else
                         Complain
                           (Item    => Syn.Name_Expected,
@@ -2412,6 +2515,15 @@ package body Landin.Syntax.Parser is
                Concept  : Node_Id := No_Node;
                Entries  : Slot_Vectors.Vector;
             begin
+               if Exported then
+                  Complain
+                    (Item    => Syn.Token_Expected,
+                     Where   => Public_At,
+                     Message => "`public` cannot modify a conformance",
+                     Note    => "[1280]: every reached conformance belongs"
+                                & " to the whole-program register");
+               end if;
+
                if Peek = Tok.Left_Paren and then not Starts_Signature then
                   Parse_Type_Formals (Start, Binders, Closed);
                end if;
@@ -2425,9 +2537,8 @@ package body Landin.Syntax.Parser is
                if Peek = Tok.Identifier and then Named_Here = Is_Id then
                   Advance;
                   if Peek = Tok.Identifier then
-                     Concept := Add
-                       (Concept_Reference, Here, Named => Named_Here);
-                     Advance;
+                     Concept := Parse_Qualified_Reference
+                       (Concept_Reference);
                   else
                      Complain
                        (Item    => Syn.Name_Expected,
@@ -2525,7 +2636,7 @@ package body Landin.Syntax.Parser is
                      At_Token => Start,
                      Extent   => Join (Start, After_Previous),
                      Children => Head & To_List (Binders) & To_List (Entries),
-                     Exported => Exported);
+                     Exported => False);
                end;
             end Parse_Conformance;
 
@@ -3115,10 +3226,8 @@ package body Landin.Syntax.Parser is
                      if Peek = Tok.Identifier and then Named_Here = Is_Id then
                         Advance;
                         if Peek = Tok.Identifier then
-                           Constraint := Add
-                             (Concept_Reference, Here,
-                              Named => Named_Here);
-                           Advance;
+                           Constraint := Parse_Qualified_Reference
+                             (Concept_Reference);
                         else
                            Complain
                              (Item    => Syn.Name_Expected,
@@ -3331,15 +3440,8 @@ package body Landin.Syntax.Parser is
                         Join (At_Bang, After_Previous));
                   end if;
 
-                  declare
-                     At_Name : constant Landin.Source.Span := Here;
-                     Named   : constant Landin.Source.Names.Name_Id :=
-                       Named_Here;
-                  begin
-                     Advance;
-                     Members.Append
-                       (Add (Type_Reference, At_Name, Named => Named));
-                  end;
+                  Members.Append
+                    (Parse_Qualified_Reference (Type_Reference));
 
                   exit when Peek /= Tok.Bar;
                   Advance;
@@ -4448,11 +4550,16 @@ package body Landin.Syntax.Parser is
                      Bindings : Slot_Vectors.Vector;
                      Kept : Boolean;
                   begin
-                     Advance;
-                     Pattern := Add
-                       (Of_Kind  => Name_Reference,
-                        At_Token => At_Case,
-                        Named    => Named);
+                     if Peek = Tok.Underscore then
+                        Advance;
+                        Pattern := Add
+                          (Of_Kind  => Name_Reference,
+                           At_Token => At_Case,
+                           Named    => Named);
+                     else
+                        Pattern := Parse_Qualified_Reference
+                          (Name_Reference);
+                     end if;
 
                      if Peek = Tok.Left_Paren then
                         Advance;

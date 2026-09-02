@@ -203,8 +203,11 @@ origin propagation and aggregate/shaped ABI are complete. R2.90's guarantee,
 diagnostic, conformance/evidence, prototype-derivation and target-applicability
 registers are complete, mechanically closed over the implementation corpus and
 owned by executable rejection, trap or explicit non-guarantee evidence.
+R3.10's directory modules, file-local import scopes, public qualified lookup,
+ordered roots, deterministic graph closure and entry-module selection are
+complete.
 
-**Current roadmap work: R3.10 — Implement minimum modules and ordered roots.**
+**Current roadmap work: R3.20 — Build the allocator and container pressure case.**
 
 `refine` runs the frontend, lowers and
 verifies target-neutral IR, emits Linux x86-64 assembly, and can assemble and

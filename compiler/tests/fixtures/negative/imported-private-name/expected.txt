@@ -1,0 +1,10 @@
+error[L0202]: `hidden` is module-internal
+  --> ../tests/fixtures/negative/imported-private-name/entry/main.ldn:2:17
+  |
+2 | seen: i32 = lib.hidden
+  |                 ^^^^^^
+  --> ../tests/fixtures/negative/imported-private-name/root/lib/private.ldn:1:1
+  |
+1 | hidden: i32 = 7
+  | ^^^^^^ declared without `public` here
+  = note: [1410]: only a public declaration is visible across a module boundary

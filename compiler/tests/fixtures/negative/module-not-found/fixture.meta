@@ -1,0 +1,7 @@
+class: negative
+summary: a plain import missing from every ordered root is reported as L0006
+expect: expected.txt
+targets: linux-x86-64, macos-arm64
+args: --root=../tests/fixtures/negative/module-not-found/root ../tests/fixtures/negative/module-not-found/entry
+codes: L0006
+status: 1

@@ -146,6 +146,7 @@ negative/immutable-struct-literal-assignment | linux-x86-64, macos-arm64
 negative/immutable-struct-zeroed-assignment | linux-x86-64, macos-arm64
 negative/immutable-variant-case-assignment | linux-x86-64, macos-arm64
 negative/immutable-variant-runtime-array-payload | linux-x86-64, macos-arm64, synthetic-32
+negative/imported-private-name | linux-x86-64, macos-arm64, synthetic-32
 negative/increment-unassigned-local-array-element | linux-x86-64, macos-arm64
 negative/index-a-scalar | linux-x86-64, macos-arm64
 negative/index-is-not-a-number | linux-x86-64, macos-arm64
@@ -223,11 +224,13 @@ negative/module-array-mixed-repetition-suffix-not-static | linux-x86-64, macos-a
 negative/module-array-repetition-element-not-static | linux-x86-64, macos-arm64
 negative/module-array-repetition-fold-range | linux-x86-64, macos-arm64
 negative/module-array-repetition-index-element | linux-x86-64, macos-arm64
+negative/module-directory-invalid | linux-x86-64, macos-arm64
 negative/module-fold-no-type-holds | linux-x86-64, macos-arm64
 negative/module-function-field-without-image | linux-x86-64, macos-arm64, synthetic-32
 negative/module-function-image-cycle | linux-x86-64, macos-arm64, synthetic-32
 negative/module-function-replacement-signature-mismatch | linux-x86-64, macos-arm64, synthetic-32
 negative/module-function-without-image | linux-x86-64, macos-arm64, synthetic-32
+negative/module-not-found | linux-x86-64, macos-arm64
 negative/module-scalar-fold-agreement | linux-x86-64, macos-arm64
 negative/module-scalar-fold-overflow | linux-x86-64, macos-arm64
 negative/module-scalar-storage-selection | linux-x86-64, macos-arm64
@@ -866,6 +869,8 @@ runtime/written-function-values | linux-x86-64
 unit/diagnostic-ordering | linux-x86-64, macos-arm64, synthetic-32
 unit/evidence-layout | linux-x86-64, synthetic-32
 unit/evidence-verifier | linux-x86-64, synthetic-32
+unit/module-conformance-register | linux-x86-64, macos-arm64, cortex-m, synthetic-32
+unit/module-graph | linux-x86-64, macos-arm64, cortex-m, synthetic-32
 unit/parser-nesting-limit | linux-x86-64, macos-arm64, synthetic-32
 unit/source-line-map | linux-x86-64, macos-arm64, synthetic-32
 unit/target-descriptions | linux-x86-64, macos-arm64, synthetic-32

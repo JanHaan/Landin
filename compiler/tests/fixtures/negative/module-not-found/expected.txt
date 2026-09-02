@@ -1,0 +1,6 @@
+error[L0006]: module not found: absent
+  --> ../tests/fixtures/negative/module-not-found/entry/main.ldn:1:1
+  |
+1 | import absent
+  | ^^^^^^^^^^^^^
+  = note: [1420]: roots are searched in supplied order

@@ -7,11 +7,13 @@ package body Landin.Backend.Entry_Point is
    use type Landin.IR.Item_Kind;
    use type Landin.IR.Signature_Id;
    use type Landin.IR.Slot_Id;
+   use type Landin.Modules.Module_Id;
    use type Landin.Types.Type_Kind;
 
    function Hosted_Main
      (Of_Unit  : Landin.IR.Unit;
       Meanings : Landin.Resolution.Table;
+      Modules  : Landin.Modules.Table;
       Names    : Landin.Source.Names.Table) return Landin.IR.Item_Id
    is
       function Spelling_Of
@@ -32,6 +34,9 @@ package body Landin.Backend.Entry_Point is
          begin
             if Landin.IR.Kind_Of (Of_Unit, Item) = Landin.IR.Routine
               and then Declared /= Landin.IR.No_Declaration
+              and then Landin.Modules.Module_Of
+                (Modules, Landin.Resolution.Source_Of (Meanings, Declared))
+                  = Landin.Modules.Entry_Module
               and then Landin.Resolution.Is_Public (Meanings, Declared)
               and then Spelling_Of (Declared) = "main"
               and then Landin.IR.Parameter_Count (Of_Unit, Item) = 0

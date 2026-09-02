@@ -2191,6 +2191,13 @@ a collision rather than specialization. Lookup binds that family and records
 one concrete key; R2.70 later turns the retained generic supplying functions
 into physical evidence entries.
 
+Under R3.10, “every source file” means every module reachable from the entry
+directory after ordered-root selection, including unused conformances and
+excluding unreachable and later-root-shadowed directories. Conformances are
+registrations rather than imported names: every reached one enters the single
+program register without `public`, while `public` on a conformance is refused
+because it declares no module member.
+
 ### [1290] A generic function takes the type as an ordinary parameter
 
 A generic function takes the type as an ordinary parameter,
@@ -2508,6 +2515,15 @@ A module is a directory. Every file in it sees the others
 with no import. Two levels of visibility: module-internal
 (the default) and public. No separate interface file.
 
+The enabled R3.10 compiler reads every direct `.ldn` child in bytewise filename
+order. Other files are ignored and subdirectories are modules of their own.
+An empty directory is therefore a legal empty module. Declaration order still
+has no language meaning: the ordering fixes identities and diagnostics, not
+visibility. Public functions, bindings, atoms, types and concepts may be named
+through an import; a variant case inherits whether its containing type is
+public. A public declaration may mention a private declaration, whose identity
+can flow through that public surface but remains unnameable by an importer.
+
 ### [1420] An import path is a directory path, and nothing cleverer
 
 An import path is a directory path, and nothing cleverer.
@@ -2529,6 +2545,21 @@ characters that some filesystem somewhere will not carry.
 The separator in source is always '/', on every host. The
 compiler turns it into whatever the filesystem wants.
 
+The enabled R3.10 loader requires each directory entry to have the exact
+lowercase spelling in the import even on a case-insensitive host. It loads the
+entry module first, then its sorted files, follows imports in source order and
+loads newly reached modules first-in-first-out. A module is loaded once, so
+cycles are legal and terminate. A later root is not merged after an earlier
+one matches.
+
+A plain import binds only its final segment as a namespace in that source
+file. `import net/http` therefore makes `http.get`, `http.response` and
+`http.drawable` qualified declaration references. The same qualification is
+available wherever a value, type, type application, concept, conformance,
+error atom or match case is named. The first dot after an imported namespace
+selects a public declaration; later dots are ordinary value selections. The
+namespace itself is not a value, type, place or first-class object.
+
 ```landin
 import net/http
 
@@ -2543,6 +2574,9 @@ import net/http as h
 
 ```
 
+The R3.10 compiler recognizes this spelling and refuses it by name. Import
+aliases are enabled by R4.30; the minimum module slice has plain imports only.
+
 ### [1440] Pull selected names into scope, by name
 
 Pull selected names into scope, by name. No wildcard.
@@ -2552,9 +2586,21 @@ import net/http (get, post)
 
 ```
 
+The R3.10 compiler likewise recognizes and names this deferred form. Selected
+imports are enabled by R4.30; there is no wildcard and a plain import never
+injects unqualified members.
+
 ### [1450] Imports are per file, so every file reads on its own
 
 Imports are per file, so every file reads on its own.
+
+They form a prelude before every declaration. One file's imports are neither
+visible in a sibling nor re-exported. A repeated import name, including the
+same import twice, is an error in that file. A parameter or local may shadow
+an import; the import in turn shadows a same-named declaration from the shared
+module scope for qualified lookup. Selecting a private member is diagnosed
+separately from selecting a member that does not exist, and points back to the
+private declaration.
 
 ### [1460] Values at module level must be known at compile time
 
@@ -2613,6 +2659,11 @@ Naming authority remains deliberately deferred to the companion
 tool and ecosystem successor in ROADMAP.md. The search path is
 project-first, so any collision can be overridden locally and
 no dispute is fatal.
+
+The bootstrap request spells that narrow seam as repeated `--root=DIR`
+options followed by one entry-module directory. With no root option it retains
+the earlier explicit-file compatibility mode as one synthetic module. Root
+defaults and environment policy remain the companion tool's work.
 
 ## COMPILE TIME
 

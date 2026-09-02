@@ -30,7 +30,12 @@ package body Landin.Stages.Syntax is
       Trees : constant not null access Landin.Syntax.Forest.Table :=
         Landin.Stages.Trees (Context);
    begin
-      for Index in 1 .. Source_Count (Context) loop
+      --  The driver's loader may append sources before semantic stages run.
+      --  A forest is append-only, so each loader pass parses only the newly
+      --  acquired suffix and preserves every existing Source_Id/Tree pair.
+      for Index in Landin.Syntax.Forest.Count (Trees.all) + 1
+        .. Source_Count (Context)
+      loop
          declare
             Id : constant Landin.Source.Source_Id :=
               Nth_Source (Context, Index);

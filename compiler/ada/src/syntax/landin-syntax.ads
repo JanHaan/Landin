@@ -82,7 +82,11 @@ package Landin.Syntax is
    --  case over a band still covers the hole instead of falling out of it.
    type Node_Kind is
      (Program,
-      --  Above: the file [1740] itself, which is not a declaration.
+      --  A file begins with a per-file import prelude.  An import retains
+      --  its ordered path segment nodes and is never a module declaration.
+      Import_Declaration,
+      Import_Segment,
+      --  Above: the file [1740] itself and its imports, none declarations.
       --  Below: declarations [1740].
       Error_Declaration,
       --  D139's module-only declaration splice.  Its trailing run is
@@ -379,6 +383,7 @@ package Landin.Syntax is
                     | Destructured_Field
                     | Destructured_Name | Recovery_Clause | Match_Binding
                     | Return_Source | Member_Selection | Field_Value
+                    | Import_Segment
                     | Call_Argument);
 
    ------------------------------------------------------------------
@@ -486,7 +491,8 @@ package Landin.Syntax is
      with Pre => Contains (Of_Tree, Id)
                  and then Kind (Of_Tree, Id)
                           in Function_Declaration | Atom_Declaration
-                             | Binding | Concept_Declaration
+                             | Binding | Type_Declaration
+                             | Concept_Declaration
                              | Conformance_Declaration;
 
    function Is_Mutable (Of_Tree : Tree; Id : Node_Id) return Boolean
@@ -560,9 +566,30 @@ package Landin.Syntax is
    --  production writes `?`.
    ------------------------------------------------------------------
 
-   --  `program ::= declaration*` [1740].  A file is a set and order does
-   --  not matter [0130]; this is the order they were written, which is what
-   --  a deterministic report needs and not what resolution may depend on.
+   --  `source_file ::= import_declaration* declaration*` [1740].  Imports
+   --  are a file-local ordered prelude; declarations form their module set.
+   function Import_Count (Of_Tree : Tree) return Natural;
+
+   function Nth_Import (Of_Tree : Tree; Index : Positive) return Node_Id
+     with Pre  => Index <= Import_Count (Of_Tree),
+          Post => Contains (Of_Tree, Nth_Import'Result)
+                  and then Kind (Of_Tree, Nth_Import'Result)
+                             = Import_Declaration;
+
+   function Import_Segment_Count
+     (Of_Tree : Tree; Id : Node_Id) return Natural
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id) = Import_Declaration;
+
+   function Nth_Import_Segment
+     (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
+     with Pre  => Contains (Of_Tree, Id)
+                  and then Kind (Of_Tree, Id) = Import_Declaration
+                  and then Index <= Import_Segment_Count (Of_Tree, Id),
+          Post => Contains (Of_Tree, Nth_Import_Segment'Result)
+                  and then Kind (Of_Tree, Nth_Import_Segment'Result)
+                             = Import_Segment;
+
    function Declaration_Count (Of_Tree : Tree) return Natural;
 
    function Nth_Declaration (Of_Tree : Tree; Index : Positive)
@@ -620,7 +647,7 @@ package Landin.Syntax is
                   and then Index <= Concept_Parent_Count (Of_Tree, Id),
           Post => Contains (Of_Tree, Nth_Concept_Parent'Result)
                   and then Kind (Of_Tree, Nth_Concept_Parent'Result)
-                             = Concept_Reference;
+                             in Concept_Reference | Member_Selection;
 
    function Concept_Entry_Count (Of_Tree : Tree; Id : Node_Id) return Natural
      with Pre => Contains (Of_Tree, Id)
@@ -865,7 +892,7 @@ package Landin.Syntax is
                   and then Kind (Of_Tree, Id) = Conformance_Declaration,
           Post => Contains (Of_Tree, Conforming_Concept'Result)
                   and then Kind (Of_Tree, Conforming_Concept'Result)
-                             = Concept_Reference;
+                             in Concept_Reference | Member_Selection;
 
    function Conformance_Binder_Count
      (Of_Tree : Tree; Id : Node_Id) return Natural
@@ -1067,7 +1094,8 @@ package Landin.Syntax is
                   and then Kind (Of_Tree, Id) = Type_Application,
           Post => Contains (Of_Tree, Applied_Type'Result)
                   and then Kind (Of_Tree, Applied_Type'Result)
-                             in Type_Name | Type_Reference | Type_Application;
+                             in Type_Name | Type_Reference | Type_Application
+                                | Member_Selection;
 
    function Type_Argument_Count (Of_Tree : Tree; Id : Node_Id) return Natural
      with Pre => Contains (Of_Tree, Id)
@@ -1092,7 +1120,7 @@ package Landin.Syntax is
                   and then Index <= Atom_Member_Count (Of_Tree, Id),
           Post => Contains (Of_Tree, Nth_Atom_Member'Result)
                   and then Kind (Of_Tree, Nth_Atom_Member'Result)
-                             = Type_Reference;
+                             in Type_Reference | Member_Selection;
 
    function Element_Count (Of_Tree : Tree; Id : Node_Id) return Natural
      with Pre => Contains (Of_Tree, Id)
@@ -1218,7 +1246,7 @@ package Landin.Syntax is
                   and then Kind (Of_Tree, Id) = Any_Type,
           Post => Contains (Of_Tree, Any_Concept'Result)
                   and then Kind (Of_Tree, Any_Concept'Result)
-                    = Concept_Reference;
+                    in Concept_Reference | Member_Selection;
 
    function Measured_Type (Of_Tree : Tree; Id : Node_Id) return Node_Id
      with Pre  => Contains (Of_Tree, Id)

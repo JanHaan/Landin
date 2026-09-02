@@ -5,7 +5,8 @@ package body Landin.Syntax is
    --  slot position appears nowhere else in the compiler.
    function Fixed (Of_Kind : Node_Kind) return Natural
      is (case Of_Kind is
-            when Program                  => 0,
+            when Program | Import_Declaration => 0,
+            when Import_Segment           => 0,
             when Error_Declaration        => 0,
             when Fixed_Conditional        => 0,
             when Function_Declaration     => 3,
@@ -168,11 +169,35 @@ package body Landin.Syntax is
      is (Of_Tree.Links (Element (Of_Tree, Id).First_Slot + Index));
 
    function Declaration_Count (Of_Tree : Tree) return Natural
-     is (Run_Length (Of_Tree, Root (Of_Tree)));
+     is (Run_Length (Of_Tree, Root (Of_Tree)) - Import_Count (Of_Tree));
+
+   function Import_Count (Of_Tree : Tree) return Natural is
+      Count : Natural := 0;
+   begin
+      for Index in 1 .. Run_Length (Of_Tree, Root (Of_Tree)) loop
+         exit when Kind
+           (Of_Tree, Nth_Item (Of_Tree, Root (Of_Tree), Index))
+             /= Import_Declaration;
+         Count := Count + 1;
+      end loop;
+      return Count;
+   end Import_Count;
+
+   function Nth_Import (Of_Tree : Tree; Index : Positive) return Node_Id
+     is (Nth_Item (Of_Tree, Root (Of_Tree), Index));
+
+   function Import_Segment_Count
+     (Of_Tree : Tree; Id : Node_Id) return Natural
+     is (Run_Length (Of_Tree, Id));
+
+   function Nth_Import_Segment
+     (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
+     is (Nth_Item (Of_Tree, Id, Index));
 
    function Nth_Declaration (Of_Tree : Tree; Index : Positive)
      return Node_Id
-     is (Nth_Item (Of_Tree, Root (Of_Tree), Index));
+     is (Nth_Item
+           (Of_Tree, Root (Of_Tree), Import_Count (Of_Tree) + Index));
 
    function Declared_Type (Of_Tree : Tree; Id : Node_Id) return Node_Id
      is (Slot (Of_Tree, Id, 1));

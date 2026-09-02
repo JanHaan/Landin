@@ -50,6 +50,8 @@ package Landin.Diagnostics.Catalogue is
       --  beside Unreadable_Source because it is the same rule from the
       --  other side, and a band records where a code was born.
       Unwritable_Output,
+      Module_Not_Found,
+      Module_Directory_Invalid,
       --  The scanner, assigned at R1.30.
       Construct_Not_Enabled,
       Malformed_Integer,
@@ -76,6 +78,7 @@ package Landin.Diagnostics.Catalogue is
       --  declared twice in one scope, and a name used and never declared.
       Duplicate_Declaration,
       Unresolved_Name,
+      Inaccessible_Name,
       --  The checker, assigned at R1.60.  Its rows cover type agreement,
       --  definite assignment, references, layouts and the other semantic
       --  rules the kernel can find.  Impossible_Operand joined them at
@@ -128,6 +131,8 @@ package Landin.Diagnostics.Catalogue is
             when Unreadable_Source     => "L0003",
             when Unknown_Target        => "L0004",
             when Unwritable_Output     => "L0005",
+            when Module_Not_Found      => "L0006",
+            when Module_Directory_Invalid => "L0007",
             when Construct_Not_Enabled => "L0010",
             when Malformed_Integer     => "L0011",
             when Unknown_Bytes         => "L0012",
@@ -148,6 +153,7 @@ package Landin.Diagnostics.Catalogue is
             when Positional_After_Named   => "L0112",
             when Duplicate_Declaration    => "L0200",
             when Unresolved_Name          => "L0201",
+            when Inaccessible_Name        => "L0202",
             when Literal_Out_Of_Range     => "L0300",
             when Type_Mismatch            => "L0301",
             when Not_Definitely_Assigned  => "L0302",
@@ -181,6 +187,8 @@ package Landin.Diagnostics.Catalogue is
             when Unreadable_Source     => Error,
             when Unknown_Target        => Error,
             when Unwritable_Output     => Error,
+            when Module_Not_Found      => Error,
+            when Module_Directory_Invalid => Error,
             when Construct_Not_Enabled => Error,
             when Malformed_Integer     => Error,
             when Unknown_Bytes         => Error,
@@ -189,6 +197,7 @@ package Landin.Diagnostics.Catalogue is
             when Name_Expected .. Positional_After_Named => Error,
             when Duplicate_Declaration => Error,
             when Unresolved_Name       => Error,
+            when Inaccessible_Name     => Error,
             when Literal_Out_Of_Range
                .. Compiler_Conformance_Reserved => Error,
             when No_Toolchain .. Frame_Not_Addressable => Error);
@@ -207,6 +216,8 @@ package Landin.Diagnostics.Catalogue is
             when Unreadable_Source     => Live,
             when Unknown_Target        => Live,
             when Unwritable_Output     => Live,
+            when Module_Not_Found      => Live,
+            when Module_Directory_Invalid => Live,
             when Construct_Not_Enabled => Live,
             when Malformed_Integer     => Live,
             when Unknown_Bytes         => Live,
@@ -215,6 +226,7 @@ package Landin.Diagnostics.Catalogue is
             when Name_Expected .. Positional_After_Named => Live,
             when Duplicate_Declaration => Live,
             when Unresolved_Name       => Live,
+            when Inaccessible_Name     => Live,
             when Literal_Out_Of_Range
                .. Compiler_Conformance_Reserved => Live,
             when No_Toolchain .. Entry_Point_Missing => Live,
@@ -235,6 +247,10 @@ package Landin.Diagnostics.Catalogue is
                "a target no description names",
             when Unwritable_Output     =>
                "an output file that cannot be written",
+            when Module_Not_Found      =>
+               "[1420]: no ordered import root contains the requested module",
+            when Module_Directory_Invalid =>
+               "[1410]: an entry module must be a readable directory",
             when Construct_Not_Enabled =>
                "[1830]: the tour describes this and the kernel omits it",
             when Malformed_Integer     =>
@@ -277,6 +293,8 @@ package Landin.Diagnostics.Catalogue is
                "[1850]: one scope gives one name to one thing",
             when Unresolved_Name       =>
                "[1860]: a name used and declared in no visible scope",
+            when Inaccessible_Name     =>
+               "[1410]: a module-internal declaration used across modules",
             when Literal_Out_Of_Range  =>
                "a compile-time magnitude its context or target does not"
                & " hold",
@@ -353,6 +371,8 @@ package Landin.Diagnostics.Catalogue is
             when Unreadable_Source     => False,
             when Unknown_Target        => False,
             when Unwritable_Output     => False,
+            when Module_Not_Found      => True,
+            when Module_Directory_Invalid => False,
             when Construct_Not_Enabled => True,
             when Malformed_Integer     => True,
             when Unknown_Bytes         => True,
@@ -361,6 +381,7 @@ package Landin.Diagnostics.Catalogue is
             when Name_Expected .. Positional_After_Named => True,
             when Duplicate_Declaration => True,
             when Unresolved_Name       => True,
+            when Inaccessible_Name     => True,
             when Literal_Out_Of_Range
                .. Compiler_Conformance_Reserved => True,
             --  None of the backend codes is about a place in a file: they
@@ -378,6 +399,8 @@ package Landin.Diagnostics.Catalogue is
             when Unreadable_Source     => False,
             when Unknown_Target        => False,
             when Unwritable_Output     => False,
+            when Module_Not_Found      => True,
+            when Module_Directory_Invalid => False,
             when Construct_Not_Enabled => True,
             when Malformed_Integer     => True,
             when Unknown_Bytes         => True,
@@ -389,6 +412,7 @@ package Landin.Diagnostics.Catalogue is
             --  is a lexeme to point at, and it is the name itself.
             when Duplicate_Declaration => True,
             when Unresolved_Name       => True,
+            when Inaccessible_Name     => True,
             --  Every one of these points at something a program wrote.
             when Literal_Out_Of_Range
                .. Compiler_Conformance_Reserved =>
@@ -421,6 +445,7 @@ package Landin.Diagnostics.Catalogue is
             --  place by definition, which is why it asks for none.
             when Duplicate_Declaration => 1,
             when Unresolved_Name       => 0,
+            when Inaccessible_Name     => 1,
             --  A mismatch is only readable next to the place that stated
             --  the requirement, and an unwritable place next to its
             --  declaration. A direct literal or fold out of range has no
@@ -462,9 +487,11 @@ package Landin.Diagnostics.Catalogue is
             when Construct_Not_Enabled => 2,
             when Malformed_Integer     => 1,
             when Unknown_Bytes         => 1,
+            when Module_Not_Found | Module_Directory_Invalid => 1,
             when Name_Expected .. Positional_After_Named => 1,
             when Duplicate_Declaration => 1,
             when Unresolved_Name       => 1,
+            when Inaccessible_Name     => 1,
             when Literal_Out_Of_Range  => 1,
             when Type_Mismatch         => 1,
             when Not_Definitely_Assigned => 1,
