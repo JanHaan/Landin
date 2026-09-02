@@ -578,9 +578,12 @@ a T that has a zero image, and general uninitialised
 generic storage is not supported.
 The answer remains a distinct raw-storage type — one that
 tracks capacity apart from the initialised count and admits
-one slot at a time. Its exact operations and invariants are
-decided from executable container cases in ROADMAP.md at R3.20
-and R3.30, not guessed as a prerequisite to the first front end.
+one slot at a time. R3.20's executable pointer-vector pressure
+case derived the required transitions: reserve an empty capacity,
+admit the next slot, expose only the initialised prefix, release
+its tail, dispose only when that prefix is empty, and publish a
+grown replacement only after transfer succeeds. R3.30 owns their
+exact language spelling and enforced representation.
 
 ## ARRAYS, SLICES AND TEXT
 

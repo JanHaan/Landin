@@ -1,0 +1,6 @@
+class: runtime
+summary: R3.20 derives honest raw-storage transitions from a growing pointer vector and a failing allocator
+program: main.ldn
+status: 42
+constructs: 0470, 0540, 1210, 1220, 1280, 1290, 1310, 1350, 1920
+targets: linux-x86-64

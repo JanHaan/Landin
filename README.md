@@ -157,9 +157,11 @@ diagnostic, conformance/evidence, prototype-derivation and target-applicability
 registers are complete and mechanically checked against their executable
 owners. R3.10's directory modules, file-local import scopes, public qualified
 lookup, ordered roots, deterministic graph closure and entry-module selection
-are complete.
+are complete. R3.20's allocator/vector pressure case derives honest raw-storage
+transitions from executable non-zeroable pointer storage, including
+transactional growth and drain-before-free.
 
-**Current roadmap work: R3.20 — Build the allocator and container pressure case.**
+**Current roadmap work: R3.30 — Implement honest raw storage and `core/mem`.**
 
 Language and architecture questions are resolved when the first vertical
 slice needs them.

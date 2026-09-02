@@ -370,10 +370,13 @@ small(ptr node, 4) does not exist until a raw-storage type does
 struct instance the nominal identity `(template, normalized actual tuple)` and
 substitutes fixed bounds, nested ordinary structs and existing variants without
 runtime formals or a synthetic declaration. R2.60 now checks the `is zeroable`
-constraint through its closed compiler conformance family. R3.20's raw storage
-still decides why `small(ptr node, 4)` cannot exist; that representation
-boundary, rather than nominal parameterization or constraint lookup, is what
-this sketch continues to wait on.
+constraint through its closed compiler conformance family. R3.20's executable
+pointer-vector pressure case has now derived the raw storage transitions needed
+for `small(ptr node, 4)`: capacity is distinct from the initialized prefix,
+which grows and shrinks one tail slot at a time and must be empty before the
+allocation is freed. R3.30 owns that representation boundary and its spelling;
+nominal parameterization and constraint lookup are no longer what this sketch
+waits on.
 
 ```landin
 public small: type (T: type is zeroable, fixed N: u32) = struct
