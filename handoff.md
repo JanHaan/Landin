@@ -207,9 +207,12 @@ R3.10's directory modules, file-local import scopes, public qualified lookup,
 ordered roots, deterministic graph closure and entry-module selection are
 complete. R3.20's allocator/vector pressure case derives honest raw-storage
 transitions from executable non-zeroable pointer storage, including
-transactional growth and drain-before-free.
+transactional growth and drain-before-free. R3.30's repository-owned
+`core/mem` enforces that initialized-prefix state machine, keeps its
+representation private and exercises rollback and publication through compiled
+Landin code.
 
-**Current roadmap work: R3.30 — Implement honest raw storage and `core/mem`.**
+**Current roadmap work: R3.40 — Implement parser-support core modules.**
 
 `refine` runs the frontend, lowers and
 verifies target-neutral IR, emits Linux x86-64 assembly, and can assemble and

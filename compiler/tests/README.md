@@ -116,6 +116,7 @@ and checks all seven on every push.
 | `summary` | yes | one line, what the fixture proves |
 | `program` | no | the `.ldn` program the fixture runs |
 | `with` | no | the rest of the module, when one file is not enough |
+| `root` | no | a runtime fixture's import root, relative to its directory; the directory itself becomes the entry module |
 | `expect` | no | the file holding the expected bytes |
 | `args` | no | the arguments `refine` is run with |
 | `status` | no | the exit status `refine` must produce (default 0) |
@@ -154,6 +155,13 @@ and `check.py` holds every file either key names to being there — a name
 pointing at nothing would compile one file while claiming to have compiled
 two. Every `.ldn` in a fixture directory is held to the grammar already, so
 the extra files are derived like any other.
+
+`root` is the runtime counterpart for a directory-module program. It is
+relative to the fixture directory; when present, the fixture directory is
+passed to `refine` as the entry module and the root is passed with `--root`.
+It cannot be combined with `with`, because rooted discovery owns the source
+membership. This is how an executable fixture imports the repository-owned
+`core/*` modules rather than keeping a fixture-only copy.
 
 `constructs` is what R1.90 indexes the corpus by, and it is a written list
 rather than a reading of the summary. A citation in prose is prose: it is

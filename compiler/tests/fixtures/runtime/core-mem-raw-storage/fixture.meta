@@ -1,0 +1,8 @@
+class: runtime
+summary: core/mem enforces an initialized prefix over non-zeroable pointer elements
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0430, 0470, 0510, 0540, 0770, 0790, 0960, 1290, 1350, 1410, 1420, 1920
+targets: linux-x86-64
+

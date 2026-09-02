@@ -71,6 +71,9 @@ package body Landin.Testing.Fixtures is
    function With_Sources (Item : Fixture) return String
      is (Unbounded.To_String (Item.Beside));
 
+   function Module_Root (Item : Fixture) return String
+     is (Unbounded.To_String (Item.Root));
+
    function Stream (Item : Fixture) return Stream_Choice is (Item.Stream);
 
    function Count (In_Catalogue : Catalogue) return Natural
@@ -154,6 +157,7 @@ package body Landin.Testing.Fixtures is
       Seen_Traps   : Boolean := False;
       Seen_Constructs : Boolean := False;
       Seen_With    : Boolean := False;
+      Seen_Root    : Boolean := False;
       Seen_Stream  : Boolean := False;
       Seen_Lex     : Boolean := False;
       Seen_Codes   : Boolean := False;
@@ -368,6 +372,19 @@ package body Landin.Testing.Fixtures is
                   Item.Beside := Unbounded.To_Unbounded_String (Value);
                end if;
 
+            elsif Key = "root" then
+               if Seen_Root then
+                  Complain ("duplicate key: root");
+                  return;
+               end if;
+               Seen_Root := True;
+
+               if Value'Length = 0 then
+                  Complain ("root names no directory");
+               else
+                  Item.Root := Unbounded.To_Unbounded_String (Value);
+               end if;
+
             elsif Key = "constructs" then
                if Seen_Constructs then
                   Complain ("duplicate key: constructs");
@@ -467,6 +484,7 @@ package body Landin.Testing.Fixtures is
                Traps   => False,
                Made_Of => Unbounded.Null_Unbounded_String,
                Beside  => Unbounded.Null_Unbounded_String,
+               Root    => Unbounded.Null_Unbounded_String,
                Stream  => Merged);
 
       for Index in Content'Range loop
@@ -526,6 +544,17 @@ package body Landin.Testing.Fixtures is
       if Seen_With and then not Seen_Program then
          Complain ("with names the rest of a module and there is no"
                    & " program to be the rest of");
+      end if;
+
+      if Seen_Root
+        and then (not Seen_Class or else Item.Class /= Runtime)
+      then
+         Complain ("root belongs only to a runtime fixture");
+      end if;
+
+      if Seen_Root and then Seen_With then
+         Complain ("a rooted runtime fixture discovers its module files"
+                   & " instead of naming them with `with`");
       end if;
 
       if Seen_Program and then not Seen_Constructs then

@@ -1643,6 +1643,25 @@ def check_grammar_corpus(full_run):
                                         "fixture expects %r"
                                         % (complaint, expected)))
 
+    #  Repository-owned core modules are source programs too. Rooted runtime
+    #  fixtures execute them, while this independent side holds each file to
+    #  the normative grammar before the Ada parser is involved.
+    core = os.path.join(ROOT, "core")
+    if os.path.isdir(core):
+        for directory, _, names in os.walk(core):
+            for source in sorted(name for name in names
+                                 if name.endswith(".ldn")):
+                path = os.path.join(directory, source)
+                where = os.path.relpath(path, ROOT)
+                text = io.open(path, "rb").read().decode("latin-1")
+                tokens, complaint = landin_tokens(text, signs, trees)
+                if tokens is None or not grammar_recognises(
+                        rules, trees, tokens):
+                    out.append((where, 1,
+                                "the grammar does not derive this core"
+                                " module: %s"
+                                % (complaint or "no derivation")))
+
     #  R1.10 asks for every production traced to its constructs.  The
     #  fixtures carry the citations, so the trace is checkable: a construct
     #  in the grammar that no fixture names is a rule nothing pins.
@@ -2561,6 +2580,14 @@ def fixture_sources():
                                     "`%s` names %s, which is not here"
                                     % (key, one)))
 
+            named_root = re.search(r"^root: (.+)$", text, re.M)
+            if named_root:
+                root = named_root.group(1).strip()
+                if not root or not os.path.isdir(os.path.join(case, root)):
+                    out.append((where, 1,
+                                "`root` names %s, which is not a directory"
+                                % (root or "nothing")))
+
     return out
 
 
@@ -2919,7 +2946,8 @@ def check_coverage_registers(full_run):
             "pointer.permission", "inout.exact-alias",
             "inout.possible-alias", "pointer.validity",
             "pointer.integer-origin", "pointer.integer-width",
-            "arrays.initialization", "slices.bounds-known",
+            "arrays.initialization", "raw.prefix", "raw.backing",
+            "slices.bounds-known",
             "slices.bounds-runtime", "atoms.sets", "aggregates.variants",
             "origins.escape", "origins.aliasing-limit", "functions.abi",
             "execution.resource-exhaustion", "consume.local",
@@ -2927,6 +2955,7 @@ def check_coverage_registers(full_run):
             "functions.anonymous", "control.flow", "cleanup.defer",
             "cleanup.undo", "generics.substitution",
             "concepts.conformance", "any.construction", "any.dispatch",
+            "modules.visibility",
             "entry.point", "module.images", "configuration.fixed"}
         classes = {"static", "trap", "beyond-lifetime", "outside"}
         for line, row in guarantees:

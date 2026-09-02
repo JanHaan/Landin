@@ -1021,7 +1021,17 @@ questions come with it: whether an inout binding borrows the
 matched value for the arm, and what happens when the arm assigns
 to the variant field it is bound out of.
 
-Z8  There is no notion of uninitialised storage, and a container
+Z8  RESOLVED by [0510] and D151. core/mem owns a private raw(T) whose
+capacity and initialised prefix are distinct. Its public operations admit the
+next slot, read only that prefix, release only its tail and dispose only at
+zero; invalid requests are declared outcomes. Transactional growth copies
+into a private replacement and publishes it only after the old prefix is
+drained. The caller still owns pointer validity, alignment and the
+capacity-derived allocator extent.
+
+The original finding, for the record.
+
+There is no notion of uninitialised storage, and a container
 cannot avoid having some. slice_from returns []T over memory
 holding no T. Requiring a zero image would forbid list(ptr node),
 which the tree needs, so that is not the answer. The containers
