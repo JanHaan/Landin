@@ -1,0 +1,283 @@
+out_of_memory: atom
+exhausted: atom
+
+--  This bounded variant is R3.20's executable state model. It exposes the
+--  transitions R3.30's raw-storage type must represent; it is not proposed
+--  raw-storage syntax.
+
+allocator: type = concept (a: type)
+    alloc: (inout state: a, size: usize, alignment: usize)
+           -> (block: ptr mut u8) ! out_of_memory
+    free: (inout state: a, block: ptr mut u8, size: usize) -> none
+end allocator
+
+counted: type = struct
+    left: usize
+    allocations: usize
+    frees: usize
+    last_size: usize
+    last_alignment: usize
+end counted
+
+counted_alloc: (inout state: counted, size: usize, alignment: usize)
+               -> (block: ptr mut u8) ! out_of_memory =
+    fail out_of_memory when state.left == 0
+    dec state.left
+    inc state.allocations
+    state.last_size = size
+    state.last_alignment = alignment
+    if state.allocations == 1 then
+        block = ptr(0x1000)
+    else
+        block = ptr(0x2000)
+    end if
+end counted_alloc
+
+counted_free: (inout state: counted, block: ptr mut u8, size: usize)
+              -> none =
+    _ = block
+    inc state.frees
+    state.last_size = size
+end counted_free
+
+counted is allocator (alloc: counted_alloc, free: counted_free)
+
+list: type (item: type) = struct
+    storage: variant
+        vacant |
+        reserved: (block: ptr mut u8, capacity: usize) |
+        one: (block: ptr mut u8, capacity: usize, first: item) |
+        two: (block: ptr mut u8, capacity: usize,
+              first: item, second: item) |
+        three: (block: ptr mut u8, capacity: usize,
+                first: item, second: item, third: item)
+    end storage
+end list
+
+new_list: (item: type) -> (result: list(item)) =
+    result = (storage: vacant)
+end new_list
+
+initialized: (item: type, value: list(item)) -> (count: usize) =
+    match value.storage
+        vacant: count = 0
+        reserved: count = 0
+        one: count = 1
+        two: count = 2
+        three: count = 3
+    end match
+end initialized
+
+capacity_of: (item: type, value: list(item)) -> (count: usize) =
+    match value.storage
+        vacant: count = 0
+        reserved(block, capacity): count = capacity
+        one(block, capacity, first): count = capacity
+        two(block, capacity, first, second): count = capacity
+        three(block, capacity, first, second, third): count = capacity
+    end match
+end capacity_of
+
+reserve: (item: type, a: type is allocator,
+          inout value: list(item), inout state: a, want: usize)
+         -> none ! out_of_memory =
+    match value.storage
+        vacant: begin
+            raw: ptr mut u8 =
+                try a.alloc(state, want * sizeof item, alignof item)
+            value.storage = reserved(block: raw, capacity: want)
+        end
+        reserved(block, capacity): begin
+            if want > capacity then
+                raw: ptr mut u8 =
+                    try a.alloc(state, want * sizeof item, alignof item)
+                a.free(state, block, capacity * sizeof item)
+                value.storage = reserved(block: raw, capacity: want)
+            end if
+        end
+        one: return
+        two: return
+        three: return
+    end match
+end reserve
+
+push: (item: type, a: type is allocator,
+       inout value: list(item), inout state: a, escaping added: item)
+      -> none ! out_of_memory =
+    match value.storage
+        vacant: begin
+            raw: ptr mut u8 =
+                try a.alloc(state, 2 * sizeof item, alignof item)
+            value.storage = one(block: raw, capacity: 2, first: added)
+        end
+        reserved(block, capacity): begin
+            saved_block: ptr mut u8 = block
+            saved_capacity: usize = capacity
+            value.storage = one(block: saved_block, capacity: saved_capacity,
+                                first: added)
+        end
+        one(block, capacity, first): begin
+            saved_block: ptr mut u8 = block
+            saved_capacity: usize = capacity
+            saved_first: item = first
+            value.storage = two(block: saved_block, capacity: saved_capacity,
+                                first: saved_first, second: added)
+        end
+        two(block, capacity, first, second): begin
+            grown := capacity * 2
+            raw: ptr mut u8 =
+                try a.alloc(state, grown * sizeof item, alignof item)
+            saved_first: item = first
+            saved_second: item = second
+            a.free(state, block, capacity * sizeof item)
+            value.storage = three(block: raw, capacity: grown,
+                                  first: saved_first, second: saved_second,
+                                  third: added)
+        end
+        three: fail out_of_memory
+    end match
+end push
+
+release_last: (item: type, inout value: list(item)) -> none ! exhausted =
+    match value.storage
+        vacant: fail exhausted
+        reserved: fail exhausted
+        one(block, capacity, first): begin
+            saved_block: ptr mut u8 = block
+            saved_capacity: usize = capacity
+            value.storage = reserved(block: saved_block,
+                                     capacity: saved_capacity)
+        end
+        two(block, capacity, first, second): begin
+            saved_block: ptr mut u8 = block
+            saved_capacity: usize = capacity
+            saved_first: item = first
+            value.storage = one(block: saved_block, capacity: saved_capacity,
+                                first: saved_first)
+        end
+        three(block, capacity, first, second, third): begin
+            saved_block: ptr mut u8 = block
+            saved_capacity: usize = capacity
+            saved_first: item = first
+            saved_second: item = second
+            value.storage = two(block: saved_block, capacity: saved_capacity,
+                                first: saved_first, second: saved_second)
+        end
+    end match
+end release_last
+
+drain: (item: type, inout value: list(item)) -> none =
+    match value.storage
+        vacant: return
+        reserved: return
+        one(block, capacity, first): begin
+            saved_block: ptr mut u8 = block
+            saved_capacity: usize = capacity
+            value.storage = reserved(block: saved_block,
+                                     capacity: saved_capacity)
+        end
+        two(block, capacity, first, second): begin
+            saved_block: ptr mut u8 = block
+            saved_capacity: usize = capacity
+            saved_first: item = first
+            value.storage = one(block: saved_block, capacity: saved_capacity,
+                                first: saved_first)
+            drain(value)
+        end
+        three(block, capacity, first, second, third): begin
+            saved_block: ptr mut u8 = block
+            saved_capacity: usize = capacity
+            saved_first: item = first
+            saved_second: item = second
+            value.storage = two(block: saved_block, capacity: saved_capacity,
+                                first: saved_first, second: saved_second)
+            drain(value)
+        end
+    end match
+end drain
+
+dispose: (item: type, a: type is allocator,
+          inout value: list(item), inout state: a) -> none =
+    drain(value)
+    match value.storage
+        vacant: return
+        reserved(block, capacity): begin
+            a.free(state, block, capacity * sizeof item)
+            value.storage = vacant
+        end
+        one: return
+        two: return
+        three: return
+    end match
+end dispose
+
+node: type = struct
+    value: i32
+end node
+
+first_node: node = (value: 7)
+second_node: node = (value: 11)
+third_node: node = (value: 24)
+
+public main: () -> (code: i32) =
+    mut state: counted = (left: 2, allocations: 0, frees: 0,
+                          last_size: 0, last_alignment: 0)
+    slots: usize = 2
+    mut values: list(ptr node) = (storage: vacant)
+    mut trace: i32 = 0
+
+    reserve(values, state, slots) else 0
+    if capacity_of(values) == 2 and initialized(values) == 0 then
+        trace = trace + 1
+    end if
+
+    push(values, state, addr first_node) else 0
+    if capacity_of(values) == 2 and initialized(values) == 1 then
+        trace = trace + 2
+    end if
+
+    push(values, state, addr second_node) else 0
+    if capacity_of(values) == 2 and initialized(values) == 2 then
+        trace = trace + 4
+    end if
+
+    push(values, state, addr third_node) else 0
+    if capacity_of(values) == 4 and initialized(values) == 3
+      and state.allocations == 2 and state.frees == 1
+    then
+        trace = trace + 8
+    end if
+
+    release_last(values) else 0
+    if capacity_of(values) == 4 and initialized(values) == 2 then
+        trace = trace + 16
+    end if
+
+    dispose(values, state)
+    if capacity_of(values) == 0 and initialized(values) == 0
+      and state.allocations == 2 and state.frees == 2
+      and state.last_size == 4 * sizeof ptr node
+      and state.last_alignment == alignof ptr node
+    then
+        trace = trace + 32
+    end if
+
+    mut failed: list(ptr node) = (
+        storage: two(block: ptr(0x3000), capacity: 2,
+                     first: addr first_node, second: addr second_node)
+    )
+    push(failed, state, addr third_node) else 0
+    if capacity_of(failed) == 2 and initialized(failed) == 2
+      and state.allocations == 2 and state.frees == 2
+    then
+        trace = trace + 64
+    end if
+
+    --  The pointer element has no zero image. Every successful trace bit
+    --  therefore depends on representing unused capacity without a T value.
+    if trace == 127 then
+        code = 42
+    else
+        code = trace
+    end if
+end main

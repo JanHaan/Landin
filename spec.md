@@ -8120,10 +8120,13 @@ runtime parameters remain after them in source signature order.
 Static type and fixed formals still create no runtime position. Inside the
 active routine view, `T.entry(...)` loads the declaration-order function word
 from that hidden table and makes the ordinary verified indirect call. Size and
-alignment remain table members even where the current concrete view can answer
-the same measurement directly, so later shared and `any` consumers use the same semantic measurement and
-provider schema; D147 gives the erased consumer a separate flattened physical
-table without changing these direct generic offsets.
+alignment remain table members even where the current concrete view answers
+`sizeof T` or `alignof T` directly by resolving the formal through that routine
+instance's type actual. The node's complete concrete descriptor lives only in
+the active instance overlay. Later shared and `any` consumers therefore use the
+same semantic measurement and provider schema; D147 gives the erased consumer
+a separate flattened physical table without changing these direct generic
+offsets.
 
 The Linux baseline may alias two concrete generic symbols to one emitted body
 only when a bounded IR comparison proves their signatures, slots, operand graph
@@ -8145,6 +8148,7 @@ bodies would leave a table that no executed path proved. All were declined.
 
 **Pinned by** `runtime/generic-evidence-indirect`,
 `runtime/generic-composed-evidence`, `runtime/generic-parameterized-evidence`,
+`runtime/allocator-vec-pressure`,
 `negative/parameterized-conformance-entry-signature-mismatch`; the target case
 `evidence ordering and layout`; the backend case `generic evidence is ordered indirect
 and shared`; IR verifier evidence identity, entry and signature checks; and the

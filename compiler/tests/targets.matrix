@@ -677,6 +677,7 @@ runtime/a-zero-remainder-divisor-traps | linux-x86-64
 runtime/add-exits-with-its-sum | linux-x86-64
 runtime/aggregate-results-across-branches | linux-x86-64
 runtime/aggregate-results-across-early-exits | linux-x86-64
+runtime/allocator-vec-pressure | linux-x86-64
 runtime/any-aggregate-storage | linux-x86-64
 runtime/any-compiler-constraint | linux-x86-64
 runtime/any-composed-dispatch | linux-x86-64

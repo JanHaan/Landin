@@ -2772,27 +2772,57 @@ ambiguous/colliding conformances.
 
 ### R3.20 — Build the allocator and container pressure case
 
-Status: active
+Status: complete
 Depends on: R2.50, R2.60, R2.70
 
-Implement the minimum allocator protocol and executable `vec` pressure case
-that distinguishes capacity from initialized elements, including a
-non-zeroable pointer element. Use it to discover the raw-storage operations;
-do not bless the old dishonest `slice_from` contract.
+The minimum allocator protocol remains [1360]'s two operations: allocate a
+byte extent at an alignment with declared `out_of_memory`, and free that same
+extent. The allocator is an ordinary constrained generic actual threaded
+through each container operation; the container does not store it.
+
+`runtime/allocator-vec-pressure` is an executable bounded-vector state model,
+not proposed raw-storage syntax. Its element is `ptr node`, which has no zero
+image. The trace reserves capacity two with zero initialized elements, admits
+three pointers while growing to capacity four, releases one initialized tail,
+drains the remaining initialized prefix before freeing, and proves that a
+failed allocation publishes no replacement. Allocation/free counts, byte
+extents and alignment are checked at each ownership boundary.
+
+That case derives the R3.30 contract: reserve raw capacity with initialized
+count zero; query capacity and initialized count separately; admit exactly the
+next slot; expose only the initialized prefix; release only its final slot;
+free only at initialized count zero; and grow transactionally by allocating an
+empty region, transferring the initialized prefix, releasing and freeing the
+old region, then publishing the replacement. The type must make reads outside
+the prefix, double admission and invalid release unrepresentable or rejected.
+It must not revive `slice_from`, whose `[]mut T` claims uninitialized bytes
+already contain values.
+
+Building the pressure case also closed three completed-prerequisite seams:
+generic nominal layouts retain pointer fields, `try` preserves pointer result
+descriptors and carries a successful pointer result through a block-local
+spill, and `sizeof T`/`alignof T` inside a concrete generic routine view resolve
+to that instance's type actual. Variant match bindings remain D78 aliases, so
+the model explicitly saves a payload before D76's destination-first case
+selection when a transition retains it.
 
 Sources: `[0510]`, Z8, `R§2`, `H§4`.
 
-Exit evidence: the pressure fixture demonstrates the exact initialization and
-release transitions the type must represent.
+Exit evidence: `runtime/allocator-vec-pressure` returns 42 only when its
+seven-bit transition trace equals 127 for a non-zeroable pointer element,
+including failed-growth publication and drain-before-free.
 
 ### R3.30 — Implement honest raw storage and `core/mem`
 
-Status: planned
+Status: active
 Depends on: R3.20, R2.10
 
-Specify and implement raw storage with separate capacity and initialized count,
-one-slot admission and release of initialized values only. Fold the resulting
-semantics into `tour.md` and the guarantee matrix.
+Specify and implement the raw-storage contract derived by R3.20: separate
+capacity and initialized count, next-slot admission, initialized-prefix access,
+tail release, zero-initialized-count disposal, and transactional growth support.
+Choose the smallest spelling and compiler-owned representation that can enforce
+those transitions. Fold the resulting semantics into `tour.md` and the
+guarantee matrix.
 
 Sources: legacy A2; `[0510]`, Z8.
 

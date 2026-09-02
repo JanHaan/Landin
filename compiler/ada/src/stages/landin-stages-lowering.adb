@@ -2659,7 +2659,8 @@ package body Landin.Stages.Lowering is
               (Unit.all, Filling, Ty.U32, Res.No_Declaration, Site,
                Atoms => Error_Set);
             if Type_At (Of_Tree, Node)
-                 in Ty.Scalar_Name | Ty.Function_Value | Ty.Atom_Value
+                 in Ty.Scalar_Name | Ty.Function_Value | Ty.Pointer_Value
+                    | Ty.Atom_Value
             then
                Success_Slot := IR.Add_Slot
                  (Unit.all, Filling, Scalar_At (Of_Tree, Node),
@@ -4932,8 +4933,10 @@ package body Landin.Stages.Lowering is
                         Held : constant Ty.Type_Kind :=
                           Landin.Checking.Type_Of (Types.all, Means);
                         Carrier : constant Ty.Scalar_Name :=
-                          (if Held = Ty.Function_Value
-                           then Ty.Usize else Ty.Scalar_Name (Held));
+                          (if Held in Ty.Function_Value | Ty.Pointer_Value
+                           then Ty.Usize
+                           elsif Held = Ty.Atom_Value then Ty.U32
+                           else Ty.Scalar_Name (Held));
                         Signature : constant IR.Signature_Id :=
                           (if Held = Ty.Function_Value
                            then Signature_For
