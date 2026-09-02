@@ -3,3 +3,4 @@ summary: every named result must be assigned independently at an early return
 constructs: 0920, 0930, 0970, 1800, 1910
 program: program.ldn
 codes: L0302
+targets: linux-x86-64, macos-arm64, synthetic-32

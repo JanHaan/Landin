@@ -3,3 +3,4 @@ summary: two erased concrete types use immutable and mutable entries through rea
 program: main.ldn
 status: 42
 constructs: 0430, 0670, 1230, 1240, 1260, 1370, 1380, 1390
+targets: linux-x86-64

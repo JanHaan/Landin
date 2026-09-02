@@ -199,9 +199,12 @@ layout, hidden evidence arguments, indirect concept calls and
 representation-compatible shared machine bodies are complete. R2.80's exact
 `any C` identity, explicit/inferred pointer erasure, object-safe
 mutable/immutable dispatch, flattened composed tables, two-word target layout,
-origin propagation and aggregate/shaped ABI are complete.
+origin propagation and aggregate/shaped ABI are complete. R2.90's guarantee,
+diagnostic, conformance/evidence, prototype-derivation and target-applicability
+registers are complete, mechanically closed over the implementation corpus and
+owned by executable rejection, trap or explicit non-guarantee evidence.
 
-**Current roadmap work: R2.90 — Establish guarantee and semantic coverage registers.**
+**Current roadmap work: R3.10 — Implement minimum modules and ordered roots.**
 
 `refine` runs the frontend, lowers and
 verifies target-neutral IR, emits Linux x86-64 assembly, and can assemble and

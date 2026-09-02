@@ -8181,6 +8181,7 @@ package body Landin.Stages.Lowering is
                      begin
                         if Type_At (Of_Tree, Value)
                              in Ty.Aggregate | Ty.Fixed_Array
+                                | Ty.Slice_Value | Ty.Any_Value
                         then
                            declare
                               Temporary : constant IR.Slot_Id :=

@@ -1,0 +1,10 @@
+read_at: (items: []u32, index: usize) -> (r: u32) =
+    r = items[index]
+end read_at
+
+public main: () -> (code: i32) =
+    words: [1]u32 = [42]
+    view: []u32 = words[0..<1]
+    _ = read_at(view, 1)
+    code = 42
+end main

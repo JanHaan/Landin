@@ -3,3 +3,4 @@ summary: two named returns cannot declare one name in their signature scope
 constructs: 0920, 1840, 1850
 program: program.ldn
 codes: L0200
+targets: linux-x86-64, macos-arm64, synthetic-32

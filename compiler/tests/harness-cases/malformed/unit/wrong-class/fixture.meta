@@ -1,2 +1,3 @@
 class: negative
 summary: the class disagrees with the directory it sits in
+targets: linux-x86-64

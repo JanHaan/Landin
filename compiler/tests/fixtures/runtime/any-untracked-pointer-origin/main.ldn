@@ -1,0 +1,19 @@
+display: type = concept (t: type)
+    code: (self: ptr t) -> (value: i32)
+end display
+
+u32_code: (self: ptr u32) -> (value: i32) =
+    value = 42
+end u32_code
+
+u32 is display (code: u32_code)
+
+erase_raw: () -> (result: any display) =
+    raw: ptr u32 = ptr(0x4002_0000)
+    result = any(raw)
+end erase_raw
+
+public main: () -> (code: i32) =
+    _ = erase_raw()
+    code = 42
+end main

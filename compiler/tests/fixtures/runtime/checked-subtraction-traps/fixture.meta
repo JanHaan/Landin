@@ -1,0 +1,6 @@
+class: runtime
+summary: a dynamic checked subtraction that underflows traps
+program: main.ldn
+traps: yes
+constructs: 0290, 0300, 1950, 1960
+targets: linux-x86-64

@@ -1,3 +1,4 @@
 class: unit
 summary: an unknown key must be reported
+targets: linux-x86-64
 colour: blue

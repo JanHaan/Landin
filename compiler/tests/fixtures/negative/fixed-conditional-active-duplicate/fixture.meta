@@ -3,3 +3,4 @@ summary: D139 selected declarations collide with ordinary declarations in their 
 program: program.ldn
 codes: L0200
 constructs: 0080, 1500, 1740, 1850
+targets: linux-x86-64, macos-arm64, synthetic-32

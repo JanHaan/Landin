@@ -90,7 +90,8 @@ package body Landin.Tests.Fixture_Suite is
       Host.Add_Directory ("root/unit/zebra");
       Host.Add_File
         ("root/unit/zebra/fixture.meta",
-         "class: unit" & LF & "summary: later by name" & LF);
+         "class: unit" & LF & "summary: later by name" & LF
+         & "targets: linux-x86-64" & LF);
       Host.Add_Directory ("root/unit/alpha");
       Host.Add_File
         ("root/unit/alpha/fixture.meta",
@@ -103,6 +104,7 @@ package body Landin.Tests.Fixture_Suite is
         ("root/negative/broken-name/fixture.meta",
          "class: negative" & LF & "summary: a rejection" & LF
          & "constructs: 1740" & LF
+         & "targets: linux-x86-64" & LF
          & "program: broken.ldn" & LF & "expect: broken.expected" & LF
          & "args: broken.ldn" & LF & "status: 1" & LF);
 
@@ -162,6 +164,11 @@ package body Landin.Tests.Fixture_Suite is
       Host.Add_Directory ("root/unit/missing-summary");
       Host.Add_File
         ("root/unit/missing-summary/fixture.meta", "class: unit" & LF);
+
+      Host.Add_Directory ("root/unit/missing-targets");
+      Host.Add_File
+        ("root/unit/missing-targets/fixture.meta",
+         "class: unit" & LF & "summary: no applicability" & LF);
 
       Host.Add_Directory ("root/unit/wrong-class");
       Host.Add_File
@@ -247,6 +254,9 @@ package body Landin.Tests.Fixture_Suite is
       Landin.Testing.Check
         (Item, Mentions (Found, "missing required key: summary"),
          "a missing required key is reported");
+      Landin.Testing.Check
+        (Item, Mentions (Found, "missing required key: targets"),
+         "missing target applicability is reported");
       Landin.Testing.Check
         (Item, Mentions (Found, "does not match directory"),
          "a class that disagrees with its directory is reported");

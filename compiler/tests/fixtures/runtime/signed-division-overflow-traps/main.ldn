@@ -1,0 +1,8 @@
+divide: (left: i8, right: i8) -> (r: i8) =
+    r = left / right
+end divide
+
+public main: () -> (code: i32) =
+    _ = divide(-128, -1)
+    code = 42
+end main

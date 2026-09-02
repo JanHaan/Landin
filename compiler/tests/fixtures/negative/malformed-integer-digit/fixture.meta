@@ -1,0 +1,6 @@
+class: negative
+summary: a digit outside the selected integer base reports the malformed literal
+program: main.ldn
+codes: L0011
+constructs: 1770
+targets: linux-x86-64, macos-arm64, synthetic-32

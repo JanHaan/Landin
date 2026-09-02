@@ -3,3 +3,4 @@ summary: a return edge inside a control value still requires its named result
 program: program.ldn
 codes: L0302
 constructs: 0930, 1050, 1080, 1800, 1810, 1910
+targets: linux-x86-64, macos-arm64, synthetic-32

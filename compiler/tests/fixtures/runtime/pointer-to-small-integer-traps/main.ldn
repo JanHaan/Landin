@@ -1,0 +1,9 @@
+narrow: (pointer: ptr u32) -> (r: u8) =
+    r = u8(pointer)
+end narrow
+
+public main: () -> (code: i32) =
+    value: u32 = 42
+    _ = narrow(addr value)
+    code = 42
+end main

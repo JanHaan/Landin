@@ -3,3 +3,4 @@ summary: a function-valued struct field requires the complete signature declared
 constructs: 0670, 0700, 1000, 1790, 1890
 program: program.ldn
 codes: L0301
+targets: linux-x86-64, macos-arm64, synthetic-32

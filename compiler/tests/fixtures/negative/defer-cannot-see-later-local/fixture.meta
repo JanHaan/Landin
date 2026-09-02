@@ -3,3 +3,4 @@ summary: a deferred call resolves in source order even though it evaluates at bl
 program: program.ldn
 codes: L0201
 constructs: 0110, 1100, 1800, 1810, 1840, 1860
+targets: linux-x86-64, macos-arm64, synthetic-32

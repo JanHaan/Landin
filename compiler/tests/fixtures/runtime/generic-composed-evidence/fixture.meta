@@ -3,3 +3,4 @@ summary: a child constraint dispatches through its separately registered parent 
 program: main.ldn
 status: 42
 constructs: 1230, 1240, 1290, 1310, 1340
+targets: linux-x86-64

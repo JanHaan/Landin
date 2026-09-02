@@ -1,3 +1,4 @@
 class: unit
 summary: a line that is not a pair must be reported
+targets: linux-x86-64
 nonsense

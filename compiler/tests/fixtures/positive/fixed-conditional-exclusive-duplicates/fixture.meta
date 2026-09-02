@@ -2,3 +2,4 @@ class: positive
 summary: D139 gives mutually exclusive arms one selected declaration, so their same spelling does not duplicate
 program: main.ldn
 constructs: 0080, 1500, 1740, 1850
+targets: linux-x86-64, macos-arm64, synthetic-32

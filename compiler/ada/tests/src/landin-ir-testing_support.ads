@@ -71,4 +71,32 @@ package Landin.IR.Testing_Support is
      with Pre => Holds (Into, Item)
                  and then Holds (Into, Item, Slot);
 
+   --  Evidence operations have public builders whose preconditions make an
+   --  out-of-range identity or entry unconstructible.  These hooks damage a
+   --  value after construction so each verifier rule remains executable.
+   procedure Overwrite_Value_Evidence
+     (Into     : in out Unit;
+      Item     : Item_Id;
+      Value    : Value_Id;
+      Evidence : Evidence_Id)
+     with Pre => Holds (Into, Item, Value)
+                 and then Op_Of (Into, Item, Value)
+                   in Evidence_Address | Evidence_Function;
+
+   procedure Overwrite_Value_Evidence_Entry
+     (Into  : in out Unit;
+      Item  : Item_Id;
+      Value : Value_Id;
+      Which : Natural)
+     with Pre => Holds (Into, Item, Value)
+                 and then Op_Of (Into, Item, Value) = Evidence_Function;
+
+   procedure Overwrite_Value_Signature
+     (Into     : in out Unit;
+      Item     : Item_Id;
+      Value    : Value_Id;
+      Signature : Signature_Id)
+     with Pre => Holds (Into, Item, Value)
+                 and then Op_Of (Into, Item, Value) = Evidence_Function;
+
 end Landin.IR.Testing_Support;

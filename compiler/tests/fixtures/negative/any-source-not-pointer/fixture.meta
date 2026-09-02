@@ -3,3 +3,4 @@ summary: explicit erasure requires a pointer rather than an unknown-size value
 program: main.ldn
 codes: L0301
 constructs: 0670, 1230, 1240, 1370, 1380
+targets: linux-x86-64, macos-arm64, synthetic-32

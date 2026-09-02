@@ -1,0 +1,8 @@
+shrink: (n: u8) -> (r: u8) =
+    r = n - 1
+end shrink
+
+public main: () -> (code: i32) =
+    _ = shrink(0)
+    code = 42
+end main

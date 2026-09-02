@@ -1,0 +1,4 @@
+class: unit
+summary: target facts distinguish 64-bit Linux and macOS pointers from synthetic 32-bit pointers and usize
+constructs: 0290, 0370, 0430, 0470
+targets: linux-x86-64, macos-arm64, synthetic-32

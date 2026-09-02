@@ -3,3 +3,4 @@ summary: an erased expression body fills caller-owned two-word result storage
 program: main.ldn
 status: 42
 constructs: 0430, 0770, 0790, 0840, 0880, 1370, 1380, 1390
+targets: linux-x86-64

@@ -2,3 +2,4 @@ class: positive
 summary: D139 recursively selects nested declarations while inactive nested conditions and semantic errors remain inert
 program: main.ldn
 constructs: 0080, 0130, 1500, 1540, 1740
+targets: linux-x86-64, macos-arm64, synthetic-32

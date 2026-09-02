@@ -2,3 +2,4 @@ class: positive
 summary: a parameterized nominal family supplies a concrete constraint lookup
 program: main.ldn
 constructs: 1230, 1240, 1250, 1280, 1290, 1350
+targets: linux-x86-64, macos-arm64, synthetic-32

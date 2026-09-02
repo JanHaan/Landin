@@ -37,6 +37,11 @@ package Landin.Testing.Fakes is
    --  reported an unknown option, which is where the promise bites.
    procedure Raise_On_Read (Host : in out Fake_Filesystem);
 
+   --  Make every later write answer Not_Writable without retaining bytes.
+   --  This pins the driver's output diagnostic without depending on native
+   --  filesystem permissions.
+   procedure Refuse_Writes (Host : in out Fake_Filesystem);
+
    overriding procedure Read_File
      (Host    : Fake_Filesystem;
       Path    : String;
@@ -139,7 +144,8 @@ private
       --  one arming is one defect.  It lives here rather than in the
       --  record because Read_File takes its host as a constant view, the
       --  same reason the writes do.
-      Raises : Boolean := False;
+      Raises       : Boolean := False;
+      Refuses_Write : Boolean := False;
    end record;
 
    type Store_Access is access Store;

@@ -3,3 +3,4 @@ summary: erased values with different direct concept identities do not convert
 program: main.ldn
 codes: L0301
 constructs: 0310, 1230, 1240, 1370, 1380
+targets: linux-x86-64, macos-arm64, synthetic-32

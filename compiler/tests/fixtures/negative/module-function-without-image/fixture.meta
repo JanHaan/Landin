@@ -3,3 +3,4 @@ summary: module function storage has no implicit zero code address
 constructs: 0540, 1000, 1790, 1940
 program: program.ldn
 codes: L0305
+targets: linux-x86-64, macos-arm64, synthetic-32

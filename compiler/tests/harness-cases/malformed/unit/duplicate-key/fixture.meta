@@ -1,3 +1,4 @@
 class: unit
+targets: linux-x86-64
 summary: one
 summary: two
