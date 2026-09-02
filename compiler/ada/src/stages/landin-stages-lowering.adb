@@ -2749,7 +2749,8 @@ package body Landin.Stages.Lowering is
                   if Type_At (Of_Tree, Argument)
                        in Ty.Slice_Value | Ty.Any_Value
                     and then Syn.Kind (Of_Tree, Argument)
-                      not in Syn.Call | Syn.Try_Expression
+                      not in Syn.Call | Syn.Labeled_Application
+                         | Syn.Try_Expression
                          | Syn.If_Statement | Syn.Match_Statement
                          | Syn.Bare_Block
                   then
@@ -2765,8 +2766,10 @@ package body Landin.Stages.Lowering is
                            Site_Of (Of_Tree, Argument));
                      end;
                   elsif Syn.Kind (Of_Tree, Argument)
-                       in Syn.Call | Syn.Try_Expression | Syn.If_Statement
+                       in Syn.Call | Syn.Labeled_Application
+                          | Syn.Try_Expression | Syn.If_Statement
                           | Syn.Match_Statement | Syn.Bare_Block
+                    and then not Is_Struct_Construction (Of_Tree, Argument)
                   then
                      declare
                         Temporary : constant IR.Slot_Id :=
@@ -7193,7 +7196,8 @@ package body Landin.Stages.Lowering is
                            pragma Unreferenced (Ignored);
                         end;
                      elsif Held in
-                       Ty.Scalar_Name | Ty.Function_Value | Ty.Atom_Value
+                       Ty.Scalar_Name | Ty.Function_Value | Ty.Pointer_Value
+                          | Ty.Atom_Value
                      then
                         declare
                            Ignored : constant IR.Value_Id :=
@@ -7329,7 +7333,10 @@ package body Landin.Stages.Lowering is
                                     raise Landin.Compiler_Defect;
                               end case;
                            elsif Syn.Kind (Of_Tree, Value)
-                                   in Syn.Call | Syn.Try_Expression
+                                   in Syn.Call | Syn.Labeled_Application
+                                      | Syn.Try_Expression
+                             and then not Is_Struct_Construction
+                               (Of_Tree, Value)
                            then
                               Lower_Stored_Expression
                                 (Of_Tree, Value, Scope, Where);
@@ -7488,7 +7495,10 @@ package body Landin.Stages.Lowering is
                                     raise Landin.Compiler_Defect;
                               end case;
                            elsif Syn.Kind (Of_Tree, Value)
-                                   in Syn.Call | Syn.Try_Expression
+                                   in Syn.Call | Syn.Labeled_Application
+                                      | Syn.Try_Expression
+                             and then not Is_Struct_Construction
+                               (Of_Tree, Value)
                            then
                               Lower_Stored_Expression
                                 (Of_Tree, Value, Scope, Where);

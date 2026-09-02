@@ -1,0 +1,12 @@
+import core/mem
+
+item_ptr: type = ptr i32
+
+public main: () -> (code: i32) =
+    mut bytes: [8]u8 = zeroed
+    base: ptr mut u8 = addr bytes[0]
+    slots: usize = 1
+    storage := mem.reserve(item: item_ptr, base: base, slots: slots)
+    code = i32(storage.initialized_count)
+end main
+

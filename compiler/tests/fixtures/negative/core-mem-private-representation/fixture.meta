@@ -1,0 +1,8 @@
+class: negative
+summary: an inferred core/mem raw value does not expose its private representation
+expect: expected.txt
+targets: linux-x86-64, macos-arm64, synthetic-32
+args: --root=../.. ../tests/fixtures/negative/core-mem-private-representation
+codes: L0202
+status: 1
+constructs: 0420, 0510, 1410, 1420

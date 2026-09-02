@@ -2814,25 +2814,38 @@ including failed-growth publication and drain-before-free.
 
 ### R3.30 — Implement honest raw storage and `core/mem`
 
-Status: active
+Status: complete
 Depends on: R3.20, R2.10
 
-Specify and implement the raw-storage contract derived by R3.20: separate
-capacity and initialized count, next-slot admission, initialized-prefix access,
-tail release, zero-initialized-count disposal, and transactional growth support.
-Choose the smallest spelling and compiler-owned representation that can enforce
-those transitions. Fold the resulting semantics into `tour.md` and the
-guarantee matrix.
+`core/mem` is now an ordinary Landin module whose private generic `raw(item)`
+representation keeps a byte pointer, capacity and initialized-prefix count.
+Its public operations reserve empty storage, report the two counts separately,
+admit exactly the next value, read only below the initialized count, release
+only the tail, and dispose only an empty region. The declared `raw_full`,
+`uninitialized`, `raw_empty` and `raw_not_empty` atoms make every rejected
+transition recoverable without claiming that spare bytes already contain
+values. D151 records the state machine, its deliberately absent spare-capacity
+slice and the transactional grow protocol.
+
+Module visibility now keeps the nominal identity usable through public
+signatures while rejecting cross-module selection of its private fields. The
+generic type-actual and lowering paths carry pointer, slice and `any`
+descriptors and distinguish labelled generic calls from labelled aggregate
+construction. Rooted runtime fixtures can consequently compile the actual
+repository `core/*` module instead of a copied test implementation. `[0510]`,
+Z8 and the guarantee matrix carry the settled contract.
 
 Sources: legacy A2; `[0510]`, Z8.
 
-Exit evidence: positive state transitions and negative uninitialized-read,
-double-admit and invalid-release cases pass; containers no longer pretend
-uninitialized bytes are `T`.
+Exit evidence: `runtime/core-mem-raw-storage` returns 42 only when a
+non-zeroable pointer element passes capacity/prefix separation, double-admit,
+uninitialized-read, tail-release, empty-dispose and failed/successful
+transactional-growth paths. `negative/core-mem-private-representation` pins
+the L0202 refusal for direct representation access.
 
 ### R3.40 — Implement parser-support core modules
 
-Status: planned
+Status: active
 Depends on: R3.30, R2.70, R2.80
 
 Implement the required Landin `core/mem`, `core/vec` and `core/text` layers,

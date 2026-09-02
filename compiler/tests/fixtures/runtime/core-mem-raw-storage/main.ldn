@@ -1,0 +1,141 @@
+import core/mem
+
+node: type = struct
+    value: i32
+end node
+
+node_ptr: type = ptr node
+
+first: node = (value: 19)
+second: node = (value: 23)
+
+growth_case: () -> (ok: bool) =
+    zero: usize = 0
+    one: usize = 1
+    two: usize = 2
+    four: usize = 4
+    null_address: usize = 0
+    fallback: ptr mut u8 = ptr(null_address)
+
+    mut old_bytes: [16]u8 = zeroed
+    old_start: ptr mut u8 = addr old_bytes[0]
+    mut old := mem.reserve(item: node_ptr, base: old_start, slots: two)
+    _ = mem.admit(old, addr first) else two
+    _ = mem.admit(old, addr second) else two
+
+    --  A too-small replacement may be changed while it is private, then
+    --  rolled back. The published old prefix is not touched.
+    mut short_bytes: [8]u8 = zeroed
+    short_start: ptr mut u8 = addr short_bytes[0]
+    mut short := mem.reserve(item: node_ptr, base: short_start, slots: one)
+    copied_first: usize = begin
+        value: ptr node = mem.get(old, zero) else addr second
+        mem.admit(short, value) else one
+    end
+    refused_second: usize = begin
+        value: ptr node = mem.get(old, one) else addr first
+        mem.admit(short, value) else one
+    end
+    rolled_back: i32 = begin
+        value: ptr node = mem.release(short) else addr second
+        value.val.value
+    end
+    short_freed: ptr mut u8 = mem.dispose(short) else fallback
+    preserved_first: i32 = begin
+        value: ptr node = mem.get(old, zero) else addr second
+        value.val.value
+    end
+    preserved_second: i32 = begin
+        value: ptr node = mem.get(old, one) else addr first
+        value.val.value
+    end
+
+    --  A large enough replacement receives the prefix first. Only after
+    --  every fallible copy succeeds is the old prefix drained and released;
+    --  the final assignment is the publication point.
+    mut grown_bytes: [32]u8 = zeroed
+    grown_start: ptr mut u8 = addr grown_bytes[0]
+    mut grown := mem.reserve(item: node_ptr, base: grown_start, slots: four)
+    grown_first: usize = begin
+        value: ptr node = mem.get(old, zero) else addr second
+        mem.admit(grown, value) else four
+    end
+    grown_second: usize = begin
+        value: ptr node = mem.get(old, one) else addr first
+        mem.admit(grown, value) else four
+    end
+    drained_second: i32 = begin
+        value: ptr node = mem.release(old) else addr first
+        value.val.value
+    end
+    drained_first: i32 = begin
+        value: ptr node = mem.release(old) else addr second
+        value.val.value
+    end
+    old_freed: ptr mut u8 = mem.dispose(old) else fallback
+    old = grown
+    published_second: i32 = begin
+        value: ptr node = mem.get(old, one) else addr first
+        value.val.value
+    end
+
+    ok = copied_first == zero and refused_second == one
+      and rolled_back == 19 and usize(short_freed) == usize(short_start)
+      and preserved_first == 19 and preserved_second == 23
+      and grown_first == zero and grown_second == one
+      and drained_second == 23 and drained_first == 19
+      and usize(old_freed) == usize(old_start)
+      and mem.capacity(old) == four and mem.initialized(old) == two
+      and published_second == 23
+end growth_case
+
+public main: () -> (code: i32) =
+    mut bytes: [16]u8 = zeroed
+    start: ptr mut u8 = addr bytes[0]
+    slots: usize = 2
+    mut storage := mem.reserve(item: node_ptr, base: start, slots: slots)
+
+    first_slot: usize = mem.admit(storage, addr first) else slots
+    second_slot: usize = mem.admit(storage, addr second) else slots
+    blocked: usize = mem.admit(storage, addr first) else slots
+
+    null_address: usize = 0
+    fallback: ptr mut u8 = ptr(null_address)
+    refused_address: usize = begin
+        refused: ptr mut u8 = mem.dispose(storage) else fallback
+        usize(refused)
+    end
+    missing_value: i32 = begin
+        missing: ptr node = mem.get(storage, slots) else addr first
+        missing.val.value
+    end
+
+    first_index: usize = 1
+    right_value: i32 = begin
+        right: ptr node = mem.get(storage, first_index) else addr first
+        right.val.value
+    end
+    released_value: i32 = begin
+        released: ptr node = mem.release(storage) else addr first
+        released.val.value
+    end
+    _ = mem.release(storage) else addr first
+    empty_value: i32 = begin
+        empty: ptr node = mem.release(storage) else addr first
+        empty.val.value
+    end
+
+    freed: ptr mut u8 = mem.dispose(storage) else fallback
+    if first_slot == 0 and second_slot == 1 and blocked == slots
+      and refused_address == 0 and missing_value == 19
+      and right_value == 23 and released_value == 23
+      and empty_value == 19 and slots * sizeof ptr node == 16
+      and usize(freed) == usize(start)
+      and mem.capacity(storage) == 0 and mem.initialized(storage) == 0
+      and growth_case()
+    then
+        code = 42
+    else
+        code = 9
+    end if
+end main
