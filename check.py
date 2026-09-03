@@ -3175,7 +3175,7 @@ def check_coverage_registers(full_run):
         required_guarantees = {
             "source.lexical", "source.structure", "declarations.names",
             "types.values", "text.literal-storage", "float.ieee",
-            "conversion.integer",
+            "conversion.integer", "conversion.float-width",
             "arithmetic.known",
             "arithmetic.runtime",
             "arithmetic.total", "ranges.measurements", "assignment.flow",

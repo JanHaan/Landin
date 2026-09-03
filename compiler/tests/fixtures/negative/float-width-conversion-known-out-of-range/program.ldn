@@ -1,0 +1,2 @@
+huge: f64 = 1.0e100
+too_large: f32 = f32(huge)

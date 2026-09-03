@@ -1,0 +1,38 @@
+module_source: f64 = 3.5
+module_narrowed: f32 = f32(module_source)
+module_widened: f64 = f64(f32(2.25))
+
+widen: (value: f32) -> (result: f64) =
+    result = f64(value)
+end widen
+
+narrow: (value: f64) -> (result: f32) =
+    result = f32(value)
+end narrow
+
+public main: () -> (code: i32) =
+    minimum: f64 = 0x1.0p-149
+    narrow_minimum: f32 = 0x1.0p-149
+    half_minimum: f64 = 0x1.0p-150
+    halfway: f64 = 0x1.000001p0
+    above_halfway: f64 = 0x1.0000010000001p0
+    negative_zero: f32 = f32(-f64(0.0))
+    narrowed_nan: f32 = f32(f64.nan)
+
+    if widen(1.5) == 1.5
+      and narrow(2.75) == 2.75
+      and module_narrowed == 3.5
+      and module_widened == 2.25
+      and widen(narrow_minimum) > 0.0
+      and narrow(minimum) > 0.0
+      and narrow(half_minimum) == 0.0
+      and narrow(halfway) == 1.0
+      and narrow(above_halfway) > 1.0
+      and 1.0 / negative_zero == -f32.infinity
+      and f32(f64.infinity) == f32.infinity
+      and narrowed_nan <> narrowed_nan then
+        code = 42
+    else
+        code = 1
+    end if
+end main

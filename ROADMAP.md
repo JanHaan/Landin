@@ -3144,6 +3144,12 @@ with L0300, sign- or zero-extends a runtime source before checking the exact
 destination range, and traps rather than truncating, wrapping or reinterpreting
 an out-of-range value. It reuses [0470]'s target-neutral conversion operation;
 float/integer and bool conversions remain named R4.10 refusals.
+The fifteenth increment enables explicit conversion between f32 and f64.
+D169 makes widening exact, narrows to nearest with ties to even, preserves
+signed zero and the infinity/NaN class, folds module-known carrier bits without
+host float arithmetic, and gives a finite f64-to-f32 overflow L0300 when known
+or a runtime trap otherwise. Integer/float and bool conversions remain named
+R4.10 refusals.
 
 Exit evidence: every hosted `[NNNN]` row has implementation and positive or
 negative evidence; no omission is hidden by prototype coverage.
