@@ -101,9 +101,10 @@
 --  is no textual reader: a dump is a recorded artefact the way
 --  `compiler/tests/lexical.tokens` is, and a reader would be both a
 --  second constructor of an IR and the first half of the serialised
---  stage protocol R0.60 refused to freeze.  There is no conversion
---  opcode, because [0700]'s conversion is refused by name [1830].  There
---  is no Discard: [1930] throws a result away and an unused value is how
+--  stage protocol R0.60 refused to freeze.  Conversion is the one checked
+--  integer operation D168 and [0470] need, not a generic coercion protocol;
+--  the checker still refuses every other [0700] conversion by name [1830].
+--  There is no Discard: [1930] throws a result away and an unused value is how
 --  that is spelt, so no rule here says every value is used.  And there is
 --  no Increment: [1900] says `inc` says what `x += 1` says, which is a
 --  Load, a Number, a trapping Add and a Store.
@@ -197,9 +198,9 @@ package Landin.IR is
       --  target question carried by the scalar element identity.
       Slice_Address,
       Empty_Slice_Base,
-      --  [0470]'s explicit integer/pointer carrier conversion.  The source
-      --  and result integer kinds retain both widths; a backend emits the
-      --  required runtime fit check before preserving the address bits.
+      --  D168's explicit integer conversion and [0470]'s pointer-address
+      --  form. The source and result integer kinds retain both widths; a
+      --  backend emits the required runtime fit check before narrowing.
       Conversion,
       Pointer_Address,
       --  [0430]'s source pointer access.  The address is an ordinary usize

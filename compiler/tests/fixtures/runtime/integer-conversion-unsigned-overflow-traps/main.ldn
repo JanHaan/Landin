@@ -1,0 +1,7 @@
+to_signed: (value: u16) -> (result: i16) =
+    result = i16(value)
+end to_signed
+
+public main: () -> (code: i32) =
+    code = i32(to_signed(40000))
+end main

@@ -481,6 +481,8 @@ package body Landin.Stages.Checking is
          Wanted  : Ty.Scalar_Name);
       function Float_Special_Type
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind;
+      function Conversion_Target
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind;
       function Character_Value
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Magnitude;
       procedure Commit_To
@@ -7812,6 +7814,22 @@ package body Landin.Stages.Checking is
          return Ty.Undecided;
       end Float_Special_Type;
 
+      function Conversion_Target
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind
+      is
+      begin
+         if Syn.Kind (Of_Tree, Node) /= Syn.Call
+           or else Syn.Argument_Count (Of_Tree, Node) /= 1
+           or else Syn.Kind
+             (Of_Tree, Syn.Callee_Of (Of_Tree, Node)) /= Syn.Name_Reference
+         then
+            return Ty.Ill_Typed;
+         end if;
+         return Landin.Checking.Named
+           (Types.all,
+            Syn.Name (Of_Tree, Syn.Callee_Of (Of_Tree, Node)));
+      end Conversion_Target;
+
       function Character_Value
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Magnitude
       is
@@ -13758,14 +13776,10 @@ package body Landin.Stages.Checking is
                      then Res.Bound_To (Meanings.all, Of_Tree, Callee)
                      else Res.No_Declaration);
                   Conversion : constant Ty.Type_Kind :=
-                    (if Syn.Kind (Of_Tree, Node) = Syn.Call
-                       and then Syn.Argument_Count (Of_Tree, Node) = 1
-                       and then Syn.Kind (Of_Tree, Callee)
-                         = Syn.Name_Reference
-                     then Landin.Checking.Named
-                       (Types.all, Syn.Name (Of_Tree, Callee))
-                     else Ty.Ill_Typed);
-                  Is_Pointer_Conversion : constant Boolean :=
+                    Conversion_Target (Of_Tree, Node);
+                  Is_Scalar_Conversion : constant Boolean :=
+                    Conversion in Ty.Scalar_Name;
+                  Is_Integer_Conversion : constant Boolean :=
                     Conversion in Ty.Integer_Name;
                   Is_Generic : constant Boolean :=
                     Named
@@ -13775,7 +13789,7 @@ package body Landin.Stages.Checking is
                       (Tree_For (Res.Source_Of (Meanings.all, Means)).all,
                        Res.Node_Of (Meanings.all, Means)) /= 0;
                   Held : constant Ty.Type_Kind :=
-                    (if Is_Pointer_Conversion or else Is_Generic
+                    (if Is_Scalar_Conversion or else Is_Generic
                      then Ty.Function_Value
                      elsif Named then Settled_Type (Means)
                      else Synthesise (Of_Tree, Callee));
@@ -13789,14 +13803,23 @@ package body Landin.Stages.Checking is
                      then Landin.Checking.No_Signature
                      else Effective_Call_Signature (Of_Tree, Node));
                begin
-                  if Is_Pointer_Conversion then
+                  if Is_Integer_Conversion then
                      declare
                         Value : constant Syn.Node_Id :=
                           Syn.Nth_Argument (Of_Tree, Node, 1);
                         Got : constant Ty.Type_Kind :=
                           Synthesise (Of_Tree, Value);
                      begin
-                        if Got /= Ty.Ill_Typed
+                        if Got = Ty.Untyped_Integer then
+                           Commit_To
+                             (Of_Tree, Value, Ty.Integer_Name (Conversion));
+                           if Landin.Checking.Type_Of
+                             (Types.all, Of_Tree, Value) = Ty.Ill_Typed
+                           then
+                              return Kept (Ty.Ill_Typed);
+                           end if;
+                        elsif Got /= Ty.Ill_Typed
+                          and then Got not in Ty.Integer_Name
                           and then Got /= Ty.Pointer_Value
                         then
                            Bad.Report
@@ -13804,9 +13827,11 @@ package body Landin.Stages.Checking is
                               Source  => Syn.Source_Of (Of_Tree),
                               Where   => Syn.Where (Of_Tree, Value),
                               Message => "this integer conversion requires a"
-                                         & " pointer value",
-                              Note    => "[0470]: converting a pointer to an"
-                                         & " integer is explicit",
+                                         & " numeric integer or pointer"
+                                         & " value",
+                              Note    => "[0310]/[0470]: conversion is"
+                                         & " explicit and preserves its"
+                                         & " source class",
                               Related => Syn.Origin (Of_Tree, Callee),
                               Because => "the integer type applied here",
                               Into    => Found);
@@ -13816,6 +13841,18 @@ package body Landin.Stages.Checking is
                         end if;
                         return Kept (Conversion);
                      end;
+                  end if;
+
+                  if Is_Scalar_Conversion then
+                     Bad.Report
+                       (Item    => Bad.Unsupported_Use,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Where (Of_Tree, Node),
+                        Message => "this scalar conversion is not enabled"
+                                   & " yet",
+                        Refused => Bad.Scalar_Conversion,
+                        Into    => Found);
+                     return Kept (Ty.Ill_Typed);
                   end if;
 
                   if Syn.Kind (Of_Tree, Node) = Syn.Labeled_Application
@@ -19283,6 +19320,10 @@ package body Landin.Stages.Checking is
 
          case Syn.Kind (Of_Tree, Node) is
             when Syn.Call =>
+               if Conversion_Target (Of_Tree, Node) in Ty.Integer_Name then
+                  return Is_Known
+                    (Of_Tree, Syn.Nth_Argument (Of_Tree, Node, 1));
+               end if;
                return False;
 
             when Syn.Labeled_Application =>
@@ -21307,6 +21348,13 @@ package body Landin.Stages.Checking is
                      Value := -Under;
                   end if;
                end;
+
+            when Syn.Call =>
+               if Conversion_Target (Of_Tree, Node) in Ty.Integer_Name then
+                  Fold
+                    (Of_Tree, Syn.Nth_Argument (Of_Tree, Node, 1),
+                     Depth + 1, Value, Known, Overflowed);
+               end if;
 
             when Syn.Name_Reference =>
                --  [1940]: a name bound to a module binding whose value is
