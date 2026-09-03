@@ -1643,12 +1643,15 @@ def check_grammar_corpus(full_run):
                                         "fixture expects %r"
                                         % (complaint, expected)))
 
-    #  Repository-owned core modules are source programs too. Rooted runtime
-    #  fixtures execute them, while this independent side holds each file to
-    #  the normative grammar before the Ada parser is involved.
-    core = os.path.join(ROOT, "core")
-    if os.path.isdir(core):
-        for directory, _, names in os.walk(core):
+    #  Repository-owned core and example modules are source programs too.
+    #  Rooted runtime fixtures execute them, while this independent side
+    #  holds each file to the normative grammar before the Ada parser is
+    #  involved.
+    for corpus in ("core", "examples"):
+        corpus_root = os.path.join(ROOT, corpus)
+        if not os.path.isdir(corpus_root):
+            continue
+        for directory, _, names in os.walk(corpus_root):
             for source in sorted(name for name in names
                                  if name.endswith(".ldn")):
                 path = os.path.join(directory, source)
@@ -1658,9 +1661,10 @@ def check_grammar_corpus(full_run):
                 if tokens is None or not grammar_recognises(
                         rules, trees, tokens):
                     out.append((where, 1,
-                                "the grammar does not derive this core"
+                                "the grammar does not derive this %s"
                                 " module: %s"
-                                % (complaint or "no derivation")))
+                                % (corpus,
+                                   complaint or "no derivation")))
 
     #  R1.10 asks for every production traced to its constructs.  The
     #  fixtures carry the citations, so the trace is checkable: a construct

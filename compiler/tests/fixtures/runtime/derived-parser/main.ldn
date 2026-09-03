@@ -1,0 +1,194 @@
+import core/diag
+import core/io
+import core/mem
+import core/text
+import examples/config_parser/parser
+
+ast_is_expected: (tree: parser.document) -> (yes: bool) =
+    yes = false
+    if parser.length(tree) <> 3 then
+        return
+    end if
+
+    first := parser.at(tree, 0) else (missing)
+        _ = missing
+        return
+    end
+    match first.val.body
+        parser.text_value(begins, ends): begin
+            if text.ordinal(begins) <> 8 or text.ordinal(ends) <> 16 then
+                return
+            end if
+        end
+        parser.integer_value(number): return
+        parser.group_value(count, items): return
+    end match
+
+    second := parser.at(tree, 1) else (missing)
+        _ = missing
+        return
+    end
+    match second.val.body
+        parser.integer_value(number): begin
+            if number <> 42 then
+                return
+            end if
+        end
+        parser.text_value(begins, ends): return
+        parser.group_value(count, items): return
+    end match
+
+    third := parser.at(tree, 2) else (missing)
+        _ = missing
+        return
+    end
+    match third.val.body
+        parser.group_value(count, items): begin
+            if count <> 2 then
+                return
+            end if
+        end
+        parser.text_value(begins, ends): return
+        parser.integer_value(number): return
+    end match
+    yes = true
+end ast_is_expected
+
+notes_are_expected: (value: diag.bounded(8), inout ok: bool) -> none =
+    if diag.stored(value) <> 3 or diag.dropped(value) <> 0 then
+        ok = false
+        return
+    end if
+    zero: usize = 0
+    one: usize = 1
+    two: usize = 2
+    first := diag.note_at(value, zero) else (missing)
+        _ = missing
+        ok = false
+        return
+    end
+    second := diag.note_at(value, one) else (missing)
+        _ = missing
+        ok = false
+        return
+    end
+    third := diag.note_at(value, two) else (missing)
+        _ = missing
+        ok = false
+        return
+    end
+    first_byte: u8 = diag.message_byte(first, zero) else (missing)
+        _ = missing
+        ok = false
+        return
+    end
+    second_byte: u8 = diag.message_byte(second, zero) else (missing)
+        _ = missing
+        ok = false
+        return
+    end
+    third_byte: u8 = diag.message_byte(third, zero) else (missing)
+        _ = missing
+        ok = false
+        return
+    end
+    if diag.position_of(first) <> 36
+      or diag.position_of(second) <> 65
+      or diag.position_of(third) <> 90
+      or diag.message_length(first) <> 13
+      or diag.message_length(second) <> 20
+      or diag.message_length(third) <> 15
+      or first_byte <> 101 or second_byte <> 110 or third_byte <> 117
+    then
+        ok = false
+    end if
+end notes_are_expected
+
+public main: () -> (code: i32) =
+    code = 1
+    mut host := io.host()
+    first_argument: usize = 0
+    source_argument := io.argument_at(host, first_argument) else (problem)
+        _ = problem
+        return
+    end
+    opened := io.open_read(host, source_argument.data) else (problem)
+        _ = problem
+        return
+    end
+    dead_stream: io.file = opened
+    mut source_bytes: [256]u8 = zeroed
+    source_length: usize = io.read(host, opened, source_bytes[0..<256])
+      else (problem)
+        _ = problem
+        return
+    end
+    io.close(host, opened) else (problem)
+        _ = problem
+        return
+    end
+    if source_length <> 92 then
+        return
+    end if
+    source: []u8 = source_bytes[0..<source_length]
+
+    mut first_memory: [4096]u8 = zeroed
+    mut first_arena := mem.arena_over(addr first_memory[0], 4096)
+    mut collected := diag.new_log(capacity: 8)
+    mut bounded_log: any diag.log = any(addr collected)
+    mut tree := parser.empty()
+    parser.parse_file(source, bounded_log, first_arena, tree) else (problem)
+        _ = problem
+        return
+    end
+    mut valid: bool = ast_is_expected(tree) and bounded_log.failed()
+    notes_are_expected(collected, valid)
+    if not valid then
+        return
+    end if
+
+    mut second_memory: [4096]u8 = zeroed
+    mut second_arena := mem.arena_over(addr second_memory[0], 4096)
+    diagnostic_stream := io.err(host)
+    mut immediate := diag.to(addr host, addr diagnostic_stream)
+    mut streaming_log: any diag.log = any(addr immediate)
+    mut streamed_tree := parser.empty()
+    parser.parse_file(source, streaming_log, second_arena, streamed_tree)
+      else (problem)
+        _ = problem
+        return
+    end
+    if not ast_is_expected(streamed_tree) or not streaming_log.failed() then
+        return
+    end if
+
+    mut tiny_memory: [1]u8 = zeroed
+    mut tiny_arena := mem.arena_over(addr tiny_memory[0], 1)
+    mut quiet := diag.new_log(capacity: 1)
+    mut quiet_log: any diag.log = any(addr quiet)
+    mut missing_tree := parser.empty()
+    mut saw_out_of_memory: bool = false
+    parser.parse_file(source, quiet_log, tiny_arena, missing_tree)
+      else (problem)
+        saw_out_of_memory = problem == mem.out_of_memory
+    end
+    if not saw_out_of_memory then
+        return
+    end if
+
+    mut third_memory: [4096]u8 = zeroed
+    mut third_arena := mem.arena_over(addr third_memory[0], 4096)
+    mut broken := diag.to(addr host, addr dead_stream)
+    mut broken_log: any diag.log = any(addr broken)
+    mut interrupted_tree := parser.empty()
+    mut saw_io_failure: bool = false
+    parser.parse_file(source, broken_log, third_arena, interrupted_tree)
+      else (problem)
+        saw_io_failure = problem == io.io_failed
+    end
+    if not saw_io_failure then
+        return
+    end if
+
+    code = 42
+end main

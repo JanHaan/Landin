@@ -262,12 +262,26 @@ package body Landin.Backend.X86_64 is
          Put (Character'Val (9) & Instruction);
       end Emit;
 
-      --  A declared item's symbol is its source spelling.  An anonymous
-      --  routine instead receives one assembler-local name derived only from
-      --  its deterministic Unit item identity.
+      --  A unique declared item's symbol remains its readable source
+      --  spelling.  Two modules may legally declare the same short name, so
+      --  a collision receives a deterministic whole-program declaration
+      --  prefix.  The same applies to names used by the compiler's hosted
+      --  libc shims: a Landin declaration called `open` must not interpose on
+      --  the shim's call to libc.  The selected hosted entry and C extern
+      --  names retain their platform ABI spellings.  An anonymous routine
+      --  instead receives one assembler-local name derived only from its
+      --  Unit item identity.
       function Symbol (Item : Landin.IR.Item_Id) return String;
       function Evidence_Symbol (Id : Landin.IR.Evidence_Id) return String;
       function Is_Public_Item (Item : Landin.IR.Item_Id) return Boolean;
+
+      function Is_Hosted_Dependency (Spelling : String) return Boolean
+        is (Spelling = "strlen"
+            or else Spelling = "open"
+            or else Spelling = "read"
+            or else Spelling = "write"
+            or else Spelling = "close"
+            or else Spelling = "__errno_location");
 
       function Symbol (Item : Landin.IR.Item_Id) return String is
          Declared : constant Landin.IR.Declaration_Id :=
@@ -277,8 +291,47 @@ package body Landin.Backend.X86_64 is
             return ".Llandin_anonymous_"
               & Trimmed (Landin.IR.Item_Id'Image (Item));
          end if;
-         return Landin.Source.Names.Spelling
-                  (Names, Landin.Resolution.Name_Of (Meanings, Declared));
+         declare
+            Spelling : constant String :=
+              Landin.Source.Names.Spelling
+                (Names, Landin.Resolution.Name_Of (Meanings, Declared));
+            Collides : Boolean :=
+              Hosted_Entry /= Landin.IR.No_Item
+              and then Is_Hosted_Dependency (Spelling);
+         begin
+            if Item = Hosted_Entry or else Landin.IR.Is_External
+              (Of_Unit, Item)
+            then
+               return Spelling;
+            end if;
+
+            for Position in 1 .. Landin.IR.Item_Count (Of_Unit) loop
+               declare
+                  Other : constant Landin.IR.Item_Id :=
+                    Landin.IR.Item_Id (Position);
+                  Other_Declaration : constant Landin.IR.Declaration_Id :=
+                    Landin.IR.Declares (Of_Unit, Other);
+               begin
+                  if Other /= Item
+                    and then Other_Declaration /= Landin.IR.No_Declaration
+                    and then Landin.Source.Names.Spelling
+                      (Names,
+                       Landin.Resolution.Name_Of
+                         (Meanings, Other_Declaration)) = Spelling
+                  then
+                     Collides := True;
+                     exit;
+                  end if;
+               end;
+            end loop;
+
+            if Collides then
+               return "landin_"
+                 & Trimmed (Landin.IR.Declaration_Id'Image (Declared))
+                 & "_" & Spelling;
+            end if;
+            return Spelling;
+         end;
       end Symbol;
 
       function Evidence_Symbol (Id : Landin.IR.Evidence_Id) return String

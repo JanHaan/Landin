@@ -1,0 +1,262 @@
+--  A complete recursive configuration parser derived from prototype 2.
+--  Syntax mistakes are reported through an erased diagnostic capability;
+--  allocation and diagnostic delivery failures use the error channel.
+
+import core/diag
+import core/io
+import core/mem
+import core/text
+import core/vec
+import examples/config_parser/lexer
+
+public too_deep: atom
+number_out_of_range: atom
+memory_failure: type = mem.out_of_memory
+diagnostic_failure: type = io.io_failed
+entry_failure: type = memory_failure | diagnostic_failure | too_deep
+
+public value: type = struct
+    name_begins: text.position
+    name_ends: text.position
+    body: variant
+        text_value: (begins: text.position, ends: text.position) |
+        integer_value: (number: u32) |
+        group_value: (count: usize, items: vec.list(ptr mut value))
+    end body
+end value
+
+public document: type = struct
+    items: vec.list(ptr mut value)
+end document
+
+parser_state: type = struct
+    lexer: lexer.state
+    look: lexer.token
+    depth: usize
+end parser_state
+
+max_depth: usize = 8
+
+expected_name: [16]u8 =
+    [101, 120, 112, 101, 99, 116, 101, 100, 32, 97, 32, 110, 97, 109, 101, 10]
+expected_equals: [13]u8 =
+    [101, 120, 112, 101, 99, 116, 101, 100, 32, 39, 61, 39, 10]
+expected_value: [17]u8 =
+    [101, 120, 112, 101, 99, 116, 101, 100, 32, 97, 32, 118, 97, 108, 117, 101, 10]
+expected_right_brace: [24]u8 =
+    [101, 120, 112, 101, 99, 116, 101, 100, 32, 39, 125, 39, 32, 98, 101, 102, 111, 114, 101, 32, 101, 110, 100, 10]
+unexpected_right_brace: [15]u8 =
+    [117, 110, 101, 120, 112, 101, 99, 116, 101, 100, 32, 39, 125, 39, 10]
+bad_number: [20]u8 =
+    [110, 117, 109, 98, 101, 114, 32, 111, 117, 116, 32, 111, 102, 32, 114, 97, 110, 103, 101, 10]
+nested_too_deep: [22]u8 =
+    [110, 101, 115, 116, 101, 100, 32, 103, 114, 111, 117, 112, 32, 116, 111, 111, 32, 100, 101, 101, 112, 10]
+unterminated: [20]u8 =
+    [117, 110, 116, 101, 114, 109, 105, 110, 97, 116, 101, 100, 32, 115, 116, 114, 105, 110, 103, 10]
+
+advance: (source: []u8, inout parser: parser_state) -> none =
+    parser.look = lexer.next(source, parser.lexer)
+end advance
+
+report: (inout logger: any diag.log, where: text.position,
+         escaping message: []u8) -> none ! io.io_failed =
+    try logger.note(where, diag.error, message)
+end report
+
+recover_to_boundary: (source: []u8, inout parser: parser_state) -> none =
+    return when parser.look.what == lexer.newline
+    return when parser.look.what == lexer.right_brace
+    return when parser.look.what == lexer.end_of_input
+    advance(source, parser)
+    recover_to_boundary(source, parser)
+end recover_to_boundary
+
+lower_depth: (inout parser: parser_state) -> none =
+    dec parser.depth
+end lower_depth
+
+parse_digits: (source: []u8, cursor: text.position, ends: text.position,
+               accumulated: u32) -> (result: u32) ! number_out_of_range =
+    if text.ordinal(cursor) == text.ordinal(ends) then
+        result = accumulated
+        return
+    end if
+    byte: u8 = text.byte(source, cursor) else 48
+    digit: u32 = if byte == 48 then 0
+                 elsif byte == 49 then 1
+                 elsif byte == 50 then 2
+                 elsif byte == 51 then 3
+                 elsif byte == 52 then 4
+                 elsif byte == 53 then 5
+                 elsif byte == 54 then 6
+                 elsif byte == 55 then 7
+                 elsif byte == 56 then 8
+                 else 9
+                 end if
+    fail number_out_of_range when accumulated > 429496729
+    fail number_out_of_range when accumulated == 429496729 and digit > 5
+    result = try parse_digits(source, text.next(cursor), ends,
+                              accumulated * 10 + digit)
+end parse_digits
+
+parse_entry: (source: []u8, inout parser: parser_state,
+              inout logger: any diag.log,
+             inout arena: mem.arena)
+             -> (item: ptr mut value from arena, got: bool)
+                ! entry_failure =
+    got = false
+    if parser.look.what <> lexer.identifier then
+        try report(logger, parser.look.begins, expected_name[0..<16])
+        recover_to_boundary(source, parser)
+        item = ptr(0)
+        return
+    end if
+
+    name_begins: text.position = text.copied(parser.look.begins)
+    name_ends: text.position = text.copied(parser.look.ends)
+    advance(source, parser)
+    if parser.look.what <> lexer.equals then
+        try report(logger, parser.look.begins, expected_equals[0..<13])
+        recover_to_boundary(source, parser)
+        item = ptr(0)
+        return
+    end if
+    advance(source, parser)
+
+    if parser.look.what == lexer.string then
+        begins: text.position = text.copied(parser.look.begins)
+        ends: text.position = text.copied(parser.look.ends)
+        advance(source, parser)
+        block: ptr mut u8 = try mem.allocate
+            (arena, sizeof value, alignof value)
+        item = ptr(usize(block))
+        item.val = (name_begins: name_begins, name_ends: name_ends,
+                    body: text_value(begins: begins, ends: ends))
+        got = true
+        return
+    end if
+    if parser.look.what == lexer.number then
+        number: u32 = (parse_digits(source, parser.look.begins,
+                                    parser.look.ends, 0)
+          else (problem)
+            _ = problem
+            try report(logger, parser.look.begins, bad_number[0..<20])
+            recover_to_boundary(source, parser)
+            item = ptr(0)
+            return
+        end)
+        advance(source, parser)
+        block: ptr mut u8 = try mem.allocate
+            (arena, sizeof value, alignof value)
+        item = ptr(usize(block))
+        item.val = (name_begins: name_begins, name_ends: name_ends,
+                    body: integer_value(number: number))
+        got = true
+        return
+    end if
+    if parser.look.what == lexer.left_brace then
+        fail too_deep when parser.depth >= max_depth
+        inc parser.depth
+        defer lower_depth(parser)
+        advance(source, parser)
+        mut children := vec.new_list(item: ptr mut value)
+        try parse_sequence(source, parser, logger, arena, children, true)
+        block: ptr mut u8 = try mem.allocate
+            (arena, sizeof value, alignof value)
+        item = ptr(usize(block))
+        item.val = (name_begins: name_begins, name_ends: name_ends,
+                    body: group_value(count: vec.length(children),
+                                      items: children))
+        got = true
+        return
+    end if
+    if parser.look.what == lexer.unterminated_string then
+        try report(logger, parser.look.begins, unterminated[0..<20])
+    else
+        try report(logger, parser.look.begins, expected_value[0..<17])
+    end if
+    recover_to_boundary(source, parser)
+    item = ptr(0)
+end parse_entry
+
+continue_after_failure:
+    (problem: entry_failure, source: []u8, inout parser: parser_state,
+     inout logger: any diag.log, inout arena: mem.arena,
+     inout items: vec.list(ptr mut value), nested: bool)
+    -> none ! mem.out_of_memory | io.io_failed =
+    match problem
+        too_deep: begin
+            try report(logger, parser.look.begins, nested_too_deep[0..<22])
+            recover_to_boundary(source, parser)
+            try parse_sequence(source, parser, logger, arena, items, nested)
+            return
+        end
+        mem.out_of_memory: fail mem.out_of_memory
+        io.io_failed: fail io.io_failed
+    end match
+end continue_after_failure
+
+parse_sequence: (source: []u8, inout parser: parser_state,
+                 inout logger: any diag.log,
+                 inout arena: mem.arena,
+                 inout items: vec.list(ptr mut value),
+                 nested: bool)
+                -> none ! mem.out_of_memory | io.io_failed =
+    if parser.look.what == lexer.end_of_input then
+        if nested then
+            try report(logger, parser.look.begins,
+                       expected_right_brace[0..<24])
+        end if
+        return
+    end if
+    if parser.look.what == lexer.newline then
+        advance(source, parser)
+        try parse_sequence(source, parser, logger, arena, items, nested)
+        return
+    end if
+    if parser.look.what == lexer.right_brace then
+        if nested then
+            advance(source, parser)
+            return
+        end if
+        try report(logger, parser.look.begins, unexpected_right_brace[0..<15])
+        advance(source, parser)
+        recover_to_boundary(source, parser)
+        try parse_sequence(source, parser, logger, arena, items, nested)
+        return
+    end if
+
+    parsed := parse_entry(source, parser, logger, arena) else (problem)
+        issue: entry_failure = problem
+        try continue_after_failure(issue, source, parser, logger, arena,
+                                   items, nested)
+        return
+    end
+    if parsed.got then
+        try vec.push(items, arena, parsed.item)
+    end if
+    try parse_sequence(source, parser, logger, arena, items, nested)
+end parse_sequence
+
+public empty: () -> (result: document) =
+    result = (items: vec.new_list(item: ptr mut value))
+end empty
+
+public parse_file: (source: []u8, inout logger: any diag.log,
+                    inout arena: mem.arena, inout result: document)
+                   -> none ! mem.out_of_memory | io.io_failed =
+    mut scanning := lexer.open()
+    first: lexer.token = lexer.next(source, scanning)
+    mut parser: parser_state = (lexer: scanning, look: first, depth: 0)
+    result = empty()
+    try parse_sequence(source, parser, logger, arena, result.items, false)
+end parse_file
+
+public length: (tree: document) -> (count: usize) =
+    count = vec.length(tree.items)
+end length
+
+public at: (tree: document, index: usize)
+           -> (item: ptr mut value from tree) ! vec.out_of_bounds =
+    item = try vec.get(tree.items, index)
+end at

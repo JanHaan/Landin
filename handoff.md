@@ -221,8 +221,14 @@ bounded and streaming providers, ordered dispatch through `any`, direct bounded
 overflow accounting and propagated hosted-write failure. Fixed formals used in
 routine bodies lower as instance constants, and aggregate storage reached
 through pointer `.val` uses the neutral runtime-address path.
+R3.70 composes the hosted, allocation, container, text and diagnostic layers
+into a complete recursive configuration parser. It retains valid nested AST
+nodes while recovering three ordered syntax faults, runs unchanged through
+bounded and streaming `any diag.log` implementations, and separately executes
+allocation and diagnostic-delivery failures. Its derivation manifest keeps the
+executable evidence traceable to prototype 2.
 
-**Current roadmap work: R3.70 — Complete and run the derived parser program.**
+**Current roadmap work: R4.10 — Close the hosted construct matrix.**
 
 `refine` runs the frontend, lowers and
 verifies target-neutral IR, emits Linux x86-64 assembly, and can assemble and

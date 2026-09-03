@@ -14,10 +14,11 @@ Cortex-M0 with 32 KB of flash at one end, a hosted desktop application
 at the other.
 
 **Status: specification 0.1.0. The compiler can build and run Landin programs
-for 64-bit Linux. It already handles functions, user-defined data types,
-generic routines, pointers, errors and control flow. The repository includes
-complete FizzBuzz, number-theory, searching and sorting programs that are
-compiled and tested automatically. Support for macOS, microcontrollers and a
+for 64-bit Linux. It handles functions, user-defined data types, generic
+routines, pointers, errors, control flow, modules, evidence-table dispatch and
+`any`. A small `core` library and a complete recovering configuration parser
+now run alongside the automatically tested FizzBuzz, number-theory, searching
+and sorting programs. Support for macOS, microcontrollers and the broader
 standard library is still to come.**
 
 ## What is here
@@ -33,6 +34,7 @@ standard library is still to come.**
 | `check.py` | mechanical checks over the live documents, grammar and fixture corpus. Run it after touching any of them. |
 | `compiler/ada/` | the Ada 2022 bootstrap compiler: `refine`, its frontend and verified IR, the Linux x86-64 backend and toolchain path, and its own test harness. |
 | `compiler/tests/` | fixtures, in a format that outlives the implementation checking them. |
+| `examples/config_parser/` | the complete lexer and recovering parser derived from prototype 2; its executable host and exact input/output oracle live in `compiler/tests/fixtures/runtime/derived-parser`. |
 | `scripts/` | build, test, clean and toolchain commands. Provider-neutral, except `linux-loop.sh`, which drives Apple Container by name. |
 | `environments/` | the pinned `linux/amd64` image the local Linux loop builds, and `pins.sh`, the one place a toolchain version or checksum is written. |
 | `flake.nix` | `nix develop`, for people who work that way: a shell holding the same pinned toolchain, read from `environments/pins.sh` rather than from nixpkgs. |
@@ -177,9 +179,12 @@ failure behavior pinned by compiled fixtures. R3.50 adds the scalar/pointer
 bridge, and builds `core/io` as an ordinary world capability with declared
 file and stream failures. R3.60 adds the object-safe `core/diag.log` capability,
 bounded and streaming implementations, ordered dispatch through `any`, direct
-bounded-overflow accounting and propagated hosted-write failure.
+bounded-overflow accounting and propagated hosted-write failure. R3.70 composes
+those pieces into a complete arena-backed recursive configuration parser,
+executes it through bounded and streaming erased loggers, recovers three syntax
+faults in order, and separately proves allocation and diagnostic I/O failure.
 
-**Current roadmap work: R3.70 — Complete and run the derived parser program.**
+**Current roadmap work: R4.10 — Close the hosted construct matrix.**
 
 Language and architecture questions are resolved when the first vertical
 slice needs them.

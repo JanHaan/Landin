@@ -5,13 +5,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Repository state
 
 Landin is a language specification with a working Ada bootstrap compiler. R0,
-R1, R2.20 and R2.30 are complete. `refine` scans and parses every
+R1, R2 and R3 are complete. `refine` scans and parses every
 `.ldn` file it is given, resolves the files as one module, checks every type
 and definite assignment, lowers accepted functions into verified
 target-neutral IR, emits Linux x86-64 assembly, and can invoke a
 triplet-selected toolchain to assemble and link a hosted executable. Runtime
-fixtures execute those binaries on the native Linux x86-64 gate. There is no
-native macOS arm64 or Cortex-M backend and no standard library yet. Under
+fixtures execute those binaries on the native Linux x86-64 gate. A small
+repository-owned `core` library and the complete prototype-2-derived parser
+execute through that path. There is no native macOS arm64 or Cortex-M backend,
+and the broader standard library remains future work. Under
 `compiler/ada/` are the Ada 2022 GPRbuild projects, the `refine` executable,
 source and diagnostic foundations, host adapters, target facts, stage seams,
 the scanner, parser, syntax table, name resolver, type checker, verified IR,

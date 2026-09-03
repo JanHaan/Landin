@@ -11046,6 +11046,48 @@ file positive/token-separation/program.ldn tokens 17
   46 50 incx
   51 54 end
   55 56 f
+file positive/try-statement-before-return/program.ldn tokens 41
+  0 7 problem
+  7 8 :
+  9 13 atom
+  15 23 may_fail
+  23 24 :
+  25 26 (
+  26 34 fail_now
+  34 35 :
+  36 40 bool
+  40 41 )
+  42 44 ->
+  45 49 none
+  50 51 !
+  52 59 problem
+  60 61 =
+  66 70 fail
+  71 78 problem
+  79 83 when
+  84 92 fail_now
+  93 96 end
+  97 105 may_fail
+  107 114 forward
+  114 115 :
+  116 117 (
+  117 125 fail_now
+  125 126 :
+  127 131 bool
+  131 132 )
+  133 135 ->
+  136 140 none
+  141 142 !
+  143 150 problem
+  151 152 =
+  157 160 try
+  161 169 may_fail
+  169 170 (
+  170 178 fail_now
+  178 179 )
+  184 190 return
+  191 194 end
+  195 202 forward
 file positive/type-declaration-aliases-a-scalar/program.ldn tokens 41
   0 5 count
   5 6 :

@@ -5337,7 +5337,8 @@ package body Landin.Stages.Lowering is
          Field : constant Positive := Positive
            (Landin.Checking.Field_Index (Types.all, Of_Tree, Subject));
          Computed : constant Boolean :=
-           Has_Computed_Index (Of_Tree, Holder);
+           Has_Computed_Index (Of_Tree, Holder)
+           or else Has_Pointer_Dereference (Of_Tree, Holder);
          Location : Stored_Place;
          Alias_Subject : Syn.Node_Id := Subject;
          Shape : constant Landin.Checking.Field_Shape :=
@@ -6679,6 +6680,42 @@ package body Landin.Stages.Lowering is
                                       (Unit.all, Filling, Destination, Site,
                                        Field  => Into_Field,
                                        Nested => Into_Steps);
+                                 elsif Syn.Kind (Of_Tree, Value)
+                                   in Syn.Call | Syn.Labeled_Application
+                                      | Syn.Try_Expression
+                                      | Syn.If_Statement
+                                      | Syn.Match_Statement
+                                      | Syn.Bare_Block
+                                 then
+                                    --  A stored call or control result has
+                                    --  no source name to root a copy at.  Let
+                                    --  it fill one caller-owned temporary,
+                                    --  then copy that child's ordinary fields
+                                    --  into the enclosing literal.
+                                    declare
+                                       Temporary : constant IR.Slot_Id :=
+                                         Add_Value_Temporary
+                                           (Of_Tree, Value);
+                                    begin
+                                       Lower_Stored_Expression
+                                         (Of_Tree, Value, Scope, Temporary);
+                                       if Current = IR.No_Block then
+                                          return;
+                                       end if;
+                                       for Child_Field in
+                                         1 .. Landin.Checking
+                                                .Layout_Field_Count
+                                                  (Types.all, Child)
+                                       loop
+                                          Copy_Field
+                                            (Child,
+                                             (Kind => IR.Frame_Slot,
+                                              Slot => Temporary),
+                                             Destination, Child_Field,
+                                             Destination_Base => Into_Field,
+                                             Destination_Steps => Into_Steps);
+                                       end loop;
+                                    end;
                                  else
                                     declare
                                        Source_Base : constant Natural :=
@@ -7946,24 +7983,26 @@ package body Landin.Stages.Lowering is
                              Syn.Target_Of (Of_Tree, Stmt);
                            From : constant Syn.Node_Id :=
                              Syn.Value_Of (Of_Tree, Stmt);
-                           Computed : constant Boolean :=
-                             Has_Computed_Index (Of_Tree, Place);
+                           Dynamic : constant Boolean :=
+                             Has_Computed_Index (Of_Tree, Place)
+                             or else Has_Pointer_Dereference
+                               (Of_Tree, Place);
                            Named : constant Syn.Node_Id :=
-                             (if Computed then Syn.No_Node
+                             (if Dynamic then Syn.No_Node
                               else Chain_Root (Of_Tree, Place));
                            Parent_Field : constant Natural :=
-                             (if Computed then 0
+                             (if Dynamic then 0
                               else Rooted_Base (Of_Tree, Place));
                            Parent_Steps : constant IR.Path_Step_Array :=
-                             (if Computed then IR.No_Path_Steps
+                             (if Dynamic then IR.No_Path_Steps
                               else Rooted_Steps (Of_Tree, Place));
                            Destination : constant IR.Storage :=
-                             (if Computed
+                             (if Dynamic
                               then (Kind => IR.Frame_Slot,
                                     Slot => IR.No_Slot)
                               else Storage_For (Of_Tree, Named));
                         begin
-                           if Computed then
+                           if Dynamic then
                               declare
                                  Reached : constant Stored_Place :=
                                    Lower_Stored_Place
@@ -8117,32 +8156,81 @@ package body Landin.Stages.Lowering is
                            elsif Syn.Kind (Of_Tree, From)
                                    in Syn.Call | Syn.Try_Expression
                            then
-                              pragma Assert
-                                (Destination.Kind in IR.Frame_Slot);
-                              if Syn.Kind (Of_Tree, From) = Syn.Call then
-                                 declare
-                                    Ignored : constant IR.Value_Id :=
-                                      Lower_Call
-                                        (Of_Tree, From, Scope,
-                                         Destination => Destination.Slot,
-                                         Destination_Field => Parent_Field,
-                                         Destination_Steps => Parent_Steps);
-                                 begin
-                                    pragma Unreferenced (Ignored);
-                                 end;
+                              if Destination.Kind = IR.Frame_Slot then
+                                 if Syn.Kind (Of_Tree, From) = Syn.Call then
+                                    declare
+                                       Ignored : constant IR.Value_Id :=
+                                         Lower_Call
+                                           (Of_Tree, From, Scope,
+                                            Destination => Destination.Slot,
+                                            Destination_Field => Parent_Field,
+                                            Destination_Steps => Parent_Steps);
+                                    begin
+                                       pragma Unreferenced (Ignored);
+                                    end;
+                                 else
+                                    declare
+                                       Ignored : constant IR.Value_Id :=
+                                         Lower_Call
+                                           (Of_Tree,
+                                            Syn.Operand_Of (Of_Tree, From),
+                                            Scope,
+                                            Destination => Destination.Slot,
+                                            Destination_Field => Parent_Field,
+                                            Destination_Steps => Parent_Steps,
+                                            Propagate => True);
+                                    begin
+                                       pragma Unreferenced (Ignored);
+                                    end;
+                                 end if;
                               else
+                                 --  The internal call convention writes a
+                                 --  stored aggregate into a caller-owned
+                                 --  frame slot.  An inout aggregate may be
+                                 --  indirect, so receive the result in an
+                                 --  ordinary temporary before copying its
+                                 --  fields to the selected destination.
                                  declare
-                                    Ignored : constant IR.Value_Id :=
-                                      Lower_Call
-                                        (Of_Tree,
-                                         Syn.Operand_Of (Of_Tree, From),
-                                         Scope,
-                                         Destination => Destination.Slot,
-                                         Destination_Field => Parent_Field,
-                                         Destination_Steps => Parent_Steps,
-                                         Propagate => True);
+                                    Wrote : constant
+                                      Landin.Checking.Nominal_Type_Id :=
+                                      Landin.Checking.Nominal_Of
+                                        (Types.all, Of_Tree, Place);
+                                    Shape : constant IR.Field_Shape :=
+                                      Neutral_Body (Wrote);
+                                    Temporary : constant IR.Slot_Id :=
+                                      Add_Value_Temporary (Of_Tree, From);
+                                    Temp_Place : constant Stored_Place :=
+                                      (Place =>
+                                         (Kind => IR.Frame_Slot,
+                                          Slot => Temporary),
+                                       Base => 0,
+                                       Steps => Stored_Path_Vectors
+                                         .Empty_Vector);
+                                    Into_Place : Stored_Place :=
+                                      (Place => Destination,
+                                       Base => Parent_Field,
+                                       Steps => Stored_Path_Vectors
+                                         .Empty_Vector);
                                  begin
-                                    pragma Unreferenced (Ignored);
+                                    for Step of Parent_Steps loop
+                                       Into_Place.Steps.Append (Step);
+                                    end loop;
+                                    Lower_Stored_Expression
+                                      (Of_Tree, From, Scope, Temporary);
+                                    if Current /= IR.No_Block then
+                                       declare
+                                          Source : constant IR.Storage :=
+                                            Addressed_Storage
+                                              (Temp_Place, Shape, Site);
+                                          Into : constant IR.Storage :=
+                                            Addressed_Storage
+                                              (Into_Place, Shape, Site);
+                                       begin
+                                          IR.Emit_Array_Copy
+                                            (Unit.all, Filling, Source, Into,
+                                             Site);
+                                       end;
+                                    end if;
                                  end;
                               end if;
                            elsif Is_Struct_Construction (Of_Tree, From) then

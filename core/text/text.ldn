@@ -24,6 +24,21 @@ public ordinal: (cursor: position) -> (offset: usize) =
     offset = cursor.offset
 end ordinal
 
+--  Copy a position out of aggregate storage without borrowing that storage.
+--  This matters to scanners that retain the token start while advancing the
+--  cursor field from which it was read.
+public copied: (cursor: position) -> (result: position) =
+    result = (offset: cursor.offset)
+end copied
+
+--  Reify an ordinal as an opaque position for byte-oriented scanners.  The
+--  source argument makes the intended coordinate space explicit even though
+--  R3's compact representation stores only the offset.
+public at: (source: []u8, offset: usize) -> (result: position) =
+    _ = source
+    result = (offset: offset)
+end at
+
 public next: (cursor: position) -> (result: position) =
     result = (offset: cursor.offset + 1)
 end next
