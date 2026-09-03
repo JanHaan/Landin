@@ -1083,7 +1083,7 @@ section.landing p.more{
 FENCE = re.compile(r"^```([\w-]*)\s*$")
 HEADING = re.compile(r"^(#{1,6})\s+(.*)$")
 BULLET = re.compile(r"^[-*]\s+(.*)$")
-NUMBER = re.compile(r"^\d+\.\s+(.*)$")
+NUMBER = re.compile(r"^(\d+)\.\s+(.*)$")
 ROW = re.compile(r"^\|(.*)\|\s*$")
 TABLE_RULE = re.compile(r"^\|[\s:|-]+\|\s*$")
 QUOTE = re.compile(r"^>\s?(.*)$")
@@ -1230,10 +1230,20 @@ def parse_guide(text):
             while index < len(lines):
                 bullet = BULLET.match(lines[index])
                 number = NUMBER.match(lines[index])
-                if bullet:
-                    items.append(bullet.group(1))
-                elif number:
-                    items.append(number.group(1))
+                if bullet and not ordered:
+                    items.append([None, bullet.group(1)])
+                elif number and ordered:
+                    #  The marker is content too.  Prototype 4 separates
+                    #  numbered implementation sketches with code blocks,
+                    #  so each becomes a one-item list; throwing the marker
+                    #  away made 1, 2, 3 render as 1, 1, 1 while the word
+                    #  check saw no missing word.
+                    items.append([int(number.group(1)), number.group(2)])
+                elif bullet or number:
+                    #  Changing marker kind starts another list.  Folding a
+                    #  bullet into an ordered list (or vice versa) invents a
+                    #  relationship the source did not write.
+                    break
                 elif lines[index].startswith("  ") and items:
                     #  An indented line continues the item it sits under.
                     #  An indented BULLET is a nested list, which this
@@ -1245,7 +1255,7 @@ def parse_guide(text):
                         raise SystemExit(
                             "render_html: nested list at line %d is not "
                             "supported:\n  %s" % (index + 1, lines[index]))
-                    items[-1] += " " + rest
+                    items[-1][1] += " " + rest
                 elif not lines[index].strip() and items:
                     #  A blank line between items is a loose list, not the
                     #  end of one: three lettered alternatives spaced apart
@@ -1253,8 +1263,10 @@ def parse_guide(text):
                     ahead = index + 1
                     while ahead < len(lines) and not lines[ahead].strip():
                         ahead += 1
-                    if ahead < len(lines) and (BULLET.match(lines[ahead])
-                                               or NUMBER.match(lines[ahead])):
+                    same_kind = (NUMBER.match(lines[ahead]) if ordered
+                                 else BULLET.match(lines[ahead])) \
+                                if ahead < len(lines) else None
+                    if same_kind:
                         index = ahead
                         continue
                     break
@@ -1338,10 +1350,24 @@ def render_guide_blocks(blocks, links, targets, hl):
                        "</blockquote>")
         elif kind == "list":
             ordered, items = payload
-            tag = "ol" if ordered else "ul"
-            body = "".join(f"<li>{inline(i, links, targets)}</li>"
-                           for i in items)
-            out.append(f"<{tag}>{body}</{tag}>")
+            if ordered:
+                first = items[0][0]
+                start = f' start="{first}"' if first != 1 else ""
+                expected = first
+                rendered = []
+                for marker, item in items:
+                    #  A discontinuity is legal HTML and must remain
+                    #  visible rather than being silently renumbered.
+                    value = f' value="{marker}"' if marker != expected else ""
+                    rendered.append(
+                        f"<li{value}>{inline(item, links, targets)}</li>")
+                    expected = marker + 1
+                out.append(f"<ol{start}>{''.join(rendered)}</ol>")
+            else:
+                body = "".join(
+                    f"<li>{inline(item, links, targets)}</li>"
+                    for _, item in items)
+                out.append(f"<ul>{body}</ul>")
         elif kind == "table":
             out.append(guide_table(payload, links, targets))
         elif kind == "code":
@@ -1410,8 +1436,16 @@ def nav_html(docs, current, sections):
     out.append('<div id="found" role="status" aria-live="polite"></div>')
     if sections:
         out.append('<div class="nav-group">in this document</div>')
+        #  Module-like headings use "name  —  purpose".  The compact name
+        #  is enough until it repeats: prototype 3 has four core/mem
+        #  sections, and reducing all four to CORE/MEM made the navigation
+        #  indistinguishable.  Keep unique compact labels and disambiguate
+        #  only the collisions with the full heading.
+        compact = [title.split("  —  ")[0] for _, title, _ in sections]
+        repeats = {label for label in compact if compact.count(label) > 1}
         for sid, title, count in sections:
-            label = esc(title.split("  —  ")[0])
+            short = title.split("  —  ")[0]
+            label = esc(title if short in repeats else short)
             n = str(count) if count else ""
             out.append(f'<a class="sect" href="#{sid}">'
                        f'<span class="num">{n}</span><span>{label}</span></a>')
@@ -1842,6 +1876,10 @@ class PageShape(HTMLParser):
         self.headings = []
         self.shelf = []
         self.sections = []
+        self.section_links = []
+        self.ordered_items = []
+        self._section_link = None
+        self._ordered_next = []
 
     def handle_starttag(self, tag, attrs):
         values = dict(attrs)
@@ -1852,10 +1890,29 @@ class PageShape(HTMLParser):
         if (tag == "a" and any(self.sections)
                 and "card" in values.get("class", "").split()):
             self.shelf.append(values.get("href", ""))
+        if (tag == "a"
+                and "sect" in values.get("class", "").split()):
+            self._section_link = [values.get("href", ""), ""]
+        if tag == "ol":
+            self._ordered_next.append(int(values.get("start", "1")))
+        if tag == "li" and self._ordered_next:
+            marker = int(values.get("value", self._ordered_next[-1]))
+            self.ordered_items.append(marker)
+            self._ordered_next[-1] = marker + 1
+
+    def handle_data(self, data):
+        if self._section_link is not None:
+            self._section_link[1] += data
 
     def handle_endtag(self, tag):
         if tag == "section" and self.sections:
             self.sections.pop()
+        if tag == "a" and self._section_link is not None:
+            href, label = self._section_link
+            self.section_links.append((href, " ".join(label.split())))
+            self._section_link = None
+        if tag == "ol" and self._ordered_next:
+            self._ordered_next.pop()
 
 
 def page_shape(out):
@@ -1864,14 +1921,36 @@ def page_shape(out):
     return shape
 
 
-def verify_structure(out: Path):
-    """A page title is the root of its heading outline, exactly once."""
-    headings = page_shape(out).headings
+def ordered_markers(text):
+    """The explicit numbers written on Markdown list items, outside fences."""
+    _, lead, sections = parse_guide(text)
+    blocks = list(lead)
+    for section in sections:
+        blocks.extend(section["blocks"])
+    return [marker for kind, payload in blocks if kind == "list"
+            for ordered, items in [payload] if ordered
+            for marker, _ in items]
+
+
+def verify_structure(out: Path, source: Path | None = None):
+    """Check relationships that a word-presence comparison cannot see."""
+    shape = page_shape(out)
+    headings = shape.headings
     failures = []
     if headings.count("h1") != 1:
         failures.append(f"has {headings.count('h1')} h1 headings")
     if not headings or headings[0] != "h1":
         failures.append("does not begin its heading outline with h1")
+    labels = [label for _, label in shape.section_links]
+    duplicates = sorted({label for label in labels if labels.count(label) > 1})
+    if duplicates:
+        failures.append("has indistinguishable section links: "
+                        + ", ".join(repr(label) for label in duplicates))
+    if source is not None:
+        expected = ordered_markers(source.read_text())
+        if shape.ordered_items != expected:
+            failures.append("renumbers ordered items: source %s, page %s"
+                            % (expected, shape.ordered_items))
     if failures:
         print(f"  {out.name}: " + "; ".join(failures))
     return not failures
@@ -2139,7 +2218,8 @@ def main(argv):
         print("checking that nothing was dropped:")
         ok = all([verify(source / d["src"], SITE / d["out"])
                   for d in docs + guides])
-        structure = all([verify_structure(SITE / d["out"])
+        structure = all([verify_structure(SITE / d["out"],
+                                          source / d["src"])
                          for d in docs + guides])
         if front:
             structure = verify_structure(SITE / "index.html") and structure
