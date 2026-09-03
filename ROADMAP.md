@@ -2701,6 +2701,7 @@ finding labels, so moving prose cannot stale a hand-copied location.
 
 | Fixture | Prototype | Findings | Pressure |
 | --- | --- | --- | --- |
+| `runtime/diagnostic-loggers-dispatch` | P2 | Y1 | recoverable diagnostics use a bounded or streaming capability without becoming parser failure |
 | `runtime/parameterized-struct-values` | P3 | Z2 | type and fixed parameters on nominal values |
 | `runtime/r250-references` | P3 | Z3, Z18 | pointer/slice carriers and implicit conventions |
 | `negative/borrowed-source-inout` | P3 | Z5, Z16 | a derived view prevents moving its source |
@@ -2965,7 +2966,7 @@ renderings to their shared sources.
 
 ### R3.60 — Implement diagnostics as runtime dispatch
 
-Status: active
+Status: complete
 Depends on: R1.30, R2.80, R3.50, R3.80
 
 Implement the parser's diagnostic capability, bounded and streaming
@@ -2974,9 +2975,32 @@ implementations, and calls through `any` evidence tables.
 Exit evidence: two logger implementations receive identical ordered notes;
 bounded overflow and hosted I/O failure follow their specified channels.
 
+Delivered: `core/diag.log` is the parser's object-safe diagnostic capability.
+Its bounded parameterized provider retains the first N notes, reports later
+ones through `dropped`, and records error severity independently of retention.
+Its streaming provider writes severity, byte position and message immediately
+through `core/io`, propagating a declared `io_failed`. Message slices are
+`escaping`, so the bounded provider may retain their backing address without
+accepting frame storage. Private bounded and entry representations are reached
+through checked accessors.
+
+One producer sends the same sequence through `any diag.log` to both real
+evidence tables. That composition required fixed formals to become
+per-routine-instance IR constants without gaining ABI positions, and required
+aggregate places below pointer `.val` to use the existing runtime-address
+storage path. Runtime fixture metadata now has `run_expect`, distinct from
+`expect`, so execution checks the logger's exact merged byte stream as well as
+its exit status. D154 records the retention, failure, lifetime and dispatch
+contract.
+
+The negative `core-diag-frame-message-escape` derivation pins the capability's
+retained-message boundary at L0314; the runtime case uses module-backed message
+bytes and therefore crosses that same boundary legally. The complete pinned
+Linux x86-64 debug and release gates pass 389 cases and 9,146 checks each.
+
 ### R3.70 — Complete and run the derived parser program
 
-Status: planned
+Status: active
 Depends on: R3.10, R3.40, R3.60, R2.90
 
 Turn prototype 2 into a complete `.ldn` program with a derivation manifest,

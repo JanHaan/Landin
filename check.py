@@ -2570,7 +2570,7 @@ def fixture_sources():
             text = io.open(meta, encoding="utf-8").read()
             where = "compiler/tests/fixtures/%s/%s/fixture.meta" % (kind,
                                                                     name)
-            for key in ("program", "with"):
+            for key in ("program", "with", "expect", "run_expect"):
                 named = re.search(r"^%s: (.+)$" % key, text, re.M)
                 if not named:
                     continue
@@ -2952,6 +2952,7 @@ def check_coverage_registers(full_run):
             "slices.bounds-runtime", "atoms.sets", "aggregates.variants",
             "origins.escape", "origins.aliasing-limit", "functions.abi",
             "extern.c-boundary", "host.io", "host.io-failure",
+            "diagnostics.retention", "diagnostics.delivery-failure",
             "execution.resource-exhaustion", "consume.local",
             "consume.copy-before", "errors.control", "results.destructure",
             "functions.anonymous", "control.flow", "cleanup.defer",

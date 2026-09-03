@@ -1584,6 +1584,15 @@ ordinary parameter. A diagnostics sink is a capability by
 [1680]: a function that was given none cannot report, which
 is enforced by an argument list and nothing else.
 
+The R3 parser-support library spells that capability `core/diag.log`. Its
+object-safe `note` entry accepts a byte position, severity and escaping byte
+slice, and declares `io_failed`: a bounded implementation never raises that
+outcome, while a streaming implementation must propagate a failed write.
+Bounded overflow is not failure. The logger stops retaining entries, increments
+its `dropped` count, and continues to observe whether an error was reported.
+Both implementations can be passed as `any diag.log`, so the producer does not
+know which retention or delivery policy its caller selected.
+
 ```landin
 parse: (src: utf8, inout d: diagnostics)
        -> (tree: ptr node) ! out_of_memory | too_deep = ... end
@@ -2278,6 +2287,11 @@ is still template syntax rather than a standalone function value; a direct call
 is what selects an instance. Private `! ...` is inferred for that concrete
 instance before its body is lowered. Constraints and evidence remain later
 work.
+
+Inside a concrete routine instance, a fixed formal may also be used as an
+ordinary expression of its declared integer type. Each such use is replaced by
+the instance's compile-time value; it still creates no runtime argument or ABI
+position.
 
 ```landin
 sort: (T: type is ordered, data: []mut T) -> none =
