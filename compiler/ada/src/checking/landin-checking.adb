@@ -1015,7 +1015,7 @@ package body Landin.Checking is
         (Concept_Record'
            (Declaration => No_Declaration, Compiler_Supplied => True));
 
-      --  Interned once, so a Type_Name node costs eleven integer
+      --  Interned once, so a Type_Name node costs thirteen integer
       --  comparisons and never a byte comparison.
       for Item in Landin.Types.Scalar_Name loop
          Into.Scalars (Item) :=
@@ -1027,7 +1027,7 @@ package body Landin.Checking is
    end Prepare;
 
    ------------------------------------------------------------------
-   --  The eleven, by identity
+   --  The scalar names, by identity
    ------------------------------------------------------------------
 
    function Named (Of_Table : Table; Id : Landin.Source.Names.Name_Id)

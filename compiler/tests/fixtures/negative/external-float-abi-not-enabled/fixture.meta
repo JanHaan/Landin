@@ -1,0 +1,6 @@
+class: negative
+summary: D162 keeps floating-point parameters outside [1580]'s first scalar C ABI boundary
+constructs: 0170, 1580
+program: program.ldn
+codes: L0301
+targets: linux-x86-64, macos-arm64

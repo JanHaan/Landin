@@ -161,7 +161,7 @@ package body Landin.Stages.Resolution is
 
             --  [1795] made a type position a place a name can stand, so
             --  the type a declaration writes down is resolved like any
-            --  other name.  Before it, every type was one of the eleven
+            --  other name.  Before it, every type was one of the scalars
             --  the parser knew and there was nothing here to look up.
             if Resolve_Declared
               and then Syn.Kind (Of_Tree, Node)
@@ -560,7 +560,7 @@ package body Landin.Stages.Resolution is
       --  Every use of a name is a Name_Reference node, so resolution is a
       --  walk looking for one kind rather than for identifiers in seven
       --  positions.  A Type_Name is not a use: [1790] gives the kernel
-      --  eleven spellings and the parser already holds that node to them.
+      --  scalar spellings and the parser already holds that node to them.
       procedure Resolve
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
@@ -819,7 +819,7 @@ package body Landin.Stages.Resolution is
             end;
          end if;
 
-         --  One of the eleven the kernel predeclares, which the parser
+         --  One of the scalar types the kernel predeclares, which the parser
          --  already recognised: there is no declaration to find.
          if Syn.Kind (Of_Tree, Node) = Syn.Type_Name then
             return;

@@ -1,10 +1,10 @@
 --  The language's types.
 --
---  `spec.md` [1790] is the authority: the enabled kernel has eleven scalar
+--  `spec.md` [1790] is the authority: the enabled kernel has thirteen scalar
 --  names plus aggregate, fixed-array, erased-any and function-value
 --  categories.  This
 --  package is that rule made addressable, and it is meant to be the only
---  place in the compiler where the eleven are written down, which is what
+--  place in the compiler where the thirteen are written down, which is what
 --  lets `check.py` keep comparing the column below with the tour's own
 --  `type` rule.  The identity or structural facts that distinguish two
 --  values within the latter categories live beside the per-node answer in
@@ -26,7 +26,7 @@
 --  band is exhaustive, so a type this package forgets is a compile error
 --  under -gnatwe rather than a fall-through.
 --
---  The first five values are not one of the eleven, and each is a value
+--  The leading bookkeeping values are not one of the scalars, and each is a
 --  rather than an absence for the reason Landin.Resolution.Verdict gives:
 --  one number meaning both "no type here" and "no type yet" is how a
 --  missing type becomes a cascade.
@@ -43,6 +43,8 @@
 --                     and it is the message that differs.
 --    Untyped_Integer  an integer literal, or a run of operators over
 --                     nothing else, that no context has fixed yet [0190].
+--    Untyped_Float    the corresponding state for [0210]'s recognisably
+--                     distinct decimal float literal.
 --
 --  Nothing here reads a tree, a token or a snapshot.  What type each node
 --  has is Landin.Checking's, for the same reason a Declaration_Id lives in
@@ -65,11 +67,13 @@ package Landin.Types is
       Ill_Typed,
       No_Value,
       Untyped_Integer,
-      --  [1790]'s eleven, in the order the grammar writes them, so that a
+      Untyped_Float,
+      --  [1790]'s thirteen, in the order the grammar writes them, so that a
       --  reader can check the column against spec.md by running down it.
       U8, U16, U32, U64,
       I8, I16, I32, I64,
       Usize, Isize,
+      F32, F64,
       Bool,
       --  [0430]/[0570]: runtime reference carriers.  Permission and the
       --  complete referent/element descriptor live beside this broad
@@ -107,6 +111,10 @@ package Landin.Types is
    --  which is what makes this band contiguous without reordering it.
    subtype Integer_Name is Type_Kind range U8 .. Isize;
 
+   subtype Float_Name is Type_Kind range F32 .. F64;
+
+   subtype Numeric_Name is Type_Kind range U8 .. F64;
+
    --  A type a value can actually have, which is what an expression node
    --  must end the pass with when its subtree is sound.
    subtype Settled is Type_Kind range Untyped_Integer .. Function_Value;
@@ -123,6 +131,8 @@ package Landin.Types is
             when I64   => "i64",
             when Usize => "usize",
             when Isize => "isize",
+            when F32   => "f32",
+            when F64   => "f64",
             when Bool  => "bool");
 
    --  [0200]: with no context, an integer literal defaults to i32.  Named
@@ -130,8 +140,15 @@ package Landin.Types is
    --  tour's and a checker applies it in five places.
    Default_Integer : constant Scalar_Name := I32;
 
+   --  [0210]'s contextless examples settle to the ordinary machine float.
+   --  D162 records this previously implicit default in the normative text.
+   Default_Float : constant Scalar_Name := F32;
+
    function Is_Signed (Item : Integer_Name) return Boolean
      is (Item in I8 | I16 | I32 | I64 | Isize);
+
+   function Float_Width (Item : Float_Name) return Landin.Targets.Bit_Width
+     is (case Item is when F32 => 32, when F64 => 64);
 
    ------------------------------------------------------------------
    --  How wide one is
@@ -248,5 +265,17 @@ package Landin.Types is
       Base       : Landin.Tokens.Integer_Base;
       Value      : out Magnitude;
       Overflowed : out Boolean);
+
+   --  Decode one scanner-validated decimal spelling into the IEEE pattern
+   --  of its contextual type.  The pattern, rather than a host float, is
+   --  what lowering and static images retain, preserving signed zero.
+   procedure Evaluate_Float
+     (Text       : String;
+      Item       : Float_Name;
+      Bits       : out Magnitude;
+      Overflowed : out Boolean);
+
+   function Negated_Float
+     (Bits : Magnitude; Item : Float_Name) return Magnitude;
 
 end Landin.Types;

@@ -1,5 +1,5 @@
 class: negative
-summary: [0170] names the three float widths and [1790]'s types omit them, so the checker refuses one by name
+summary: [0170] names f16 but D162 leaves that width as a named R4.10 refusal
 constructs: 0170, 1790, 1830
 program: program.ldn
 codes: L0304

@@ -180,6 +180,102 @@ package body Landin.Tokens.Lexer is
          Base        : Integer_Base := Decimal;
          Digits_From : Natural := Position;
          Prefixed    : Boolean := False;
+
+         function Good_Run
+           (From, Through : Natural; Radix : Integer_Base) return Boolean;
+
+         function Good_Run
+           (From, Through : Natural; Radix : Integer_Base) return Boolean
+         is
+         begin
+            if Through < From
+              or else Text (From) = '_'
+              or else Text (Through) = '_'
+            then
+               return False;
+            end if;
+
+            for Index in From .. Through loop
+               if Text (Index) /= '_'
+                 and then not Digit_Of (Radix, Text (Index))
+               then
+                  return False;
+               end if;
+            end loop;
+            return True;
+         end Good_Run;
+
+         procedure Finish_Float
+           (Fraction_From : Natural; Hexadecimal : Boolean);
+
+         procedure Finish_Float
+           (Fraction_From : Natural; Hexadecimal : Boolean)
+         is
+            Fraction_Last : Natural;
+            Exponent_From : Natural := 0;
+            Exponent_Last : Natural := 0;
+            Good          : Boolean;
+         begin
+            --  Position names the dot.  The caller established one digit
+            --  after it, so a range/slice opener remains punctuation.
+            Position := Position + 1;
+            while Position <= Last
+              and then
+                ((if Hexadecimal then Is_Hex (Text (Position))
+                  else Is_Digit (Text (Position)))
+                 or else Text (Position) = '_')
+            loop
+               Position := Position + 1;
+            end loop;
+            Fraction_Last := Position - 1;
+
+            if Position <= Last
+              and then
+                (if Hexadecimal then Text (Position) in 'p' | 'P'
+                 else Text (Position) in 'e' | 'E')
+            then
+               Position := Position + 1;
+               if Position <= Last and then Text (Position) in '+' | '-' then
+                  Position := Position + 1;
+               end if;
+               Exponent_From := Position;
+               while Position <= Last
+                 and then
+                   (Is_Digit (Text (Position))
+                    or else Text (Position) = '_')
+               loop
+                  Position := Position + 1;
+               end loop;
+               Exponent_Last := Position - 1;
+            end if;
+
+            Good :=
+              Good_Run
+                (Fraction_From, Fraction_Last,
+                 (if Hexadecimal then Landin.Tokens.Hexadecimal
+                  else Decimal))
+              and then
+                (if Hexadecimal then Exponent_From /= 0 else True)
+              and then
+                (if Exponent_From = 0 then True
+                 else Good_Run
+                        (Exponent_From, Exponent_Last, Decimal));
+
+            if Good then
+               Emit
+                 ((if Hexadecimal then Hex_Float_Literal else Float_Literal),
+                  First, Position - 1);
+               if Hexadecimal then
+                  Complain
+                    (Not_Enabled, First, Position - 1,
+                     Refused => Hex_Float_Literal);
+               end if;
+            else
+               Emit (Malformed_Float, First, Position - 1);
+               Complain
+                 (Malformed_Float_Literal_Run, First, Position - 1);
+            end if;
+         end Finish_Float;
       begin
          if Text (Position) = '0' and then Position + 1 <= Last
            and then Text (Position + 1) in 'b' | 'o' | 'x'
@@ -194,42 +290,47 @@ package body Landin.Tokens.Lexer is
          end if;
 
          while Position <= Last
-           and then (Is_Hex (Text (Position)) or else Text (Position) = '_')
+           and then
+             ((if Prefixed then Is_Hex (Text (Position))
+               else Is_Digit (Text (Position)))
+              or else Text (Position) = '_')
          loop
             Position := Position + 1;
          end loop;
 
-         --  A float is one lexeme, named, so [1830] can refuse it rather
-         --  than report a stray dot [0210].
-         if not Prefixed and then Position + 1 <= Last
+         --  A decimal float is enabled as one recognisable token [0210].
+         --  [0230]'s hexadecimal form is likewise kept whole, but retains
+         --  its named R4.10 refusal until exact source conversion lands.
+         if (not Prefixed or else Base = Hexadecimal)
+           and then Position + 1 <= Last
            and then Text (Position) = '.'
-           and then Is_Digit (Text (Position + 1))
+           and then
+             (if Base = Hexadecimal then Is_Hex (Text (Position + 1))
+              else Is_Digit (Text (Position + 1)))
          then
-            Position := Position + 1;
+            Finish_Float
+              (Position + 1, Hexadecimal => Base = Hexadecimal);
+            return;
+         end if;
+
+         --  Preserve the original one-run diagnosis for a decimal digit
+         --  followed by a base-only digit: `12a` is not `12` and a name.
+         if not Prefixed
+           and then Position <= Last
+           and then Text (Position) in 'a' .. 'f' | 'A' .. 'F'
+         then
             while Position <= Last
-              and then (Is_Digit (Text (Position))
+              and then (Is_Hex (Text (Position))
                         or else Text (Position) = '_')
             loop
                Position := Position + 1;
             end loop;
-            Emit (Float_Literal, First, Position - 1);
-            Complain (Not_Enabled, First, Position - 1,
-                      Refused => Float_Literal);
-            return;
          end if;
 
          declare
-            Run  : constant String := Text (Digits_From .. Position - 1);
-            Good : Boolean := Run'Length > 0
-              and then Run (Run'First) /= '_'
-              and then Run (Run'Last) /= '_';
+            Good : constant Boolean :=
+              Good_Run (Digits_From, Position - 1, Base);
          begin
-            for Index in Run'Range loop
-               exit when not Good;
-               Good := Run (Index) = '_'
-                 or else Digit_Of (Base, Run (Index));
-            end loop;
-
             if Good then
                Into.Items.Append
                  (Token'(Kind      => Integer_Literal,

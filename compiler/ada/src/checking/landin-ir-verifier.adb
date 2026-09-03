@@ -2503,6 +2503,13 @@ package body Landin.IR.Verifier is
                      begin
                         if Element = Landin.Types.Bool then
                            Fits := Held in 0 .. 1;
+                        elsif Element in Landin.Types.Float_Name then
+                           Fits := Held >= 0
+                             and then Held <= Landin.Types.Folded
+                               (2 ** Natural
+                                  (Landin.Types.Float_Width
+                                     (Landin.Types.Float_Name (Element)))
+                                - 1);
                         else
                            Fits :=
                              Landin.Types.Holds
@@ -2587,6 +2594,12 @@ package body Landin.IR.Verifier is
                      Element : Landin.Types.Scalar_Name) return Boolean
                   is (if Element = Landin.Types.Bool
                       then Held in 0 .. 1
+                      elsif Element in Landin.Types.Float_Name
+                      then Held >= 0
+                        and then Held <= Landin.Types.Folded
+                          (2 ** Natural
+                             (Landin.Types.Float_Width
+                                (Landin.Types.Float_Name (Element))) - 1)
                       else Landin.Types.Holds
                         (Held, Landin.Types.Integer_Name (Element), Facts));
 
@@ -2914,6 +2927,12 @@ package body Landin.IR.Verifier is
                      Element : Landin.Types.Scalar_Name) return Boolean
                   is (if Element = Landin.Types.Bool
                       then Held in 0 .. 1
+                      elsif Element in Landin.Types.Float_Name
+                      then Held >= 0
+                        and then Held <= Landin.Types.Folded
+                          (2 ** Natural
+                             (Landin.Types.Float_Width
+                                (Landin.Types.Float_Name (Element))) - 1)
                       else Landin.Types.Holds
                         (Held, Landin.Types.Integer_Name (Element), Facts));
                begin
@@ -4335,6 +4354,30 @@ package body Landin.IR.Verifier is
                                  end if;
 
                                  declare
+                                    Operand_Kind : constant
+                                      Landin.Types.Type_Kind :=
+                                        Result_Of (Of_Unit, Id, L);
+                                    Ordinary_Numeric : constant Boolean :=
+                                      Op in Multiply | Divide | Add | Subtract;
+                                 begin
+                                    if Op in Numeric_Kind
+                                      and then
+                                        (if Ordinary_Numeric
+                                         then Operand_Kind
+                                                not in
+                                                  Landin.Types.Numeric_Name
+                                         else Operand_Kind
+                                                not in
+                                                  Landin.Types.Integer_Name)
+                                    then
+                                       return
+                                         (Kind => Result_Disagrees,
+                                          Item => Id, Block => Block,
+                                          Value => V);
+                                    end if;
+                                 end;
+
+                                 declare
                                     Left_Signature : constant Signature_Id :=
                                       Signature_Of (Of_Unit, Id, L);
                                     Right_Signature : constant Signature_Id :=
@@ -4403,15 +4446,31 @@ package body Landin.IR.Verifier is
                               end;
 
                            when Unary_Kind =>
-                              if Result_Of (Of_Unit, Id, V)
-                                 /= Result_Of
-                                      (Of_Unit, Id,
-                                       Nth_Operand (Of_Unit, Id, V, 1))
-                              then
-                                 return (Kind => Result_Disagrees,
-                                         Item => Id, Block => Block,
-                                         Value => V);
-                              end if;
+                              declare
+                                 Operand_Kind : constant
+                                   Landin.Types.Type_Kind :=
+                                     Result_Of
+                                       (Of_Unit, Id,
+                                        Nth_Operand (Of_Unit, Id, V, 1));
+                              begin
+                                 if Result_Of (Of_Unit, Id, V) /= Operand_Kind
+                                   or else
+                                     (case Op is
+                                         when Negation =>
+                                           Operand_Kind not in
+                                             Landin.Types.Numeric_Name,
+                                         when Complement =>
+                                           Operand_Kind not in
+                                             Landin.Types.Integer_Name,
+                                         when Logical_Not =>
+                                           Operand_Kind /= Landin.Types.Bool,
+                                         when others => True)
+                                 then
+                                    return (Kind => Result_Disagrees,
+                                            Item => Id, Block => Block,
+                                            Value => V);
+                                 end if;
+                              end;
 
                            when Pointer_Address =>
                               if Result_Of (Of_Unit, Id, V)

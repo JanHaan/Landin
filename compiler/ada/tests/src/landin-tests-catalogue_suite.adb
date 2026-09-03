@@ -98,7 +98,7 @@ package body Landin.Tests.Catalogue_Suite is
       end loop;
 
       Landin.Testing.Check_Equal
-        (Item, Rows.Count, 54, "the catalogue holds fifty-four codes");
+        (Item, Rows.Count, 55, "the catalogue holds fifty-five codes");
    end Rows_Are_Whole;
 
    --  A fault kind maps to exactly one code, and every kind has one.
@@ -131,9 +131,10 @@ package body Landin.Tests.Catalogue_Suite is
       Sources : Landin.Source.Sets.Source_Set;
       Report  : Landin.Diagnostics.Diagnostic_List;
    begin
-      --  `1.5` is refused by [1830], and the span is the whole lexeme
+      --  A hexadecimal float is refused by [1830], and the span is the
+      --  whole lexeme
       --  rather than the dot inside it.
-      Lex_And_Report ("r: f32 = 1.5", Sources, Report);
+      Lex_And_Report ("r: f64 = 0x1.0p0", Sources, Report);
 
       Landin.Testing.Check_Equal
         (Item, Landin.Diagnostics.Count (Report), 1, "one diagnostic");
@@ -152,7 +153,7 @@ package body Landin.Tests.Catalogue_Suite is
         (Item,
          Landin.Diagnostics.Span_Of
            (Landin.Diagnostics.Primary
-              (Landin.Diagnostics.Get (Report, 1))).Last = 12,
+           (Landin.Diagnostics.Get (Report, 1))).Last = 16,
          "and ends at the end of it, not at the dot");
       Landin.Testing.Check_Equal
         (Item,
@@ -204,12 +205,12 @@ package body Landin.Tests.Catalogue_Suite is
         "error[L0010]: this construct is not enabled yet" & LF
         & "  --> case.ldn:1:10" & LF
         & "  |" & LF
-        & "1 | r: f32 = 1.5" & LF
-        & "  |          ^^^" & LF
-        & "  = note: the tour describes it at [0210]" & LF
+        & "1 | r: f64 = 0x1.0p0" & LF
+        & "  |          ^^^^^^^" & LF
+        & "  = note: the tour describes it at [0230]" & LF
         & "  = note: ROADMAP.md R4.10 is where it is enabled" & LF;
    begin
-      Lex_And_Report ("r: f32 = 1.5", Sources, Report);
+      Lex_And_Report ("r: f64 = 0x1.0p0", Sources, Report);
 
       Landin.Testing.Check_Equal
         (Item, Landin.Diagnostics.Text.Render (Report, Sources), Expected,

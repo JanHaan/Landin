@@ -2245,6 +2245,21 @@ package body Landin.IR is
                          Negated => Negated,
                          others  => <>)));
 
+   function Emit_Float
+     (Into    : in out Unit;
+      Item    : Item_Id;
+      Of_Type : Landin.Types.Float_Name;
+      Bits    : Landin.Types.Magnitude;
+      Site    : Landin.Provenance.Origin) return Value_Id
+     is (Append
+           (Into, Item,
+            Instruction'(Op      => Number,
+                         Result  => Of_Type,
+                         Site    => Site,
+                         Number  => Bits,
+                         Negated => False,
+                         others  => <>)));
+
    function Emit_Measurement
      (Into     : in out Unit;
       Item     : Item_Id;

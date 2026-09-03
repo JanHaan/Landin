@@ -1,5 +1,5 @@
 holder: type = struct
-    value: f32
+    value: f16
 end holder
 
 mut state: holder

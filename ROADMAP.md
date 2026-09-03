@@ -3098,6 +3098,13 @@ refusal. The seventh increment enables quoted text in a direct read-only
 trailing NUL, content-pooled read-only data and static slice relocations.
 D161 keeps `utf8`, `utf16`, `cstring` and codepoint escapes deferred while
 giving malformed spelling lexical L0320.
+The eighth increment enables contextual and default-f32 decimal literals for
+f32 and f64, their storage and internal call carriers, IEEE runtime `+`, `-`,
+`*`, `/`, unary minus and comparisons, including signed zero, infinities and
+unordered NaN comparisons. D162 keeps f16, hexadecimal and named special
+literals, scalar conversions, module float arithmetic and the floating-point
+C ABI as explicit later boundaries, and gives malformed exponents lexical
+L0321.
 
 Exit evidence: every hosted `[NNNN]` row has implementation and positive or
 negative evidence; no omission is hidden by prototype coverage.

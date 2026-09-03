@@ -43,7 +43,7 @@
 --  walk reaches it.  One mechanism, two readings.
 --
 --  What this package does not do.  It resolves no type name: [1790] gives
---  the kernel eleven scalar spellings, and Landin.Syntax.Parser already
+--  the kernel scalar spellings, and Landin.Syntax.Parser already
 --  holds a Type_Name node to exactly those -- check.py compares that table
 --  with the tour's own `type` rule -- so a second table here would be a
 --  second authority on a question the tour has already answered once.
