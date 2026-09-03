@@ -1660,6 +1660,7 @@ package body Landin.Stages.Checking.Flow is
 
          if Syn.Kind (Of_Tree, Root)
               in Syn.If_Statement | Syn.Match_Statement | Syn.Bare_Block
+                 | Syn.Loop_Statement | Syn.While_Statement
          then
             return True;
          end if;
@@ -1701,6 +1702,7 @@ package body Landin.Stages.Checking.Flow is
                   Is_While : constant Boolean :=
                     Syn.Kind (Of_Tree, Node) = Syn.While_Statement;
                   Returned : Boolean := False;
+                  Completion_Falls_Through : Boolean := False;
                begin
                   if Is_While then
                      declare
@@ -1740,10 +1742,35 @@ package body Landin.Stages.Checking.Flow is
                               Result, Syn.Origin (Of_Tree, Node),
                               Complete_State, Complete_Edges);
                            Returned := Returned or Complete_Edges.Returns;
+                           Completion_Falls_Through :=
+                             Complete_Edges.Falls_Through;
                         end;
                      end if;
                      Loop_Cleanup_Stack.Delete_Last;
                   end;
+
+                  if Needs_Value and then Is_While
+                    and then
+                      (Syn.Complete_Body (Of_Tree, Node) = Syn.No_Node
+                       or else Completion_Falls_Through)
+                  then
+                     Bad.Report
+                       (Item    => Bad.Type_Mismatch,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Where
+                          (Of_Tree,
+                           (if Syn.Complete_Body (Of_Tree, Node) = Syn.No_Node
+                            then Node
+                            else Syn.Complete_Body (Of_Tree, Node))),
+                        Message => "this value-producing loop can finish"
+                          & " without a value",
+                        Note    => "[1190]: `complete` must leave through"
+                          & " `break with` when a finite loop is an"
+                          & " expression",
+                        Related => Syn.Origin (Of_Tree, Node),
+                        Because => "this value-producing loop",
+                        Into    => Found);
+                  end if;
 
                   --  A while's false test and an unconditional loop's
                   --  break edges are the only exits.  This first increment
@@ -2531,6 +2558,7 @@ package body Landin.Stages.Checking.Flow is
                         declare
                            Transfer_State : Assigned_Set := State;
                            Cleanup_Edges : Edge_Facts;
+                           Value_Edges : Edge_Facts := Fallthrough_Edge;
                            Guarded : constant Boolean :=
                              Syn.Condition_Of (Of_Tree, Item) /= Syn.No_Node;
                            Target : constant Loop_Cleanup_Entry :=
@@ -2538,11 +2566,24 @@ package body Landin.Stages.Checking.Flow is
                            First : constant Natural :=
                              Target.Cleanup_Base + 1;
                         begin
-                           Flow_Cleanups
-                             (Of_Tree, First, Cleanup.Structured_Transfer,
-                              Result, Transfer_State, Cleanup_Edges);
-                           Step.Returns := Step.Returns
-                             or Cleanup_Edges.Returns;
+                           if Syn.Kind (Of_Tree, Item) = Syn.Break_Statement
+                             and then Syn.Transfer_Value (Of_Tree, Item)
+                               /= Syn.No_Node
+                           then
+                              Flow_Expression
+                                (Of_Tree, Syn.Transfer_Value (Of_Tree, Item),
+                                 Result, Transfer_State, Value_Edges);
+                              Step.Returns := Step.Returns
+                                or Value_Edges.Returns;
+                           end if;
+
+                           if Value_Edges.Falls_Through then
+                              Flow_Cleanups
+                                (Of_Tree, First, Cleanup.Structured_Transfer,
+                                 Result, Transfer_State, Cleanup_Edges);
+                              Step.Returns := Step.Returns
+                                or Cleanup_Edges.Returns;
+                           end if;
                            Step.Falls_Through := Guarded;
                         end;
                      end if;

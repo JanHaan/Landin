@@ -132,9 +132,10 @@ package Landin.Syntax is
       --  [0970]'s second early exit.  Its first slot is the atom and its
       --  second the optional `when` condition.
       Fail_Statement,
-      --  R4.10's loop control.  A transfer carries its optional `when`
-      --  guard and optional target label in Name; a loop carries its own
-      --  optional label, condition, body and `complete` block separately.
+      --  R4.10's loop control.  A break carries its optional `with` value,
+      --  both transfers carry an optional `when` guard and target label in
+      --  Name, and a loop carries its optional label, condition, body and
+      --  `complete` block separately.
       Break_Statement,
       Continue_Statement,
       Loop_Statement,
@@ -762,6 +763,11 @@ package Landin.Syntax is
                           in If_Arm | Return_Statement | Fail_Statement
                              | Break_Statement | Continue_Statement
                              | While_Statement;
+
+   --  [1190]'s value carried by `break with`; No_Node for a valueless break.
+   function Transfer_Value (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id) = Break_Statement;
 
    --  R4.10's loop body.  It is a Block and therefore owns the same lexical
    --  cleanup and scope rules as a branch body.

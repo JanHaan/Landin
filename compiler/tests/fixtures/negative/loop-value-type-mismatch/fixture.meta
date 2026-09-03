@@ -1,0 +1,6 @@
+class: negative
+summary: a break value must agree with the loop expression context
+program: program.ldn
+codes: L0301
+constructs: 0310, 1130, 1190, 1890
+targets: linux-x86-64, macos-arm64, synthetic-32
