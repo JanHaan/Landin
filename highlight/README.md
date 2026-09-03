@@ -23,6 +23,35 @@ The two grammars are the reason this directory exists rather than the
 scanner living under `docs/site/`: the reading copies are a consumer of
 the language's highlighting, not the owner of it.
 
+## Installing editor and IDE support
+
+Clone or download the repository, then use the package for the editor in the
+table. Every package associates the `.ldn` suffix with Landin; the structural
+packages also provide editor features such as indentation, folds, text
+objects or an outline where their host supports them.
+
+| editor or tool | package | installation |
+|---|---|---|
+| Zed | `highlight/zed` | Open Extensions, choose **Install Dev Extension**, and select this directory. |
+| VS Code, VSCodium, Cursor, Windsurf | `highlight/textmate` | Run `npm install`, `npm run package:check`, and `npx vsce package`; then choose **Install from VSIX** in the editor. |
+| Neovim | `highlight/nvim` | Run `make -C highlight/nvim`, then add the directory to `runtimepath` or use it as a local plugin. |
+| Helix | `highlight/helix` | Merge `languages.toml`, copy the query directory into the matching runtime directory, then run `hx --grammar fetch` and `hx --grammar build`. |
+| Vim | `highlight/vim` | Copy the directory to `~/.vim/pack/landin/start/landin`, or point a package manager at it. |
+| Emacs | `highlight/emacs` | Put the directory on `load-path` and require `landin-mode`; on Emacs 29+, run `M-x landin-ts-install-grammar` to enable the tree-sitter mode. |
+| Sublime Text | `highlight/sublime` | Copy the directory to `Packages/Landin`. |
+| Visual Studio | `highlight/visual-studio` | Run `install.ps1` in PowerShell, then reopen the file or restart Visual Studio. |
+| JetBrains IDEs | `highlight/textmate` | Enable **TextMate Bundles**, import this directory as a bundle, and map `*.ldn` if necessary. |
+| Eclipse | `highlight/textmate` | With TM4E installed, import `syntaxes/landin.tmLanguage.json` and open `.ldn` files in the Generic Editor. |
+| Notepad++ | `highlight/notepad-plus-plus` | From **Language**, open **User Defined Language** and import `Landin.xml`, or copy it to the user-defined-language directory. |
+| Kate | `highlight/kate/landin.xml` | Install the XML file as a user syntax-highlighting definition. |
+| Nano | `highlight/nano/landin.nanorc` | Include the syntax file from the user's `nanorc`. |
+| Pygments, Sphinx, MkDocs | `highlight` | Run `pip install ./highlight`; the lexer registers the `landin` and `ldn` aliases and the `.ldn` suffix. |
+
+The TextMate grammar can also be loaded directly by TextMate, Shiki and
+`bat`. The package-specific README in each directory records any additional
+host details. These are repository packages rather than editor-marketplace
+releases, so installation is deliberately local for now.
+
 ## What the scanner is not
 
 It is not a parser. It is a token scanner with a symbol table collected
