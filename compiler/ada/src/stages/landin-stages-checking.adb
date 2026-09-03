@@ -478,6 +478,8 @@ package body Landin.Stages.Checking is
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
          Wanted  : Ty.Scalar_Name);
+      function Character_Value
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Magnitude;
       procedure Commit_To
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
@@ -7774,6 +7776,25 @@ package body Landin.Stages.Checking is
          end if;
       end Check_Float_Literal;
 
+      function Character_Value
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Magnitude
+      is
+         Snap : constant Landin.Source.Snapshot :=
+           Source (Context, Syn.Source_Of (Of_Tree));
+         Lexeme : constant String :=
+           Landin.Source.Slice (Snap, Syn.Anchor (Of_Tree, Node));
+         Value, Fault_First, Fault_Last : Natural;
+         Fault : Landin.Tokens.Text.Problem;
+      begin
+         Landin.Tokens.Text.Decode_Character
+           (Lexeme, Value, Fault, Fault_First, Fault_Last);
+         if Fault /= Landin.Tokens.Text.Well_Formed then
+            raise Landin.Compiler_Defect with
+              "a malformed character literal passed lexical analysis";
+         end if;
+         return Ty.Magnitude (Value);
+      end Character_Value;
+
       --  [1880]: a context reaches inward through the arithmetic, bitwise,
       --  shift and unary levels.  The walk prunes at the first node that
       --  already has a type of its own, so a mixed expression stops at
@@ -12834,6 +12855,11 @@ package body Landin.Stages.Checking is
 
             when Syn.Float_Literal =>
                return Kept (Ty.Untyped_Float);
+
+            when Syn.Character_Literal =>
+               --  [0250]: unlike numeric literals, a character does not
+               --  borrow a type from context.  It is the codepoint itself.
+               return Kept (Ty.U32);
 
             when Syn.Text_Literal =>
                --  [0260]: with no context a text literal is `utf8`, and
@@ -21096,6 +21122,10 @@ package body Landin.Stages.Checking is
                   end if;
                end;
 
+            when Syn.Character_Literal =>
+               Value := Ty.Folded (Character_Value (Of_Tree, Node));
+               Known := True;
+
             when Syn.True_Literal =>
                Value := 1;
                Known := True;
@@ -21548,6 +21578,7 @@ package body Landin.Stages.Checking is
             if not
                  (Syn.Kind (Of_Tree, Each)
                     in Syn.Integer_Literal | Syn.Float_Literal
+                       | Syn.Character_Literal
                   or else
                     (Syn.Kind (Of_Tree, Each) = Syn.Negation
                      and then Syn.Kind
@@ -22122,6 +22153,10 @@ package body Landin.Stages.Checking is
                      Known := True;
                   end if;
                end;
+
+            when Syn.Character_Literal =>
+               Value := Ty.Folded (Character_Value (Of_Tree, Node));
+               Known := True;
 
             when Syn.Negation =>
                declare

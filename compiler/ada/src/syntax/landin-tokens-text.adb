@@ -53,6 +53,30 @@ package body Landin.Tokens.Text is
       return 0;
    end UTF8_Length;
 
+   function UTF8_Value
+     (Lexeme : String; At_Byte : Positive; Count : Positive) return Natural;
+
+   function UTF8_Value
+     (Lexeme : String; At_Byte : Positive; Count : Positive) return Natural
+   is
+      function Byte (Offset : Natural) return Natural
+        is (Character'Pos (Lexeme (At_Byte + Offset)));
+   begin
+      return
+        (case Count is
+            when 1 => Byte (0),
+            when 2 => (Byte (0) - 16#C0#) * 64
+                      + Byte (1) - 16#80#,
+            when 3 => (Byte (0) - 16#E0#) * 4_096
+                      + (Byte (1) - 16#80#) * 64
+                      + Byte (2) - 16#80#,
+            when 4 => (Byte (0) - 16#F0#) * 262_144
+                      + (Byte (1) - 16#80#) * 4_096
+                      + (Byte (2) - 16#80#) * 64
+                      + Byte (3) - 16#80#,
+            when others => raise Program_Error);
+   end UTF8_Value;
+
    procedure Decode
      (Lexeme      : String;
       Bytes       : out String;
@@ -180,5 +204,122 @@ package body Landin.Tokens.Text is
          end if;
       end loop;
    end Decode;
+
+   procedure Decode_Character
+     (Lexeme      : String;
+      Value       : out Natural;
+      Fault       : out Problem;
+      Fault_First : out Natural;
+      Fault_Last  : out Natural)
+   is
+      First   : constant Positive := Lexeme'First + 1;
+      Last    : constant Natural  := Lexeme'Last - 1;
+      At_Byte : Positive := First;
+
+      procedure Fail (Which : Problem; Stop : Natural);
+
+      procedure Fail (Which : Problem; Stop : Natural) is
+      begin
+         Fault := Which;
+         Fault_First := At_Byte - Lexeme'First;
+         Fault_Last := Stop - Lexeme'First + 1;
+      end Fail;
+   begin
+      Value := 0;
+      Fault := Well_Formed;
+      Fault_First := 0;
+      Fault_Last := 0;
+
+      if First > Last then
+         Fault := Empty_Character;
+         Fault_First := 0;
+         Fault_Last := Lexeme'Length;
+         return;
+      end if;
+
+      if Lexeme (At_Byte) /= '\' then
+         declare
+            Count : constant Natural :=
+              UTF8_Length (Lexeme, At_Byte, Last);
+         begin
+            if Count = 0 then
+               Fail (Invalid_UTF8_Source, At_Byte);
+               return;
+            end if;
+            Value := UTF8_Value (Lexeme, At_Byte, Count);
+            At_Byte := At_Byte + Count;
+         end;
+      elsif At_Byte = Last then
+         Fail (Dangling_Backslash, At_Byte);
+         return;
+      else
+         case Lexeme (At_Byte + 1) is
+            when 'n' => Value := 10;
+            when 'r' => Value := 13;
+            when 't' => Value := 9;
+            when 'e' => Value := 27;
+            when '\' => Value := Character'Pos ('\');
+            when '"' => Value := Character'Pos ('"');
+            when ''' => Value := Character'Pos (''');
+            when 'x' =>
+               Fail
+                 (Byte_Where_Codepoint_Is_Meant,
+                  Natural'Min (Last, At_Byte + 3));
+               return;
+            when 'u' =>
+               declare
+                  Stop        : Natural := At_Byte + 2;
+                  Codepoint   : Natural := 0;
+                  Digit_Count : Natural := 0;
+               begin
+                  if Stop > Last or else Lexeme (Stop) /= '{' then
+                     Fail
+                       (Malformed_Codepoint_Escape,
+                        Natural'Min (Last, Stop));
+                     return;
+                  end if;
+                  Stop := Stop + 1;
+                  while Stop <= Last and then Lexeme (Stop) /= '}' loop
+                     declare
+                        Digit : constant Integer := Hex_Value (Lexeme (Stop));
+                     begin
+                        if Digit < 0
+                          or else Codepoint > (16#10_FFFF# - Digit) / 16
+                        then
+                           Fail (Malformed_Codepoint_Escape, Stop);
+                           return;
+                        end if;
+                        Codepoint := Codepoint * 16 + Digit;
+                        Digit_Count := Digit_Count + 1;
+                     end;
+                     Stop := Stop + 1;
+                  end loop;
+                  if Stop > Last
+                    or else Digit_Count = 0
+                    or else Codepoint in 16#D800# .. 16#DFFF#
+                  then
+                     Fail
+                       (Malformed_Codepoint_Escape,
+                        Natural'Min (Last, Stop));
+                     return;
+                  end if;
+                  Value := Codepoint;
+                  At_Byte := Stop + 1;
+                  if At_Byte <= Last then
+                     Fail (Multiple_Characters, Last);
+                  end if;
+                  return;
+               end;
+            when others =>
+               Fail (Unknown_Escape, At_Byte + 1);
+               return;
+         end case;
+         At_Byte := At_Byte + 2;
+      end if;
+
+      if At_Byte <= Last then
+         Fail (Multiple_Characters, Last);
+      end if;
+   end Decode_Character;
 
 end Landin.Tokens.Text;
