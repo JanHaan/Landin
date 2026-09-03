@@ -4978,7 +4978,8 @@ package body Landin.Stages.Checking is
               and then Syn.Value_Of (Of_Tree, Node) /= Syn.No_Node
               and then Syn.Kind (Of_Tree, Syn.Value_Of (Of_Tree, Node))
                 in Syn.If_Statement | Syn.Match_Statement | Syn.Bare_Block
-                   | Syn.Loop_Statement | Syn.While_Statement;
+                   | Syn.Loop_Statement | Syn.While_Statement
+                   | Syn.For_Statement;
             Is_Struct_Control_Init : constant Boolean :=
               Held = Ty.Aggregate
               and then Is_Local_Binding (Of_Tree, Node)
@@ -4986,6 +4987,7 @@ package body Landin.Stages.Checking is
               and then Syn.Kind (Of_Tree, Syn.Value_Of (Of_Tree, Node))
                 in Syn.If_Statement | Syn.Match_Statement | Syn.Bare_Block
                    | Syn.Loop_Statement | Syn.While_Statement
+                   | Syn.For_Statement
               and then Landin.Checking.Nominal_Of
                 (Types.all, Of_Tree, Written)
                   /= Landin.Checking.No_Nominal_Type;
@@ -7735,6 +7737,7 @@ package body Landin.Stages.Checking is
          if Syn.Kind (Of_Tree, Node)
               in Syn.If_Statement | Syn.Match_Statement | Syn.Bare_Block
                  | Syn.Loop_Statement | Syn.While_Statement
+                 | Syn.For_Statement
            and then Wanted in Ty.Scalar_Name
          then
             Check_Contextual_Value
@@ -7796,6 +7799,7 @@ package body Landin.Stages.Checking is
          if Syn.Kind (Of_Tree, Node)
               in Syn.If_Statement | Syn.Match_Statement | Syn.Bare_Block
                  | Syn.Loop_Statement | Syn.While_Statement
+                 | Syn.For_Statement
          then
             Check_Contextual_Value
               (Of_Tree, Node,
@@ -12628,7 +12632,8 @@ package body Landin.Stages.Checking is
 
          case Syn.Kind (Of_Tree, Node) is
             when Syn.If_Statement | Syn.Match_Statement | Syn.Bare_Block
-               | Syn.Loop_Statement | Syn.While_Statement =>
+               | Syn.Loop_Statement | Syn.While_Statement
+               | Syn.For_Statement =>
                return Kept (Synthesise_Control (Of_Tree, Node));
 
             when Syn.Integer_Literal =>
@@ -16175,11 +16180,86 @@ package body Landin.Stages.Checking is
          Expected : Value_Context := No_Value_Context;
          Requires_Value : Boolean := False)
       is
+         procedure Set_Traversal_Binding
+           (Binding : Syn.Node_Id; Kind : Ty.Type_Kind);
+
+         procedure Set_Traversal_Binding
+           (Binding : Syn.Node_Id; Kind : Ty.Type_Kind)
+         is
+            Id : constant Res.Declaration_Id :=
+              Declaration_At (Syn.Source_Of (Of_Tree), Binding);
+         begin
+            if Id = Res.No_Declaration then
+               return;
+            end if;
+            if Landin.Checking.State_Of (Types.all, Id)
+                 = Landin.Checking.Untouched
+            then
+               Landin.Checking.Begin_Inference (Types.all, Id);
+               Landin.Checking.Settle (Types.all, Id, Kind);
+            end if;
+         end Set_Traversal_Binding;
       begin
          if Syn.Kind (Of_Tree, Node) = Syn.While_Statement then
             Require
               (Of_Tree, Syn.Condition_Of (Of_Tree, Node), Ty.Bool,
                Syn.Origin (Of_Tree, Node), "the condition of this loop");
+         elsif Syn.Kind (Of_Tree, Node) = Syn.For_Statement then
+            declare
+               Lower : constant Syn.Node_Id :=
+                 Syn.Traversal_Lower (Of_Tree, Node);
+               Upper : constant Syn.Node_Id :=
+                 Syn.Traversal_Upper (Of_Tree, Node);
+               Element : constant Syn.Node_Id :=
+                 Syn.Traversal_Element (Of_Tree, Node);
+               Index : constant Syn.Node_Id :=
+                 Syn.Traversal_Index (Of_Tree, Node);
+               Range_Type : Ty.Type_Kind := Ty.Ill_Typed;
+            begin
+               if Upper = Syn.No_Node then
+                  Bad.Report
+                    (Item    => Bad.Unsupported_Use,
+                     Source  => Syn.Source_Of (Of_Tree),
+                     Where   => Syn.Where (Of_Tree, Lower),
+                     Message => "collection traversal is not enabled yet",
+                     Refused => Bad.Collection_Traversal,
+                     Into    => Found);
+               else
+                  Range_Type := Synthesise (Of_Tree, Lower);
+                  if Range_Type = Ty.Untyped_Integer then
+                     Range_Type := Ty.Default_Integer;
+                     Commit_To (Of_Tree, Lower, Ty.Default_Integer);
+                  elsif Range_Type not in Ty.Integer_Name then
+                     Bad.Report
+                       (Item    => Bad.Type_Mismatch,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Where (Of_Tree, Lower),
+                        Message => "a range traversal starts with an integer",
+                        Note    => "[1150]: `a..<b` and `a..b` are integer"
+                                   & " ranges",
+                        Related => Syn.Origin (Of_Tree, Node),
+                        Because => "this for loop",
+                        Into    => Found);
+                     Landin.Checking.Refuse (Types.all, Of_Tree, Lower);
+                     Range_Type := Ty.Ill_Typed;
+                  end if;
+
+                  if Range_Type in Ty.Integer_Name then
+                     Require
+                       (Of_Tree, Upper, Ty.Scalar_Name (Range_Type),
+                        Syn.Origin (Of_Tree, Lower),
+                        "the other endpoint of this range");
+                  end if;
+               end if;
+
+               Set_Traversal_Binding (Element, Range_Type);
+               if Index /= Syn.No_Node then
+                  Set_Traversal_Binding
+                    (Index,
+                     (if Range_Type = Ty.Ill_Typed
+                      then Ty.Ill_Typed else Ty.Usize));
+               end if;
+            end;
          end if;
 
          Loop_Values.Append
@@ -17358,7 +17438,8 @@ package body Landin.Stages.Checking is
                   end if;
                end;
 
-            when Syn.Loop_Statement | Syn.While_Statement =>
+            when Syn.Loop_Statement | Syn.While_Statement
+               | Syn.For_Statement =>
                Check_Loop (Of_Tree, Node, Returns);
 
             when Syn.If_Statement =>
@@ -17450,7 +17531,7 @@ package body Landin.Stages.Checking is
                if Syn.Kind (Of_Tree, Value)
                     in Syn.If_Statement | Syn.Match_Statement
                        | Syn.Bare_Block | Syn.Loop_Statement
-                       | Syn.While_Statement
+                       | Syn.While_Statement | Syn.For_Statement
                then
                   Check_Statement (Of_Tree, Value, Returns);
                else
@@ -17505,7 +17586,8 @@ package body Landin.Stages.Checking is
                      then
                         return Syn.Transfer_Value (Of_Tree, Statement);
                      end if;
-                  when Syn.Loop_Statement | Syn.While_Statement =>
+                  when Syn.Loop_Statement | Syn.While_Statement
+                     | Syn.For_Statement =>
                      if Target = Landin.Source.Names.No_Name
                        or else Syn.Name (Of_Tree, Statement) = Target
                      then
@@ -17632,7 +17714,8 @@ package body Landin.Stages.Checking is
                return Syn.Block_Value
                  (Of_Tree, Syn.Body_Of (Of_Tree, Node));
 
-            when Syn.Loop_Statement | Syn.While_Statement =>
+            when Syn.Loop_Statement | Syn.While_Statement
+               | Syn.For_Statement =>
                declare
                   Found_Value : constant Syn.Node_Id :=
                     In_Loop_Block
@@ -17742,6 +17825,7 @@ package body Landin.Stages.Checking is
          if Syn.Kind (Of_Tree, Node)
               in Syn.If_Statement | Syn.Match_Statement | Syn.Bare_Block
                  | Syn.Loop_Statement | Syn.While_Statement
+                 | Syn.For_Statement
          then
             Note_Context (Of_Tree, Node, Expected);
 
@@ -17777,7 +17861,8 @@ package body Landin.Stages.Checking is
                     (Of_Tree, Syn.Body_Of (Of_Tree, Node),
                      Ty.Not_Typed, Expected, Site, Because);
 
-               when Syn.Loop_Statement | Syn.While_Statement =>
+               when Syn.Loop_Statement | Syn.While_Statement
+                  | Syn.For_Statement =>
                   Check_Loop
                     (Of_Tree, Node, Ty.Not_Typed, Expected,
                      Requires_Value => True);
@@ -18558,7 +18643,8 @@ package body Landin.Stages.Checking is
                return True;
 
             when Syn.If_Statement | Syn.Match_Statement | Syn.Bare_Block
-               | Syn.Loop_Statement | Syn.While_Statement =>
+               | Syn.Loop_Statement | Syn.While_Statement
+               | Syn.For_Statement =>
                return False;
 
             --  D31 measures the literal's syntax.  Its elements are checked
@@ -18839,7 +18925,36 @@ package body Landin.Stages.Checking is
            Tree_For (Res.Source_Of (Meanings.all, Id));
          Node    : constant Syn.Node_Id := Res.Node_Of (Meanings.all, Id);
          Value   : constant Syn.Node_Id := Syn.Value_Of (Of_Tree.all, Node);
+
+         function Is_Traversal_Binding return Boolean;
+
+         function Is_Traversal_Binding return Boolean is
+         begin
+            if Syn.Kind (Of_Tree.all, Node) /= Syn.Binding then
+               return False;
+            end if;
+            for Candidate in Syn.Node_Id'(1)
+              .. Syn.Last_Node (Of_Tree.all)
+            loop
+               if Syn.Kind (Of_Tree.all, Candidate) = Syn.For_Statement
+                 and then
+                   (Syn.Traversal_Element (Of_Tree.all, Candidate) = Node
+                    or else Syn.Traversal_Index
+                      (Of_Tree.all, Candidate) = Node)
+               then
+                  return True;
+               end if;
+            end loop;
+            return False;
+         end Is_Traversal_Binding;
       begin
+         --  A traversal header declares its locals without an initializer;
+         --  Check_Loop settles them from the checked source/range before it
+         --  checks the body that can name them.
+         if Value = Syn.No_Node and then Is_Traversal_Binding then
+            return;
+         end if;
+
          Landin.Checking.Begin_Inference (Types.all, Id);
 
          if Value = Syn.No_Node then
@@ -19165,7 +19280,8 @@ package body Landin.Stages.Checking is
             Control_Source : constant Boolean :=
               Syn.Kind (Of_Tree.all, Value)
                 in Syn.If_Statement | Syn.Match_Statement | Syn.Bare_Block
-                   | Syn.Loop_Statement | Syn.While_Statement;
+                   | Syn.Loop_Statement | Syn.While_Statement
+                   | Syn.For_Statement;
          begin
             if Got = Ty.Untyped_Integer then
                Commit_To (Of_Tree.all, Value, Ty.Default_Integer);

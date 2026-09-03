@@ -1,0 +1,8 @@
+public main: () -> (code: i32) =
+    code = 1
+    first: i32 = 0
+    last: u8 = 3
+    for item in first..<last do
+        _ = item
+    end for
+end main

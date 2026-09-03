@@ -153,6 +153,9 @@ package Landin.Diagnostics.Checking is
       --  and so does an element the kernel cannot lay out end to end.
       Array_Value,
       Array_Element,
+      --  [1150]'s collection traversal is parsed alongside ranges so the
+      --  later checker can distinguish the source's element shape.
+      Collection_Traversal,
       --  D135's parameterized aliases are checked here, including an
       --  unapplied constructor and malformed positional application.
       Parameterized_Type_Alias,
@@ -172,6 +175,7 @@ package Landin.Diagnostics.Checking is
             when Variant_Value      => "[0680]",
             when Array_Value        => "[0520]",
             when Array_Element      => "[0520]",
+            when Collection_Traversal => "[1150]",
             when Parameterized_Type_Alias => "[1350]",
             when Zeroed_Value       => "[0540]",
             when External_C_ABI     => "[1580]")
@@ -234,6 +238,7 @@ private
                | Array_Value
                | Array_Element
                | Zeroed_Value      => "R2.20",
+            when Collection_Traversal => "R4.10",
             when Parameterized_Type_Alias => "R2.40",
             when External_C_ABI     => "R4.40");
 

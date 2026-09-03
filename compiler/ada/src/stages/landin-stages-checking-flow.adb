@@ -1661,6 +1661,7 @@ package body Landin.Stages.Checking.Flow is
          if Syn.Kind (Of_Tree, Root)
               in Syn.If_Statement | Syn.Match_Statement | Syn.Bare_Block
                  | Syn.Loop_Statement | Syn.While_Statement
+                 | Syn.For_Statement
          then
             return True;
          end if;
@@ -1697,12 +1698,29 @@ package body Landin.Stages.Checking.Flow is
          Edges := No_Edges;
 
          case Syn.Kind (Of_Tree, Node) is
-            when Syn.Loop_Statement | Syn.While_Statement =>
+            when Syn.Loop_Statement | Syn.While_Statement
+               | Syn.For_Statement =>
                declare
                   Is_While : constant Boolean :=
                     Syn.Kind (Of_Tree, Node) = Syn.While_Statement;
+                  Is_For : constant Boolean :=
+                    Syn.Kind (Of_Tree, Node) = Syn.For_Statement;
                   Returned : Boolean := False;
                   Completion_Falls_Through : Boolean := False;
+
+                  procedure Mark_Iteration
+                    (Binding : Syn.Node_Id; Into : in out Assigned_Set);
+
+                  procedure Mark_Iteration
+                    (Binding : Syn.Node_Id; Into : in out Assigned_Set)
+                  is
+                     Id : constant Res.Declaration_Id :=
+                       Declaration_At (Syn.Source_Of (Of_Tree), Binding);
+                  begin
+                     if Id /= Res.No_Declaration and then Is_Tracked (Id) then
+                        Into.Fields (Positive (Id), 0) := True;
+                     end if;
+                  end Mark_Iteration;
                begin
                   if Is_While then
                      declare
@@ -1719,10 +1737,46 @@ package body Landin.Stages.Checking.Flow is
                      end;
                   end if;
 
+                  if Is_For then
+                     declare
+                        Bound_Edges : Edge_Facts;
+                     begin
+                        Flow_Expression
+                          (Of_Tree, Syn.Traversal_Lower (Of_Tree, Node),
+                           Result, State, Bound_Edges);
+                        Returned := Returned or Bound_Edges.Returns;
+                        if not Bound_Edges.Falls_Through then
+                           Edges := Bound_Edges;
+                           return;
+                        end if;
+                        if Syn.Traversal_Upper (Of_Tree, Node)
+                             /= Syn.No_Node
+                        then
+                           Flow_Expression
+                             (Of_Tree, Syn.Traversal_Upper (Of_Tree, Node),
+                              Result, State, Bound_Edges);
+                           Returned := Returned or Bound_Edges.Returns;
+                           if not Bound_Edges.Falls_Through then
+                              Edges := Bound_Edges;
+                              return;
+                           end if;
+                        end if;
+                     end;
+                  end if;
+
                   declare
                      Body_State : Assigned_Set := State;
                      Body_Edges : Edge_Facts;
                   begin
+                     if Is_For then
+                        Mark_Iteration
+                          (Syn.Traversal_Element (Of_Tree, Node), Body_State);
+                        if Syn.Traversal_Index (Of_Tree, Node) /= Syn.No_Node
+                        then
+                           Mark_Iteration
+                             (Syn.Traversal_Index (Of_Tree, Node), Body_State);
+                        end if;
+                     end if;
                      Loop_Cleanup_Stack.Append
                        (Loop_Cleanup_Entry'
                           (Label        => Syn.Name (Of_Tree, Node),
@@ -1749,7 +1803,7 @@ package body Landin.Stages.Checking.Flow is
                      Loop_Cleanup_Stack.Delete_Last;
                   end;
 
-                  if Needs_Value and then Is_While
+                  if Needs_Value and then (Is_While or else Is_For)
                     and then
                       (Syn.Complete_Body (Of_Tree, Node) = Syn.No_Node
                        or else Completion_Falls_Through)
@@ -2546,7 +2600,7 @@ package body Landin.Stages.Checking.Flow is
                   when Syn.Discard | Syn.Call | Syn.Try_Expression
                      | Syn.If_Statement | Syn.Match_Statement
                      | Syn.Bare_Block | Syn.Loop_Statement
-                     | Syn.While_Statement =>
+                     | Syn.While_Statement | Syn.For_Statement =>
                      Flow_Expression
                        (Of_Tree, Item, Result, State, Step);
 

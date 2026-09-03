@@ -128,7 +128,7 @@
 1120   tour        -                                  Checks may be switched off for a region, visibly
 1130   tour        accepted emitted executed refused  Unconditional loop
 1140   tour        accepted emitted executed refused  Conditional loop
-1150   tour        refused-by-name                    Traversal
+1150   tour        accepted emitted executed refused  Traversal
 1160   tour        -                                  There is no marker on a loop binding
 1170   tour        accepted emitted executed refused  complete runs when the loop finished without break
 1180   tour        accepted emitted executed refused  Labels use the ordinary name form

@@ -70,18 +70,16 @@ package body Landin.Syntax.Parser is
 
    type Refused_Word is
      (Word_None,
-      Word_For, Word_Distinct);
+      Word_Distinct);
 
-   subtype Real_Word is Refused_Word range Word_For .. Word_Distinct;
+   subtype Real_Word is Refused_Word range Word_Distinct .. Word_Distinct;
 
    function Spelling (Item : Real_Word) return String
      is (case Item is
-            when Word_For      => "for",
             when Word_Distinct => "distinct");
 
    function Refusal (Item : Real_Word) return Syn.Refused_Construct
      is (case Item is
-            when Word_For      => Syn.For_Statement,
             when Word_Distinct => Syn.Distinct_Type);
 
    --  The scalar names [1790].  These are the types the kernel predeclares,
@@ -206,6 +204,9 @@ package body Landin.Syntax.Parser is
 
             While_Id : constant Landin.Source.Names.Name_Id :=
               Landin.Source.Names.Intern (Names, "while");
+
+            For_Id : constant Landin.Source.Names.Name_Id :=
+              Landin.Source.Names.Intern (Names, "for");
 
             Break_Id : constant Landin.Source.Names.Name_Id :=
               Landin.Source.Names.Intern (Names, "break");
@@ -389,6 +390,11 @@ package body Landin.Syntax.Parser is
                Allow_Value : Boolean := False) return Node_Id;
             function Parse_Statement (Context : Frame) return Node_Id;
             function Parse_Loop
+              (Context : Frame;
+               Starts  : Landin.Source.Span := Landin.Source.Empty_Span;
+               Label   : Landin.Source.Names.Name_Id :=
+                 Landin.Source.Names.No_Name) return Node_Id;
+            function Parse_For
               (Context : Frame;
                Starts  : Landin.Source.Span := Landin.Source.Empty_Span;
                Label   : Landin.Source.Names.Name_Id :=
@@ -3584,7 +3590,8 @@ package body Landin.Syntax.Parser is
                                      Landin.Source.Names.No_Name
                                 then not Nested
                                 else Name (Result, Statement) = Target);
-                        when Loop_Statement | While_Statement =>
+                        when Loop_Statement | While_Statement
+                           | For_Statement =>
                            if Target = Landin.Source.Names.No_Name
                              or else Name (Result, Statement) = Target
                            then
@@ -3683,7 +3690,7 @@ package body Landin.Syntax.Parser is
                      return Block_Value
                        (Result, Body_Of (Result, Control)) /= No_Node;
 
-                  when Loop_Statement | While_Statement =>
+                  when Loop_Statement | While_Statement | For_Statement =>
                      return Loop_Block_Offers_Value
                        (Loop_Body (Result, Control), Name (Result, Control))
                        or else
@@ -3715,12 +3722,12 @@ package body Landin.Syntax.Parser is
                       (Peek = Tok.Identifier
                        and then
                          (Named_Here in Match_Id | Begin_Id
-                            | Loop_Id | While_Id
+                            | Loop_Id | While_Id | For_Id
                           or else
                             (Ahead (1) = Tok.Colon
                              and then Ahead (2) = Tok.Identifier
                              and then Named_Ahead (2)
-                               in Loop_Id | While_Id)))
+                               in Loop_Id | While_Id | For_Id)))
                   then
                      declare
                         Control : constant Node_Id := Parse_Expression;
@@ -3732,7 +3739,7 @@ package body Landin.Syntax.Parser is
                         elsif Kind (Result, Control)
                                 in If_Statement | Match_Statement
                                    | Bare_Block | Loop_Statement
-                                   | While_Statement
+                                   | While_Statement | For_Statement
                         then
                            return Parse_Block (Context, Seed => Control);
                         else
@@ -4141,7 +4148,7 @@ package body Landin.Syntax.Parser is
 
                   if Ahead (1) = Tok.Colon
                     and then Ahead (2) = Tok.Identifier
-                    and then Named_Ahead (2) in Loop_Id | While_Id
+                    and then Named_Ahead (2) in Loop_Id | While_Id | For_Id
                   then
                      return False;
                   end if;
@@ -4399,21 +4406,32 @@ package body Landin.Syntax.Parser is
                   when Tok.Identifier =>
                      if Ahead (1) = Tok.Colon
                        and then Ahead (2) = Tok.Identifier
-                       and then Named_Ahead (2) in Loop_Id | While_Id
+                       and then Named_Ahead (2) in Loop_Id | While_Id | For_Id
                      then
                         declare
                            Label : constant Landin.Source.Names.Name_Id :=
                              Named_Here;
                            Label_At : constant Landin.Source.Span := Here;
+                           Is_For : constant Boolean :=
+                             Named_Ahead (2) = For_Id;
                         begin
                            Advance;
                            Advance;
-                           return Parse_Loop
-                             (Context, Starts => Label_At, Label => Label);
+                           if Is_For then
+                              return Parse_For
+                                (Context, Starts => Label_At, Label => Label);
+                           else
+                              return Parse_Loop
+                                (Context, Starts => Label_At, Label => Label);
+                           end if;
                         end;
-                     elsif Named_Here in Loop_Id | While_Id
+                     elsif Named_Here in Loop_Id | While_Id | For_Id
                      then
-                        return Parse_Loop (Context);
+                        if Named_Here = For_Id then
+                           return Parse_For (Context);
+                        else
+                           return Parse_Loop (Context);
+                        end if;
                      elsif Named_Here in Break_Id | Continue_Id
                      then
                         return Parse_Loop_Transfer;
@@ -4760,6 +4778,156 @@ package body Landin.Syntax.Parser is
                end if;
             end Parse_Loop;
 
+            --  for_statement ::= label? "for" identifier
+            --    ("," identifier)? "in" expression
+            --    ((".." | "..<") expression)? "do" block
+            --    ("complete" block)? "end" (label | "for")       [1150]
+            function Parse_For
+              (Context : Frame;
+               Starts  : Landin.Source.Span := Landin.Source.Empty_Span;
+               Label   : Landin.Source.Names.Name_Id :=
+                 Landin.Source.Names.No_Name) return Node_Id
+            is
+               Opened : constant Landin.Source.Span :=
+                 (if Starts = Landin.Source.Empty_Span then Here else Starts);
+               Element : Node_Id;
+               Index : Node_Id := No_Node;
+               Lower : Node_Id := No_Node;
+               Upper : Node_Id := No_Node;
+               Inclusive : Boolean := False;
+               Runs : Node_Id;
+               Completed : Node_Id := No_Node;
+               Kept : Boolean;
+               Saved_Complete : constant Boolean := Complete_Closes_Block;
+
+               function Parse_Traversal_Binding
+                 (Role : String) return Node_Id;
+
+               function Parse_Traversal_Binding
+                 (Role : String) return Node_Id
+               is
+                  At_Name : constant Landin.Source.Span :=
+                    (if Peek = Tok.End_Of_Input then After_Previous else Here);
+                  Named : Landin.Source.Names.Name_Id :=
+                    Landin.Source.Names.No_Name;
+               begin
+                  if Peek = Tok.Identifier then
+                     Named := Named_Here;
+                     Advance;
+                  else
+                     Complain
+                       (Item    => Syn.Token_Expected,
+                        Where   => At_Name,
+                        Message => "a for loop names its " & Role,
+                        Note    => "[1150]: `for item, idx in source do`",
+                        Related => Opened,
+                        Because => "this traversal");
+                  end if;
+                  return Add
+                    (Of_Kind  => Binding,
+                     At_Token => At_Name,
+                     Extent   => At_Name,
+                     Children => [No_Node, No_Node],
+                     Named    => Named);
+               end Parse_Traversal_Binding;
+            begin
+               if Too_Deep (Opened) then
+                  Advance;
+                  Resync_Statement;
+                  return Add
+                    (Error_Statement, Opened, Join (Opened, After_Previous));
+               end if;
+
+               Depth := Depth + 1;
+               Advance;
+               Element := Parse_Traversal_Binding ("element binding");
+               if Peek = Tok.Comma then
+                  Advance;
+                  Index := Parse_Traversal_Binding ("index binding");
+               end if;
+
+               if Expect
+                 (Wanted  => Tok.Kw_In,
+                  Message => "a for loop traverses with `in`",
+                  Note    => "[1150]: `for item in source do`",
+                  Related => Opened,
+                  Because => "this traversal")
+               then
+                  Lower := Parse_Expression;
+                  if Peek in Tok.Dot_Dot | Tok.Dot_Dot_Less then
+                     Inclusive := Peek = Tok.Dot_Dot;
+                     Advance;
+                     Upper := Parse_Expression;
+                  end if;
+               end if;
+
+               if Peek = Tok.Identifier and then Named_Here = Do_Id then
+                  Advance;
+               else
+                  Complain
+                    (Item    => Syn.Token_Expected,
+                     Where   => (if Peek = Tok.End_Of_Input
+                                 then After_Previous else Here),
+                     Message => "a for loop body opens with `do`",
+                     Note    => "[1150]: `for item in source do`",
+                     Related => Opened,
+                     Because => "this traversal");
+               end if;
+
+               Loop_Depth := Loop_Depth + 1;
+               Loop_Labels (Loop_Depth) := Label;
+               Complete_Closes_Block := True;
+               Runs := Parse_Block (Context);
+               Complete_Closes_Block := Saved_Complete;
+
+               if Peek = Tok.Identifier
+                 and then Named_Here = Complete_Id
+               then
+                  Advance;
+                  Completed := Parse_Block (Context);
+               end if;
+
+               Loop_Labels (Loop_Depth) := Landin.Source.Names.No_Name;
+               Loop_Depth := Loop_Depth - 1;
+
+               Kept := Expect
+                 (Wanted  => Tok.Kw_End,
+                  Message => "this for loop is never closed",
+                  Note    => "[1150]: a for loop closes with `end for`",
+                  Related => Opened,
+                  Because => "opened here");
+               if Kept then
+                  if Peek = Tok.Identifier
+                    and then Named_Here =
+                      (if Label /= Landin.Source.Names.No_Name
+                       then Label else For_Id)
+                  then
+                     Advance;
+                  else
+                     Complain
+                       (Item    => Syn.Token_Expected,
+                        Where   => (if Peek = Tok.End_Of_Input
+                                    then After_Previous else Here),
+                        Message => "a for loop closes with `end "
+                                   & (if Label /= Landin.Source.Names.No_Name
+                                      then "<label>`" else "for`"),
+                        Note    => "[1150]",
+                        Related => Opened,
+                        Because => "this traversal");
+                  end if;
+               end if;
+               Depth := Depth - 1;
+
+               return Add
+                 (Of_Kind  => For_Statement,
+                  At_Token => Opened,
+                  Extent   => Join (Opened, After_Previous),
+                  Children =>
+                    [Lower, Upper, Element, Index, Runs, Completed],
+                  Named    => Label,
+                  Fills    => Inclusive);
+            end Parse_For;
+
             --  transfer ::= "break" identifier? ("with" expression)?
             --               ("when" expression)?
             --             | "continue" identifier? ("when" expression)?
@@ -5104,12 +5272,12 @@ package body Landin.Syntax.Parser is
                                (Named_Here in Defer_Id | Undo_Id
                                 or else
                                   (Named_Here not in Match_Id | Begin_Id
-                                     | Loop_Id | While_Id
+                                     | Loop_Id | While_Id | For_Id
                                    and then not
                                      (Ahead (1) = Tok.Colon
                                       and then Ahead (2) = Tok.Identifier
                                       and then Named_Ahead (2)
-                                        in Loop_Id | While_Id)
+                                        in Loop_Id | While_Id | For_Id)
                                    and then
                                      (Word_At_Hand /= Word_None
                                       or else Ahead (1)
@@ -5394,22 +5562,33 @@ package body Landin.Syntax.Parser is
                elsif Peek = Tok.Identifier
                  and then Ahead (1) = Tok.Colon
                  and then Ahead (2) = Tok.Identifier
-                 and then Named_Ahead (2) in Loop_Id | While_Id
+                 and then Named_Ahead (2) in Loop_Id | While_Id | For_Id
                then
                   declare
                      Label : constant Landin.Source.Names.Name_Id :=
                        Named_Here;
                      Label_At : constant Landin.Source.Span := Here;
+                     Is_For : constant Boolean :=
+                       Named_Ahead (2) = For_Id;
                   begin
                      Advance;
                      Advance;
-                     return Parse_Loop
-                       (Active_Frame, Starts => Label_At, Label => Label);
+                     if Is_For then
+                        return Parse_For
+                          (Active_Frame, Starts => Label_At, Label => Label);
+                     else
+                        return Parse_Loop
+                          (Active_Frame, Starts => Label_At, Label => Label);
+                     end if;
                   end;
                elsif Peek = Tok.Identifier
-                 and then Named_Here in Loop_Id | While_Id
+                 and then Named_Here in Loop_Id | While_Id | For_Id
                then
-                  return Parse_Loop (Active_Frame);
+                  if Named_Here = For_Id then
+                     return Parse_For (Active_Frame);
+                  else
+                     return Parse_Loop (Active_Frame);
+                  end if;
                end if;
 
                --  [0520]'s literal is one or more expressions in source

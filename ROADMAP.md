@@ -3083,7 +3083,11 @@ increment adds `break with` and value-producing `loop`/`while` expressions for
 scalar, function, pointer and atom results, reusing the existing caller-owned
 control join. The fourth increment carries fixed arrays, structs, slices and
 `any` through that same destination-aware block-value path, including literal
-formation before cleanup. D158 leaves `for` traversal in this active item.
+formation before cleanup. The fifth increment parses the complete `for`
+header and enables ascending half-open and inclusive integer ranges, including
+one-time bound evaluation, immutable element and `usize` index bindings,
+labels, `continue`, natural completion and loop values. D159 keeps this as
+ordinary CFG and reserves collection traversal for the next increment.
 
 Exit evidence: every hosted `[NNNN]` row has implementation and positive or
 negative evidence; no omission is hidden by prototype coverage.

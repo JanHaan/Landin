@@ -108,6 +108,9 @@ negative/fixed-conditional-evaluator | linux-x86-64, macos-arm64, synthetic-32
 negative/fixed-conditional-inactive-parser-error | linux-x86-64, macos-arm64, synthetic-32
 negative/float-literal-not-enabled | linux-x86-64, macos-arm64
 negative/float-type-not-enabled | linux-x86-64, macos-arm64
+negative/for-collection-traversal-deferred | linux-x86-64, macos-arm64, synthetic-32
+negative/for-range-endpoints-disagree | linux-x86-64, macos-arm64, synthetic-32
+negative/for-range-needs-integer | linux-x86-64, macos-arm64, synthetic-32
 negative/frame-origin-return | linux-x86-64, macos-arm64, synthetic-32
 negative/function-field-assignment-signature-mismatch | linux-x86-64, macos-arm64, synthetic-32
 negative/function-field-cannot-be-filled-with-zeroed | linux-x86-64, macos-arm64, synthetic-32
@@ -744,6 +747,7 @@ runtime/fixed-array-bound-zero | linux-x86-64
 runtime/fixed-conditional-generic-runtime | linux-x86-64
 runtime/fixed-conditional-runtime | linux-x86-64
 runtime/fizzbuzz | linux-x86-64
+runtime/for-range-traversal | linux-x86-64
 runtime/function-valued-struct-fields | linux-x86-64
 runtime/generic-composed-evidence | linux-x86-64
 runtime/generic-declared-errors | linux-x86-64
