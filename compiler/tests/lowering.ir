@@ -1113,6 +1113,10 @@ item 1 ROUTINE f result u32 signature 1 params 2 slots 4 blocks 1 values 8
     6 STORE slot 3 <- 5
     7 LOAD u32 slot 3
     8 LEAVE <- 7
+file positive/external-scalar-c-boundary/program.ldn
+unit signatures 1 items 1
+signature 1 (in i32, in usize, in usize) -> usize
+item 1 ROUTINE host_read result usize signature 1 extern(c) params 0 slots 0 blocks 0 values 0
 file positive/fixed-array-bound-expression/program.ldn
 unit signatures 0 items 1
 item 1 DATUM storage result array params 0 slots 0 blocks 1 values 1

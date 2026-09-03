@@ -1972,6 +1972,34 @@ file positive/divisor-is-not-known/program.ldn tokens 25
   46 47 y
   48 51 end
   52 53 f
+file positive/external-scalar-c-boundary/program.ldn tokens 27
+  0 6 extern
+  6 7 (
+  7 8 c
+  8 9 )
+  10 19 host_read
+  19 20 :
+  21 22 (
+  22 32 descriptor
+  32 33 :
+  34 37 i32
+  37 38 ,
+  39 44 bytes
+  44 45 :
+  46 49 ptr
+  50 53 mut
+  54 56 u8
+  56 57 ,
+  58 63 count
+  63 64 :
+  65 70 usize
+  70 71 )
+  93 95 ->
+  96 97 (
+  97 107 read_count
+  107 108 :
+  109 114 usize
+  114 115 )
 file positive/fixed-array-bound-expression/program.ldn tokens 14
   0 4 pool
   4 5 :
@@ -18630,6 +18658,52 @@ file negative/escaping-frame-reference/program.ldn tokens 36
   132 133 )
   134 137 end
   138 141 bad
+file negative/external-aggregate-boundary/program.ldn tokens 26
+  0 4 pair
+  4 5 :
+  6 10 type
+  11 12 =
+  13 19 struct
+  24 28 left
+  28 29 :
+  30 33 u32
+  38 43 right
+  43 44 :
+  45 48 u32
+  49 52 end
+  53 57 pair
+  59 65 extern
+  65 66 (
+  66 67 c
+  67 68 )
+  69 78 host_pair
+  78 79 :
+  80 81 (
+  81 86 value
+  86 87 :
+  88 92 pair
+  92 93 )
+  94 96 ->
+  97 101 none
+file negative/external-convention-not-closed/program.ldn tokens 18
+  0 6 extern
+  6 7 (
+  7 8 c
+  9 14 extra
+  14 15 )
+  16 25 host_read
+  25 26 :
+  27 28 (
+  28 38 descriptor
+  38 39 :
+  40 43 i32
+  43 44 )
+  45 47 ->
+  48 49 (
+  49 59 read_count
+  59 60 :
+  61 66 usize
+  66 67 )
 file negative/fail-needs-one-atom/program.ldn tokens 41
   0 3 bad
   3 4 :

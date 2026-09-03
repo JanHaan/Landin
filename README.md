@@ -165,9 +165,12 @@ representation private and exercises rollback and publication through compiled
 Landin code. R3.40 adds the allocator interface, explicit and deliberately
 failing arenas, a transactional pointer-capable `core/vec`, and the parser's
 byte-oriented `core/text` positions and subslices, with backing origins and
-failure behavior pinned by compiled fixtures.
+failure behavior pinned by compiled fixtures. R3.50 adds the scalar/pointer
+`extern(c)` seam, captures hosted arguments through a libc-backed runtime
+bridge, and builds `core/io` as an ordinary world capability with declared
+file and stream failures.
 
-**Current roadmap work: R3.50 — Implement the minimum hosted ABI and I/O.**
+**Current roadmap work: R3.60 — Implement diagnostics as runtime dispatch.**
 
 Language and architecture questions are resolved when the first vertical
 slice needs them.

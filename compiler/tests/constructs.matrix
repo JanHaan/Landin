@@ -11,7 +11,7 @@
 #
 #  A construct with no evidence and no refusal is this
 #  item's to answer for; see ROADMAP.md R1.90.
-#  199 constructs, 150 with evidence, 49 with neither.
+#  200 constructs, 154 with evidence, 46 with neither.
 #
 #  id    defined in  evidence
 0010   tour        accepted emitted                   Line comment, to end of line
@@ -170,8 +170,8 @@
 1540   tour        accepted emitted refused           There are no compile-time loops and no compile-time
 1550   tour        -                                  Landin has its own native backends
 1560   tour        -                                  Three builtin modules are the way to the tools
-1570   tour        -                                  Calling conventions are a growing set of atoms behind one
-1580   tour        -                                  Importing from C
+1570   tour        accepted emitted executed refused  Calling conventions are a growing set of atoms behind one
+1580   tour        accepted emitted executed refused  Importing from C
 1590   tour        -                                  Linking a static library
 1600   tour        -                                  Exporting to C
 1610   tour        -                                  A symbol name the language's identifiers cannot spell
@@ -181,7 +181,7 @@
 1650   tour        accepted emitted executed          Entry point
 1660   tour        accepted emitted executed          And this is where capabilities come from
 1670   tour        -                                  A failed check calls a fixed, never-returning symbol
-1680   tour        -                                  Require a capability, do not track an effect
+1680   tour        accepted emitted executed          Require a capability, do not track an effect
 1690   tour        accepted emitted executed          One mechanism, two readings, is better than two mechanisms
 1700   tour        accepted emitted executed refused  Atoms are the same idea wherever they appear
 1710   tour        -                                  How a new feature earns its place
@@ -212,4 +212,5 @@
 1950   spec        accepted emitted executed refused  An operand an operation cannot take
 1960   spec        accepted emitted executed          A trap stops at the operation
 1970   spec        accepted emitted executed          The first hosted path has one entry shape
+1975   spec        accepted emitted refused           The first foreign boundary imports fixed scalar C routines
 1980   spec        accepted emitted executed          Declared errors are an orthogonal payload-free atom outcome

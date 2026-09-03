@@ -2197,7 +2197,9 @@ package body Landin.IR.Verifier is
                                 Item => Id, others => <>);
                      end if;
 
-                     if Result_Of (Of_Unit, Id) /= Carrier
+                     if not Is_External (Of_Unit, Id)
+                       and then
+                         (Result_Of (Of_Unit, Id) /= Carrier
                        or else Parameter_Count (Of_Unit, Id)
                                  /= Signature_Carrier_Count (Signature)
                        or else
@@ -2205,13 +2207,15 @@ package body Landin.IR.Verifier is
                                and then Result.Kind = Landin.Types.Aggregate
                           then Nominal_Of (Of_Unit, Id) /= Result.Nominal
                           else Nominal_Of (Of_Unit, Id)
-                                 /= No_Nominal_Type)
+                                 /= No_Nominal_Type))
                      then
                         return (Kind => Routine_Signature_Disagrees,
                                 Item => Id, others => <>);
                      end if;
 
-                     if (Count = 0
+                     if not Is_External (Of_Unit, Id)
+                       and then
+                         ((Count = 0
                          and then Result_Slot (Of_Unit, Id) /= No_Slot)
                        or else
                          (Count = 1
@@ -2228,13 +2232,13 @@ package body Landin.IR.Verifier is
                                (Of_Unit, Id, Result_Slot (Of_Unit, Id))
                              or else not Results_Agree_With_Slot
                                (Id, Signature,
-                                Result_Slot (Of_Unit, Id))))
+                                Result_Slot (Of_Unit, Id)))))
                      then
                         return (Kind => Routine_Signature_Disagrees,
                                 Item => Id, others => <>);
                      end if;
 
-                     if Hidden = 1 then
+                     if not Is_External (Of_Unit, Id) and then Hidden = 1 then
                         declare
                            Slot : constant Slot_Id :=
                              Nth_Parameter (Of_Unit, Id, 1);
@@ -2251,22 +2255,24 @@ package body Landin.IR.Verifier is
                         end;
                      end if;
 
-                     for Index in
-                       1 .. Signature_Parameter_Count
-                              (Of_Unit, Signature)
-                     loop
-                        if not Part_Agrees_With_Slot
-                          (Id,
-                           Nth_Signature_Parameter
-                             (Of_Unit, Signature, Index),
-                           Nth_Parameter
-                             (Of_Unit, Id, Index + Hidden))
-                        then
-                           return
-                             (Kind => Routine_Signature_Disagrees,
-                              Item => Id, others => <>);
-                        end if;
-                     end loop;
+                     if not Is_External (Of_Unit, Id) then
+                        for Index in
+                          1 .. Signature_Parameter_Count
+                                 (Of_Unit, Signature)
+                        loop
+                           if not Part_Agrees_With_Slot
+                             (Id,
+                              Nth_Signature_Parameter
+                                (Of_Unit, Signature, Index),
+                              Nth_Parameter
+                                (Of_Unit, Id, Index + Hidden))
+                           then
+                              return
+                                (Kind => Routine_Signature_Disagrees,
+                                 Item => Id, others => <>);
+                           end if;
+                        end loop;
+                     end if;
                   end;
                end;
             end if;
@@ -2405,8 +2411,12 @@ package body Landin.IR.Verifier is
               [others => False];
          begin
             if Blocks = 0 then
-               return (Kind => Item_Without_A_Block, Item => Id,
-                       others => <>);
+               if Is_External (Of_Unit, Id) then
+                  goto Next_IR_Item;
+               else
+                  return (Kind => Item_Without_A_Block, Item => Id,
+                          others => <>);
+               end if;
             end if;
 
             if Open_Block (Of_Unit, Id) /= No_Block then
@@ -5365,6 +5375,9 @@ package body Landin.IR.Verifier is
                           Block => Block_Id (B), others => <>);
                end if;
             end loop;
+
+            <<Next_IR_Item>>
+            null;
          end;
       end loop;
 

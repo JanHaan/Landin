@@ -1,0 +1,65 @@
+import core/io
+
+public main: () -> (code: i32) =
+    mut host := io.host()
+    fail_code: i32 = 1
+
+    if io.argument_count(host) <> 1 then
+        code = fail_code
+        return
+    end if
+
+    first: usize = 0
+    source := io.argument_at(host, first) else (argument_problem)
+        _ = argument_problem
+        code = fail_code
+        return
+    end
+
+    opened := io.open_read(host, source.data) else (open_problem)
+        _ = open_problem
+        code = fail_code
+        return
+    end
+
+    mut bytes: [13]u8 = zeroed
+    count: usize = io.read(host, opened, bytes[0..<13]) else (read_problem)
+        _ = read_problem
+        code = fail_code
+        return
+    end
+    io.close(host, opened) else (close_problem)
+        _ = close_problem
+        code = fail_code
+        return
+    end
+
+    if count <> 13 or bytes[0] <> 112 or bytes[6] <> 32
+      or bytes[12] <> 10
+    then
+        code = fail_code
+        return
+    end if
+
+    mut missing: [36]u8 =
+        [47, 100, 101, 102, 105, 110, 105, 116, 101, 108, 121, 45,
+         110, 111, 116, 45, 97, 45, 108, 97, 110, 100, 105, 110, 45,
+         102, 105, 108, 101, 45, 114, 51, 53, 48, 0, 0]
+    missing_path: ptr u8 = addr missing[0]
+    should_fail := io.open_read(host, missing_path) else begin
+        diagnostic: [3]u8 = [79, 75, 10]
+        error_stream := io.err(host)
+        io.write(host, error_stream, diagnostic[0..<3])
+          else (write_problem)
+            _ = write_problem
+            code = fail_code
+            return
+        end
+        code = 42
+        return
+    end
+    io.close(host, should_fail) else (unexpected_close_problem)
+        _ = unexpected_close_problem
+    end
+    code = fail_code
+end

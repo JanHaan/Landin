@@ -61,6 +61,9 @@ package body Landin.Testing.Fixtures is
    function Args (Item : Fixture) return String
      is (Unbounded.To_String (Item.Args));
 
+   function Run_Args (Item : Fixture) return String
+     is (Unbounded.To_String (Item.Run_Args));
+
    function Status (Item : Fixture) return Integer is (Item.Status);
 
    function Traps (Item : Fixture) return Boolean is (Item.Traps);
@@ -153,6 +156,7 @@ package body Landin.Testing.Fixtures is
       Seen_Expect  : Boolean := False;
       Seen_Targets : Boolean := False;
       Seen_Args    : Boolean := False;
+      Seen_Run_Args : Boolean := False;
       Seen_Status  : Boolean := False;
       Seen_Traps   : Boolean := False;
       Seen_Constructs : Boolean := False;
@@ -344,6 +348,14 @@ package body Landin.Testing.Fixtures is
                Seen_Args := True;
                Item.Args := Unbounded.To_Unbounded_String (Value);
 
+            elsif Key = "run_args" then
+               if Seen_Run_Args then
+                  Complain ("duplicate key: run_args");
+                  return;
+               end if;
+               Seen_Run_Args := True;
+               Item.Run_Args := Unbounded.To_Unbounded_String (Value);
+
             elsif Key = "stream" then
                if Seen_Stream then
                   Complain ("duplicate key: stream");
@@ -479,6 +491,7 @@ package body Landin.Testing.Fixtures is
                Expect  => Unbounded.Null_Unbounded_String,
                Targets => Unbounded.Null_Unbounded_String,
                Args    => Unbounded.Null_Unbounded_String,
+               Run_Args => Unbounded.Null_Unbounded_String,
                Codes   => Unbounded.Null_Unbounded_String,
                Status  => 0,
                Traps   => False,
@@ -521,6 +534,12 @@ package body Landin.Testing.Fixtures is
 
       if Seen_Args and then not Seen_Expect then
          Complain ("args without expect: nothing would be compared");
+      end if;
+
+      if Seen_Run_Args
+        and then (not Seen_Class or else Item.Class /= Runtime)
+      then
+         Complain ("run_args belong only to a runtime fixture");
       end if;
 
       --  A runtime fixture is compiled, linked and executed, so its

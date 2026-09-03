@@ -157,7 +157,9 @@ package Landin.Diagnostics.Checking is
       --  unapplied constructor and malformed positional application.
       Parameterized_Type_Alias,
       --  [0540]'s contextual all-bits-zero image.
-      Zeroed_Value);
+      Zeroed_Value,
+      --  [1580]'s aggregate, variadic and wider foreign ABI matrix.
+      External_C_ABI);
 
    function Construct (Item : Refused_Use)
      return Landin.Tokens.Construct_Reference
@@ -171,7 +173,8 @@ package Landin.Diagnostics.Checking is
             when Array_Value        => "[0520]",
             when Array_Element      => "[0520]",
             when Parameterized_Type_Alias => "[1350]",
-            when Zeroed_Value       => "[0540]")
+            when Zeroed_Value       => "[0540]",
+            when External_C_ABI     => "[1580]")
      with Post => Landin.Tokens.Is_Valid_Construct (Construct'Result);
 
    --  The type names above, spelled once.  A name that is not here is a
@@ -231,6 +234,7 @@ private
                | Array_Value
                | Array_Element
                | Zeroed_Value      => "R2.20",
-            when Parameterized_Type_Alias => "R2.40");
+            when Parameterized_Type_Alias => "R2.40",
+            when External_C_ABI     => "R4.40");
 
 end Landin.Diagnostics.Checking;

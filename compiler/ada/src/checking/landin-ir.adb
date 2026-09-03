@@ -560,6 +560,16 @@ package body Landin.IR is
       return Signature_Id
      is (Element (Of_Unit, Item).Signature);
 
+   function Is_External (Of_Unit : Unit; Item : Item_Id) return Boolean
+     is (Element (Of_Unit, Item).External);
+
+   procedure Mark_External (Into : in out Unit; Item : Item_Id) is
+      Held : Item_Record := Element (Into, Item);
+   begin
+      Held.External := True;
+      Into.Items (Positive (Item)) := Held;
+   end Mark_External;
+
    function Atom_Set_Of (Of_Unit : Unit; Item : Item_Id) return Atom_Set_Id
      is (Element (Of_Unit, Item).Atom_Set);
 

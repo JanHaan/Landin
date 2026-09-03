@@ -119,6 +119,7 @@ and checks all seven on every push.
 | `root` | no | a runtime fixture's import root, relative to its directory; the directory itself becomes the entry module |
 | `expect` | no | the file holding the expected bytes |
 | `args` | no | the arguments `refine` is run with |
+| `run_args` | no | the arguments handed to a compiled runtime program |
 | `status` | no | the exit status `refine` must produce (default 0) |
 | `traps` | no | `yes` if the program must end without returning a status |
 | `stream` | no | `output` (the bytes must be on standard output, and standard error must be empty) or `merged` (default) |

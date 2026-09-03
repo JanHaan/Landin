@@ -695,6 +695,8 @@ package body Landin.Stages.Checking is
          Value_Because : String := "");
       procedure Check_Routine_Body
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
+      procedure Check_External_Declaration
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
       procedure Check_Operands
         (Of_Tree    : Syn.Tree;
          Node       : Syn.Node_Id;
@@ -21627,6 +21629,7 @@ package body Landin.Stages.Checking is
                   begin
                      if Syn.Kind (In_Tree, Node) = Syn.Function_Declaration
                        and then Syn.Generic_Formal_Count (In_Tree, Node) = 0
+                       and then not Syn.Is_External (In_Tree, Node)
                      then
                         declare
                            Id : constant Res.Declaration_Id :=
@@ -22061,6 +22064,73 @@ package body Landin.Stages.Checking is
          Check_Operands (Of_Tree, Runs, Whole_Fold => False);
       end Check_Routine_Body;
 
+      --  R3.50 establishes only the ABI subset needed by the hosted service
+      --  module.  Keeping the refusal here prevents the neutral call IR from
+      --  accidentally promising R4.40's aggregate and callback matrix.
+      procedure Check_External_Declaration
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
+      is
+         Signature : constant Landin.Checking.Signature_Id :=
+           Landin.Checking.Signature_Of
+             (Types.all,
+              Declaration_At (Syn.Source_Of (Of_Tree), Node));
+         Supported : Boolean :=
+           Syn.Generic_Formal_Count (Of_Tree, Node) = 0
+           and then Syn.Error_Set_Of (Of_Tree, Node) = Syn.No_Node
+           and then Syn.Return_Count (Of_Tree, Node) <= 1;
+      begin
+         for Index in 1 .. Syn.Parameter_Count (Of_Tree, Node) loop
+            declare
+               Parameter : constant Syn.Node_Id :=
+                 Syn.Nth_Parameter (Of_Tree, Node, Index);
+               Held : constant Ty.Type_Kind :=
+                 Landin.Checking.Type_Of
+                   (Types.all,
+                    Declaration_At (Syn.Source_Of (Of_Tree), Parameter));
+            begin
+               Supported := Supported
+                 and then Held in Ty.Scalar_Name | Ty.Pointer_Value
+                 and then Syn.Convention_Of (Of_Tree, Parameter)
+                            in Syn.Implicit_In | Syn.Explicit_In
+                 and then not Syn.Is_Escaping (Of_Tree, Parameter);
+            end;
+         end loop;
+
+         for Index in 1 .. Syn.Return_Count (Of_Tree, Node) loop
+            declare
+               Returned : constant Syn.Node_Id :=
+                 Syn.Nth_Return (Of_Tree, Node, Index);
+               Held : constant Ty.Type_Kind :=
+                 Landin.Checking.Type_Of
+                   (Types.all,
+                    Declaration_At (Syn.Source_Of (Of_Tree), Returned));
+            begin
+               Supported := Supported
+                 and then Held in Ty.Scalar_Name | Ty.Pointer_Value;
+            end;
+         end loop;
+
+         if Signature = Landin.Checking.No_Signature then
+            Supported := False;
+         end if;
+
+         if not Supported then
+            Bad.Report
+              (Item    => Bad.Type_Mismatch,
+               Source  => Syn.Source_Of (Of_Tree),
+               Where   => Syn.Where (Of_Tree, Node),
+               Message => "this external signature is outside the hosted"
+                          & " scalar C boundary",
+               Note    => "[1580]: R3.50 admits fixed scalar and pointer"
+                          & " parameters and at most one such result; the"
+                          & " general C ABI matrix belongs to R4.40",
+               Related => Syn.Origin (Of_Tree, Node),
+               Because => "this external declaration",
+               Refused => Bad.External_C_ABI,
+               Into    => Found);
+         end if;
+      end Check_External_Declaration;
+
       --  D139 presents its active declarations through the same traversal
       --  as ordinary module declarations.  This action deliberately knows
       --  nothing about arms, so it cannot descend into an inactive one.
@@ -22083,7 +22153,9 @@ package body Landin.Stages.Checking is
                Check_Operands (Of_Tree, Syn.Value_Of (Of_Tree, Node),
                                Whole_Fold => True);
             when Syn.Function_Declaration =>
-               if Syn.Generic_Formal_Count (Of_Tree, Node) = 0 then
+               if Syn.Is_External (Of_Tree, Node) then
+                  Check_External_Declaration (Of_Tree, Node);
+               elsif Syn.Generic_Formal_Count (Of_Tree, Node) = 0 then
                   Check_Routine_Body (Of_Tree, Node);
                end if;
             when others =>
@@ -22295,6 +22367,7 @@ package body Landin.Stages.Checking is
                begin
                   if Syn.Kind (In_Tree, Node) = Syn.Function_Declaration
                     and then Syn.Generic_Formal_Count (In_Tree, Node) = 0
+                    and then not Syn.Is_External (In_Tree, Node)
                   then
                      Discover_Generic_Calls
                        (In_Tree, Syn.Body_Of (In_Tree, Node));

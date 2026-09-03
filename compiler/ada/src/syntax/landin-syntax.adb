@@ -142,6 +142,9 @@ package body Landin.Syntax is
    function Is_Public (Of_Tree : Tree; Id : Node_Id) return Boolean
      is (Element (Of_Tree, Id).Exported);
 
+   function Is_External (Of_Tree : Tree; Id : Node_Id) return Boolean
+     is (Element (Of_Tree, Id).External);
+
    function Is_Mutable (Of_Tree : Tree; Id : Node_Id) return Boolean
      is (Element (Of_Tree, Id).Mutable);
 

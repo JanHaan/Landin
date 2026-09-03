@@ -48,6 +48,12 @@ package body Landin.Syntax.Dump is
                Strings.Append (Line, " unsound");
             end if;
 
+            if Of_Kind = Function_Declaration
+              and then Is_External (Of_Tree, Id)
+            then
+               Strings.Append (Line, " extern(c)");
+            end if;
+
             for Position in 1 .. Slot_Count (Of_Tree, Id) loop
                declare
                   Child : constant Node_Id :=

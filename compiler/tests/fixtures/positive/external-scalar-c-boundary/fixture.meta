@@ -1,0 +1,5 @@
+class: positive
+summary: extern(c) retains a fixed scalar and pointer signature without a Landin body
+program: program.ldn
+constructs: 0430, 1570, 1580, 1740, 1800, 1975
+targets: linux-x86-64

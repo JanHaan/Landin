@@ -689,7 +689,12 @@ package body Landin.Driver is
                  (Landin.Stages.Code (Context).all,
                   Landin.Stages.Meanings (Context).all,
                   Landin.Stages.Identities (Context).all,
-                  Landin.Stages.Target (Context)),
+                  Landin.Stages.Target (Context),
+                  Hosted_Entry => Landin.Backend.Entry_Point.Hosted_Main
+                    (Landin.Stages.Code (Context).all,
+                     Landin.Stages.Meanings (Context).all,
+                     Landin.Stages.Modules (Context).all,
+                     Landin.Stages.Identities (Context).all)),
                Written);
 
             if Written /= Landin.Platform.Write_Ok then
