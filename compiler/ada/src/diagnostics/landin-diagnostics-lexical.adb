@@ -21,6 +21,8 @@ package body Landin.Diagnostics.Lexical is
                "this is not an integer any base spells",
             when Landin.Tokens.Malformed_Float_Literal_Run =>
                "this is not a well-formed floating-point literal",
+            when Landin.Tokens.Malformed_Character_Literal_Run =>
+               "this character literal does not spell one codepoint",
             when Landin.Tokens.Malformed_Text_Literal_Run =>
                "this text literal contains malformed bytes or an escape",
             when Landin.Tokens.Unknown_Byte_Run =>
@@ -39,6 +41,8 @@ package body Landin.Diagnostics.Lexical is
                Rows.Malformed_Integer,
             when Landin.Tokens.Malformed_Float_Literal_Run =>
                Rows.Malformed_Float_Literal,
+            when Landin.Tokens.Malformed_Character_Literal_Run =>
+               Rows.Malformed_Character_Literal,
             when Landin.Tokens.Malformed_Text_Literal_Run =>
                Rows.Malformed_Text_Literal,
             when Landin.Tokens.Unknown_Byte_Run           =>
@@ -51,7 +55,6 @@ package body Landin.Diagnostics.Lexical is
    function Enabled_By (Refused : Landin.Tokens.Deferred_Kind) return String
      is (case Refused is
             when Landin.Tokens.Hex_Float_Literal
-               | Landin.Tokens.Character_Literal
                | Landin.Tokens.Raw_Literal      => "R4.10",
             when Landin.Tokens.Compound_Assign  => "R4.10");
 
@@ -118,6 +121,12 @@ package body Landin.Diagnostics.Lexical is
                     (Report,
                      "a decimal float has digits on both sides of its dot"
                      & " and a complete optional exponent [0210] [0220]");
+
+               when Landin.Tokens.Malformed_Character_Literal_Run =>
+                  Add_Note
+                    (Report,
+                     "write one source scalar, a simple escape, or"
+                     & " `\\u{...}` [0250] [0270]");
 
                when Landin.Tokens.Malformed_Text_Literal_Run =>
                   Add_Note

@@ -17345,6 +17345,16 @@ file negative/chained-comparison/program.ldn tokens 28
   49 50 <
   51 52 c
   53 56 end
+file negative/character-literal-byte-escape/program.ldn refused a character literal is malformed
+file negative/character-literal-empty/program.ldn refused a character literal is malformed
+file negative/character-literal-invalid-codepoint/program.ldn refused a character literal is malformed
+file negative/character-literal-multiple/program.ldn refused a character literal is malformed
+file negative/character-literal-needs-u32/program.ldn tokens 5
+  0 3 bad
+  3 4 :
+  5 7 u8
+  8 9 =
+  10 13 'a'
 file negative/compiler-concept-reserved/main.ldn tokens 12
   0 8 zeroable
   8 9 :

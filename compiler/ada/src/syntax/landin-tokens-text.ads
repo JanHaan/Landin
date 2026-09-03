@@ -22,6 +22,13 @@ package Landin.Tokens.Text is
       Malformed_Codepoint_Escape,
       --  `\u{...}` where bytes are meant.
       Codepoint_Where_Bytes_Are_Meant,
+      --  A character literal has no scalar between its quotes.
+      Empty_Character,
+      --  A character literal has more than one scalar or escape.
+      Multiple_Characters,
+      --  `\xNN` in a character literal, whose value is a codepoint rather
+      --  than a byte.
+      Byte_Where_Codepoint_Is_Meant,
       --  A non-ASCII source-byte run that is not shortest-form UTF-8.
       Invalid_UTF8_Source,
       --  A backslash as the last byte before the closing quote.
@@ -42,5 +49,17 @@ package Landin.Tokens.Text is
      with Pre  => Lexeme'Length >= 2
                   and then Bytes'Length >= Lexeme'Length,
           Post => Length <= Lexeme'Length;
+
+   --  Decode [0250]'s whole single-quoted token.  Value is the one Unicode
+   --  scalar value it spells.  Character literals admit [0270]'s simple
+   --  escapes and `\u{...}`, but not the byte-only `\xNN` form.  Fault
+   --  offsets have the same convention as Decode's.
+   procedure Decode_Character
+     (Lexeme      : String;
+      Value       : out Natural;
+      Fault       : out Problem;
+      Fault_First : out Natural;
+      Fault_Last  : out Natural)
+     with Pre => Lexeme'Length >= 2;
 
 end Landin.Tokens.Text;

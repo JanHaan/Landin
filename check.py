@@ -379,7 +379,9 @@ def check_code(lines, offset):
 #  does not expand it, because they read bytes rather than tokens.
 LEXICAL_RULES = {"space", "line_end", "comment", "line_comment",
                  "doc_comment", "block_comment", "block_item", "identifier",
-                 "keyword", "literal", "text", "text_byte", "text_escape",
+                 "keyword", "literal", "character", "character_escape",
+                 "unicode_scalar",
+                 "text", "text_byte", "text_escape",
                  "integer", "float", "decimal_fraction", "decimal_exponent",
                  "decimal_digits", "decimal", "hex", "octal", "binary", "lower",
                  "digit", "hex_digit", "octal_digit", "binary_digit"}
@@ -388,7 +390,8 @@ LEXICAL_RULES = {"space", "line_end", "comment", "line_comment",
 #  spelling.
 TOKEN_KIND_RULES = {"identifier": "name", "integer": "integer",
                     "float": "float",
-                    "text": "text", "literal": "literal"}
+                    "character": "character", "text": "text",
+                    "literal": "literal"}
 
 PRODUCTION = re.compile(r"^([a-z_]+)\s+::=\s*(.*)$")
 
@@ -797,6 +800,47 @@ def landin_tokens(source, signs, trees=None):
             out.append(("text", source[start:i], start))
             continue
 
+        #  D163's single-quoted token is exactly one Unicode scalar value.
+        #  Fixture input is Latin-1-decoded bytes, so raw content is put
+        #  back into bytes before validating shortest-form UTF-8.
+        if char == "'":
+            start, i, closed = i, i + 1, False
+            while i < n and source[i] not in "\r\n":
+                if source[i] == "'":
+                    i += 1
+                    closed = True
+                    break
+                if source[i] == "\\" and i + 1 < n \
+                        and source[i + 1] not in "\r\n":
+                    i += 1
+                i += 1
+            if not closed:
+                return None, "a character literal is never closed"
+
+            content = source[start + 1:i - 1]
+            valid = False
+            if content.startswith("\\"):
+                if len(content) == 2 and content[1] in "nrte\\\"'":
+                    valid = True
+                elif content.startswith("\\u{") and content.endswith("}"):
+                    digits = content[3:-1]
+                    if digits and all(byte in "0123456789abcdefABCDEF"
+                                      for byte in digits):
+                        value = int(digits, 16)
+                        valid = (value <= 0x10ffff
+                                 and not 0xd800 <= value <= 0xdfff)
+            else:
+                try:
+                    decoded = content.encode("latin-1").decode("utf-8")
+                    valid = len(decoded) == 1
+                except UnicodeError:
+                    valid = False
+
+            if not valid:
+                return None, "a character literal is malformed"
+            out.append(("character", source[start:i], start))
+            continue
+
         for sign in ordered:
             if source.startswith(sign, i):
                 out.append(("sign", sign, i))
@@ -840,11 +884,15 @@ def grammar_recognises(rules, trees, tokens, start="program"):
                         ends = (at + 1,) if token_kind == "integer" else ()
                     elif wanted == "float":
                         ends = (at + 1,) if token_kind == "float" else ()
+                    elif wanted == "character":
+                        ends = ((at + 1,)
+                                if token_kind == "character" else ())
                     elif wanted == "text":
                         ends = (at + 1,) if token_kind == "text" else ()
                     else:
                         ends = ((at + 1,)
-                                if token_kind in ("integer", "float", "text")
+                                if token_kind in ("integer", "float",
+                                                  "character", "text")
                                 or text in ("true", "false", "zeroed") else ())
             elif name in LEXICAL_RULES:
                 ends = (at + 1,) if at < len(tokens) else ()
@@ -1879,7 +1927,7 @@ def check_token_vocabulary(full_run):
 #  reserved words, and expanding it is what makes a first set comparable
 #  with Landin.Tokens.Is_Literal.
 TOKEN_PRODUCERS = frozenset(
-    ("identifier", "keyword", "integer", "float", "text"))
+    ("identifier", "keyword", "integer", "float", "character", "text"))
 
 
 def grammar_first(trees):
@@ -2019,6 +2067,8 @@ def check_precedence_table(full_run):
             return ("token", "integer")
         if kind == "Float_Literal":
             return ("token", "float")
+        if kind == "Character_Literal":
+            return ("token", "character")
         if kind == "Text_Literal":
             return ("token", "text")
         if kind.startswith("Kw_"):
@@ -2035,7 +2085,8 @@ def check_precedence_table(full_run):
 
     def kinds_in(body):
         return set(re.findall(r"(?:Landin\.Tokens\.)?\b((?:Kw_[A-Za-z_]+)"
-                              r"|Identifier|Integer_Literal|Float_Literal|Text_Literal"
+                              r"|Identifier|Integer_Literal|Float_Literal"
+                              r"|Character_Literal|Text_Literal"
                               r"|Ampersand|Bar"
                               r"|Caret|Equal_Equal|Greater_Greater|Greater_Equal"
                               r"|Greater|Left_Bracket|Left_Paren|Less_Greater|Less_Equal"

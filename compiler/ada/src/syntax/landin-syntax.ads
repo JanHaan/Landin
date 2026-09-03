@@ -211,6 +211,9 @@ package Landin.Syntax is
       --  spelling is retained in Anchor, then decoded once checking knows
       --  whether its context is f32 or f64.
       Float_Literal,
+      --  [0250]'s Unicode scalar value, fixed as `u32`.  Like text, the
+      --  node keeps its source span and the shared decoder reads it later.
+      Character_Literal,
       --  [0260]'s quoted bytes.  The node keeps only its span; D161's
       --  shared decoder reads the escapes from source again where the
       --  context that decides whether they mean bytes is known.

@@ -54,6 +54,7 @@ L0318  Live     a concrete type actual lacks the required concept conformance
 L0319  Live     a user attempts to declare the compiler-owned concept or one of its supplied conformances
 L0320  Live     [0270] [1750]: a text literal contains a malformed escape or invalid source encoding
 L0321  Live     [0210] [0220]: a decimal float has a complete fraction and exponent
+L0322  Live     [0250] [0270]: a character literal spells exactly one Unicode scalar value
 L0500  Live     [1550]: no assembler and linker for the target on this host
 L0501  Live     [1550]: the platform assembler or linker refused what was emitted
 L0502  Live     [1970]: a hosted program with no `public main: () -> (code: i32)`

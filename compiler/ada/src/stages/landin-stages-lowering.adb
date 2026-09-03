@@ -489,6 +489,9 @@ package body Landin.Stages.Lowering is
       function Text_Content
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return String;
 
+      function Character_Magnitude
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Magnitude;
+
       function Text_Datum
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return IR.Item_Id;
 
@@ -515,6 +518,25 @@ package body Landin.Stages.Lowering is
          end if;
          return Decoded (1 .. Length);
       end Text_Content;
+
+      function Character_Magnitude
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Magnitude
+      is
+         Snap : constant Landin.Source.Snapshot :=
+           Source (Context, Syn.Source_Of (Of_Tree));
+         Lexeme : constant String :=
+           Landin.Source.Slice (Snap, Syn.Anchor (Of_Tree, Node));
+         Value, Fault_First, Fault_Last : Natural;
+         Fault : Landin.Tokens.Text.Problem;
+      begin
+         Landin.Tokens.Text.Decode_Character
+           (Lexeme, Value, Fault, Fault_First, Fault_Last);
+         if Fault not in Landin.Tokens.Text.Well_Formed then
+            raise Landin.Compiler_Defect with
+              "a malformed character literal reached lowering";
+         end if;
+         return Ty.Magnitude (Value);
+      end Character_Magnitude;
 
       function Text_Datum
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return IR.Item_Id
@@ -4391,6 +4413,11 @@ package body Landin.Stages.Lowering is
                         (Unit.all, Filling,
                          Ty.Float_Name (Scalar_At (Of_Tree, Node)),
                          Float_Pattern_Of (Node), Site);
+
+            when Syn.Character_Literal =>
+               return IR.Emit_Number
+                        (Unit.all, Filling, Ty.U32,
+                         Character_Magnitude (Of_Tree, Node), False, Site);
 
             when Syn.True_Literal =>
                return IR.Emit_Truth (Unit.all, Filling, True, Site);
@@ -10888,6 +10915,11 @@ package body Landin.Stages.Lowering is
                         Known := True;
                      end if;
                   end;
+
+               when Syn.Character_Literal =>
+                  Value := Ty.Folded
+                    (Character_Magnitude (Of_Tree, Node));
+                  Known := True;
 
                when Syn.True_Literal =>
                   Value := 1;

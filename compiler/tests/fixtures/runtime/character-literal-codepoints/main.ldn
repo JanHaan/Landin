@@ -1,0 +1,31 @@
+sample: type = struct
+    value: u32
+end sample
+
+characters: [3]u32 = ['A', '☃', '\n']
+module_sample: sample = sample(value: '\u{1F600}')
+
+next: (value: u32) -> (result: u32) =
+    result = value + 1
+end next
+
+public main: () -> (code: i32) =
+    inferred := 'A'
+    quote := '\''
+    slash := '\\'
+    zero := '\u{0}'
+
+    if inferred == 65
+      and next(inferred) == 66
+      and characters[0] == 65
+      and characters[1] == 9731
+      and characters[2] == 10
+      and module_sample.value == 128512
+      and quote == 39
+      and slash == 92
+      and zero == 0 then
+        code = 42
+    else
+        code = 1
+    end if
+end main

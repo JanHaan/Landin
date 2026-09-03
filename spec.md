@@ -131,10 +131,10 @@ keyword     ::= "addr" | "alignof" | "and" | "any" | "atom" | "dec" | "else"
 
 ```
 
-### [1770] The kernel's literals include decimal floats and contextual byte text
+### [1770] The kernel's literals include characters, decimal floats and byte text
 
-The kernel's literals are integers, decimal floats, quoted text, the two
-booleans, and contextual `zeroed`.
+The kernel's literals are integers, decimal floats, characters, quoted text,
+the two booleans, and contextual `zeroed`.
 Integer literals are untyped and take
 the type of their context [0190], defaulting to i32 with none [0200]; the bases
 and the separator are [0220]'s. `zeroed` has no type of its own: [0540] gives it
@@ -148,12 +148,19 @@ where no enabled construct supplies that context. D161 admits [0260]'s quoted
 literal when its direct context is a read-only `[]u8`; the unescaped source
 content is UTF-8 [1750], and [0270]'s byte escapes are decoded into that view.
 With no context it still defaults to the not-yet-enabled `utf8`, and `utf8`,
-`utf16`, `cstring` and codepoint escapes remain R4.10 work. D162 admits
+`utf16`, `cstring` and text codepoint escapes remain R4.10 work. D162 admits
 [0210]'s decimal float with [0220]'s optional exponent; hexadecimal floats
-[0230], characters [0250] and raw literals [0280] are not enabled yet.
+[0230] and raw literals [0280] are not enabled yet. D163 admits [0250]'s
+single-quoted character as exactly one Unicode scalar value of fixed type
+`u32`. A raw scalar is shortest-form UTF-8; [0270]'s simple escapes and
+`\u{...}` spell scalar values, while byte-only `\xNN` does not.
 
 ```landin-grammar
-literal     ::= integer | float | text | "true" | "false" | "zeroed"
+literal     ::= integer | float | character | text
+              | "true" | "false" | "zeroed"
+character   ::= "'" (character_escape | unicode_scalar) "'"
+character_escape ::= "\\" ("n" | "r" | "t" | "e" | "\\" | "\"" | "'"
+                  | "u" "{" hex_digit+ "}")
 text        ::= "\"" (text_escape | text_byte)* "\""
 text_byte   ::= any byte except quote, backslash or line_end
 text_escape ::= "\\" ("n" | "r" | "t" | "e" | "\\" | "\"" | "'"
@@ -741,6 +748,8 @@ That shape supplies an inferred whole binding and every arm of a control value.
 
 And two give none: the inferred form [0050] and a discard [1020], where
 [0200]'s i32 is what is left for an integer and D162's f32 for a float.
+[0250]'s character literal is different: it already has type `u32`, so a
+surrounding context must agree and an inferred binding keeps `u32`.
 For [0260]'s text literal, those same direct positions may instead supply a
 complete text view. D161 currently admits only `[]u8`; with no supplied
 context the literal defaults to `utf8` and is refused by [1830].
@@ -8442,10 +8451,10 @@ classified failure boundary before the repository gate can pass.
 
 | Operation | Class | Constructs | Behaviour | Evidence |
 | --- | --- | --- | --- | --- |
-| `source.lexical` | static | 0010, 0020, 0030, 0210, 0220, 0260, 0270, 1750, 1760, 1770, 1780, 1830 | L0010--L0014, L0320 or L0321 | `negative/hex-float-literal-not-enabled`, `negative/malformed-float-exponent`, `negative/malformed-integer-digit`, `negative/text-literal-unknown-escape`, `negative/unterminated-text-literal`, `negative/unknown-byte` |
+| `source.lexical` | static | 0010, 0020, 0030, 0210, 0220, 0250, 0260, 0270, 1750, 1760, 1770, 1780, 1830 | L0010--L0014 or L0320--L0322 | `negative/character-literal-empty`, `negative/character-literal-invalid-codepoint`, `negative/character-literal-multiple`, `negative/hex-float-literal-not-enabled`, `negative/malformed-float-exponent`, `negative/malformed-integer-digit`, `negative/text-literal-unknown-escape`, `negative/unterminated-text-literal`, `negative/unknown-byte` |
 | `source.structure` | static | 1740, 1800, 1810, 1820, 1840 | L0100--L0112 | `negative/variant-part-end-name-mismatch`, `unit/parser-nesting-limit` |
 | `declarations.names` | static | 0040, 0050, 0060, 0080, 0090, 0100, 0110, 0120, 0130, 0140, 1790, 1795, 1850 | L0200 or L0201 | `negative/duplicate-in-a-module`, `negative/local-used-above-its-declaration` |
-| `types.values` | static | 0070, 0160, 0170, 0180, 0190, 0200, 0210, 1870, 1880, 1890 | L0300, L0301 or L0304 | `negative/float-literal-not-enabled`, `negative/float-type-not-enabled`, `negative/integer-literal-not-a-float`, `negative/literal-above-its-type`, `negative/type-name-is-not-a-type` |
+| `types.values` | static | 0070, 0160, 0170, 0180, 0190, 0200, 0210, 0250, 1870, 1880, 1890 | L0300, L0301 or L0304 | `negative/character-literal-needs-u32`, `negative/float-literal-not-enabled`, `negative/float-type-not-enabled`, `negative/integer-literal-not-a-float`, `negative/literal-above-its-type`, `negative/type-name-is-not-a-type` |
 | `float.ieee` | static | 0170, 0210, 0220, 0240, 0290, 0350 | f32/f64 runtime arithmetic and comparison follow IEEE binary32/binary64, preserving signed zero and unordered NaN behavior; L0301 rejects mixed classes and integer-only operators, and L0304 retains the static-fold boundary | `negative/float-remainder-is-integer-only`, `negative/module-float-arithmetic-not-enabled`, `runtime/float-decimal-runtime` |
 | `text.literal-storage` | static | 0260, 0270, 0570, 1770, 1880, 1900, 1940 | L0301 for a non-byte, writable or codepoint context; L0303 for a write through its read-only view; L0304 for the default deferred `utf8`; equal decoded contents share read-only storage with one trailing NUL excluded from the slice length | `negative/text-literal-codepoint-in-byte-context`, `negative/text-literal-needs-byte-slice`, `negative/text-literal-needs-read-only-slice`, `negative/text-literal-not-enabled`, `negative/text-literal-write`, `runtime/text-literal-bytes` |
 | `arithmetic.known` | static | 0290, 0300, 1950 | L0300 or L0306 | `negative/divisor-is-zero`, `negative/literal-above-its-type` |
@@ -9207,3 +9216,39 @@ make cross-compilation depend on the host.
 `negative/module-float-arithmetic-not-enabled`,
 `negative/external-float-abi-not-enabled`, the lexer cases, and the
 `float.ieee` guarantee row.
+
+### D163 — A character is one decoded Unicode scalar with fixed type u32
+
+**The tour said** that [0250]'s character literal is a codepoint typed `u32`
+and [0270] gives literals one closed escape set. It did not say whether the
+byte escape denotes a character, whether raw source may contain more than one
+scalar, or which stage rejects a nonscalar `\u{...}` value.
+
+**Chosen:** the ninth R4.10 increment admits a single-quoted literal only when
+its content decodes to exactly one Unicode scalar value. Raw content is one
+shortest-form UTF-8 scalar. The simple escapes `\n`, `\r`, `\t`, `\e`, `\\`,
+`\"` and `\'` denote their codepoints, and `\u{...}` denotes one scalar written
+in hexadecimal. The byte-only `\xNN` form is not a character spelling. Empty,
+multiple, malformed UTF-8, unknown-escape, surrogate and above-`10FFFF`
+contents are lexical L0322; an unclosed quote remains L0014.
+
+The literal's type is always `u32`, including in an inferred binding. A
+different scalar context is L0301 rather than an implicit conversion. Its
+decoded value uses the existing integer constant carrier, arithmetic,
+comparison, module folding and aggregate images; the IR and backend need no
+character-specific operation or representation. Lexing, checking and lowering
+call one decoder so they cannot disagree about the scalar.
+
+**The alternatives:** treat `\xNN` as a codepoint, infer an integer type from
+context, retain UTF-8 bytes as the value, or permit a quoted grapheme cluster.
+Those choices erase [0270]'s byte/codepoint boundary, contradict [0250]'s fixed
+type, or turn a scalar literal into the text representation work [0600] owns.
+All were declined.
+
+**Pinned by** `runtime/character-literal-codepoints`,
+`negative/character-literal-byte-escape`,
+`negative/character-literal-empty`,
+`negative/character-literal-invalid-codepoint`,
+`negative/character-literal-multiple`,
+`negative/character-literal-needs-u32`, the decoder and lexer cases, and the
+`source.lexical` and `types.values` guarantee rows.

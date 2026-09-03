@@ -297,6 +297,21 @@ package body Landin.Tests.Lexer_Suite is
       end;
 
       declare
+         Characters : Landin.Tokens.Token_Stream;
+      begin
+         Lex_Text ("'a' '\u{2603}'", Sources, Names, Characters);
+         Landin.Testing.Check_Equal
+           (Item, Landin.Tokens.Fault_Count (Characters), 0,
+            "raw and escaped character literals carry no lexical fault");
+         Landin.Testing.Check
+           (Item, Landin.Tokens.Kind (Characters, 1)
+                  = Landin.Tokens.Character_Literal
+             and then Landin.Tokens.Kind (Characters, 2)
+                        = Landin.Tokens.Character_Literal,
+            "each character literal is one enabled token");
+      end;
+
+      declare
          Malformed : Landin.Tokens.Token_Stream;
          Where : Landin.Source.Span;
       begin
@@ -371,10 +386,54 @@ package body Landin.Tests.Lexer_Suite is
          "an empty codepoint escape is malformed");
    end Text_Literal_Decoding;
 
+   --  D163 uses the same decoder in lexing, checking and lowering.  Hold
+   --  both raw UTF-8 and escaped scalar values at that seam.
+   procedure Character_Literal_Decoding
+     (Item : in out Landin.Testing.Context);
+
+   procedure Character_Literal_Decoding
+     (Item : in out Landin.Testing.Context)
+   is
+      Value, First, Last : Natural;
+      Fault : Landin.Tokens.Text.Problem;
+
+      procedure Decode (Lexeme : String);
+
+      procedure Decode (Lexeme : String) is
+      begin
+         Landin.Tokens.Text.Decode_Character
+           (Lexeme, Value, Fault, First, Last);
+      end Decode;
+   begin
+      Decode
+        ("'" & Character'Val (16#E2#) & Character'Val (16#98#)
+         & Character'Val (16#83#) & "'");
+      Landin.Testing.Check
+        (Item,
+         Fault = Landin.Tokens.Text.Well_Formed and then Value = 16#2603#,
+         "one shortest-form UTF-8 scalar decodes to its codepoint");
+
+      Decode ("'\u{1F600}'");
+      Landin.Testing.Check
+        (Item,
+         Fault = Landin.Tokens.Text.Well_Formed and then Value = 16#1F600#,
+         "a codepoint escape decodes to one scalar");
+
+      Decode ("'\x41'");
+      Landin.Testing.Check
+        (Item, Fault = Landin.Tokens.Text.Byte_Where_Codepoint_Is_Meant,
+         "a byte escape is not a character escape");
+
+      Decode ("'ab'");
+      Landin.Testing.Check
+        (Item, Fault = Landin.Tokens.Text.Multiple_Characters,
+         "two source scalars are not one character literal");
+   end Character_Literal_Decoding;
+
    --  Every deferred kind has to be reachable.  Declared and never
    --  produced is dead vocabulary, which is the same defect as an
-   --  unreachable rule in the grammar.  Text left this table in D161 when
-   --  its byte-slice context became enabled.
+   --  unreachable rule in the grammar.  Text left this table in D161 and
+   --  character in D163 when their first contexts became enabled.
    procedure Every_Deferred_Kind_Is_Reachable
      (Item : in out Landin.Testing.Context);
 
@@ -412,7 +471,6 @@ package body Landin.Tests.Lexer_Suite is
       Note ("try f() ...");                        --  Dot_Dot_Dot
       Note ("xs[0]");                              --  the brackets
       Note ("x += 1");                             --  Compound_Assign
-      Note ("c: u32 = 'a'");                       --  Character_Literal
       Note ("r: f32 = 0x1.0p0");                  --  Hex_Float_Literal
       Note ("r: utf8 = """"""raw""""""");          --  Raw_Literal
 
@@ -674,6 +732,9 @@ package body Landin.Tests.Lexer_Suite is
       Landin.Testing.Register
         (Into, "lexer", "text literal decoding",
          Text_Literal_Decoding'Access);
+      Landin.Testing.Register
+        (Into, "lexer", "character literal decoding",
+         Character_Literal_Decoding'Access);
       Landin.Testing.Register
         (Into, "lexer", "unknown bytes recover",
          Unknown_Bytes_Recover'Access);
