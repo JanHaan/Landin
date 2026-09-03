@@ -133,7 +133,7 @@ package body Landin.Backend.X86_64 is
          else Landin.Types.Folded (Value));
 
    --  How wide a fold works at.  `Landin.Types.Width` answers for the
-   --  eleven integers only, and a bool is [1870]'s zero or one in the byte
+   --  enabled integers only, and a bool is [1870]'s zero or one in the byte
    --  `Landin.Backend` gives it, so it folds at that byte's width.
    function Fold_Width
      (Kind : Landin.Types.Scalar_Name;
@@ -382,6 +382,11 @@ package body Landin.Backend.X86_64 is
          elsif Left in Landin.Types.Scalar_Name
            and then Right in Landin.Types.Scalar_Name
          then
+            if Left in Landin.Types.Float_Name
+              or else Right in Landin.Types.Float_Name
+            then
+               return False;
+            end if;
             return Landin.Types.Storage_Size
               (Landin.Types.Scalar_Name (Left), Facts)
               = Landin.Types.Storage_Size
@@ -1288,19 +1293,25 @@ package body Landin.Backend.X86_64 is
                        Landin.IR.Result_Of (Of_Unit, Item, Value);
                      Digits_Of : constant Landin.Types.Magnitude :=
                        Landin.IR.Number_Of (Of_Unit, Item, Value);
+                     Width : constant Landin.Targets.Bit_Width :=
+                       (if Size in Landin.Types.Float_Name
+                        then Landin.Types.Float_Width
+                          (Landin.Types.Float_Name (Size))
+                        else Landin.Types.Width
+                          (Landin.Types.Integer_Name (Size), Facts));
                      Highest : constant Landin.Types.Magnitude :=
-                       (if Landin.Types.Width (Size, Facts) = 64
+                       (if Width = 64
                         then Landin.Types.Magnitude'Last
-                        else 2 ** Natural
-                                    (Landin.Types.Width (Size, Facts))
-                             - 1);
+                        else 2 ** Natural (Width) - 1);
                      --  [1770]'s magnitude and [1880]'s minus are carried
                      --  apart, so the two's complement pattern is formed
                      --  here, where a width finally exists.  The checker
                      --  has already refused a literal the type cannot
                      --  hold, so no masking is needed above the negation.
                      Pattern : constant Landin.Types.Magnitude :=
-                       (if not Landin.IR.Is_Negated (Of_Unit, Item, Value)
+                       (if Size in Landin.Types.Float_Name
+                        then Digits_Of
+                        elsif not Landin.IR.Is_Negated (Of_Unit, Item, Value)
                           or else Digits_Of = 0
                         then Digits_Of
                         else Highest - Digits_Of + 1);
@@ -1700,16 +1711,31 @@ package body Landin.Backend.X86_64 is
                   --  and no unsigned value but zero has one at all.  `neg`
                   --  reports the first as overflow and the second as carry.
                   declare
-                     Kind : constant Landin.Types.Integer_Name :=
+                     Kind : constant Landin.Types.Type_Kind :=
                        Landin.IR.Result_Of (Of_Unit, Item, Value);
                      Held : constant Held_Size := Size_Of_Value (Value);
                      Next : constant String := Value_Label (Value);
                   begin
+                     if Kind in Landin.Types.Float_Name then
+                        Emit ("mov" & Suffix (Held) & " "
+                              & Value_Cell (Operand (1)) & ", "
+                              & Accumulator (Held));
+                        Emit
+                          ((if Kind = Landin.Types.F32
+                            then "xorl $2147483648, %eax"
+                            else "btcq $63, %rax"));
+                        Emit ("mov" & Suffix (Held) & " "
+                              & Accumulator (Held) & ", "
+                              & Value_Cell (Value));
+                        return;
+                     end if;
+
                      Emit ("mov" & Suffix (Held) & " "
                            & Value_Cell (Operand (1)) & ", "
                            & Accumulator (Held));
                      Emit ("neg" & Suffix (Held) & " " & Accumulator (Held));
-                     Emit ((if Landin.Types.Is_Signed (Kind)
+                     Emit ((if Landin.Types.Is_Signed
+                                   (Landin.Types.Integer_Name (Kind))
                             then "jno " else "jnc ") & Next);
                      Emit ("ud2");
                      Put (Next & ":");
@@ -2329,11 +2355,25 @@ package body Landin.Backend.X86_64 is
 
                when Landin.IR.Add | Landin.IR.Subtract =>
                   declare
-                     Kind : constant Landin.Types.Integer_Name :=
+                     Kind : constant Landin.Types.Type_Kind :=
                        Landin.IR.Result_Of (Of_Unit, Item, Value);
                      Held : constant Held_Size := Size_Of_Value (Value);
                      Next : constant String := Value_Label (Value);
                   begin
+                     if Kind in Landin.Types.Float_Name then
+                        Emit ((if Kind = Landin.Types.F32
+                               then "movss " else "movsd ")
+                              & Value_Cell (Operand (1)) & ", %xmm0");
+                        Emit ((if Op = Landin.IR.Add then "add" else "sub")
+                              & (if Kind = Landin.Types.F32
+                                 then "ss " else "sd ")
+                              & Value_Cell (Operand (2)) & ", %xmm0");
+                        Emit ((if Kind = Landin.Types.F32
+                               then "movss " else "movsd ")
+                              & "%xmm0, " & Value_Cell (Value));
+                        return;
+                     end if;
+
                      Emit ("mov" & Suffix (Held) & " "
                            & Value_Cell (Operand (1)) & ", "
                            & Accumulator (Held));
@@ -2341,7 +2381,8 @@ package body Landin.Backend.X86_64 is
                            & Suffix (Held) & " "
                            & Value_Cell (Operand (2)) & ", "
                            & Accumulator (Held));
-                     Emit ((if Landin.Types.Is_Signed (Kind)
+                     Emit ((if Landin.Types.Is_Signed
+                                   (Landin.Types.Integer_Name (Kind))
                             then "jno " else "jnc ") & Next);
                      Emit ("ud2");
                      Put (Next & ":");
@@ -2369,7 +2410,7 @@ package body Landin.Backend.X86_64 is
 
                when Landin.IR.Divide | Landin.IR.Remainder =>
                   declare
-                     Kind : constant Landin.Types.Integer_Name :=
+                     Kind : constant Landin.Types.Type_Kind :=
                        Landin.IR.Result_Of (Of_Unit, Item, Value);
                      Held : constant Held_Size := Size_Of_Value (Value);
                      Nonzero : constant String :=
@@ -2378,101 +2419,141 @@ package body Landin.Backend.X86_64 is
                        Value_Label (Value) & "_divide";
                      Done : constant String :=
                        Value_Label (Value) & "_done";
-                     Signed : constant Boolean :=
-                       Landin.Types.Is_Signed (Kind);
-                     Minimum_Pattern : constant Landin.Types.Magnitude :=
-                       2 ** Natural (Landin.Types.Width (Kind, Facts) - 1);
                   begin
-                     Emit ("cmp" & Suffix (Held) & " $0, "
-                           & Value_Cell (Operand (2)));
-                     Emit ("jne " & Nonzero);
-                     Emit ("ud2");
-                     Put (Nonzero & ":");
+                     if Kind in Landin.Types.Float_Name then
+                        if Op /= Landin.IR.Divide then
+                           raise Compiler_Defect with
+                             "float remainder passed IR verification";
+                        end if;
+                        Emit ((if Kind = Landin.Types.F32
+                               then "movss " else "movsd ")
+                              & Value_Cell (Operand (1)) & ", %xmm0");
+                        Emit ((if Kind = Landin.Types.F32
+                               then "divss " else "divsd ")
+                              & Value_Cell (Operand (2)) & ", %xmm0");
+                        Emit ((if Kind = Landin.Types.F32
+                               then "movss " else "movsd ")
+                              & "%xmm0, " & Value_Cell (Value));
+                        return;
+                     end if;
 
-                     if Signed then
-                        Emit ("cmp" & Suffix (Held) & " $-1, "
+                     declare
+                        Integer_Kind : constant Landin.Types.Integer_Name :=
+                          Landin.Types.Integer_Name (Kind);
+                        Signed : constant Boolean :=
+                          Landin.Types.Is_Signed (Integer_Kind);
+                        Minimum_Pattern : constant Landin.Types.Magnitude :=
+                          2 ** Natural
+                            (Landin.Types.Width (Integer_Kind, Facts) - 1);
+                     begin
+                        Emit ("cmp" & Suffix (Held) & " $0, "
                               & Value_Cell (Operand (2)));
-                        Emit ("jne " & Divide);
-                        Emit ("movabsq $"
-                              & Trimmed
-                                  (Landin.Types.Magnitude'Image
-                                     (Minimum_Pattern))
-                              & ", %rax");
-                        Emit ("cmp" & Suffix (Held) & " "
+                        Emit ("jne " & Nonzero);
+                        Emit ("ud2");
+                        Put (Nonzero & ":");
+
+                        if Signed then
+                           Emit ("cmp" & Suffix (Held) & " $-1, "
+                                 & Value_Cell (Operand (2)));
+                           Emit ("jne " & Divide);
+                           Emit ("movabsq $"
+                                 & Trimmed
+                                     (Landin.Types.Magnitude'Image
+                                        (Minimum_Pattern))
+                                 & ", %rax");
+                           Emit ("cmp" & Suffix (Held) & " "
+                                 & Value_Cell (Operand (1)) & ", "
+                                 & Accumulator (Held));
+                           Emit ("jne " & Divide);
+                           if Op = Landin.IR.Divide then
+                              Emit ("ud2");
+                           else
+                              Emit ("mov" & Suffix (Held) & " $0, "
+                                    & Value_Cell (Value));
+                              Emit ("jmp " & Done);
+                           end if;
+                           Put (Divide & ":");
+                        end if;
+
+                        Emit ("mov" & Suffix (Held) & " "
                               & Value_Cell (Operand (1)) & ", "
                               & Accumulator (Held));
-                        Emit ("jne " & Divide);
-                        if Op = Landin.IR.Divide then
-                           Emit ("ud2");
+                        if Signed then
+                           Emit
+                             (case Held is
+                                 when Landin.Targets.Byte_1 => "cbtw",
+                                 when Landin.Targets.Byte_2 => "cwtd",
+                                 when Landin.Targets.Byte_4 => "cltd",
+                                 when Landin.Targets.Byte_8 => "cqto");
                         else
-                           Emit ("mov" & Suffix (Held) & " $0, "
-                                 & Value_Cell (Value));
-                           Emit ("jmp " & Done);
+                           case Held is
+                              when Landin.Targets.Byte_1 =>
+                                 Emit ("movb $0, %ah");
+                              when Landin.Targets.Byte_2 =>
+                                 Emit ("xorw %dx, %dx");
+                              when Landin.Targets.Byte_4 =>
+                                 Emit ("xorl %edx, %edx");
+                              when Landin.Targets.Byte_8 =>
+                                 Emit ("xorq %rdx, %rdx");
+                           end case;
                         end if;
-                        Put (Divide & ":");
-                     end if;
-
-                     Emit ("mov" & Suffix (Held) & " "
-                           & Value_Cell (Operand (1)) & ", "
-                           & Accumulator (Held));
-                     if Signed then
-                        Emit
-                          (case Held is
-                              when Landin.Targets.Byte_1 => "cbtw",
-                              when Landin.Targets.Byte_2 => "cwtd",
-                              when Landin.Targets.Byte_4 => "cltd",
-                              when Landin.Targets.Byte_8 => "cqto");
-                     else
-                        case Held is
-                           when Landin.Targets.Byte_1 =>
-                              Emit ("movb $0, %ah");
-                           when Landin.Targets.Byte_2 =>
-                              Emit ("xorw %dx, %dx");
-                           when Landin.Targets.Byte_4 =>
-                              Emit ("xorl %edx, %edx");
-                           when Landin.Targets.Byte_8 =>
-                              Emit ("xorq %rdx, %rdx");
-                        end case;
-                     end if;
-                     Emit ((if Signed then "idiv" else "div")
-                           & Suffix (Held) & " "
-                           & Value_Cell (Operand (2)));
-                     Emit ("mov" & Suffix (Held) & " "
-                           & (if Op = Landin.IR.Divide
-                              then Accumulator (Held)
-                              else
-                                (case Held is
-                                    when Landin.Targets.Byte_1 => "%ah",
-                                    when Landin.Targets.Byte_2 => "%dx",
-                                    when Landin.Targets.Byte_4 => "%edx",
-                                    when Landin.Targets.Byte_8 => "%rdx"))
-                           & ", " & Value_Cell (Value));
-                     if Op = Landin.IR.Remainder then
-                        Put (Done & ":");
-                     end if;
+                        Emit ((if Signed then "idiv" else "div")
+                              & Suffix (Held) & " "
+                              & Value_Cell (Operand (2)));
+                        Emit ("mov" & Suffix (Held) & " "
+                              & (if Op = Landin.IR.Divide
+                                 then Accumulator (Held)
+                                 else
+                                   (case Held is
+                                       when Landin.Targets.Byte_1 => "%ah",
+                                       when Landin.Targets.Byte_2 => "%dx",
+                                       when Landin.Targets.Byte_4 => "%edx",
+                                       when Landin.Targets.Byte_8 => "%rdx"))
+                              & ", " & Value_Cell (Value));
+                        if Op = Landin.IR.Remainder then
+                           Put (Done & ":");
+                        end if;
+                     end;
                   end;
 
                when Landin.IR.Multiply =>
                   declare
-                     Kind : constant Landin.Types.Integer_Name :=
+                     Kind : constant Landin.Types.Type_Kind :=
                        Landin.IR.Result_Of (Of_Unit, Item, Value);
                      Held : constant Held_Size := Size_Of_Value (Value);
                      Next : constant String := Value_Label (Value);
-                     Signed : constant Boolean :=
-                       Landin.Types.Is_Signed (Kind);
                   begin
-                     Emit ("mov" & Suffix (Held) & " "
-                           & Value_Cell (Operand (1)) & ", "
-                           & Accumulator (Held));
-                     Emit ((if Signed then "imul" else "mul")
-                           & Suffix (Held) & " "
-                           & Value_Cell (Operand (2)));
-                     Emit ((if Signed then "jno " else "jnc ") & Next);
-                     Emit ("ud2");
-                     Put (Next & ":");
-                     Emit ("mov" & Suffix (Held) & " "
-                           & Accumulator (Held) & ", "
-                           & Value_Cell (Value));
+                     if Kind in Landin.Types.Float_Name then
+                        Emit ((if Kind = Landin.Types.F32
+                               then "movss " else "movsd ")
+                              & Value_Cell (Operand (1)) & ", %xmm0");
+                        Emit ((if Kind = Landin.Types.F32
+                               then "mulss " else "mulsd ")
+                              & Value_Cell (Operand (2)) & ", %xmm0");
+                        Emit ((if Kind = Landin.Types.F32
+                               then "movss " else "movsd ")
+                              & "%xmm0, " & Value_Cell (Value));
+                        return;
+                     end if;
+
+                     declare
+                        Signed : constant Boolean :=
+                          Landin.Types.Is_Signed
+                            (Landin.Types.Integer_Name (Kind));
+                     begin
+                        Emit ("mov" & Suffix (Held) & " "
+                              & Value_Cell (Operand (1)) & ", "
+                              & Accumulator (Held));
+                        Emit ((if Signed then "imul" else "mul")
+                              & Suffix (Held) & " "
+                              & Value_Cell (Operand (2)));
+                        Emit ((if Signed then "jno " else "jnc ") & Next);
+                        Emit ("ud2");
+                        Put (Next & ":");
+                        Emit ("mov" & Suffix (Held) & " "
+                              & Accumulator (Held) & ", "
+                              & Value_Cell (Value));
+                     end;
                   end;
 
                when Landin.IR.Wrapping_Multiply =>
@@ -2522,6 +2603,41 @@ package body Landin.Backend.X86_64 is
                              (if Signed then "setge" else "setae"),
                            when others => raise Program_Error);
                   begin
+                     if Kind in Landin.Types.Float_Name then
+                        Emit ((if Kind = Landin.Types.F32
+                               then "movss " else "movsd ")
+                              & Value_Cell (Operand (1)) & ", %xmm0");
+                        Emit ((if Kind = Landin.Types.F32
+                               then "ucomiss " else "ucomisd ")
+                              & Value_Cell (Operand (2)) & ", %xmm0");
+                        case Op is
+                           when Landin.IR.Equal_To =>
+                              Emit ("sete %al");
+                              Emit ("setnp %cl");
+                              Emit ("andb %cl, %al");
+                           when Landin.IR.Not_Equal_To =>
+                              Emit ("setne %al");
+                              Emit ("setp %cl");
+                              Emit ("orb %cl, %al");
+                           when Landin.IR.Less_Than
+                              | Landin.IR.Less_Or_Equal =>
+                              Emit
+                                ((if Op = Landin.IR.Less_Than
+                                  then "setb " else "setbe ") & "%al");
+                              Emit ("setnp %cl");
+                              Emit ("andb %cl, %al");
+                           when Landin.IR.Greater_Than =>
+                              Emit ("seta %al");
+                           when Landin.IR.Greater_Or_Equal =>
+                              Emit ("setae %al");
+                           when others =>
+                              raise Compiler_Defect with
+                                "non-comparison in comparison emission";
+                        end case;
+                        Emit ("movb %al, " & Value_Cell (Value));
+                        return;
+                     end if;
+
                      Emit ("mov" & Suffix (Held) & " "
                            & Value_Cell (Operand (1)) & ", "
                            & Accumulator (Held));

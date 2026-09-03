@@ -1,0 +1,4 @@
+public main: () -> (code: i32) =
+    value: f32 = 3.0 % 2.0
+    code = 1
+end main

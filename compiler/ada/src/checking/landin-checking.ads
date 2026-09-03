@@ -1,6 +1,6 @@
 --  What type everything in a program has.
 --
---  `spec.md` [1790] gives the kernel eleven types, [0190] says an integer
+--  `spec.md` [1790] gives the kernel's scalar types, [0190] says an integer
 --  literal takes the type of its context, [0200] says what it takes when
 --  there is no context, and [0310] says there is no implicit conversion
 --  between any two of them.  Landin.Types is those rules made addressable;
@@ -229,7 +229,7 @@ package Landin.Checking is
      return Boolean
      with Pre => Is_Prepared (Of_Table);
 
-   --  Sizes both runs once, and interns the eleven spellings so that a
+   --  Sizes both runs once, and interns the scalar spellings so that a
    --  Type_Name node is answered by an identity comparison rather than by
    --  bytes.  Once, for Landin.Resolution.Prepare's reason: the forest is
    --  complete when the parse is and the declarations are complete when
@@ -247,10 +247,10 @@ package Landin.Checking is
                            = Landin.Resolution.Declaration_Count (Meanings);
 
    ------------------------------------------------------------------
-   --  The eleven, by identity
+   --  The scalar names, by identity
    ------------------------------------------------------------------
 
-   --  Which type a Type_Name node names.  [1790]'s eleven are ordinary
+   --  Which type a Type_Name node names.  [1790]'s scalars are ordinary
    --  declared names the kernel predeclares [1760], so this is an interned
    --  identity and not a token kind, exactly as Landin.Syntax.Parser
    --  already reads one.  A name that is none of them cannot reach here --
@@ -1769,9 +1769,9 @@ package Landin.Checking is
                            = Landin.Types.Undecided,
           Post => Type_Of (Into, Of_Tree, Node) = Item;
 
-   --  Fixes an untyped integer literal at the type its context gives it
-   --  [0190], or at [0200]'s default when the context is that there is
-   --  none.  Only from Untyped_Integer, and so at most once for any node:
+   --  Fixes an untyped numeric literal at the type its context gives it
+   --  [0190]/D162, or at its default when there is no context.  Only from
+   --  the corresponding untyped class, and so at most once for any node:
    --  an expression has one parent, so there is one context site above it,
    --  and a second commit would mean two.
    procedure Commit
@@ -1783,7 +1783,8 @@ package Landin.Checking is
                   and then Covers (Into, Of_Tree)
                   and then Landin.Syntax.Contains (Of_Tree, Node)
                   and then Type_Of (Into, Of_Tree, Node)
-                           = Landin.Types.Untyped_Integer,
+                           in Landin.Types.Untyped_Integer
+                              | Landin.Types.Untyped_Float,
           Post => Type_Of (Into, Of_Tree, Node) = To;
 
    --  Marks a node the pass refused, so that every node above it declines
@@ -1866,9 +1867,9 @@ private
    package Settlement_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Settlement);
 
-   --  The eleven spellings' identities, interned once by Prepare.  An
+   --  The scalar spellings' identities, interned once by Prepare.  An
    --  array over Scalar_Name and not a map: the set is fixed and closed,
-   --  so a lookup is eleven integer comparisons and there is nothing to
+   --  so a lookup is thirteen integer comparisons and there is nothing to
    --  hash and no order to depend on.
    type Scalar_Identities is
      array (Landin.Types.Scalar_Name) of Landin.Source.Names.Name_Id;

@@ -21,7 +21,7 @@
 --  alternative, negated, loose, and the arrow before an operand list --
 --  is this function's and no paragraph's.  The words the language does
 --  spell are taken from it: a type is `Landin.Types`' spelling of one of
---  [1790]'s eleven, and a `Truth` is [1870]'s `true` or `false` and never
+--  [1790]'s scalars, and a `Truth` is [1870]'s `true` or `false` and never
 --  a zero or a one.
 --
 --  No origin is printed, and that is a decision and not an omission.

@@ -380,12 +380,14 @@ def check_code(lines, offset):
 LEXICAL_RULES = {"space", "line_end", "comment", "line_comment",
                  "doc_comment", "block_comment", "block_item", "identifier",
                  "keyword", "literal", "text", "text_byte", "text_escape",
-                 "integer", "decimal", "hex", "octal", "binary", "lower",
+                 "integer", "float", "decimal_fraction", "decimal_exponent",
+                 "decimal_digits", "decimal", "hex", "octal", "binary", "lower",
                  "digit", "hex_digit", "octal_digit", "binary_digit"}
 
 #  Rule names the recogniser matches against a token kind rather than a
 #  spelling.
 TOKEN_KIND_RULES = {"identifier": "name", "integer": "integer",
+                    "float": "float",
                     "text": "text", "literal": "literal"}
 
 PRODUCTION = re.compile(r"^([a-z_]+)\s+::=\s*(.*)$")
@@ -679,18 +681,43 @@ def landin_tokens(source, signs, trees=None):
 
         if char in DIGITS:
             start = i
-            while i < n and (source[i] in DIGITS or source[i] in LETTERS
-                             or source[i] in UPPER or source[i] == "_"):
-                i += 1
-            run = source[start:i]
+            prefixed = source.startswith(("0x", "0o", "0b"), i)
+            if prefixed:
+                while i < n and (source[i] in DIGITS
+                                 or source[i] in LETTERS
+                                 or source[i] in UPPER or source[i] == "_"):
+                    i += 1
+            else:
+                while i < n and (source[i] in DIGITS or source[i] == "_"):
+                    i += 1
 
-            #  A digit run, a dot and a digit is [0210]'s float literal,
-            #  which the scanner takes as one lexeme and no rule here
-            #  spells.  Reading it as an integer, a selection dot and
-            #  another integer would be three tokens the real scanner
-            #  never produces, and the dump exists to agree with it.
             if i + 1 < n and source[i] == "." and source[i + 1] in DIGITS:
-                return None, "no rule spells a float literal"
+                if prefixed:
+                    return None, "no rule spells a hexadecimal float literal"
+                i += 1
+                while i < n and (source[i] in DIGITS or source[i] == "_"):
+                    i += 1
+                if i < n and source[i] in "eE":
+                    i += 1
+                    if i < n and source[i] in "+-":
+                        i += 1
+                    exponent = i
+                    while i < n and (source[i] in DIGITS
+                                     or source[i] == "_"):
+                        i += 1
+                    if exponent == i:
+                        return None, "a float exponent has no digit run"
+                run = source[start:i]
+                if trees and not lexical_matches(trees, "float", run):
+                    return None, "%r is not a float the rules spell" % run
+                out.append(("float", run, start))
+                continue
+
+            if not prefixed:
+                while i < n and (source[i] in LETTERS
+                                 or source[i] in UPPER or source[i] == "_"):
+                    i += 1
+            run = source[start:i]
 
             if trees and not lexical_matches(trees, "integer", run):
                 return None, "%r is not an integer the rules spell" % run
@@ -811,11 +838,13 @@ def grammar_recognises(rules, trees, tokens, start="program"):
                                 and text not in reserved else ())
                     elif wanted == "integer":
                         ends = (at + 1,) if token_kind == "integer" else ()
+                    elif wanted == "float":
+                        ends = (at + 1,) if token_kind == "float" else ()
                     elif wanted == "text":
                         ends = (at + 1,) if token_kind == "text" else ()
                     else:
                         ends = ((at + 1,)
-                                if token_kind in ("integer", "text")
+                                if token_kind in ("integer", "float", "text")
                                 or text in ("true", "false", "zeroed") else ())
             elif name in LEXICAL_RULES:
                 ends = (at + 1,) if at < len(tokens) else ()
@@ -1849,15 +1878,16 @@ def check_token_vocabulary(full_run):
 #  among them: it alternates the two literal token classes with three
 #  reserved words, and expanding it is what makes a first set comparable
 #  with Landin.Tokens.Is_Literal.
-TOKEN_PRODUCERS = frozenset(("identifier", "keyword", "integer", "text"))
+TOKEN_PRODUCERS = frozenset(
+    ("identifier", "keyword", "integer", "float", "text"))
 
 
 def grammar_first(trees):
     """rule -> (what it may begin with, whether it may be empty).
 
     The items are ('lit', bytes) for a terminal the rule spells and
-    ('token', rule) for one of the four lexical rules that produce a token
-    of their own [1750].  Those four are terminals to every rule above the
+    ('token', rule) for one of the lexical rules that produces a token of
+    its own [1750].  Those are terminals to every rule above the
     lexical layer, which is what makes a first set comparable with a
     predicate over token kinds.
     """
@@ -1987,6 +2017,8 @@ def check_precedence_table(full_run):
             return ("token", "identifier")
         if kind == "Integer_Literal":
             return ("token", "integer")
+        if kind == "Float_Literal":
+            return ("token", "float")
         if kind == "Text_Literal":
             return ("token", "text")
         if kind.startswith("Kw_"):
@@ -2003,7 +2035,7 @@ def check_precedence_table(full_run):
 
     def kinds_in(body):
         return set(re.findall(r"(?:Landin\.Tokens\.)?\b((?:Kw_[A-Za-z_]+)"
-                              r"|Identifier|Integer_Literal|Text_Literal"
+                              r"|Identifier|Integer_Literal|Float_Literal|Text_Literal"
                               r"|Ampersand|Bar"
                               r"|Caret|Equal_Equal|Greater_Greater|Greater_Equal"
                               r"|Greater|Left_Bracket|Left_Paren|Less_Greater|Less_Equal"
@@ -2147,7 +2179,7 @@ def check_refused_constructs(full_run):
     to be a word the tour writes and not one the grammar already spells,
     and every construct it cites has to exist.
 
-    The eleven scalar names get the same treatment from the other side.
+    The thirteen scalar names get the same treatment from the other side.
     They are ordinary declared names the kernel predeclares [1760], not
     keywords, so nothing in the scanner holds them to `type`; this does.
     """
@@ -2222,7 +2254,7 @@ def check_refused_constructs(full_run):
                         found.group(1)))
 
     keywords = set(re.findall(r'"([a-z]+)"', rules.get("keyword", "")))
-    #  [1795] let a type position hold a declared name, so the eleven the
+    #  [1795] let a type position hold a declared name, so the thirteen the
     #  kernel predeclares moved into their own rule.  This reads that one:
     #  `type` now spells no name of its own.
     scalars = set(re.findall(r'"([a-z0-9]+)"',
@@ -2284,7 +2316,7 @@ def check_refused_constructs(full_run):
                         "%s refuses %r, which neither document writes"
                         % (name, word)))
 
-    #  The eleven, exactly.  A twelfth here would be a type the grammar
+    #  The thirteen, exactly.  A fourteenth here would be a type the grammar
     #  does not have, and a missing one a type no program could name.
     declared = spellings("Scalar_Name")
     if declared is None:
@@ -2297,7 +2329,7 @@ def check_refused_constructs(full_run):
             % (", ".join(sorted(declared.values())),
                ", ".join(sorted(scalars)))))
 
-    #  Landin.Types spells the eleven a second time, because it is the
+    #  Landin.Types spells the thirteen a second time, because it is the
     #  package that maps each onto a machine width.  Two transcriptions of
     #  one rule is one more than the repository allows to drift, so both
     #  are held to the tour and to each other.
@@ -3012,7 +3044,8 @@ def check_coverage_registers(full_run):
         keys, covered = set(), set()
         required_guarantees = {
             "source.lexical", "source.structure", "declarations.names",
-            "types.values", "text.literal-storage", "arithmetic.known",
+            "types.values", "text.literal-storage", "float.ieee",
+            "arithmetic.known",
             "arithmetic.runtime",
             "arithmetic.total", "ranges.measurements", "assignment.flow",
             "pointer.permission", "inout.exact-alias",

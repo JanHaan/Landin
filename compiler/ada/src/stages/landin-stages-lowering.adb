@@ -4274,6 +4274,9 @@ package body Landin.Stages.Lowering is
          --  smallest i8 rather than 128 refused and then negated.  So it
          --  is one Number here, and not a Negation over one.
          function Magnitude_Of (Literal : Syn.Node_Id) return Ty.Magnitude;
+         function Float_Pattern_Of
+           (Literal : Syn.Node_Id; Negated : Boolean := False)
+            return Ty.Magnitude;
 
          function Fixed_Actual_Of
            (Formal : Res.Declaration_Id) return Ty.Magnitude;
@@ -4297,6 +4300,27 @@ package body Landin.Stages.Lowering is
 
             return Value;
          end Magnitude_Of;
+
+         function Float_Pattern_Of
+           (Literal : Syn.Node_Id; Negated : Boolean := False)
+            return Ty.Magnitude
+         is
+            Text : constant String :=
+              Landin.Source.Slice
+                (Landin.Stages.Source (Context, Syn.Source_Of (Of_Tree)),
+                 Syn.Anchor (Of_Tree, Literal));
+            Kind : constant Ty.Float_Name :=
+              Ty.Float_Name (Scalar_At (Of_Tree, Literal));
+            Bits       : Ty.Magnitude;
+            Overflowed : Boolean;
+         begin
+            Ty.Evaluate_Float (Text, Kind, Bits, Overflowed);
+            if Overflowed then
+               raise Landin.Compiler_Defect with
+                 "a float literal the checker accepted overflowed lowering";
+            end if;
+            return (if Negated then Ty.Negated_Float (Bits, Kind) else Bits);
+         end Float_Pattern_Of;
 
          --  Fixed routine formals are static arguments rather than runtime
          --  ABI parameters.  The checker interns each concrete routine with
@@ -4362,6 +4386,12 @@ package body Landin.Stages.Lowering is
                         (Unit.all, Filling, Scalar_At (Of_Tree, Node),
                          Magnitude_Of (Node), False, Site);
 
+            when Syn.Float_Literal =>
+               return IR.Emit_Float
+                        (Unit.all, Filling,
+                         Ty.Float_Name (Scalar_At (Of_Tree, Node)),
+                         Float_Pattern_Of (Node), Site);
+
             when Syn.True_Literal =>
                return IR.Emit_Truth (Unit.all, Filling, True, Site);
 
@@ -4376,6 +4406,13 @@ package body Landin.Stages.Lowering is
                if Landin.Checking.Type_Of (Types.all, Of_Tree, Node) = Ty.Bool
                then
                   return IR.Emit_Truth (Unit.all, Filling, False, Site);
+               elsif Landin.Checking.Type_Of
+                       (Types.all, Of_Tree, Node) in Ty.Float_Name
+               then
+                  return IR.Emit_Float
+                           (Unit.all, Filling,
+                            Ty.Float_Name (Scalar_At (Of_Tree, Node)),
+                            0, Site);
                else
                   return IR.Emit_Number
                            (Unit.all, Filling, Scalar_At (Of_Tree, Node),
@@ -4750,6 +4787,13 @@ package body Landin.Stages.Lowering is
                               (Unit.all, Filling,
                                Scalar_At (Of_Tree, Node),
                                Magnitude_Of (Under), True, Site);
+                  elsif Syn.Kind (Of_Tree, Under) = Syn.Float_Literal then
+                     return IR.Emit_Float
+                              (Unit.all, Filling,
+                               Ty.Float_Name (Scalar_At (Of_Tree, Node)),
+                               Float_Pattern_Of
+                                 (Under, Negated => True),
+                               Site);
                   end if;
 
                   declare
@@ -10823,6 +10867,28 @@ package body Landin.Stages.Lowering is
                      end if;
                   end;
 
+               when Syn.Float_Literal =>
+                  declare
+                     Snap : constant Landin.Source.Snapshot :=
+                       Landin.Stages.Source
+                         (Context, Syn.Source_Of (Of_Tree));
+                     Text : constant String :=
+                       Landin.Source.Slice
+                         (Snap, Syn.Anchor (Of_Tree, Node));
+                     Kind : constant Ty.Float_Name :=
+                       Ty.Float_Name
+                         (Landin.Checking.Type_Of
+                            (Types.all, Of_Tree, Node));
+                     Bits       : Ty.Magnitude;
+                     Overflowed : Boolean;
+                  begin
+                     Ty.Evaluate_Float (Text, Kind, Bits, Overflowed);
+                     if not Overflowed then
+                        Value := Ty.Folded (Bits);
+                        Known := True;
+                     end if;
+                  end;
+
                when Syn.True_Literal =>
                   Value := 1;
                   Known := True;
@@ -10850,7 +10916,18 @@ package body Landin.Stages.Lowering is
                        (Of_Tree, Syn.Operand_Of (Of_Tree, Node),
                         Under, Known);
                      if Known then
-                        Value := -Under;
+                        if Landin.Checking.Type_Of
+                             (Types.all, Of_Tree, Node) in Ty.Float_Name
+                        then
+                           Value := Ty.Folded
+                             (Ty.Negated_Float
+                                (Ty.Magnitude (Under),
+                                 Ty.Float_Name
+                                   (Landin.Checking.Type_Of
+                                      (Types.all, Of_Tree, Node))));
+                        else
+                           Value := -Under;
+                        end if;
                      end if;
                   end;
 

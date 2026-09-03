@@ -63,7 +63,7 @@ package body Landin.Tokens is
      (case Of_Kind is
          when Compound_Assign   => "[0390]",   --  x += 1 says x = x + 1
          when Character_Literal => "[0250]",
-         when Float_Literal     => "[0210]",
+         when Hex_Float_Literal => "[0230]",
          when Raw_Literal       => "[0280]",
          when Text_Literal      => "[0260]");
 

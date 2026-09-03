@@ -1108,7 +1108,7 @@ package body Landin.Tests.Driver_Suite is
       Host.Add_File
         ("holed.ldn",
          "outer: type = struct" & LF
-         & "    part: f32" & LF
+         & "    part: f16" & LF
          & "    count: u32" & LF
          & "end outer" & LF
          & "mut here: outer" & LF

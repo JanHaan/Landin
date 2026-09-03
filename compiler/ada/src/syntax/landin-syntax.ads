@@ -43,7 +43,7 @@
 --  program is data.
 --
 --  Nothing here asks the host anything, and nothing here is a language
---  decision this package is allowed to make.  The eleven scalar spellings
+--  decision this package is allowed to make.  The scalar spellings
 --  are not enumerated: [1760] says u32 and bool are ordinary declared names
 --  the kernel predeclares, so a type is a Type_Name node carrying an
 --  interned name, and what names a type may have belongs to the stage that
@@ -207,6 +207,10 @@ package Landin.Syntax is
       --  should bind.
       Struct_Literal,
       Integer_Literal,
+      --  [0210]'s contextual IEEE value.  Its scanner-validated decimal
+      --  spelling is retained in Anchor, then decoded once checking knows
+      --  whether its context is f32 or f64.
+      Float_Literal,
       --  [0260]'s quoted bytes.  The node keeps only its span; D161's
       --  shared decoder reads the escapes from source again where the
       --  context that decides whether they mean bytes is known.
@@ -273,7 +277,7 @@ package Landin.Syntax is
       --  Types [1790].  A name, not a closed set: see the header.
       Error_Type,
       Type_Name,
-      --  A type the program declared [1795].  Told apart from the eleven
+      --  A type the program declared [1795].  Told apart from the built-in
       --  the kernel predeclares because those are known to the parser and
       --  this one is a name only resolution can answer for.
       Type_Reference,
