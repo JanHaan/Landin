@@ -1,0 +1,41 @@
+widen_signed: (value: i8) -> (result: i64) =
+    result = i64(value)
+end widen_signed
+
+narrow_signed: (value: i64) -> (result: i8) =
+    result = i8(value)
+end narrow_signed
+
+to_unsigned: (value: i16) -> (result: u8) =
+    result = u8(value)
+end to_unsigned
+
+to_signed: (value: u16) -> (result: i16) =
+    result = i16(value)
+end to_signed
+
+module_source: i16 = 42
+module_widened: i64 = i64(module_source)
+module_narrowed: [2]u8 = [u8(module_source), u8(200)]
+
+public main: () -> (code: i32) =
+    negative: i8 = -37
+    positive: i64 = 120
+    unsigned_source: u16 = 32000
+    values: [3]u8 = [1, 2, 3]
+
+    if widen_signed(negative) == -37
+      and narrow_signed(positive) == 120
+      and to_unsigned(200) == 200
+      and to_signed(unsigned_source) == 32000
+      and u64(255) == 255
+      and i8(-128) == -128
+      and i32(lenof values) == 3
+      and module_widened == 42
+      and module_narrowed[0] == 42
+      and module_narrowed[1] == 200 then
+        code = 42
+    else
+        code = 1
+    end if
+end main

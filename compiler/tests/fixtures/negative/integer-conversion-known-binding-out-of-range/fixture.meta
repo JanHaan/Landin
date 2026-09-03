@@ -1,0 +1,6 @@
+class: negative
+summary: an explicit integer conversion rejects a known module value outside its destination range
+constructs: 0130, 0150, 0310, 0700, 1460, 1940
+program: program.ldn
+codes: L0300
+targets: linux-x86-64, macos-arm64

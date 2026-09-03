@@ -5456,7 +5456,13 @@ package body Landin.Stages.Lowering is
                   begin
                      return IR.Emit_Conversion
                        (Unit.all, Filling, Value,
-                        Ty.Integer_Name (Type_At (Of_Tree, Node)), Site);
+                        Ty.Integer_Name
+                          (Landin.Checking.Named
+                             (Types.all,
+                              Syn.Name
+                                (Of_Tree,
+                                 Syn.Callee_Of (Of_Tree, Node)))),
+                        Site);
                   end;
                end if;
                return Lower_Call (Of_Tree, Node, Scope);
@@ -11148,6 +11154,22 @@ package body Landin.Stages.Lowering is
                         end if;
                      end if;
                   end;
+
+               when Syn.Call =>
+                  if Syn.Argument_Count (Of_Tree, Node) = 1
+                    and then Syn.Kind
+                      (Of_Tree, Syn.Callee_Of (Of_Tree, Node))
+                        = Syn.Name_Reference
+                    and then Landin.Checking.Named
+                      (Types.all,
+                       Syn.Name
+                         (Of_Tree, Syn.Callee_Of (Of_Tree, Node)))
+                           in Ty.Integer_Name
+                  then
+                     Fold_Constant
+                       (Of_Tree, Syn.Nth_Argument (Of_Tree, Node, 1),
+                        Value, Known);
+                  end if;
 
                when Syn.Name_Reference =>
                   if Res.Verdict_Of (Meanings.all, Of_Tree, Node)

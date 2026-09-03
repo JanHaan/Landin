@@ -227,10 +227,11 @@ package Landin.Diagnostics.Checking is
 private
 
    --  Where the roadmap says each becomes available.  R2.20 owns the
-   --  remaining scalar conversion and general aggregate-value contexts.
+   --  remaining general aggregate-value contexts; R4.10 closes scalar
+   --  conversions with the hosted construct matrix.
    function Enabled_By (Item : Refused_Use) return String
      is (case Item is
-            when Scalar_Conversion => "R2.20",
+            when Scalar_Conversion => "R4.10",
             --  R4.10 closes the hosted construct matrix, which is where
             --  the wide integers, the floats and the text views arrive.
             when Wide_Integer_Type

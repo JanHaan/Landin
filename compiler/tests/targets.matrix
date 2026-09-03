@@ -117,6 +117,7 @@ negative/fixed-conditional-active-generic-error | linux-x86-64, macos-arm64, syn
 negative/fixed-conditional-active-reference-inactive | linux-x86-64, macos-arm64, synthetic-32
 negative/fixed-conditional-evaluator | linux-x86-64, macos-arm64, synthetic-32
 negative/fixed-conditional-inactive-parser-error | linux-x86-64, macos-arm64, synthetic-32
+negative/float-conversion-not-yet-enabled | linux-x86-64, macos-arm64
 negative/float-literal-not-enabled | linux-x86-64, macos-arm64
 negative/float-literal-overflows-context | linux-x86-64, macos-arm64
 negative/float-remainder-is-integer-only | linux-x86-64, macos-arm64
@@ -193,6 +194,8 @@ negative/inferred-module-array-repetition-element-not-static | linux-x86-64, mac
 negative/inferred-module-array-repetition-extent-overflow | linux-x86-64, macos-arm64
 negative/inferred-zeroed-not-enabled | linux-x86-64, macos-arm64
 negative/inout-same-place-twice | linux-x86-64, macos-arm64, synthetic-32
+negative/integer-conversion-known-binding-out-of-range | linux-x86-64, macos-arm64
+negative/integer-conversion-known-out-of-range | linux-x86-64, macos-arm64
 negative/integer-literal-not-a-float | linux-x86-64, macos-arm64
 negative/keyword-as-name | linux-x86-64, macos-arm64
 negative/latin1-byte-in-name | linux-x86-64, macos-arm64
@@ -812,6 +815,10 @@ runtime/infallible-function-values | linux-x86-64
 runtime/inferred-function-values | linux-x86-64
 runtime/inout-pointer-alias-is-unchecked | linux-x86-64
 runtime/insertion-sort | linux-x86-64
+runtime/integer-conversion-out-of-range-traps | linux-x86-64
+runtime/integer-conversion-signed-overflow-traps | linux-x86-64
+runtime/integer-conversion-unsigned-overflow-traps | linux-x86-64
+runtime/integer-conversions | linux-x86-64
 runtime/large-array-offset-is-addressed | linux-x86-64
 runtime/lenof-array-literal-is-compile-time | linux-x86-64
 runtime/lenof-named-fixed-arrays | linux-x86-64

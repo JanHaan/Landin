@@ -1,0 +1,7 @@
+narrow: (value: i16) -> (result: i8) =
+    result = i8(value)
+end narrow
+
+public main: () -> (code: i32) =
+    code = i32(narrow(200))
+end main

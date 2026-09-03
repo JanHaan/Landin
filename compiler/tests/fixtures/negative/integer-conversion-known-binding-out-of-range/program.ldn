@@ -1,0 +1,2 @@
+source: u16 = 300
+too_small: u8 = u8(source)
