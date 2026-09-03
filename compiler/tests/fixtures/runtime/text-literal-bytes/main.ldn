@@ -1,0 +1,57 @@
+holder: type = struct
+    text: []u8
+end holder
+
+module_text: []u8 = "module"
+module_holder: holder = holder(text: "field")
+
+first: (text: []u8) -> (byte: u8) =
+    byte = text[0]
+end first
+
+returned: () -> (text: []u8) =
+    text = "return"
+end returned
+
+generic_text: (item: type) -> (text: []u8) =
+    text = "generic"
+end generic_text
+
+public main: () -> (code: i32) =
+    empty: []u8 = ""
+    escaped: []u8 = "A\tB\n\r\e\\\"\'\x00\xFF"
+    snowman: []u8 = "☃"
+    local: []u8 = "local"
+    same_one: []u8 = "same"
+    same_two: []u8 = "\x73ame"
+    local_holder: holder = holder(text: "local field")
+    result: []u8 = returned()
+    generic: []u8 = generic_text(item: i32)
+    chosen: []u8 = if true then "chosen" else "wrong" end if
+
+    if lenof empty == 0
+      and lenof escaped == 11
+      and escaped[0] == 65 and escaped[1] == 9
+      and escaped[2] == 66 and escaped[3] == 10
+      and escaped[4] == 13 and escaped[5] == 27
+      and escaped[6] == 92 and escaped[7] == 34
+      and escaped[8] == 39 and escaped[9] == 0
+      and escaped[10] == 255
+      and lenof snowman == 3
+      and snowman[0] == 226 and snowman[1] == 152
+      and snowman[2] == 131
+      and first(local) == 108
+      and first("direct") == 100
+      and module_text[5] == 101
+      and module_holder.text[4] == 100
+      and local_holder.text[6] == 102
+      and result[5] == 110
+      and generic[6] == 99
+      and chosen[5] == 110
+      and u64(addr same_one[0]) == u64(addr same_two[0])
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

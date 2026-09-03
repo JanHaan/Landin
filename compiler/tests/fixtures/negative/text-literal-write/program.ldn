@@ -1,0 +1,4 @@
+bad: () -> none =
+    text: []u8 = "landin"
+    text[0] = 76
+end bad

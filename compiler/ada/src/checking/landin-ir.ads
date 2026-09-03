@@ -726,7 +726,8 @@ package Landin.IR is
      is (Id /= No_Item and then Natural (Id) <= Item_Count (Of_Unit));
 
    --  One item per module declaration in resolution order, followed by
-   --  D118's anonymous routine items in deterministic source/post-order.
+   --  D118's anonymous routine items in deterministic source/post-order
+   --  and D161's content-pooled anonymous text datums.
    --
    --  Result is [1800]'s returns for a Routine -- one of [1790]'s eleven,
    --  or Landin.Types.No_Value for `-> none` -- and the declared type for
@@ -745,7 +746,11 @@ package Landin.IR is
       Site     : Landin.Provenance.Origin;
       Nominal  : Nominal_Type_Id := No_Nominal_Type) return Item_Id
      with Pre  => Is_Prepared (Into)
-                  and then (Declares /= No_Declaration or else Kind = Routine)
+                  and then (Declares /= No_Declaration
+                            or else Kind = Routine
+                            or else (Kind = Datum
+                                     and then Result
+                                       = Landin.Types.Fixed_Array))
                   and then (Declares = No_Declaration
                             or else (Natural (Declares)
                                        <= Declaration_Limit (Into)
@@ -831,6 +836,20 @@ package Landin.IR is
    function Signature_Of (Of_Unit : Unit; Item : Item_Id)
       return Signature_Id
      with Pre => Holds (Of_Unit, Item);
+
+   --  D161: a datum whose image may be placed in read-only storage, which
+   --  is where [0260] says a text literal lives.  Nothing stores through
+   --  it: the checker admits no writable reference to one.
+   function Is_Read_Only (Of_Unit : Unit; Item : Item_Id) return Boolean
+     with Pre => Holds (Of_Unit, Item);
+
+   procedure Mark_Read_Only (Into : in out Unit; Item : Item_Id)
+     with Pre  => Holds (Into, Item)
+                  and then Kind_Of (Into, Item) = Datum
+                  and then Result_Of (Into, Item)
+                    = Landin.Types.Fixed_Array
+                  and then not Is_Read_Only (Into, Item),
+          Post => Is_Read_Only (Into, Item);
 
    --  An external routine is a declaration-only item whose calls retain the
    --  ordinary neutral signature.  It owns no blocks or frame slots; the
@@ -3256,6 +3275,7 @@ private
       Nominal     : Nominal_Type_Id           := No_Nominal_Type;
       Signature   : Signature_Id              := No_Signature;
       External    : Boolean                   := False;
+      Read_Only   : Boolean                   := False;
       Atom_Set    : Atom_Set_Id               := No_Atom_Set;
       Function_Image : Item_Id                := No_Item;
       Site        : Landin.Provenance.Origin  :=

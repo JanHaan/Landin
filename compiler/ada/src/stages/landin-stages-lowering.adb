@@ -1,3 +1,4 @@
+with Ada.Containers.Indefinite_Ordered_Maps;
 with Ada.Containers.Vectors;
 
 with Landin.Checking;
@@ -9,6 +10,7 @@ with Landin.Provenance;
 with Landin.Resolution;
 with Landin.Source;
 with Landin.Syntax;
+with Landin.Tokens.Text;
 with Landin.Syntax.Forest;
 with Landin.Targets;
 with Landin.Types;
@@ -475,6 +477,82 @@ package body Landin.Stages.Lowering is
 
       type Alias_Map is array (Declared) of Payload_Alias;
       Aliases : Alias_Map := [others => (others => <>)];
+
+      --  D161: every text literal is one read-only datum holding its bytes
+      --  and [0260]'s trailing NUL, shared by content, so two spellings of
+      --  one string are one object.
+      package Text_Datum_Maps is new Ada.Containers.Indefinite_Ordered_Maps
+        (Key_Type => String, Element_Type => IR.Item_Id, "=" => IR."=");
+
+      Text_Data : Text_Datum_Maps.Map;
+
+      function Text_Content
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return String;
+
+      function Text_Datum
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return IR.Item_Id;
+
+      procedure Register_Text_Datum
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
+
+      function Text_Content
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return String
+      is
+         Snap : constant Landin.Source.Snapshot :=
+           Source (Context, Syn.Source_Of (Of_Tree));
+         Lexeme : constant String :=
+           Landin.Source.Slice (Snap, Syn.Where (Of_Tree, Node));
+         Decoded : String (1 .. Lexeme'Length);
+         Length : Natural;
+         Fault : Landin.Tokens.Text.Problem;
+         Fault_First, Fault_Last : Natural;
+      begin
+         Landin.Tokens.Text.Decode
+           (Lexeme, Decoded, Length, Fault, Fault_First, Fault_Last);
+         if Fault not in Landin.Tokens.Text.Well_Formed then
+            raise Landin.Compiler_Defect with
+              "a malformed text literal reached lowering";
+         end if;
+         return Decoded (1 .. Length);
+      end Text_Content;
+
+      function Text_Datum
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return IR.Item_Id
+      is
+         Content : constant String := Text_Content (Of_Tree, Node);
+         Found : constant Text_Datum_Maps.Cursor := Text_Data.Find (Content);
+      begin
+         if Text_Datum_Maps.Has_Element (Found) then
+            return Text_Datum_Maps.Element (Found);
+         end if;
+         raise Landin.Compiler_Defect with
+           "a checked text literal has no registered datum";
+      end Text_Datum;
+
+      procedure Register_Text_Datum
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
+      is
+         Site : constant Landin.Provenance.Origin :=
+           Syn.Origin (Of_Tree, Node);
+         Content : constant String := Text_Content (Of_Tree, Node);
+         Image : Ty.Folded_Array (1 .. Content'Length + 1);
+         Made : IR.Item_Id;
+      begin
+         if Text_Data.Contains (Content) then
+            return;
+         end if;
+         for Index in Content'Range loop
+            Image (Index) := Ty.Folded (Character'Pos (Content (Index)));
+         end loop;
+         Image (Image'Last) := 0;
+         Made := IR.Add_Item
+           (Unit.all, IR.Datum, Res.No_Declaration, Ty.Fixed_Array, Site);
+         IR.Set_Array
+           (Unit.all, Made, Ty.U8, IR.Element_Total (Image'Length));
+         IR.Set_Array_Image (Unit.all, Made, Image);
+         IR.Mark_Read_Only (Unit.all, Made);
+         Text_Data.Insert (Content, Made);
+      end Register_Text_Datum;
 
       --  The item being filled, and the block instructions go into.
       --  Current is No_Block when the flow has been terminated and
@@ -2577,7 +2655,8 @@ package body Landin.Stages.Lowering is
       begin
          case Syn.Kind (Of_Tree, Node) is
             when Syn.Inclusive_Slice | Syn.Half_Open_Slice
-               | Syn.Empty_Slice_Literal | Syn.Any_Construction
+               | Syn.Empty_Slice_Literal | Syn.Text_Literal
+               | Syn.Any_Construction
                | Syn.Name_Reference | Syn.Member_Selection =>
                if Destination_Field /= 0 or else Destination_Path'Length /= 0
                then
@@ -3995,7 +4074,7 @@ package body Landin.Stages.Lowering is
       begin
          if Syn.Kind (Of_Tree, Node)
               in Syn.Inclusive_Slice | Syn.Half_Open_Slice
-            or else Syn.Kind (Of_Tree, Node) = Syn.Empty_Slice_Literal
+                 | Syn.Empty_Slice_Literal | Syn.Text_Literal
          then
             declare
                Temporary : constant IR.Slot_Id := IR.Add_Array_Slot
@@ -4067,6 +4146,25 @@ package body Landin.Stages.Lowering is
                  (Unit.all, Filling, Slice_Shape (Of_Tree, Node), Site);
                Length : constant IR.Value_Id := IR.Emit_Number
                  (Unit.all, Filling, Ty.Usize, 0, False, Site);
+            begin
+               IR.Emit_Store_Slot_Field
+                 (Unit.all, Filling, Destination, 1, Base, Site);
+               IR.Emit_Store_Slot_Field
+                 (Unit.all, Filling, Destination, 2, Length, Site);
+            end;
+            return;
+         elsif Syn.Kind (Of_Tree, Node) = Syn.Text_Literal then
+            --  D161: the slice views the shared read-only datum, and its
+            --  length leaves the trailing NUL out.
+            declare
+               Datum : constant IR.Item_Id := Text_Datum (Of_Tree, Node);
+               Base : constant IR.Value_Id := IR.Emit_Storage_Address
+                 (Unit.all, Filling,
+                  (Kind => IR.Module_Datum, Datum => Datum), Site);
+               Length : constant IR.Value_Id := IR.Emit_Number
+                 (Unit.all, Filling, Ty.Usize,
+                  Ty.Magnitude (IR.Array_Length (Unit.all, Datum) - 1),
+                  False, Site);
             begin
                IR.Emit_Store_Slot_Field
                  (Unit.all, Filling, Destination, 1, Base, Site);
@@ -6889,6 +6987,7 @@ package body Landin.Stages.Lowering is
                                   | Syn.Inclusive_Slice
                                   | Syn.Half_Open_Slice
                                   | Syn.Empty_Slice_Literal
+                                  | Syn.Text_Literal
                                   | Syn.Any_Construction);
 
                   if Type_At (Of_Tree, Value)
@@ -10309,6 +10408,66 @@ package body Landin.Stages.Lowering is
          end loop;
       end;
 
+      --  D161's anonymous data items must be registered before pass two
+      --  starts filling declaration items, then completed after those
+      --  earlier items: every item's values occupy one contiguous IR run.
+      --  The base view covers
+      --  ordinary declarations and anonymous functions; each ready generic
+      --  view covers contextual literals whose referent was substituted.
+      declare
+         procedure Register_Texts (Of_Tree : Syn.Tree);
+
+         procedure Register_Texts (Of_Tree : Syn.Tree) is
+         begin
+            for Node in Syn.Node_Id'(1) .. Syn.Last_Node (Of_Tree) loop
+               if Syn.Kind (Of_Tree, Node) = Syn.Text_Literal
+                 and then Landin.Checking.Type_Of
+                   (Types.all, Of_Tree, Node) = Ty.Slice_Value
+               then
+                  Register_Text_Datum (Of_Tree, Node);
+               end if;
+            end loop;
+         end Register_Texts;
+      begin
+         for Index in 1 .. Source_Count (Context) loop
+            Register_Texts (Tree_For (Nth_Source (Context, Index)).all);
+         end loop;
+
+         for Position in
+           1 .. Landin.Checking.Routine_Instance_Count (Types.all)
+         loop
+            declare
+               Instance : constant Landin.Checking.Routine_Instance_Id :=
+                 Landin.Checking.Routine_Identities.Nth
+                   (Types.all, Position);
+            begin
+               if Landin.Checking.Routine_State_Of (Types.all, Instance)
+                 = Landin.Checking.Routine_Ready
+               then
+                  declare
+                     Template : constant Res.Declaration_Id :=
+                       Landin.Checking.Routine_Template_Of
+                         (Types.all, Instance);
+                     Previous : Landin.Checking.Routine_Instance_Id;
+                  begin
+                     Landin.Checking.Activate_Routine_View
+                       (Types.all, Instance, Previous);
+                     Register_Texts
+                       (Tree_For
+                          (Res.Source_Of (Meanings.all, Template)).all);
+                     Landin.Checking.Restore_Routine_View
+                       (Types.all, Previous);
+                  exception
+                     when others =>
+                        Landin.Checking.Restore_Routine_View
+                          (Types.all, Previous);
+                        raise;
+                  end;
+               end if;
+            end;
+         end loop;
+      end;
+
       --  Pass two: fill every active item in the same declaration order.
       declare
          procedure Lower_Declaration
@@ -10384,6 +10543,29 @@ package body Landin.Stages.Lowering is
               Tree_For (Routine_Entry.Source);
          begin
             Lower_Routine (Of_Tree.all, Routine_Entry.Node);
+         end;
+      end loop;
+
+      --  Text datums were appended after every routine and declaration
+      --  item.  Give them their static no-result blocks in that same item
+      --  order, after every earlier item has finished its own block and
+      --  instruction runs.
+      for Position in 1 .. IR.Item_Count (Unit.all) loop
+         declare
+            Item : constant IR.Item_Id := IR.Item_Id (Position);
+         begin
+            if IR.Is_Read_Only (Unit.all, Item) then
+               declare
+                  Site : constant Landin.Provenance.Origin :=
+                    IR.Origin_Of (Unit.all, Item);
+                  Block : constant IR.Block_Id := IR.Add_Block
+                    (Unit.all, Item, Res.Program_Scope, Site);
+               begin
+                  IR.Enter (Unit.all, Item, Block);
+                  IR.Emit_Leave (Unit.all, Item, IR.No_Value, Site);
+                  IR.Leave_Block (Unit.all, Item);
+               end;
+            end if;
          end;
       end loop;
 
@@ -12565,6 +12747,15 @@ package body Landin.Stages.Lowering is
                               then
                                  Images (Which).Value := 0;
                               elsif Syn.Kind (Of_Tree, Value)
+                                      = Syn.Text_Literal
+                              then
+                                 Images (Which).Target :=
+                                   Text_Datum (Of_Tree, Value);
+                                 Images (Which).Slice_First := 0;
+                                 Images (Which).Value := Ty.Folded
+                                   (IR.Array_Length
+                                      (Unit.all, Images (Which).Target) - 1);
+                              elsif Syn.Kind (Of_Tree, Value)
                                 in Syn.Inclusive_Slice | Syn.Half_Open_Slice
                               then
                                  declare
@@ -13064,6 +13255,18 @@ package body Landin.Stages.Lowering is
                      IR.Set_Slice_Image
                        (Unit.all, IR.Item_For (Unit.all, Id), Element, 0);
                      Made (Id) := True;
+                  elsif Syn.Kind (Their_Tree.all, Value) = Syn.Text_Literal
+                  then
+                     declare
+                        Datum : constant IR.Item_Id :=
+                          Text_Datum (Their_Tree.all, Value);
+                     begin
+                        IR.Set_Slice_Image
+                          (Unit.all, IR.Item_For (Unit.all, Id), Element,
+                           IR.Array_Length (Unit.all, Datum) - 1,
+                           Source => Datum, First => 0);
+                        Made (Id) := True;
+                     end;
                   elsif Syn.Kind (Their_Tree.all, Value)
                     in Syn.Inclusive_Slice | Syn.Half_Open_Slice
                   then

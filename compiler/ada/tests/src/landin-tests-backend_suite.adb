@@ -3466,6 +3466,53 @@ package body Landin.Tests.Backend_Suite is
       end;
    end A_Module_Array_Literal_Becomes_Data_Image;
 
+   --  D161: equal decoded text shares one anonymous datum in `.rodata`.
+   --  The slice count omits the final NUL, while an explicit `\x00` remains
+   --  part of both the count and the image.
+   procedure Text_Literals_Are_Shared_Read_Only_Data
+     (Item : in out Landin.Testing.Context);
+
+   procedure Text_Literals_Are_Shared_Read_Only_Data
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "one: []u8 = ""A\x00""" & LF
+         & "two: []u8 = ""\x41\x00""" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
+
+      declare
+         Text : constant String := Emitted (Work);
+         Shared : constant String := ".Llandin_anonymous_3";
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Occurrences (Text, HT & ".section .rodata" & LF), 1,
+            "read-only literal data has one section");
+         Landin.Testing.Check
+           (Item,
+            Contains
+              (Text,
+               Shared & ":" & LF
+               & HT & ".byte 65" & LF
+               & HT & ".byte 0" & LF
+               & HT & ".byte 0" & LF
+               & HT & ".size " & Shared & ", 3" & LF),
+            "the explicit zero and uncounted trailing zero are distinct");
+         Landin.Testing.Check_Equal
+           (Item, Occurrences (Text, HT & ".quad " & Shared & LF), 2,
+            "equal decoded literals share one datum");
+         Landin.Testing.Check_Equal
+           (Item, Occurrences (Text, HT & ".quad 2" & LF), 2,
+            "both slices omit only the trailing zero from their count");
+      end;
+   end Text_Literals_Are_Shared_Read_Only_Data;
+
    --  D34: a nonzero repeated image is emitted as a constant number of
    --  directives for every scalar width.  In particular, the eight-byte
    --  pattern must not travel through GNU `.fill`'s four-byte value field.
@@ -5149,6 +5196,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "a module array literal becomes data image",
          A_Module_Array_Literal_Becomes_Data_Image'Access);
+      Landin.Testing.Register
+        (Into, "backend", "text literals are shared read-only data",
+         Text_Literals_Are_Shared_Read_Only_Data'Access);
       Landin.Testing.Register
         (Into, "backend",
          "module repetition uses compact full-width directives",

@@ -131,9 +131,10 @@ keyword     ::= "addr" | "alignof" | "and" | "any" | "atom" | "dec" | "else"
 
 ```
 
-### [1770] The kernel's literals are integers, booleans, and contextual zero
+### [1770] The kernel's literals include contextual byte text
 
-The kernel's literals are integers, the two booleans, and contextual `zeroed`.
+The kernel's literals are integers, quoted text, the two booleans, and
+contextual `zeroed`.
 Integer literals are untyped and take
 the type of their context [0190], defaulting to i32 with none [0200]; the bases
 and the separator are [0220]'s. `zeroed` has no type of its own: [0540] gives it
@@ -143,13 +144,20 @@ contexts, D49 and D57--D59 whole array-field and ordinary-struct contexts,
 D62 the depth-one indexed field place, D64--D67 labelled struct fields and
 static images, D75/D76 variant-bearing struct storage and case payloads, and
 D87 depth-one nested ordinary storage. It remains refused
-where no enabled construct supplies that context. Floats
-[0210], characters
-[0250], text [0260] and raw literals [0280] are described in this tour and are
-not enabled yet.
+where no enabled construct supplies that context. D161 admits [0260]'s quoted
+literal when its direct context is a read-only `[]u8`; the unescaped source
+content is UTF-8 [1750], and [0270]'s byte escapes are decoded into that view.
+With no context it still defaults to the not-yet-enabled `utf8`, and `utf8`,
+`utf16`, `cstring` and codepoint escapes remain R4.10 work. Floats [0210],
+characters [0250] and raw literals [0280] are also not enabled yet.
 
 ```landin-grammar
-literal     ::= integer | "true" | "false" | "zeroed"
+literal     ::= integer | text | "true" | "false" | "zeroed"
+text        ::= "\"" (text_escape | text_byte)* "\""
+text_byte   ::= any byte except quote, backslash or line_end
+text_escape ::= "\\" ("n" | "r" | "t" | "e" | "\\" | "\"" | "'"
+                  | "x" hex_digit hex_digit
+                  | "u" "{" hex_digit+ "}")
 integer     ::= decimal | hex | octal | binary
 decimal     ::= digit (digit | "_")*
 hex         ::= "0x" hex_digit (hex_digit | "_")*
@@ -727,6 +735,9 @@ That shape supplies an inferred whole binding and every arm of a control value.
 
 And two give none: the inferred form [0050] and a discard
 [1020], where [0200]'s i32 is what is left.
+For [0260]'s text literal, those same direct positions may instead supply a
+complete text view. D161 currently admits only `[]u8`; with no supplied
+context the literal defaults to `utf8` and is refused by [1830].
 With no surrounding context, the first written answer of a control expression
 supplies its scalar type, fixed-array element and extent, or nominal aggregate
 body; every other answer must have that same complete shape. An edge that
@@ -964,6 +975,11 @@ such a declared or anonymous routine, not an integer fold. Copying a complete
 module struct image copies that relocation while retaining distinct storage.
 A module aggregate whose active all-zero shape contains a function field must
 therefore write an explicit static image too.
+
+A contextual `[]u8` text literal is also known: its module image is the base
+of D161's read-only byte datum and its decoded length. The datum's trailing NUL
+is present in storage but excluded from that length; it is an address
+relocation rather than an integer fold or code run before the entry point.
 
 An atom-valued module binding must name an initializer. There is no zero atom,
 and the zero carrier pattern reserved by [1980] is not a source value.
@@ -8407,10 +8423,11 @@ classified failure boundary before the repository gate can pass.
 
 | Operation | Class | Constructs | Behaviour | Evidence |
 | --- | --- | --- | --- | --- |
-| `source.lexical` | static | 0010, 0020, 0030, 0220, 1750, 1760, 1770, 1780, 1830 | L0010--L0014 | `negative/malformed-integer-digit`, `negative/unterminated-text-literal`, `negative/unknown-byte` |
+| `source.lexical` | static | 0010, 0020, 0030, 0220, 0260, 0270, 1750, 1760, 1770, 1780, 1830 | L0010--L0014 or L0320 | `negative/malformed-integer-digit`, `negative/text-literal-unknown-escape`, `negative/unterminated-text-literal`, `negative/unknown-byte` |
 | `source.structure` | static | 1740, 1800, 1810, 1820, 1840 | L0100--L0112 | `negative/variant-part-end-name-mismatch`, `unit/parser-nesting-limit` |
 | `declarations.names` | static | 0040, 0050, 0060, 0080, 0090, 0100, 0110, 0120, 0130, 0140, 1790, 1795, 1850 | L0200 or L0201 | `negative/duplicate-in-a-module`, `negative/local-used-above-its-declaration` |
 | `types.values` | static | 0070, 0160, 0180, 0190, 0200, 1870, 1880, 1890 | L0300, L0301 or L0304 | `negative/literal-above-its-type`, `negative/type-name-is-not-a-type` |
+| `text.literal-storage` | static | 0260, 0270, 0570, 1770, 1880, 1900, 1940 | L0301 for a non-byte, writable or codepoint context; L0303 for a write through its read-only view; L0304 for the default deferred `utf8`; equal decoded contents share read-only storage with one trailing NUL excluded from the slice length | `negative/text-literal-codepoint-in-byte-context`, `negative/text-literal-needs-byte-slice`, `negative/text-literal-needs-read-only-slice`, `negative/text-literal-not-enabled`, `negative/text-literal-write`, `runtime/text-literal-bytes` |
 | `arithmetic.known` | static | 0290, 0300, 1950 | L0300 or L0306 | `negative/divisor-is-zero`, `negative/literal-above-its-type` |
 | `arithmetic.runtime` | trap | 0290, 0300, 0320, 1950, 1960 | trap | `runtime/checked-overflow-traps`, `runtime/checked-subtraction-traps`, `runtime/checked-multiplication-traps`, `runtime/checked-negation-traps`, `runtime/signed-division-overflow-traps`, `runtime/a-zero-divisor-traps`, `runtime/a-zero-remainder-divisor-traps`, `runtime/negative-left-shift-traps`, `runtime/negative-right-shift-traps` |
 | `arithmetic.total` | static | 0320, 0330, 0340, 0350 | L0301 for an inapplicable operand; admitted nonnegative shifts and wrapping operations are total | `negative/condition-is-not-believed`, `runtime/shifts-fill-with-zeros-beyond-the-width` |
@@ -8668,9 +8685,10 @@ or `out_of_bounds` at the vector boundary.
 `core/text` supplies an opaque nominal byte `position`, traversal, bounded
 byte access with `past_end`, and a half-open subslice whose result is `from
 source`. Positions are byte offsets because the parser consumes source bytes.
-This is not the complete [0600] text design: distinct text literals, UTF-8
-scalar decoding, codepoint indexing and the permanent text/string boundary
-remain R4.10.
+This is not the complete [0600] text design: D161 subsequently adds the
+read-only `[]u8` literal view, while the other literal contexts, UTF-8 scalar
+decoding, codepoint indexing and the permanent text/string boundary remain
+R4.10.
 
 The composition exposed four language rules needed by ordinary modules. D135
 aliases may normalize to a nominal aggregate, selected calls are statement
@@ -9060,3 +9078,58 @@ source that was not written. All were declined.
 `negative/for-source-not-traversable`,
 `negative/for-collection-traversal-deferred`, and the `control.loops`
 guarantee row.
+
+### D161 — Byte-context text is a pooled read-only datum and slice
+
+**The tour said** that [0260]'s text literal takes `utf8`, `[]u8`, `utf16` or
+`cstring` from context, defaults to `utf8`, lives in read-only storage and
+carries an uncounted trailing NUL. [0270] closed its escape set and separated
+byte escapes from codepoint escapes. It did not state whether one literal
+context could be enabled before the text types, whether equal literals share
+an object, or which stage owns malformed spelling.
+
+**Chosen:** the seventh R4.10 increment admits a quoted literal only where a
+direct context supplies read-only `[]u8`. Its unescaped source content must be
+shortest-form UTF-8; `\n`, `\r`, `\t`, `\e`, `\\`, `\"`, `\'` and `\xNN` decode
+to bytes, including an arbitrary byte from `\xNN`. A well-formed `\u{...}` is
+text rather than bytes and is L0301 in this context. A literal with no context
+still defaults to the deferred `utf8` and is L0304; `utf8`, `utf16`, `cstring`
+and their codepoint representation remain later R4.10 work.
+
+Malformed UTF-8 source content or an unknown, incomplete or nonscalar escape
+is lexical L0320 at the offending run. The scanner first retains the complete
+escape-aware token, so an escaped quote cannot close it; the shared decoder
+then validates every token before configuration can hide a declaration. An
+unclosed token remains L0014. The parser retains one text node and its source
+span, and checking supplies its complete immutable `[]u8` reference
+descriptor.
+
+Lowering decodes the content into one anonymous target-neutral fixed array of
+`u8`, appends one zero byte, marks the datum read-only and constructs each
+literal value as its base address plus the decoded length. Equal decoded byte
+sequences throughout the program use one datum, even when their source escape
+spellings differ; this identity is observable when their element addresses
+are converted to integers. Module values carry the same datum relocation and
+length as a static slice image. Anonymous datums are registered before item
+bodies are filled and completed in item order afterward, preserving the IR's
+contiguous-run invariant. The Linux backend emits them in `.rodata`; no text
+opcode, runtime initialization or writable copy was added.
+
+**The alternatives:** enable `utf8` and codepoint decoding at the same time,
+make a literal a fixed `[N]u8`, synthesize a writable copy in each context,
+give equal occurrences distinct storage, omit the trailing NUL, or let the
+checker and lowering each interpret escapes independently. Those choices
+either pull [0600]'s indexing and representation questions into this slice,
+lose [0260]'s contextual carrier or read-only promise, duplicate flash on the
+small targets the language preserves, contradict the stated C boundary, or
+permit two compiler stages to disagree about the bytes. All were declined.
+
+**Pinned by** `runtime/text-literal-bytes`,
+`negative/text-literal-codepoint-in-byte-context`,
+`negative/text-literal-malformed-codepoint-escape`,
+`negative/text-literal-needs-byte-slice`,
+`negative/text-literal-needs-read-only-slice`,
+`negative/text-literal-not-enabled`, `negative/text-literal-short-byte-escape`,
+`negative/text-literal-unknown-escape`, `negative/text-literal-write`, the
+lexer and backend cases, and the `source.lexical` and `text.literal-storage`
+guarantee rows.

@@ -1,0 +1,5 @@
+fixed if compiler.arch == arm64 then
+    name: []u8 = "bad\u{}"
+else
+    selected: i32 = 1
+end if

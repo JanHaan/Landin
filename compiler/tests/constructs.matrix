@@ -11,7 +11,7 @@
 #
 #  A construct with no evidence and no refusal is this
 #  item's to answer for; see ROADMAP.md R1.90.
-#  200 constructs, 157 with evidence, 43 with neither.
+#  200 constructs, 158 with evidence, 42 with neither.
 #
 #  id    defined in  evidence
 0010   tour        accepted emitted                   Line comment, to end of line
@@ -20,7 +20,7 @@
 0040   tour        accepted emitted executed refused  Full form: name, type, value
 0050   tour        accepted emitted executed refused  Type inferred from the value
 0060   tour        accepted emitted executed refused  Mutable binding
-0070   tour        accepted emitted executed          Two questions about a reference
+0070   tour        accepted emitted executed refused  Two questions about a reference
 0080   tour        accepted emitted executed refused  Declaration only
 0090   tour        accepted emitted refused           Exported from the module
 0100   tour        accepted emitted executed          Several names may share one declaration
@@ -39,8 +39,8 @@
 0230   tour        -                                  Hex float literals express every representable value exactly
 0240   tour        -                                  IEEE special values
 0250   tour        -                                  Character literal is a codepoint, typed u32
-0260   tour        refused                            Text literals are untyped too
-0270   tour        -                                  The escape set is closed and small
+0260   tour        accepted emitted executed refused  Text literals are untyped too
+0270   tour        accepted emitted executed refused  The escape set is closed and small
 0280   tour        -                                  Raw literals: N quotes on each side, N at least three
 0290   tour        accepted emitted executed refused  Arithmetic
 0300   tour        accepted emitted executed refused  Overflow traps
@@ -190,7 +190,7 @@
 1740   spec        accepted emitted executed refused  A source file is an import prelude and declarations in any order
 1750   spec        accepted emitted executed refused  A source file is bytes
 1760   spec        accepted emitted executed refused  Identifiers are lower case, and no identifier is a keyword
-1770   spec        accepted emitted executed refused  The kernel's literals are integers, booleans, and contextual zero
+1770   spec        accepted emitted executed refused  The kernel's literals include contextual byte text
 1780   spec        accepted emitted refused           A comment ends a token, and its opener says which kind it is
 1790   spec        accepted emitted executed refused  A binding names one thing, and says how much it may change
 1795   spec        accepted emitted executed refused  A type declaration names a type, and names nothing new
