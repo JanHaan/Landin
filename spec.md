@@ -8370,7 +8370,7 @@ classified failure boundary before the repository gate can pass.
 | `arrays.initialization` | static | 0520, 0530, 0540, 0550, 0560 | L0300--L0304 or L0313 | `negative/array-initializer-length-mismatch`, `runtime/whole-arrays-copy-between-storage` |
 | `raw.prefix` | static | 0420, 0510 | L0202 prevents representation access; `core/mem` reports `raw_full`, `uninitialized`, `raw_empty` or `raw_not_empty` before an invalid transition | `negative/core-mem-private-representation`, `runtime/core-mem-raw-storage` |
 | `raw.backing` | outside | 0430, 0470, 0510, 1720 | non-guarantee: the supplied byte pointer may be invalid, misaligned or smaller than the declared capacity | `runtime/core-mem-raw-storage` |
-| `allocation.failure` | static | 0940, 1230, 1280, 1290, 1310, 1360 | `core/mem` reports `out_of_memory`, which a caller must handle or declare; its failing allocator makes the runtime boundary deterministic | `runtime/core-mem-allocators`, `runtime/core-vec-pointer-storage` |
+| `allocation.failure` | static | 0940, 1230, 1280, 1290, 1310, 1360 | `core/mem` reports `out_of_memory`, which a caller must handle or declare; its failing allocator makes the runtime boundary deterministic | `runtime/core-mem-allocators`, `runtime/core-vec-pointer-storage`, `runtime/derived-parser` |
 | `allocation.backing` | outside | 0430, 0470, 0770, 1360, 1720 | non-guarantee: caller-supplied arena storage may be invalid or cease to live after an origin-erasing pointer conversion | `runtime/core-mem-allocators`, `negative/core-arena-frame-escape` |
 | `slices.bounds-known` | static | 0570, 0580, 1950 | L0300 or L0306 | `negative/index-outside-the-length`, `negative/readonly-slice-write` |
 | `slices.bounds-runtime` | trap | 0570, 0580, 1950, 1960 | trap | `runtime/computed-array-index-traps`, `runtime/local-array-computed-store-traps`, `runtime/slice-index-read-traps`, `runtime/slice-index-write-traps`, `runtime/slice-half-open-upper-traps`, `runtime/slice-inclusive-upper-traps`, `runtime/slice-lower-after-upper-traps` |
@@ -8380,10 +8380,10 @@ classified failure boundary before the repository gate can pass.
 | `origins.aliasing-limit` | outside | 0770, 0910 | non-guarantee: a pre-existing copy or indistinguishable arena is not tracked | `positive/reference-origins-and-consume`, `negative/use-after-sink` |
 | `functions.abi` | static | 0870, 0880, 0890, 0900, 0920, 0930, 0980, 1000, 1020, 1030, 1460, 1920, 1970 | L0301, L0302 or L0502 | `negative/call-with-too-few-arguments`, `runtime/r230-composition` |
 | `extern.c-boundary` | static | 0430, 1570, 1580, 1975 | L0301 for a signature outside R3.50's fixed scalar/pointer subset | `positive/external-scalar-c-boundary`, `negative/external-aggregate-boundary` |
-| `host.io` | outside | 0430, 1580, 1650, 1660, 1680, 1975 | non-guarantee: files, descriptors, arguments and streams reflect mutable host state | `runtime/hosted-io-reads-parser-input` |
-| `host.io-failure` | static | 0940, 0960, 1030, 1975 | `core/io` reports foreseeable host failure as declared atoms which callers handle or declare | `runtime/hosted-io-reads-parser-input`, `runtime/diagnostic-loggers-dispatch` |
-| `diagnostics.retention` | outside | 0950, 1680 | non-guarantee: `core/diag.bounded(N)` retains at most N notes and reports every later note through its `dropped` count instead | `runtime/diagnostic-loggers-dispatch` |
-| `diagnostics.delivery-failure` | static | 0940, 0960, 0950, 1030, 1680 | a streaming diagnostic write reports `io_failed`, which a caller must handle or declare; bounded overflow does not use that channel | `runtime/diagnostic-loggers-dispatch` |
+| `host.io` | outside | 0430, 1580, 1650, 1660, 1680, 1975 | non-guarantee: files, descriptors, arguments and streams reflect mutable host state | `runtime/hosted-io-reads-parser-input`, `runtime/derived-parser` |
+| `host.io-failure` | static | 0940, 0960, 1030, 1975 | `core/io` reports foreseeable host failure as declared atoms which callers handle or declare | `runtime/hosted-io-reads-parser-input`, `runtime/diagnostic-loggers-dispatch`, `runtime/derived-parser` |
+| `diagnostics.retention` | outside | 0950, 1680 | non-guarantee: `core/diag.bounded(N)` retains at most N notes and reports every later note through its `dropped` count instead | `runtime/diagnostic-loggers-dispatch`, `runtime/derived-parser` |
+| `diagnostics.delivery-failure` | static | 0940, 0960, 0950, 1030, 1680 | a streaming diagnostic write reports `io_failed`, which a caller must handle or declare; bounded overflow does not use that channel | `runtime/diagnostic-loggers-dispatch`, `runtime/derived-parser` |
 | `execution.resource-exhaustion` | outside | 0950, 1770, 1970 | non-guarantee: the kernel sets no recursion-depth, stack, or host-resource bound | `runtime/recursive-fibonacci` |
 | `consume.local` | static | 0910 | L0302 or L0315 | `negative/use-after-sink`, `negative/sunk-inout-not-restored` |
 | `consume.copy-before` | static | 0860, 0910, 1720 | a value copied before the sink remains independently usable | `runtime/copy-before-sink-remains-live` |
@@ -8424,9 +8424,9 @@ operation can travel through several physical mechanisms:
 | `constraint-refusal` | D142, D143 | `negative/constraint-not-satisfied`, `negative/nonzeroable-zero-length-constraint` |
 | `generic-direct-table` | D144 | `runtime/generic-evidence-indirect`, `negative/parameterized-conformance-entry-signature-mismatch` |
 | `generic-parent-tables` | D144 | `runtime/generic-composed-evidence` |
-| `erased-direct-table` | D145--D147, D154 | `runtime/any-heterogeneous-dispatch`, `runtime/diagnostic-loggers-dispatch`, `negative/any-concept-identity-mismatch` |
+| `erased-direct-table` | D145--D147, D154, D155 | `runtime/any-heterogeneous-dispatch`, `runtime/diagnostic-loggers-dispatch`, `runtime/derived-parser`, `negative/any-concept-identity-mismatch` |
 | `erased-parent-flattening` | D147 | `runtime/any-composed-dispatch` |
-| `erased-parameterized-provider` | D145--D147, D154 | `runtime/any-parameterized-provider`, `runtime/diagnostic-loggers-dispatch` |
+| `erased-parameterized-provider` | D145--D147, D154, D155 | `runtime/any-parameterized-provider`, `runtime/diagnostic-loggers-dispatch`, `runtime/derived-parser` |
 | `verifier-boundaries` | D144, D147 | `unit/evidence-verifier` |
 | `target-layout-64` | D144, D147 | `unit/evidence-layout`, `runtime/any-aggregate-storage` |
 | `target-layout-32` | D144, D147 | `unit/evidence-layout` |
@@ -8675,6 +8675,15 @@ the distinction. Reads expose EOF as count zero and host failure as
 Linux libc `ENOENT` to `not_found`, `EACCES` to `no_access`, and every other
 failure to `io_failed`.
 
+The backend's calls to `strlen`, `open`, `read`, `write`, `close` and
+`__errno_location` are private runtime dependencies, not names reserved from
+Landin source. A non-external Landin declaration with one of those spellings is
+therefore given a deterministic whole-program assembler name, just as two
+reached module declarations with the same short name are. The selected hosted
+entry and an `extern(c)` declaration retain their required ABI spellings. This
+prevents a public Landin `open` from interposing on the bridge while preserving
+the explicit foreign-symbol contract.
+
 **The alternatives:** direct Linux syscalls would couple the first hosted
 library to kernel numbers and conventions without reducing the already-linked
 C boundary. Enabling aggregate returns, unions, variadics, callbacks, foreign
@@ -8691,7 +8700,8 @@ capability without changing its callers.
 
 **Pinned by** `positive/external-scalar-c-boundary`,
 `negative/external-aggregate-boundary`,
-`runtime/hosted-io-reads-parser-input`, the rooted fixture execution path, and
+`runtime/hosted-io-reads-parser-input`, `runtime/derived-parser`, the rooted
+fixture execution path, and
 the `host.io`, `host.io-failure` and `extern.c-boundary` guarantee rows.
 
 ### D154 — Diagnostics separate retention from delivery failure
@@ -8748,3 +8758,50 @@ conformance registers, the `diagnostics.retention`,
 `diagnostics.delivery-failure`, `origins.escape`, `pointer.integer-origin` and
 `host.io-failure` guarantee rows, and the rooted fixture execution path's
 recorded merged output.
+
+### D155 — The derived parser is ordinary composition, not a privileged stage
+
+**Prototype 2 said** that a useful parser retains positioned bad input,
+reports foreseeable syntax faults through a replaceable sink, recovers and
+keeps valid nodes, while allocation, nesting and delivery failures take
+explicit paths. It used loops and the future text surface, and therefore did
+not settle what the enabled R3 kernel could honestly execute.
+
+**Chosen:** the derived lexer and parser are ordinary rooted Landin modules.
+The lexer classifies an intentionally ASCII configuration grammar over
+`core/text` byte positions and emits bad-character and unterminated-string
+tokens rather than dropping bytes. The recursive-descent parser stores a
+recursive variant tree as arena-allocated `value` nodes reached through
+`core/vec.list(ptr mut value)`. Syntax mistakes call an erased `any
+core/diag.log`, recover at a newline, brace or end boundary, and do not enter
+the public error set. Excess nesting is reported and recovered internally.
+Only `core/mem.out_of_memory` and `core/io.io_failed` leave `parse_file`.
+
+The same parser body runs with bounded and streaming D154 providers. No
+specialized parser copy is emitted or required. Until R4.10 enables loops and
+the complete UTF-8 text model, scanner, recovery and sequence walks use
+recursion over R3's byte positions; that is an implementation substitution,
+not a second parser design.
+
+The program also pins general compilation rules already implied by the
+language. A `try` call followed by another statement is the statement form of
+[1810], not an expression consuming the rest of the body. A pointer to an
+ordinary nominal needs the target's identity without forcing its value layout,
+including when nested in a parameterized wrapper; only by-value recursion is
+L0313 under D137. A concrete call's named recovery binding and body are checked
+even when result inference first reaches the call. Stored aggregate results
+from calls or control expressions are produced in caller-owned temporary
+storage before being copied into a nested or runtime-addressed destination.
+None is a parser-only exception.
+
+**The alternatives:** implementing the workload inside the Ada frontend would
+test the wrong language; stopping at the first syntax fault or putting each one
+in the declared error channel would reverse Y1 and [0950]; waiting for loops,
+UTF-8 text or specialization would make the first major compiler milestone
+depend on later surface or optimization work. Adding special AST allocation,
+diagnostic or parsing intrinsics would duplicate the ordinary allocator,
+container and evidence mechanisms. All were declined.
+
+**Pinned by** `runtime/derived-parser`,
+`positive/try-statement-before-return`, its `DERIVATION.md`, the prototype
+derivation register, and the complete rooted fixture path.

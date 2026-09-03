@@ -660,6 +660,7 @@ positive/struct-module-state | linux-x86-64, macos-arm64
 positive/struct-type-is-declared | linux-x86-64, macos-arm64
 positive/struct-zeroed-assignment | linux-x86-64, macos-arm64
 positive/token-separation | linux-x86-64, macos-arm64
+positive/try-statement-before-return | linux-x86-64, macos-arm64
 positive/type-declaration-aliases-a-scalar | linux-x86-64, macos-arm64
 positive/unary-binds-tightest | linux-x86-64, macos-arm64
 positive/undo-evaluates-on-failure | linux-x86-64, macos-arm64, synthetic-32
@@ -731,6 +732,7 @@ runtime/deep-nested-struct-leaves | linux-x86-64
 runtime/defer-call-shapes | linux-x86-64
 runtime/defer-cleanups-follow-control-edges | linux-x86-64
 runtime/defer-does-not-unwind-traps | linux-x86-64
+runtime/derived-parser | linux-x86-64
 runtime/diagnostic-loggers-dispatch | linux-x86-64
 runtime/division-and-remainder-exit-with-their-results | linux-x86-64
 runtime/evaluation-order-is-left-then-right | linux-x86-64

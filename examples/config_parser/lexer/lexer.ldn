@@ -1,0 +1,148 @@
+--  The R3.70 parser's byte lexer.  R4.10 owns full UTF-8 text; this
+--  derivation classifies its deliberately ASCII configuration grammar and
+--  retains unknown bytes as tokens so the parser can recover.
+
+import core/text
+
+--  Atom-valued struct fields remain outside the enabled aggregate matrix, so
+--  the token tag uses the same private-width representation as diag.severity.
+public kind: type = u8
+public identifier: kind = 0
+public number: kind = 1
+public string: kind = 2
+public left_brace: kind = 3
+public right_brace: kind = 4
+public equals: kind = 5
+public newline: kind = 6
+public end_of_input: kind = 7
+public bad_character: kind = 8
+public unterminated_string: kind = 9
+
+public token: type = struct
+    what: kind
+    begins: text.position
+    ends: text.position
+end token
+
+--  The input slice remains an explicit capability of `next`.  Keeping only
+--  an ordinal here makes advancing the scanner independent of a token's
+--  copied opaque positions.
+public state: type = struct
+    cursor: usize
+end state
+
+public open: () -> (result: state) =
+    result = (cursor: 0)
+end open
+
+cursor_of: (lexer: state) -> (result: usize) =
+    result = lexer.cursor
+end cursor_of
+
+is_letter: (byte: u8) -> (yes: bool) =
+    yes = (byte >= 65 and byte <= 90) or (byte >= 97 and byte <= 122)
+end is_letter
+
+is_digit: (byte: u8) -> (yes: bool) =
+    yes = byte >= 48 and byte <= 57
+end is_digit
+
+is_identifier_tail: (byte: u8) -> (yes: bool) =
+    yes = is_letter(byte) or is_digit(byte) or byte == 95
+end is_identifier_tail
+
+skip_blanks: (source: []u8, inout cursor: usize) -> none =
+    return when cursor >= lenof source
+    byte: u8 = source[cursor]
+    if byte == 32 or byte == 9 or byte == 13 then
+        inc cursor
+        skip_blanks(source, cursor)
+    end if
+end skip_blanks
+
+take_identifier: (source: []u8, inout cursor: usize) -> none =
+    return when cursor >= lenof source
+    byte: u8 = source[cursor]
+    if is_identifier_tail(byte) then
+        inc cursor
+        take_identifier(source, cursor)
+    end if
+end take_identifier
+
+take_number: (source: []u8, inout cursor: usize) -> none =
+    return when cursor >= lenof source
+    byte: u8 = source[cursor]
+    if is_digit(byte) then
+        inc cursor
+        take_number(source, cursor)
+    end if
+end take_number
+
+take_string: (source: []u8, inout cursor: usize) -> none =
+    return when cursor >= lenof source
+    byte: u8 = source[cursor]
+    return when byte == 34 or byte == 10
+    inc cursor
+    take_string(source, cursor)
+end take_string
+
+single: (source: []u8, what: kind, begins: usize) -> (result: token) =
+    result = (what: what, begins: text.at(source, begins),
+              ends: text.at(source, begins + 1))
+end single
+
+public next: (source: []u8, inout lexer: state) -> (result: token) =
+    skip_blanks(source, lexer.cursor)
+    begins: usize = cursor_of(lexer)
+    if begins >= lenof source then
+        at_end: text.position = text.at(source, begins)
+        result = (what: end_of_input, begins: at_end, ends: at_end)
+        return
+    end if
+
+    byte: u8 = source[begins]
+    if is_letter(byte) or byte == 95 then
+        inc lexer.cursor
+        take_identifier(source, lexer.cursor)
+        result = (what: identifier, begins: text.at(source, begins),
+                  ends: text.at(source, lexer.cursor))
+        return
+    end if
+    if is_digit(byte) then
+        inc lexer.cursor
+        take_number(source, lexer.cursor)
+        result = (what: number, begins: text.at(source, begins),
+                  ends: text.at(source, lexer.cursor))
+        return
+    end if
+    if byte == 34 then
+        inc lexer.cursor
+        take_string(source, lexer.cursor)
+        if lexer.cursor < lenof source then
+            closing: u8 = source[lexer.cursor]
+            if closing == 34 then
+                inc lexer.cursor
+                result = (what: string, begins: text.at(source, begins),
+                          ends: text.at(source, lexer.cursor))
+                return
+            end if
+        end if
+        result = (what: unterminated_string,
+                  begins: text.at(source, begins),
+                  ends: text.at(source, lexer.cursor))
+        return
+    end if
+
+    inc lexer.cursor
+    result = if byte == 123 then
+        single(source, left_brace, begins)
+    elsif byte == 125 then
+        single(source, right_brace, begins)
+    elsif byte == 61 then
+        single(source, equals, begins)
+    elsif byte == 10 then
+        single(source, newline, begins)
+    else
+        single(source, bad_character, begins)
+    end if
+end next

@@ -1,0 +1,10 @@
+problem: atom
+
+may_fail: (fail_now: bool) -> none ! problem =
+    fail problem when fail_now
+end may_fail
+
+forward: (fail_now: bool) -> none ! problem =
+    try may_fail(fail_now)
+    return
+end forward

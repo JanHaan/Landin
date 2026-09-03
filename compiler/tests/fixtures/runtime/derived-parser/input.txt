@@ -1,0 +1,9 @@
+title = "landin"
+answer = 42
+broken 99
+group = {
+child = 7
+bad = 4294967296
+text = "ok"
+}
+}
