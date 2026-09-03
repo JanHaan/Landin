@@ -463,6 +463,8 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Outcome : Landin.Platform.Tool_Result;
       Args    : Landin.Platform.Path_List;
       Runtime_Arguments : Landin.Platform.Path_List;
+      Expected : Unbounded.Unbounded_String;
+      Read     : Landin.Platform.Read_Status;
    begin
       if Module_Root (Case_Item) = "" then
          Landin.Platform.Add (Args, Source);
@@ -536,6 +538,22 @@ package body Landin.Tests.Fixture_Execution_Suite is
          Runtime_Arguments := Split (Run_Args (Case_Item));
          Runner.Run
            (Built, Runtime_Arguments, Outcome, Landin.Platform.Merged);
+
+         if Run_Expect (Case_Item) /= "" then
+            Host.Read_File
+              (Fixture_Root & "/runtime/" & Name (Case_Item) & "/"
+               & Run_Expect (Case_Item), Expected, Read);
+            if Read /= Landin.Platform.Read_Ok then
+               Landin.Testing.Fail
+                 (Item, Label & ": runtime expectation is unreadable");
+            else
+               Landin.Testing.Check_Equal
+                 (Item,
+                  Unbounded.To_String (Outcome.Output),
+                  Unbounded.To_String (Expected),
+                  Label & ": recorded merged runtime output");
+            end if;
+         end if;
 
          if Traps (Case_Item) then
             Landin.Testing.Check

@@ -1,0 +1,8 @@
+class: negative
+summary: a diagnostic logger may retain its escaping message and refuses frame bytes
+expect: expected.txt
+args: --root=../.. ../tests/fixtures/negative/core-diag-frame-message-escape
+codes: L0314
+status: 1
+constructs: 0520, 0570, 0770, 0780, 0940, 1030, 1230, 1370, 1380, 1390, 1410, 1420, 1680
+targets: linux-x86-64, macos-arm64, synthetic-32

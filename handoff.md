@@ -216,9 +216,13 @@ byte-oriented `core/text` positions and subslices, with backing origins and
 failure behavior pinned by compiled fixtures. R3.50 adds the scalar/pointer
 `extern(c)` seam, captures hosted arguments through a libc-backed runtime
 bridge, and builds `core/io` as an ordinary world capability with declared
-file and stream failures.
+file and stream failures. R3.60 adds the object-safe `core/diag.log` capability,
+bounded and streaming providers, ordered dispatch through `any`, direct bounded
+overflow accounting and propagated hosted-write failure. Fixed formals used in
+routine bodies lower as instance constants, and aggregate storage reached
+through pointer `.val` uses the neutral runtime-address path.
 
-**Current roadmap work: R3.60 — Implement diagnostics as runtime dispatch.**
+**Current roadmap work: R3.70 — Complete and run the derived parser program.**
 
 `refine` runs the frontend, lowers and
 verifies target-neutral IR, emits Linux x86-64 assembly, and can assemble and

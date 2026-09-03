@@ -12365,6 +12365,27 @@ package body Landin.Stages.Checking is
                return Kept (Ty.Ill_Typed);
             end if;
 
+            --  A fixed formal is a compile-time scalar supplied by the active
+            --  routine instance.  Its value is not declaration storage and so
+            --  must not enter Infer, which is solely the path for a binding's
+            --  initializer.  The declared integer type is nevertheless the
+            --  ordinary expression type used by conversions and operators;
+            --  lowering substitutes the matching instance actual directly.
+            if Res.Sort_Of (Meanings.all, Means) = Res.Fixed_Parameter then
+               declare
+                  Formal_Tree : constant not null access constant Syn.Tree :=
+                    Tree_For (Res.Source_Of (Meanings.all, Means));
+                  Formal_Node : constant Syn.Node_Id :=
+                    Res.Node_Of (Meanings.all, Means);
+               begin
+                  return Kept
+                    (Type_At
+                       (Formal_Tree.all,
+                        Syn.Declared_Type
+                          (Formal_Tree.all, Formal_Node)));
+               end;
+            end if;
+
             declare
                Held : constant Ty.Type_Kind := Settled_Type (Means);
             begin

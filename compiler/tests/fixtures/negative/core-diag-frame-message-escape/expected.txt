@@ -1,0 +1,10 @@
+error[L0314]: this frame-origin reference cannot be retained beyond the call
+  --> ../tests/fixtures/negative/core-diag-frame-message-escape/main.ldn:8:57
+  |
+8 |     logger.note(text.first(message[0..<1]), diag.error, message[0..<1])
+  |                                                         ^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/core-diag-frame-message-escape/main.ldn:7:5
+  |
+7 |     message: [1]u8 = [65]
+  |     ^^^^^^^^^^^^^^^^^^^^^ the shorter-lived reference source
+  = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`

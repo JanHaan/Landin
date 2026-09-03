@@ -1,0 +1,123 @@
+import core/diag
+import core/io
+import core/text
+
+message_a: [2]u8 = [65, 10]
+message_b: [2]u8 = [66, 10]
+message_c: [2]u8 = [67, 10]
+
+emit_notes: (inout logger: any diag.log) -> none ! io.io_failed =
+    first: text.position = text.first(message_a[0..<2])
+    second: text.position = text.next(first)
+    third: text.position = text.next(second)
+    try logger.note(first, diag.warning, message_a[0..<2])
+    try logger.note(second, diag.error, message_b[0..<2])
+    try logger.note(third, diag.warning, message_c[0..<2])
+end emit_notes
+
+public main: () -> (code: i32) =
+    code = 1
+
+    mut collected := diag.new_log(capacity: 3)
+    mut bounded_log: any diag.log = any(addr collected)
+    emit_notes(bounded_log) else (unexpected_bounded_failure)
+        _ = unexpected_bounded_failure
+        return
+    end
+
+    first_index: usize = 0
+    second_index: usize = 1
+    third_index: usize = 2
+    first_note := diag.note_at(collected, first_index) else (missing_first)
+        _ = missing_first
+        return
+    end
+    second_note := diag.note_at(collected, second_index) else (missing_second)
+        _ = missing_second
+        return
+    end
+    third_note := diag.note_at(collected, third_index) else (missing_third)
+        _ = missing_third
+        return
+    end
+    first_byte: u8 = diag.message_byte(first_note, first_index)
+      else (missing_first_byte)
+        _ = missing_first_byte
+        return
+    end
+    second_byte: u8 = diag.message_byte(second_note, first_index)
+      else (missing_second_byte)
+        _ = missing_second_byte
+        return
+    end
+    third_byte: u8 = diag.message_byte(third_note, first_index)
+      else (missing_third_byte)
+        _ = missing_third_byte
+        return
+    end
+    if diag.stored(collected) <> 3 or diag.dropped(collected) <> 0
+      or not bounded_log.failed()
+      or diag.position_of(first_note) <> 0
+      or diag.position_of(second_note) <> 1
+      or diag.position_of(third_note) <> 2
+      or diag.severity_of(first_note) <> diag.warning
+      or diag.severity_of(second_note) <> diag.error
+      or diag.severity_of(third_note) <> diag.warning
+      or diag.message_length(first_note) <> 2
+      or diag.message_length(second_note) <> 2
+      or diag.message_length(third_note) <> 2
+      or first_byte <> 65
+      or second_byte <> 66
+      or third_byte <> 67
+    then
+        return
+    end if
+
+    mut host := io.host()
+    diagnostic_stream := io.err(host)
+    mut immediate := diag.to(addr host, addr diagnostic_stream)
+    mut streaming_log: any diag.log = any(addr immediate)
+    emit_notes(streaming_log) else (unexpected_stream_failure)
+        _ = unexpected_stream_failure
+        return
+    end
+    if not streaming_log.failed() then
+        return
+    end if
+
+    mut overflowed := diag.new_log(capacity: 2)
+    mut overflow_log: any diag.log = any(addr overflowed)
+    emit_notes(overflow_log) else (unexpected_overflow_failure)
+        _ = unexpected_overflow_failure
+        return
+    end
+    if diag.stored(overflowed) <> 2 or diag.dropped(overflowed) <> 1
+      or not overflow_log.failed()
+    then
+        return
+    end if
+
+    first_argument: usize = 0
+    path := io.argument_at(host, first_argument) else (argument_failure)
+        _ = argument_failure
+        return
+    end
+    opened := io.open_read(host, path.data) else (open_failure)
+        _ = open_failure
+        return
+    end
+    dead_stream: io.file = opened
+    io.close(host, opened) else (close_failure)
+        _ = close_failure
+        return
+    end
+
+    mut broken := diag.to(addr host, addr dead_stream)
+    mut broken_log: any diag.log = any(addr broken)
+    broken_log.note(text.first(message_a[0..<2]), diag.error,
+                    message_a[0..<2])
+      else begin
+        code = 42
+        return
+    end
+end main

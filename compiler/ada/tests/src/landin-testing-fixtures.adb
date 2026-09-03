@@ -64,6 +64,9 @@ package body Landin.Testing.Fixtures is
    function Run_Args (Item : Fixture) return String
      is (Unbounded.To_String (Item.Run_Args));
 
+   function Run_Expect (Item : Fixture) return String
+     is (Unbounded.To_String (Item.Run_Expect));
+
    function Status (Item : Fixture) return Integer is (Item.Status);
 
    function Traps (Item : Fixture) return Boolean is (Item.Traps);
@@ -157,6 +160,7 @@ package body Landin.Testing.Fixtures is
       Seen_Targets : Boolean := False;
       Seen_Args    : Boolean := False;
       Seen_Run_Args : Boolean := False;
+      Seen_Run_Expect : Boolean := False;
       Seen_Status  : Boolean := False;
       Seen_Traps   : Boolean := False;
       Seen_Constructs : Boolean := False;
@@ -356,6 +360,14 @@ package body Landin.Testing.Fixtures is
                Seen_Run_Args := True;
                Item.Run_Args := Unbounded.To_Unbounded_String (Value);
 
+            elsif Key = "run_expect" then
+               if Seen_Run_Expect then
+                  Complain ("duplicate key: run_expect");
+                  return;
+               end if;
+               Seen_Run_Expect := True;
+               Item.Run_Expect := Unbounded.To_Unbounded_String (Value);
+
             elsif Key = "stream" then
                if Seen_Stream then
                   Complain ("duplicate key: stream");
@@ -492,6 +504,7 @@ package body Landin.Testing.Fixtures is
                Targets => Unbounded.Null_Unbounded_String,
                Args    => Unbounded.Null_Unbounded_String,
                Run_Args => Unbounded.Null_Unbounded_String,
+               Run_Expect => Unbounded.Null_Unbounded_String,
                Codes   => Unbounded.Null_Unbounded_String,
                Status  => 0,
                Traps   => False,
@@ -540,6 +553,12 @@ package body Landin.Testing.Fixtures is
         and then (not Seen_Class or else Item.Class /= Runtime)
       then
          Complain ("run_args belong only to a runtime fixture");
+      end if;
+
+      if Seen_Run_Expect
+        and then (not Seen_Class or else Item.Class /= Runtime)
+      then
+         Complain ("run_expect belongs only to a runtime fixture");
       end if;
 
       --  A runtime fixture is compiled, linked and executed, so its

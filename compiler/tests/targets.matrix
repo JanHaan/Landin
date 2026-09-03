@@ -75,6 +75,7 @@ negative/control-expression-fallthrough-without-value | linux-x86-64, macos-arm6
 negative/control-expression-function-signature-mismatch | linux-x86-64, macos-arm64, synthetic-32
 negative/control-result-field-name-mismatch | linux-x86-64, macos-arm64, synthetic-32
 negative/core-arena-frame-escape | linux-x86-64, macos-arm64, synthetic-32
+negative/core-diag-frame-message-escape | linux-x86-64, macos-arm64, synthetic-32
 negative/core-mem-private-representation | linux-x86-64, macos-arm64, synthetic-32
 negative/core-text-frame-slice-escape | linux-x86-64, macos-arm64, synthetic-32
 negative/core-text-private-position | linux-x86-64, macos-arm64, synthetic-32
@@ -730,6 +731,7 @@ runtime/deep-nested-struct-leaves | linux-x86-64
 runtime/defer-call-shapes | linux-x86-64
 runtime/defer-cleanups-follow-control-edges | linux-x86-64
 runtime/defer-does-not-unwind-traps | linux-x86-64
+runtime/diagnostic-loggers-dispatch | linux-x86-64
 runtime/division-and-remainder-exit-with-their-results | linux-x86-64
 runtime/evaluation-order-is-left-then-right | linux-x86-64
 runtime/fixed-array-bound-expression | linux-x86-64

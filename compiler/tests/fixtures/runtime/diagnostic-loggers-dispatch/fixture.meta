@@ -1,0 +1,10 @@
+class: runtime
+summary: bounded and streaming diagnostic loggers receive one ordered sequence through any dispatch while overflow and I/O failure keep distinct channels
+program: main.ldn
+root: ../../../../..
+run_args: ../tests/fixtures/runtime/diagnostic-loggers-dispatch/input.txt
+run_expect: output.txt
+status: 42
+stream: merged
+constructs: 0430, 0470, 0520, 0630, 0670, 0770, 0940, 0960, 1030, 1230, 1260, 1280, 1290, 1310, 1370, 1380, 1390, 1410, 1420, 1580, 1650, 1660, 1680, 1920, 1970, 1975
+targets: linux-x86-64

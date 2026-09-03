@@ -7862,9 +7862,11 @@ runtime signature part or ABI position. This executable increment carries every
 enabled direct-formal descriptor through routine parameters, results, locals
 and calls, including atom sets, function signatures and nominal aggregate
 transport/layout. Recursive structural deduction changes no descriptor,
-transport, layout or ABI rule: static arguments have no synthesis, evaluation,
-flow fact, cleanup, IR value or ABI position, and lowering maps only written
-runtime arguments to runtime formals. A direct type formal still cannot bind a
+transport, layout or ABI rule: static arguments have no runtime synthesis,
+flow fact, cleanup or ABI position, and lowering maps only written runtime
+arguments to runtime formals. A fixed formal used as an expression in the
+concrete body has its declared integer type and lowers to the instance actual as
+a target-neutral constant; it is not a slot or hidden parameter. A direct type formal still cannot bind a
 function descriptor whose error graph is currently inferred, because it is not
 yet a complete actual key. A generic template itself remains unavailable as a
 function value: only a direct call chooses the concrete instance signature.
@@ -7899,7 +7901,8 @@ facts`, the lowering case `generic routines lower once per key`,
 `runtime/generic-declared-errors`,
 `runtime/generic-routine-inferred-errors`,
 `runtime/generic-try-effective-signature`, and
-`runtime/generic-same-key-recursion` on Linux x86-64. The malformed-error
+`runtime/generic-same-key-recursion` and
+`runtime/diagnostic-loggers-dispatch` on Linux x86-64. The malformed-error
 verifier case uses a generic-instance item to pin that only the finalized
 concrete signature and ordinary failure opcode reach neutral IR.
 
@@ -8362,7 +8365,7 @@ classified failure boundary before the repository gate can pass.
 | `inout.exact-alias` | static | 0900 | L0301 when one provably identical binding-rooted place fills two inout parameters | `negative/inout-same-place-twice` |
 | `inout.possible-alias` | outside | 0430, 0770, 0900 | non-guarantee: distinct pointer or computed paths may still alias | `runtime/inout-pointer-alias-is-unchecked` |
 | `pointer.validity` | outside | 0430 | non-guarantee: a permitted pointer may still be invalid or stale | `runtime/r250-references` |
-| `pointer.integer-origin` | beyond-lifetime | 0470, 0860, 1690, 1720 | non-guarantee: integer-to-pointer conversion carries no origin through a direct or erased value | `runtime/r250-references`, `runtime/any-untracked-pointer-origin`, `negative/frame-origin-return` |
+| `pointer.integer-origin` | beyond-lifetime | 0470, 0860, 1690, 1720 | non-guarantee: integer-to-pointer conversion carries no origin through a direct or erased value | `runtime/r250-references`, `runtime/any-untracked-pointer-origin`, `runtime/diagnostic-loggers-dispatch`, `negative/frame-origin-return` |
 | `pointer.integer-width` | trap | 0470, 1950, 1960 | trap | `runtime/pointer-to-small-integer-traps` |
 | `arrays.initialization` | static | 0520, 0530, 0540, 0550, 0560 | L0300--L0304 or L0313 | `negative/array-initializer-length-mismatch`, `runtime/whole-arrays-copy-between-storage` |
 | `raw.prefix` | static | 0420, 0510 | L0202 prevents representation access; `core/mem` reports `raw_full`, `uninitialized`, `raw_empty` or `raw_not_empty` before an invalid transition | `negative/core-mem-private-representation`, `runtime/core-mem-raw-storage` |
@@ -8373,12 +8376,14 @@ classified failure boundary before the repository gate can pass.
 | `slices.bounds-runtime` | trap | 0570, 0580, 1950, 1960 | trap | `runtime/computed-array-index-traps`, `runtime/local-array-computed-store-traps`, `runtime/slice-index-read-traps`, `runtime/slice-index-write-traps`, `runtime/slice-half-open-upper-traps`, `runtime/slice-inclusive-upper-traps`, `runtime/slice-lower-after-upper-traps` |
 | `atoms.sets` | static | 0630, 0640 | L0301 or L0312 | `negative/atom-match-not-exhaustive`, `runtime/atom-values-cross-the-abi` |
 | `aggregates.variants` | static | 0670, 0680, 0690, 0700, 0710, 0720, 0750, 1210 | L0301, L0308--L0312 or L0313 | `negative/struct-literal-field-not-given`, `negative/variant-match-not-exhaustive` |
-| `origins.escape` | static | 0770, 0780, 0790, 0800, 0830, 0840 | L0314--L0316 | `negative/frame-origin-return`, `negative/borrowed-source-inout`, `negative/returned-reference-missing-from`, `negative/core-arena-frame-escape`, `negative/core-text-frame-slice-escape` |
+| `origins.escape` | static | 0770, 0780, 0790, 0800, 0830, 0840 | L0314--L0316 | `negative/frame-origin-return`, `negative/borrowed-source-inout`, `negative/returned-reference-missing-from`, `negative/core-arena-frame-escape`, `negative/core-text-frame-slice-escape`, `negative/core-diag-frame-message-escape`, `runtime/diagnostic-loggers-dispatch` |
 | `origins.aliasing-limit` | outside | 0770, 0910 | non-guarantee: a pre-existing copy or indistinguishable arena is not tracked | `positive/reference-origins-and-consume`, `negative/use-after-sink` |
 | `functions.abi` | static | 0870, 0880, 0890, 0900, 0920, 0930, 0980, 1000, 1020, 1030, 1460, 1920, 1970 | L0301, L0302 or L0502 | `negative/call-with-too-few-arguments`, `runtime/r230-composition` |
 | `extern.c-boundary` | static | 0430, 1570, 1580, 1975 | L0301 for a signature outside R3.50's fixed scalar/pointer subset | `positive/external-scalar-c-boundary`, `negative/external-aggregate-boundary` |
 | `host.io` | outside | 0430, 1580, 1650, 1660, 1680, 1975 | non-guarantee: files, descriptors, arguments and streams reflect mutable host state | `runtime/hosted-io-reads-parser-input` |
-| `host.io-failure` | static | 0940, 0960, 1030, 1975 | `core/io` reports foreseeable host failure as declared atoms which callers handle or declare | `runtime/hosted-io-reads-parser-input` |
+| `host.io-failure` | static | 0940, 0960, 1030, 1975 | `core/io` reports foreseeable host failure as declared atoms which callers handle or declare | `runtime/hosted-io-reads-parser-input`, `runtime/diagnostic-loggers-dispatch` |
+| `diagnostics.retention` | outside | 0950, 1680 | non-guarantee: `core/diag.bounded(N)` retains at most N notes and reports every later note through its `dropped` count instead | `runtime/diagnostic-loggers-dispatch` |
+| `diagnostics.delivery-failure` | static | 0940, 0960, 0950, 1030, 1680 | a streaming diagnostic write reports `io_failed`, which a caller must handle or declare; bounded overflow does not use that channel | `runtime/diagnostic-loggers-dispatch` |
 | `execution.resource-exhaustion` | outside | 0950, 1770, 1970 | non-guarantee: the kernel sets no recursion-depth, stack, or host-resource bound | `runtime/recursive-fibonacci` |
 | `consume.local` | static | 0910 | L0302 or L0315 | `negative/use-after-sink`, `negative/sunk-inout-not-restored` |
 | `consume.copy-before` | static | 0860, 0910, 1720 | a value copied before the sink remains independently usable | `runtime/copy-before-sink-remains-live` |
@@ -8419,9 +8424,9 @@ operation can travel through several physical mechanisms:
 | `constraint-refusal` | D142, D143 | `negative/constraint-not-satisfied`, `negative/nonzeroable-zero-length-constraint` |
 | `generic-direct-table` | D144 | `runtime/generic-evidence-indirect`, `negative/parameterized-conformance-entry-signature-mismatch` |
 | `generic-parent-tables` | D144 | `runtime/generic-composed-evidence` |
-| `erased-direct-table` | D145--D147 | `runtime/any-heterogeneous-dispatch`, `negative/any-concept-identity-mismatch` |
+| `erased-direct-table` | D145--D147, D154 | `runtime/any-heterogeneous-dispatch`, `runtime/diagnostic-loggers-dispatch`, `negative/any-concept-identity-mismatch` |
 | `erased-parent-flattening` | D147 | `runtime/any-composed-dispatch` |
-| `erased-parameterized-provider` | D145--D147 | `runtime/any-parameterized-provider` |
+| `erased-parameterized-provider` | D145--D147, D154 | `runtime/any-parameterized-provider`, `runtime/diagnostic-loggers-dispatch` |
 | `verifier-boundaries` | D144, D147 | `unit/evidence-verifier` |
 | `target-layout-64` | D144, D147 | `unit/evidence-layout`, `runtime/any-aggregate-storage` |
 | `target-layout-32` | D144, D147 | `unit/evidence-layout` |
@@ -8688,3 +8693,58 @@ capability without changing its callers.
 `negative/external-aggregate-boundary`,
 `runtime/hosted-io-reads-parser-input`, the rooted fixture execution path, and
 the `host.io`, `host.io-failure` and `extern.c-boundary` guarantee rows.
+
+### D154 — Diagnostics separate retention from delivery failure
+
+**The tour and prototype 2 said** that a diagnostic sink is an ordinary
+capability [0950] [1680], that a parser reports foreseeable syntax mistakes and
+continues, and that bounded and streaming sinks must be interchangeable. They
+did not say whether bounded overflow or a failed hosted write belongs to the
+parser's error channel, how a retained message keeps its origin, or whether the
+two implementations use the same dynamic call path.
+
+**Chosen:** `core/diag.log(logger)` is an object-safe concept with `note` and
+`failed`. `note` receives a mutable self pointer, `core/text.position`, a
+`u8`-represented warning/error severity and an `escaping []u8` message, and
+declares `core/io.io_failed`. `failed` reports whether any error-severity note
+has been received. A producer accepts `any diag.log` and invokes both entries
+through D147's ordinary erased evidence table; it neither names nor branches on
+the concrete logger.
+
+`bounded(capacity)` is a parameterized private nominal implementation. It
+retains the first `capacity` entries in order, counts every later note in
+`dropped`, and counts error severity even when that note is dropped. Overflow
+therefore returns normally and never raises `io_failed`. Entry and logger
+representation stay private; checked accessors report `out_of_bounds` rather
+than exposing unused storage. Until R4.10 supplies the final text types, one
+entry retains the message address and byte length internally. The `escaping`
+parameter prevents a frame-backed slice at the capability boundary; explicit
+integer-pointer conversion remains subject to [0470]'s honest validity limit.
+
+`streaming` retains a mutable `core/io.system` pointer and a borrowed file. It
+writes `W:` or `E:`, the decimal byte position, `:`, and the message bytes as the
+note arrives. Each write propagates `io_failed`; the error count is updated
+before delivery is attempted, so `failed` describes what the logger received
+rather than what the host accepted. Both implementations receive the same
+ordered calls in the executable evidence.
+
+The implementation pressure also closes two existing representation seams. A
+fixed formal used in a generic routine body is D138's per-instance constant and
+has no ABI position. An aggregate place reached through pointer `.val` uses the
+same target-neutral runtime-address storage path as a computed aggregate index;
+`.val` is not encoded as a fictitious field zero.
+
+**The alternatives:** treating bounded overflow as failure would make a parser
+stop because its reporting policy is intentionally finite. Ignoring a failed
+stream write would claim delivery that did not happen. Giving each logger a
+different producer interface would erase the capability abstraction, while
+specializing the producer would make optimization the semantic basis contrary
+to [1310]. Retaining arbitrary frame bytes behind an origin-erasing address was
+also declined; `escaping` states the lifetime consequence at the call.
+
+**Pinned by** `runtime/diagnostic-loggers-dispatch`,
+`negative/core-diag-frame-message-escape`, the parameterized and erased
+conformance registers, the `diagnostics.retention`,
+`diagnostics.delivery-failure`, `origins.escape`, `pointer.integer-origin` and
+`host.io-failure` guarantee rows, and the rooted fixture execution path's
+recorded merged output.

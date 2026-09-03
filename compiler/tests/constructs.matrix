@@ -181,7 +181,7 @@
 1650   tour        accepted emitted executed          Entry point
 1660   tour        accepted emitted executed          And this is where capabilities come from
 1670   tour        -                                  A failed check calls a fixed, never-returning symbol
-1680   tour        accepted emitted executed          Require a capability, do not track an effect
+1680   tour        accepted emitted executed refused  Require a capability, do not track an effect
 1690   tour        accepted emitted executed          One mechanism, two readings, is better than two mechanisms
 1700   tour        accepted emitted executed refused  Atoms are the same idea wherever they appear
 1710   tour        -                                  How a new feature earns its place
@@ -212,5 +212,5 @@
 1950   spec        accepted emitted executed refused  An operand an operation cannot take
 1960   spec        accepted emitted executed          A trap stops at the operation
 1970   spec        accepted emitted executed          The first hosted path has one entry shape
-1975   spec        accepted emitted refused           The first foreign boundary imports fixed scalar C routines
+1975   spec        accepted emitted executed refused  The first foreign boundary imports fixed scalar C routines
 1980   spec        accepted emitted executed          Declared errors are an orthogonal payload-free atom outcome
