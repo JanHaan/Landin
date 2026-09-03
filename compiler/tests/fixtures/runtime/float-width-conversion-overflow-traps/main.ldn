@@ -1,0 +1,8 @@
+narrow: (value: f64) -> (result: f32) =
+    result = f32(value)
+end narrow
+
+public main: () -> (code: i32) =
+    _ = narrow(1.0e100)
+    code = 1
+end main

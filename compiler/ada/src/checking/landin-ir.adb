@@ -2426,7 +2426,7 @@ package body Landin.IR is
      (Into  : in out Unit;
       Item  : Item_Id;
       Value : Value_Id;
-      Result : Landin.Types.Integer_Name;
+      Result : Landin.Types.Numeric_Name;
       Site  : Landin.Provenance.Origin) return Value_Id
    is
       Made : Instruction :=

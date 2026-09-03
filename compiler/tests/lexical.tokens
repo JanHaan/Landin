@@ -19491,6 +19491,20 @@ file negative/float-type-not-enabled/program.ldn tokens 5
   7 10 f16
   11 12 =
   13 16 1.0
+file negative/float-width-conversion-known-out-of-range/program.ldn tokens 13
+  0 4 huge
+  4 5 :
+  6 9 f64
+  10 11 =
+  12 19 1.0e100
+  20 29 too_large
+  29 30 :
+  31 34 f32
+  35 36 =
+  37 40 f32
+  40 41 (
+  41 45 huge
+  45 46 )
 file negative/for-collection-element-read-only/program.ldn tokens 51
   0 6 public
   7 11 main
