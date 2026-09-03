@@ -392,8 +392,9 @@ only literals were integers and the two booleans `[1770]`, while character,
 text and raw literals `[0250]` `[0260]` `[0280]` were refused by `[1830]`.
 D161's seventh R4.10 increment now enables the direct `[]u8` text-literal
 context and puts its escape-aware scan, shared decoding and L0320 malformed
-spelling at this lexical seam. Character and raw literals, and the remaining
-text contexts, stay with R4.10.
+spelling at this lexical seam. D163's ninth increment likewise enables one
+decoded `u32` character and gives malformed character spelling L0322. Raw
+literals and the remaining text contexts stay with R4.10.
 
 ### R1.30 — Establish the diagnostic catalogue
 
