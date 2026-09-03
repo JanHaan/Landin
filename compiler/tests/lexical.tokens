@@ -17209,6 +17209,13 @@ file negative/bare-block-unclosed/program.ldn tokens 13
   23 24 =
   29 34 begin
   43 45 42
+file negative/bool-conversion-not-yet-enabled/program.ldn tokens 6
+  0 5 whole
+  6 8 :=
+  9 12 i32
+  12 13 (
+  13 17 true
+  17 18 )
 file negative/borrowed-source-inout/program.ldn tokens 49
   0 9 increment
   9 10 :
@@ -19413,17 +19420,17 @@ file negative/fixed-conditional-inactive-parser-error/program.ldn tokens 20
   79 82 end
   83 85 if
 file negative/float-conversion-not-yet-enabled/program.ldn tokens 11
-  0 5 whole
-  5 6 :
-  7 10 i32
-  11 12 =
-  13 14 7
-  15 23 fraction
-  24 26 :=
-  27 30 f32
-  30 31 (
-  31 36 whole
-  36 37 )
+  0 8 fraction
+  8 9 :
+  10 13 f32
+  14 15 =
+  16 19 7.0
+  20 25 whole
+  26 28 :=
+  29 32 i32
+  32 33 (
+  33 41 fraction
+  41 42 )
 file negative/float-literal-not-enabled/program.ldn tokens 5
   0 5 ratio
   5 6 :

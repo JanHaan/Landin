@@ -288,6 +288,12 @@ package Landin.Types is
       Result     : out Magnitude;
       Overflowed : out Boolean);
 
+   --  Round one enabled integer's mathematical value into an IEEE carrier.
+   --  Every enabled integer is inside both float formats' finite range, so
+   --  this operation has no overflow outcome.
+   function Convert_Integer_To_Float
+     (Value : Folded; Into : Float_Name) return Magnitude;
+
    --  [0240]'s two type-qualified IEEE values.  A quiet NaN has one
    --  canonical payload in each enabled width; unary minus below changes
    --  only its sign bit.

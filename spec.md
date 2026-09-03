@@ -973,8 +973,9 @@ integer type applied to a pointer checks that the address fits, and
 `ptr(integer)` takes its complete pointer type from context and produces an
 untracked pointer. D168 also admits an enabled integer type applied to an
 integer value. D169 admits f32 or f64 applied to a float value. Conversion
-between the integer and float classes, conversion involving bool, and the
-deferred integer widths remain refused by [1830].
+from an enabled integer to f32 or f64 is admitted by D170. Conversion from a
+float to an integer, conversion involving bool, and the deferred integer
+widths remain refused by [1830].
 
 ### [1930] What may be discarded
 
@@ -8488,6 +8489,7 @@ classified failure boundary before the repository gate can pass.
 | `float.ieee` | static | 0170, 0210, 0220, 0230, 0240, 0290, 0350 | f32/f64 decimal and hexadecimal literals plus inherently typed infinity and canonical quiet NaN names follow IEEE binary32/binary64 through runtime arithmetic and comparison, preserving exact hexadecimal values, signed zero and unordered NaN behavior; L0300 rejects a finite literal that becomes infinity, L0301 rejects an invalid named special, a width mismatch, mixed classes and integer-only operators, and L0304 retains the static-fold boundary | `negative/float-remainder-is-integer-only`, `negative/float-special-name-unknown`, `negative/float-special-on-integer-type`, `negative/float-special-width-mismatch`, `negative/hex-float-overflows-context`, `negative/module-float-arithmetic-not-enabled`, `runtime/float-decimal-runtime`, `runtime/float-hexadecimal-runtime`, `runtime/float-named-specials` |
 | `conversion.integer` | trap | 0150, 0190, 0310, 0470, 0700, 1460, 1670, 1880, 1940, 1950, 1960 | explicit conversion among enabled integer types preserves the mathematical value; L0300 rejects a known value outside the destination range and a runtime value outside it traps, without truncation, wrapping or signedness reinterpretation | `negative/integer-conversion-known-binding-out-of-range`, `negative/integer-conversion-known-out-of-range`, `runtime/integer-conversion-out-of-range-traps`, `runtime/integer-conversion-signed-overflow-traps`, `runtime/integer-conversion-unsigned-overflow-traps`, `runtime/integer-conversions` |
 | `conversion.float-width` | trap | 0170, 0210, 0230, 0240, 0310, 0700, 1880, 1940, 1950, 1960 | explicit f32/f64 conversion widens exactly or narrows to nearest with ties to even, preserving signed zero and the infinity/NaN class; L0300 rejects a known finite narrowing overflow and an equivalent runtime conversion traps | `negative/float-width-conversion-known-out-of-range`, `runtime/float-width-conversion-overflow-traps`, `runtime/float-width-conversions` |
+| `conversion.integer-to-float` | static | 0150, 0170, 0190, 0210, 0310, 0700, 1880, 1940, 1960 | explicit conversion from every enabled integer to f32 or f64 preserves the mathematical value when exact and otherwise rounds to nearest with ties to even; the enabled integer range cannot overflow either float width | `runtime/integer-to-float-conversions` |
 | `text.literal-storage` | static | 0260, 0270, 0280, 0570, 1770, 1880, 1900, 1940 | L0301 for a non-byte, writable or codepoint context; L0303 for a write through its read-only view; L0304 for the default deferred `utf8`; equal decoded quoted or raw contents share read-only storage with one trailing NUL excluded from the slice length | `negative/raw-literal-needs-byte-slice`, `negative/raw-literal-needs-read-only-slice`, `negative/raw-literal-write`, `negative/text-literal-codepoint-in-byte-context`, `negative/text-literal-needs-byte-slice`, `negative/text-literal-needs-read-only-slice`, `negative/text-literal-not-enabled`, `negative/text-literal-write`, `runtime/raw-literal-bytes`, `runtime/text-literal-bytes` |
 | `arithmetic.known` | static | 0290, 0300, 0390, 1950 | L0300 or L0306 | `negative/compound-assignment-zero-divisor`, `negative/divisor-is-zero`, `negative/literal-above-its-type` |
 | `arithmetic.runtime` | trap | 0290, 0300, 0320, 0390, 1950, 1960 | trap | `runtime/compound-assignment-overflow-traps`, `runtime/checked-overflow-traps`, `runtime/checked-subtraction-traps`, `runtime/checked-multiplication-traps`, `runtime/checked-negation-traps`, `runtime/signed-division-overflow-traps`, `runtime/a-zero-divisor-traps`, `runtime/a-zero-remainder-divisor-traps`, `runtime/negative-left-shift-traps`, `runtime/negative-right-shift-traps` |
@@ -9492,10 +9494,11 @@ destination bounds. An out-of-range value reaches [1950]'s existing `ud2` trap;
 an in-range value stores the destination-width pattern. The same conversion
 opcode continues to carry [0470]'s pointer-to-integer address check.
 
-Conversions between the integer and float classes and conversions involving
-bool remain L0304 under R4.10. D169 subsequently admits conversion between the
-two enabled float widths. The deferred u128, i128 and packed integer widths
-gain no spelling through this increment.
+Conversion from a float to an integer and conversions involving bool remain
+L0304 under R4.10. D169 subsequently admits conversion between the two enabled
+float widths, and D170 admits conversion from an enabled integer to either
+float width. The deferred u128, i128 and packed integer widths gain no spelling
+through this increment.
 
 **The alternatives:** reinterpret the low bits, make narrowing wrap, allow a
 negative signed value to cross to same-width unsigned, or give module
@@ -9540,9 +9543,9 @@ work, including the narrowing round bit and sticky bits, so cross-compilation
 does not borrow the compiler host's float conversion. Runtime Linux x86-64
 uses the corresponding SSE width conversion and explicitly distinguishes a
 finite result overflow from an infinity or NaN source. The existing
-target-neutral conversion operation now admits every numeric result while its
-verifier still rejects mixed numeric classes. Conversion between an integer
-and a float, and conversion involving bool, remain L0304.
+target-neutral conversion operation now admits every numeric result. D170
+subsequently admits its integer-to-float direction; conversion from a float to
+an integer, and conversion involving bool, remain L0304.
 
 **The alternatives:** require exact representability, silently produce
 infinity on finite overflow, trap on gradual underflow, expose a NaN payload
@@ -9557,3 +9560,44 @@ declined.
 `negative/float-width-conversion-known-out-of-range`,
 `negative/float-conversion-not-yet-enabled`, and the
 `conversion.float-width` guarantee row.
+
+### D170 — Integer-to-float conversion rounds the mathematical integer
+
+**The tour said** that [0310] makes conversion explicit and distinguishes an
+impossible known conversion from one which traps at runtime. It did not say
+whether integer-to-float conversion requires exact representation, how it
+rounds, or whether the upper half of u64 participates.
+
+**Chosen:** the sixteenth R4.10 increment enables f32 or f64 applied to a value
+of any enabled integer type. The source is the integer's mathematical value,
+not its carrier bits. An untyped integer operand first takes [0200]'s default
+i32 source type; a wider literal therefore writes an explicit integer
+conversion before the float conversion. There is still no implicit conversion
+between numeric classes.
+
+An exactly representable integer is preserved. Every other value rounds to
+nearest with ties to even. Every enabled integer, including u64's maximum and
+i64's minimum, lies inside the finite range of both f32 and f64, so precision
+loss is ordinary rounding and no integer-to-float conversion can report L0300
+or trap. The result of converting integer zero is positive zero.
+
+The module folder derives the IEEE exponent and retained, round and sticky bits
+with bounded integer work. The Linux backend sign- or zero-extends narrower
+sources before SSE conversion. Because SSE's qword conversion is signed, a u64
+above i64's maximum is halved with its low bit retained as sticky information,
+converted, and doubled; this produces the same nearest-even result without
+reinterpreting the source as negative. The neutral conversion verifier admits
+this one mixed-class direction and continues to reject float-to-integer IR.
+Float-to-integer conversion and conversion involving bool remain L0304.
+
+**The alternatives:** require exact representation, saturate at a float
+boundary, reinterpret an unsigned carrier as signed, use a compiler-host float
+for module images, or make the conversion implicit. Those choices discard the
+ordinary IEEE conversion rule, invent a failure despite the float range, lose
+the upper half of u64, make cross-target output host-dependent, or contradict
+[0310]. All were declined.
+
+**Pinned by** `runtime/integer-to-float-conversions`,
+`negative/float-conversion-not-yet-enabled`,
+`negative/bool-conversion-not-yet-enabled`, and the
+`conversion.integer-to-float` guarantee row.
