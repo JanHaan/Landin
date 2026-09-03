@@ -429,7 +429,8 @@ defer       ::= "defer" call
 undo        ::= "undo" call
 return      ::= "return" ("when" expression)?
 fail        ::= "fail" expression ("when" expression)?
-break       ::= "break" identifier? ("when" expression)?
+break       ::= "break" identifier? ("with" expression)?
+                ("when" expression)?
 continue    ::= "continue" identifier? ("when" expression)?
 loop        ::= "loop" "do" block "end" "loop"
               | identifier ":" "loop" "do" block "end" identifier
@@ -494,13 +495,18 @@ fill; the all-fill spelling remains refused by name.
 A call-site `else` binds to the call except where that same token directly
 closes an enclosing `then` or `elsif` arm; parentheses around the recovered
 call make the inner use explicit.
-An `if`, exhaustive `match`, or bare `begin` block is also a primary. Its
+An `if`, exhaustive `match`, bare `begin` block, `loop`, or `while` is also a
+primary. A loop is value-producing when its targeted `break` edges carry
+`with` values. Every break edge then carries one value of the joined type; a
+finite conditional loop also needs `complete` to leave through such an edge.
+The current R4.10 increment carries scalar, function, pointer and atom values;
+storage-shaped array, struct, slice and `any` loop results remain in R4.10.
+For the other controls, their
 conditions or subject run first, then exactly the selected block runs in source
 order. In a value context the final expression of every edge that can fall
 through supplies the answer; an edge that returns supplies none. D124 gives the
-complete edge and type rule, and D125 gives its storage representation. These
-three value-producing controls do not by themselves make the loop forms
-value-producing; that remains with `break with` and `complete` in R4.10.
+complete edge and type rule, and D125 gives its storage representation. D158
+extends the same caller-owned representation to loop values.
 Evaluation order is left to right and fixed [0410], so the table
 decides what binds, never what runs first.
 
@@ -509,7 +515,7 @@ primary     ::= literal | array_literal | array_repetition | struct_literal
               | empty_slice | labeled_application | anonymous_function
               | indexed | call | address | pointer_conversion
               | any_construction | measurement | try
-              | if | match | bare_block | "(" expression ")"
+              | if | match | bare_block | loop | while | "(" expression ")"
 array_literal ::= "[" expression ("," expression)* "]"
 array_repetition ::= "[" integer "of" expression "]"
                    | "[" "of" expression "]"
@@ -8417,7 +8423,7 @@ classified failure boundary before the repository gate can pass.
 | `results.destructure` | static | 0990 | L0200, L0301, L0302 or L0308 | `negative/result-destructure-needs-multiple`, `runtime/r230-composition` |
 | `functions.anonymous` | static | 1010 | L0201 for capture; complete signature checks otherwise apply | `negative/anonymous-function-captures-local`, `runtime/inferred-function-values` |
 | `control.flow` | static | 1050, 1060, 1080, 1090 | L0301 or L0302 at every reachable join and exit | `negative/if-expression-missing-else`, `runtime/control-expression-edges-keep-source-order` |
-| `control.loops` | static | 1130, 1140, 1170, 1180, 1190 | L0301 for a non-bool condition; a taken transfer runs active defers and targets its named or nearest loop edge, while natural completion alone enters `complete` | `negative/loop-condition-not-bool`, `runtime/loop-control-flow` |
+| `control.loops` | static | 1130, 1140, 1170, 1180, 1190 | L0301 for a non-bool condition or incomplete/inconsistent value exit; a taken transfer runs active defers and targets its named or nearest loop edge, while natural completion alone enters `complete` | `negative/loop-condition-not-bool`, `negative/loop-value-missing-break-value`, `negative/loop-value-missing-completion`, `negative/loop-value-type-mismatch`, `runtime/loop-control-flow`, `runtime/loop-values` |
 | `cleanup.defer` | static | 1100 | the registered call is checked at every ordinary and successful-return edge | `negative/defer-read-not-assigned-on-return`, `runtime/defer-cleanups-follow-control-edges` |
 | `cleanup.undo` | static | 1110 | the registered call is checked at every propagated-failure edge | `negative/undo-read-not-assigned-on-failure`, `runtime/undo-cleanups-follow-failure-edges` |
 | `generics.substitution` | static | 1220, 1280, 1290, 1300, 1310, 1350, 1500, 1650, 1660, 1700 | L0300, L0301, L0306, L0307, L0313 or L0318 | `negative/generic-routine-undeduced-formal`, `runtime/generic-structural-deduction`, `runtime/core-vec-pointer-storage` |
@@ -8902,3 +8908,39 @@ by explicit CFG edges. All were declined.
 
 **Pinned by** `runtime/loop-control-flow`, the syntax, flow and lowering seams,
 and the `control.loops` guarantee row.
+
+### D158 — Loop values reuse the caller-owned control join
+
+**The tour said** that [1190]'s `break with` makes a loop an expression, that
+every break from such a loop yields the same type, and that a finite loop's
+`complete` path supplies its exhaustion value. It did not state where that
+value lives while lexical cleanup runs or how a labelled break crosses an
+inner loop.
+
+**Chosen:** a value-producing loop has the same consumer-owned neutral join
+slot as D125's `if`, `match`, and bare-block expressions. Each taken `break
+with` evaluates its guard once, evaluates the value only on the taken edge,
+writes the target loop's join slot, performs D156's structured cleanup, and
+jumps directly to that loop's post-loop block. A labelled break selects both
+the cleanup boundary and join slot of the nearest matching loop; an intervening
+loop owns neither.
+
+Every break targeting a value-producing loop must carry `with`, and all values
+are checked against the type and complete identity inferred from the first
+one or supplied by context. A conditional value loop must have `complete`,
+and that block must not fall through: it leaves through a compatible `break
+with`. An unconditional loop needs no synthetic exhaustion value because it
+has no natural exhaustion edge. This increment lowers scalar, function,
+pointer and atom results. Storage-shaped array, struct, slice and `any` results
+stay in R4.10 until the target frame can retain an arbitrary nested destination
+path without narrowing D125.
+
+**The alternatives:** add a loop-result IR instruction, store the result in a
+compiler-global temporary, evaluate a guarded value before its guard, or pass
+an inner loop's destination outward implicitly. Each either duplicates the
+existing CFG/storage model, changes source evaluation order, or loses the
+explicit labelled target. All were declined.
+
+**Pinned by** `negative/loop-value-missing-break-value`,
+`negative/loop-value-missing-completion`, `negative/loop-value-type-mismatch`,
+`runtime/loop-values`, and the `control.loops` guarantee row.

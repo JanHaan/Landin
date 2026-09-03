@@ -1,0 +1,27 @@
+public main: () -> (code: i32) =
+    mut i: i32 = 0
+    first := loop do
+        inc i
+        continue when i < 3
+        break with i * 10
+    end loop
+
+    mut j: i32 = 0
+    second: i32 = while j < 2 do
+        inc j
+    complete
+        break with 7
+    end while
+
+    third: i32 = choice: loop do
+        loop do
+            break choice with 5
+        end loop
+    end choice
+
+    if first == 30 and second == 7 and third == 5 then
+        code = 42
+    else
+        code = 1
+    end if
+end main

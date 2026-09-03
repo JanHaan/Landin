@@ -592,6 +592,42 @@ package body Landin.Stages.Checking is
 
       No_Value_Context : constant Value_Context := (others => <>);
 
+      type Loop_Value_Entry is record
+         Label : Landin.Source.Names.Name_Id :=
+           Landin.Source.Names.No_Name;
+         Expected : Value_Context := No_Value_Context;
+         Requires_Value : Boolean := False;
+         Site : Landin.Provenance.Origin := Landin.Provenance.No_Origin;
+      end record;
+
+      package Loop_Value_Vectors is new Ada.Containers.Vectors
+        (Index_Type => Positive, Element_Type => Loop_Value_Entry);
+
+      Loop_Values : Loop_Value_Vectors.Vector;
+
+      function Target_Loop_Value
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Loop_Value_Entry;
+
+      function Target_Loop_Value
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Loop_Value_Entry
+      is
+         Target : constant Landin.Source.Names.Name_Id :=
+           Syn.Name (Of_Tree, Node);
+      begin
+         for Index in reverse 1 .. Natural (Loop_Values.Length) loop
+            declare
+               Candidate : constant Loop_Value_Entry := Loop_Values (Index);
+            begin
+               if Target = Landin.Source.Names.No_Name
+                 or else Candidate.Label = Target
+               then
+                  return Candidate;
+               end if;
+            end;
+         end loop;
+         raise Landin.Compiler_Defect with "a loop transfer has no target";
+      end Target_Loop_Value;
+
       procedure Check_Contextual_Value
         (Of_Tree      : Syn.Tree;
          Node         : Syn.Node_Id;
@@ -685,6 +721,12 @@ package body Landin.Stages.Checking is
            Landin.Provenance.No_Origin);
       procedure Check_Statement
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id; Returns : Ty.Type_Kind);
+      procedure Check_Loop
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Returns : Ty.Type_Kind;
+         Expected : Value_Context := No_Value_Context;
+         Requires_Value : Boolean := False);
       procedure Check_Block
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
@@ -7668,6 +7710,7 @@ package body Landin.Stages.Checking is
 
          if Syn.Kind (Of_Tree, Node)
               in Syn.If_Statement | Syn.Match_Statement | Syn.Bare_Block
+                 | Syn.Loop_Statement | Syn.While_Statement
            and then Wanted in Ty.Scalar_Name
          then
             Check_Contextual_Value
@@ -7728,6 +7771,7 @@ package body Landin.Stages.Checking is
 
          if Syn.Kind (Of_Tree, Node)
               in Syn.If_Statement | Syn.Match_Statement | Syn.Bare_Block
+                 | Syn.Loop_Statement | Syn.While_Statement
          then
             Check_Contextual_Value
               (Of_Tree, Node,
@@ -12559,7 +12603,8 @@ package body Landin.Stages.Checking is
          end if;
 
          case Syn.Kind (Of_Tree, Node) is
-            when Syn.If_Statement | Syn.Match_Statement | Syn.Bare_Block =>
+            when Syn.If_Statement | Syn.Match_Statement | Syn.Bare_Block
+               | Syn.Loop_Statement | Syn.While_Statement =>
                return Kept (Synthesise_Control (Of_Tree, Node));
 
             when Syn.Integer_Literal =>
@@ -16099,6 +16144,34 @@ package body Landin.Stages.Checking is
          end;
       end Check_Match;
 
+      procedure Check_Loop
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Returns : Ty.Type_Kind;
+         Expected : Value_Context := No_Value_Context;
+         Requires_Value : Boolean := False)
+      is
+      begin
+         if Syn.Kind (Of_Tree, Node) = Syn.While_Statement then
+            Require
+              (Of_Tree, Syn.Condition_Of (Of_Tree, Node), Ty.Bool,
+               Syn.Origin (Of_Tree, Node), "the condition of this loop");
+         end if;
+
+         Loop_Values.Append
+           (Loop_Value_Entry'
+              (Label          => Syn.Name (Of_Tree, Node),
+               Expected       => Expected,
+               Requires_Value => Requires_Value,
+               Site           => Syn.Origin (Of_Tree, Node)));
+         Check_Block (Of_Tree, Syn.Loop_Body (Of_Tree, Node), Returns);
+         if Syn.Complete_Body (Of_Tree, Node) /= Syn.No_Node then
+            Check_Block
+              (Of_Tree, Syn.Complete_Body (Of_Tree, Node), Returns);
+         end if;
+         Loop_Values.Delete_Last;
+      end Check_Loop;
+
       procedure Check_Statement
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id; Returns : Ty.Type_Kind) is
       begin
@@ -17218,24 +17291,51 @@ package body Landin.Stages.Checking is
                   Syn.Origin (Of_Tree, Node), "the guard of this exit");
 
             when Syn.Break_Statement | Syn.Continue_Statement =>
-               Require
-                 (Of_Tree, Syn.Condition_Of (Of_Tree, Node), Ty.Bool,
-                  Syn.Origin (Of_Tree, Node),
-                  "the guard of this loop transfer");
-
-            when Syn.Loop_Statement | Syn.While_Statement =>
-               if Syn.Kind (Of_Tree, Node) = Syn.While_Statement then
+               declare
+                  Target : constant Loop_Value_Entry :=
+                    Target_Loop_Value (Of_Tree, Node);
+                  Value : constant Syn.Node_Id :=
+                    (if Syn.Kind (Of_Tree, Node) = Syn.Break_Statement
+                     then Syn.Transfer_Value (Of_Tree, Node)
+                     else Syn.No_Node);
+               begin
                   Require
                     (Of_Tree, Syn.Condition_Of (Of_Tree, Node), Ty.Bool,
                      Syn.Origin (Of_Tree, Node),
-                     "the condition of this loop");
-               end if;
-               Check_Block
-                 (Of_Tree, Syn.Loop_Body (Of_Tree, Node), Returns);
-               if Syn.Complete_Body (Of_Tree, Node) /= Syn.No_Node then
-                  Check_Block
-                    (Of_Tree, Syn.Complete_Body (Of_Tree, Node), Returns);
-               end if;
+                     "the guard of this loop transfer");
+
+                  if Value /= Syn.No_Node and then Target.Requires_Value then
+                     Check_Contextual_Value
+                       (Of_Tree, Value, Target.Expected, Target.Site,
+                        "the value produced by this loop");
+                  elsif Value /= Syn.No_Node then
+                     declare
+                        Got : constant Ty.Type_Kind :=
+                          Synthesise (Of_Tree, Value);
+                     begin
+                        if Got = Ty.Untyped_Integer then
+                           Commit_To (Of_Tree, Value, Ty.Default_Integer);
+                        end if;
+                     end;
+                  elsif Syn.Kind (Of_Tree, Node) = Syn.Break_Statement
+                    and then Target.Requires_Value
+                  then
+                     Bad.Report
+                       (Item    => Bad.Type_Mismatch,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Where (Of_Tree, Node),
+                        Message => "this break leaves a value-producing loop"
+                          & " without a value",
+                        Note    => "[1190]: every break from a loop used as"
+                          & " an expression carries `with`",
+                        Related => Target.Site,
+                        Because => "this value-producing loop",
+                        Into    => Found);
+                  end if;
+               end;
+
+            when Syn.Loop_Statement | Syn.While_Statement =>
+               Check_Loop (Of_Tree, Node, Returns);
 
             when Syn.If_Statement =>
                for Arm in 1 .. Syn.Arm_Count (Of_Tree, Node) loop
@@ -17325,7 +17425,8 @@ package body Landin.Stages.Checking is
             begin
                if Syn.Kind (Of_Tree, Value)
                     in Syn.If_Statement | Syn.Match_Statement
-                       | Syn.Bare_Block
+                       | Syn.Bare_Block | Syn.Loop_Statement
+                       | Syn.While_Statement
                then
                   Check_Statement (Of_Tree, Value, Returns);
                else
@@ -17352,6 +17453,117 @@ package body Landin.Stages.Checking is
       function First_Control_Value
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Syn.Node_Id
       is
+         function In_Loop_Block
+           (Block  : Syn.Node_Id;
+            Target : Landin.Source.Names.Name_Id;
+            Nested : Boolean := False) return Syn.Node_Id;
+
+         function In_Loop_Block
+           (Block  : Syn.Node_Id;
+            Target : Landin.Source.Names.Name_Id;
+            Nested : Boolean := False) return Syn.Node_Id
+         is
+            function In_Statement (Statement : Syn.Node_Id)
+              return Syn.Node_Id;
+
+            function In_Statement (Statement : Syn.Node_Id)
+              return Syn.Node_Id
+            is
+            begin
+               case Syn.Kind (Of_Tree, Statement) is
+                  when Syn.Break_Statement =>
+                     if Syn.Transfer_Value (Of_Tree, Statement) /= Syn.No_Node
+                       and then
+                         (if Syn.Name (Of_Tree, Statement) =
+                               Landin.Source.Names.No_Name
+                          then not Nested
+                          else Syn.Name (Of_Tree, Statement) = Target)
+                     then
+                        return Syn.Transfer_Value (Of_Tree, Statement);
+                     end if;
+                  when Syn.Loop_Statement | Syn.While_Statement =>
+                     if Target = Landin.Source.Names.No_Name
+                       or else Syn.Name (Of_Tree, Statement) = Target
+                     then
+                        return Syn.No_Node;
+                     end if;
+                     declare
+                        Found_Value : constant Syn.Node_Id :=
+                          In_Loop_Block
+                            (Syn.Loop_Body (Of_Tree, Statement),
+                             Target, True);
+                     begin
+                        if Found_Value /= Syn.No_Node then
+                           return Found_Value;
+                        end if;
+                     end;
+                     if Syn.Complete_Body (Of_Tree, Statement) /= Syn.No_Node
+                     then
+                        return In_Loop_Block
+                          (Syn.Complete_Body (Of_Tree, Statement),
+                           Target, True);
+                     end if;
+                  when Syn.If_Statement =>
+                     for Index in 1 .. Syn.Arm_Count
+                       (Of_Tree, Statement)
+                     loop
+                        declare
+                           Found_Value : constant Syn.Node_Id :=
+                             In_Loop_Block
+                               (Syn.Body_Of
+                                  (Of_Tree, Syn.Nth_Arm
+                                     (Of_Tree, Statement, Index)),
+                                Target, Nested);
+                        begin
+                           if Found_Value /= Syn.No_Node then
+                              return Found_Value;
+                           end if;
+                        end;
+                     end loop;
+                     if Syn.Else_Body (Of_Tree, Statement) /= Syn.No_Node then
+                        return In_Loop_Block
+                          (Syn.Else_Body (Of_Tree, Statement),
+                           Target, Nested);
+                     end if;
+                  when Syn.Match_Statement =>
+                     for Index in 1 .. Syn.Match_Arm_Count
+                       (Of_Tree, Statement)
+                     loop
+                        declare
+                           Found_Value : constant Syn.Node_Id :=
+                             In_Loop_Block
+                               (Syn.Body_Of
+                                  (Of_Tree, Syn.Nth_Match_Arm
+                                     (Of_Tree, Statement, Index)),
+                                Target, Nested);
+                        begin
+                           if Found_Value /= Syn.No_Node then
+                              return Found_Value;
+                           end if;
+                        end;
+                     end loop;
+                  when Syn.Bare_Block =>
+                     return In_Loop_Block
+                       (Syn.Body_Of (Of_Tree, Statement), Target, Nested);
+                  when others =>
+                     null;
+               end case;
+               return Syn.No_Node;
+            end In_Statement;
+         begin
+            for Index in 1 .. Syn.Statement_Count (Of_Tree, Block) loop
+               declare
+                  Found_Value : constant Syn.Node_Id :=
+                    In_Statement
+                      (Syn.Nth_Statement (Of_Tree, Block, Index));
+               begin
+                  if Found_Value /= Syn.No_Node then
+                     return Found_Value;
+                  end if;
+               end;
+            end loop;
+            return Syn.No_Node;
+         end In_Loop_Block;
       begin
          case Syn.Kind (Of_Tree, Node) is
             when Syn.If_Statement =>
@@ -17395,6 +17607,24 @@ package body Landin.Stages.Checking is
             when Syn.Bare_Block =>
                return Syn.Block_Value
                  (Of_Tree, Syn.Body_Of (Of_Tree, Node));
+
+            when Syn.Loop_Statement | Syn.While_Statement =>
+               declare
+                  Found_Value : constant Syn.Node_Id :=
+                    In_Loop_Block
+                      (Syn.Loop_Body (Of_Tree, Node),
+                       Syn.Name (Of_Tree, Node));
+               begin
+                  if Found_Value /= Syn.No_Node then
+                     return Found_Value;
+                  end if;
+               end;
+               if Syn.Complete_Body (Of_Tree, Node) /= Syn.No_Node then
+                  return In_Loop_Block
+                    (Syn.Complete_Body (Of_Tree, Node),
+                     Syn.Name (Of_Tree, Node));
+               end if;
+               return Syn.No_Node;
 
             when others =>
                return Syn.No_Node;
@@ -17487,6 +17717,7 @@ package body Landin.Stages.Checking is
 
          if Syn.Kind (Of_Tree, Node)
               in Syn.If_Statement | Syn.Match_Statement | Syn.Bare_Block
+                 | Syn.Loop_Statement | Syn.While_Statement
          then
             Note_Context (Of_Tree, Node, Expected);
 
@@ -17521,6 +17752,11 @@ package body Landin.Stages.Checking is
                   Check_Block
                     (Of_Tree, Syn.Body_Of (Of_Tree, Node),
                      Ty.Not_Typed, Expected, Site, Because);
+
+               when Syn.Loop_Statement | Syn.While_Statement =>
+                  Check_Loop
+                    (Of_Tree, Node, Ty.Not_Typed, Expected,
+                     Requires_Value => True);
 
                when others =>
                   raise Landin.Compiler_Defect;
@@ -18244,6 +18480,23 @@ package body Landin.Stages.Checking is
             return Ty.Ill_Typed;
          end if;
 
+         if Syn.Kind (Of_Tree, Node)
+              in Syn.Loop_Statement | Syn.While_Statement
+           and then Expected.Kind not in Ty.Scalar_Name | Ty.Function_Value
+              | Ty.Pointer_Value | Ty.Atom_Value
+         then
+            Bad.Report
+              (Item    => Bad.Type_Mismatch,
+               Source  => Syn.Source_Of (Of_Tree),
+               Where   => Syn.Where (Of_Tree, Node),
+               Message => "this loop result needs a storage-shaped carrier",
+               Note    => "[1190]: this increment enables scalar, function,"
+                 & " pointer and atom loop values first",
+               Into    => Found);
+            Landin.Checking.Refuse (Types.all, Of_Tree, Node);
+            return Ty.Ill_Typed;
+         end if;
+
          Check_Contextual_Value
            (Of_Tree, Node, Expected, Syn.Origin (Of_Tree, Node),
             "the first value-producing edge");
@@ -18297,7 +18550,8 @@ package body Landin.Stages.Checking is
                --  body; the body is checked as its own routine.
                return True;
 
-            when Syn.If_Statement | Syn.Match_Statement | Syn.Bare_Block =>
+            when Syn.If_Statement | Syn.Match_Statement | Syn.Bare_Block
+               | Syn.Loop_Statement | Syn.While_Statement =>
                return False;
 
             --  D31 measures the literal's syntax.  Its elements are checked
@@ -18903,7 +19157,8 @@ package body Landin.Stages.Checking is
               and then Got = Ty.Fixed_Array;
             Control_Source : constant Boolean :=
               Syn.Kind (Of_Tree.all, Value)
-                in Syn.If_Statement | Syn.Match_Statement | Syn.Bare_Block;
+                in Syn.If_Statement | Syn.Match_Statement | Syn.Bare_Block
+                   | Syn.Loop_Statement | Syn.While_Statement;
          begin
             if Got = Ty.Untyped_Integer then
                Commit_To (Of_Tree.all, Value, Ty.Default_Integer);
