@@ -17217,6 +17217,22 @@ package body Landin.Stages.Checking is
                  (Of_Tree, Syn.Condition_Of (Of_Tree, Node), Ty.Bool,
                   Syn.Origin (Of_Tree, Node), "the guard of this exit");
 
+            when Syn.Break_Statement | Syn.Continue_Statement =>
+               Require
+                 (Of_Tree, Syn.Condition_Of (Of_Tree, Node), Ty.Bool,
+                  Syn.Origin (Of_Tree, Node),
+                  "the guard of this loop transfer");
+
+            when Syn.Loop_Statement | Syn.While_Statement =>
+               if Syn.Kind (Of_Tree, Node) = Syn.While_Statement then
+                  Require
+                    (Of_Tree, Syn.Condition_Of (Of_Tree, Node), Ty.Bool,
+                     Syn.Origin (Of_Tree, Node),
+                     "the condition of this loop");
+               end if;
+               Check_Block
+                 (Of_Tree, Syn.Loop_Body (Of_Tree, Node), Returns);
+
             when Syn.If_Statement =>
                for Arm in 1 .. Syn.Arm_Count (Of_Tree, Node) loop
                   declare

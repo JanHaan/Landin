@@ -132,6 +132,13 @@ package Landin.Syntax is
       --  [0970]'s second early exit.  Its first slot is the atom and its
       --  second the optional `when` condition.
       Fail_Statement,
+      --  R4.10's first control-flow increment.  A transfer carries its
+      --  optional `when` guard; loops retain their condition (No_Node for
+      --  `loop`) and lexical body separately.
+      Break_Statement,
+      Continue_Statement,
+      Loop_Statement,
+      While_Statement,
       --  [1050], D124: the same nodes stand in statement and expression
       --  positions.  A control expression carries its answer in the final
       --  expression of each child Block.  Checking decides whether the
@@ -751,7 +758,18 @@ package Landin.Syntax is
    function Condition_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
      with Pre => Contains (Of_Tree, Id)
                  and then Kind (Of_Tree, Id)
-                          in If_Arm | Return_Statement | Fail_Statement;
+                          in If_Arm | Return_Statement | Fail_Statement
+                             | Break_Statement | Continue_Statement
+                             | While_Statement;
+
+   --  R4.10's loop body.  It is a Block and therefore owns the same lexical
+   --  cleanup and scope rules as a branch body.
+   function Loop_Body (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     with Pre  => Contains (Of_Tree, Id)
+                  and then Kind (Of_Tree, Id)
+                             in Loop_Statement | While_Statement,
+          Post => Contains (Of_Tree, Loop_Body'Result)
+                  and then Kind (Of_Tree, Loop_Body'Result) = Block;
 
    --  D139's declaration conditional and its arms.  An arm's first slot is
    --  its condition, or No_Node for `else`; the remaining slots are ordinary

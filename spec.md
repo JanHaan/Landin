@@ -358,6 +358,7 @@ value_statement ::= binding | destructuring_binding | assignment
                   | increment | discard | call | defer | undo | try
                   | "return" "when" expression
                   | "fail" expression "when" expression
+                  | break | continue | loop | while
                   | if | match | bare_block
 destructuring_binding ::= "(" destructured_field
                           ("," destructured_field)* ")" ":=" expression
@@ -401,10 +402,23 @@ and stepped exactly as the binding holding it is. What may be
 written is [1900]'s and not this rule's: a field is writable when
 the binding it belongs to is.
 
+R4.10's first loop increment admits the nearest-loop forms of [1130], [1140],
+[1180], and [1190]. An unconditional loop tests nothing; a `while` condition
+is evaluated before every iteration and must be `bool`. `break` transfers to
+the point after the nearest loop and `continue` transfers to that loop's next
+condition test (or next unconditional iteration). Their optional `when`
+condition is evaluated once and must be `bool`; its false edge continues with
+the following statement. Both transfers leave every lexical block between the
+statement and the loop edge, so [1100]'s `defer` runs and [1110]'s `undo` does
+not. Facts established only in a loop body do not establish definite
+assignment after the loop. Labelled loops and transfers, `break with`,
+`complete`, value-producing loops, and `for` traversal remain outside this
+increment.
+
 ```landin-grammar
 statement   ::= binding | destructuring_binding | assignment | increment
               | discard | call | defer | undo | try | return | fail
-              | if | match | bare_block
+              | break | continue | loop | while | if | match | bare_block
 assignment  ::= place "=" expression
 increment   ::= ("inc" | "dec") place
 discard     ::= "_" "=" expression
@@ -412,6 +426,10 @@ defer       ::= "defer" call
 undo        ::= "undo" call
 return      ::= "return" ("when" expression)?
 fail        ::= "fail" expression ("when" expression)?
+break       ::= "break" ("when" expression)?
+continue    ::= "continue" ("when" expression)?
+loop        ::= "loop" "do" block "end" "loop"
+while       ::= "while" expression "do" block "end" "while"
 try         ::= "try" (call | labeled_application)
 if          ::= "if" expression "then" block
                 ("elsif" expression "then" block)*
@@ -474,7 +492,8 @@ conditions or subject run first, then exactly the selected block runs in source
 order. In a value context the final expression of every edge that can fall
 through supplies the answer; an edge that returns supplies none. D124 gives the
 complete edge and type rule, and D125 gives its storage representation. These
-three non-loop controls do not enable R4.10's loops, `break`, or `continue`.
+three value-producing controls do not by themselves make the loop forms
+value-producing; that remains with `break with` and `complete` in R4.10.
 Evaluation order is left to right and fixed [0410], so the table
 decides what binds, never what runs first.
 
@@ -8391,6 +8410,7 @@ classified failure boundary before the repository gate can pass.
 | `results.destructure` | static | 0990 | L0200, L0301, L0302 or L0308 | `negative/result-destructure-needs-multiple`, `runtime/r230-composition` |
 | `functions.anonymous` | static | 1010 | L0201 for capture; complete signature checks otherwise apply | `negative/anonymous-function-captures-local`, `runtime/inferred-function-values` |
 | `control.flow` | static | 1050, 1060, 1080, 1090 | L0301 or L0302 at every reachable join and exit | `negative/if-expression-missing-else`, `runtime/control-expression-edges-keep-source-order` |
+| `control.loops` | static | 1130, 1140, 1180, 1190 | L0301 for a non-bool condition; a taken transfer runs active defers and targets the nearest loop edge | `negative/loop-condition-not-bool`, `runtime/loop-control-flow` |
 | `cleanup.defer` | static | 1100 | the registered call is checked at every ordinary and successful-return edge | `negative/defer-read-not-assigned-on-return`, `runtime/defer-cleanups-follow-control-edges` |
 | `cleanup.undo` | static | 1110 | the registered call is checked at every propagated-failure edge | `negative/undo-read-not-assigned-on-failure`, `runtime/undo-cleanups-follow-failure-edges` |
 | `generics.substitution` | static | 1220, 1280, 1290, 1300, 1310, 1350, 1500, 1650, 1660, 1700 | L0300, L0301, L0306, L0307, L0313 or L0318 | `negative/generic-routine-undeduced-formal`, `runtime/generic-structural-deduction`, `runtime/core-vec-pointer-storage` |
@@ -8805,3 +8825,39 @@ container and evidence mechanisms. All were declined.
 **Pinned by** `runtime/derived-parser`,
 `positive/try-statement-before-return`, its `DERIVATION.md`, the prototype
 derivation register, and the complete rooted fixture path.
+
+### D156 — Loop transfers are ordinary CFG edges with lexical cleanup
+
+**The tour said** that [1130] repeats unconditionally, [1140] tests before an
+iteration, [1180] gives `break` and `continue` optional guards, and [1100]
+executes deferred calls when a lexical block is left. It did not state the
+definite-assignment approximation at a back edge or whether a transfer selects
+[1110]'s failure-only cleanup.
+
+**Chosen:** the first R4.10 increment enables unlabelled `loop` and `while`
+statements and their unlabelled, valueless `break` and `continue` transfers.
+The neutral IR represents them only with its existing blocks, branches and
+jumps: the loop header is an ordinary backward target, and no loop opcode or
+backend-specific form is introduced. A guarded transfer branches after
+evaluating its condition once. A taken transfer is a
+`Structured_Transfer`, so it runs active `defer` entries from inner to outer
+through the loop-body boundary and never selects `undo`.
+
+Definite assignment is intentionally conservative. The condition is checked
+with the incoming facts; the body is checked with those facts, but an
+assignment made only in an iteration does not establish a fact after the loop.
+This is sound for a `while` that may run zero times and avoids claiming a fixed
+point the checker has not computed. Origins join the incoming and one-body
+facts because that analysis is monotone union. Labels, `break with`,
+`complete`, value-producing loops and iterable `for` remain in R4.10 rather
+than being approximated in this increment.
+
+**The alternatives:** lower a loop to recursion, add a neutral loop opcode,
+skip cleanup on iteration edges, or treat one body pass as proof of assignment
+after the loop. Recursion changes stack behavior, an opcode duplicates the
+existing control-flow graph, skipping cleanup violates lexical registration,
+and the last choice is unsound for zero iterations. All were declined.
+
+**Pinned by** `negative/loop-condition-not-bool`,
+`runtime/loop-control-flow`, the syntax, resolution, checking, flow, lowering
+and verifier seams, and the `control.loops` guarantee row.

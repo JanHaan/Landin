@@ -696,6 +696,15 @@ package body Landin.Stages.Resolution is
                  (Of_Tree, Syn.Body_Of (Of_Tree, Node), Inside);
                return;
 
+            when Syn.Loop_Statement | Syn.While_Statement =>
+               if Syn.Kind (Of_Tree, Node) = Syn.While_Statement then
+                  Resolve
+                    (Of_Tree, Syn.Condition_Of (Of_Tree, Node), Inside);
+               end if;
+               Walk_Scoped_Block
+                 (Of_Tree, Syn.Loop_Body (Of_Tree, Node), Inside);
+               return;
+
             when others =>
                null;
          end case;
