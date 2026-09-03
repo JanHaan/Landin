@@ -886,14 +886,24 @@ package body Landin.Stages.Checking.References is
                begin
                   if Syn.Kind (Tree, Node) = Syn.For_Statement then
                      declare
-                        Ignored : Origin_Fact :=
+                        Source_Fact : Origin_Fact :=
                           Fact_Of (Tree, Syn.Traversal_Lower (Tree, Node));
+                        Element : constant Res.Declaration_Id :=
+                          Declaration_At
+                            (Tree, Syn.Traversal_Element (Tree, Node));
                      begin
                         if Syn.Traversal_Upper (Tree, Node) /= Syn.No_Node then
-                           Ignored := Fact_Of
+                           Source_Fact := Fact_Of
                              (Tree, Syn.Traversal_Upper (Tree, Node));
+                        elsif Element /= Res.No_Declaration
+                          and then Element in Origins'Range
+                        then
+                           --  D160: the element is a place inside the
+                           --  traversed storage, so a reference read out
+                           --  of it derives from wherever that storage
+                           --  came from.
+                           Origins (Element) := Source_Fact;
                         end if;
-                        pragma Unreferenced (Ignored);
                      end;
                   end if;
                   Process_Block (Tree, Syn.Loop_Body (Tree, Node));

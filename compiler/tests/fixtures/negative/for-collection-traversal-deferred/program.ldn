@@ -1,5 +1,9 @@
+bag: type = struct
+    count: usize
+end bag
+
 public main: () -> (code: i32) =
-    items: [2]i32 = [1, 2]
+    items: bag = bag(count: 2)
     for item in items do
         _ = item
     end for

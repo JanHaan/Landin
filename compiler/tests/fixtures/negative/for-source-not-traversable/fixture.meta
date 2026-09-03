@@ -1,0 +1,6 @@
+class: negative
+summary: a traversal source that is neither a slice, a fixed array nor a range is refused
+program: program.ldn
+codes: L0301
+constructs: 1150
+targets: linux-x86-64, macos-arm64, synthetic-32
