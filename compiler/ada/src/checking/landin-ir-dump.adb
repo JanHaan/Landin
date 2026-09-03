@@ -818,6 +818,7 @@ package body Landin.IR.Dump is
                       & Trimmed
                           (Signature_Id'Image
                              (Signature_Of (Of_Unit, Id))))
+                 & (if Is_External (Of_Unit, Id) then " extern(c)" else "")
                  & (if Function_Target (Of_Unit, Id) = No_Item then ""
                     else " function target "
                       & Trimmed

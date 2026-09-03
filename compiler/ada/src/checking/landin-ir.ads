@@ -832,6 +832,19 @@ package Landin.IR is
       return Signature_Id
      with Pre => Holds (Of_Unit, Item);
 
+   --  An external routine is a declaration-only item whose calls retain the
+   --  ordinary neutral signature.  It owns no blocks or frame slots; the
+   --  selected backend supplies the foreign calling convention [1580].
+   function Is_External (Of_Unit : Unit; Item : Item_Id) return Boolean
+     with Pre => Holds (Of_Unit, Item);
+
+   procedure Mark_External (Into : in out Unit; Item : Item_Id)
+     with Pre  => Holds (Into, Item)
+                  and then Kind_Of (Into, Item) = Routine
+                  and then Signature_Of (Into, Item) /= No_Signature
+                  and then not Is_External (Into, Item),
+          Post => Is_External (Into, Item);
+
    function Atom_Set_Of (Of_Unit : Unit; Item : Item_Id) return Atom_Set_Id
      with Pre => Holds (Of_Unit, Item);
 
@@ -3242,6 +3255,7 @@ private
       Result      : Landin.Types.Type_Kind    := Landin.Types.Not_Typed;
       Nominal     : Nominal_Type_Id           := No_Nominal_Type;
       Signature   : Signature_Id              := No_Signature;
+      External    : Boolean                   := False;
       Atom_Set    : Atom_Set_Id               := No_Atom_Set;
       Function_Image : Item_Id                := No_Item;
       Site        : Landin.Provenance.Origin  :=

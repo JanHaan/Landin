@@ -8956,6 +8956,9 @@ package body Landin.Stages.Lowering is
                      end if;
                      IR.Set_Signature
                        (Unit.all, Made, Signature_For (Source_Signature));
+                     if Syn.Is_External (Of_Tree, Node) then
+                        IR.Mark_External (Unit.all, Made);
+                     end if;
                   end if;
                end;
 
@@ -9434,7 +9437,9 @@ package body Landin.Stages.Lowering is
          begin
             case Syn.Kind (Of_Tree, Node) is
                when Syn.Function_Declaration =>
-                  if Syn.Generic_Formal_Count (Of_Tree, Node) = 0 then
+                  if Syn.Generic_Formal_Count (Of_Tree, Node) = 0
+                    and then not Syn.Is_External (Of_Tree, Node)
+                  then
                      Lower_Routine (Of_Tree, Node);
                   end if;
                when Syn.Binding =>

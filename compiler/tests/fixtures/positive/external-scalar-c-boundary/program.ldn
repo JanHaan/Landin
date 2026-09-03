@@ -1,0 +1,2 @@
+extern(c) host_read: (descriptor: i32, bytes: ptr mut u8, count: usize)
+                     -> (read_count: usize)

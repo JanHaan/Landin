@@ -28,6 +28,9 @@ aggregates.variants | static | 0670, 0680, 0690, 0700, 0710, 0720, 0750, 1210 | 
 origins.escape | static | 0770, 0780, 0790, 0800, 0830, 0840 | L0314--L0316 | `negative/frame-origin-return`, `negative/borrowed-source-inout`, `negative/returned-reference-missing-from`, `negative/core-arena-frame-escape`, `negative/core-text-frame-slice-escape`
 origins.aliasing-limit | outside | 0770, 0910 | non-guarantee: a pre-existing copy or indistinguishable arena is not tracked | `positive/reference-origins-and-consume`, `negative/use-after-sink`
 functions.abi | static | 0870, 0880, 0890, 0900, 0920, 0930, 0980, 1000, 1020, 1030, 1460, 1920, 1970 | L0301, L0302 or L0502 | `negative/call-with-too-few-arguments`, `runtime/r230-composition`
+extern.c-boundary | static | 0430, 1570, 1580, 1975 | L0301 for a signature outside R3.50's fixed scalar/pointer subset | `positive/external-scalar-c-boundary`, `negative/external-aggregate-boundary`
+host.io | outside | 0430, 1580, 1650, 1660, 1680, 1975 | non-guarantee: files, descriptors, arguments and streams reflect mutable host state | `runtime/hosted-io-reads-parser-input`
+host.io-failure | static | 0940, 0960, 1030, 1975 | `core/io` reports foreseeable host failure as declared atoms which callers handle or declare | `runtime/hosted-io-reads-parser-input`
 execution.resource-exhaustion | outside | 0950, 1770, 1970 | non-guarantee: the kernel sets no recursion-depth, stack, or host-resource bound | `runtime/recursive-fibonacci`
 consume.local | static | 0910 | L0302 or L0315 | `negative/use-after-sink`, `negative/sunk-inout-not-restored`
 consume.copy-before | static | 0860, 0910, 1720 | a value copied before the sink remains independently usable | `runtime/copy-before-sink-remains-live`

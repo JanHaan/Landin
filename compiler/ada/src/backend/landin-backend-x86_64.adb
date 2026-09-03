@@ -224,6 +224,9 @@ package body Landin.Backend.X86_64 is
         2 ** 31 - 1;
       Layout : Frame;
    begin
+      if Landin.IR.Is_External (Of_Unit, Item) then
+         return True;
+      end if;
       Layout := Laid_Out (Of_Unit, Item, Facts);
       return Extent (Layout) <= Largest_Displacement;
    exception
@@ -240,7 +243,8 @@ package body Landin.Backend.X86_64 is
      (Of_Unit  : Landin.IR.Unit;
       Meanings : Landin.Resolution.Table;
       Names    : Landin.Source.Names.Table;
-      Facts    : Landin.Targets.Target_Facts) return String
+      Facts    : Landin.Targets.Target_Facts;
+      Hosted_Entry : Landin.IR.Item_Id := Landin.IR.No_Item) return String
    is
       Out_Text : Unbounded.Unbounded_String;
 
@@ -2703,6 +2707,14 @@ package body Landin.Backend.X86_64 is
          Emit ("pushq %rbp");
          Emit ("movq %rsp, %rbp");
 
+         --  The hosted entry keeps its source-level no-argument shape.  Its
+         --  C argc/argv carriers are captured before ordinary Landin code can
+         --  clobber them and exposed only through core/io's runtime bridge.
+         if Item = Hosted_Entry then
+            Emit ("movl %edi, .Llandin_host_argc(%rip)");
+            Emit ("movq %rsi, .Llandin_host_argv(%rip)");
+         end if;
+
          if Extent (Layout) > 0 then
             Emit ("subq $"
                   & Trimmed
@@ -4113,10 +4125,14 @@ package body Landin.Backend.X86_64 is
       for Right in 2 .. Landin.IR.Item_Count (Of_Unit) loop
          if Landin.IR.Kind_Of
            (Of_Unit, Landin.IR.Item_Id (Right)) = Landin.IR.Routine
+           and then not Landin.IR.Is_External
+             (Of_Unit, Landin.IR.Item_Id (Right))
          then
             for Left in 1 .. Right - 1 loop
                if Landin.IR.Kind_Of
                  (Of_Unit, Landin.IR.Item_Id (Left)) = Landin.IR.Routine
+                 and then not Landin.IR.Is_External
+                   (Of_Unit, Landin.IR.Item_Id (Left))
                  and then Routines_Can_Share
                    (Landin.IR.Item_Id (Left), Landin.IR.Item_Id (Right))
                then
@@ -4132,7 +4148,9 @@ package body Landin.Backend.X86_64 is
             Item : constant Landin.IR.Item_Id := Landin.IR.Item_Id (Index);
          begin
             if Landin.IR.Kind_Of (Of_Unit, Item) = Landin.IR.Routine then
-               if Shared_With (Index) = Landin.IR.No_Item then
+               if Landin.IR.Is_External (Of_Unit, Item) then
+                  null;
+               elsif Shared_With (Index) = Landin.IR.No_Item then
                   Emit_Routine (Item);
                else
                   Emit
@@ -4254,6 +4272,90 @@ package body Landin.Backend.X86_64 is
                end if;
             end;
          end loop;
+      end if;
+
+      if Hosted_Entry /= Landin.IR.No_Item then
+         Put (Character'Val (9) & ".text");
+         Put (Character'Val (9)
+              & ".type _landin_host_argument_count, @function");
+         Put ("_landin_host_argument_count:");
+         Emit ("movl .Llandin_host_argc(%rip), %eax");
+         Emit ("subl $1, %eax");
+         Emit ("jns .Llandin_host_count_ready");
+         Emit ("xorl %eax, %eax");
+         Put (".Llandin_host_count_ready:");
+         Emit ("ret");
+         Put (Character'Val (9)
+              & ".size _landin_host_argument_count, "
+              & ".-_landin_host_argument_count");
+
+         Put (Character'Val (9)
+              & ".type _landin_host_argument_at, @function");
+         Put ("_landin_host_argument_at:");
+         Emit ("movq .Llandin_host_argv(%rip), %rax");
+         Emit ("movq 8(%rax,%rdi,8), %rax");
+         Emit ("ret");
+         Put (Character'Val (9)
+              & ".size _landin_host_argument_at, "
+              & ".-_landin_host_argument_at");
+
+         Put (Character'Val (9)
+              & ".type _landin_host_text_length, @function");
+         Put ("_landin_host_text_length:");
+         Emit ("jmp strlen");
+         Put (Character'Val (9)
+              & ".size _landin_host_text_length, "
+              & ".-_landin_host_text_length");
+
+         Put (Character'Val (9)
+              & ".type _landin_host_open_read, @function");
+         Put ("_landin_host_open_read:");
+         Emit ("xorl %esi, %esi");
+         Emit ("xorl %eax, %eax");
+         Emit ("jmp open");
+         Put (Character'Val (9)
+              & ".size _landin_host_open_read, "
+              & ".-_landin_host_open_read");
+
+         Put (Character'Val (9) & ".type _landin_host_read, @function");
+         Put ("_landin_host_read:");
+         Emit ("jmp read");
+         Put (Character'Val (9)
+              & ".size _landin_host_read, .-_landin_host_read");
+
+         Put (Character'Val (9) & ".type _landin_host_write, @function");
+         Put ("_landin_host_write:");
+         Emit ("jmp write");
+         Put (Character'Val (9)
+              & ".size _landin_host_write, .-_landin_host_write");
+
+         Put (Character'Val (9) & ".type _landin_host_close, @function");
+         Put ("_landin_host_close:");
+         Emit ("jmp close");
+         Put (Character'Val (9)
+              & ".size _landin_host_close, .-_landin_host_close");
+
+         Put (Character'Val (9) & ".type _landin_host_errno, @function");
+         Put ("_landin_host_errno:");
+         Emit ("subq $8, %rsp");
+         Emit ("call __errno_location");
+         Emit ("movl (%rax), %eax");
+         Emit ("addq $8, %rsp");
+         Emit ("ret");
+         Put (Character'Val (9)
+              & ".size _landin_host_errno, .-_landin_host_errno");
+
+         --  Keep the two entry cells in the small initialized data section.
+         --  A program may own a multi-gigabyte zero-image datum in .bss;
+         --  placing these cells after that section would put RIP-relative
+         --  entry accesses outside x86-64's signed displacement.
+         Put (Character'Val (9) & ".data");
+         Put (Character'Val (9) & ".balign 8");
+         Put (".Llandin_host_argv:");
+         Emit (".zero 8");
+         Put (Character'Val (9) & ".balign 4");
+         Put (".Llandin_host_argc:");
+         Emit (".zero 4");
       end if;
 
       --  An executable stack is inherited when nothing says otherwise,
