@@ -501,6 +501,9 @@ package body Landin.Stages.Lowering is
 
       Cleanup_Stack : Cleanup_Entries.Vector;
 
+      package Stored_Path_Vectors is new Ada.Containers.Vectors
+        (Index_Type => Positive, Element_Type => IR.Path_Step);
+
       type Loop_Entry is record
          Label        : Landin.Source.Names.Name_Id :=
            Landin.Source.Names.No_Name;
@@ -508,6 +511,8 @@ package body Landin.Stages.Lowering is
          Exit_Block   : IR.Block_Id := IR.No_Block;
          Cleanup_Base : Natural := 0;
          Value_Destination : IR.Slot_Id := IR.No_Slot;
+         Value_Destination_Field : Natural := 0;
+         Value_Destination_Path : Stored_Path_Vectors.Vector;
       end record;
 
       package Loop_Entries is new Ada.Containers.Vectors
@@ -796,9 +801,6 @@ package body Landin.Stages.Lowering is
       function Rooted_Steps
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return IR.Path_Step_Array;
 
-      package Stored_Path_Vectors is new Ada.Containers.Vectors
-        (Index_Type => Positive, Element_Type => IR.Path_Step);
-
       type Stored_Place is record
          Place : IR.Storage := (others => <>);
          Base  : Natural := 0;
@@ -927,7 +929,8 @@ package body Landin.Stages.Lowering is
          Result  : IR.Slot_Id;
          Destination : IR.Slot_Id := IR.No_Slot;
          Destination_Field : Natural := 0;
-         Destination_Path : IR.Path_Step_Array := IR.No_Path_Steps);
+         Destination_Path : IR.Path_Step_Array := IR.No_Path_Steps;
+         Direct_Value : Syn.Node_Id := Syn.No_Node);
 
       procedure Lower_If
         (Of_Tree : Syn.Tree;
@@ -979,7 +982,9 @@ package body Landin.Stages.Lowering is
          Node    : Syn.Node_Id;
          Scope   : Res.Scope_Id;
          Result  : IR.Slot_Id;
-         Destination : IR.Slot_Id := IR.No_Slot);
+         Destination : IR.Slot_Id := IR.No_Slot;
+         Destination_Field : Natural := 0;
+         Destination_Path : IR.Path_Step_Array := IR.No_Path_Steps);
 
       procedure Lower_Loop_Transfer
         (Of_Tree : Syn.Tree;
@@ -2603,6 +2608,10 @@ package body Landin.Stages.Lowering is
                Lower_Bare_Block
                  (Of_Tree, Node, Scope, Active_Result, Destination,
                   Destination_Field, Destination_Path);
+            when Syn.Loop_Statement | Syn.While_Statement =>
+               Lower_Loop
+                 (Of_Tree, Node, Scope, Active_Result, Destination,
+                  Destination_Field, Destination_Path);
             when others =>
                raise Landin.Compiler_Defect with
                  "an expression cannot fill caller-owned storage";
@@ -2834,7 +2843,8 @@ package body Landin.Stages.Lowering is
                       not in Syn.Call | Syn.Labeled_Application
                          | Syn.Try_Expression
                          | Syn.If_Statement | Syn.Match_Statement
-                         | Syn.Bare_Block
+                         | Syn.Bare_Block | Syn.Loop_Statement
+                         | Syn.While_Statement
                   then
                      declare
                         Temporary : constant IR.Slot_Id :=
@@ -2851,6 +2861,7 @@ package body Landin.Stages.Lowering is
                        in Syn.Call | Syn.Labeled_Application
                           | Syn.Try_Expression | Syn.If_Statement
                           | Syn.Match_Statement | Syn.Bare_Block
+                          | Syn.Loop_Statement | Syn.While_Statement
                     and then not Is_Struct_Construction (Of_Tree, Argument)
                   then
                      declare
@@ -4017,6 +4028,7 @@ package body Landin.Stages.Lowering is
          if Syn.Kind (Of_Tree, Node)
            in Syn.Call | Syn.Labeled_Application | Syn.Try_Expression
               | Syn.If_Statement | Syn.Match_Statement | Syn.Bare_Block
+              | Syn.Loop_Statement | Syn.While_Statement
          then
             Lower_Stored_Expression
               (Of_Tree, Node, Scope, Destination);
@@ -5828,7 +5840,9 @@ package body Landin.Stages.Lowering is
          Node    : Syn.Node_Id;
          Scope   : Res.Scope_Id;
          Result  : IR.Slot_Id;
-         Destination : IR.Slot_Id := IR.No_Slot)
+         Destination : IR.Slot_Id := IR.No_Slot;
+         Destination_Field : Natural := 0;
+         Destination_Path : IR.Path_Step_Array := IR.No_Path_Steps)
       is
          Site : constant Landin.Provenance.Origin := Site_Of (Of_Tree, Node);
          Runs : constant Syn.Node_Id := Syn.Loop_Body (Of_Tree, Node);
@@ -5874,13 +5888,22 @@ package body Landin.Stages.Lowering is
             Close_With_Jump (Body_Block, Site);
          end if;
 
-         Loop_Stack.Append
-           (Loop_Entry'
+         declare
+            Frame : Loop_Entry :=
               (Label        => Syn.Name (Of_Tree, Node),
                Head         => Head,
                Exit_Block   => Exit_Block,
                Cleanup_Base => Natural (Cleanup_Stack.Length),
-               Value_Destination => Destination));
+               Value_Destination => Destination,
+               Value_Destination_Field => Destination_Field,
+               Value_Destination_Path =>
+                 Stored_Path_Vectors.Empty_Vector);
+         begin
+            for Step of Destination_Path loop
+               Frame.Value_Destination_Path.Append (Step);
+            end loop;
+            Loop_Stack.Append (Frame);
+         end;
          Open (Body_Block);
          Lower_Statements (Of_Tree, Runs, Inside, Result);
          if Current /= IR.No_Block then
@@ -5929,17 +5952,19 @@ package body Landin.Stages.Lowering is
               and then Syn.Transfer_Value (Of_Tree, Node) /= Syn.No_Node
             then
                declare
-                  Value : constant IR.Value_Id :=
-                    Lower_Expression
-                      (Of_Tree, Syn.Transfer_Value (Of_Tree, Node), Scope);
+                  Destination_Path : IR.Path_Step_Array
+                    (1 .. Natural (Frame.Value_Destination_Path.Length));
                begin
-                  if Current /= IR.No_Block
-                    and then Frame.Value_Destination /= IR.No_Slot
-                  then
-                     IR.Emit_Store
-                       (Unit.all, Filling, Frame.Value_Destination,
-                        Value, Site);
-                  end if;
+                  for Index in Destination_Path'Range loop
+                     Destination_Path (Index) :=
+                       Frame.Value_Destination_Path (Index);
+                  end loop;
+                  Lower_Statements
+                    (Of_Tree, Syn.No_Node, Scope, Active_Result,
+                     Destination => Frame.Value_Destination,
+                     Destination_Field => Frame.Value_Destination_Field,
+                     Destination_Path => Destination_Path,
+                     Direct_Value => Syn.Transfer_Value (Of_Tree, Node));
                end;
             end if;
 
@@ -5990,12 +6015,15 @@ package body Landin.Stages.Lowering is
          Result  : IR.Slot_Id;
          Destination : IR.Slot_Id := IR.No_Slot;
          Destination_Field : Natural := 0;
-         Destination_Path : IR.Path_Step_Array := IR.No_Path_Steps)
+         Destination_Path : IR.Path_Step_Array := IR.No_Path_Steps;
+         Direct_Value : Syn.Node_Id := Syn.No_Node)
       is
          Last_Statement : constant Natural :=
-           Syn.Statement_Count (Of_Tree, Block);
+           (if Direct_Value /= Syn.No_Node
+            then 0 else Syn.Statement_Count (Of_Tree, Block));
          Has_Value : constant Boolean :=
-           Syn.Block_Value (Of_Tree, Block) /= Syn.No_Node;
+           Direct_Value /= Syn.No_Node
+           or else Syn.Block_Value (Of_Tree, Block) /= Syn.No_Node;
          Cleanup_Base : constant Natural := Natural (Cleanup_Stack.Length);
       begin
          for Which in
@@ -6007,7 +6035,9 @@ package body Landin.Stages.Lowering is
                Final_Value : constant Boolean := Which > Last_Statement;
                Stmt : constant Syn.Node_Id :=
                  (if Final_Value
-                  then Syn.Block_Value (Of_Tree, Block)
+                  then (if Direct_Value /= Syn.No_Node
+                        then Direct_Value
+                        else Syn.Block_Value (Of_Tree, Block))
                   else Syn.Nth_Statement (Of_Tree, Block, Which));
                Site : constant Landin.Provenance.Origin :=
                  Site_Of (Of_Tree, Stmt);
@@ -7559,7 +7589,11 @@ package body Landin.Stages.Lowering is
                      Held : constant Ty.Type_Kind := Type_At (Of_Tree, Stmt);
                      Target : IR.Slot_Id := Destination;
                   begin
-                     if Held in Ty.Aggregate | Ty.Fixed_Array
+                     if Held in Ty.Slice_Value | Ty.Any_Value
+                       and then Target = IR.No_Slot
+                     then
+                        Target := Add_Value_Temporary (Of_Tree, Stmt);
+                     elsif Held in Ty.Aggregate | Ty.Fixed_Array
                        and then Target = IR.No_Slot
                      then
                         if Held = Ty.Aggregate then
@@ -7648,11 +7682,21 @@ package body Landin.Stages.Lowering is
                           (Of_Tree, Stmt, Scope, Result, Target,
                            Destination_Field, Destination_Path);
                      elsif Syn.Kind (Of_Tree, Stmt)
+                             in Syn.Loop_Statement | Syn.While_Statement
+                     then
+                        Lower_Loop
+                          (Of_Tree, Stmt, Scope, Result, Target,
+                           Destination_Field, Destination_Path);
+                     elsif Syn.Kind (Of_Tree, Stmt)
                              in Syn.Call | Syn.Labeled_Application
                                 | Syn.Try_Expression
                        and then not Is_Struct_Construction
                          (Of_Tree, Stmt)
                      then
+                        Lower_Stored_Expression
+                          (Of_Tree, Stmt, Scope, Target,
+                           Destination_Field, Destination_Path);
+                     elsif Held in Ty.Slice_Value | Ty.Any_Value then
                         Lower_Stored_Expression
                           (Of_Tree, Stmt, Scope, Target,
                            Destination_Field, Destination_Path);
@@ -7739,7 +7783,8 @@ package body Landin.Stages.Lowering is
                         then
                            if Syn.Kind (Of_Tree, Value)
                                 in Syn.If_Statement | Syn.Match_Statement
-                                   | Syn.Bare_Block
+                                   | Syn.Bare_Block | Syn.Loop_Statement
+                                   | Syn.While_Statement
                            then
                               case Syn.Kind (Of_Tree, Value) is
                                  when Syn.If_Statement =>
@@ -7750,6 +7795,10 @@ package body Landin.Stages.Lowering is
                                       (Of_Tree, Value, Scope, Result, Where);
                                  when Syn.Bare_Block =>
                                     Lower_Bare_Block
+                                      (Of_Tree, Value, Scope, Result, Where);
+                                 when Syn.Loop_Statement
+                                    | Syn.While_Statement =>
+                                    Lower_Loop
                                       (Of_Tree, Value, Scope, Result, Where);
                                  when others =>
                                     raise Landin.Compiler_Defect;
@@ -7901,7 +7950,8 @@ package body Landin.Stages.Lowering is
                         then
                            if Syn.Kind (Of_Tree, Value)
                                 in Syn.If_Statement | Syn.Match_Statement
-                                   | Syn.Bare_Block
+                                   | Syn.Bare_Block | Syn.Loop_Statement
+                                   | Syn.While_Statement
                            then
                               case Syn.Kind (Of_Tree, Value) is
                                  when Syn.If_Statement =>
@@ -7912,6 +7962,10 @@ package body Landin.Stages.Lowering is
                                       (Of_Tree, Value, Scope, Result, Where);
                                  when Syn.Bare_Block =>
                                     Lower_Bare_Block
+                                      (Of_Tree, Value, Scope, Result, Where);
+                                 when Syn.Loop_Statement
+                                    | Syn.While_Statement =>
+                                    Lower_Loop
                                       (Of_Tree, Value, Scope, Result, Where);
                                  when others =>
                                     raise Landin.Compiler_Defect;
@@ -8000,7 +8054,8 @@ package body Landin.Stages.Lowering is
                      begin
                         if Syn.Kind (Of_Tree, Value)
                              in Syn.Call | Syn.If_Statement
-                                | Syn.Match_Statement | Syn.Bare_Block
+                          | Syn.Match_Statement | Syn.Bare_Block
+                          | Syn.Loop_Statement | Syn.While_Statement
                         then
                            Temporary := Add_Value_Temporary (Of_Tree, Value);
                            Lower_Stored_Expression
@@ -8389,7 +8444,8 @@ package body Landin.Stages.Lowering is
                               end;
                            elsif Syn.Kind (Of_Tree, From)
                                 in Syn.If_Statement | Syn.Match_Statement
-                                   | Syn.Bare_Block
+                                   | Syn.Bare_Block | Syn.Loop_Statement
+                                   | Syn.While_Statement
                            then
                               declare
                                  Wrote : constant
@@ -8424,6 +8480,11 @@ package body Landin.Stages.Lowering is
                                           Temporary);
                                     when Syn.Bare_Block =>
                                        Lower_Bare_Block
+                                         (Of_Tree, From, Scope, Result,
+                                          Temporary);
+                                    when Syn.Loop_Statement
+                                       | Syn.While_Statement =>
+                                       Lower_Loop
                                          (Of_Tree, From, Scope, Result,
                                           Temporary);
                                     when others =>
@@ -8568,7 +8629,8 @@ package body Landin.Stages.Lowering is
                         begin
                            if Syn.Kind (Of_Tree, Value)
                                 in Syn.If_Statement | Syn.Match_Statement
-                                   | Syn.Bare_Block
+                                   | Syn.Bare_Block | Syn.Loop_Statement
+                                   | Syn.While_Statement
                            then
                               declare
                                  Temporary : constant IR.Slot_Id :=

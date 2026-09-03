@@ -3081,8 +3081,9 @@ transfers, plus the conditional loop's natural-only `complete` edge. D157
 keeps both features as neutral CFG structure. The third
 increment adds `break with` and value-producing `loop`/`while` expressions for
 scalar, function, pointer and atom results, reusing the existing caller-owned
-control join. D158 leaves storage-shaped loop results and `for` traversal in
-this active item.
+control join. The fourth increment carries fixed arrays, structs, slices and
+`any` through that same destination-aware block-value path, including literal
+formation before cleanup. D158 leaves `for` traversal in this active item.
 
 Exit evidence: every hosted `[NNNN]` row has implementation and positive or
 negative evidence; no omission is hidden by prototype coverage.
