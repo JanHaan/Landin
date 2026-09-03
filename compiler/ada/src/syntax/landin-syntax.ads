@@ -207,6 +207,10 @@ package Landin.Syntax is
       --  should bind.
       Struct_Literal,
       Integer_Literal,
+      --  [0260]'s quoted bytes.  The node keeps only its span; D161's
+      --  shared decoder reads the escapes from source again where the
+      --  context that decides whether they mean bytes is known.
+      Text_Literal,
       True_Literal,
       False_Literal,
       --  [0540]'s contextual all-bits-zero image.

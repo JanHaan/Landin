@@ -386,14 +386,14 @@ grammar twice over: `check.py` compares its reserved words with `spec.md`'s own
 and the harness lexes all 65 corpus programs and compares each token with
 what `check.py`'s independent tokeniser produced.
 
-Invalid escapes are struck from this item's evidence, with the reason
-recorded rather than the clause quietly dropped: the kernel's only literals
-are integers and the two booleans `[1770]`, and character, text and raw
-literals `[0250]` `[0260]` `[0280]` — the only constructs that define an
-escape at all — are refused by `[1830]`. No enabled rule reads a byte as an
-escape, so neither a valid nor an invalid one can be written. The clause
-belongs to the work that enables a literal carrying escapes, and R4.10 owns
-the remaining hosted literal forms.
+Invalid escapes were struck from this item's original evidence, with the
+reason recorded rather than the clause quietly dropped: at R1.20 the kernel's
+only literals were integers and the two booleans `[1770]`, while character,
+text and raw literals `[0250]` `[0260]` `[0280]` were refused by `[1830]`.
+D161's seventh R4.10 increment now enables the direct `[]u8` text-literal
+context and puts its escape-aware scan, shared decoding and L0320 malformed
+spelling at this lexical seam. Character and raw literals, and the remaining
+text contexts, stay with R4.10.
 
 ### R1.30 — Establish the diagnostic catalogue
 
@@ -3093,7 +3093,11 @@ evaluated once, the element is an aliased place in its storage, writable
 through `[]mut T` or an assignable array and read-only otherwise, and the
 index is the hidden counter. D160 records the alias lowering and keeps
 array, slice and `any` elements and iterable-evidence sources as the named
-refusal.
+refusal. The seventh increment enables quoted text in a direct read-only
+`[]u8` context, including byte escapes, UTF-8 source validation, an uncounted
+trailing NUL, content-pooled read-only data and static slice relocations.
+D161 keeps `utf8`, `utf16`, `cstring` and codepoint escapes deferred while
+giving malformed spelling lexical L0320.
 
 Exit evidence: every hosted `[NNNN]` row has implementation and positive or
 negative evidence; no omission is hidden by prototype coverage.

@@ -379,14 +379,14 @@ def check_code(lines, offset):
 #  does not expand it, because they read bytes rather than tokens.
 LEXICAL_RULES = {"space", "line_end", "comment", "line_comment",
                  "doc_comment", "block_comment", "block_item", "identifier",
-                 "keyword", "literal", "integer", "decimal", "hex", "octal",
-                 "binary", "lower", "digit", "hex_digit", "octal_digit",
-                 "binary_digit"}
+                 "keyword", "literal", "text", "text_byte", "text_escape",
+                 "integer", "decimal", "hex", "octal", "binary", "lower",
+                 "digit", "hex_digit", "octal_digit", "binary_digit"}
 
 #  Rule names the recogniser matches against a token kind rather than a
 #  spelling.
 TOKEN_KIND_RULES = {"identifier": "name", "integer": "integer",
-                    "literal": "literal"}
+                    "text": "text", "literal": "literal"}
 
 PRODUCTION = re.compile(r"^([a-z_]+)\s+::=\s*(.*)$")
 
@@ -400,6 +400,7 @@ UPPER = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
 DIGITS = frozenset("0123456789")
 NOTATION_WORD = re.compile(
     r'\s*("(?:[^"\\]|\\.)*"'
+    r'|any byte except quote, backslash or line_end'
     r'|any byte(?: that begins neither "[^"]*" nor "[^"]*")?'
     r'(?: except [a-z_]+)?'
     r'|\.\.\.'
@@ -519,7 +520,9 @@ class Notation:
                 atom = ("range", word[1:-1], upper[1:-1])
         elif word.startswith("any byte"):
             self.at += 1
-            atom = ("byte", None)
+            atom = (("text_byte", None)
+                    if word == "any byte except quote, backslash or line_end"
+                    else ("byte", None))
         else:
             self.at += 1
             atom = ("rule", word)
@@ -586,6 +589,9 @@ def lexical_matches(trees, rule, text):
                     and node[1] <= text[at] <= node[2] else ())
         elif kind == "byte":
             ends = (at + 1,) if at < len(text) else ()
+        elif kind == "text_byte":
+            ends = ((at + 1,) if at < len(text)
+                    and text[at] not in '"\\\r\n' else ())
         elif kind == "rule":
             ends = item(trees[node[1]], at) if node[1] in trees else ()
         elif kind == "alt":
@@ -709,6 +715,61 @@ def landin_tokens(source, signs, trees=None):
             out.append(("word", run, start))
             continue
 
+        #  D161 enables a quote-delimited text token.  An escaped quote is
+        #  content, a line end never is, and three opening quotes remain
+        #  [0280]'s deferred raw literal rather than three empty texts.
+        if char == '"':
+            if source.startswith('"""', i):
+                return None, "no rule spells a raw literal"
+            start, i, closed = i, i + 1, False
+            while i < n and source[i] not in "\r\n":
+                if source[i] == '"':
+                    i += 1
+                    closed = True
+                    break
+                if source[i] == "\\" and i + 1 < n \
+                        and source[i + 1] not in "\r\n":
+                    i += 1
+                i += 1
+            if not closed:
+                return None, "a text literal is never closed"
+
+            at, last = start + 1, i - 1
+            while at < last:
+                if source[at] != "\\":
+                    at += 1
+                    continue
+                escape = source[at + 1]
+                if escape in "nrte\\\"'":
+                    at += 2
+                    continue
+                if escape == "x":
+                    if at + 3 >= last or any(
+                            byte not in "0123456789abcdefABCDEF"
+                            for byte in source[at + 2:at + 4]):
+                        return None, "a text literal has a malformed escape"
+                    at += 4
+                    continue
+                if escape == "u":
+                    if at + 2 >= last or source[at + 2] != "{":
+                        return None, "a text literal has a malformed escape"
+                    end = source.find("}", at + 3, last)
+                    if end < 0:
+                        return None, "a text literal has a malformed escape"
+                    digits = source[at + 3:end]
+                    if not digits or any(
+                            byte not in "0123456789abcdefABCDEF"
+                            for byte in digits):
+                        return None, "a text literal has a malformed escape"
+                    value = int(digits, 16)
+                    if value > 0x10ffff or 0xd800 <= value <= 0xdfff:
+                        return None, "a text literal has a malformed escape"
+                    at = end + 1
+                    continue
+                return None, "a text literal has an unknown escape"
+            out.append(("text", source[start:i], start))
+            continue
+
         for sign in ordered:
             if source.startswith(sign, i):
                 out.append(("sign", sign, i))
@@ -736,7 +797,7 @@ def grammar_recognises(rules, trees, tokens, start="program"):
             ends = ()
             if at < len(tokens) and tokens[at][1] == node[1]:
                 ends = (at + 1,)
-        elif kind == "byte":
+        elif kind in ("byte", "text_byte"):
             ends = (at + 1,) if at < len(tokens) else ()
         elif kind == "rule":
             name = node[1]
@@ -750,9 +811,11 @@ def grammar_recognises(rules, trees, tokens, start="program"):
                                 and text not in reserved else ())
                     elif wanted == "integer":
                         ends = (at + 1,) if token_kind == "integer" else ()
+                    elif wanted == "text":
+                        ends = (at + 1,) if token_kind == "text" else ()
                     else:
                         ends = ((at + 1,)
-                                if token_kind == "integer"
+                                if token_kind in ("integer", "text")
                                 or text in ("true", "false", "zeroed") else ())
             elif name in LEXICAL_RULES:
                 ends = (at + 1,) if at < len(tokens) else ()
@@ -1783,9 +1846,10 @@ def check_token_vocabulary(full_run):
 
 #  The lexical rules that produce exactly one token [1750], so a rule
 #  above the lexical layer may treat them as terminals.  `literal` is not
-#  among them: it is an alternation of three, and expanding it is what
-#  makes a first set comparable with Landin.Tokens.Is_Literal.
-TOKEN_PRODUCERS = frozenset(("identifier", "keyword", "integer"))
+#  among them: it alternates the two literal token classes with three
+#  reserved words, and expanding it is what makes a first set comparable
+#  with Landin.Tokens.Is_Literal.
+TOKEN_PRODUCERS = frozenset(("identifier", "keyword", "integer", "text"))
 
 
 def grammar_first(trees):
@@ -1804,7 +1868,7 @@ def grammar_first(trees):
         kind = node[0]
         if kind == "lit":
             return {("lit", node[1])}, False
-        if kind in ("range", "byte"):
+        if kind in ("range", "byte", "text_byte"):
             return {(kind,)}, False
         if kind == "rule":
             if node[1] in TOKEN_PRODUCERS:
@@ -1923,6 +1987,8 @@ def check_precedence_table(full_run):
             return ("token", "identifier")
         if kind == "Integer_Literal":
             return ("token", "integer")
+        if kind == "Text_Literal":
+            return ("token", "text")
         if kind.startswith("Kw_"):
             return ("lit", kind[3:].lower())
         if kind in spelling:
@@ -1937,7 +2003,8 @@ def check_precedence_table(full_run):
 
     def kinds_in(body):
         return set(re.findall(r"(?:Landin\.Tokens\.)?\b((?:Kw_[A-Za-z_]+)"
-                              r"|Identifier|Integer_Literal|Ampersand|Bar"
+                              r"|Identifier|Integer_Literal|Text_Literal"
+                              r"|Ampersand|Bar"
                               r"|Caret|Equal_Equal|Greater_Greater|Greater_Equal"
                               r"|Greater|Left_Bracket|Left_Paren|Less_Greater|Less_Equal"
                               r"|Less_Less|Less|Minus_Percent|Minus|Percent"
@@ -2945,7 +3012,8 @@ def check_coverage_registers(full_run):
         keys, covered = set(), set()
         required_guarantees = {
             "source.lexical", "source.structure", "declarations.names",
-            "types.values", "arithmetic.known", "arithmetic.runtime",
+            "types.values", "text.literal-storage", "arithmetic.known",
+            "arithmetic.runtime",
             "arithmetic.total", "ranges.measurements", "assignment.flow",
             "pointer.permission", "inout.exact-alias",
             "inout.possible-alias", "pointer.validity",

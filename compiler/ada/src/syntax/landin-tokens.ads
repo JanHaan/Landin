@@ -51,6 +51,9 @@ package Landin.Tokens is
      (End_Of_Input,
       Identifier,
       Integer_Literal,
+      --  [0260]'s quoted bytes, one lexeme with its escapes unread; D161
+      --  decodes them where the literal's context is known.
+      Text_Literal,
       --  The words [1760] reserves.
       Kw_Addr, Kw_Alignof, Kw_And, Kw_Any, Kw_Atom, Kw_Dec, Kw_Else, Kw_Elsif,
       Kw_End, Kw_Escaping, Kw_Extern, Kw_Fail, Kw_False, Kw_Fixed, Kw_From,
@@ -68,7 +71,6 @@ package Landin.Tokens is
       Underscore, Bang, Dot_Dot_Dot, Dot_Dot, Dot_Dot_Less,
       --  Lexemes with more than one spelling that the kernel omits.
       Compound_Assign, Character_Literal, Float_Literal, Raw_Literal,
-      Text_Literal,
       --  Bytes that spell nothing at all.
       Malformed_Integer, Unknown_Bytes);
 
@@ -81,7 +83,14 @@ package Landin.Tokens is
    subtype Punctuation is Token_Kind range Ampersand .. Dot_Dot_Less;
 
    --  Described by the tour, omitted by the grammar, refused by [1830].
-   subtype Deferred_Kind is Token_Kind range Compound_Assign .. Text_Literal;
+   subtype Deferred_Kind is Token_Kind range Compound_Assign .. Raw_Literal;
+
+   --  A literal the tour describes by paragraph: every deferred lexeme, and
+   --  the text literal, which stays here so an unterminated one can still
+   --  say what it was.
+   subtype Described_Kind is Token_Kind
+     with Static_Predicate =>
+       Described_Kind in Deferred_Kind | Text_Literal;
 
    subtype Malformed_Kind is
      Token_Kind range Malformed_Integer .. Unknown_Bytes;
@@ -91,11 +100,12 @@ package Landin.Tokens is
    --  literal has as many as there are programs.
    subtype Spelled_Kind is Token_Kind range Kw_Addr .. Dot_Dot_Less;
 
-   --  `literal ::= integer | "true" | "false" | "zeroed"` [1770].  The
-   --  three words are reserved and literals at once, so this is a predicate
-   --  rather than a band of the enumeration.
+   --  `literal ::= integer | text | "true" | "false" | "zeroed"` [1770].
+   --  The three words are reserved and literals at once, so this is a
+   --  predicate rather than a band of the enumeration.
    function Is_Literal (Of_Kind : Token_Kind) return Boolean
-     is (Of_Kind in Integer_Literal | Kw_True | Kw_False | Kw_Zeroed);
+     is (Of_Kind in Integer_Literal | Text_Literal
+                    | Kw_True | Kw_False | Kw_Zeroed);
 
    --  The bytes of a kind that has only one spelling.  `escaping` is the
    --  longest, at eight.
@@ -115,7 +125,7 @@ package Landin.Tokens is
    --  diagnostic can name it rather than call it a syntax error [1830].
    --  Which roadmap item enables it is not answered here: ROADMAP.md is the
    --  authority for that, and R1.30's catalogue is where it is read.
-   function Construct (Of_Kind : Deferred_Kind) return Construct_Reference
+   function Construct (Of_Kind : Described_Kind) return Construct_Reference
      with Post => Is_Valid_Construct (Construct'Result);
 
    --  A set of kinds, for the one operation that scans a stream forward.
@@ -162,6 +172,7 @@ package Landin.Tokens is
 
    type Fault_Kind is
      (Malformed_Integer_Run,
+      Malformed_Text_Literal_Run,
       Not_Enabled,
       Unknown_Byte_Run,
       Unterminated_Block_Comment,
@@ -182,9 +193,9 @@ package Landin.Tokens is
    function Opened_At (Item : Fault) return Landin.Source.Span
      with Pre => Kind (Item) in Unterminated_Fault;
 
-   --  Which construct was refused. An unterminated literal is refused as
-   --  well as unclosed, so both kinds carry it.
-   function Refused (Item : Fault) return Deferred_Kind
+   --  Which construct was refused, or which literal was left unclosed: a
+   --  text literal is enabled and still has to say it was one.
+   function Refused (Item : Fault) return Described_Kind
      with Pre => Kind (Item) in Not_Enabled | Unterminated_Literal;
 
    ------------------------------------------------------------------

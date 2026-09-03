@@ -1,0 +1,6 @@
+class: runtime
+summary: text literals form read-only byte slices with decoded escapes and an uncounted trailing NUL
+constructs: 0260, 0270, 0370, 0570, 1050, 1080, 1290, 1800, 1810, 1820
+program: main.ldn
+status: 42
+targets: linux-x86-64

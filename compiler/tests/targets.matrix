@@ -448,7 +448,14 @@ negative/struct-with-an-array-field | linux-x86-64, macos-arm64
 negative/struct-zeroed-assignment-nested-not-enabled | linux-x86-64, macos-arm64
 negative/struct-zeroed-assignment-not-on-every-path | linux-x86-64, macos-arm64
 negative/sunk-inout-not-restored | linux-x86-64, macos-arm64, synthetic-32
+negative/text-literal-codepoint-in-byte-context | linux-x86-64, macos-arm64
+negative/text-literal-malformed-codepoint-escape | linux-x86-64, macos-arm64
+negative/text-literal-needs-byte-slice | linux-x86-64, macos-arm64
+negative/text-literal-needs-read-only-slice | linux-x86-64, macos-arm64
 negative/text-literal-not-enabled | linux-x86-64, macos-arm64
+negative/text-literal-short-byte-escape | linux-x86-64, macos-arm64
+negative/text-literal-unknown-escape | linux-x86-64, macos-arm64
+negative/text-literal-write | linux-x86-64, macos-arm64
 negative/text-type-not-enabled | linux-x86-64, macos-arm64
 negative/try-infallible-call | linux-x86-64, synthetic-32
 negative/type-alias-cycle | linux-x86-64, macos-arm64, synthetic-32
@@ -872,6 +879,7 @@ runtime/struct-locals-hold-their-fields | linux-x86-64
 runtime/struct-returns-cross-calls | linux-x86-64
 runtime/struct-zeroed-assignment-clears-storage | linux-x86-64
 runtime/structs-copy-whole | linux-x86-64
+runtime/text-literal-bytes | linux-x86-64
 runtime/unary-and-bitwise-exit-with-their-results | linux-x86-64
 runtime/undo-call-shapes | linux-x86-64
 runtime/undo-cleanups-follow-failure-edges | linux-x86-64

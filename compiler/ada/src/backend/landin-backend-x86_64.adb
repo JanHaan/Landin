@@ -4171,6 +4171,7 @@ package body Landin.Backend.X86_64 is
 
       Any_Written  : Boolean := False;
       Any_Reserved : Boolean := False;
+      Any_Read_Only : Boolean := False;
 
    begin
       Put (Character'Val (9) & ".text");
@@ -4210,6 +4211,8 @@ package body Landin.Backend.X86_64 is
                     (".set " & Symbol (Item) & ", "
                      & Symbol (Shared_With (Index)));
                end if;
+            elsif Landin.IR.Is_Read_Only (Of_Unit, Item) then
+               Any_Read_Only := True;
             elsif Is_All_Zero (Item) then
                Any_Reserved := True;
             else
@@ -4217,6 +4220,26 @@ package body Landin.Backend.X86_64 is
             end if;
          end;
       end loop;
+
+      --  D161: read-only images sit in `.rodata`, so a write through a
+      --  reference the checker should have refused faults instead of
+      --  silently changing every reader's literal.
+      if Any_Read_Only then
+         Put (Character'Val (9) & ".section .rodata");
+
+         for Index in 1 .. Landin.IR.Item_Count (Of_Unit) loop
+            declare
+               Item : constant Landin.IR.Item_Id :=
+                 Landin.IR.Item_Id (Index);
+            begin
+               if Landin.IR.Kind_Of (Of_Unit, Item) = Landin.IR.Datum
+                 and then Landin.IR.Is_Read_Only (Of_Unit, Item)
+               then
+                  Emit_Array_Image_Datum (Item);
+               end if;
+            end;
+         end loop;
+      end if;
 
       if Landin.IR.Evidence_Count (Of_Unit) > 0 then
          Put (Character'Val (9) & ".section .data.rel.ro.local,""aw""");
@@ -4269,6 +4292,7 @@ package body Landin.Backend.X86_64 is
                  Landin.IR.Item_Id (Index);
             begin
                if Landin.IR.Kind_Of (Of_Unit, Item) = Landin.IR.Datum
+                 and then not Landin.IR.Is_Read_Only (Of_Unit, Item)
                  and then not Is_All_Zero (Item)
                then
                   if Landin.IR.Result_Of (Of_Unit, Item)
@@ -4298,6 +4322,7 @@ package body Landin.Backend.X86_64 is
                  Landin.IR.Item_Id (Index);
             begin
                if Landin.IR.Kind_Of (Of_Unit, Item) = Landin.IR.Datum
+                 and then not Landin.IR.Is_Read_Only (Of_Unit, Item)
                  and then Is_All_Zero (Item)
                then
                   if Landin.IR.Result_Of (Of_Unit, Item)
