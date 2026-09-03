@@ -414,7 +414,7 @@ the right of an assignment, written on the left.
 
 Assignment is a statement, never an expression:
 =  +=  -=  *=  /=  %=  &=  |=  ^=  <<=  >>=
-and the wrapping forms  +%=  -%=*%=
+and the wrapping forms  +%=  -%=  *%=
 
 ### [0400] No `++` and no `--`
 

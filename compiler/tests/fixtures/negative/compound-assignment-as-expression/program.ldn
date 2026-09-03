@@ -1,0 +1,4 @@
+public main: () -> (code: i32) =
+    mut value: i32 = 1
+    code = (value += 1)
+end main

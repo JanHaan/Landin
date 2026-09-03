@@ -33,6 +33,7 @@ package body Landin.Stages.Checking is
    use type Landin.Syntax.Node_Id;
    use type Landin.Syntax.Node_Kind;
    use type Landin.Tokens.Text.Problem;
+   use type Landin.Tokens.Assignment_Operator;
    use type Landin.Targets.Bit_Width;
    use type Landin.Targets.Byte_Count;
    use type Landin.Types.Type_Kind;
@@ -525,6 +526,10 @@ package body Landin.Stages.Checking is
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
       function Synthesise_Binary
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind;
+      function Synthesise_Binary
+        (Of_Tree : Syn.Tree;
+         Of_Kind : Syn.Node_Kind;
+         Left, Right, Site : Syn.Node_Id) return Ty.Type_Kind;
       function Signatures_Agree
         (Left, Right : Landin.Checking.Signature_Id) return Boolean;
       function Note_Reference_Value
@@ -8012,12 +8017,18 @@ package body Landin.Stages.Checking is
       --  u8 in a u8 binding.
       function Synthesise_Binary
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind
+      is (Synthesise_Binary
+            (Of_Tree, Syn.Kind (Of_Tree, Node),
+             Syn.Left_Of (Of_Tree, Node), Syn.Right_Of (Of_Tree, Node),
+             Node));
+
+      function Synthesise_Binary
+        (Of_Tree : Syn.Tree;
+         Of_Kind : Syn.Node_Kind;
+         Left, Right, Site : Syn.Node_Id) return Ty.Type_Kind
       is
-         Of_Kind    : constant Syn.Node_Kind := Syn.Kind (Of_Tree, Node);
          Comparing  : constant Boolean :=
            Of_Kind in Syn.Equal_To .. Syn.Greater_Or_Equal;
-         Left       : constant Syn.Node_Id := Syn.Left_Of (Of_Tree, Node);
-         Right      : constant Syn.Node_Id := Syn.Right_Of (Of_Tree, Node);
          Left_Type  : constant Ty.Type_Kind := Synthesise (Of_Tree, Left);
          Right_Type : constant Ty.Type_Kind := Synthesise (Of_Tree, Right);
          Decided    : Ty.Type_Kind;
@@ -8059,7 +8070,7 @@ package body Landin.Stages.Checking is
             Bad.Report
               (Item    => Bad.Type_Mismatch,
                Source  => Syn.Source_Of (Of_Tree),
-               Where   => Syn.Anchor (Of_Tree, Node),
+               Where   => Syn.Anchor (Of_Tree, Site),
                Message => "atoms support identity comparison with `==` or"
                           & " `<>` only",
                Note    => "[0630]: an atom has identity without payload",
@@ -8083,14 +8094,14 @@ package body Landin.Stages.Checking is
                   Bad.Report
                     (Item    => Bad.Type_Mismatch,
                      Source  => Syn.Source_Of (Of_Tree),
-                     Where   => Syn.Anchor (Of_Tree, Node),
+                     Where   => Syn.Anchor (Of_Tree, Site),
                      Message => "this operator admits integers only",
                      Note    => "[1890]: remainder, wrapping, shifts and"
                                 & " bitwise operators do not admit floats",
                      Related => Syn.Origin (Of_Tree, Left),
                      Because => "the floating-point operand",
                      Into    => Found);
-                  Landin.Checking.Refuse (Types.all, Of_Tree, Node);
+                  Landin.Checking.Refuse (Types.all, Of_Tree, Site);
                   return Ty.Ill_Typed;
                end if;
                return Left_Type;
@@ -8141,26 +8152,48 @@ package body Landin.Stages.Checking is
             Bad.Report
               (Item    => Bad.Type_Mismatch,
                Source  => Syn.Source_Of (Of_Tree),
-               Where   => Syn.Anchor (Of_Tree, Node),
+               Where   => Syn.Anchor (Of_Tree, Site),
                Message => "this operator wants numbers and was given "
                           & Shown (Decided),
                Note    => "[1890]: ordinary arithmetic admits integers and"
                           & " floats; width and bit operators admit integers",
-               Related => Syn.Origin (Of_Tree, Node),
+               Related => Syn.Origin (Of_Tree, Site),
                Because => "here",
                Into    => Found);
             return Ty.Ill_Typed;
          end if;
 
          Require
-           (Of_Tree, Left, Decided, Syn.Origin (Of_Tree, Node),
+           (Of_Tree, Left, Decided, Syn.Origin (Of_Tree, Site),
             "required by this operator");
          Require
-           (Of_Tree, Right, Decided, Syn.Origin (Of_Tree, Node),
+           (Of_Tree, Right, Decided, Syn.Origin (Of_Tree, Site),
             "required by this operator");
 
          return (if Comparing then Ty.Bool else Decided);
       end Synthesise_Binary;
+
+      function Update_Kind
+        (Operation : Landin.Tokens.Assignment_Operator) return Syn.Node_Kind
+      is (case Operation is
+             when Landin.Tokens.Add_Assignment => Syn.Add,
+             when Landin.Tokens.Subtract_Assignment => Syn.Subtract,
+             when Landin.Tokens.Multiply_Assignment => Syn.Multiply,
+             when Landin.Tokens.Divide_Assignment => Syn.Divide,
+             when Landin.Tokens.Remainder_Assignment => Syn.Remainder,
+             when Landin.Tokens.Bitwise_And_Assignment => Syn.Bitwise_And,
+             when Landin.Tokens.Bitwise_Or_Assignment => Syn.Bitwise_Or,
+             when Landin.Tokens.Bitwise_Xor_Assignment => Syn.Bitwise_Xor,
+             when Landin.Tokens.Shift_Left_Assignment => Syn.Shift_Left,
+             when Landin.Tokens.Shift_Right_Assignment => Syn.Shift_Right,
+             when Landin.Tokens.Wrapping_Add_Assignment => Syn.Wrapping_Add,
+             when Landin.Tokens.Wrapping_Subtract_Assignment =>
+               Syn.Wrapping_Subtract,
+             when Landin.Tokens.Wrapping_Multiply_Assignment =>
+               Syn.Wrapping_Multiply,
+             when Landin.Tokens.Plain_Assignment =>
+               raise Landin.Compiler_Defect with
+                 "plain assignment has no updating operator");
 
       function Signatures_Agree
         (Left, Right : Landin.Checking.Signature_Id) return Boolean
@@ -17303,6 +17336,42 @@ package body Landin.Stages.Checking is
                end;
 
             when Syn.Assignment =>
+               --  [0390]: updating assignment reads and writes one scalar
+               --  place.  Check the write permission first, then apply the
+               --  ordinary binary operator's exact operand rules to the
+               --  existing value and the written right-hand side.
+               if Syn.Assignment_Operation (Of_Tree, Node)
+                    /= Landin.Tokens.Plain_Assignment
+               then
+                  declare
+                     Place : constant Syn.Node_Id :=
+                       Syn.Target_Of (Of_Tree, Node);
+                     Value : constant Syn.Node_Id :=
+                       Syn.Value_Of (Of_Tree, Node);
+                  begin
+                     Check_Place (Of_Tree, Place, Stepping => False);
+                     if Landin.Checking.Type_Of
+                          (Types.all, Of_Tree, Place) = Ty.Ill_Typed
+                     then
+                        Landin.Checking.Refuse
+                          (Types.all, Of_Tree, Value);
+                     else
+                        declare
+                           Result : constant Ty.Type_Kind :=
+                             Synthesise_Binary
+                               (Of_Tree,
+                                Update_Kind
+                                  (Syn.Assignment_Operation
+                                     (Of_Tree, Node)),
+                                Place, Value, Node);
+                        begin
+                           pragma Unreferenced (Result);
+                        end;
+                     end if;
+                  end;
+                  return;
+               end if;
+
                --  D76 gives a directly selected variant part one contextual
                --  destination form.  It is intercepted before ordinary
                --  selection synthesis (which correctly keeps the part out
@@ -22229,6 +22298,7 @@ package body Landin.Stages.Checking is
       is
          Amount : Ty.Folded;
          Known  : Boolean;
+         Operation : Syn.Node_Kind := Syn.Assignment;
       begin
          if Node = Syn.No_Node
            or else not Syn.Is_Sound (Of_Tree, Node)
@@ -22241,14 +22311,27 @@ package body Landin.Stages.Checking is
               (Of_Tree, Syn.Slot (Of_Tree, Node, Position), Whole_Fold);
          end loop;
 
-         if Syn.Kind (Of_Tree, Node) not in
+         Operation := Syn.Kind (Of_Tree, Node);
+
+         if Syn.Kind (Of_Tree, Node) = Syn.Assignment
+           and then Syn.Assignment_Operation (Of_Tree, Node)
+                      /= Landin.Tokens.Plain_Assignment
+         then
+            Operation := Update_Kind
+              (Syn.Assignment_Operation (Of_Tree, Node));
+         end if;
+
+         if Operation not in
               Syn.Divide | Syn.Remainder | Syn.Shift_Left | Syn.Shift_Right
          then
             return;
          end if;
 
-         if Syn.Kind (Of_Tree, Node) = Syn.Divide
-           and then Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
+         if Operation = Syn.Divide
+           and then Landin.Checking.Type_Of
+             (Types.all, Of_Tree,
+              (if Syn.Kind (Of_Tree, Node) = Syn.Assignment
+               then Syn.Target_Of (Of_Tree, Node) else Node))
                     in Ty.Float_Name
          then
             --  IEEE division by either signed zero produces infinity or
@@ -22257,7 +22340,10 @@ package body Landin.Stages.Checking is
          end if;
 
          declare
-            Right : constant Syn.Node_Id := Syn.Right_Of (Of_Tree, Node);
+            Right : constant Syn.Node_Id :=
+              (if Syn.Kind (Of_Tree, Node) = Syn.Assignment
+               then Syn.Value_Of (Of_Tree, Node)
+               else Syn.Right_Of (Of_Tree, Node));
          begin
             if Right = Syn.No_Node
               or else not Syn.Is_Sound (Of_Tree, Right)
@@ -22294,7 +22380,7 @@ package body Landin.Stages.Checking is
                return;
             end if;
 
-            case Syn.Kind (Of_Tree, Node) is
+            case Operation is
                when Syn.Divide | Syn.Remainder =>
                   if Amount /= 0 then
                      return;

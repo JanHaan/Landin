@@ -280,6 +280,8 @@ package body Landin.Syntax.Parser is
                              Landin.Source.Names.No_Name;
                Radix     : Tok.Integer_Base := Tok.Decimal;
                Digits_At : Landin.Source.Span := Landin.Source.Empty_Span;
+               Assignment_Op : Tok.Assignment_Operator :=
+                 Tok.Plain_Assignment;
                Exported  : Boolean := False;
                External  : Boolean := False;
                Mutable   : Boolean := False;
@@ -696,6 +698,8 @@ package body Landin.Syntax.Parser is
                              Landin.Source.Names.No_Name;
                Radix     : Tok.Integer_Base := Tok.Decimal;
                Digits_At : Landin.Source.Span := Landin.Source.Empty_Span;
+               Assignment_Op : Tok.Assignment_Operator :=
+                 Tok.Plain_Assignment;
                Exported  : Boolean := False;
                External  : Boolean := False;
                Mutable   : Boolean := False;
@@ -733,6 +737,7 @@ package body Landin.Syntax.Parser is
                    Name       => Named,
                    Base       => Radix,
                    Digit_Run  => Digits_At,
+                   Assignment_Op => Assignment_Op,
                    First_Slot => Result.Links.Last_Index - Children'Length,
                    Slots      => Children'Length,
                    Sound      => Sound,
@@ -4561,31 +4566,26 @@ package body Landin.Syntax.Parser is
                      --  what follows the whole of it -- every dot and
                      --  every bracket group -- is what makes this an
                      --  assignment.
-                     if After_Selectors = Tok.Equal then
+                     if After_Selectors in Tok.Equal | Tok.Compound_Assign
+                     then
                         declare
                            Target : constant Node_Id := Parse_Place;
                            At_Op  : Landin.Source.Span;
+                           Operation : Tok.Assignment_Operator;
                            Value  : Node_Id := No_Node;
                         begin
                            At_Op := Here;
-
-                           if Expect
-                                (Wanted  => Tok.Equal,
-                                 Message => "an assignment writes a place"
-                                            & " with `=`",
-                                 Note    => "[1810]: `=` assigns and `==`"
-                                            & " compares [0390]",
-                                 Related => Start,
-                                 Because => "the place written")
-                           then
-                              Value := Parse_Expression;
-                           end if;
+                           Operation := Tok.Assignment_Operation
+                             (Tok.Token_At (From, Index));
+                           Advance;
+                           Value := Parse_Expression;
 
                            return Add
                              (Of_Kind  => Assignment,
                               At_Token => At_Op,
                               Extent   => Join (Start, After_Previous),
-                              Children => [Target, Value]);
+                              Children => [Target, Value],
+                              Assignment_Op => Operation);
                         end;
                      end if;
 
@@ -5459,12 +5459,14 @@ package body Landin.Syntax.Parser is
                   end;
                end loop;
 
-               --  [0390]: an `=` where an operator or a closer was
+               --  [0390]: an assignment token where an operator or closer
+               --  was
                --  expected is assignment used as an expression, which is
                --  a named rule with its own recovery -- swallow it -- and
                --  not a token nothing allows.
                if Min = Pre.Level_Expression
-                 and then Peek in Tok.Equal | Tok.Colon_Equal
+                 and then Peek in
+                   Tok.Equal | Tok.Colon_Equal | Tok.Compound_Assign
                then
                   declare
                      At_Op : constant Landin.Source.Span := Here;

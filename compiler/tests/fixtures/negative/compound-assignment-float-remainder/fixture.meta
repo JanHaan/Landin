@@ -1,0 +1,6 @@
+class: negative
+summary: compound remainder keeps the ordinary operator's integer-only rule
+constructs: 0170, 0290, 0390, 1890
+program: program.ldn
+targets: linux-x86-64, macos-arm64
+codes: L0301

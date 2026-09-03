@@ -144,6 +144,10 @@ package body Landin.Syntax is
      return Landin.Source.Span
      is (Element (Of_Tree, Id).Digit_Run);
 
+   function Assignment_Operation (Of_Tree : Tree; Id : Node_Id)
+     return Landin.Tokens.Assignment_Operator
+     is (Element (Of_Tree, Id).Assignment_Op);
+
    function Is_Public (Of_Tree : Tree; Id : Node_Id) return Boolean
      is (Element (Of_Tree, Id).Exported);
 
