@@ -3078,8 +3078,11 @@ backward neutral-IR edges, conservative definite assignment and lexical
 `defer` cleanup on iteration transfers. D156 records why no loop opcode was
 added. The second increment adds ordinary-name loop labels and targeted
 transfers, plus the conditional loop's natural-only `complete` edge. D157
-keeps both features as neutral CFG structure and leaves `break with`,
-value-producing loops and `for` traversal in this active item.
+keeps both features as neutral CFG structure. The third
+increment adds `break with` and value-producing `loop`/`while` expressions for
+scalar, function, pointer and atom results, reusing the existing caller-owned
+control join. D158 leaves storage-shaped loop results and `for` traversal in
+this active item.
 
 Exit evidence: every hosted `[NNNN]` row has implementation and positive or
 negative evidence; no omission is hidden by prototype coverage.

@@ -1,0 +1,6 @@
+class: negative
+summary: a finite value-producing loop must supply its natural exhaustion edge
+program: program.ldn
+codes: L0301
+constructs: 1130, 1140, 1170, 1190
+targets: linux-x86-64, macos-arm64, synthetic-32

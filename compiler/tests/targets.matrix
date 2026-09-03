@@ -201,6 +201,9 @@ negative/local-struct-initializer-source-unassigned | linux-x86-64, macos-arm64
 negative/local-used-above-its-declaration | linux-x86-64, macos-arm64
 negative/logical-words-on-numbers | linux-x86-64, macos-arm64
 negative/loop-condition-not-bool | linux-x86-64, macos-arm64
+negative/loop-value-missing-break-value | linux-x86-64, macos-arm64, synthetic-32
+negative/loop-value-missing-completion | linux-x86-64, macos-arm64, synthetic-32
+negative/loop-value-type-mismatch | linux-x86-64, macos-arm64, synthetic-32
 negative/malformed-integer-digit | linux-x86-64, macos-arm64, synthetic-32
 negative/match-scalar-not-enabled | linux-x86-64, macos-arm64
 negative/measuring-refused-types | linux-x86-64, macos-arm64
@@ -781,6 +784,7 @@ runtime/local-struct-inference-copies-storage | linux-x86-64
 runtime/local-struct-initializer-copies-storage | linux-x86-64
 runtime/local-struct-zeroed-reads-zero | linux-x86-64
 runtime/loop-control-flow | linux-x86-64
+runtime/loop-values | linux-x86-64
 runtime/match-expressions-produce-values | linux-x86-64
 runtime/measurements-answer-for-the-target | linux-x86-64
 runtime/merge-sort | linux-x86-64

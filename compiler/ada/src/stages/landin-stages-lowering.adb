@@ -507,6 +507,7 @@ package body Landin.Stages.Lowering is
          Head         : IR.Block_Id := IR.No_Block;
          Exit_Block   : IR.Block_Id := IR.No_Block;
          Cleanup_Base : Natural := 0;
+         Value_Destination : IR.Slot_Id := IR.No_Slot;
       end record;
 
       package Loop_Entries is new Ada.Containers.Vectors
@@ -977,7 +978,8 @@ package body Landin.Stages.Lowering is
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
          Scope   : Res.Scope_Id;
-         Result  : IR.Slot_Id);
+         Result  : IR.Slot_Id;
+         Destination : IR.Slot_Id := IR.No_Slot);
 
       procedure Lower_Loop_Transfer
         (Of_Tree : Syn.Tree;
@@ -2536,6 +2538,9 @@ package body Landin.Stages.Lowering is
                  (Of_Tree, Node, Scope, Active_Result, Answer);
             when Syn.Bare_Block =>
                Lower_Bare_Block
+                 (Of_Tree, Node, Scope, Active_Result, Answer);
+            when Syn.Loop_Statement | Syn.While_Statement =>
+               Lower_Loop
                  (Of_Tree, Node, Scope, Active_Result, Answer);
             when others =>
                raise Landin.Compiler_Defect with
@@ -4233,7 +4238,8 @@ package body Landin.Stages.Lowering is
 
       begin
          case Syn.Kind (Of_Tree, Node) is
-            when Syn.If_Statement | Syn.Match_Statement | Syn.Bare_Block =>
+            when Syn.If_Statement | Syn.Match_Statement | Syn.Bare_Block
+               | Syn.Loop_Statement | Syn.While_Statement =>
                return Lower_Control_Expression (Of_Tree, Node, Scope);
 
             when Syn.Integer_Literal =>
@@ -5821,7 +5827,8 @@ package body Landin.Stages.Lowering is
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
          Scope   : Res.Scope_Id;
-         Result  : IR.Slot_Id)
+         Result  : IR.Slot_Id;
+         Destination : IR.Slot_Id := IR.No_Slot)
       is
          Site : constant Landin.Provenance.Origin := Site_Of (Of_Tree, Node);
          Runs : constant Syn.Node_Id := Syn.Loop_Body (Of_Tree, Node);
@@ -5872,7 +5879,8 @@ package body Landin.Stages.Lowering is
               (Label        => Syn.Name (Of_Tree, Node),
                Head         => Head,
                Exit_Block   => Exit_Block,
-               Cleanup_Base => Natural (Cleanup_Stack.Length)));
+               Cleanup_Base => Natural (Cleanup_Stack.Length),
+               Value_Destination => Destination));
          Open (Body_Block);
          Lower_Statements (Of_Tree, Runs, Inside, Result);
          if Current /= IR.No_Block then
@@ -5917,6 +5925,24 @@ package body Landin.Stages.Lowering is
 
          procedure Transfer is
          begin
+            if Syn.Kind (Of_Tree, Node) = Syn.Break_Statement
+              and then Syn.Transfer_Value (Of_Tree, Node) /= Syn.No_Node
+            then
+               declare
+                  Value : constant IR.Value_Id :=
+                    Lower_Expression
+                      (Of_Tree, Syn.Transfer_Value (Of_Tree, Node), Scope);
+               begin
+                  if Current /= IR.No_Block
+                    and then Frame.Value_Destination /= IR.No_Slot
+                  then
+                     IR.Emit_Store
+                       (Unit.all, Filling, Frame.Value_Destination,
+                        Value, Site);
+                  end if;
+               end;
+            end if;
+
             Emit_Cleanups
               (Of_Tree, Frame.Cleanup_Base + 1,
                Cleanup.Structured_Transfer);

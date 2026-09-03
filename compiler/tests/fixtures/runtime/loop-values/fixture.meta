@@ -1,0 +1,6 @@
+class: runtime
+summary: scalar loop expressions receive guarded, completion, and labelled break values through one join slot
+program: main.ldn
+status: 42
+constructs: 0110, 0290, 0350, 1130, 1140, 1170, 1180, 1190, 1810
+targets: linux-x86-64

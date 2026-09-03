@@ -29,7 +29,8 @@ package body Landin.Syntax is
             when Defer_Statement | Undo_Statement => 1,
             when Return_Statement         => 1,
             when Fail_Statement           => 2,
-            when Break_Statement | Continue_Statement => 1,
+            when Break_Statement            => 2,
+            when Continue_Statement         => 1,
             when Loop_Statement            => 2,
             when While_Statement           => 3,
             when If_Statement             => 1,
@@ -385,7 +386,11 @@ package body Landin.Syntax is
 
    function Condition_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
      is (Slot (Of_Tree, Id,
-          (if Kind (Of_Tree, Id) = Fail_Statement then 2 else 1)));
+          (if Kind (Of_Tree, Id) in Fail_Statement | Break_Statement
+           then 2 else 1)));
+
+   function Transfer_Value (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     is (Slot (Of_Tree, Id, 1));
 
    function Loop_Body (Of_Tree : Tree; Id : Node_Id) return Node_Id
      is (Slot

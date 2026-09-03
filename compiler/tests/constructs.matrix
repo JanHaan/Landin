@@ -126,13 +126,13 @@
 1100   tour        accepted emitted executed refused  defer runs at the end of its block, in reverse order
 1110   tour        accepted emitted executed refused  undo is the same machinery under a condition
 1120   tour        -                                  Checks may be switched off for a region, visibly
-1130   tour        accepted emitted executed          Unconditional loop
+1130   tour        accepted emitted executed refused  Unconditional loop
 1140   tour        accepted emitted executed refused  Conditional loop
 1150   tour        refused-by-name                    Traversal
 1160   tour        -                                  There is no marker on a loop binding
-1170   tour        accepted emitted executed          complete runs when the loop finished without break
-1180   tour        accepted emitted executed          Labels use the ordinary name form
-1190   tour        accepted emitted executed          break carries a value with 'with'
+1170   tour        accepted emitted executed refused  complete runs when the loop finished without break
+1180   tour        accepted emitted executed refused  Labels use the ordinary name form
+1190   tour        accepted emitted executed refused  break carries a value with 'with'
 1200   tour        -                                  Because entries are registered where control reaches
 1210   tour        accepted emitted executed refused  Pattern matching
 1220   tour        accepted emitted executed refused  A pattern binding carries a parameter convention
