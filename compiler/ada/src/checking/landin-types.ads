@@ -277,6 +277,14 @@ package Landin.Types is
       Bits       : out Magnitude;
       Overflowed : out Boolean);
 
+   --  [0240]'s two type-qualified IEEE values.  A quiet NaN has one
+   --  canonical payload in each enabled width; unary minus below changes
+   --  only its sign bit.
+   type Float_Special is (Infinity, Quiet_NaN);
+
+   function Float_Special_Bits
+     (Item : Float_Name; Special : Float_Special) return Magnitude;
+
    function Negated_Float
      (Bits : Magnitude; Item : Float_Name) return Magnitude;
 

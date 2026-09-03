@@ -107,6 +107,9 @@ package body Landin.Tests.Checking_Suite is
    procedure Routine_Instance_Views_Keep_Source_Facts_Separate
      (Item : in out Landin.Testing.Context);
 
+   procedure Float_Specials_Have_Canonical_Bits
+     (Item : in out Landin.Testing.Context);
+
    procedure Failed_Generic_Deduction_Has_No_Target
      (Item : in out Landin.Testing.Context);
 
@@ -6717,8 +6720,44 @@ package body Landin.Tests.Checking_Suite is
       end;
    end Conformance_Register_Uses_Normalized_Keys;
 
+   procedure Float_Specials_Have_Canonical_Bits
+     (Item : in out Landin.Testing.Context)
+   is
+   begin
+      Landin.Testing.Check
+        (Item,
+         Landin.Types.Float_Special_Bits
+           (Landin.Types.F32, Landin.Types.Infinity) = 16#7F80_0000#
+         and then Landin.Types.Float_Special_Bits
+           (Landin.Types.F64, Landin.Types.Infinity)
+             = 16#7FF0_0000_0000_0000#,
+         "each infinity has the positive IEEE pattern");
+      Landin.Testing.Check
+        (Item,
+         Landin.Types.Float_Special_Bits
+           (Landin.Types.F32, Landin.Types.Quiet_NaN) = 16#7FC0_0000#
+         and then Landin.Types.Float_Special_Bits
+           (Landin.Types.F64, Landin.Types.Quiet_NaN)
+             = 16#7FF8_0000_0000_0000#,
+         "each nan has the canonical quiet IEEE pattern");
+      Landin.Testing.Check
+        (Item,
+         Landin.Types.Negated_Float
+           (Landin.Types.Float_Special_Bits
+              (Landin.Types.F32, Landin.Types.Quiet_NaN),
+            Landin.Types.F32) = 16#FFC0_0000#
+         and then Landin.Types.Negated_Float
+           (Landin.Types.Float_Special_Bits
+              (Landin.Types.F64, Landin.Types.Quiet_NaN),
+            Landin.Types.F64) = 16#FFF8_0000_0000_0000#,
+         "unary minus changes only the nan sign bit");
+   end Float_Specials_Have_Canonical_Bits;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "checking", "float specials have canonical bits",
+         Float_Specials_Have_Canonical_Bits'Access);
       Landin.Testing.Register
         (Into, "checking", "conformance register uses normalized keys",
          Conformance_Register_Uses_Normalized_Keys'Access);

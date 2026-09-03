@@ -152,9 +152,10 @@ no escape and removes a line-leading closing delimiter's indentation.
 With no context it still defaults to the not-yet-enabled `utf8`, and `utf8`,
 `utf16`, `cstring` and text codepoint escapes remain R4.10 work. D162 admits
 [0210]'s decimal float with [0220]'s optional exponent. D166 adds [0230]'s
-hexadecimal fraction and required binary exponent. D163 admits [0250]'s
-single-quoted character as exactly one Unicode scalar value of fixed type
-`u32`. A raw scalar is shortest-form UTF-8; [0270]'s simple escapes and
+hexadecimal fraction and required binary exponent. D167 admits [0240]'s
+type-qualified `infinity` and `nan` values for f32 and f64. D163 admits
+[0250]'s single-quoted character as exactly one Unicode scalar value of fixed
+type `u32`. A raw scalar is shortest-form UTF-8; [0270]'s simple escapes and
 `\u{...}` spell scalar values, while byte-only `\xNN` does not.
 
 ```landin-grammar
@@ -779,6 +780,10 @@ implicit conversion from an integer literal or integer value; with no context
 the float defaults to f32. The decimal spelling rounds once to the contextual
 IEEE format. A finite spelling that would round to infinity is L0300 rather
 than silently becoming [0240]'s named special value.
+The named values `f32.infinity`, `f64.infinity`, `f32.nan` and `f64.nan` have
+the type written before the dot rather than taking one from context. D167
+chooses one canonical quiet NaN pattern for each width; unary minus changes
+only its sign bit, as it does for infinity.
 With no surrounding context, the first written answer of a control expression
 supplies its scalar type, fixed-array element and extent, or nominal aggregate
 body; every other answer must have that same complete shape. An edge that
@@ -1001,10 +1006,11 @@ value to stand for it. Inside a body the same expression
 traps [0300] and is not this, which is the one place the two
 readings of one sum come apart.
 D162's first float increment admits a decimal float literal, its unary minus,
-or `zeroed` as a module scalar or aggregate-field image. Module float
-arithmetic is a named R4.10 refusal: reproducing the runtime IEEE rounding and
-NaN rules in a target-neutral static folder is separate work, not permission
-to use the compiler host's floating-point behavior as language semantics.
+`zeroed`, or D167's named infinity and NaN as a module scalar or
+aggregate-field image. Module float arithmetic is a named R4.10 refusal:
+reproducing the runtime IEEE rounding and NaN rules in a target-neutral static
+folder is separate work, not permission to use the compiler host's
+floating-point behavior as language semantics.
 [0130] makes a module a set, so one module value may name
 another written below it. A chain of them that comes back to
 where it began names nothing at all: no member of it is
@@ -8476,7 +8482,7 @@ classified failure boundary before the repository gate can pass.
 | `source.structure` | static | 1740, 1800, 1810, 1820, 1840 | L0100--L0112 | `negative/variant-part-end-name-mismatch`, `unit/parser-nesting-limit` |
 | `declarations.names` | static | 0040, 0050, 0060, 0080, 0090, 0100, 0110, 0120, 0130, 0140, 1790, 1795, 1850 | L0200 or L0201 | `negative/duplicate-in-a-module`, `negative/local-used-above-its-declaration` |
 | `types.values` | static | 0070, 0160, 0170, 0180, 0190, 0200, 0210, 0250, 1870, 1880, 1890 | L0300, L0301 or L0304 | `negative/character-literal-needs-u32`, `negative/float-literal-not-enabled`, `negative/float-type-not-enabled`, `negative/integer-literal-not-a-float`, `negative/literal-above-its-type`, `negative/type-name-is-not-a-type` |
-| `float.ieee` | static | 0170, 0210, 0220, 0230, 0240, 0290, 0350 | f32/f64 decimal and hexadecimal literals, runtime arithmetic and comparison follow IEEE binary32/binary64, preserving exact hexadecimal values, signed zero and unordered NaN behavior; L0300 rejects a finite literal that becomes infinity, L0301 rejects mixed classes and integer-only operators, and L0304 retains the static-fold boundary | `negative/float-remainder-is-integer-only`, `negative/hex-float-overflows-context`, `negative/module-float-arithmetic-not-enabled`, `runtime/float-decimal-runtime`, `runtime/float-hexadecimal-runtime` |
+| `float.ieee` | static | 0170, 0210, 0220, 0230, 0240, 0290, 0350 | f32/f64 decimal and hexadecimal literals plus inherently typed infinity and canonical quiet NaN names follow IEEE binary32/binary64 through runtime arithmetic and comparison, preserving exact hexadecimal values, signed zero and unordered NaN behavior; L0300 rejects a finite literal that becomes infinity, L0301 rejects an invalid named special, a width mismatch, mixed classes and integer-only operators, and L0304 retains the static-fold boundary | `negative/float-remainder-is-integer-only`, `negative/float-special-name-unknown`, `negative/float-special-on-integer-type`, `negative/float-special-width-mismatch`, `negative/hex-float-overflows-context`, `negative/module-float-arithmetic-not-enabled`, `runtime/float-decimal-runtime`, `runtime/float-hexadecimal-runtime`, `runtime/float-named-specials` |
 | `text.literal-storage` | static | 0260, 0270, 0280, 0570, 1770, 1880, 1900, 1940 | L0301 for a non-byte, writable or codepoint context; L0303 for a write through its read-only view; L0304 for the default deferred `utf8`; equal decoded quoted or raw contents share read-only storage with one trailing NUL excluded from the slice length | `negative/raw-literal-needs-byte-slice`, `negative/raw-literal-needs-read-only-slice`, `negative/raw-literal-write`, `negative/text-literal-codepoint-in-byte-context`, `negative/text-literal-needs-byte-slice`, `negative/text-literal-needs-read-only-slice`, `negative/text-literal-not-enabled`, `negative/text-literal-write`, `runtime/raw-literal-bytes`, `runtime/text-literal-bytes` |
 | `arithmetic.known` | static | 0290, 0300, 0390, 1950 | L0300 or L0306 | `negative/compound-assignment-zero-divisor`, `negative/divisor-is-zero`, `negative/literal-above-its-type` |
 | `arithmetic.runtime` | trap | 0290, 0300, 0320, 0390, 1950, 1960 | trap | `runtime/compound-assignment-overflow-traps`, `runtime/checked-overflow-traps`, `runtime/checked-subtraction-traps`, `runtime/checked-multiplication-traps`, `runtime/checked-negation-traps`, `runtime/signed-division-overflow-traps`, `runtime/a-zero-divisor-traps`, `runtime/a-zero-remainder-divisor-traps`, `runtime/negative-left-shift-traps`, `runtime/negative-right-shift-traps` |
@@ -9216,8 +9222,9 @@ A module float may presently use a literal, its unary minus or `zeroed`, also
 inside a static aggregate image. Float arithmetic in a module image is a named
 R4.10 refusal: the target-neutral folder does not borrow the compiler host's
 rounding mode or NaN behavior. D166 subsequently enables hexadecimal floats
-[0230]. f16, the named `infinity` and `nan` members [0240], and explicit
-integer/float conversions [0310] remain separate hosted increments.
+[0230], and D167 enables the named `infinity` and `nan` members [0240]. f16
+and explicit integer/float conversions [0310] remain separate hosted
+increments.
 
 **The alternatives:** default to f64, admit decimal literals only with an
 explicit type, treat a float's same-width integer carrier as interchangeable,
@@ -9411,3 +9418,45 @@ declined.
 `negative/hex-float-overflows-context`,
 `negative/malformed-hex-float-exponent`, the lexer cases, and the `float.ieee`
 and `source.lexical` guarantee rows.
+
+### D167 — IEEE special values are inherent type-qualified constants
+
+**The tour said** that [0240] writes infinity and NaN as members of a float
+type, that unary minus supplies their negative forms, and that NaN comparison
+is unordered. It did not say whether the qualifier or the surrounding context
+chooses the width, which NaN payload a source name denotes, whether a signed
+NaN retains that sign, or whether the names are valid module images.
+
+**Chosen:** the thirteenth R4.10 increment enables exactly `f32.infinity`,
+`f64.infinity`, `f32.nan` and `f64.nan`. The type before the dot is an inherent
+part of the value: it does not convert to another contextual float width, so a
+width mismatch is L0301. No other scalar type has these members, and no other
+member of f32 or f64 is a named value. An unknown type-qualified member is
+also L0301 rather than an unresolved module or runtime field selection.
+
+Infinity has the ordinary positive IEEE pattern. `nan` denotes one canonical
+quiet NaN: `0x7FC00000` for f32 and `0x7FF8000000000000` for f64. Unary minus
+flips only the sign bit of either named value, preserving the quiet NaN's
+payload. These bits use the existing float IR carrier, storage, internal-call,
+arithmetic and comparison paths; no new runtime operation or backend opcode is
+introduced.
+
+A named special and its unary minus are compile-time scalar leaves, not member
+reads from storage. They are therefore valid in module scalar images and in
+the scalar leaves of module arrays and structs wherever a float literal is
+valid. General module float arithmetic remains D162's L0304 boundary. f16 and
+explicit integer/float conversions remain separate hosted increments.
+
+**The alternatives:** infer the width from context despite the written type,
+spell the values as unqualified lexical literals, preserve an unspecified or
+host-chosen NaN payload, or reject them from static images as field reads.
+Those choices respectively make the qualifier misleading, add another token
+family for values the tour writes as members, make generated target bits
+depend on the compiler host, or deny a constant spelling where an equivalent
+literal image is already accepted. All were declined.
+
+**Pinned by** `runtime/float-named-specials`,
+`negative/float-special-name-unknown`,
+`negative/float-special-on-integer-type`,
+`negative/float-special-width-mismatch`, the direct checking case, and the
+`float.ieee` guarantee row.

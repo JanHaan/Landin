@@ -19449,6 +19449,30 @@ file negative/float-remainder-is-integer-only/program.ldn tokens 24
   71 72 1
   73 76 end
   77 81 main
+file negative/float-special-name-unknown/program.ldn tokens 7
+  0 5 wrong
+  5 6 :
+  7 10 f64
+  11 12 =
+  13 16 f64
+  16 17 .
+  17 24 forever
+file negative/float-special-on-integer-type/program.ldn tokens 7
+  0 5 wrong
+  5 6 :
+  7 10 u32
+  11 12 =
+  13 16 u32
+  16 17 .
+  17 20 nan
+file negative/float-special-width-mismatch/program.ldn tokens 7
+  0 5 wrong
+  5 6 :
+  7 10 f32
+  11 12 =
+  13 16 f64
+  16 17 .
+  17 25 infinity
 file negative/float-type-not-enabled/program.ldn tokens 5
   0 5 ratio
   5 6 :

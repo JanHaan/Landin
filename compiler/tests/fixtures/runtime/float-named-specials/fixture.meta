@@ -1,0 +1,6 @@
+class: runtime
+summary: named IEEE infinity and canonical quiet NaN values retain their type and sign through module and local images
+constructs: 0170, 0210, 0220, 0240, 0290, 0350, 1800, 1880, 1890, 1940
+program: main.ldn
+status: 42
+targets: linux-x86-64
