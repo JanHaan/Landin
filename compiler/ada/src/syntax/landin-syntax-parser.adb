@@ -5817,6 +5817,11 @@ package body Landin.Syntax.Parser is
                   return Add (Of_Kind => Text_Literal, At_Token => At_Item);
                end if;
 
+               if Peek = Tok.Raw_Literal then
+                  Advance;
+                  return Add (Of_Kind => Raw_Literal, At_Token => At_Item);
+               end if;
+
                --  [1380]: `any(pointer)` is explicit but takes its concept
                --  type from context.  The checker resolves the concrete
                --  conformance and retains the pointer's origin/permission.

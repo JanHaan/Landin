@@ -1,0 +1,5 @@
+public main: () -> (code: i32) =
+    mut name: []u8 = """landin"""
+    name[0] = 76
+    code = 0
+end main

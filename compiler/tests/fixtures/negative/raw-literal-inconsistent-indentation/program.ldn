@@ -1,0 +1,4 @@
+bad: []u8 = """
+    enough
+  short
+    """

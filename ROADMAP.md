@@ -393,8 +393,9 @@ text and raw literals `[0250]` `[0260]` `[0280]` were refused by `[1830]`.
 D161's seventh R4.10 increment now enables the direct `[]u8` text-literal
 context and puts its escape-aware scan, shared decoding and L0320 malformed
 spelling at this lexical seam. D163's ninth increment likewise enables one
-decoded `u32` character and gives malformed character spelling L0322. Raw
-literals and the remaining text contexts stay with R4.10.
+decoded `u32` character and gives malformed character spelling L0322. D164's
+tenth enables raw byte text with matching quote runs and indentation stripping.
+The remaining text contexts stay with R4.10.
 
 ### R1.30 — Establish the diagnostic catalogue
 
@@ -3112,6 +3113,12 @@ escapes and `\u{...}` while rejecting empty, multiple, nonscalar and
 byte-escape contents with lexical L0322. D163 shares one decoder across
 lexing, static folding and lowering and keeps the text representation types
 and their indexing work separate.
+The tenth increment enables [0280]'s raw literals in the same direct read-only
+`[]u8` context as quoted byte text. Matching runs of three or more quotes make
+shorter quote runs content, escapes remain uninterpreted, and a line-leading
+closer's exact indentation is stripped from nonblank lines. D164 assigns
+malformed UTF-8 or indentation lexical L0323 and shares the pooled datum path
+with ordinary text.
 
 Exit evidence: every hosted `[NNNN]` row has implementation and positive or
 negative evidence; no omission is hidden by prototype coverage.

@@ -1,0 +1,6 @@
+class: negative
+summary: D164 requires each nonblank raw line to carry the closing delimiter indentation
+constructs: 0280, 1770
+program: program.ldn
+codes: L0323
+targets: linux-x86-64, macos-arm64

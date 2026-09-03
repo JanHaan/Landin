@@ -322,4 +322,139 @@ package body Landin.Tokens.Text is
       end if;
    end Decode_Character;
 
+   procedure Decode_Raw
+     (Lexeme      : String;
+      Bytes       : out String;
+      Length      : out Natural;
+      Fault       : out Problem;
+      Fault_First : out Natural;
+      Fault_Last  : out Natural)
+   is
+      Opening_Quotes : Natural := 0;
+      Cursor : Natural := Lexeme'First;
+
+      procedure Keep (Item : Character);
+
+      procedure Keep (Item : Character) is
+      begin
+         Length := Length + 1;
+         Bytes (Bytes'First + Length - 1) := Item;
+      end Keep;
+   begin
+      Length := 0;
+      Fault := Well_Formed;
+      Fault_First := 0;
+      Fault_Last := 0;
+      Bytes := [others => ' '];
+
+      while Cursor <= Lexeme'Last and then Lexeme (Cursor) = '"' loop
+         Opening_Quotes := Opening_Quotes + 1;
+         Cursor := Cursor + 1;
+      end loop;
+
+      if Opening_Quotes < 3 then
+         raise Program_Error with "a non-raw token reached raw decoding";
+      end if;
+
+      declare
+         Content_First : constant Positive :=
+           Lexeme'First + Opening_Quotes;
+         Close_First : constant Positive :=
+           Lexeme'Last - Opening_Quotes + 1;
+         Content_Last : constant Natural := Close_First - 1;
+         Line_First : Positive := Close_First;
+         Indent_Length : Natural;
+         At_Byte : Positive := Content_First;
+         At_Line_Start : Boolean := False;
+
+         procedure Fail (Which : Problem; Stop : Natural);
+
+         procedure Fail (Which : Problem; Stop : Natural) is
+         begin
+            Fault := Which;
+            Fault_First := At_Byte - Lexeme'First;
+            Fault_Last := Stop - Lexeme'First + 1;
+         end Fail;
+
+         function Is_Horizontal (Item : Character) return Boolean
+           is (Item in ' ' | Character'Val (9));
+      begin
+         while Line_First > Content_First
+           and then Lexeme (Line_First - 1) not in Character'Val (10)
+                                                   | Character'Val (13)
+         loop
+            Line_First := Line_First - 1;
+         end loop;
+
+         Indent_Length :=
+           (if Line_First = Content_First
+            then 0
+            else Close_First - Line_First);
+         for Position in Line_First .. Close_First - 1 loop
+            if not Is_Horizontal (Lexeme (Position)) then
+               Indent_Length := 0;
+               exit;
+            end if;
+         end loop;
+
+         while At_Byte <= Content_Last loop
+            if At_Line_Start and then Indent_Length > 0 then
+               declare
+                  Line_Last : Natural := At_Byte;
+                  Prefix    : Natural := 0;
+               begin
+                  while Line_Last <= Content_Last
+                    and then Lexeme (Line_Last) not in Character'Val (10)
+                                                     | Character'Val (13)
+                  loop
+                     Line_Last := Line_Last + 1;
+                  end loop;
+
+                  while At_Byte + Prefix < Line_Last
+                    and then Is_Horizontal (Lexeme (At_Byte + Prefix))
+                  loop
+                     Prefix := Prefix + 1;
+                  end loop;
+
+                  if At_Byte + Prefix = Line_Last then
+                     --  A blank line carries no observable indentation.
+                     At_Byte := At_Byte + Prefix;
+                  elsif Prefix < Indent_Length
+                    or else Lexeme
+                      (At_Byte .. At_Byte + Indent_Length - 1)
+                        /= Lexeme (Line_First .. Close_First - 1)
+                  then
+                     Fail
+                       (Inconsistent_Raw_Indentation,
+                        Natural'Min (Content_Last,
+                                     At_Byte + Indent_Length - 1));
+                     return;
+                  else
+                     At_Byte := At_Byte + Indent_Length;
+                  end if;
+               end;
+               At_Line_Start := False;
+            end if;
+
+            exit when At_Byte > Content_Last;
+
+            declare
+               Count : constant Natural :=
+                 UTF8_Length (Lexeme, At_Byte, Content_Last);
+            begin
+               if Count = 0 then
+                  Fail (Invalid_UTF8_Source, At_Byte);
+                  return;
+               end if;
+               for Offset in 0 .. Count - 1 loop
+                  Keep (Lexeme (At_Byte + Offset));
+               end loop;
+               At_Line_Start := Lexeme (At_Byte) in Character'Val (10)
+                                                   | Character'Val (13);
+               At_Byte := At_Byte + Count;
+            end;
+         end loop;
+      end;
+   end Decode_Raw;
+
 end Landin.Tokens.Text;

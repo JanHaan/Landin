@@ -7868,7 +7868,9 @@ package body Landin.Stages.Checking is
             return;
          end if;
 
-         if Syn.Kind (Of_Tree, Node) = Syn.Text_Literal then
+         if Syn.Kind (Of_Tree, Node)
+              in Syn.Text_Literal | Syn.Raw_Literal
+         then
             Bad.Report
               (Item    => Bad.Type_Mismatch,
                Source  => Syn.Source_Of (Of_Tree),
@@ -8530,6 +8532,7 @@ package body Landin.Stages.Checking is
                  and then Syn.Kind (Of_Tree, Argument)
                             in Syn.If_Statement | Syn.Match_Statement
                                | Syn.Bare_Block | Syn.Text_Literal
+                               | Syn.Raw_Literal
                then
                   declare
                      Expected : Value_Context := (Kind => Wants, others => <>);
@@ -12861,7 +12864,7 @@ package body Landin.Stages.Checking is
                --  borrow a type from context.  It is the codepoint itself.
                return Kept (Ty.U32);
 
-            when Syn.Text_Literal =>
+            when Syn.Text_Literal | Syn.Raw_Literal =>
                --  [0260]: with no context a text literal is `utf8`, and
                --  D161 enables only the `[]u8` context.
                Bad.Report
@@ -18272,8 +18275,13 @@ package body Landin.Stages.Checking is
             return;
          end if;
 
-         Landin.Tokens.Text.Decode
-           (Lexeme, Bytes, Length, Fault, Fault_First, Fault_Last);
+         if Syn.Kind (Of_Tree, Node) = Syn.Raw_Literal then
+            Landin.Tokens.Text.Decode_Raw
+              (Lexeme, Bytes, Length, Fault, Fault_First, Fault_Last);
+         else
+            Landin.Tokens.Text.Decode
+              (Lexeme, Bytes, Length, Fault, Fault_First, Fault_Last);
+         end if;
          if Fault = Landin.Tokens.Text.Codepoint_Where_Bytes_Are_Meant then
             Bad.Report
               (Item    => Bad.Type_Mismatch,
@@ -18315,7 +18323,9 @@ package body Landin.Stages.Checking is
             return;
          end if;
 
-         if Syn.Kind (Of_Tree, Node) = Syn.Text_Literal then
+         if Syn.Kind (Of_Tree, Node)
+              in Syn.Text_Literal | Syn.Raw_Literal
+         then
             if Expected.Kind = Ty.Slice_Value then
                Check_Text_Literal
                  (Of_Tree, Node, Expected.Reference, Site, Because);
