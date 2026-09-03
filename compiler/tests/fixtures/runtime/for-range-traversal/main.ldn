@@ -1,0 +1,66 @@
+mut bound_calls: i32 = 0
+
+bound: (value: i32) -> (answer: i32) =
+    bound_calls = bound_calls + 1
+    answer = value
+end bound
+
+public main: () -> (code: i32) =
+    mut half_open: i32 = 0
+    for item, idx in bound(2)..<bound(6) do
+        half_open = half_open + item
+        if idx == 3 then
+            half_open = half_open + 6
+        end if
+    end for
+
+    mut inclusive: i32 = 0
+    for item in 3..5 do
+        inclusive = inclusive + item
+        continue when item == 4
+        inclusive = inclusive + 10
+    end for
+
+    mut completed: i32 = 0
+    for item in 4..<4 do
+        completed = item
+    complete
+        completed = 7
+    end for
+
+    mut reached: i32 = 0
+    outer: for x in 0..<4 do
+        for y in 0..<4 do
+            continue outer when x < 2
+            reached = reached + y + 1
+            break outer when x == 2
+        end for
+    end outer
+
+    selected: i32 = for item in 0..<4 do
+        break with 9 when item == 2
+    complete
+        break with 1
+    end for
+
+    exhausted: i32 = for item in 0..<0 do
+        break with item
+    complete
+        break with 8
+    end for
+
+    first: u8 = 254
+    last: u8 = 255
+    mut edge_count: i32 = 0
+    for item in first..last do
+        edge_count = edge_count + 1
+    end for
+
+    if half_open == 20 and inclusive == 32 and completed == 7
+      and reached == 1 and selected == 9 and exhausted == 8
+      and edge_count == 2 and bound_calls == 2 then
+        code = 42
+    else
+        code = 1
+    end if
+end main

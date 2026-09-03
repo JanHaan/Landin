@@ -358,7 +358,7 @@ value_statement ::= binding | destructuring_binding | assignment
                   | increment | discard | call | defer | undo | try
                   | "return" "when" expression
                   | "fail" expression "when" expression
-                  | break | continue | loop | while
+                  | break | continue | loop | while | for
                   | if | match | bare_block
 destructuring_binding ::= "(" destructured_field
                           ("," destructured_field)* ")" ":=" expression
@@ -415,13 +415,23 @@ statement and the loop edge, so [1100]'s `defer` runs and [1110]'s `undo` does
 not. A conditional loop's optional `complete` block runs only when its
 condition becomes false; a `break` skips it. Facts established only in a loop
 body or completion block do not establish definite assignment after the loop.
-`break with`, value-producing loops, and `for` traversal remain outside this
-increment.
+`break with` and value-producing loops are D158's extension. D159 enables the
+integer-range form of `for`: both bounds are evaluated once, from left to
+right, and have one integer type. `a..<b` visits the ascending values for
+which the element is less than `b`; `a..b` also visits `b`. Either form is
+empty when its first value is already beyond its last. The element binding is
+an immutable copy with the range's type; an optional index is an immutable
+`usize` beginning at zero. `continue` advances both before the next test, and
+the inclusive form completes at its maximum integer endpoint without first
+overflowing it. Collection traversal has the same parsed form but remains a
+named R4.10 refusal until its element permission and iterable evidence are
+implemented.
 
 ```landin-grammar
 statement   ::= binding | destructuring_binding | assignment | increment
               | discard | call | defer | undo | try | return | fail
-              | break | continue | loop | while | if | match | bare_block
+              | break | continue | loop | while | for | if | match
+              | bare_block
 assignment  ::= place "=" expression
 increment   ::= ("inc" | "dec") place
 discard     ::= "_" "=" expression
@@ -437,6 +447,12 @@ loop        ::= "loop" "do" block "end" "loop"
 while       ::= "while" expression "do" block
                 ("complete" block)? "end" "while"
               | identifier ":" "while" expression "do" block
+                ("complete" block)? "end" identifier
+for         ::= "for" identifier ("," identifier)? "in" expression
+                ((".." | "..<") expression)? "do" block
+                ("complete" block)? "end" "for"
+              | identifier ":" "for" identifier ("," identifier)?
+                "in" expression ((".." | "..<") expression)? "do" block
                 ("complete" block)? "end" identifier
 try         ::= "try" (call | labeled_application)
 if          ::= "if" expression "then" block
@@ -495,8 +511,8 @@ fill; the all-fill spelling remains refused by name.
 A call-site `else` binds to the call except where that same token directly
 closes an enclosing `then` or `elsif` arm; parentheses around the recovered
 call make the inner use explicit.
-An `if`, exhaustive `match`, bare `begin` block, `loop`, or `while` is also a
-primary. A loop is value-producing when its targeted `break` edges carry
+An `if`, exhaustive `match`, bare `begin` block, `loop`, `while`, or `for` is
+also a primary. A loop is value-producing when its targeted `break` edges carry
 `with` values. Every break edge then carries one value of the joined type; a
 finite conditional loop also needs `complete` to leave through such an edge.
 Scalar values use the join's ordinary slot. Fixed arrays, structs, slices and
@@ -515,7 +531,8 @@ primary     ::= literal | array_literal | array_repetition | struct_literal
               | empty_slice | labeled_application | anonymous_function
               | indexed | call | address | pointer_conversion
               | any_construction | measurement | try
-              | if | match | bare_block | loop | while | "(" expression ")"
+              | if | match | bare_block | loop | while | for
+              | "(" expression ")"
 array_literal ::= "[" expression ("," expression)* "]"
 array_repetition ::= "[" integer "of" expression "]"
                    | "[" "of" expression "]"
@@ -8423,7 +8440,7 @@ classified failure boundary before the repository gate can pass.
 | `results.destructure` | static | 0990 | L0200, L0301, L0302 or L0308 | `negative/result-destructure-needs-multiple`, `runtime/r230-composition` |
 | `functions.anonymous` | static | 1010 | L0201 for capture; complete signature checks otherwise apply | `negative/anonymous-function-captures-local`, `runtime/inferred-function-values` |
 | `control.flow` | static | 1050, 1060, 1080, 1090 | L0301 or L0302 at every reachable join and exit | `negative/if-expression-missing-else`, `runtime/control-expression-edges-keep-source-order` |
-| `control.loops` | static | 1130, 1140, 1170, 1180, 1190 | L0301 for a non-bool condition or incomplete/inconsistent value exit; a taken transfer runs active defers and targets its named or nearest loop edge, while natural completion alone enters `complete` | `negative/loop-condition-not-bool`, `negative/loop-value-missing-break-value`, `negative/loop-value-missing-completion`, `negative/loop-value-type-mismatch`, `runtime/loop-control-flow`, `runtime/loop-values` |
+| `control.loops` | static | 1130, 1140, 1150, 1170, 1180, 1190 | L0301 for a non-bool condition, mismatched range, or incomplete/inconsistent value exit; L0304 for a deferred traversal source; a taken transfer runs active defers and targets its named or nearest loop edge, while natural completion alone enters `complete` | `negative/loop-condition-not-bool`, `negative/loop-value-missing-break-value`, `negative/loop-value-missing-completion`, `negative/loop-value-type-mismatch`, `negative/for-range-needs-integer`, `negative/for-range-endpoints-disagree`, `negative/for-collection-traversal-deferred`, `runtime/loop-control-flow`, `runtime/loop-values`, `runtime/for-range-traversal` |
 | `cleanup.defer` | static | 1100 | the registered call is checked at every ordinary and successful-return edge | `negative/defer-read-not-assigned-on-return`, `runtime/defer-cleanups-follow-control-edges` |
 | `cleanup.undo` | static | 1110 | the registered call is checked at every propagated-failure edge | `negative/undo-read-not-assigned-on-failure`, `runtime/undo-cleanups-follow-failure-edges` |
 | `generics.substitution` | static | 1220, 1280, 1290, 1300, 1310, 1350, 1500, 1650, 1660, 1700 | L0300, L0301, L0306, L0307, L0313 or L0318 | `negative/generic-routine-undeduced-formal`, `runtime/generic-structural-deduction`, `runtime/core-vec-pointer-storage` |
@@ -8946,4 +8963,43 @@ explicit labelled target. All were declined.
 **Pinned by** `negative/loop-value-missing-break-value`,
 `negative/loop-value-missing-completion`, `negative/loop-value-type-mismatch`,
 `runtime/loop-values`, `runtime/loop-any-values`, and the `control.loops`
+guarantee row.
+
+### D159 — Integer range traversal is retained bounds over ordinary CFG
+
+**The tour said** that [1150] traverses `a..<b` and `a..b`, optionally binds
+an index, and shares [1170]--[1190]'s completion, labels and values. It did not
+state when bounds run, the index type, what descending bounds mean, or how an
+inclusive range ending at the integer maximum avoids an overflow after its
+last body execution.
+
+**Chosen:** the first `for` increment admits ascending integer ranges. The
+lower bound runs once, then the upper bound runs once; both have one integer
+type. The current element is an immutable copy of that type and the optional
+index is immutable `usize`, starting at zero. A half-open range tests `<`; an
+inclusive range tests `<=` and, after its body, checks equality with the saved
+upper bound before incrementing. Thus an inclusive range whose upper bound is
+the type's maximum completes without forming an out-of-range successor. A
+lower bound greater than the upper bound is an empty traversal.
+
+Lowering uses only D156's slots, comparisons, branches and backward jumps.
+`continue` targets the shared step block, so both element and index advance
+exactly once; natural exhaustion selects [1170]'s completion block and
+`break` skips it. Bounds are outside the body scope. The iteration bindings
+are ordinary local declarations inside that scope, so name resolution,
+definite assignment and lowering use the same declaration side tables as any
+other local. The parser retains collection traversal too, but checking reports
+its named R4.10 deferral until [1160]'s permission-sensitive element binding
+and iterable evidence are implemented.
+
+**The alternatives:** re-evaluate the upper bound per iteration, desugar the
+header into source nodes, widen the element to create an inclusive sentinel,
+or give `continue` a separate increment sequence. These change observable
+order, invent source that was not written, fail for the widest type, or let
+the two paths drift. All were declined.
+
+**Pinned by** `runtime/for-range-traversal`,
+`negative/for-range-needs-integer`,
+`negative/for-range-endpoints-disagree`,
+`negative/for-collection-traversal-deferred`, and the `control.loops`
 guarantee row.

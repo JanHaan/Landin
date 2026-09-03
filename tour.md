@@ -1958,6 +1958,10 @@ Conditional loop.
 ### [1150] Traversal
 
 Traversal. Bindings default to in; inout implies mut.
+An integer range is ascending. Its bounds are evaluated once, left to right;
+`..<` excludes the upper bound and `..` includes it. The optional index is a
+`usize` beginning at zero. Collection traversal supplies the same binding
+shape, with writability decided by [1160].
 
 ```landin
     for item in items do

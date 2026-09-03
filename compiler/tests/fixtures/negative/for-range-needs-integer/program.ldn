@@ -1,0 +1,6 @@
+public main: () -> (code: i32) =
+    code = 1
+    for item in false..true do
+        _ = 0
+    end for
+end main

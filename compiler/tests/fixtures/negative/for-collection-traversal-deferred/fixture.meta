@@ -1,0 +1,6 @@
+class: negative
+summary: collection traversal remains a named checking-stage deferral after for syntax is parsed
+program: program.ldn
+codes: L0304
+constructs: 0520, 1150
+targets: linux-x86-64, macos-arm64, synthetic-32

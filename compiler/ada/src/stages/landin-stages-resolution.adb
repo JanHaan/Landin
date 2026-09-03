@@ -709,6 +709,38 @@ package body Landin.Stages.Resolution is
                end if;
                return;
 
+            when Syn.For_Statement =>
+               Resolve
+                 (Of_Tree, Syn.Traversal_Lower (Of_Tree, Node), Inside);
+               if Syn.Traversal_Upper (Of_Tree, Node) /= Syn.No_Node then
+                  Resolve
+                    (Of_Tree, Syn.Traversal_Upper (Of_Tree, Node), Inside);
+               end if;
+               declare
+                  Runs : constant Syn.Node_Id :=
+                    Syn.Loop_Body (Of_Tree, Node);
+                  Body_Scope : constant Landin.Resolution.Scope_Id :=
+                    Landin.Resolution.Open_Scope
+                      (Meanings.all, Landin.Resolution.Block, Inside);
+               begin
+                  Landin.Resolution.Record_Scope
+                    (Meanings.all, Of_Tree, Runs, Body_Scope);
+                  Declare_One
+                    (Of_Tree, Syn.Traversal_Element (Of_Tree, Node),
+                     Body_Scope, Resolve_Declared => False);
+                  if Syn.Traversal_Index (Of_Tree, Node) /= Syn.No_Node then
+                     Declare_One
+                       (Of_Tree, Syn.Traversal_Index (Of_Tree, Node),
+                        Body_Scope, Resolve_Declared => False);
+                  end if;
+                  Walk_Block (Of_Tree, Runs, Body_Scope);
+               end;
+               if Syn.Complete_Body (Of_Tree, Node) /= Syn.No_Node then
+                  Walk_Scoped_Block
+                    (Of_Tree, Syn.Complete_Body (Of_Tree, Node), Inside);
+               end if;
+               return;
+
             when others =>
                null;
          end case;
