@@ -884,6 +884,9 @@ package body Landin.Stages.Checking.References is
                   Before : constant Origin_Table := Origins;
                begin
                   Process_Block (Tree, Syn.Loop_Body (Tree, Node));
+                  if Syn.Complete_Body (Tree, Node) /= Syn.No_Node then
+                     Process_Block (Tree, Syn.Complete_Body (Tree, Node));
+                  end if;
                   for Id in Origins'Range loop
                      Join (Origins (Id), Before (Id));
                   end loop;
