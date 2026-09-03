@@ -9,11 +9,9 @@
 --
 --  Two bands are not the kernel's, and both are tokens on purpose.
 --  Deferred_Kind is a lexeme the tour describes and the grammar omits,
---  refused by [1830]: `0x1.0p0`, `'x'`, `!` and `+=` are read as one thing
---  each and named, rather than falling apart into signs that happen to be
---  enabled. That also fixes the reading of a program now, because enabling
---  compound assignment later cannot change how a file that never used it was
---  tokenised. Malformed_Kind is a run of bytes no rule spells at all: a
+--  refused by [1830]: `0x1.0p0` is read as one thing and named, rather than
+--  falling apart into signs that happen to be enabled. Malformed_Kind is a
+--  run of bytes no rule spells at all: a
 --  parser that recovers needs something standing in the hole, because a hole
 --  is not something to resume from.
 --
@@ -61,6 +59,10 @@ package Landin.Tokens is
       --  [0280]'s unescaped bytes between matching runs of at least three
       --  quotes.  D164 also removes the closing delimiter's indentation.
       Raw_Literal,
+      --  [0390]'s thirteen updating assignment spellings.  One token kind
+      --  keeps every spelling indivisible; Assignment_Operator below keeps
+      --  the operation that the spelling selected.
+      Compound_Assign,
       --  The words [1760] reserves.
       Kw_Addr, Kw_Alignof, Kw_And, Kw_Any, Kw_Atom, Kw_Dec, Kw_Else, Kw_Elsif,
       Kw_End, Kw_Escaping, Kw_Extern, Kw_Fail, Kw_False, Kw_Fixed, Kw_From,
@@ -76,8 +78,8 @@ package Landin.Tokens is
       Minus_Greater, Minus_Percent, Percent, Plus, Plus_Percent,
       Right_Bracket, Right_Paren, Slash, Star, Star_Percent, Tilde,
       Underscore, Bang, Dot_Dot_Dot, Dot_Dot, Dot_Dot_Less,
-      --  Lexemes with more than one spelling that the kernel omits.
-      Compound_Assign, Hex_Float_Literal,
+      --  A literal family that the kernel omits.
+      Hex_Float_Literal,
       --  Bytes that spell nothing at all.
       Malformed_Integer, Malformed_Float, Unknown_Bytes);
 
@@ -90,8 +92,8 @@ package Landin.Tokens is
    subtype Punctuation is Token_Kind range Ampersand .. Dot_Dot_Less;
 
    --  Described by the tour, omitted by the grammar, refused by [1830].
-   subtype Deferred_Kind is
-     Token_Kind range Compound_Assign .. Hex_Float_Literal;
+   subtype Deferred_Kind is Token_Kind range Hex_Float_Literal
+     .. Hex_Float_Literal;
 
    --  A literal the tour describes by paragraph: every deferred lexeme, and
    --  the quoted literals, which stay here so an unterminated one can still
@@ -151,6 +153,18 @@ package Landin.Tokens is
    --  built by the one unit that reads bytes, and Ada says so with a child
    --  unit rather than with a comment asking politely.
    type Token is private;
+
+   type Assignment_Operator is
+     (Plain_Assignment,
+      Add_Assignment, Subtract_Assignment, Multiply_Assignment,
+      Divide_Assignment, Remainder_Assignment,
+      Bitwise_And_Assignment, Bitwise_Or_Assignment,
+      Bitwise_Xor_Assignment, Shift_Left_Assignment,
+      Shift_Right_Assignment, Wrapping_Add_Assignment,
+      Wrapping_Subtract_Assignment, Wrapping_Multiply_Assignment);
+
+   function Assignment_Operation (Item : Token) return Assignment_Operator
+     with Pre => Kind (Item) in Equal | Compound_Assign;
 
    function Kind (Item : Token) return Token_Kind;
 
@@ -283,6 +297,7 @@ private
         Landin.Source.Names.No_Name;
       Base    : Integer_Base := Decimal;
       Digit_Run : Landin.Source.Span := Landin.Source.Empty_Span;
+      Assignment : Assignment_Operator := Plain_Assignment;
    end record;
 
    type Fault is record

@@ -47,7 +47,8 @@ package body Landin.Tokens.Lexer is
                    Where     => Span (First, Stop),
                    Name      => Landin.Source.Names.No_Name,
                    Base      => Decimal,
-                   Digit_Run => Landin.Source.Empty_Span));
+                   Digit_Run => Landin.Source.Empty_Span,
+                   Assignment => Plain_Assignment));
       end Emit;
 
       procedure Complain
@@ -87,9 +88,18 @@ package body Landin.Tokens.Lexer is
          function Ahead (Count : Natural) return String
            is (Text (First .. First + Count - 1));
       begin
-         if Three and then Ahead (3) in "..." | "..<" then
+         if Three
+           and then Ahead (3) in "..." | "..<" | "<<=" | ">>="
+                                      | "+%=" | "-%=" | "*%="
+         then
             Length := 3;
-            return (if Ahead (3) = "..." then Dot_Dot_Dot else Dot_Dot_Less);
+            if Ahead (3) = "..." then
+               return Dot_Dot_Dot;
+            elsif Ahead (3) = "..<" then
+               return Dot_Dot_Less;
+            else
+               return Compound_Assign;
+            end if;
          end if;
 
          if Two then
@@ -160,6 +170,44 @@ package body Landin.Tokens.Lexer is
                return Unknown_Bytes;
          end case;
       end Sign_At;
+
+      function Compound_At
+        (First : Natural; Length : Positive) return Assignment_Operator;
+
+      function Compound_At
+        (First : Natural; Length : Positive) return Assignment_Operator
+      is
+         Word : constant String := Text (First .. First + Length - 1);
+      begin
+         if Word = "+=" then
+            return Add_Assignment;
+         elsif Word = "-=" then
+            return Subtract_Assignment;
+         elsif Word = "*=" then
+            return Multiply_Assignment;
+         elsif Word = "/=" then
+            return Divide_Assignment;
+         elsif Word = "%=" then
+            return Remainder_Assignment;
+         elsif Word = "&=" then
+            return Bitwise_And_Assignment;
+         elsif Word = "|=" then
+            return Bitwise_Or_Assignment;
+         elsif Word = "^=" then
+            return Bitwise_Xor_Assignment;
+         elsif Word = "<<=" then
+            return Shift_Left_Assignment;
+         elsif Word = ">>=" then
+            return Shift_Right_Assignment;
+         elsif Word = "+%=" then
+            return Wrapping_Add_Assignment;
+         elsif Word = "-%=" then
+            return Wrapping_Subtract_Assignment;
+         elsif Word = "*%=" then
+            return Wrapping_Multiply_Assignment;
+         end if;
+         raise Landin.Compiler_Defect with "unknown compound assignment";
+      end Compound_At;
 
       --  Whether a byte is a digit of this base.  [1770] gives each base
       --  its own digit rule, and a byte outside it makes the run
@@ -337,7 +385,8 @@ package body Landin.Tokens.Lexer is
                          Where     => Span (First, Position - 1),
                          Name      => Landin.Source.Names.No_Name,
                          Base      => Base,
-                         Digit_Run => Span (Digits_From, Position - 1)));
+                         Digit_Run => Span (Digits_From, Position - 1),
+                         Assignment => Plain_Assignment));
             else
                Emit (Malformed_Integer, First, Position - 1);
                Complain (Malformed_Integer_Run, First, Position - 1);
@@ -598,7 +647,8 @@ package body Landin.Tokens.Lexer is
                                          (Names, Run),
                                      Base      => Decimal,
                                      Digit_Run =>
-                                       Landin.Source.Empty_Span));
+                                       Landin.Source.Empty_Span,
+                                     Assignment => Plain_Assignment));
                         else
                            Emit (Word, First, Position - 1);
                         end if;
@@ -639,7 +689,17 @@ package body Landin.Tokens.Lexer is
                      Complain (Unknown_Byte_Run, First, Position - 1);
                   else
                      Position := Position + Length;
-                     Emit (Kind, First, Position - 1);
+                     if Kind = Compound_Assign then
+                        Into.Items.Append
+                          (Token'(Kind       => Kind,
+                                  Where      => Span (First, Position - 1),
+                                  Name       => Landin.Source.Names.No_Name,
+                                  Base       => Decimal,
+                                  Digit_Run  => Landin.Source.Empty_Span,
+                                  Assignment => Compound_At (First, Length)));
+                     else
+                        Emit (Kind, First, Position - 1);
+                     end if;
                      if Kind in Deferred_Kind then
                         Complain (Not_Enabled, First, Position - 1,
                                   Refused => Kind);

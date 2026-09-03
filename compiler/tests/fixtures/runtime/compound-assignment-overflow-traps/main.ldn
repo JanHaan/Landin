@@ -1,0 +1,5 @@
+public main: () -> (code: i32) =
+    mut value: u8 = 255
+    value += 1
+    code = 1
+end main

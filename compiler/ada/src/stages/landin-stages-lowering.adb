@@ -10,6 +10,7 @@ with Landin.Provenance;
 with Landin.Resolution;
 with Landin.Source;
 with Landin.Syntax;
+with Landin.Tokens;
 with Landin.Tokens.Text;
 with Landin.Syntax.Forest;
 with Landin.Targets;
@@ -52,6 +53,7 @@ package body Landin.Stages.Lowering is
    use type Landin.Checking.Signature_Id;
    use type Landin.Source.Source_Id;
    use type Landin.Source.Names.Name_Id;
+   use type Landin.Tokens.Assignment_Operator;
    use type Landin.Targets.Bit_Width;
    use type Landin.Targets.Byte_Count;
    use type Res.Application_Class;
@@ -849,6 +851,28 @@ package body Landin.Stages.Lowering is
                when others                =>
                   raise Landin.Compiler_Defect with
                     "this operator has no opcode");
+
+      function Update_Opcode
+        (Operation : Landin.Tokens.Assignment_Operator) return IR.Opcode
+      is (case Operation is
+             when Landin.Tokens.Add_Assignment => IR.Add,
+             when Landin.Tokens.Subtract_Assignment => IR.Subtract,
+             when Landin.Tokens.Multiply_Assignment => IR.Multiply,
+             when Landin.Tokens.Divide_Assignment => IR.Divide,
+             when Landin.Tokens.Remainder_Assignment => IR.Remainder,
+             when Landin.Tokens.Bitwise_And_Assignment => IR.Bitwise_And,
+             when Landin.Tokens.Bitwise_Or_Assignment => IR.Bitwise_Or,
+             when Landin.Tokens.Bitwise_Xor_Assignment => IR.Bitwise_Xor,
+             when Landin.Tokens.Shift_Left_Assignment => IR.Shift_Left,
+             when Landin.Tokens.Shift_Right_Assignment => IR.Shift_Right,
+             when Landin.Tokens.Wrapping_Add_Assignment => IR.Wrapping_Add,
+             when Landin.Tokens.Wrapping_Subtract_Assignment =>
+               IR.Wrapping_Subtract,
+             when Landin.Tokens.Wrapping_Multiply_Assignment =>
+               IR.Wrapping_Multiply,
+             when Landin.Tokens.Plain_Assignment =>
+               raise Landin.Compiler_Defect with
+                 "plain assignment has no updating opcode");
 
       procedure Impossible with No_Return;
 
@@ -8629,11 +8653,134 @@ package body Landin.Stages.Lowering is
                      end;
 
                   when Syn.Assignment =>
+                     --  [0390]/[0410]: form the destination address and read
+                     --  its old scalar value before the right-hand side.
+                     --  Both are retained in frame slots because that value
+                     --  may cross blocks.  The final indirect store therefore
+                     --  cannot re-evaluate an index or pointer expression.
+                     if Syn.Assignment_Operation (Of_Tree, Stmt)
+                          /= Landin.Tokens.Plain_Assignment
+                     then
+                        declare
+                           Place : constant Syn.Node_Id :=
+                             Syn.Target_Of (Of_Tree, Stmt);
+                           Held : constant Ty.Scalar_Name :=
+                             Scalar_At (Of_Tree, Place);
+                           Dynamic : constant Boolean :=
+                             Has_Computed_Index (Of_Tree, Place)
+                             or else Has_Pointer_Dereference
+                               (Of_Tree, Place);
+                        begin
+                           if Current /= IR.No_Block then
+                              declare
+                                 procedure Finish_Update
+                                   (Was          : IR.Value_Id;
+                                    Address_Slot : IR.Slot_Id := IR.No_Slot;
+                                    Base         : Natural := 0;
+                                    Steps        : IR.Path_Step_Array :=
+                                      IR.No_Path_Steps);
+
+                                 procedure Finish_Update
+                                   (Was          : IR.Value_Id;
+                                    Address_Slot : IR.Slot_Id := IR.No_Slot;
+                                    Base         : Natural := 0;
+                                    Steps        : IR.Path_Step_Array :=
+                                      IR.No_Path_Steps)
+                                 is
+                                    Saved : constant IR.Slot_Id :=
+                                      IR.Add_Slot
+                                        (Unit.all, Filling, Held,
+                                         Res.No_Declaration, Site);
+                                 begin
+                                    IR.Emit_Store
+                                      (Unit.all, Filling, Saved, Was, Site);
+                                    declare
+                                       Right : constant IR.Value_Id :=
+                                         Lower_Expression
+                                           (Of_Tree,
+                                            Syn.Value_Of (Of_Tree, Stmt),
+                                            Scope);
+                                    begin
+                                       if Current /= IR.No_Block then
+                                          declare
+                                             Left : constant IR.Value_Id :=
+                                               IR.Emit_Load
+                                                 (Unit.all, Filling, Saved,
+                                                  Site);
+                                             Result : constant IR.Value_Id :=
+                                               IR.Emit_Binary
+                                                 (Unit.all, Filling,
+                                                  Update_Opcode
+                                                    (Syn.Assignment_Operation
+                                                       (Of_Tree, Stmt)),
+                                                  Left, Right, Held, Site);
+                                          begin
+                                             if Address_Slot = IR.No_Slot then
+                                                Write (Place, Result);
+                                             elsif Base = 0 then
+                                                IR.Emit_Store_Indirect
+                                                  (Unit.all, Filling,
+                                                   IR.Emit_Load
+                                                     (Unit.all, Filling,
+                                                      Address_Slot, Site),
+                                                   Result, Site);
+                                             else
+                                                IR.Emit_Store_Slot_Field
+                                                  (Unit.all, Filling,
+                                                   Address_Slot,
+                                                   IR.Part_Position (Base),
+                                                   Result, Site,
+                                                   Nested => Steps);
+                                             end if;
+                                          end;
+                                       end if;
+                                    end;
+                                 end Finish_Update;
+                              begin
+                                 if Dynamic then
+                                    declare
+                                       Reached : constant Stored_Place :=
+                                         Lower_Stored_Place
+                                           (Of_Tree, Place, Scope);
+                                       Steps : constant IR.Path_Step_Array :=
+                                         Stored_Steps (Reached);
+                                       Was : IR.Value_Id;
+                                    begin
+                                       pragma Assert
+                                         (Reached.Place.Kind
+                                            = IR.Runtime_Address);
+                                       if Reached.Base = 0 then
+                                          pragma Assert (Steps'Length = 0);
+                                          Was := IR.Emit_Load_Indirect
+                                            (Unit.all, Filling,
+                                             IR.Emit_Load
+                                               (Unit.all, Filling,
+                                                Reached.Place.Address, Site),
+                                             Held, Site);
+                                       else
+                                          Was := IR.Emit_Load_Slot_Field
+                                            (Unit.all, Filling,
+                                             Reached.Place.Address,
+                                             IR.Part_Position (Reached.Base),
+                                             Held, Site, Nested => Steps);
+                                       end if;
+                                       Finish_Update
+                                         (Was, Reached.Place.Address,
+                                          Reached.Base, Steps);
+                                    end;
+                                 else
+                                    Finish_Update
+                                      (Read_Place (Place, IR.No_Value));
+                                 end if;
+                              end;
+                           end if;
+                        end;
+
                      --  D76's direct part assignment is contextual and its
                      --  target is Not_Typed rather than a general aggregate
                      --  value.  Lower it before the ordinary whole-struct
                      --  branch asks the place for an aggregate body.
-                     if Syn.Kind
+                     elsif Syn.Kind
                           (Of_Tree, Syn.Target_Of (Of_Tree, Stmt))
                           = Syn.Member_Selection
                        and then Landin.Checking.Type_Of

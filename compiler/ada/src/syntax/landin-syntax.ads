@@ -512,6 +512,13 @@ package Landin.Syntax is
      with Pre => Contains (Of_Tree, Id)
                  and then Kind (Of_Tree, Id) = Integer_Literal;
 
+   --  `=` or the arithmetic/bitwise operation selected by [0390]'s
+   --  updating assignment spelling.
+   function Assignment_Operation (Of_Tree : Tree; Id : Node_Id)
+     return Landin.Tokens.Assignment_Operator
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id) = Assignment;
+
    --  `public` rides on a named declaration and never on a statement [1740].
    --  A Binding inside a body is the same kind of node, and this answers
    --  False for it: the parser refused the `public` and said so.
@@ -1362,6 +1369,8 @@ private
                      Landin.Source.Names.No_Name;
       Base       : Landin.Tokens.Integer_Base := Landin.Tokens.Decimal;
       Digit_Run  : Landin.Source.Span := Landin.Source.Empty_Span;
+      Assignment_Op : Landin.Tokens.Assignment_Operator :=
+        Landin.Tokens.Plain_Assignment;
       First_Slot : Natural := 0;
       Slots      : Natural := 0;
       Sound      : Boolean := True;

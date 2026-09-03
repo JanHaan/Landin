@@ -58,8 +58,7 @@ package body Landin.Diagnostics.Lexical is
 
    function Enabled_By (Refused : Landin.Tokens.Deferred_Kind) return String
      is (case Refused is
-            when Landin.Tokens.Hex_Float_Literal => "R4.10",
-            when Landin.Tokens.Compound_Assign  => "R4.10");
+            when Landin.Tokens.Hex_Float_Literal => "R4.10");
 
    procedure Report
      (Stream : Landin.Tokens.Token_Stream;

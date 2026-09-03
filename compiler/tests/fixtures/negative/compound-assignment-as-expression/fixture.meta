@@ -1,0 +1,6 @@
+class: negative
+summary: compound assignment remains a statement and never becomes an expression
+constructs: 0390
+program: program.ldn
+targets: linux-x86-64, macos-arm64
+codes: L0105

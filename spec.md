@@ -352,8 +352,9 @@ Forming it produces a static code address and does not execute its body.
 A body is one block. Its statements run in source order and an optional final
 expression fills the one named return or the complete anonymous aggregate of a
 multiple return list. One token past a leading name decides
-between a first statement and a direct expression: ':' opens a binding and '='
-an assignment, and anything else means the body begins with its value. A
+between a first statement and a direct expression: ':' opens a binding and an
+assignment operator opens an assignment; anything else means the body begins
+with its value. A
 function returning none has no expression form, because there is no return for
 one to fill.
 An unguarded `return` has no fallthrough edge, so it can end a statement-only
@@ -427,6 +428,13 @@ and stepped exactly as the binding holding it is. What may be
 written is [1900]'s and not this rule's: a field is writable when
 the binding it belongs to is.
 
+D165 enables [0390]'s compound forms. Each reads the selected place, applies
+the corresponding [1820] binary operator to that value and the right-hand
+expression, then writes the result back. The place is evaluated once before
+the right-hand expression [0410], must already be assigned [1910], and needs
+the same write permission as `=` [1900]. The operator keeps its ordinary
+type, known-operand, trapping and wrapping rules.
+
 R4.10 admits the statement forms of [1130], [1140], [1170], [1180], and
 [1190]. An unconditional loop tests nothing; a `while` condition
 is evaluated before every iteration and must be `bool`. `break` transfers to
@@ -463,7 +471,10 @@ statement   ::= binding | destructuring_binding | assignment | increment
               | discard | call | defer | undo | try | return | fail
               | break | continue | loop | while | for | if | match
               | bare_block
-assignment  ::= place "=" expression
+assignment  ::= place assignment_operator expression
+assignment_operator ::= "=" | "+=" | "-=" | "*=" | "/=" | "%="
+                      | "&=" | "|=" | "^=" | "<<=" | ">>="
+                      | "+%=" | "-%=" | "*%="
 increment   ::= ("inc" | "dec") place
 discard     ::= "_" "=" expression
 defer       ::= "defer" call
@@ -8463,11 +8474,11 @@ classified failure boundary before the repository gate can pass.
 | `types.values` | static | 0070, 0160, 0170, 0180, 0190, 0200, 0210, 0250, 1870, 1880, 1890 | L0300, L0301 or L0304 | `negative/character-literal-needs-u32`, `negative/float-literal-not-enabled`, `negative/float-type-not-enabled`, `negative/integer-literal-not-a-float`, `negative/literal-above-its-type`, `negative/type-name-is-not-a-type` |
 | `float.ieee` | static | 0170, 0210, 0220, 0240, 0290, 0350 | f32/f64 runtime arithmetic and comparison follow IEEE binary32/binary64, preserving signed zero and unordered NaN behavior; L0301 rejects mixed classes and integer-only operators, and L0304 retains the static-fold boundary | `negative/float-remainder-is-integer-only`, `negative/module-float-arithmetic-not-enabled`, `runtime/float-decimal-runtime` |
 | `text.literal-storage` | static | 0260, 0270, 0280, 0570, 1770, 1880, 1900, 1940 | L0301 for a non-byte, writable or codepoint context; L0303 for a write through its read-only view; L0304 for the default deferred `utf8`; equal decoded quoted or raw contents share read-only storage with one trailing NUL excluded from the slice length | `negative/raw-literal-needs-byte-slice`, `negative/raw-literal-needs-read-only-slice`, `negative/raw-literal-write`, `negative/text-literal-codepoint-in-byte-context`, `negative/text-literal-needs-byte-slice`, `negative/text-literal-needs-read-only-slice`, `negative/text-literal-not-enabled`, `negative/text-literal-write`, `runtime/raw-literal-bytes`, `runtime/text-literal-bytes` |
-| `arithmetic.known` | static | 0290, 0300, 1950 | L0300 or L0306 | `negative/divisor-is-zero`, `negative/literal-above-its-type` |
-| `arithmetic.runtime` | trap | 0290, 0300, 0320, 1950, 1960 | trap | `runtime/checked-overflow-traps`, `runtime/checked-subtraction-traps`, `runtime/checked-multiplication-traps`, `runtime/checked-negation-traps`, `runtime/signed-division-overflow-traps`, `runtime/a-zero-divisor-traps`, `runtime/a-zero-remainder-divisor-traps`, `runtime/negative-left-shift-traps`, `runtime/negative-right-shift-traps` |
-| `arithmetic.total` | static | 0320, 0330, 0340, 0350 | L0301 for an inapplicable operand; admitted nonnegative shifts and wrapping operations are total | `negative/condition-is-not-believed`, `runtime/shifts-fill-with-zeros-beyond-the-width` |
+| `arithmetic.known` | static | 0290, 0300, 0390, 1950 | L0300 or L0306 | `negative/compound-assignment-zero-divisor`, `negative/divisor-is-zero`, `negative/literal-above-its-type` |
+| `arithmetic.runtime` | trap | 0290, 0300, 0320, 0390, 1950, 1960 | trap | `runtime/compound-assignment-overflow-traps`, `runtime/checked-overflow-traps`, `runtime/checked-subtraction-traps`, `runtime/checked-multiplication-traps`, `runtime/checked-negation-traps`, `runtime/signed-division-overflow-traps`, `runtime/a-zero-divisor-traps`, `runtime/a-zero-remainder-divisor-traps`, `runtime/negative-left-shift-traps`, `runtime/negative-right-shift-traps` |
+| `arithmetic.total` | static | 0320, 0330, 0340, 0350, 0390 | L0301 for an inapplicable operand; admitted nonnegative shifts and wrapping operations are total | `negative/compound-assignment-float-remainder`, `negative/condition-is-not-believed`, `runtime/compound-assignment`, `runtime/shifts-fill-with-zeros-beyond-the-width` |
 | `ranges.measurements` | static | 0360, 0370 | L0300, L0301 or L0306 | `negative/lenof-scalar`, `runtime/measurements-answer-for-the-target` |
-| `assignment.flow` | static | 0390, 0400, 0410, 0420, 1900, 1910 | L0302 or L0303 | `negative/assigned-on-one-path-only`, `negative/assignment-to-an-immutable-binding` |
+| `assignment.flow` | static | 0390, 0400, 0410, 0420, 1900, 1910 | L0302 or L0303 | `negative/assigned-on-one-path-only`, `negative/assignment-to-an-immutable-binding`, `negative/compound-assignment-immutable`, `negative/compound-assignment-unassigned`, `runtime/compound-assignment` |
 | `pointer.permission` | static | 0430, 0440, 0450, 0460 | L0301 or L0303 | `negative/any-readonly-source-for-mutable-entry`, `negative/sink-through-dereference` |
 | `inout.exact-alias` | static | 0900 | L0301 when one provably identical binding-rooted place fills two inout parameters | `negative/inout-same-place-twice` |
 | `inout.possible-alias` | outside | 0430, 0770, 0900 | non-guarantee: distinct pointer or computed paths may still alias | `runtime/inout-pointer-alias-is-unchecked` |
@@ -9304,3 +9315,51 @@ were declined.
 `negative/raw-literal-write`, `negative/unterminated-raw-literal`, the raw
 decoder and lexer cases, and the `source.lexical` and `text.literal-storage`
 guarantee rows.
+
+### D165 — Compound assignment retains one destination and one operator
+
+**The tour said** that assignment is a statement, listed thirteen compound
+spellings [0390], fixed destination-before-value evaluation [0410], and said
+that `inc x` means what `x += 1` means [0400]. It did not say whether the
+destination was re-evaluated for its implicit read, whether it had to be
+assigned already, or whether a compound form inherited every failure boundary
+of its binary operator.
+
+**Chosen:** `place op= value` evaluates `place` once, reads its existing scalar
+value, evaluates `value`, applies the corresponding [1820] binary operator and
+writes the result through that retained place. The thirteen forms are `+=`,
+`-=`, `*=`, `/=`, `%=`, `&=`, `|=`, `^=`, `<<=`, `>>=`, `+%=`, `-%=` and
+`*%=`. Destination evaluation and its implicit read both precede the
+right-hand expression. A computed index or pointer path is retained as an
+internal address, not reconstructed after the expression.
+
+The destination must be assigned on every arriving path because the operation
+reads its old value; success leaves it assigned. It needs the same binding or
+reference write permission as plain assignment. Both operands have the
+destination scalar type under [1890]: ordinary arithmetic admits integers and
+floats, while remainder, wrapping, shifts and bitwise forms admit integers
+only. Known zero integer divisors and negative shifts retain [1950]'s L0306.
+Runtime checked overflow and impossible integer operands retain [1960]'s trap;
+the three wrapping forms and admitted shifts remain total. Float division by
+signed zero retains D162's IEEE result.
+
+This is one read-modify-write language operation but makes no atomicity or
+concurrency claim. Aggregates, slices, `any`, functions, pointers and atoms
+have no applicable binary operator and are L0301 rather than acquiring a
+copy-update meaning.
+
+**The alternatives:** desugar by copying the place syntax into both sides of
+plain assignment, evaluate the right-hand side before reading the old value,
+let an unassigned destination become initialized, or define separate compound
+operator rules. Those choices duplicate observable calls in indexes, reverse
+[0410], permit a read of indeterminate storage, or let two spellings of one
+operation drift. All were declined.
+
+**Pinned by** `runtime/compound-assignment`,
+`runtime/compound-assignment-overflow-traps`,
+`negative/compound-assignment-as-expression`,
+`negative/compound-assignment-float-remainder`,
+`negative/compound-assignment-immutable`,
+`negative/compound-assignment-unassigned`,
+`negative/compound-assignment-zero-divisor`, and the `arithmetic.known`,
+`arithmetic.runtime`, `arithmetic.total` and `assignment.flow` guarantee rows.

@@ -67,6 +67,11 @@ negative/character-literal-needs-u32 | linux-x86-64, macos-arm64
 negative/compiler-concept-reserved | linux-x86-64, macos-arm64, synthetic-32
 negative/compiler-conformance-reserved | linux-x86-64, macos-arm64, synthetic-32
 negative/composed-conformance-missing-parent | linux-x86-64, macos-arm64, synthetic-32
+negative/compound-assignment-as-expression | linux-x86-64, macos-arm64
+negative/compound-assignment-float-remainder | linux-x86-64, macos-arm64
+negative/compound-assignment-immutable | linux-x86-64, macos-arm64
+negative/compound-assignment-unassigned | linux-x86-64, macos-arm64
+negative/compound-assignment-zero-divisor | linux-x86-64, macos-arm64
 negative/concept-composition-cycle | linux-x86-64, macos-arm64, synthetic-32
 negative/condition-is-not-believed | linux-x86-64, macos-arm64
 negative/conformance-collision | linux-x86-64, macos-arm64, synthetic-32
@@ -746,6 +751,8 @@ runtime/checked-negation-traps | linux-x86-64
 runtime/checked-overflow-traps | linux-x86-64
 runtime/checked-subtraction-traps | linux-x86-64
 runtime/comparisons-exit-with-their-verdict | linux-x86-64
+runtime/compound-assignment | linux-x86-64
+runtime/compound-assignment-overflow-traps | linux-x86-64
 runtime/computed-aggregate-elements | linux-x86-64
 runtime/computed-array-index-reads-and-writes | linux-x86-64
 runtime/computed-array-index-traps | linux-x86-64
