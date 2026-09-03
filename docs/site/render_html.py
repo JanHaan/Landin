@@ -963,6 +963,10 @@ GUIDES = [
          nav="the environments", group="the implementation",
          blurb="Which machine produces which kind of evidence, and which "
                "one is the authority."),
+    dict(key="editors", src="highlight/README.md", out="editors.html",
+         nav="editor and IDE support", group="the implementation",
+         blurb="Installable Landin highlighting for Zed, VS Code, Neovim, "
+               "Vim, Emacs, Helix and the other major editor families."),
     dict(key="fixtures", src="compiler/tests/README.md", out="fixtures.html",
          nav="the fixtures", group="the implementation",
          blurb="The test format that has to outlive the implementation "
