@@ -93,10 +93,10 @@
 0770   tour        accepted emitted executed refused  There is no borrow checker and there are no lifetime
 0780   tour        accepted emitted executed refused  Parameters are non-escaping by default
 0790   tour        accepted emitted executed refused  The other direction
-0800   tour        accepted emitted refused           The borrow of reaches across the call from there
+0800   tour        accepted emitted executed refused  The borrow of reaches across the call from there
 0810   tour        -                                  Derivation stops at the three primitives of
 0820   tour        -                                  arena is built in
-0830   tour        accepted emitted refused           A view derived from a local borrows it
+0830   tour        accepted emitted executed refused  A view derived from a local borrows it
 0840   tour        accepted emitted executed refused  Origins join to the shortest-lived part
 0850   tour        -                                  Volatile is exempt from the borrow rule and from every
 0860   tour        accepted emitted executed          What this does not catch

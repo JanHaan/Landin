@@ -3613,6 +3613,23 @@ package body Landin.Syntax.Parser is
                      end;
                   end if;
 
+                  --  `try call` has the same expression/statement overlap
+                  --  as the direct call handled below.  At the function
+                  --  closer it supplies the body value; with another block
+                  --  item behind it, it is the first statement and its
+                  --  successful value is discarded [1810].
+                  if Peek = Tok.Kw_Try then
+                     declare
+                        Tried : constant Node_Id := Parse_Expression;
+                     begin
+                        if Peek = Tok.Kw_End then
+                           return Tried;
+                        end if;
+
+                        return Parse_Block (Context, Seed => Tried);
+                     end;
+                  end if;
+
                   --  [1800]'s expression body takes any expression, so
                   --  this asks the same question [1820]'s first set does
                   --  rather than keeping a second list beside it: a token
@@ -4026,7 +4043,7 @@ package body Landin.Syntax.Parser is
                               exit;
                            elsif Kind (Result, Candidate)
                                    in If_Statement | Match_Statement
-                                      | Bare_Block | Call
+                                      | Bare_Block | Call | Try_Expression
                            then
                               Items.Append (Candidate);
                            else

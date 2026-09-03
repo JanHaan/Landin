@@ -2065,6 +2065,27 @@ package body Landin.Stages.Checking is
                   Declaration : constant Syn.Node_Id :=
                     Res.Node_Of (Meanings.all, Means);
                begin
+                  --  A reference target needs nominal identity, never the
+                  --  target's by-value layout.  Preserve that distinction
+                  --  while the target struct itself is being laid out: a
+                  --  generic wrapper such as list(ptr node) may then be a
+                  --  finite field of node without Settled_Type mistaking the
+                  --  pointer edge for recursive containment.
+                  if Requirement = Identity_Only
+                    and then Syn.Type_Formal_Count
+                      (Template.all, Declaration) = 0
+                    and then Syn.Kind
+                      (Template.all,
+                       Syn.Declared_Type (Template.all, Declaration))
+                         = Syn.Struct_Body
+                  then
+                     return
+                       (Kind    => Ty.Aggregate,
+                        Nominal => Landin.Checking.Empty_Nominal_Instance
+                          (Types.all, Means),
+                        others  => <>);
+                  end if;
+
                   if Syn.Type_Formal_Count
                        (Template.all, Declaration) /= 0
                   then
@@ -3752,25 +3773,34 @@ package body Landin.Stages.Checking is
                   end if;
 
                   declare
+                     Nominal : constant Landin.Checking.Nominal_Type_Id :=
+                       Landin.Checking.Empty_Nominal_Instance
+                         (Types.all, For_Declaration);
                      Fits : Boolean;
                   begin
-                     Landin.Checking.Lay_Out
-                       (Types.all,
-                        Landin.Checking.Empty_Nominal_Instance
-                          (Types.all, For_Declaration),
-                        Fields, Facts, Fits,
-                        Cases => Cases, Payloads => Payloads);
+                     --  A representation-derived constraint may have
+                     --  materialized this ordinary empty-actual instance
+                     --  before the declaration walk reaches it.  Layout is
+                     --  canonical per nominal identity, so do not replay it.
+                     if Landin.Checking.Instance_State_Of (Types.all, Nominal)
+                          in Landin.Checking.Instance_Unseen
+                             | Landin.Checking.Instance_Building
+                     then
+                        Landin.Checking.Lay_Out
+                          (Types.all, Nominal, Fields, Facts, Fits,
+                           Cases => Cases, Payloads => Payloads);
 
-                     if not Fits then
-                        Bad.Report
-                          (Item    => Bad.Literal_Out_Of_Range,
-                           Source  => Syn.Source_Of (Of_Tree),
-                           Where   => Syn.Where (Of_Tree, Written),
-                           Message => "this struct is too large for the"
-                                      & " target's usize",
-                           Note    => "D45: every padded aggregate extent"
-                                      & " must fit the selected target",
-                           Into    => Found);
+                        if not Fits then
+                           Bad.Report
+                             (Item    => Bad.Literal_Out_Of_Range,
+                              Source  => Syn.Source_Of (Of_Tree),
+                              Where   => Syn.Where (Of_Tree, Written),
+                              Message => "this struct is too large for the"
+                                         & " target's usize",
+                              Note    => "D45: every padded aggregate extent"
+                                         & " must fit the selected target",
+                              Into    => Found);
+                        end if;
                      end if;
                   end;
                end if;
@@ -8469,6 +8499,40 @@ package body Landin.Stages.Checking is
             null;
          end loop;
 
+         --  A concrete call already owns its final atom set.  Materialize a
+         --  named recovery binding before checking the body even when this
+         --  call is first visited by initializer inference; otherwise the
+         --  successful result can be cached while the recovery subtree stays
+         --  unchecked until lowering.  Inferred signatures retain the
+         --  deferred fixed-point path below.
+         if Syn.Recovery_Of (Of_Tree, Node) /= Syn.No_Node
+           and then Landin.Checking.Signature_Error_Form
+             (Types.all, Signature) = Landin.Checking.Concrete
+           and then Syn.Name (Of_Tree, Syn.Recovery_Of (Of_Tree, Node))
+             /= Landin.Source.Names.No_Name
+         then
+            declare
+               Recovery : constant Syn.Node_Id :=
+                 Syn.Recovery_Of (Of_Tree, Node);
+               Id : constant Res.Declaration_Id :=
+                 Declaration_At (Syn.Source_Of (Of_Tree), Recovery);
+               Errors : constant Landin.Checking.Atom_Set_Id :=
+                 Landin.Checking.Signature_Errors (Types.all, Signature);
+            begin
+               if Landin.Checking.State_Of (Types.all, Id)
+                    = Landin.Checking.Untouched
+               then
+                  Landin.Checking.Begin_Inference (Types.all, Id);
+                  if Errors = Landin.Checking.No_Atom_Set then
+                     Landin.Checking.Settle (Types.all, Id, Ty.Ill_Typed);
+                  else
+                     Landin.Checking.Note_Atom_Set (Types.all, Id, Errors);
+                     Landin.Checking.Settle (Types.all, Id, Ty.Atom_Value);
+                  end if;
+               end if;
+            end;
+         end if;
+
          if Syn.Recovery_Of (Of_Tree, Node) /= Syn.No_Node
            and then Landin.Checking.Signature_Error_Form
              (Types.all, Signature) /= Landin.Checking.Inferred
@@ -10409,20 +10473,53 @@ package body Landin.Stages.Checking is
             return False;
          end if;
 
+         --  Compiler concepts are representation-derived.  An ordinary
+         --  nominal reference can reach this point with identity alone, but
+         --  `zeroable` must inspect its complete value layout.  Materialize
+         --  that layout here rather than making every identity-only type
+         --  mention recursive by value.
+         if Landin.Checking.Is_Compiler_Concept (Types.all, Concept) then
+            declare
+               Complete : constant Type_Descriptor :=
+                 (if Actual.Kind in Ty.Aggregate | Ty.Fixed_Array
+                  then Require_Value_Layout
+                    (Actual, Of_Tree, Constraint, Application)
+                  else Actual);
+            begin
+               if Complete.Kind = Ty.Ill_Typed then
+                  return False;
+               end if;
+               Existing := Landin.Checking.Find_Conformance
+                 (Types.all, Concept, Actual_For (Complete), Inputs);
+               if Existing /= Landin.Checking.No_Conformance then
+                  return True;
+               elsif Descriptor_Has_Zero_Image (Complete) then
+                  Existing := Landin.Checking.Add_Conformance
+                    (Types.all, Concept, Actual_For (Complete), Inputs,
+                     Landin.Checking.Empty_Actuals, Landin.Source.No_Source,
+                     Syn.No_Node,
+                     Landin.Checking.Compiler_Zeroable_Conformance);
+                  return Existing /= Landin.Checking.No_Conformance;
+               end if;
+               Bad.Report
+                 (Item    => Bad.Unsatisfied_Constraint,
+                  Source  => Application.Source,
+                  Where   => Application.Where,
+                  Message => "this concrete type has no conformance to `"
+                             & Spelled (Syn.Name (Of_Tree, Constraint)) & "`",
+                  Note    => "[1290]: every constrained type actual must"
+                             & " have one whole-program conformance",
+                  Related => Syn.Origin (Of_Tree, Constraint),
+                  Because => "the constraint declared here",
+                  Into    => Found);
+               return False;
+            end;
+         end if;
+
          Existing := Landin.Checking.Find_Conformance
            (Types.all, Concept, Actual_For (Actual), Inputs);
          if Existing /= Landin.Checking.No_Conformance then
             return Parents_Hold;
-         end if;
-
-         if Landin.Checking.Is_Compiler_Concept (Types.all, Concept)
-           and then Descriptor_Has_Zero_Image (Actual)
-         then
-            Existing := Landin.Checking.Add_Conformance
-              (Types.all, Concept, Actual_For (Actual), Inputs,
-               Landin.Checking.Empty_Actuals, Landin.Source.No_Source,
-               Syn.No_Node, Landin.Checking.Compiler_Zeroable_Conformance);
-            return Existing /= Landin.Checking.No_Conformance;
          end if;
 
          --  Parameterized conformances are source patterns.  Match their

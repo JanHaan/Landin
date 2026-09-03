@@ -2702,6 +2702,7 @@ finding labels, so moving prose cannot stale a hand-copied location.
 | Fixture | Prototype | Findings | Pressure |
 | --- | --- | --- | --- |
 | `runtime/diagnostic-loggers-dispatch` | P2 | Y1 | recoverable diagnostics use a bounded or streaming capability without becoming parser failure |
+| `runtime/derived-parser` | P2 | Y1, Y4, Y5, Y6, Y7 | a complete recursive parser builds an arena AST, logs and recovers from syntax faults, and propagates allocation or diagnostic-delivery failure through shared erased evidence |
 | `runtime/parameterized-struct-values` | P3 | Z2 | type and fixed parameters on nominal values |
 | `runtime/r250-references` | P3 | Z3, Z18 | pointer/slice carriers and implicit conventions |
 | `negative/borrowed-source-inout` | P3 | Z5, Z16 | a derived view prevents moving its source |
@@ -3000,7 +3001,7 @@ Linux x86-64 debug and release gates pass 389 cases and 9,146 checks each.
 
 ### R3.70 — Complete and run the derived parser program
 
-Status: active
+Status: complete
 Depends on: R3.10, R3.40, R3.60, R2.90
 
 Turn prototype 2 into a complete `.ldn` program with a derivation manifest,
@@ -3014,6 +3015,38 @@ Exit evidence: the parser compiles and runs on native Linux x86-64, reports and
 recovers from multiple foreseeable syntax errors, propagates allocation and
 I/O failures, and proves real shared evidence-table and `any` dispatch with no
 specialization.
+
+Delivered: `examples/config_parser/lexer` retains every source byte as a
+positioned token, and `examples/config_parser/parser` is a complete recursive
+descent parser over it. The parser builds a recursive arena-backed variant AST
+through `core/vec`, reports syntax mistakes through `any core/diag.log`,
+recovers at newline and brace boundaries, and exposes only allocation or
+diagnostic-delivery failure from its public operation. R4.10 still owns loops
+and full UTF-8 text, so the same scanner, recovery and sequence walks are
+spelled recursively over R3's byte-oriented positions.
+
+`runtime/derived-parser` reads its input through the real hosted `core/io`
+provider and runs the same parser with bounded and streaming loggers. It keeps
+valid nodes around three ordered syntax faults, checks the nested AST, forces a
+one-byte arena to report `out_of_memory`, and directs a streaming logger at a
+closed descriptor to report `io_failed`. Its `DERIVATION.md` maps the executable
+program back to prototype 2 without editing that design record.
+
+That composition closed five general compiler seams rather than adding parser
+privileges. A standalone `try` followed by another statement parses as a
+statement; a pointer target requests nominal identity without recursively
+laying out the target through a generic wrapper; concrete call recovery is
+checked even when the call is first visited during initializer inference;
+aggregate call/control results use caller-owned temporaries before copies into
+nested or indirect places; and module-local symbols are mangled when they
+collide with another module or with the backend's private libc dependencies.
+D155 records those boundaries. The parser's public lexer operation named
+`open` is the executable regression for the last: it cannot interpose on the
+host bridge's libc `open` call.
+
+The complete pinned Linux x86-64 debug and release gates pass 389 cases and
+9,153 checks each, including the exact three-line merged diagnostic output and
+the program's own exit status.
 
 ### R3 gate
 
@@ -3032,7 +3065,7 @@ baseline measured optimization.
 
 ### R4.10 — Close the hosted construct matrix
 
-Status: planned
+Status: active
 Depends on: R3.70
 
 Implement or explicitly amend every remaining hosted normative construct,
