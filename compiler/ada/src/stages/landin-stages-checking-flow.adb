@@ -1717,8 +1717,38 @@ package body Landin.Stages.Checking.Flow is
                      Id : constant Res.Declaration_Id :=
                        Declaration_At (Syn.Source_Of (Of_Tree), Binding);
                   begin
-                     if Id /= Res.No_Declaration and then Is_Tracked (Id) then
-                        Into.Fields (Positive (Id), 0) := True;
+                     if Id = Res.No_Declaration or else not Is_Tracked (Id)
+                     then
+                        return;
+                     end if;
+                     Into.Fields (Positive (Id), 0) := True;
+
+                     --  D160: a struct element is a whole struct the
+                     --  traversed storage already holds, so every one of
+                     --  its parts arrives assigned, as a copied struct's do.
+                     if Landin.Checking.Type_Of (Types.all, Id) = Ty.Aggregate
+                       and then Landin.Checking.Has_Layout
+                         (Types.all,
+                          Landin.Checking.Nominal_Of (Types.all, Id))
+                     then
+                        for Each in
+                          1 .. Landin.Checking.Layout_Field_Count
+                            (Types.all,
+                             Landin.Checking.Nominal_Of (Types.all, Id))
+                        loop
+                           if Each in 1 .. Widest_Struct then
+                              if Landin.Checking.Field_Kind_Of
+                                (Types.all,
+                                 Landin.Checking.Nominal_Of (Types.all, Id),
+                                 Each) = Landin.Checking.Fixed_Array_Field
+                              then
+                                 Array_Sets.Include
+                                   (Into.Whole_Arrays, (Id, One (Each)));
+                              else
+                                 Into.Fields (Positive (Id), Each) := True;
+                              end if;
+                           end if;
+                        end loop;
                      end if;
                   end Mark_Iteration;
                begin

@@ -5132,9 +5132,20 @@ package body Landin.Stages.Lowering is
                                  IR.Part_Position (Alias.Field), Carrier,
                                  Site, Signature => Signature);
                            when IR.Runtime_Address =>
-                              raise Landin.Compiler_Defect with
-                                "a runtime aggregate alias reached direct"
-                                & " scalar lowering";
+                              --  D160: a traversal element aliases one
+                              --  element of runtime storage, so the value
+                              --  is read through the address it keeps.
+                              if Alias.Field /= 0 then
+                                 raise Landin.Compiler_Defect with
+                                   "a runtime aggregate alias reached"
+                                   & " direct scalar lowering";
+                              end if;
+                              return IR.Emit_Load_Indirect
+                                (Unit.all, Filling,
+                                 IR.Emit_Load
+                                   (Unit.all, Filling,
+                                    Alias.Source.Address, Site),
+                                 Carrier, Site);
                         end case;
                      end;
                   end if;
@@ -5858,6 +5869,13 @@ package body Landin.Stages.Lowering is
            Syn.Kind (Of_Tree, Node) = Syn.While_Statement;
          Is_For : constant Boolean :=
            Syn.Kind (Of_Tree, Node) = Syn.For_Statement;
+         --  D160: a traversal with no upper bound walks a slice or a fixed
+         --  array.  Its element binding is an alias into that storage,
+         --  refreshed from a hidden `usize` counter before every body run.
+         Is_Collection : constant Boolean :=
+           Is_For
+           and then Syn.Traversal_Upper (Of_Tree, Node) = Syn.No_Node;
+         Is_Range : constant Boolean := Is_For and then not Is_Collection;
          Head : constant IR.Block_Id := Fresh (Of_Tree, Node, Scope);
          Body_Block : constant IR.Block_Id := Fresh (Of_Tree, Runs, Inside);
          Has_Complete : constant Boolean :=
@@ -5881,7 +5899,7 @@ package body Landin.Stages.Lowering is
          Entry_Block : constant IR.Block_Id :=
            (if Is_For then Fresh (Of_Tree, Node, Scope) else IR.No_Block);
          Increment_Block : constant IR.Block_Id :=
-           (if Is_For and then Syn.Traversal_Is_Inclusive (Of_Tree, Node)
+           (if Is_Range and then Syn.Traversal_Is_Inclusive (Of_Tree, Node)
             then Fresh (Of_Tree, Node, Inside) else Step_Block);
          Element_Node : constant Syn.Node_Id :=
            (if Is_For
@@ -5891,7 +5909,7 @@ package body Landin.Stages.Lowering is
             then Declaration_At (Syn.Source_Of (Of_Tree), Element_Node)
             else Res.No_Declaration);
          Element_Slot : constant IR.Slot_Id :=
-           (if Is_For
+           (if Is_Range
             then Slot_For (Of_Tree, Element_Node, Element_Id)
             else IR.No_Slot);
          Index_Node : constant Syn.Node_Id :=
@@ -5906,13 +5924,101 @@ package body Landin.Stages.Lowering is
             then Slot_For (Of_Tree, Index_Node, Index_Id)
             else IR.No_Slot);
          Range_Type : constant Ty.Integer_Name :=
-           (if Is_For
+           (if Is_Range
             then Ty.Integer_Name
               (Scalar_At (Of_Tree, Syn.Traversal_Lower (Of_Tree, Node)))
             else Ty.I32);
          Upper_Slot : IR.Slot_Id := IR.No_Slot;
+         --  The collection form's hidden state: where the storage starts,
+         --  how many elements it holds, which one the body is at, and the
+         --  address the element alias reads and writes through.  The
+         --  source's index binding, when written, is the counter itself.
+         Base_Slot : IR.Slot_Id := IR.No_Slot;
+         Length_Slot : IR.Slot_Id := IR.No_Slot;
+         Counter_Slot : IR.Slot_Id := IR.No_Slot;
+         Address_Slot : IR.Slot_Id := IR.No_Slot;
+         Element_Shape : IR.Field_Shape;
       begin
-         if Is_For then
+         if Is_Collection then
+            declare
+               Source : constant Syn.Node_Id :=
+                 Syn.Traversal_Lower (Of_Tree, Node);
+               Base : IR.Value_Id;
+               Length : IR.Value_Id;
+            begin
+               if Type_At (Of_Tree, Source) = Ty.Slice_Value then
+                  declare
+                     Parts : constant Slice_Values :=
+                       Lower_Slice (Of_Tree, Source, Scope);
+                  begin
+                     Base := Parts.Base;
+                     Length := Parts.Length;
+                  end;
+                  Element_Shape := Slice_Shape (Of_Tree, Source);
+               else
+                  declare
+                     Place : Stored_Place;
+                  begin
+                     if Syn.Kind (Of_Tree, Source)
+                       in Syn.Name_Reference | Syn.Member_Selection
+                          | Syn.Element_Index
+                     then
+                        Place := Lower_Stored_Place (Of_Tree, Source, Scope);
+                     else
+                        Place.Place :=
+                          (Kind => IR.Frame_Slot,
+                           Slot => Add_Value_Temporary (Of_Tree, Source));
+                        Lower_Stored_Expression
+                          (Of_Tree, Source, Scope, Place.Place.Slot);
+                     end if;
+                     if Current = IR.No_Block then
+                        return;
+                     end if;
+                     Base := IR.Emit_Storage_Address
+                       (Unit.all, Filling, Place.Place, Site,
+                        Field  => Place.Base,
+                        Nested => Stored_Steps (Place));
+                  end;
+                  Length := IR.Emit_Number
+                    (Unit.all, Filling, Ty.Usize,
+                     Ty.Magnitude
+                       (Landin.Checking.Array_Length
+                          (Types.all, Of_Tree, Source)),
+                     False, Site);
+                  Element_Shape := Neutral_Element (Of_Tree, Source);
+               end if;
+               if Current = IR.No_Block then
+                  return;
+               end if;
+
+               Base_Slot := IR.Add_Slot
+                 (Unit.all, Filling, Ty.Usize, Res.No_Declaration, Site);
+               Length_Slot := IR.Add_Slot
+                 (Unit.all, Filling, Ty.Usize, Res.No_Declaration, Site);
+               Counter_Slot :=
+                 (if Index_Slot /= IR.No_Slot then Index_Slot
+                  else IR.Add_Slot
+                    (Unit.all, Filling, Ty.Usize, Res.No_Declaration, Site));
+               Address_Slot := IR.Add_Address_Slot
+                 (Unit.all, Filling, Element_Shape, Site);
+               IR.Emit_Store (Unit.all, Filling, Base_Slot, Base, Site);
+               IR.Emit_Store (Unit.all, Filling, Length_Slot, Length, Site);
+               IR.Emit_Store
+                 (Unit.all, Filling, Counter_Slot,
+                  IR.Emit_Number
+                    (Unit.all, Filling, Ty.Usize, 0, False, Site), Site);
+               Aliases (Declared (Element_Id)) :=
+                 (Active        => True,
+                  Source        => (Kind => IR.Runtime_Address,
+                                    Address => Address_Slot),
+                  Field         => 0,
+                  Subject       => Syn.No_Node,
+                  Which         => 0,
+                  Payload_Field => 0);
+            end;
+         end if;
+
+         if Is_Range then
             declare
                Lower : constant IR.Value_Id :=
                  Lower_Expression
@@ -5972,6 +6078,22 @@ package body Landin.Stages.Lowering is
                   Current := IR.No_Block;
                end if;
             end;
+         elsif Is_Collection then
+            declare
+               Position : constant IR.Value_Id :=
+                 IR.Emit_Load (Unit.all, Filling, Counter_Slot, Site);
+               Count : constant IR.Value_Id :=
+                 IR.Emit_Load (Unit.all, Filling, Length_Slot, Site);
+               Test : constant IR.Value_Id :=
+                 IR.Emit_Binary
+                   (Unit.all, Filling, IR.Less_Than,
+                    Position, Count, Ty.Bool, Site);
+            begin
+               IR.Emit_Branch
+                 (Unit.all, Filling, Test, Body_Block, Natural_Exit, Site);
+               IR.Leave_Block (Unit.all, Filling);
+               Current := IR.No_Block;
+            end;
          elsif Is_For then
             declare
                Current_Value : constant IR.Value_Id :=
@@ -6012,13 +6134,48 @@ package body Landin.Stages.Lowering is
             Loop_Stack.Append (Frame);
          end;
          Open (Body_Block);
+         if Is_Collection then
+            --  The element's address for this iteration.  The bound check
+            --  is structural: the head already proved the counter is below
+            --  the length, and the verifier sees an ordinary element
+            --  address of the storage.
+            declare
+               Position : constant IR.Value_Id :=
+                 IR.Emit_Load (Unit.all, Filling, Counter_Slot, Site);
+               Address : constant IR.Value_Id :=
+                 IR.Emit_Slice_Address
+                   (Unit.all, Filling,
+                    IR.Emit_Load (Unit.all, Filling, Base_Slot, Site),
+                    IR.Emit_Load (Unit.all, Filling, Length_Slot, Site),
+                    Position, Position, Element_Shape, True, Site);
+            begin
+               IR.Emit_Store
+                 (Unit.all, Filling, Address_Slot, Address, Site);
+            end;
+         end if;
          Lower_Statements (Of_Tree, Runs, Inside, Result);
          if Current /= IR.No_Block then
             Close_With_Jump
               ((if Is_For then Step_Block else Head), Site);
          end if;
 
-         if Is_For then
+         if Is_Collection then
+            Open (Step_Block);
+            declare
+               Position : constant IR.Value_Id :=
+                 IR.Emit_Load (Unit.all, Filling, Counter_Slot, Site);
+               One : constant IR.Value_Id :=
+                 IR.Emit_Number
+                   (Unit.all, Filling, Ty.Usize, 1, False, Site);
+               Next_Position : constant IR.Value_Id :=
+                 IR.Emit_Binary
+                   (Unit.all, Filling, IR.Add, Position, One, Ty.Usize, Site);
+            begin
+               IR.Emit_Store
+                 (Unit.all, Filling, Counter_Slot, Next_Position, Site);
+               Close_With_Jump (Head, Site);
+            end;
+         elsif Is_For then
             Open (Step_Block);
             if Syn.Traversal_Is_Inclusive (Of_Tree, Node) then
                declare
@@ -7554,8 +7711,19 @@ package body Landin.Stages.Lowering is
                                        IR.Part_Position (Alias.Field),
                                        Value, Site);
                                  when IR.Runtime_Address =>
-                                    raise Landin.Compiler_Defect with
-                                      "a runtime alias reached scalar write";
+                                    --  D160: written through the address
+                                    --  a traversal element keeps.
+                                    if Alias.Field /= 0 then
+                                       raise Landin.Compiler_Defect with
+                                         "a runtime alias reached scalar"
+                                         & " write";
+                                    end if;
+                                    IR.Emit_Store_Indirect
+                                      (Unit.all, Filling,
+                                       IR.Emit_Load
+                                         (Unit.all, Filling,
+                                          Alias.Source.Address, Site),
+                                       Value, Site);
                               end case;
                            end if;
                         elsif Syn.Kind (Of_Tree, Place)
