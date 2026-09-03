@@ -462,7 +462,7 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Compile : Landin.Platform.Tool_Result;
       Outcome : Landin.Platform.Tool_Result;
       Args    : Landin.Platform.Path_List;
-      Nothing : Landin.Platform.Path_List;
+      Runtime_Arguments : Landin.Platform.Path_List;
    begin
       if Module_Root (Case_Item) = "" then
          Landin.Platform.Add (Args, Source);
@@ -533,7 +533,9 @@ package body Landin.Tests.Fixture_Execution_Suite is
             Label & ": refine reported success and wrote no executable at "
             & Built);
       else
-         Runner.Run (Built, Nothing, Outcome, Landin.Platform.Merged);
+         Runtime_Arguments := Split (Run_Args (Case_Item));
+         Runner.Run
+           (Built, Runtime_Arguments, Outcome, Landin.Platform.Merged);
 
          if Traps (Case_Item) then
             Landin.Testing.Check

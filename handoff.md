@@ -213,15 +213,18 @@ representation private and exercises rollback and publication through compiled
 Landin code. R3.40 adds the allocator interface, explicit and deliberately
 failing arenas, a transactional pointer-capable `core/vec`, and the parser's
 byte-oriented `core/text` positions and subslices, with backing origins and
-failure behavior pinned by compiled fixtures.
+failure behavior pinned by compiled fixtures. R3.50 adds the scalar/pointer
+`extern(c)` seam, captures hosted arguments through a libc-backed runtime
+bridge, and builds `core/io` as an ordinary world capability with declared
+file and stream failures.
 
-**Current roadmap work: R3.50 — Implement the minimum hosted ABI and I/O.**
+**Current roadmap work: R3.60 — Implement diagnostics as runtime dispatch.**
 
 `refine` runs the frontend, lowers and
 verifies target-neutral IR, emits Linux x86-64 assembly, and can assemble and
 link a hosted executable whose runtime behaviour the native x86-64 gate
-checks. macOS arm64 and Cortex-M backends and the standard library remain
-future work. `ROADMAP.md` is the sole durable work authority. Outstanding
+checks. macOS arm64 and Cortex-M backends and the broader standard library
+remain future work. `ROADMAP.md` is the sole durable work authority. Outstanding
 grammar, representation, ABI, guarantee, and diagnostic questions are settled
 by the first phase that needs them rather than forming one blanket front-end
 barrier.

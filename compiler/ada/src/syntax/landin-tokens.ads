@@ -53,7 +53,8 @@ package Landin.Tokens is
       Integer_Literal,
       --  The words [1760] reserves.
       Kw_Addr, Kw_Alignof, Kw_And, Kw_Any, Kw_Atom, Kw_Dec, Kw_Else, Kw_Elsif,
-      Kw_End, Kw_Escaping, Kw_Fail, Kw_False, Kw_Fixed, Kw_From, Kw_If,
+      Kw_End, Kw_Escaping, Kw_Extern, Kw_Fail, Kw_False, Kw_Fixed, Kw_From,
+      Kw_If,
       Kw_Import, Kw_In, Kw_Inc, Kw_Inout, Kw_Mut, Kw_None, Kw_Not, Kw_Or,
       Kw_Ptr,
       Kw_Public, Kw_Return, Kw_Sink, Kw_Sizeof, Kw_Struct, Kw_Then, Kw_True,

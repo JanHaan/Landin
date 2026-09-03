@@ -1,0 +1,179 @@
+--  R3.50's Linux hosted service layer.  The foreign declarations are the
+--  compiler/runtime seam: fixed scalar and pointer carriers only.  Files and
+--  streams above it remain ordinary values reached through a world capability.
+
+extern(c) _landin_host_argument_count: () -> (count: usize)
+extern(c) _landin_host_argument_at: (index: usize) -> (data: ptr u8)
+extern(c) _landin_host_text_length: (data: ptr u8) -> (length: usize)
+extern(c) _landin_host_open_read: (path: ptr u8) -> (descriptor: i32)
+extern(c) _landin_host_read: (descriptor: i32, data: ptr mut u8,
+                              length: usize) -> (read_count: usize)
+extern(c) _landin_host_write: (descriptor: i32, data: ptr u8,
+                               length: usize) -> (write_count: usize)
+extern(c) _landin_host_close: (descriptor: i32) -> (status: i32)
+extern(c) _landin_host_errno: () -> (number: i32)
+
+public not_found: atom
+public no_access: atom
+public io_failed: atom
+public no_argument: atom
+
+file_value: type = struct
+    descriptor: i32
+end file_value
+
+public file: type = file_value
+
+public argument: type = struct
+    data: ptr u8
+    length: usize
+end argument
+
+public world: type = concept (provider: type)
+    open_read: (inout state: provider, path: ptr u8)
+               -> (opened: file) ! not_found | no_access | io_failed
+    close: (inout state: provider, sink opened: file)
+           -> none ! io_failed
+    read: (inout state: provider, opened: file, into: []mut u8)
+          -> (count: usize) ! io_failed
+    write: (inout state: provider, opened: file, bytes: []u8)
+           -> none ! io_failed
+    out: (state: provider) -> (stream: file)
+    err: (state: provider) -> (stream: file)
+    argument_count: (state: provider) -> (count: usize)
+    argument: (state: provider, index: usize)
+              -> (value: argument) ! no_argument
+end world
+
+public open_read: (provider: type is world, inout state: provider,
+                   path: ptr u8)
+                  -> (opened: file) ! not_found | no_access | io_failed =
+    opened = try provider.open_read(state, path)
+end open_read
+
+public close: (provider: type is world, inout state: provider,
+               sink opened: file) -> none ! io_failed =
+    try provider.close(state, opened)
+end close
+
+public read: (provider: type is world, inout state: provider,
+              opened: file, into: []mut u8)
+             -> (count: usize) ! io_failed =
+    count = try provider.read(state, opened, into)
+end read
+
+public write: (provider: type is world, inout state: provider,
+               opened: file, bytes: []u8) -> none ! io_failed =
+    try provider.write(state, opened, bytes)
+end write
+
+public out: (provider: type is world, state: provider) -> (stream: file) =
+    stream = provider.out(state)
+end out
+
+public err: (provider: type is world, state: provider) -> (stream: file) =
+    stream = provider.err(state)
+end err
+
+public argument_count: (provider: type is world, state: provider)
+                       -> (count: usize) =
+    count = provider.argument_count(state)
+end argument_count
+
+public argument_at: (provider: type is world, state: provider, index: usize)
+                    -> (value: argument) ! no_argument =
+    value = try provider.argument(state, index)
+end argument_at
+
+public system: type = struct
+    reserved: u8
+end system
+
+system_open_read: (inout state: system, path: ptr u8)
+                  -> (opened: file) ! not_found | no_access | io_failed =
+    _ = state.reserved
+    descriptor: i32 = _landin_host_open_read(path)
+    if descriptor < 0 then
+        number: i32 = _landin_host_errno()
+        fail not_found when number == 2
+        fail no_access when number == 13
+        fail io_failed
+    end if
+    opened = (descriptor: descriptor)
+end system_open_read
+
+system_close: (inout state: system, sink opened: file)
+              -> none ! io_failed =
+    _ = state.reserved
+    status: i32 = _landin_host_close(opened.descriptor)
+    fail io_failed when status <> 0
+end system_close
+
+system_read: (inout state: system, opened: file, into: []mut u8)
+             -> (count: usize) ! io_failed =
+    _ = state.reserved
+    if lenof into == 0 then
+        count = 0
+        return
+    end if
+    base: ptr mut u8 = addr into[0]
+    read_count: usize = _landin_host_read
+        (opened.descriptor, base, lenof into)
+    fail io_failed when read_count == 18446744073709551615
+    count = read_count
+end system_read
+
+write_from: (descriptor: i32, base: ptr u8, length: usize, offset: usize)
+            -> none ! io_failed =
+    return when offset == length
+    address: usize = usize(base) + offset
+    remaining: ptr u8 = ptr(address)
+    write_count: usize = _landin_host_write
+        (descriptor, remaining, length - offset)
+    fail io_failed when write_count == 0
+    fail io_failed when write_count == 18446744073709551615
+    try write_from(descriptor, base, length, offset + write_count)
+end write_from
+
+system_write: (inout state: system, opened: file, bytes: []u8)
+              -> none ! io_failed =
+    _ = state.reserved
+    return when lenof bytes == 0
+    base: ptr u8 = addr bytes[0]
+    try write_from(opened.descriptor, base, lenof bytes, 0)
+end system_write
+
+system_out: (state: system) -> (stream: file) =
+    _ = state.reserved
+    stream = (descriptor: 1)
+end system_out
+
+system_err: (state: system) -> (stream: file) =
+    _ = state.reserved
+    stream = (descriptor: 2)
+end system_err
+
+system_argument_count: (state: system) -> (count: usize) =
+    _ = state.reserved
+    count = _landin_host_argument_count()
+end system_argument_count
+
+system_argument: (state: system, index: usize)
+                 -> (value: argument) ! no_argument =
+    _ = state.reserved
+    count: usize = _landin_host_argument_count()
+    fail no_argument when index >= count
+    data: ptr u8 = _landin_host_argument_at(index)
+    length: usize = _landin_host_text_length(data)
+    value = (data: data, length: length)
+end system_argument
+
+system is world
+    (open_read: system_open_read, close: system_close,
+     read: system_read, write: system_write, out: system_out,
+     err: system_err, argument_count: system_argument_count,
+     argument: system_argument)
+
+public host: () -> (state: system) =
+    state = (reserved: 0)
+end host

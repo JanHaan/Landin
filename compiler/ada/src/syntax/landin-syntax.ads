@@ -495,6 +495,12 @@ package Landin.Syntax is
                              | Concept_Declaration
                              | Conformance_Declaration;
 
+   --  `extern(c)` is an imported C routine declaration.  It retains the
+   --  ordinary declared signature but has no Landin body [1570] [1580].
+   function Is_External (Of_Tree : Tree; Id : Node_Id) return Boolean
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id) = Function_Declaration;
+
    function Is_Mutable (Of_Tree : Tree; Id : Node_Id) return Boolean
      with Pre => Contains (Of_Tree, Id)
                  and then Kind (Of_Tree, Id) in Binding | Match_Binding;
@@ -1283,6 +1289,7 @@ private
       Slots      : Natural := 0;
       Sound      : Boolean := True;
       Exported   : Boolean := False;
+      External   : Boolean := False;
       Mutable    : Boolean := False;
       Escaping   : Boolean := False;
       Convention : Parameter_Convention := Implicit_In;

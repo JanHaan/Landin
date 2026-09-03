@@ -1,0 +1,6 @@
+pair: type = struct
+    left: u32
+    right: u32
+end pair
+
+extern(c) host_pair: (value: pair) -> none

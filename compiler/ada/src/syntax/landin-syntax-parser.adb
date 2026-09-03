@@ -256,6 +256,7 @@ package body Landin.Syntax.Parser is
                Radix     : Tok.Integer_Base := Tok.Decimal;
                Digits_At : Landin.Source.Span := Landin.Source.Empty_Span;
                Exported  : Boolean := False;
+               External  : Boolean := False;
                Mutable   : Boolean := False;
                Escapes   : Boolean := False;
                Convention : Parameter_Convention := Implicit_In;
@@ -331,7 +332,10 @@ package body Landin.Syntax.Parser is
             function Parse_Destructuring return Node_Id;
             function Parse_Function
               (Exported  : Boolean;
-               Public_At : Landin.Source.Span) return Node_Id;
+               Public_At : Landin.Source.Span;
+               External  : Boolean := False;
+               Extern_At : Landin.Source.Span := Landin.Source.Empty_Span)
+               return Node_Id;
             function Parse_Anonymous_Function return Node_Id;
             function Parse_Parameter
               (Allow_Static : Boolean := False) return Node_Id;
@@ -657,6 +661,7 @@ package body Landin.Syntax.Parser is
                Radix     : Tok.Integer_Base := Tok.Decimal;
                Digits_At : Landin.Source.Span := Landin.Source.Empty_Span;
                Exported  : Boolean := False;
+               External  : Boolean := False;
                Mutable   : Boolean := False;
                Escapes   : Boolean := False;
                Convention : Parameter_Convention := Implicit_In;
@@ -696,6 +701,7 @@ package body Landin.Syntax.Parser is
                    Slots      => Children'Length,
                    Sound      => Sound,
                    Exported   => Exported,
+                   External   => External,
                    Mutable    => Mutable,
                    Escaping   => Escapes,
                    Convention => Convention,
@@ -1126,6 +1132,57 @@ package body Landin.Syntax.Parser is
                                    & " with an export modifier");
                   end if;
                   return Parse_Fixed_Conditional;
+               end if;
+
+               --  R3.50's imported boundary is deliberately one explicit
+               --  convention and no body: `extern(c) name: signature`.
+               if Peek = Tok.Kw_Extern then
+                  declare
+                     Extern_At : constant Landin.Source.Span := Here;
+                  begin
+                     Advance;
+
+                     if Expect
+                       (Wanted  => Tok.Left_Paren,
+                        Message => "`extern` names its convention in `(`",
+                        Note    => "[1580]: `extern(c)` imports a C routine",
+                        Related => Extern_At,
+                        Because => "introduced here")
+                     then
+                        if Peek /= Tok.Identifier
+                          or else Landin.Source.Names.Spelling
+                                    (Names, Named_Here) /= "c"
+                        then
+                           Complain
+                             (Item    => Syn.Token_Expected,
+                              Where   => Here,
+                              Message => "the hosted boundary supports the"
+                                         & " `c` convention",
+                              Note    => "[1580]: write `extern(c)`",
+                              Related => Extern_At,
+                              Because => "introduced here");
+                        end if;
+
+                        if Peek = Tok.Identifier then
+                           Advance;
+                        end if;
+
+                        if not Expect
+                          (Wanted  => Tok.Right_Paren,
+                           Message => "the external convention is never"
+                                      & " closed",
+                           Note    => "[1580]: write `extern(c)`",
+                           Related => Extern_At,
+                           Because => "opened here")
+                        then
+                           Resync_Declaration;
+                        end if;
+                     end if;
+
+                     return Parse_Function
+                       (Exported, Public_At, External => True,
+                        Extern_At => Extern_At);
+                  end;
                end if;
 
                if Peek in Tok.Left_Paren | Tok.Left_Bracket | Tok.Kw_Ptr
@@ -3608,10 +3665,15 @@ package body Landin.Syntax.Parser is
             --               "end" identifier?                     [1800]
             function Parse_Function
               (Exported  : Boolean;
-               Public_At : Landin.Source.Span) return Node_Id
+               Public_At : Landin.Source.Span;
+               External  : Boolean := False;
+               Extern_At : Landin.Source.Span := Landin.Source.Empty_Span)
+               return Node_Id
             is
                Start : constant Landin.Source.Span :=
-                 (if Exported then Public_At else Here);
+                 (if Exported then Public_At
+                  elsif External then Extern_At
+                  else Here);
                Named        : Landin.Source.Names.Name_Id;
                At_Name      : Landin.Source.Span;
                Params       : Slot_Vectors.Vector;
@@ -3699,7 +3761,15 @@ package body Landin.Syntax.Parser is
                   Result  => Returns_At,
                   Returns => Returns_Node /= No_Node);
 
-               if Expect
+               if External then
+                  --  Keep Body_Of total for every function node while later
+                  --  stages use the explicit flag to avoid treating this
+                  --  placeholder as a Landin definition.
+                  Body_Node := Add
+                    (Of_Kind  => Block,
+                     At_Token => At_Name,
+                     Children => [1 => No_Node]);
+               elsif Expect
                     (Wanted  => Tok.Equal,
                      Message => "a body opens with `=`",
                      Note    => "[1800]: `=` opens the body and `end`"
@@ -3714,7 +3784,9 @@ package body Landin.Syntax.Parser is
                   Body_Node := Add (Error_Statement, After_Previous);
                end if;
 
-               if Peek = Tok.Kw_End then
+               if External then
+                  null;
+               elsif Peek = Tok.Kw_End then
                   Advance;
 
                   if Peek = Tok.Identifier then
@@ -3760,7 +3832,8 @@ package body Landin.Syntax.Parser is
                      Extent   => Join (Start, After_Previous),
                      Children => Head & To_List (Params),
                      Named    => Named,
-                     Exported => Exported);
+                     Exported => Exported,
+                     External => External);
                end;
             end Parse_Function;
 

@@ -1,0 +1,6 @@
+class: negative
+summary: R3.50 refuses aggregate carriers at the narrow extern(c) boundary
+program: program.ldn
+codes: L0301
+constructs: 0670, 1570, 1580, 1740, 1800, 1975
+targets: linux-x86-64

@@ -44,6 +44,9 @@ package Landin.Testing.Fixtures is
    --  A fixture that records an expectation and no way to produce it is
    --  dead data, so `expect` without `args` is a reported fault.
    function Args    (Item : Fixture) return String;
+   --  Arguments handed to a compiled runtime program, separately from the
+   --  `args` used to invoke refine for recorded command-line fixtures.
+   function Run_Args (Item : Fixture) return String;
    function Status  (Item : Fixture) return Integer;
 
    --  Whether the fixture's program must end without exiting.  [1960] says
@@ -119,6 +122,7 @@ private
       Expect  : Unbounded.Unbounded_String;
       Targets : Unbounded.Unbounded_String;
       Args    : Unbounded.Unbounded_String;
+      Run_Args : Unbounded.Unbounded_String;
       Codes   : Unbounded.Unbounded_String;
       Status  : Integer := 0;
       Traps   : Boolean := False;

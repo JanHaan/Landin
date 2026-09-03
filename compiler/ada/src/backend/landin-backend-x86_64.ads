@@ -92,6 +92,7 @@ package Landin.Backend.X86_64 is
      (Of_Unit  : Landin.IR.Unit;
       Meanings : Landin.Resolution.Table;
       Names    : Landin.Source.Names.Table;
-      Facts    : Landin.Targets.Target_Facts) return String;
+      Facts    : Landin.Targets.Target_Facts;
+      Hosted_Entry : Landin.IR.Item_Id := Landin.IR.No_Item) return String;
 
 end Landin.Backend.X86_64;

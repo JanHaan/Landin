@@ -2887,19 +2887,49 @@ Linux gate passes 389 cases and 9,124 checks.
 
 ### R3.50 — Implement the minimum hosted ABI and I/O
 
-Status: active
+Status: complete
 Depends on: R1.80, R2.30, R3.10
 
-Choose and document the smallest Linux hosted service route needed for
-arguments, files and streams, using a narrow libc boundary unless executable
-evidence justifies direct syscalls. Keep the general C ABI matrix in R4.
+The first foreign declaration is the bodyless
+`extern(c) name: declared_signature`. The checker deliberately admits only
+fixed scalar and pointer parameters and zero or one scalar or pointer result;
+generic declarations, parameter modes other than `in`, declared errors,
+aggregates, variadics and the rest of the C ABI matrix remain R4.40. Lowering
+keeps such a declaration as a signature-only neutral-IR routine item, the
+verifier recognises its absence of blocks as intentional, and Linux x86-64
+emits calls to its source symbol without emitting a definition.
 
-Exit evidence: Landin `core/io` reads parser input, writes diagnostics and
-reports world-dependent failures through declared errors.
+The selected hosted entry captures C `argc`/`argv` before its ordinary
+no-argument Landin body. A small compiler-owned bridge exposes arguments after
+`argv[0]` and fixed wrappers for read-only `open`, `read`, `write`, `close`,
+`strlen` and `errno`. The wrappers use libc rather than direct Linux syscalls:
+the existing executable path already links the C runtime, libc supplies the
+portable hosted contract this slice needs, and no executable evidence called
+for a kernel-specific boundary.
+
+`core/io` builds on that seam as an ordinary library module. Its opaque file
+descriptor and public argument view sit below a `world(provider)` concept;
+generic `open_read`, `close`, `read`, `write`, stream and argument operations
+thread the provider, while `host()` is the single concrete root mint. The
+system provider maps `ENOENT`, `EACCES` and other host failures to declared
+`not_found`, `no_access` and `io_failed` atoms. The C declaration itself is
+infallible: `errno` is interpreted only in the library wrapper where the
+world-dependent operation is given its Landin error channel. D153 records the
+boundary and the wider designs it leaves open.
+
+Runtime fixture metadata now has `run_args`, distinct from the arguments that
+invoke `refine`, so executable evidence can test the hosted argument route.
+
+Exit evidence: `runtime/hosted-io-reads-parser-input` receives one hosted
+argument, opens and reads the named parser-input file through `core/io`, writes
+`OK` to the diagnostic stream, and returns 42 only after a deliberately
+missing path takes a declared recovery edge. The external-boundary fixtures
+pin acceptance of the scalar subset and L0301 for an aggregate signature. The
+complete pinned Linux gate passes 389 cases and 9,140 checks.
 
 ### R3.60 — Implement diagnostics as runtime dispatch
 
-Status: planned
+Status: active
 Depends on: R1.30, R2.80, R3.50
 
 Implement the parser's diagnostic capability, bounded and streaming

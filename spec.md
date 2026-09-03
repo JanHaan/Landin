@@ -61,7 +61,8 @@ program     ::= import_declaration* declaration*
 import_declaration ::= "import" import_path
 import_path ::= identifier ("/" identifier)*
 declaration ::= "public"? (atom_declaration | binding | function
-                            | type_declaration | concept_declaration)
+                            | external_function | type_declaration
+                            | concept_declaration)
                 | conformance_declaration
                 | fixed_conditional
 fixed_conditional ::= "fixed" "if" expression "then" declaration*
@@ -110,7 +111,7 @@ that one is the tokeniser's. The other is in the rule itself: a
 name that starts with '_' needs something after it, so the lone
 '_' is the discard of [1020] and nothing may be called it. The
 kernel
-reserves thirty-five words; the reserved set of the whole language is
+reserves thirty-six words; the reserved set of the whole language is
 larger, and each word joins it with the construct that introduces
 it, so a program that avoids a construct never trips over its
 keyword. Type names are not among them: u32 and bool are ordinary
@@ -122,7 +123,7 @@ identifier  ::= lower (lower | digit | "_")*
 lower       ::= "a" ... "z"
 digit       ::= "0" ... "9"
 keyword     ::= "addr" | "alignof" | "and" | "any" | "atom" | "dec" | "else"
-              | "elsif" | "end" | "escaping" | "fail" | "false"
+              | "elsif" | "end" | "escaping" | "extern" | "fail" | "false"
               | "fixed" | "from" | "if" | "import" | "in" | "inc" | "inout"
               | "mut" | "none" | "not" | "or" | "ptr" | "public"
               | "return" | "sink" | "sizeof" | "struct" | "then"
@@ -337,6 +338,7 @@ prefix a final expression because its untaken edge continues.
 
 ```landin-grammar
 function           ::= identifier ":" declared_signature "=" body "end" identifier?
+external_function  ::= "extern" "(" "c" ")" identifier ":" declared_signature
 anonymous_function ::= signature "=" body "end"
 signature          ::= "(" parameters? ")" "->" returns errors?
 declared_signature ::= "(" routine_formals? ")" "->" returns errors?
@@ -1020,6 +1022,26 @@ error.
 In a rooted R3.10 program, only a declaration in the designated entry module
 can satisfy this shape. A reachable imported module's `public main` is an
 ordinary public function and is never selected as the executable entry.
+
+### [1975] The first foreign boundary imports fixed scalar C routines
+
+`extern(c) name: declared_signature` declares a C routine supplied by the
+linked host and has no Landin body. R3.50 admits no generic form, no declared
+error set, only `in` scalar or pointer parameters, and at most one scalar or
+pointer result. Pointer permission remains part of the Landin signature. The
+general C ABI matrix—aggregates, unions, bitfields, variadic calls, callbacks,
+thread-local state, foreign ownership and generated bindings—belongs to R4.40.
+
+On the first Linux x86-64 hosted path, the executable's selected no-argument
+Landin entry captures the incoming C `argc` and `argv` before its body runs.
+The repository-owned runtime bridge exposes user arguments (excluding
+`argv[0]`) and fixed wrappers for `strlen`, read-only `open`, `read`, `write`,
+`close`, and `errno`; those wrappers call libc. This is a compiler/runtime ABI
+used by `core/io`, not a set of privileged language operations. `core/io`
+turns descriptors and argument views into ordinary values, maps foreseeable
+host failures onto declared atoms, and threads its `world(provider)` concept
+as the authority for opening files and touching streams [1660] [1680]. Direct
+Linux syscalls are not part of this route.
 
 ### [1980] Declared errors are an orthogonal payload-free atom outcome
 
@@ -8354,6 +8376,9 @@ classified failure boundary before the repository gate can pass.
 | `origins.escape` | static | 0770, 0780, 0790, 0800, 0830, 0840 | L0314--L0316 | `negative/frame-origin-return`, `negative/borrowed-source-inout`, `negative/returned-reference-missing-from`, `negative/core-arena-frame-escape`, `negative/core-text-frame-slice-escape` |
 | `origins.aliasing-limit` | outside | 0770, 0910 | non-guarantee: a pre-existing copy or indistinguishable arena is not tracked | `positive/reference-origins-and-consume`, `negative/use-after-sink` |
 | `functions.abi` | static | 0870, 0880, 0890, 0900, 0920, 0930, 0980, 1000, 1020, 1030, 1460, 1920, 1970 | L0301, L0302 or L0502 | `negative/call-with-too-few-arguments`, `runtime/r230-composition` |
+| `extern.c-boundary` | static | 0430, 1570, 1580, 1975 | L0301 for a signature outside R3.50's fixed scalar/pointer subset | `positive/external-scalar-c-boundary`, `negative/external-aggregate-boundary` |
+| `host.io` | outside | 0430, 1580, 1650, 1660, 1680, 1975 | non-guarantee: files, descriptors, arguments and streams reflect mutable host state | `runtime/hosted-io-reads-parser-input` |
+| `host.io-failure` | static | 0940, 0960, 1030, 1975 | `core/io` reports foreseeable host failure as declared atoms which callers handle or declare | `runtime/hosted-io-reads-parser-input` |
 | `execution.resource-exhaustion` | outside | 0950, 1770, 1970 | non-guarantee: the kernel sets no recursion-depth, stack, or host-resource bound | `runtime/recursive-fibonacci` |
 | `consume.local` | static | 0910 | L0302 or L0315 | `negative/use-after-sink`, `negative/sunk-inout-not-restored` |
 | `consume.copy-before` | static | 0860, 0910, 1720 | a value copied before the sink remains independently usable | `runtime/copy-before-sink-remains-live` |
@@ -8615,3 +8640,51 @@ library design without parser evidence. All were declined.
 `negative/core-text-private-position`, and the `allocation.failure`,
 `allocation.backing`, `raw.prefix`, `origins.escape` and
 `modules.visibility` guarantee rows.
+
+### D153 — Hosted I/O is a libc-backed capability over a scalar import seam
+
+**The tour and prototypes said** that hosted arguments begin in C `argc` and
+`argv` form [1650], that the entry is where a root capability is minted
+[1660], that world access is passed as an ordinary argument [1680], and that
+`core/io.world` admits real and in-memory providers. They did not choose how
+the first backend reaches Linux services or how much of [1570]/[1580]'s
+foreign surface must become executable before the complete C work.
+
+**Chosen:** D153 is exactly [1975]. The compiler implements bodyless
+`extern(c)` declarations for fixed scalar/pointer signatures and carries them
+as signature-only IR routines. The Linux backend captures entry `argc` and
+`argv`, then emits a small fixed bridge whose implementations tail-call libc
+for arguments, text length, read-only open, file read/write/close and errno.
+`core/io` alone declares that bridge and turns it into a `world(provider)`
+capability, an opaque file value, a public pointer-and-length argument view,
+standard output/error descriptors and declared host-failure atoms. The system
+provider is ordinary conformance evidence; generic callers do not know which
+provider they received.
+
+The bridge uses libc rather than direct syscalls because the hosted executable
+already uses the C runtime and libc supplies the smallest stable host contract
+for this workload. File descriptors remain private library representation.
+Arguments exclude `argv[0]`; a runtime fixture's new `run_args` metadata pins
+the distinction. Reads expose EOF as count zero and host failure as
+`io_failed`; writes complete the requested slice or fail. `open_read` maps
+Linux libc `ENOENT` to `not_found`, `EACCES` to `no_access`, and every other
+failure to `io_failed`.
+
+**The alternatives:** direct Linux syscalls would couple the first hosted
+library to kernel numbers and conventions without reducing the already-linked
+C boundary. Enabling aggregate returns, unions, variadics, callbacks, foreign
+allocation ownership or generated header bindings would pre-empt R4.40.
+Making I/O a compiler intrinsic or global singleton would defeat [1660]'s
+replaceable capability. Passing C-shaped parameters to Landin `main` would
+reverse [1650]'s chosen ordinary no-argument entry.
+
+This selects the bootstrap provider, not permanent compiler ownership of I/O.
+R4.30 and R4.40 retain both direct libc declarations with explicit library
+linkage and target-specific `core` providers built over inline assembly or
+separately linked syscall wrappers. Either may implement the same `world`
+capability without changing its callers.
+
+**Pinned by** `positive/external-scalar-c-boundary`,
+`negative/external-aggregate-boundary`,
+`runtime/hosted-io-reads-parser-input`, the rooted fixture execution path, and
+the `host.io`, `host.io-failure` and `extern.c-boundary` guarantee rows.

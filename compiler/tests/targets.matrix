@@ -93,6 +93,8 @@ negative/duplicate-in-a-module | linux-x86-64, macos-arm64
 negative/duplicate-parameter | linux-x86-64, macos-arm64
 negative/error-set-needs-an-atom | linux-x86-64, synthetic-32
 negative/escaping-frame-reference | linux-x86-64, macos-arm64, synthetic-32
+negative/external-aggregate-boundary | linux-x86-64
+negative/external-convention-not-closed | linux-x86-64
 negative/fail-needs-one-atom | linux-x86-64, synthetic-32
 negative/fail-outside-declared-set | linux-x86-64, synthetic-32
 negative/failing-function-signature-mismatch | linux-x86-64, synthetic-32
@@ -522,6 +524,7 @@ positive/deep-nested-struct-leaves | linux-x86-64, macos-arm64
 positive/defer-evaluates-at-exit | linux-x86-64, macos-arm64, synthetic-32
 positive/discard-of-a-value | linux-x86-64, macos-arm64
 positive/divisor-is-not-known | linux-x86-64, macos-arm64
+positive/external-scalar-c-boundary | linux-x86-64
 positive/fixed-array-bound-expression | linux-x86-64, macos-arm64
 positive/fixed-array-bound-zero | linux-x86-64, macos-arm64
 positive/fixed-conditional-cross-file-forward | linux-x86-64, macos-arm64, synthetic-32
@@ -750,6 +753,7 @@ runtime/generic-structural-deduction | linux-x86-64
 runtime/generic-try-effective-signature | linux-x86-64
 runtime/generic-zero-nominal-array-signatures | linux-x86-64
 runtime/greatest-common-divisor | linux-x86-64
+runtime/hosted-io-reads-parser-input | linux-x86-64
 runtime/indirect-function-abi | linux-x86-64
 runtime/infallible-function-values | linux-x86-64
 runtime/inferred-function-values | linux-x86-64
