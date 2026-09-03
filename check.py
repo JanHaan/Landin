@@ -384,7 +384,8 @@ LEXICAL_RULES = {"space", "line_end", "comment", "line_comment",
                  "text", "text_byte", "text_escape", "raw", "quote_run",
                  "raw_content",
                  "integer", "float", "decimal_fraction", "decimal_exponent",
-                 "decimal_digits", "decimal", "hex", "octal", "binary", "lower",
+                 "hex_fraction", "binary_exponent", "decimal_digits",
+                 "hex_digits", "decimal", "hex", "octal", "binary", "lower",
                  "digit", "hex_digit", "octal_digit", "binary_digit"}
 
 #  Rule names the recogniser matches against a token kind rather than a
@@ -695,9 +696,34 @@ def landin_tokens(source, signs, trees=None):
                 while i < n and (source[i] in DIGITS or source[i] == "_"):
                     i += 1
 
-            if i + 1 < n and source[i] == "." and source[i + 1] in DIGITS:
+            if i + 1 < n and source[i] == "." \
+                    and (source[i + 1] in DIGITS
+                         or (source.startswith("0x", start)
+                             and source[i + 1] in "abcdefABCDEF")):
                 if prefixed:
-                    return None, "no rule spells a hexadecimal float literal"
+                    if not source.startswith("0x", start):
+                        return None, "only hexadecimal floats use a base prefix"
+                    i += 1
+                    while i < n and (source[i] in DIGITS
+                                     or source[i] in "abcdefABCDEF"
+                                     or source[i] == "_"):
+                        i += 1
+                    if i >= n or source[i] not in "pP":
+                        return None, "a hexadecimal float needs a binary exponent"
+                    i += 1
+                    if i < n and source[i] in "+-":
+                        i += 1
+                    exponent = i
+                    while i < n and (source[i] in DIGITS
+                                     or source[i] == "_"):
+                        i += 1
+                    if exponent == i:
+                        return None, "a float exponent has no digit run"
+                    run = source[start:i]
+                    if trees and not lexical_matches(trees, "float", run):
+                        return None, "%r is not a float the rules spell" % run
+                    out.append(("float", run, start))
+                    continue
                 i += 1
                 while i < n and (source[i] in DIGITS or source[i] == "_"):
                     i += 1
@@ -1911,12 +1937,11 @@ def check_grammar_corpus(full_run):
 
 
 def check_token_vocabulary(full_run):
-    """The scanner's vocabulary is the grammar's, and says where it is not.
+    """The scanner's vocabulary agrees with the grammar and tour.
 
-    Landin.Tokens names two things the grammar does not: the reserved words,
-    which must be exactly the grammar's own, and a band of
-    deferred lexemes the kernel refuses by [1830], each of which must name
-    a construct spec.md actually defines.  Without this the scanner would
+    Landin.Tokens names the reserved words, which must be exactly the
+    grammar's own. Quoted token kinds also name the construct that an
+    unterminated spelling was trying to form. Without this the scanner would
     be a second lexical authority, which is one more than this repository
     is willing to have.
     """
@@ -1953,32 +1978,19 @@ def check_token_vocabulary(full_run):
             "keyword rule: missing %s, extra %s"
             % (missing or "none", extra or "none")))
 
-    #  Every deferred lexeme names a construct, and the construct exists.
+    #  Every described quoted lexeme names a construct, and it exists.
     constructs = construct_ids()
     arms = re.findall(r"when\s+([A-Za-z_]+)\s*=>\s*\"\[(\d{4})\]\"",
                       body_text)
     if not arms:
         out.append(("compiler/ada/src/syntax/landin-tokens.adb", 1,
-                    "no deferred lexeme names a construct"))
+                    "no described literal names a construct"))
     for kind, construct in arms:
         if construct not in constructs:
             out.append((
                 "compiler/ada/src/syntax/landin-tokens.adb", 1,
                 "%s names [%s], which neither document defines"
                 % (kind, construct)))
-
-    #  A deferred lexeme is one the grammar does NOT spell.  If the grammar
-    #  grows to spell it, it stops being deferred and this says so.
-    spelled = grammar_signs(trees)
-    signs = dict(re.findall(r'when\s+([A-Za-z_]+)\s*=>\s*"([^"]+)",',
-                            body_text))
-    for kind, _ in arms:
-        spelling = signs.get(kind)
-        if spelling and spelling in spelled:
-            out.append((
-                "compiler/ada/src/syntax/landin-tokens.adb", 1,
-                "%s is deferred and the grammar spells %r, so it is not "
-                "deferred any more" % (kind, spelling)))
 
     return out
 
@@ -2130,6 +2142,8 @@ def check_precedence_table(full_run):
             return ("token", "integer")
         if kind == "Float_Literal":
             return ("token", "float")
+        if kind == "Hex_Float_Literal":
+            return ("token", "float")
         if kind == "Character_Literal":
             return ("token", "character")
         if kind == "Text_Literal":
@@ -2150,7 +2164,7 @@ def check_precedence_table(full_run):
 
     def kinds_in(body):
         return set(re.findall(r"(?:Landin\.Tokens\.)?\b((?:Kw_[A-Za-z_]+)"
-                              r"|Identifier|Integer_Literal|Float_Literal"
+                              r"|Identifier|Integer_Literal|Float_Literal|Hex_Float_Literal"
                               r"|Character_Literal|Text_Literal|Raw_Literal"
                               r"|Ampersand|Bar"
                               r"|Caret|Equal_Equal|Greater_Greater|Greater_Equal"

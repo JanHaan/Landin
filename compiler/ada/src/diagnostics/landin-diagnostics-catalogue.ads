@@ -111,7 +111,8 @@ package Landin.Diagnostics.Catalogue is
       --  D161 enables [0260]'s byte-slice context and gives malformed
       --  [0270] escapes their own source-facing rule.
       Malformed_Text_Literal,
-      --  D162's decimal spelling has a complete optional exponent.
+      --  D162's decimal spelling has a complete optional exponent, and
+      --  D166's hexadecimal spelling has a complete required exponent.
       Malformed_Float_Literal,
       --  D163's character literal is exactly one Unicode scalar value.
       Malformed_Character_Literal,
@@ -358,8 +359,8 @@ package Landin.Diagnostics.Catalogue is
                "[0270] [1750]: a text literal contains a malformed escape"
                & " or invalid source encoding",
             when Malformed_Float_Literal =>
-               "[0210] [0220]: a decimal float has a complete fraction"
-               & " and exponent",
+               "[0210] [0220] [0230]: a float has a complete fraction"
+               & " and exponent when required",
             when Malformed_Character_Literal =>
                "[0250] [0270]: a character literal spells exactly one"
                & " Unicode scalar value",

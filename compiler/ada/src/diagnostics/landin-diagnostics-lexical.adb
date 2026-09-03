@@ -15,8 +15,6 @@ package body Landin.Diagnostics.Lexical is
 
    function Sentence (Fault : Landin.Tokens.Fault) return String
      is (case Landin.Tokens.Kind (Fault) is
-            when Landin.Tokens.Not_Enabled =>
-               "this construct is not enabled yet",
             when Landin.Tokens.Malformed_Integer_Run =>
                "this is not an integer any base spells",
             when Landin.Tokens.Malformed_Float_Literal_Run =>
@@ -37,8 +35,6 @@ package body Landin.Diagnostics.Lexical is
    function Code_For (Fault : Landin.Tokens.Fault_Kind)
      return Rows.Code_Name
      is (case Fault is
-            when Landin.Tokens.Not_Enabled                =>
-               Rows.Construct_Not_Enabled,
             when Landin.Tokens.Malformed_Integer_Run      =>
                Rows.Malformed_Integer,
             when Landin.Tokens.Malformed_Float_Literal_Run =>
@@ -55,10 +51,6 @@ package body Landin.Diagnostics.Lexical is
                Rows.Unterminated_Comment,
             when Landin.Tokens.Unterminated_Literal       =>
                Rows.Unterminated_Literal);
-
-   function Enabled_By (Refused : Landin.Tokens.Deferred_Kind) return String
-     is (case Refused is
-            when Landin.Tokens.Hex_Float_Literal => "R4.10");
 
    procedure Report
      (Stream : Landin.Tokens.Token_Stream;
@@ -85,20 +77,6 @@ package body Landin.Diagnostics.Lexical is
                     Message => Sentence (Fault));
          begin
             case Kind is
-               when Landin.Tokens.Not_Enabled =>
-                  Add_Note
-                    (Report,
-                     "the tour describes it at "
-                     & Landin.Tokens.Construct
-                         (Landin.Tokens.Refused (Fault)));
-                  Add_Note
-                    (Report,
-                     "ROADMAP.md "
-                     & Enabled_By
-                         (Landin.Tokens.Deferred_Kind
-                            (Landin.Tokens.Refused (Fault)))
-                     & " is where it is enabled");
-
                when Landin.Tokens.Unterminated_Literal =>
                   Add_Label
                     (Report,
@@ -121,8 +99,9 @@ package body Landin.Diagnostics.Lexical is
                when Landin.Tokens.Malformed_Float_Literal_Run =>
                   Add_Note
                     (Report,
-                     "a decimal float has digits on both sides of its dot"
-                     & " and a complete optional exponent [0210] [0220]");
+                     "a float has digits on both sides of its dot and a"
+                     & " complete exponent when one is required"
+                     & " [0210] [0220] [0230]");
 
                when Landin.Tokens.Malformed_Character_Literal_Run =>
                   Add_Note

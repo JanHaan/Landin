@@ -24,11 +24,4 @@ package Landin.Diagnostics.Lexical is
    function Code_For (Fault : Landin.Tokens.Fault_Kind)
      return Landin.Diagnostics.Catalogue.Code_Name;
 
-private
-
-   --  Where the roadmap says a refused construct becomes available. The
-   --  note [1830] promises has to name work, and this package may not
-   --  invent it: R1.30 records what ROADMAP.md already says.
-   function Enabled_By (Refused : Landin.Tokens.Deferred_Kind) return String;
-
 end Landin.Diagnostics.Lexical;
