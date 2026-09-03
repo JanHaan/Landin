@@ -1,0 +1,30 @@
+module_raw: []u8 = """module"""
+
+public main: () -> (code: i32) =
+    block: []u8 = """
+        A\n
+          B
+        """
+    quoted: []u8 = """"three """ quotes""""
+    escaped: []u8 = """\n"""
+    raw_same: []u8 = """same"""
+    text_same: []u8 = "same"
+
+    if lenof block == 9
+      and block[0] == 10
+      and block[1] == 65
+      and block[2] == 92 and block[3] == 110
+      and block[4] == 10
+      and block[5] == 32 and block[6] == 32
+      and block[7] == 66 and block[8] == 10
+      and lenof quoted == 16
+      and quoted[6] == 34 and quoted[7] == 34 and quoted[8] == 34
+      and lenof escaped == 2
+      and escaped[0] == 92 and escaped[1] == 110
+      and module_raw[5] == 101
+      and u64(addr raw_same[0]) == u64(addr text_same[0]) then
+        code = 42
+    else
+        code = 1
+    end if
+end main

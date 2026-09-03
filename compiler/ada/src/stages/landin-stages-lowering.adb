@@ -510,8 +510,13 @@ package body Landin.Stages.Lowering is
          Fault : Landin.Tokens.Text.Problem;
          Fault_First, Fault_Last : Natural;
       begin
-         Landin.Tokens.Text.Decode
-           (Lexeme, Decoded, Length, Fault, Fault_First, Fault_Last);
+         if Syn.Kind (Of_Tree, Node) = Syn.Raw_Literal then
+            Landin.Tokens.Text.Decode_Raw
+              (Lexeme, Decoded, Length, Fault, Fault_First, Fault_Last);
+         else
+            Landin.Tokens.Text.Decode
+              (Lexeme, Decoded, Length, Fault, Fault_First, Fault_Last);
+         end if;
          if Fault not in Landin.Tokens.Text.Well_Formed then
             raise Landin.Compiler_Defect with
               "a malformed text literal reached lowering";
@@ -2678,6 +2683,7 @@ package body Landin.Stages.Lowering is
          case Syn.Kind (Of_Tree, Node) is
             when Syn.Inclusive_Slice | Syn.Half_Open_Slice
                | Syn.Empty_Slice_Literal | Syn.Text_Literal
+               | Syn.Raw_Literal
                | Syn.Any_Construction
                | Syn.Name_Reference | Syn.Member_Selection =>
                if Destination_Field /= 0 or else Destination_Path'Length /= 0
@@ -4097,6 +4103,7 @@ package body Landin.Stages.Lowering is
          if Syn.Kind (Of_Tree, Node)
               in Syn.Inclusive_Slice | Syn.Half_Open_Slice
                  | Syn.Empty_Slice_Literal | Syn.Text_Literal
+                 | Syn.Raw_Literal
          then
             declare
                Temporary : constant IR.Slot_Id := IR.Add_Array_Slot
@@ -4175,9 +4182,11 @@ package body Landin.Stages.Lowering is
                  (Unit.all, Filling, Destination, 2, Length, Site);
             end;
             return;
-         elsif Syn.Kind (Of_Tree, Node) = Syn.Text_Literal then
-            --  D161: the slice views the shared read-only datum, and its
-            --  length leaves the trailing NUL out.
+         elsif Syn.Kind (Of_Tree, Node)
+                 in Syn.Text_Literal | Syn.Raw_Literal
+         then
+            --  D161/D164: the slice views the shared read-only datum, and
+            --  its length leaves the trailing NUL out.
             declare
                Datum : constant IR.Item_Id := Text_Datum (Of_Tree, Node);
                Base : constant IR.Value_Id := IR.Emit_Storage_Address
@@ -7059,6 +7068,7 @@ package body Landin.Stages.Lowering is
                                   | Syn.Half_Open_Slice
                                   | Syn.Empty_Slice_Literal
                                   | Syn.Text_Literal
+                                  | Syn.Raw_Literal
                                   | Syn.Any_Construction);
 
                   if Type_At (Of_Tree, Value)
@@ -10491,7 +10501,8 @@ package body Landin.Stages.Lowering is
          procedure Register_Texts (Of_Tree : Syn.Tree) is
          begin
             for Node in Syn.Node_Id'(1) .. Syn.Last_Node (Of_Tree) loop
-               if Syn.Kind (Of_Tree, Node) = Syn.Text_Literal
+               if Syn.Kind (Of_Tree, Node)
+                    in Syn.Text_Literal | Syn.Raw_Literal
                  and then Landin.Checking.Type_Of
                    (Types.all, Of_Tree, Node) = Ty.Slice_Value
                then
@@ -12856,7 +12867,7 @@ package body Landin.Stages.Lowering is
                               then
                                  Images (Which).Value := 0;
                               elsif Syn.Kind (Of_Tree, Value)
-                                      = Syn.Text_Literal
+                                      in Syn.Text_Literal | Syn.Raw_Literal
                               then
                                  Images (Which).Target :=
                                    Text_Datum (Of_Tree, Value);
@@ -13364,7 +13375,8 @@ package body Landin.Stages.Lowering is
                      IR.Set_Slice_Image
                        (Unit.all, IR.Item_For (Unit.all, Id), Element, 0);
                      Made (Id) := True;
-                  elsif Syn.Kind (Their_Tree.all, Value) = Syn.Text_Literal
+                  elsif Syn.Kind (Their_Tree.all, Value)
+                          in Syn.Text_Literal | Syn.Raw_Literal
                   then
                      declare
                         Datum : constant IR.Item_Id :=

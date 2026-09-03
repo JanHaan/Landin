@@ -365,6 +365,10 @@ negative/parameterized-struct-unused-unknown | linux-x86-64, macos-arm64
 negative/parameterized-struct-used-actual-overflow | linux-x86-64, macos-arm64
 negative/parameterized-struct-used-array-actual-overflow | linux-x86-64, macos-arm64
 negative/public-on-statement | linux-x86-64, macos-arm64
+negative/raw-literal-inconsistent-indentation | linux-x86-64, macos-arm64
+negative/raw-literal-needs-byte-slice | linux-x86-64, macos-arm64
+negative/raw-literal-needs-read-only-slice | linux-x86-64, macos-arm64
+negative/raw-literal-write | linux-x86-64, macos-arm64
 negative/read-before-it-is-assigned | linux-x86-64, macos-arm64
 negative/readonly-slice-write | linux-x86-64, macos-arm64, synthetic-32
 negative/recover-infallible-call | linux-x86-64, synthetic-32
@@ -479,6 +483,7 @@ negative/undo-needs-call | linux-x86-64, macos-arm64, synthetic-32
 negative/undo-read-not-assigned-on-failure | linux-x86-64, macos-arm64, synthetic-32
 negative/unhandled-declared-error | linux-x86-64, synthetic-32
 negative/unknown-byte | linux-x86-64, macos-arm64
+negative/unterminated-raw-literal | linux-x86-64, macos-arm64
 negative/unterminated-text-literal | linux-x86-64, macos-arm64, synthetic-32
 negative/upper-case-name | linux-x86-64, macos-arm64
 negative/use-after-sink | linux-x86-64, macos-arm64, synthetic-32
@@ -857,6 +862,7 @@ runtime/pointer-to-small-integer-traps | linux-x86-64
 runtime/r230-composition | linux-x86-64
 runtime/r230-composition-trap | linux-x86-64
 runtime/r250-references | linux-x86-64
+runtime/raw-literal-bytes | linux-x86-64
 runtime/recursive-fibonacci | linux-x86-64
 runtime/recursive-module-images-are-laid-out-and-distinct | linux-x86-64
 runtime/run-length-encoding | linux-x86-64

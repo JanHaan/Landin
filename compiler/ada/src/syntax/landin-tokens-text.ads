@@ -29,6 +29,9 @@ package Landin.Tokens.Text is
       --  `\xNN` in a character literal, whose value is a codepoint rather
       --  than a byte.
       Byte_Where_Codepoint_Is_Meant,
+      --  A nonblank raw-literal line does not begin with the exact
+      --  indentation of its line-leading closing delimiter.
+      Inconsistent_Raw_Indentation,
       --  A non-ASCII source-byte run that is not shortest-form UTF-8.
       Invalid_UTF8_Source,
       --  A backslash as the last byte before the closing quote.
@@ -61,5 +64,22 @@ package Landin.Tokens.Text is
       Fault_First : out Natural;
       Fault_Last  : out Natural)
      with Pre => Lexeme'Length >= 2;
+
+   --  Decode [0280]'s whole raw token.  The matching quote runs are not
+   --  content and no escape is interpreted.  When the closing delimiter is
+   --  line-leading, its exact horizontal indentation is removed from each
+   --  nonblank content line; a blank line's horizontal bytes are discarded.
+   --  Source content must remain shortest-form
+   --  UTF-8.  Fault offsets and Bytes follow Decode's conventions.
+   procedure Decode_Raw
+     (Lexeme      : String;
+      Bytes       : out String;
+      Length      : out Natural;
+      Fault       : out Problem;
+      Fault_First : out Natural;
+      Fault_Last  : out Natural)
+     with Pre  => Lexeme'Length >= 6
+                  and then Bytes'Length >= Lexeme'Length,
+          Post => Length <= Lexeme'Length;
 
 end Landin.Tokens.Text;

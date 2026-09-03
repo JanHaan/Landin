@@ -430,10 +430,73 @@ package body Landin.Tests.Lexer_Suite is
          "two source scalars are not one character literal");
    end Character_Literal_Decoding;
 
+   --  D164's decoder owns both the variable delimiter and the exact
+   --  indentation removal shared by checking and lowering.
+   procedure Raw_Literal_Decoding
+     (Item : in out Landin.Testing.Context);
+
+   procedure Raw_Literal_Decoding
+     (Item : in out Landin.Testing.Context)
+   is
+      Three : constant String (1 .. 3) := [others => '"'];
+      Four  : constant String (1 .. 4) := [others => '"'];
+      Bytes : String (1 .. 64);
+      Length, First, Last : Natural;
+      Fault : Landin.Tokens.Text.Problem;
+
+      procedure Decode (Lexeme : String);
+
+      procedure Decode (Lexeme : String) is
+      begin
+         Landin.Tokens.Text.Decode_Raw
+           (Lexeme, Bytes, Length, Fault, First, Last);
+      end Decode;
+   begin
+      Decode
+        (Three & LF & "  one" & LF & "    two" & LF & "  " & Three);
+      Landin.Testing.Check
+        (Item,
+         Fault = Landin.Tokens.Text.Well_Formed
+           and then Bytes (1 .. Length) = LF & "one" & LF & "  two" & LF,
+         "the closer's exact indentation is removed from every line");
+
+      Decode (Three & "\n" & Three);
+      Landin.Testing.Check
+        (Item,
+         Fault = Landin.Tokens.Text.Well_Formed
+           and then Length = 2
+           and then Bytes (1 .. Length) = "\n",
+         "a raw apparent escape remains two bytes");
+
+      Decode (Three & "   " & Three);
+      Landin.Testing.Check
+        (Item,
+         Fault = Landin.Tokens.Text.Well_Formed
+           and then Bytes (1 .. Length) = "   ",
+         "inline horizontal bytes are content rather than indentation");
+
+      Decode (Four & "a" & Three & "b" & Four);
+      Landin.Testing.Check
+        (Item,
+         Fault = Landin.Tokens.Text.Well_Formed
+           and then Bytes (1 .. Length) = "a" & Three & "b",
+         "a quote run shorter than the opener remains content");
+
+      Decode (Three & LF & "  one" & LF & " short" & LF & "  " & Three);
+      Landin.Testing.Check
+        (Item, Fault = Landin.Tokens.Text.Inconsistent_Raw_Indentation,
+         "a nonblank line must carry the closer's exact prefix");
+
+      Decode (Three & Character'Val (16#C0#) & Three);
+      Landin.Testing.Check
+        (Item, Fault = Landin.Tokens.Text.Invalid_UTF8_Source,
+         "raw source content is shortest-form UTF-8");
+   end Raw_Literal_Decoding;
+
    --  Every deferred kind has to be reachable.  Declared and never
    --  produced is dead vocabulary, which is the same defect as an
-   --  unreachable rule in the grammar.  Text left this table in D161 and
-   --  character in D163 when their first contexts became enabled.
+   --  unreachable rule in the grammar.  Text left this table in D161,
+   --  character in D163 and raw text in D164 as each became enabled.
    procedure Every_Deferred_Kind_Is_Reachable
      (Item : in out Landin.Testing.Context);
 
@@ -472,7 +535,6 @@ package body Landin.Tests.Lexer_Suite is
       Note ("xs[0]");                              --  the brackets
       Note ("x += 1");                             --  Compound_Assign
       Note ("r: f32 = 0x1.0p0");                  --  Hex_Float_Literal
-      Note ("r: utf8 = """"""raw""""""");          --  Raw_Literal
 
       for Kind in Landin.Tokens.Deferred_Kind loop
          Landin.Testing.Check
@@ -735,6 +797,9 @@ package body Landin.Tests.Lexer_Suite is
       Landin.Testing.Register
         (Into, "lexer", "character literal decoding",
          Character_Literal_Decoding'Access);
+      Landin.Testing.Register
+        (Into, "lexer", "raw literal decoding",
+         Raw_Literal_Decoding'Access);
       Landin.Testing.Register
         (Into, "lexer", "unknown bytes recover",
          Unknown_Bytes_Recover'Access);
