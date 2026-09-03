@@ -32329,7 +32329,59 @@ file negative/sunk-inout-not-restored/program.ldn tokens 47
   189 190 )
   191 194 end
   195 198 bad
-file negative/text-literal-not-enabled/program.ldn refused no rule spells '"'
+file negative/text-literal-codepoint-in-byte-context/program.ldn tokens 7
+  0 4 name
+  4 5 :
+  6 7 [
+  7 8 ]
+  8 10 u8
+  11 12 =
+  13 24 "bad\u{41}"
+file negative/text-literal-malformed-codepoint-escape/program.ldn refused a text literal has a malformed escape
+file negative/text-literal-needs-byte-slice/program.ldn tokens 5
+  0 4 name
+  4 5 :
+  6 9 i32
+  10 11 =
+  12 20 "landin"
+file negative/text-literal-needs-read-only-slice/program.ldn tokens 8
+  0 4 name
+  4 5 :
+  6 7 [
+  7 8 ]
+  8 11 mut
+  12 14 u8
+  15 16 =
+  17 25 "landin"
+file negative/text-literal-not-enabled/program.ldn tokens 3
+  0 4 name
+  5 7 :=
+  8 16 "landin"
+file negative/text-literal-short-byte-escape/program.ldn refused a text literal has a malformed escape
+file negative/text-literal-unknown-escape/program.ldn refused a text literal has an unknown escape
+file negative/text-literal-write/program.ldn tokens 22
+  0 3 bad
+  3 4 :
+  5 6 (
+  6 7 )
+  8 10 ->
+  11 15 none
+  16 17 =
+  22 26 text
+  26 27 :
+  28 29 [
+  29 30 ]
+  30 32 u8
+  33 34 =
+  35 43 "landin"
+  48 52 text
+  52 53 [
+  53 54 0
+  54 55 ]
+  56 57 =
+  58 60 76
+  61 64 end
+  65 68 bad
 file negative/text-type-not-enabled/program.ldn tokens 5
   0 4 name
   4 5 :
@@ -32550,7 +32602,7 @@ file negative/unhandled-declared-error/program.ldn tokens 43
   139 142 end
   143 149 caller
 file negative/unknown-byte/program.ldn refused no rule spells ';'
-file negative/unterminated-text-literal/main.ldn refused no rule spells '"'
+file negative/unterminated-text-literal/main.ldn refused a text literal is never closed
 file negative/upper-case-name/program.ldn refused no rule spells 'X'
 file negative/use-after-sink/program.ldn tokens 45
   0 7 consume

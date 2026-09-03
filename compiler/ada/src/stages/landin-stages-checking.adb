@@ -15,6 +15,7 @@ with Landin.Stages.Checking.Flow;
 with Landin.Stages.Checking.References;
 with Landin.Syntax.Forest;
 with Landin.Syntax;
+with Landin.Tokens.Text;
 with Landin.Targets;
 with Landin.Types;
 
@@ -28,8 +29,10 @@ package body Landin.Stages.Checking is
 
    use type Landin.Provenance.Declaration_Id;
    use type Landin.Modules.Module_Id;
+   use type Landin.Source.Byte_Offset;
    use type Landin.Syntax.Node_Id;
    use type Landin.Syntax.Node_Kind;
+   use type Landin.Tokens.Text.Problem;
    use type Landin.Targets.Bit_Width;
    use type Landin.Targets.Byte_Count;
    use type Landin.Types.Type_Kind;
@@ -7776,6 +7779,22 @@ package body Landin.Stages.Checking is
             return;
          end if;
 
+         if Syn.Kind (Of_Tree, Node) = Syn.Text_Literal then
+            Bad.Report
+              (Item    => Bad.Type_Mismatch,
+               Source  => Syn.Source_Of (Of_Tree),
+               Where   => Syn.Where (Of_Tree, Node),
+               Message => "a text literal cannot take the "
+                          & Shown (Wanted) & " context required here",
+               Note    => "[0260]: a text literal takes one of the text"
+                          & " views, including `[]u8`",
+               Related => Site,
+               Because => Because,
+               Into    => Found);
+            Landin.Checking.Refuse (Types.all, Of_Tree, Node);
+            return;
+         end if;
+
          if Syn.Kind (Of_Tree, Node)
               in Syn.If_Statement | Syn.Match_Statement | Syn.Bare_Block
                  | Syn.Loop_Statement | Syn.While_Statement
@@ -8358,7 +8377,7 @@ package body Landin.Stages.Checking is
                               | Ty.Atom_Value | Ty.Any_Value
                  and then Syn.Kind (Of_Tree, Argument)
                             in Syn.If_Statement | Syn.Match_Statement
-                               | Syn.Bare_Block
+                               | Syn.Bare_Block | Syn.Text_Literal
                then
                   declare
                      Expected : Value_Context := (Kind => Wants, others => <>);
@@ -12681,6 +12700,19 @@ package body Landin.Stages.Checking is
 
             when Syn.Integer_Literal =>
                return Kept (Ty.Untyped_Integer);
+
+            when Syn.Text_Literal =>
+               --  [0260]: with no context a text literal is `utf8`, and
+               --  D161 enables only the `[]u8` context.
+               Bad.Report
+                 (Item    => Bad.Unsupported_Use,
+                  Source  => Syn.Source_Of (Of_Tree),
+                  Where   => Syn.Where (Of_Tree, Node),
+                  Message => "a text literal with no `[]u8` context is"
+                             & " `utf8`, which is not enabled yet",
+                  Refused => Bad.Text_Type,
+                  Into    => Found);
+               return Kept (Ty.Ill_Typed);
 
             when Syn.True_Literal | Syn.False_Literal =>
                return Kept (Ty.Bool);
@@ -17981,6 +18013,100 @@ package body Landin.Stages.Checking is
          Landin.Checking.Refuse (Types.all, Of_Tree, Node);
       end Context_Mismatch;
 
+      --  D161: a text literal is contextual like `zeroed`, and its one
+      --  enabled context is a read-only `[]u8`.  Lexing has already
+      --  rejected malformed spelling; this contextual pass distinguishes
+      --  a valid codepoint escape from byte content.
+      procedure Check_Text_Literal
+        (Of_Tree   : Syn.Tree;
+         Node      : Syn.Node_Id;
+         Reference : Landin.Checking.Reference_Id;
+         Site      : Landin.Provenance.Origin;
+         Because   : String);
+
+      procedure Check_Text_Literal
+        (Of_Tree   : Syn.Tree;
+         Node      : Syn.Node_Id;
+         Reference : Landin.Checking.Reference_Id;
+         Site      : Landin.Provenance.Origin;
+         Because   : String)
+      is
+         Descriptor : constant Landin.Checking.Reference_Descriptor :=
+           Landin.Checking.Descriptor_Of (Types.all, Reference);
+         Snap : constant Landin.Source.Snapshot :=
+           Source (Context, Syn.Source_Of (Of_Tree));
+         Where : constant Landin.Source.Span := Syn.Where (Of_Tree, Node);
+         Lexeme : constant String := Landin.Source.Slice (Snap, Where);
+         Bytes : String (1 .. Lexeme'Length);
+         Length, Fault_First, Fault_Last : Natural;
+         Fault : Landin.Tokens.Text.Problem;
+      begin
+         if Descriptor.Referent /= Ty.U8 then
+            Bad.Report
+              (Item    => Bad.Type_Mismatch,
+               Source  => Syn.Source_Of (Of_Tree),
+               Where   => Where,
+               Message => "a text literal spells bytes, and this context"
+                          & " wants a slice of "
+                          & (if Descriptor.Referent in Ty.Scalar_Name
+                             then Ty.Spelling
+                               (Ty.Scalar_Name (Descriptor.Referent))
+                             else "something other than u8"),
+               Note    => "[0260]: a text literal takes `[]u8` from its"
+                          & " context",
+               Related => Site,
+               Because => Because,
+               Into    => Found);
+            Landin.Checking.Refuse (Types.all, Of_Tree, Node);
+            return;
+         end if;
+
+         if Descriptor.Mutable then
+            Bad.Report
+              (Item    => Bad.Type_Mismatch,
+               Source  => Syn.Source_Of (Of_Tree),
+               Where   => Where,
+               Message => "a text literal lives in read-only storage, and"
+                          & " this context wants `[]mut u8`",
+               Note    => "[0260]: writable text is a copy into storage"
+                          & " you asked for",
+               Related => Site,
+               Because => Because,
+               Into    => Found);
+            Landin.Checking.Refuse (Types.all, Of_Tree, Node);
+            return;
+         end if;
+
+         Landin.Tokens.Text.Decode
+           (Lexeme, Bytes, Length, Fault, Fault_First, Fault_Last);
+         if Fault = Landin.Tokens.Text.Codepoint_Where_Bytes_Are_Meant then
+            Bad.Report
+              (Item    => Bad.Type_Mismatch,
+               Source  => Syn.Source_Of (Of_Tree),
+               Where   =>
+                  (First => Where.First
+                             + Landin.Source.Byte_Offset (Fault_First),
+                   Last  => Where.First
+                             + Landin.Source.Byte_Offset (Fault_Last)),
+               Message => "`\\u{...}` spells a codepoint, and this"
+                          & " `[]u8` context means bytes",
+               Note    => "[0270]: `\\u{...}` is only valid where"
+                          & " text is meant",
+               Related => Site,
+               Because => Because,
+               Into    => Found);
+            Landin.Checking.Refuse (Types.all, Of_Tree, Node);
+            return;
+         elsif Fault /= Landin.Tokens.Text.Well_Formed then
+            raise Landin.Compiler_Defect with
+              "a malformed text literal passed lexical analysis";
+         end if;
+
+         Landin.Checking.Note (Types.all, Of_Tree, Node, Ty.Slice_Value);
+         Landin.Checking.Note_Reference
+           (Types.all, Of_Tree, Node, Reference);
+      end Check_Text_Literal;
+
       procedure Check_Contextual_Value
         (Of_Tree      : Syn.Tree;
          Node         : Syn.Node_Id;
@@ -17991,6 +18117,28 @@ package body Landin.Stages.Checking is
       is
       begin
          if Node = Syn.No_Node then
+            return;
+         end if;
+
+         if Syn.Kind (Of_Tree, Node) = Syn.Text_Literal then
+            if Expected.Kind = Ty.Slice_Value then
+               Check_Text_Literal
+                 (Of_Tree, Node, Expected.Reference, Site, Because);
+            else
+               Bad.Report
+                 (Item    => Bad.Type_Mismatch,
+                  Source  => Syn.Source_Of (Of_Tree),
+                  Where   => Syn.Where (Of_Tree, Node),
+                  Message => "a text literal cannot take the "
+                             & Shown (Expected.Kind)
+                             & " context required here",
+                  Note    => "[0260]: a text literal takes one of the text"
+                             & " views, including `[]u8`",
+                  Related => Site,
+                  Because => Because,
+                  Into    => Found);
+               Landin.Checking.Refuse (Types.all, Of_Tree, Node);
+            end if;
             return;
          end if;
 

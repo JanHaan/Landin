@@ -1,0 +1,6 @@
+class: negative
+summary: a byte escape has exactly two hexadecimal digits
+constructs: 0260, 0270
+program: program.ldn
+codes: L0320
+targets: linux-x86-64, macos-arm64

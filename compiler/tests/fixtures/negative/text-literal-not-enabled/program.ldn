@@ -1,1 +1,1 @@
-name: i32 = "landin"
+name := "landin"

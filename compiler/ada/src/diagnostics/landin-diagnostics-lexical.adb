@@ -19,6 +19,8 @@ package body Landin.Diagnostics.Lexical is
                "this construct is not enabled yet",
             when Landin.Tokens.Malformed_Integer_Run =>
                "this is not an integer any base spells",
+            when Landin.Tokens.Malformed_Text_Literal_Run =>
+               "this text literal contains malformed bytes or an escape",
             when Landin.Tokens.Unknown_Byte_Run =>
                "no rule spells these bytes",
             when Landin.Tokens.Unterminated_Block_Comment =>
@@ -33,6 +35,8 @@ package body Landin.Diagnostics.Lexical is
                Rows.Construct_Not_Enabled,
             when Landin.Tokens.Malformed_Integer_Run      =>
                Rows.Malformed_Integer,
+            when Landin.Tokens.Malformed_Text_Literal_Run =>
+               Rows.Malformed_Text_Literal,
             when Landin.Tokens.Unknown_Byte_Run           =>
                Rows.Unknown_Bytes,
             when Landin.Tokens.Unterminated_Block_Comment =>
@@ -44,7 +48,6 @@ package body Landin.Diagnostics.Lexical is
      is (case Refused is
             when Landin.Tokens.Float_Literal
                | Landin.Tokens.Character_Literal
-               | Landin.Tokens.Text_Literal
                | Landin.Tokens.Raw_Literal      => "R4.10",
             when Landin.Tokens.Compound_Assign  => "R4.10");
 
@@ -82,7 +85,9 @@ package body Landin.Diagnostics.Lexical is
                   Add_Note
                     (Report,
                      "ROADMAP.md "
-                     & Enabled_By (Landin.Tokens.Refused (Fault))
+                     & Enabled_By
+                         (Landin.Tokens.Deferred_Kind
+                            (Landin.Tokens.Refused (Fault)))
                      & " is where it is enabled");
 
                when Landin.Tokens.Unterminated_Literal =>
@@ -103,6 +108,11 @@ package body Landin.Diagnostics.Lexical is
                   Add_Note
                     (Report,
                      "a digit outside the base its prefix selected [1770]");
+
+               when Landin.Tokens.Malformed_Text_Literal_Run =>
+                  Add_Note
+                    (Report,
+                     "the text escape set is closed and small [0270]");
 
                when Landin.Tokens.Unknown_Byte_Run =>
                   Add_Note

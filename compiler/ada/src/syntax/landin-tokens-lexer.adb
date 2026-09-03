@@ -1,3 +1,5 @@
+with Landin.Tokens.Text;
+
 package body Landin.Tokens.Lexer is
 
    subtype Offset is Landin.Source.Byte_Offset;
@@ -249,11 +251,15 @@ package body Landin.Tokens.Lexer is
 
       procedure Scan_Quoted;
 
-      --  The quote-delimited literals the tour describes and the kernel
-      --  refuses: text [0260], raw [0280] and character [0250]. Each is
-      --  read as one lexeme so [1830] can name the construct instead of
-      --  reporting a stray quote, and so enabling one later cannot change
-      --  how a file that never used it was read.
+      --  The quote-delimited literals: text [0260], which D161 enables,
+      --  and raw [0280] and character [0250], which the kernel refuses.
+      --  Each is read as one lexeme so [1830] can name the construct
+      --  instead of reporting a stray quote, and so enabling one later
+      --  cannot change how a file that never used it was read.  A text
+      --  literal's escapes [0270] are skipped while finding its end, then
+      --  the shared decoder validates them here; `\"` therefore does not
+      --  close the token and malformed spelling cannot hide in inactive
+      --  syntax.
       procedure Scan_Quoted is
          First  : constant Natural := Position;
          Opener : constant Character := Text (Position);
@@ -282,13 +288,44 @@ package body Landin.Tokens.Lexer is
                exit;
             end if;
 
+            if Refused = Text_Literal and then Text (Position) = '\'
+              and then Position < Last
+              and then Text (Position + 1) /= LF
+              and then Text (Position + 1) /= CR
+            then
+               Position := Position + 1;
+            end if;
+
             Position := Position + 1;
          end loop;
 
          Emit (Refused, First, Position - 1);
 
          if Closed then
-            Complain (Not_Enabled, First, Position - 1, Refused => Refused);
+            if Refused = Text_Literal then
+               declare
+                  Lexeme : constant String := Text (First .. Position - 1);
+                  Bytes : String (1 .. Lexeme'Length);
+                  Length, Fault_First, Fault_Last : Natural;
+                  Fault : Landin.Tokens.Text.Problem;
+               begin
+                  Landin.Tokens.Text.Decode
+                    (Lexeme, Bytes, Length, Fault,
+                     Fault_First, Fault_Last);
+                  if Fault not in Landin.Tokens.Text.Well_Formed
+                                    | Landin.Tokens.Text.
+                                        Codepoint_Where_Bytes_Are_Meant
+                  then
+                     Complain
+                       (Malformed_Text_Literal_Run,
+                        First + Fault_First,
+                        First + Fault_Last - 1);
+                  end if;
+               end;
+            elsif Refused in Deferred_Kind then
+               Complain
+                 (Not_Enabled, First, Position - 1, Refused => Refused);
+            end if;
          else
             Complain (Unterminated_Literal, First, Position - 1,
                       Opened  => Span (First, First),

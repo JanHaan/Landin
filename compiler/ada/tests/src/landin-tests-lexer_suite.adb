@@ -14,6 +14,7 @@ with Landin.Source.Names;
 with Landin.Source.Sets;
 with Landin.Source;
 with Landin.Tokens.Lexer;
+with Landin.Tokens.Text;
 with Landin.Tokens;
 
 package body Landin.Tests.Lexer_Suite is
@@ -26,6 +27,7 @@ package body Landin.Tests.Lexer_Suite is
    use type Landin.Tokens.Integer_Base;
    use type Landin.Tokens.Token_Index;
    use type Landin.Tokens.Fault_Kind;
+   use type Landin.Tokens.Text.Problem;
 
    LF : constant Character := Character'Val (10);
 
@@ -187,7 +189,8 @@ package body Landin.Tests.Lexer_Suite is
       end;
    end Comments_Are_Space;
 
-   --  [1770] gives each base its own digits, and [1830] refuses a float.
+   --  [1770] gives each base its own digits, enables text, and [1830]
+   --  refuses a float.
    procedure Literals_And_Refusals (Item : in out Landin.Testing.Context);
 
    procedure Literals_And_Refusals (Item : in out Landin.Testing.Context) is
@@ -240,12 +243,99 @@ package body Landin.Tests.Lexer_Suite is
             Landin.Tokens.Construct (Landin.Tokens.Float_Literal), "[0210]",
             "which names the tour construct that describes it");
       end;
+
+      declare
+         Quoted : Landin.Tokens.Token_Stream;
+      begin
+         Lex_Text ("""a\""b""", Sources, Names, Quoted);
+         Landin.Testing.Check_Equal
+           (Item, Landin.Tokens.Fault_Count (Quoted), 0,
+            "an escaped quote does not close a text literal");
+         Landin.Testing.Check
+           (Item, Landin.Tokens.Kind (Quoted, 1)
+                  = Landin.Tokens.Text_Literal,
+            "an enabled text literal is one token");
+      end;
+
+      declare
+         Malformed : Landin.Tokens.Token_Stream;
+         Where : Landin.Source.Span;
+      begin
+         Lex_Text ("""bad\q""", Sources, Names, Malformed);
+         Landin.Testing.Check_Equal
+           (Item, Landin.Tokens.Fault_Count (Malformed), 1,
+            "an unknown text escape is one lexical fault");
+         Landin.Testing.Check
+           (Item,
+            Landin.Tokens.Kind (Landin.Tokens.Nth_Fault (Malformed, 1))
+              = Landin.Tokens.Malformed_Text_Literal_Run,
+            "and the fault identifies malformed text");
+         Where := Landin.Tokens.Where
+           (Landin.Tokens.Nth_Fault (Malformed, 1));
+         Landin.Testing.Check
+           (Item, Where.First = 4 and then Where.Last = 6,
+            "and its span covers the offending escape");
+      end;
    end Literals_And_Refusals;
+
+   --  D161 keeps escape decoding shared by checking and lowering.  Exercise
+   --  the byte result and the failures that source text cannot conveniently
+   --  carry as an invalid UTF-8 file in the repository.
+   procedure Text_Literal_Decoding
+     (Item : in out Landin.Testing.Context);
+
+   procedure Text_Literal_Decoding
+     (Item : in out Landin.Testing.Context)
+   is
+      Bytes : String (1 .. 32);
+      Length : Natural;
+      Fault : Landin.Tokens.Text.Problem;
+      First, Last : Natural;
+
+      procedure Decode (Lexeme : String);
+
+      procedure Decode (Lexeme : String) is
+      begin
+         Landin.Tokens.Text.Decode
+           (Lexeme, Bytes, Length, Fault, First, Last);
+      end Decode;
+   begin
+      Decode ("""A\t\x42""");
+      Landin.Testing.Check
+        (Item,
+         Fault = Landin.Tokens.Text.Well_Formed
+           and then Length = 3
+           and then Bytes (1) = 'A'
+           and then Character'Pos (Bytes (2)) = 9
+           and then Bytes (3) = 'B',
+         "simple and hexadecimal escapes decode to their bytes");
+
+      Decode
+        ('"' & Character'Val (16#E2#) & Character'Val (16#98#)
+         & Character'Val (16#83#) & '"');
+      Landin.Testing.Check
+        (Item,
+         Fault = Landin.Tokens.Text.Well_Formed and then Length = 3,
+         "a shortest-form UTF-8 source run is retained byte for byte");
+
+      Decode ('"' & Character'Val (16#C0#) & '"');
+      Landin.Testing.Check
+        (Item,
+         Fault = Landin.Tokens.Text.Invalid_UTF8_Source
+           and then First = 1 and then Last = 2,
+         "an invalid UTF-8 source byte names its half-open span");
+
+      Decode ("""\u{}""");
+      Landin.Testing.Check
+        (Item,
+         Fault = Landin.Tokens.Text.Malformed_Codepoint_Escape,
+         "an empty codepoint escape is malformed");
+   end Text_Literal_Decoding;
 
    --  Every deferred kind has to be reachable.  Declared and never
    --  produced is dead vocabulary, which is the same defect as an
-   --  unreachable rule in the grammar -- and text literals, the likeliest
-   --  thing a user writes that the kernel refuses, were exactly that.
+   --  unreachable rule in the grammar.  Text left this table in D161 when
+   --  its byte-slice context became enabled.
    procedure Every_Deferred_Kind_Is_Reachable
      (Item : in out Landin.Testing.Context);
 
@@ -285,7 +375,6 @@ package body Landin.Tests.Lexer_Suite is
       Note ("x += 1");                             --  Compound_Assign
       Note ("c: u32 = 'a'");                       --  Character_Literal
       Note ("r: f32 = 1.5");                       --  Float_Literal
-      Note ("t: utf8 = ""landin""");               --  Text_Literal
       Note ("r: utf8 = """"""raw""""""");          --  Raw_Literal
 
       for Kind in Landin.Tokens.Deferred_Kind loop
@@ -543,6 +632,9 @@ package body Landin.Tests.Lexer_Suite is
       Landin.Testing.Register
         (Into, "lexer", "literals and refusals",
          Literals_And_Refusals'Access);
+      Landin.Testing.Register
+        (Into, "lexer", "text literal decoding",
+         Text_Literal_Decoding'Access);
       Landin.Testing.Register
         (Into, "lexer", "unknown bytes recover",
          Unknown_Bytes_Recover'Access);

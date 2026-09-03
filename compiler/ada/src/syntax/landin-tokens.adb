@@ -59,7 +59,7 @@ package body Landin.Tokens is
       return Sign_Spelling (Of_Kind);
    end Spelling;
 
-   function Construct (Of_Kind : Deferred_Kind) return Construct_Reference is
+   function Construct (Of_Kind : Described_Kind) return Construct_Reference is
      (case Of_Kind is
          when Compound_Assign   => "[0390]",   --  x += 1 says x = x + 1
          when Character_Literal => "[0250]",
@@ -86,7 +86,7 @@ package body Landin.Tokens is
    function Opened_At (Item : Fault) return Landin.Source.Span
      is (Item.Opened);
 
-   function Refused (Item : Fault) return Deferred_Kind is (Item.Refused);
+   function Refused (Item : Fault) return Described_Kind is (Item.Refused);
 
    function Source_Of (Of_Stream : Token_Stream)
      return Landin.Source.Source_Id is (Of_Stream.Source);

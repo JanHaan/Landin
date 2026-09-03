@@ -1,0 +1,6 @@
+class: negative
+summary: a literal cannot supply writable byte storage
+constructs: 0260, 0440, 0570, 1880
+program: program.ldn
+codes: L0301
+targets: linux-x86-64, macos-arm64

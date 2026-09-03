@@ -563,6 +563,28 @@ package body Landin.IR is
    function Is_External (Of_Unit : Unit; Item : Item_Id) return Boolean
      is (Element (Of_Unit, Item).External);
 
+   function Is_Read_Only (Of_Unit : Unit; Item : Item_Id) return Boolean
+     is (Element (Of_Unit, Item).Read_Only);
+
+   procedure Mark_Read_Only (Into : in out Unit; Item : Item_Id) is
+      Held : Item_Record := Element (Into, Item);
+   begin
+      --  Backend emission calls the finite-image reader directly for this
+      --  marker.  Keep that true in release builds too: a Pre alone would
+      --  turn malformed internal IR into a bounds failure downstream.
+      if Kind_Of (Into, Item) /= Datum
+        or else Result_Of (Into, Item) not in Landin.Types.Fixed_Array
+        or else not Has_Image (Into, Item)
+        or else Has_Slice_Image (Into, Item)
+        or else Array_Element (Into, Item) not in Landin.Types.U8
+      then
+         raise Landin.Compiler_Defect with
+           "read-only IR data is not a finite byte image";
+      end if;
+      Held.Read_Only := True;
+      Into.Items (Positive (Item)) := Held;
+   end Mark_Read_Only;
+
    procedure Mark_External (Into : in out Unit; Item : Item_Id) is
       Held : Item_Record := Element (Into, Item);
    begin
