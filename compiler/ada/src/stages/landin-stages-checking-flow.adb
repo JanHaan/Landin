@@ -39,6 +39,7 @@ package body Landin.Stages.Checking.Flow is
    use type Res.Argument_Role;
    use type Res.Declaration_Sort;
    use type Landin.Source.Source_Id;
+   use type Landin.Source.Names.Name_Id;
 
    procedure Check_Function
      (Context       : in out Compilation;
@@ -348,13 +349,43 @@ package body Landin.Stages.Checking.Flow is
 
       Cleanup_Stack : Cleanup_Entries.Vector;
 
+      type Loop_Cleanup_Entry is record
+         Label        : Landin.Source.Names.Name_Id :=
+           Landin.Source.Names.No_Name;
+         Cleanup_Base : Natural := 0;
+      end record;
+
       package Loop_Cleanup_Entries is new Ada.Containers.Vectors
-        (Index_Type => Positive, Element_Type => Natural);
+        (Index_Type => Positive, Element_Type => Loop_Cleanup_Entry);
 
       --  The cleanup depth outside each active loop.  A transfer unwinds
       --  only lexical frames entered since that loop began, then either
       --  reaches the loop exit or its next condition test.
       Loop_Cleanup_Stack : Loop_Cleanup_Entries.Vector;
+
+      function Transfer_Loop
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Loop_Cleanup_Entry;
+
+      function Transfer_Loop
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Loop_Cleanup_Entry
+      is
+         Target : constant Landin.Source.Names.Name_Id :=
+           Syn.Name (Of_Tree, Node);
+      begin
+         for Index in reverse 1 .. Natural (Loop_Cleanup_Stack.Length) loop
+            declare
+               Candidate : constant Loop_Cleanup_Entry :=
+                 Loop_Cleanup_Stack (Index);
+            begin
+               if Target = Landin.Source.Names.No_Name
+                 or else Candidate.Label = Target
+               then
+                  return Candidate;
+               end if;
+            end;
+         end loop;
+         raise Landin.Compiler_Defect with "a loop transfer has no target";
+      end Transfer_Loop;
 
       --  Which declarations [1910] is about.  A parameter arrives assigned
       --  and a module binding is [1940]'s, so what is left is a local
@@ -1691,12 +1722,27 @@ package body Landin.Stages.Checking.Flow is
                      Body_Edges : Edge_Facts;
                   begin
                      Loop_Cleanup_Stack.Append
-                       (Natural (Cleanup_Stack.Length));
+                       (Loop_Cleanup_Entry'
+                          (Label        => Syn.Name (Of_Tree, Node),
+                           Cleanup_Base => Natural (Cleanup_Stack.Length)));
                      Flow_Block
                        (Of_Tree, Syn.Loop_Body (Of_Tree, Node), Result,
                         Syn.Origin (Of_Tree, Node), Body_State, Body_Edges);
-                     Loop_Cleanup_Stack.Delete_Last;
                      Returned := Returned or Body_Edges.Returns;
+
+                     if Syn.Complete_Body (Of_Tree, Node) /= Syn.No_Node then
+                        declare
+                           Complete_State : Assigned_Set := State;
+                           Complete_Edges : Edge_Facts;
+                        begin
+                           Flow_Block
+                             (Of_Tree, Syn.Complete_Body (Of_Tree, Node),
+                              Result, Syn.Origin (Of_Tree, Node),
+                              Complete_State, Complete_Edges);
+                           Returned := Returned or Complete_Edges.Returns;
+                        end;
+                     end if;
+                     Loop_Cleanup_Stack.Delete_Last;
                   end;
 
                   --  A while's false test and an unconditional loop's
@@ -2487,8 +2533,10 @@ package body Landin.Stages.Checking.Flow is
                            Cleanup_Edges : Edge_Facts;
                            Guarded : constant Boolean :=
                              Syn.Condition_Of (Of_Tree, Item) /= Syn.No_Node;
+                           Target : constant Loop_Cleanup_Entry :=
+                             Transfer_Loop (Of_Tree, Item);
                            First : constant Natural :=
-                             Loop_Cleanup_Stack.Last_Element + 1;
+                             Target.Cleanup_Base + 1;
                         begin
                            Flow_Cleanups
                              (Of_Tree, First, Cleanup.Structured_Transfer,

@@ -132,9 +132,9 @@ package Landin.Syntax is
       --  [0970]'s second early exit.  Its first slot is the atom and its
       --  second the optional `when` condition.
       Fail_Statement,
-      --  R4.10's first control-flow increment.  A transfer carries its
-      --  optional `when` guard; loops retain their condition (No_Node for
-      --  `loop`) and lexical body separately.
+      --  R4.10's loop control.  A transfer carries its optional `when`
+      --  guard and optional target label in Name; a loop carries its own
+      --  optional label, condition, body and `complete` block separately.
       Break_Statement,
       Continue_Statement,
       Loop_Statement,
@@ -391,7 +391,8 @@ package Landin.Syntax is
                     | Destructured_Name | Recovery_Clause | Match_Binding
                     | Return_Source | Member_Selection | Field_Value
                     | Import_Segment
-                    | Call_Argument);
+                    | Call_Argument | Break_Statement | Continue_Statement
+                    | Loop_Statement | While_Statement);
 
    ------------------------------------------------------------------
    --  Trees
@@ -770,6 +771,13 @@ package Landin.Syntax is
                              in Loop_Statement | While_Statement,
           Post => Contains (Of_Tree, Loop_Body'Result)
                   and then Kind (Of_Tree, Loop_Body'Result) = Block;
+
+   --  [1170]'s block on the natural-completion edge.  No_Node when no
+   --  `complete` clause was written.
+   function Complete_Body (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id)
+                            in Loop_Statement | While_Statement;
 
    --  D139's declaration conditional and its arms.  An arm's first slot is
    --  its condition, or No_Node for `else`; the remaining slots are ordinary

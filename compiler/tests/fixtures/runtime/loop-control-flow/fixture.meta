@@ -1,6 +1,6 @@
 class: runtime
-summary: unconditional and conditional loops execute guarded transfers and unwind lexical defers on iteration edges
+summary: loops execute guarded and labelled transfers, unwind lexical defers, and distinguish completion from break
 program: main.ldn
 status: 42
-constructs: 0410, 1090, 1100, 1130, 1140, 1180, 1190, 1810, 1910
+constructs: 0410, 1090, 1100, 1130, 1140, 1170, 1180, 1190, 1810, 1910
 targets: linux-x86-64

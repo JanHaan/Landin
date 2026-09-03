@@ -11,7 +11,7 @@
 #
 #  A construct with no evidence and no refusal is this
 #  item's to answer for; see ROADMAP.md R1.90.
-#  200 constructs, 154 with evidence, 46 with neither.
+#  200 constructs, 155 with evidence, 45 with neither.
 #
 #  id    defined in  evidence
 0010   tour        accepted emitted                   Line comment, to end of line
@@ -130,7 +130,7 @@
 1140   tour        accepted emitted executed refused  Conditional loop
 1150   tour        refused-by-name                    Traversal
 1160   tour        -                                  There is no marker on a loop binding
-1170   tour        -                                  complete runs when the loop finished without break
+1170   tour        accepted emitted executed          complete runs when the loop finished without break
 1180   tour        accepted emitted executed          Labels use the ordinary name form
 1190   tour        accepted emitted executed          break carries a value with 'with'
 1200   tour        -                                  Because entries are registered where control reaches

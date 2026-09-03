@@ -30,8 +30,8 @@ package body Landin.Syntax is
             when Return_Statement         => 1,
             when Fail_Statement           => 2,
             when Break_Statement | Continue_Statement => 1,
-            when Loop_Statement            => 1,
-            when While_Statement           => 2,
+            when Loop_Statement            => 2,
+            when While_Statement           => 3,
             when If_Statement             => 1,
             when Match_Statement          => 1,
             when Bare_Block               => 1,
@@ -391,6 +391,11 @@ package body Landin.Syntax is
      is (Slot
            (Of_Tree, Id,
             (if Kind (Of_Tree, Id) = Loop_Statement then 1 else 2)));
+
+   function Complete_Body (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     is (Slot
+           (Of_Tree, Id,
+            (if Kind (Of_Tree, Id) = Loop_Statement then 2 else 3)));
 
    --  A function's return list is slot 1 and an arm's condition is slot 1, so
    --  both put what they run in slot 2.  A bare block has only the body in

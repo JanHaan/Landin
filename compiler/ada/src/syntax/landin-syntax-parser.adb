@@ -151,10 +151,16 @@ package body Landin.Syntax.Parser is
             --  end of a then/elsif arm the enclosing branch wins; wrapping a
             --  recovered call in parentheses makes its inner `else` explicit.
             Else_Closes_Arm : Boolean := False;
+            --  `complete` is contextual and closes only the body of the
+            --  loop currently being parsed.
+            Complete_Closes_Block : Boolean := False;
             --  Transfers are contextual identifiers.  Keeping the nesting
             --  count here lets a stray `break` or `continue` remain a source
             --  diagnostic instead of reaching lowering without a target.
             Loop_Depth : Natural := 0;
+            Loop_Labels : array (1 .. Nesting_Limit)
+              of Landin.Source.Names.Name_Id :=
+                [others => Landin.Source.Names.No_Name];
             --  A labelled RHS keeps direct positional applications neutral:
             --  their own arguments may recursively be type-only syntax.
             --  Outside that one parse, positional Call uses the unchanged
@@ -209,6 +215,9 @@ package body Landin.Syntax.Parser is
 
             Do_Id : constant Landin.Source.Names.Name_Id :=
               Landin.Source.Names.Intern (Names, "do");
+
+            Complete_Id : constant Landin.Source.Names.Name_Id :=
+              Landin.Source.Names.Intern (Names, "complete");
 
             --  These remain ordinary identifiers except in the three
             --  contextual productions below.
@@ -376,7 +385,11 @@ package body Landin.Syntax.Parser is
                Seed        : Node_Id := No_Node;
                Allow_Value : Boolean := False) return Node_Id;
             function Parse_Statement (Context : Frame) return Node_Id;
-            function Parse_Loop (Context : Frame) return Node_Id;
+            function Parse_Loop
+              (Context : Frame;
+               Starts  : Landin.Source.Span := Landin.Source.Empty_Span;
+               Label   : Landin.Source.Names.Name_Id :=
+                 Landin.Source.Names.No_Name) return Node_Id;
             function Parse_Loop_Transfer return Node_Id;
             function Parse_If (Context : Frame) return Node_Id;
             function Parse_Match (Context : Frame) return Node_Id;
@@ -3592,6 +3605,16 @@ package body Landin.Syntax.Parser is
             function Parse_Body (Context : Frame) return Node_Id is
             begin
                if Context.Returns then
+                  --  Loops are still statements in this increment.  Their
+                  --  contextual names otherwise satisfy the expression
+                  --  first set and could be mistaken for a function body's
+                  --  final name expression.
+                  if Peek = Tok.Identifier
+                    and then Named_Here in Loop_Id | While_Id
+                  then
+                     return Parse_Block (Context);
+                  end if;
+
                   if Peek = Tok.Identifier
                     and then Named_Here in Defer_Id | Undo_Id
                   then
@@ -3992,7 +4015,11 @@ package body Landin.Syntax.Parser is
 
                function At_Closer return Boolean
                  is (Peek in Tok.End_Of_Input | Tok.Kw_End
-                                 | Tok.Kw_Elsif | Tok.Kw_Else);
+                                 | Tok.Kw_Elsif | Tok.Kw_Else
+                     or else
+                       (Complete_Closes_Block
+                        and then Peek = Tok.Identifier
+                        and then Named_Here = Complete_Id));
 
                --  A name beginning a declaration or assignment is not the
                --  final expression [1080].  Every other expression first
@@ -4020,6 +4047,7 @@ package body Landin.Syntax.Parser is
                   end if;
 
                   return Named_Here in Defer_Id | Undo_Id
+                    | Loop_Id | While_Id | Break_Id | Continue_Id
                     or else Word_At_Hand /= Word_None
                     or else Ahead (1) in Tok.Colon | Tok.Colon_Equal
                     or else After_Selectors = Tok.Equal;
@@ -4266,7 +4294,21 @@ package body Landin.Syntax.Parser is
                         Join (Start, After_Previous));
 
                   when Tok.Identifier =>
-                     if Named_Here in Loop_Id | While_Id
+                     if Ahead (1) = Tok.Colon
+                       and then Ahead (2) = Tok.Identifier
+                       and then Named_Ahead (2) in Loop_Id | While_Id
+                     then
+                        declare
+                           Label : constant Landin.Source.Names.Name_Id :=
+                             Named_Here;
+                           Label_At : constant Landin.Source.Span := Here;
+                        begin
+                           Advance;
+                           Advance;
+                           return Parse_Loop
+                             (Context, Starts => Label_At, Label => Label);
+                        end;
+                     elsif Named_Here in Loop_Id | While_Id
                      then
                         return Parse_Loop (Context);
                      elsif Named_Here in Break_Id | Continue_Id
@@ -4494,19 +4536,27 @@ package body Landin.Syntax.Parser is
             --  loop_statement ::= "loop" "do" block "end" "loop"
             --  while_statement ::= "while" expression "do" block
             --                       "end" "while"                [1130/1140]
-            function Parse_Loop (Context : Frame) return Node_Id is
-               Starts : constant Landin.Source.Span := Here;
+            function Parse_Loop
+              (Context : Frame;
+               Starts  : Landin.Source.Span := Landin.Source.Empty_Span;
+               Label   : Landin.Source.Names.Name_Id :=
+                 Landin.Source.Names.No_Name) return Node_Id
+            is
+               Opened : constant Landin.Source.Span :=
+                 (if Starts = Landin.Source.Empty_Span then Here else Starts);
                Is_While : constant Boolean :=
                  Named_Here = While_Id;
                Test : Node_Id := No_Node;
                Runs : Node_Id;
+               Completed : Node_Id := No_Node;
                Kept : Boolean;
+               Saved_Complete : constant Boolean := Complete_Closes_Block;
             begin
-               if Too_Deep (Starts) then
+               if Too_Deep (Opened) then
                   Advance;
                   Resync_Statement;
                   return Add
-                    (Error_Statement, Starts, Join (Starts, After_Previous));
+                    (Error_Statement, Opened, Join (Opened, After_Previous));
                end if;
 
                Depth := Depth + 1;
@@ -4526,12 +4576,34 @@ package body Landin.Syntax.Parser is
                      Note    => (if Is_While
                                  then "[1140]: `while condition do`"
                                  else "[1130]: `loop do`"),
-                     Related => Starts,
+                     Related => Opened,
                      Because => "this loop");
                end if;
 
                Loop_Depth := Loop_Depth + 1;
+               Loop_Labels (Loop_Depth) := Label;
+               Complete_Closes_Block := True;
                Runs := Parse_Block (Context);
+               Complete_Closes_Block := Saved_Complete;
+
+               if Peek = Tok.Identifier
+                 and then Named_Here = Complete_Id
+               then
+                  if not Is_While then
+                     Complain
+                       (Item    => Syn.Stray_Token,
+                        Where   => Here,
+                        Message => "an unconditional loop cannot complete",
+                        Note    => "[1170]: `complete` is the edge where a"
+                          & " finite loop runs out",
+                        Related => Opened,
+                        Because => "this unconditional loop");
+                  end if;
+                  Advance;
+                  Completed := Parse_Block (Context);
+               end if;
+
+               Loop_Labels (Loop_Depth) := Landin.Source.Names.No_Name;
                Loop_Depth := Loop_Depth - 1;
 
                Kept := Expect
@@ -4541,12 +4613,14 @@ package body Landin.Syntax.Parser is
                               then "[1140]: a while loop closes with"
                                 & " `end while`"
                               else "[1130]: a loop closes with `end loop`"),
-                  Related => Starts,
+                  Related => Opened,
                   Because => "opened here");
                if Kept then
                   if Peek = Tok.Identifier
                     and then Named_Here =
-                      (if Is_While then While_Id else Loop_Id)
+                      (if Label /= Landin.Source.Names.No_Name
+                       then Label
+                       elsif Is_While then While_Id else Loop_Id)
                   then
                      Advance;
                   else
@@ -4560,7 +4634,7 @@ package body Landin.Syntax.Parser is
                                     else "an unconditional loop closes"
                                       & " with `end loop`"),
                         Note    => (if Is_While then "[1140]" else "[1130]"),
-                        Related => Starts,
+                        Related => Opened,
                         Because => "this loop");
                   end if;
                end if;
@@ -4569,40 +4643,62 @@ package body Landin.Syntax.Parser is
                if Is_While then
                   return Add
                     (Of_Kind  => While_Statement,
-                     At_Token => Starts,
-                     Extent   => Join (Starts, After_Previous),
-                     Children => [Test, Runs]);
+                     At_Token => Opened,
+                     Extent   => Join (Opened, After_Previous),
+                     Children => [Test, Runs, Completed],
+                     Named    => Label);
                else
                   return Add
                     (Of_Kind  => Loop_Statement,
-                     At_Token => Starts,
-                     Extent   => Join (Starts, After_Previous),
-                     Children => [1 => Runs]);
+                     At_Token => Opened,
+                     Extent   => Join (Opened, After_Previous),
+                     Children => [Runs, Completed],
+                     Named    => Label);
                end if;
             end Parse_Loop;
 
-            --  transfer ::= ("break" | "continue") ("when" expression)?
-            --  R4.10 begins with the nearest-loop form.  Labels, `with` and
-            --  value-producing `complete` remain the next loop increment.
+            --  transfer ::= ("break" | "continue") identifier?
+            --               ("when" expression)?
+            --  `with` and value-producing loops remain the next R4.10
+            --  increment.
             function Parse_Loop_Transfer return Node_Id is
                Starts : constant Landin.Source.Span := Here;
                Is_Break : constant Boolean :=
                  Named_Here = Break_Id;
                Guard : Node_Id := No_Node;
+               Target : Landin.Source.Names.Name_Id :=
+                 Landin.Source.Names.No_Name;
+               Targeted : Boolean := False;
             begin
                Advance;
+               if Peek = Tok.Identifier then
+                  Target := Named_Here;
+                  Advance;
+               end if;
                if Peek = Tok.Kw_When then
                   Advance;
                   Guard := Parse_Expression;
                end if;
 
-               if Loop_Depth = 0 then
+               if Target = Landin.Source.Names.No_Name then
+                  Targeted := Loop_Depth > 0;
+               else
+                  for Index in reverse 1 .. Loop_Depth loop
+                     if Loop_Labels (Index) = Target then
+                        Targeted := True;
+                        exit;
+                     end if;
+                  end loop;
+               end if;
+
+               if not Targeted then
                   Complain
                     (Item    => Syn.Stray_Token,
                      Where   => Starts,
                      Message => (if Is_Break
-                                 then "`break` has no enclosing loop"
-                                 else "`continue` has no enclosing loop"),
+                                 then "`break` has no matching enclosing loop"
+                                 else "`continue` has no matching enclosing"
+                                   & " loop"),
                      Note    => "[1180]/[1190]: a loop transfer targets"
                        & " an enclosing loop");
                   return Add
@@ -4615,7 +4711,8 @@ package body Landin.Syntax.Parser is
                      else Continue_Statement),
                   At_Token => Starts,
                   Extent   => Join (Starts, After_Previous),
-                  Children => [1 => Guard]);
+                  Children => [1 => Guard],
+                  Named    => Target);
             end Parse_Loop_Transfer;
 
             --  if ::= "if" expression "then" block

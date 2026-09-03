@@ -402,17 +402,20 @@ and stepped exactly as the binding holding it is. What may be
 written is [1900]'s and not this rule's: a field is writable when
 the binding it belongs to is.
 
-R4.10's first loop increment admits the nearest-loop forms of [1130], [1140],
-[1180], and [1190]. An unconditional loop tests nothing; a `while` condition
+R4.10 admits the statement forms of [1130], [1140], [1170], [1180], and
+[1190]. An unconditional loop tests nothing; a `while` condition
 is evaluated before every iteration and must be `bool`. `break` transfers to
-the point after the nearest loop and `continue` transfers to that loop's next
-condition test (or next unconditional iteration). Their optional `when`
+the point after its target loop and `continue` transfers to that loop's next
+condition test (or next unconditional iteration). Without a label they target
+the nearest loop; with one they target the nearest enclosing loop carrying
+that ordinary name. A labelled loop closes with its label. Their optional `when`
 condition is evaluated once and must be `bool`; its false edge continues with
 the following statement. Both transfers leave every lexical block between the
 statement and the loop edge, so [1100]'s `defer` runs and [1110]'s `undo` does
-not. Facts established only in a loop body do not establish definite
-assignment after the loop. Labelled loops and transfers, `break with`,
-`complete`, value-producing loops, and `for` traversal remain outside this
+not. A conditional loop's optional `complete` block runs only when its
+condition becomes false; a `break` skips it. Facts established only in a loop
+body or completion block do not establish definite assignment after the loop.
+`break with`, value-producing loops, and `for` traversal remain outside this
 increment.
 
 ```landin-grammar
@@ -426,10 +429,14 @@ defer       ::= "defer" call
 undo        ::= "undo" call
 return      ::= "return" ("when" expression)?
 fail        ::= "fail" expression ("when" expression)?
-break       ::= "break" ("when" expression)?
-continue    ::= "continue" ("when" expression)?
+break       ::= "break" identifier? ("when" expression)?
+continue    ::= "continue" identifier? ("when" expression)?
 loop        ::= "loop" "do" block "end" "loop"
-while       ::= "while" expression "do" block "end" "while"
+              | identifier ":" "loop" "do" block "end" identifier
+while       ::= "while" expression "do" block
+                ("complete" block)? "end" "while"
+              | identifier ":" "while" expression "do" block
+                ("complete" block)? "end" identifier
 try         ::= "try" (call | labeled_application)
 if          ::= "if" expression "then" block
                 ("elsif" expression "then" block)*
@@ -8410,7 +8417,7 @@ classified failure boundary before the repository gate can pass.
 | `results.destructure` | static | 0990 | L0200, L0301, L0302 or L0308 | `negative/result-destructure-needs-multiple`, `runtime/r230-composition` |
 | `functions.anonymous` | static | 1010 | L0201 for capture; complete signature checks otherwise apply | `negative/anonymous-function-captures-local`, `runtime/inferred-function-values` |
 | `control.flow` | static | 1050, 1060, 1080, 1090 | L0301 or L0302 at every reachable join and exit | `negative/if-expression-missing-else`, `runtime/control-expression-edges-keep-source-order` |
-| `control.loops` | static | 1130, 1140, 1180, 1190 | L0301 for a non-bool condition; a taken transfer runs active defers and targets the nearest loop edge | `negative/loop-condition-not-bool`, `runtime/loop-control-flow` |
+| `control.loops` | static | 1130, 1140, 1170, 1180, 1190 | L0301 for a non-bool condition; a taken transfer runs active defers and targets its named or nearest loop edge, while natural completion alone enters `complete` | `negative/loop-condition-not-bool`, `runtime/loop-control-flow` |
 | `cleanup.defer` | static | 1100 | the registered call is checked at every ordinary and successful-return edge | `negative/defer-read-not-assigned-on-return`, `runtime/defer-cleanups-follow-control-edges` |
 | `cleanup.undo` | static | 1110 | the registered call is checked at every propagated-failure edge | `negative/undo-read-not-assigned-on-failure`, `runtime/undo-cleanups-follow-failure-edges` |
 | `generics.substitution` | static | 1220, 1280, 1290, 1300, 1310, 1350, 1500, 1650, 1660, 1700 | L0300, L0301, L0306, L0307, L0313 or L0318 | `negative/generic-routine-undeduced-formal`, `runtime/generic-structural-deduction`, `runtime/core-vec-pointer-storage` |
@@ -8850,7 +8857,8 @@ This is sound for a `while` that may run zero times and avoids claiming a fixed
 point the checker has not computed. Origins join the incoming and one-body
 facts because that analysis is monotone union. Labels, `break with`,
 `complete`, value-producing loops and iterable `for` remain in R4.10 rather
-than being approximated in this increment.
+than being approximated in this first increment; D157 subsequently enables
+the labels and completion edge without changing this representation.
 
 **The alternatives:** lower a loop to recursion, add a neutral loop opcode,
 skip cleanup on iteration edges, or treat one body pass as proof of assignment
@@ -8861,3 +8869,36 @@ and the last choice is unsound for zero iterations. All were declined.
 **Pinned by** `negative/loop-condition-not-bool`,
 `runtime/loop-control-flow`, the syntax, resolution, checking, flow, lowering
 and verifier seams, and the `control.loops` guarantee row.
+
+### D157 — Loop labels and completion select explicit existing edges
+
+**The tour said** that [1180] gives loops ordinary-name labels and lets
+`break` and `continue` name one, while [1170] runs `complete` only when a loop
+finishes without `break`. It did not state how an implementation should retain
+those targets or whether a conditional loop's false edge and a breaking edge
+share one block.
+
+**Chosen:** a label is retained on its loop syntax node and on each targeted
+transfer; it is neither a value declaration nor an IR operand. Resolution,
+flow checking and lowering select the nearest enclosing loop whose label
+matches, while an unlabelled transfer continues to select the nearest loop.
+The selected loop's existing cleanup boundary controls [1100]/[1110] exactly
+as it does for the nearest-loop form.
+
+A `while` with `complete` has two distinct CFG destinations. Its false
+condition edge enters the completion block, whose ordinary fallthrough then
+enters the post-loop block. Every `break` targets the post-loop block directly
+and therefore skips completion. `continue` still targets the condition header.
+An unconditional `loop` has no natural exhaustion edge and consequently
+cannot carry `complete`. Definite assignment remains D156's conservative
+incoming state after either exit.
+
+**The alternatives:** introduce labels into ordinary lexical name resolution,
+encode target depths in the syntax tree, add labelled IR jumps, or route
+`break` through `complete` and suppress it dynamically. The first creates a
+value namespace where the language promises only control names; the second is
+fragile under tree rewrites; the last two duplicate structure already stated
+by explicit CFG edges. All were declined.
+
+**Pinned by** `runtime/loop-control-flow`, the syntax, flow and lowering seams,
+and the `control.loops` guarantee row.

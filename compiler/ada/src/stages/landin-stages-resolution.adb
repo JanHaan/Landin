@@ -703,6 +703,10 @@ package body Landin.Stages.Resolution is
                end if;
                Walk_Scoped_Block
                  (Of_Tree, Syn.Loop_Body (Of_Tree, Node), Inside);
+               if Syn.Complete_Body (Of_Tree, Node) /= Syn.No_Node then
+                  Walk_Scoped_Block
+                    (Of_Tree, Syn.Complete_Body (Of_Tree, Node), Inside);
+               end if;
                return;
 
             when others =>
