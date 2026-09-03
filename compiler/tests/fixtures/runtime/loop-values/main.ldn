@@ -1,3 +1,8 @@
+pair: type = struct
+    left: i32
+    right: i32
+end pair
+
 public main: () -> (code: i32) =
     mut i: i32 = 0
     first := loop do
@@ -19,7 +24,23 @@ public main: () -> (code: i32) =
         end loop
     end choice
 
-    if first == 30 and second == 7 and third == 5 then
+    fourth: pair = loop do
+        break with pair(left: 8, right: 9)
+    end loop
+
+    fifth: [3]i32 = loop do
+        break with [4, 5, 6]
+    end loop
+
+    source: [3]i32 = [10, 11, 12]
+    sixth: []i32 = loop do
+        break with source[0..<2]
+    end loop
+
+    if first == 30 and second == 7 and third == 5
+      and fourth.left == 8 and fourth.right == 9
+      and fifth[0] == 4 and fifth[1] == 5 and fifth[2] == 6
+      and sixth[0] == 10 and sixth[1] == 11 then
         code = 42
     else
         code = 1

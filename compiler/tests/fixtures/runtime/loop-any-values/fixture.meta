@@ -1,0 +1,6 @@
+class: runtime
+summary: an any-valued loop fills caller-owned erased storage before leaving its body
+program: main.ldn
+status: 42
+constructs: 0430, 0670, 0770, 0840, 0880, 1130, 1190, 1370, 1380, 1390
+targets: linux-x86-64

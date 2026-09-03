@@ -783,6 +783,7 @@ runtime/local-scalar-zeroed-reads-zero | linux-x86-64
 runtime/local-struct-inference-copies-storage | linux-x86-64
 runtime/local-struct-initializer-copies-storage | linux-x86-64
 runtime/local-struct-zeroed-reads-zero | linux-x86-64
+runtime/loop-any-values | linux-x86-64
 runtime/loop-control-flow | linux-x86-64
 runtime/loop-values | linux-x86-64
 runtime/match-expressions-produce-values | linux-x86-64
