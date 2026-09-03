@@ -3076,8 +3076,10 @@ The first increment enables unlabelled `loop` and `while` statements with
 unlabelled, valueless `break` and `continue`, including guarded transfers,
 backward neutral-IR edges, conservative definite assignment and lexical
 `defer` cleanup on iteration transfers. D156 records why no loop opcode was
-added and leaves labels, values, `complete` and `for` traversal in this active
-item.
+added. The second increment adds ordinary-name loop labels and targeted
+transfers, plus the conditional loop's natural-only `complete` edge. D157
+keeps both features as neutral CFG structure and leaves `break with`,
+value-producing loops and `for` traversal in this active item.
 
 Exit evidence: every hosted `[NNNN]` row has implementation and positive or
 negative evidence; no omission is hidden by prototype coverage.

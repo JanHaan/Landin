@@ -17232,6 +17232,10 @@ package body Landin.Stages.Checking is
                end if;
                Check_Block
                  (Of_Tree, Syn.Loop_Body (Of_Tree, Node), Returns);
+               if Syn.Complete_Body (Of_Tree, Node) /= Syn.No_Node then
+                  Check_Block
+                    (Of_Tree, Syn.Complete_Body (Of_Tree, Node), Returns);
+               end if;
 
             when Syn.If_Statement =>
                for Arm in 1 .. Syn.Arm_Count (Of_Tree, Node) loop
