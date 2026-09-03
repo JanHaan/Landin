@@ -218,6 +218,9 @@ package Landin.Syntax is
       --  shared decoder reads the escapes from source again where the
       --  context that decides whether they mean bytes is known.
       Text_Literal,
+      --  [0280]'s unescaped, indentation-normalized text.  It keeps its
+      --  source span for D164's shared decoder just as Text_Literal does.
+      Raw_Literal,
       True_Literal,
       False_Literal,
       --  [0540]'s contextual all-bits-zero image.

@@ -11,7 +11,7 @@
 #
 #  A construct with no evidence and no refusal is this
 #  item's to answer for; see ROADMAP.md R1.90.
-#  200 constructs, 161 with evidence, 39 with neither.
+#  200 constructs, 162 with evidence, 38 with neither.
 #
 #  id    defined in  evidence
 0010   tour        accepted emitted                   Line comment, to end of line
@@ -41,7 +41,7 @@
 0250   tour        accepted emitted executed refused  Character literal is a codepoint, typed u32
 0260   tour        accepted emitted executed refused  Text literals are untyped too
 0270   tour        accepted emitted executed refused  The escape set is closed and small
-0280   tour        -                                  Raw literals: N quotes on each side, N at least three
+0280   tour        accepted emitted executed refused  Raw literals: N quotes on each side, N at least three
 0290   tour        accepted emitted executed refused  Arithmetic
 0300   tour        accepted emitted executed refused  Overflow traps
 0310   tour        refused                            No implicit conversion

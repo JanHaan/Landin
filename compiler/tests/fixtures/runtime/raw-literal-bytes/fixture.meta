@@ -1,0 +1,6 @@
+class: runtime
+summary: raw literals preserve unescaped UTF-8 bytes, strip closing indentation and share read-only text data
+constructs: 0260, 0280, 0370, 0570, 1770, 1880, 1940
+program: main.ldn
+status: 42
+targets: linux-x86-64

@@ -28513,6 +28513,52 @@ file negative/public-on-statement/program.ldn tokens 15
   36 37 1
   38 41 end
   42 43 f
+file negative/raw-literal-inconsistent-indentation/program.ldn refused a raw literal has inconsistent indentation
+file negative/raw-literal-needs-byte-slice/program.ldn tokens 3
+  0 4 name
+  5 7 :=
+  8 20 """landin"""
+file negative/raw-literal-needs-read-only-slice/program.ldn tokens 8
+  0 4 name
+  4 5 :
+  6 7 [
+  7 8 ]
+  8 11 mut
+  12 14 u8
+  15 16 =
+  17 29 """landin"""
+file negative/raw-literal-write/program.ldn tokens 31
+  0 6 public
+  7 11 main
+  11 12 :
+  13 14 (
+  14 15 )
+  16 18 ->
+  19 20 (
+  20 24 code
+  24 25 :
+  26 29 i32
+  29 30 )
+  31 32 =
+  37 40 mut
+  41 45 name
+  45 46 :
+  47 48 [
+  48 49 ]
+  49 51 u8
+  52 53 =
+  54 66 """landin"""
+  71 75 name
+  75 76 [
+  76 77 0
+  77 78 ]
+  79 80 =
+  81 83 76
+  88 92 code
+  93 94 =
+  95 96 0
+  97 100 end
+  101 105 main
 file negative/read-before-it-is-assigned/program.ldn tokens 19
   0 1 f
   1 2 :
@@ -32682,6 +32728,7 @@ file negative/unhandled-declared-error/program.ldn tokens 43
   139 142 end
   143 149 caller
 file negative/unknown-byte/program.ldn refused no rule spells ';'
+file negative/unterminated-raw-literal/program.ldn refused a raw literal is never closed
 file negative/unterminated-text-literal/main.ldn refused a text literal is never closed
 file negative/upper-case-name/program.ldn refused no rule spells 'X'
 file negative/use-after-sink/program.ldn tokens 45

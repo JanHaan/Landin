@@ -147,16 +147,18 @@ D87 depth-one nested ordinary storage. It remains refused
 where no enabled construct supplies that context. D161 admits [0260]'s quoted
 literal when its direct context is a read-only `[]u8`; the unescaped source
 content is UTF-8 [1750], and [0270]'s byte escapes are decoded into that view.
+Raw text [0280] takes the same direct byte-slice context by D164, but interprets
+no escape and removes a line-leading closing delimiter's indentation.
 With no context it still defaults to the not-yet-enabled `utf8`, and `utf8`,
 `utf16`, `cstring` and text codepoint escapes remain R4.10 work. D162 admits
 [0210]'s decimal float with [0220]'s optional exponent; hexadecimal floats
-[0230] and raw literals [0280] are not enabled yet. D163 admits [0250]'s
+[0230] are not enabled yet. D163 admits [0250]'s
 single-quoted character as exactly one Unicode scalar value of fixed type
 `u32`. A raw scalar is shortest-form UTF-8; [0270]'s simple escapes and
 `\u{...}` spell scalar values, while byte-only `\xNN` does not.
 
 ```landin-grammar
-literal     ::= integer | float | character | text
+literal     ::= integer | float | character | text | raw
               | "true" | "false" | "zeroed"
 character   ::= "'" (character_escape | unicode_scalar) "'"
 character_escape ::= "\\" ("n" | "r" | "t" | "e" | "\\" | "\"" | "'"
@@ -166,6 +168,9 @@ text_byte   ::= any byte except quote, backslash or line_end
 text_escape ::= "\\" ("n" | "r" | "t" | "e" | "\\" | "\"" | "'"
                   | "x" hex_digit hex_digit
                   | "u" "{" hex_digit+ "}")
+raw         ::= quote_run raw_content quote_run
+quote_run   ::= "\"" "\"" "\"" "\""*
+raw_content ::= any byte*
 integer     ::= decimal | hex | octal | binary
 float       ::= decimal_fraction decimal_exponent?
 decimal_fraction ::= decimal_digits "." decimal_digits
@@ -751,8 +756,9 @@ And two give none: the inferred form [0050] and a discard [1020], where
 [0250]'s character literal is different: it already has type `u32`, so a
 surrounding context must agree and an inferred binding keeps `u32`.
 For [0260]'s text literal, those same direct positions may instead supply a
-complete text view. D161 currently admits only `[]u8`; with no supplied
-context the literal defaults to `utf8` and is refused by [1830].
+complete text view. D161 and D164 currently admit quoted and raw literals only
+as `[]u8`; with no supplied context either defaults to `utf8` and is refused
+by [1830].
 For [0210]'s float literal, the same positions supply f32 or f64. There is no
 implicit conversion from an integer literal or integer value; with no context
 the float defaults to f32. The decimal spelling rounds once to the contextual
@@ -8451,12 +8457,12 @@ classified failure boundary before the repository gate can pass.
 
 | Operation | Class | Constructs | Behaviour | Evidence |
 | --- | --- | --- | --- | --- |
-| `source.lexical` | static | 0010, 0020, 0030, 0210, 0220, 0250, 0260, 0270, 1750, 1760, 1770, 1780, 1830 | L0010--L0014 or L0320--L0322 | `negative/character-literal-empty`, `negative/character-literal-invalid-codepoint`, `negative/character-literal-multiple`, `negative/hex-float-literal-not-enabled`, `negative/malformed-float-exponent`, `negative/malformed-integer-digit`, `negative/text-literal-unknown-escape`, `negative/unterminated-text-literal`, `negative/unknown-byte` |
+| `source.lexical` | static | 0010, 0020, 0030, 0210, 0220, 0250, 0260, 0270, 0280, 1750, 1760, 1770, 1780, 1830 | L0010--L0014 or L0320--L0323 | `negative/character-literal-empty`, `negative/character-literal-invalid-codepoint`, `negative/character-literal-multiple`, `negative/hex-float-literal-not-enabled`, `negative/malformed-float-exponent`, `negative/malformed-integer-digit`, `negative/raw-literal-inconsistent-indentation`, `negative/text-literal-unknown-escape`, `negative/unterminated-raw-literal`, `negative/unterminated-text-literal`, `negative/unknown-byte` |
 | `source.structure` | static | 1740, 1800, 1810, 1820, 1840 | L0100--L0112 | `negative/variant-part-end-name-mismatch`, `unit/parser-nesting-limit` |
 | `declarations.names` | static | 0040, 0050, 0060, 0080, 0090, 0100, 0110, 0120, 0130, 0140, 1790, 1795, 1850 | L0200 or L0201 | `negative/duplicate-in-a-module`, `negative/local-used-above-its-declaration` |
 | `types.values` | static | 0070, 0160, 0170, 0180, 0190, 0200, 0210, 0250, 1870, 1880, 1890 | L0300, L0301 or L0304 | `negative/character-literal-needs-u32`, `negative/float-literal-not-enabled`, `negative/float-type-not-enabled`, `negative/integer-literal-not-a-float`, `negative/literal-above-its-type`, `negative/type-name-is-not-a-type` |
 | `float.ieee` | static | 0170, 0210, 0220, 0240, 0290, 0350 | f32/f64 runtime arithmetic and comparison follow IEEE binary32/binary64, preserving signed zero and unordered NaN behavior; L0301 rejects mixed classes and integer-only operators, and L0304 retains the static-fold boundary | `negative/float-remainder-is-integer-only`, `negative/module-float-arithmetic-not-enabled`, `runtime/float-decimal-runtime` |
-| `text.literal-storage` | static | 0260, 0270, 0570, 1770, 1880, 1900, 1940 | L0301 for a non-byte, writable or codepoint context; L0303 for a write through its read-only view; L0304 for the default deferred `utf8`; equal decoded contents share read-only storage with one trailing NUL excluded from the slice length | `negative/text-literal-codepoint-in-byte-context`, `negative/text-literal-needs-byte-slice`, `negative/text-literal-needs-read-only-slice`, `negative/text-literal-not-enabled`, `negative/text-literal-write`, `runtime/text-literal-bytes` |
+| `text.literal-storage` | static | 0260, 0270, 0280, 0570, 1770, 1880, 1900, 1940 | L0301 for a non-byte, writable or codepoint context; L0303 for a write through its read-only view; L0304 for the default deferred `utf8`; equal decoded quoted or raw contents share read-only storage with one trailing NUL excluded from the slice length | `negative/raw-literal-needs-byte-slice`, `negative/raw-literal-needs-read-only-slice`, `negative/raw-literal-write`, `negative/text-literal-codepoint-in-byte-context`, `negative/text-literal-needs-byte-slice`, `negative/text-literal-needs-read-only-slice`, `negative/text-literal-not-enabled`, `negative/text-literal-write`, `runtime/raw-literal-bytes`, `runtime/text-literal-bytes` |
 | `arithmetic.known` | static | 0290, 0300, 1950 | L0300 or L0306 | `negative/divisor-is-zero`, `negative/literal-above-its-type` |
 | `arithmetic.runtime` | trap | 0290, 0300, 0320, 1950, 1960 | trap | `runtime/checked-overflow-traps`, `runtime/checked-subtraction-traps`, `runtime/checked-multiplication-traps`, `runtime/checked-negation-traps`, `runtime/signed-division-overflow-traps`, `runtime/a-zero-divisor-traps`, `runtime/a-zero-remainder-divisor-traps`, `runtime/negative-left-shift-traps`, `runtime/negative-right-shift-traps` |
 | `arithmetic.total` | static | 0320, 0330, 0340, 0350 | L0301 for an inapplicable operand; admitted nonnegative shifts and wrapping operations are total | `negative/condition-is-not-believed`, `runtime/shifts-fill-with-zeros-beyond-the-width` |
@@ -9252,3 +9258,49 @@ All were declined.
 `negative/character-literal-multiple`,
 `negative/character-literal-needs-u32`, the decoder and lexer cases, and the
 `source.lexical` and `types.values` guarantee rows.
+
+### D164 — Raw byte text uses matching quote runs and exact indentation
+
+**The tour said** that [0280]'s raw literal has the same number `N` of quotes
+on each side, with `N` at least three, interprets no escape, and strips the
+closing delimiter's indentation from every line. It did not define whether a
+longer quote run closes a literal, how indentation mismatches are handled, or
+which currently enabled text carrier receives the bytes.
+
+**Chosen:** the tenth R4.10 increment admits raw literals in D161's direct
+read-only `[]u8` context. The maximal opening quote run chooses `N`; the first
+later run of at least `N` quotes closes the token, consumes exactly `N`, and
+leaves any additional quotes for following tokens. Runs shorter than `N` are
+content. Backslashes and [0270]'s apparent escapes are ordinary bytes. Raw
+source content must remain shortest-form UTF-8, and the view carries the same
+uncounted trailing NUL as quoted text. With no direct byte-slice context the
+literal defaults to the still-deferred `utf8` type.
+
+A closer is line-leading when an earlier line ending is followed only by
+spaces or tabs before it. That exact byte prefix is removed at the start of
+every nonblank content line that begins after a line ending; content on the
+opener's own line is unchanged. A nonblank line with a shorter or different prefix is lexical
+L0323; horizontal bytes on a blank line are discarded. Line endings, including
+the one immediately after an opener or before the closer, remain content. An
+inline closer has no indentation to remove. A mismatched or absent closing run
+remains the existing unterminated-literal L0014.
+
+After indentation is removed, raw and quoted literals with equal byte content
+share D161's one pooled read-only datum. Checking, module images, aggregate
+fields, calls and lowering otherwise use the same slice path; neither IR nor
+the backend learns a raw-literal operation.
+
+**The alternatives:** fix the delimiter at three quotes, close on a shorter
+run, silently leave under-indented lines unchanged, count visual columns rather
+than exact source bytes, interpret escapes, or allocate raw and quoted content
+separately. Those choices contradict [0280], make tabs target/editor dependent,
+or duplicate representation that is observably identical after decoding. All
+were declined.
+
+**Pinned by** `runtime/raw-literal-bytes`,
+`negative/raw-literal-inconsistent-indentation`,
+`negative/raw-literal-needs-byte-slice`,
+`negative/raw-literal-needs-read-only-slice`,
+`negative/raw-literal-write`, `negative/unterminated-raw-literal`, the raw
+decoder and lexer cases, and the `source.lexical` and `text.literal-storage`
+guarantee rows.

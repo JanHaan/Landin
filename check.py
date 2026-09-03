@@ -381,7 +381,8 @@ LEXICAL_RULES = {"space", "line_end", "comment", "line_comment",
                  "doc_comment", "block_comment", "block_item", "identifier",
                  "keyword", "literal", "character", "character_escape",
                  "unicode_scalar",
-                 "text", "text_byte", "text_escape",
+                 "text", "text_byte", "text_escape", "raw", "quote_run",
+                 "raw_content",
                  "integer", "float", "decimal_fraction", "decimal_exponent",
                  "decimal_digits", "decimal", "hex", "octal", "binary", "lower",
                  "digit", "hex_digit", "octal_digit", "binary_digit"}
@@ -390,7 +391,7 @@ LEXICAL_RULES = {"space", "line_end", "comment", "line_comment",
 #  spelling.
 TOKEN_KIND_RULES = {"identifier": "name", "integer": "integer",
                     "float": "float",
-                    "character": "character", "text": "text",
+                    "character": "character", "text": "text", "raw": "raw",
                     "literal": "literal"}
 
 PRODUCTION = re.compile(r"^([a-z_]+)\s+::=\s*(.*)$")
@@ -745,12 +746,71 @@ def landin_tokens(source, signs, trees=None):
             out.append(("word", run, start))
             continue
 
-        #  D161 enables a quote-delimited text token.  An escaped quote is
-        #  content, a line end never is, and three opening quotes remain
-        #  [0280]'s deferred raw literal rather than three empty texts.
+        #  D161's text uses one quote and escapes.  D164's raw form uses a
+        #  matching run of at least three quotes, permits line ends, and
+        #  interprets no escape.
         if char == '"':
-            if source.startswith('"""', i):
-                return None, "no rule spells a raw literal"
+            quotes = 0
+            while i + quotes < n and source[i + quotes] == '"':
+                quotes += 1
+            if quotes >= 3:
+                start, i, closed = i, i + quotes, False
+                close = i
+                while i < n:
+                    if source[i] == '"':
+                        run = 0
+                        while i + run < n and source[i + run] == '"':
+                            run += 1
+                        if run >= quotes:
+                            close = i
+                            i += quotes
+                            closed = True
+                            break
+                        i += run
+                    else:
+                        i += 1
+                if not closed:
+                    return None, "a raw literal is never closed"
+
+                content = source[start + quotes:close]
+                try:
+                    content.encode("latin-1").decode("utf-8")
+                except UnicodeError:
+                    return None, "a raw literal has invalid UTF-8"
+
+                last_break = max(content.rfind("\n"), content.rfind("\r"))
+                line_start = last_break + 1
+                indent = content[line_start:] if last_break >= 0 else ""
+                if any(byte not in " \t" for byte in indent):
+                    indent = ""
+                if indent:
+                    at = 0
+                    line_leading = False
+                    while at < len(content):
+                        if line_leading:
+                            line_end = at
+                            while line_end < len(content) \
+                                    and content[line_end] not in "\r\n":
+                                line_end += 1
+                            prefix = at
+                            while prefix < line_end \
+                                    and content[prefix] in " \t":
+                                prefix += 1
+                            if prefix < line_end \
+                                    and not content.startswith(indent, at):
+                                return None, ("a raw literal has inconsistent "
+                                              "indentation")
+                            at = prefix if prefix == line_end \
+                                else at + len(indent)
+                            line_leading = False
+                            if at >= len(content):
+                                break
+                        line_leading = content[at] in "\r\n"
+                        at += 1
+
+                out.append(("raw", source[start:i], start))
+                continue
+
             start, i, closed = i, i + 1, False
             while i < n and source[i] not in "\r\n":
                 if source[i] == '"':
@@ -889,10 +949,12 @@ def grammar_recognises(rules, trees, tokens, start="program"):
                                 if token_kind == "character" else ())
                     elif wanted == "text":
                         ends = (at + 1,) if token_kind == "text" else ()
+                    elif wanted == "raw":
+                        ends = (at + 1,) if token_kind == "raw" else ()
                     else:
                         ends = ((at + 1,)
                                 if token_kind in ("integer", "float",
-                                                  "character", "text")
+                                                  "character", "text", "raw")
                                 or text in ("true", "false", "zeroed") else ())
             elif name in LEXICAL_RULES:
                 ends = (at + 1,) if at < len(tokens) else ()
@@ -1927,7 +1989,8 @@ def check_token_vocabulary(full_run):
 #  reserved words, and expanding it is what makes a first set comparable
 #  with Landin.Tokens.Is_Literal.
 TOKEN_PRODUCERS = frozenset(
-    ("identifier", "keyword", "integer", "float", "character", "text"))
+    ("identifier", "keyword", "integer", "float", "character", "text",
+     "raw"))
 
 
 def grammar_first(trees):
@@ -2071,6 +2134,8 @@ def check_precedence_table(full_run):
             return ("token", "character")
         if kind == "Text_Literal":
             return ("token", "text")
+        if kind == "Raw_Literal":
+            return ("token", "raw")
         if kind.startswith("Kw_"):
             return ("lit", kind[3:].lower())
         if kind in spelling:
@@ -2086,7 +2151,7 @@ def check_precedence_table(full_run):
     def kinds_in(body):
         return set(re.findall(r"(?:Landin\.Tokens\.)?\b((?:Kw_[A-Za-z_]+)"
                               r"|Identifier|Integer_Literal|Float_Literal"
-                              r"|Character_Literal|Text_Literal"
+                              r"|Character_Literal|Text_Literal|Raw_Literal"
                               r"|Ampersand|Bar"
                               r"|Caret|Equal_Equal|Greater_Greater|Greater_Equal"
                               r"|Greater|Left_Bracket|Left_Paren|Less_Greater|Less_Equal"

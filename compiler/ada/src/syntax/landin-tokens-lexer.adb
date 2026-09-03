@@ -350,11 +350,21 @@ package body Landin.Tokens.Lexer is
             and then Text (Position .. Position + Text_To_Match'Length - 1)
                      = Text_To_Match);
 
+      function Quote_Run (From : Natural) return Natural;
+
+      function Quote_Run (From : Natural) return Natural is
+         Cursor : Natural := From;
+      begin
+         while Cursor <= Last and then Text (Cursor) = '"' loop
+            Cursor := Cursor + 1;
+         end loop;
+         return Cursor - From;
+      end Quote_Run;
+
       procedure Scan_Quoted;
 
-      --  The quote-delimited literals: character [0250] and text [0260],
-      --  which D163 and D161 enable, and raw [0280], which the kernel
-      --  refuses.
+      --  The quote-delimited literals: character [0250], text [0260] and
+      --  raw text [0280], enabled by D163, D161 and D164 respectively.
       --  Each is read as one lexeme so [1830] can name the construct
       --  instead of reporting a stray quote, and so enabling one later
       --  cannot change how a file that never used it was read.  A quoted
@@ -365,18 +375,19 @@ package body Landin.Tokens.Lexer is
       procedure Scan_Quoted is
          First  : constant Natural := Position;
          Opener : constant Character := Text (Position);
-         Quote  : constant String := """";
-         Three  : constant String := Quote & Quote & Quote;
+         Opening_Quotes : constant Natural :=
+           (if Opener = '"' then Quote_Run (Position) else 0);
          Raw    : constant Boolean :=
-           Opener = '"' and then Ahead (Three);
-         Closer : constant String := (if Raw then Three else [Opener]);
+           Opening_Quotes >= 3;
+         Delimiter_Length : constant Positive :=
+           (if Raw then Opening_Quotes else 1);
          Refused : constant Token_Kind :=
            (if Raw then Raw_Literal
             elsif Opener = '"' then Text_Literal
             else Character_Literal);
          Closed : Boolean := False;
       begin
-         Position := Position + Closer'Length;
+         Position := Position + Delimiter_Length;
 
          while Position <= Last loop
             --  A text or character literal ends at its line [0260]; a raw
@@ -384,8 +395,12 @@ package body Landin.Tokens.Lexer is
             exit when not Raw
               and then (Text (Position) = LF or else Text (Position) = CR);
 
-            if Ahead (Closer) then
-               Position := Position + Closer'Length;
+            if (if Raw then Text (Position) = '"'
+                              and then Quote_Run (Position)
+                                         >= Delimiter_Length
+                else Text (Position) = Opener)
+            then
+               Position := Position + Delimiter_Length;
                Closed := True;
                exit;
             end if;
@@ -436,6 +451,23 @@ package body Landin.Tokens.Lexer is
                   if Fault not in Landin.Tokens.Text.Well_Formed then
                      Complain
                        (Malformed_Character_Literal_Run,
+                        First + Fault_First,
+                        First + Fault_Last - 1);
+                  end if;
+               end;
+            elsif Refused = Raw_Literal then
+               declare
+                  Lexeme : constant String := Text (First .. Position - 1);
+                  Bytes : String (1 .. Lexeme'Length);
+                  Length, Fault_First, Fault_Last : Natural;
+                  Fault : Landin.Tokens.Text.Problem;
+               begin
+                  Landin.Tokens.Text.Decode_Raw
+                    (Lexeme, Bytes, Length, Fault,
+                     Fault_First, Fault_Last);
+                  if Fault not in Landin.Tokens.Text.Well_Formed then
+                     Complain
+                       (Malformed_Raw_Literal_Run,
                         First + Fault_First,
                         First + Fault_Last - 1);
                   end if;
