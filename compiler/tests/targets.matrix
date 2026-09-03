@@ -55,6 +55,7 @@ negative/atom-match-not-exhaustive | linux-x86-64, synthetic-32
 negative/atom-union-member-not-atom | linux-x86-64, synthetic-32
 negative/bare-block-scope-does-not-leak | linux-x86-64, macos-arm64, synthetic-32
 negative/bare-block-unclosed | linux-x86-64, macos-arm64, synthetic-32
+negative/bool-conversion-not-yet-enabled | linux-x86-64, macos-arm64
 negative/borrowed-source-inout | linux-x86-64, macos-arm64, synthetic-32
 negative/call-of-a-non-function | linux-x86-64, macos-arm64, synthetic-32
 negative/call-with-too-few-arguments | linux-x86-64, macos-arm64
@@ -822,6 +823,7 @@ runtime/integer-conversion-out-of-range-traps | linux-x86-64
 runtime/integer-conversion-signed-overflow-traps | linux-x86-64
 runtime/integer-conversion-unsigned-overflow-traps | linux-x86-64
 runtime/integer-conversions | linux-x86-64
+runtime/integer-to-float-conversions | linux-x86-64
 runtime/large-array-offset-is-addressed | linux-x86-64
 runtime/lenof-array-literal-is-compile-time | linux-x86-64
 runtime/lenof-named-fixed-arrays | linux-x86-64

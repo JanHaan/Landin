@@ -11183,17 +11183,27 @@ package body Landin.Stages.Lowering is
                               Fold_Constant
                                 (Of_Tree, Operand, Value, Known);
                               if Known then
-                                 Ty.Convert_Float_Width
-                                   (Ty.Magnitude (Value),
-                                    Ty.Float_Name
-                                      (Landin.Checking.Type_Of
-                                         (Types.all, Of_Tree, Operand)),
-                                    Ty.Float_Name (Target), Converted,
-                                    Overflowed);
-                                 if Overflowed then
-                                    raise Landin.Compiler_Defect with
-                                      "an overflowing float conversion"
-                                      & " passed checking";
+                                 if Landin.Checking.Type_Of
+                                   (Types.all, Of_Tree, Operand)
+                                      in Ty.Integer_Name
+                                 then
+                                    Converted :=
+                                      Ty.Convert_Integer_To_Float
+                                        (Value, Ty.Float_Name (Target));
+                                    Overflowed := False;
+                                 else
+                                    Ty.Convert_Float_Width
+                                      (Ty.Magnitude (Value),
+                                       Ty.Float_Name
+                                         (Landin.Checking.Type_Of
+                                            (Types.all, Of_Tree, Operand)),
+                                       Ty.Float_Name (Target), Converted,
+                                       Overflowed);
+                                    if Overflowed then
+                                       raise Landin.Compiler_Defect with
+                                         "an overflowing float conversion"
+                                         & " passed checking";
+                                    end if;
                                  end if;
                                  Value := Ty.Folded (Converted);
                               end if;

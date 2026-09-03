@@ -13827,13 +13827,15 @@ package body Landin.Stages.Checking is
                            then
                               return Kept (Ty.Ill_Typed);
                            end if;
-                        elsif Got in Ty.Float_Name | Ty.Untyped_Float then
+                        elsif Got
+                          in Ty.Float_Name | Ty.Untyped_Float | Ty.Bool
+                        then
                            Bad.Report
                              (Item    => Bad.Unsupported_Use,
                               Source  => Syn.Source_Of (Of_Tree),
                               Where   => Syn.Where (Of_Tree, Node),
-                              Message => "conversion between integer and"
-                                         & " float is not enabled yet",
+                              Message => "this scalar conversion is not"
+                                         & " enabled yet",
                               Refused => Bad.Scalar_Conversion,
                               Into    => Found);
                            Landin.Checking.Refuse
@@ -13879,27 +13881,35 @@ package body Landin.Stages.Checking is
                            then
                               return Kept (Ty.Ill_Typed);
                            end if;
-                        elsif Got in Ty.Integer_Name | Ty.Untyped_Integer then
+                        elsif Got = Ty.Untyped_Integer then
+                           Commit_To (Of_Tree, Value, Ty.Default_Integer);
+                           if Landin.Checking.Type_Of
+                             (Types.all, Of_Tree, Value) = Ty.Ill_Typed
+                           then
+                              return Kept (Ty.Ill_Typed);
+                           end if;
+                        elsif Got = Ty.Bool then
                            Bad.Report
                              (Item    => Bad.Unsupported_Use,
                               Source  => Syn.Source_Of (Of_Tree),
                               Where   => Syn.Where (Of_Tree, Node),
-                              Message => "conversion between integer and"
-                                         & " float is not enabled yet",
+                              Message => "conversion involving bool is not"
+                                         & " enabled yet",
                               Refused => Bad.Scalar_Conversion,
                               Into    => Found);
                            Landin.Checking.Refuse
                              (Types.all, Of_Tree, Node);
                            return Kept (Ty.Ill_Typed);
                         elsif Got /= Ty.Ill_Typed
-                          and then Got not in Ty.Float_Name
+                          and then Got
+                            not in Ty.Integer_Name | Ty.Float_Name
                         then
                            Bad.Report
                              (Item    => Bad.Type_Mismatch,
                               Source  => Syn.Source_Of (Of_Tree),
                               Where   => Syn.Where (Of_Tree, Value),
                               Message => "this float conversion requires a"
-                                         & " floating-point value",
+                                         & " numeric value",
                               Note    => "[0310]: conversion is explicit"
                                          & " and preserves its source class",
                               Related => Syn.Origin (Of_Tree, Callee),
@@ -21300,9 +21310,28 @@ package body Landin.Stages.Checking is
                      Under      : Ty.Magnitude;
                      Under_Kind : Ty.Type_Kind;
                   begin
-                     Fold_Float
-                       (Of_Tree, Syn.Nth_Argument (Of_Tree, Node, 1),
-                        Under, Under_Kind, Known, Overflowed);
+                     Under_Kind := Landin.Checking.Type_Of
+                       (Types.all, Of_Tree,
+                        Syn.Nth_Argument (Of_Tree, Node, 1));
+                     if Under_Kind in Ty.Integer_Name then
+                        declare
+                           Integer_Value : Ty.Folded;
+                        begin
+                           Fold
+                             (Of_Tree,
+                              Syn.Nth_Argument (Of_Tree, Node, 1), 0,
+                              Integer_Value, Known, Overflowed);
+                           if Known and then not Overflowed then
+                              Kind := Conversion_Target (Of_Tree, Node);
+                              Bits := Ty.Convert_Integer_To_Float
+                                (Integer_Value, Ty.Float_Name (Kind));
+                           end if;
+                        end;
+                     else
+                        Fold_Float
+                          (Of_Tree, Syn.Nth_Argument (Of_Tree, Node, 1),
+                           Under, Under_Kind, Known, Overflowed);
+                     end if;
                      if Known and then not Overflowed
                        and then Under_Kind in Ty.Float_Name
                      then

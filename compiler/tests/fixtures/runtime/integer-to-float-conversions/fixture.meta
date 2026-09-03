@@ -1,0 +1,6 @@
+class: runtime
+summary: explicit integer-to-float conversion rounds signed and unsigned values to nearest even
+constructs: 0150, 0170, 0190, 0210, 0230, 0310, 0700, 1880, 1940, 1960
+program: main.ldn
+status: 42
+targets: linux-x86-64
