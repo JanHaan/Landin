@@ -971,7 +971,9 @@ A scalar type name in front of `(` remains [0700]'s explicit conversion.
 The enabled reference slice admits the two directions [0470] requires: an
 integer type applied to a pointer checks that the address fits, and
 `ptr(integer)` takes its complete pointer type from context and produces an
-untracked pointer. Other scalar conversions remain refused by [1830].
+untracked pointer. D168 also admits an enabled integer type applied to an
+integer value. Conversion to or from a float, conversion involving bool, and
+the deferred integer widths remain refused by [1830].
 
 ### [1930] What may be discarded
 
@@ -8483,6 +8485,7 @@ classified failure boundary before the repository gate can pass.
 | `declarations.names` | static | 0040, 0050, 0060, 0080, 0090, 0100, 0110, 0120, 0130, 0140, 1790, 1795, 1850 | L0200 or L0201 | `negative/duplicate-in-a-module`, `negative/local-used-above-its-declaration` |
 | `types.values` | static | 0070, 0160, 0170, 0180, 0190, 0200, 0210, 0250, 1870, 1880, 1890 | L0300, L0301 or L0304 | `negative/character-literal-needs-u32`, `negative/float-literal-not-enabled`, `negative/float-type-not-enabled`, `negative/integer-literal-not-a-float`, `negative/literal-above-its-type`, `negative/type-name-is-not-a-type` |
 | `float.ieee` | static | 0170, 0210, 0220, 0230, 0240, 0290, 0350 | f32/f64 decimal and hexadecimal literals plus inherently typed infinity and canonical quiet NaN names follow IEEE binary32/binary64 through runtime arithmetic and comparison, preserving exact hexadecimal values, signed zero and unordered NaN behavior; L0300 rejects a finite literal that becomes infinity, L0301 rejects an invalid named special, a width mismatch, mixed classes and integer-only operators, and L0304 retains the static-fold boundary | `negative/float-remainder-is-integer-only`, `negative/float-special-name-unknown`, `negative/float-special-on-integer-type`, `negative/float-special-width-mismatch`, `negative/hex-float-overflows-context`, `negative/module-float-arithmetic-not-enabled`, `runtime/float-decimal-runtime`, `runtime/float-hexadecimal-runtime`, `runtime/float-named-specials` |
+| `conversion.integer` | trap | 0150, 0190, 0310, 0470, 0700, 1460, 1670, 1880, 1940, 1950, 1960 | explicit conversion among enabled integer types preserves the mathematical value; L0300 rejects a known value outside the destination range and a runtime value outside it traps, without truncation, wrapping or signedness reinterpretation | `negative/integer-conversion-known-binding-out-of-range`, `negative/integer-conversion-known-out-of-range`, `runtime/integer-conversion-out-of-range-traps`, `runtime/integer-conversion-signed-overflow-traps`, `runtime/integer-conversion-unsigned-overflow-traps`, `runtime/integer-conversions` |
 | `text.literal-storage` | static | 0260, 0270, 0280, 0570, 1770, 1880, 1900, 1940 | L0301 for a non-byte, writable or codepoint context; L0303 for a write through its read-only view; L0304 for the default deferred `utf8`; equal decoded quoted or raw contents share read-only storage with one trailing NUL excluded from the slice length | `negative/raw-literal-needs-byte-slice`, `negative/raw-literal-needs-read-only-slice`, `negative/raw-literal-write`, `negative/text-literal-codepoint-in-byte-context`, `negative/text-literal-needs-byte-slice`, `negative/text-literal-needs-read-only-slice`, `negative/text-literal-not-enabled`, `negative/text-literal-write`, `runtime/raw-literal-bytes`, `runtime/text-literal-bytes` |
 | `arithmetic.known` | static | 0290, 0300, 0390, 1950 | L0300 or L0306 | `negative/compound-assignment-zero-divisor`, `negative/divisor-is-zero`, `negative/literal-above-its-type` |
 | `arithmetic.runtime` | trap | 0290, 0300, 0320, 0390, 1950, 1960 | trap | `runtime/compound-assignment-overflow-traps`, `runtime/checked-overflow-traps`, `runtime/checked-subtraction-traps`, `runtime/checked-multiplication-traps`, `runtime/checked-negation-traps`, `runtime/signed-division-overflow-traps`, `runtime/a-zero-divisor-traps`, `runtime/a-zero-remainder-divisor-traps`, `runtime/negative-left-shift-traps`, `runtime/negative-right-shift-traps` |
@@ -9460,3 +9463,48 @@ literal image is already accepted. All were declined.
 `negative/float-special-on-integer-type`,
 `negative/float-special-width-mismatch`, the direct checking case, and the
 `float.ieee` guarantee row.
+
+### D168 — Integer conversion checks a mathematical value, not its bits
+
+**The tour said** that [0310] writes conversion as a type applied to a value,
+rejects an impossible compile-time conversion, and traps when a runtime value
+does not fit. It did not say whether signedness changes reinterpret a pattern,
+whether every enabled integer width participates, or how a module conversion
+is folded without compile-time execution.
+
+**Chosen:** the fourteenth R4.10 increment enables an application of any
+enabled integer type to one integer value. The source keeps its own integer
+type and the destination is the applied type; no contextual or implicit
+conversion is introduced. The mathematical source value must lie between the
+destination's inclusive minimum and maximum. Widening a signed value therefore
+preserves its sign, a negative value never converts to unsigned, and crossing
+to a signed type rejects an unsigned value above that signed maximum. There is
+no truncation, wrapping or same-width bit reinterpretation.
+
+An integer literal operand is checked immediately in the destination context.
+A conversion of a module-known integer expression is folded through the same
+target-aware integer fold as its source; an impossible known result is L0300.
+At runtime the neutral IR retains the source and destination integer types, and
+the Linux backend sign- or zero-extends the source before comparing it with the
+destination bounds. An out-of-range value reaches [1950]'s existing `ud2` trap;
+an in-range value stores the destination-width pattern. The same conversion
+opcode continues to carry [0470]'s pointer-to-integer address check.
+
+Conversions to or from f32 or f64 and conversions involving bool remain L0304
+under R4.10. The deferred u128, i128 and packed integer widths gain no spelling
+through this increment.
+
+**The alternatives:** reinterpret the low bits, make narrowing wrap, allow a
+negative signed value to cross to same-width unsigned, or give module
+conversions a runtime initializer. Those choices contradict [0310]'s fit and
+trap rule, make signedness a representation cast, or contradict [1460]'s rule
+that nothing runs before the entry point. All were declined.
+
+**Pinned by** `runtime/integer-conversions`,
+`runtime/integer-conversion-out-of-range-traps`,
+`runtime/integer-conversion-signed-overflow-traps`,
+`runtime/integer-conversion-unsigned-overflow-traps`,
+`negative/integer-conversion-known-binding-out-of-range`,
+`negative/integer-conversion-known-out-of-range`,
+`negative/float-conversion-not-yet-enabled`, and the `conversion.integer`
+guarantee row.

@@ -1,0 +1,6 @@
+class: runtime
+summary: an explicit runtime integer conversion traps when its source is outside the destination range
+constructs: 0150, 0310, 0700, 1670, 1950, 1960
+program: main.ldn
+traps: yes
+targets: linux-x86-64

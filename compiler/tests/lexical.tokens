@@ -19412,6 +19412,18 @@ file negative/fixed-conditional-inactive-parser-error/program.ldn tokens 20
   76 78 42
   79 82 end
   83 85 if
+file negative/float-conversion-not-yet-enabled/program.ldn tokens 11
+  0 5 whole
+  5 6 :
+  7 10 i32
+  11 12 =
+  13 14 7
+  15 23 fraction
+  24 26 :=
+  27 30 f32
+  30 31 (
+  31 36 whole
+  36 37 )
 file negative/float-literal-not-enabled/program.ldn tokens 5
   0 5 ratio
   5 6 :
@@ -22432,6 +22444,27 @@ file negative/inout-same-place-twice/main.ldn tokens 53
   188 189 0
   190 193 end
   194 198 main
+file negative/integer-conversion-known-binding-out-of-range/program.ldn tokens 13
+  0 6 source
+  6 7 :
+  8 11 u16
+  12 13 =
+  14 17 300
+  18 27 too_small
+  27 28 :
+  29 31 u8
+  32 33 =
+  34 36 u8
+  36 37 (
+  37 43 source
+  43 44 )
+file negative/integer-conversion-known-out-of-range/program.ldn tokens 6
+  0 9 too_large
+  10 12 :=
+  13 15 u8
+  15 16 (
+  16 19 300
+  19 20 )
 file negative/integer-literal-not-a-float/program.ldn tokens 5
   0 5 ratio
   5 6 :

@@ -1,0 +1,6 @@
+class: runtime
+summary: explicit integer conversions widen, narrow and cross signedness after exact runtime range checks
+constructs: 0150, 0190, 0200, 0310, 0700, 1880, 1960
+program: main.ldn
+status: 42
+targets: linux-x86-64

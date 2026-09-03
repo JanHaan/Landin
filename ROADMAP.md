@@ -3138,6 +3138,12 @@ bit, admits the names throughout scalar and aggregate module images, and gives
 unknown type-qualified members or a contextual width mismatch L0301. f16,
 explicit integer/float conversions, module float arithmetic and the external
 float ABI remain later boundaries.
+The fourteenth increment enables [0310]'s explicit conversions among every
+enabled integer type. D168 rejects an impossible literal or module-known value
+with L0300, sign- or zero-extends a runtime source before checking the exact
+destination range, and traps rather than truncating, wrapping or reinterpreting
+an out-of-range value. It reuses [0470]'s target-neutral conversion operation;
+float/integer and bool conversions remain named R4.10 refusals.
 
 Exit evidence: every hosted `[NNNN]` row has implementation and positive or
 negative evidence; no omission is hidden by prototype coverage.

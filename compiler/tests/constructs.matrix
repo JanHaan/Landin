@@ -11,7 +11,7 @@
 #
 #  A construct with no evidence and no refusal is this
 #  item's to answer for; see ROADMAP.md R1.90.
-#  200 constructs, 162 with evidence, 38 with neither.
+#  200 constructs, 163 with evidence, 37 with neither.
 #
 #  id    defined in  evidence
 0010   tour        accepted emitted                   Line comment, to end of line
@@ -28,7 +28,7 @@
 0120   tour        accepted emitted refused refused-by-name Types are declared like any other value, with 'type'
 0130   tour        accepted emitted executed refused  Order inside a module does not matter
 0140   tour        accepted emitted                   An inner scope may shadow an outer name
-0150   tour        refused refused-by-name            Integers: u8 u16 u32 u64 u128, i8 i16 i32 i64 i128
+0150   tour        accepted emitted executed refused refused-by-name Integers: u8 u16 u32 u64 u128, i8 i16 i32 i64 i128
 0160   tour        accepted emitted executed refused  Pointer-width integers: usize, isize
 0170   tour        accepted emitted executed refused refused-by-name Floating point: f16, f32, f64
 0180   tour        accepted emitted                   bool, with true and false
@@ -44,7 +44,7 @@
 0280   tour        accepted emitted executed refused  Raw literals: N quotes on each side, N at least three
 0290   tour        accepted emitted executed refused  Arithmetic
 0300   tour        accepted emitted executed refused  Overflow traps
-0310   tour        refused                            No implicit conversion
+0310   tour        accepted emitted executed refused  No implicit conversion
 0320   tour        accepted emitted executed refused  Shifts fill with zeros beyond the width, for any amount
 0330   tour        accepted emitted executed refused  Bitwise
 0340   tour        accepted emitted executed refused  Logical: and, or, not
@@ -180,7 +180,7 @@
 1640   tour        -                                  Kept against section garbage collection, and placed
 1650   tour        accepted emitted executed          Entry point
 1660   tour        accepted emitted executed          And this is where capabilities come from
-1670   tour        -                                  A failed check calls a fixed, never-returning symbol
+1670   tour        accepted emitted executed          A failed check calls a fixed, never-returning symbol
 1680   tour        accepted emitted executed refused  Require a capability, do not track an effect
 1690   tour        accepted emitted executed          One mechanism, two readings, is better than two mechanisms
 1700   tour        accepted emitted executed refused  Atoms are the same idea wherever they appear

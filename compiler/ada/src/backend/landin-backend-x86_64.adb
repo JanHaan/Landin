@@ -1466,28 +1466,70 @@ package body Landin.Backend.X86_64 is
                      From_Size : constant Held_Size := Size_Of (From, Facts);
                      Into_Size : constant Held_Size :=
                        Size_Of (Into_Type, Facts);
-                     Safe_Sign : constant String :=
-                       Value_Label (Value) & "_sign";
-                     Safe_Range : constant String :=
-                       Value_Label (Value) & "_range";
+                     Into_Bits : constant Landin.Targets.Bit_Width :=
+                       Landin.Types.Width (Into_Type, Facts);
+                     Safe_Lower : constant String :=
+                       Value_Label (Value) & "_lower";
+                     Safe_Upper : constant String :=
+                       Value_Label (Value) & "_upper";
                   begin
-                     Emit ("movq $0, %rax");
-                     Emit ("mov" & Suffix (From_Size) & " "
-                           & Value_Cell (Source) & ", "
-                           & Accumulator (From_Size));
                      if Landin.Types.Is_Signed (From) then
-                        Emit ("test" & Suffix (From_Size) & " "
-                              & Accumulator (From_Size) & ", "
+                        Emit
+                          ((case From_Size is
+                              when Landin.Targets.Byte_1 => "movsbq ",
+                              when Landin.Targets.Byte_2 => "movswq ",
+                              when Landin.Targets.Byte_4 => "movslq ",
+                              when Landin.Targets.Byte_8 => "movq ")
+                           & Value_Cell (Source) & ", %rax");
+                     else
+                        Emit ("movq $0, %rax");
+                        Emit ("mov" & Suffix (From_Size) & " "
+                              & Value_Cell (Source) & ", "
                               & Accumulator (From_Size));
-                        Emit ("jns " & Safe_Sign);
-                        Emit ("ud2");
-                        Put (Safe_Sign & ":");
                      end if;
-                     if Landin.Types.Width (Into_Type, Facts) < 64 then
+
+                     if Landin.Types.Is_Signed (Into_Type) then
                         declare
                            Maximum : constant Landin.Types.Magnitude :=
-                             2 ** Natural
-                               (Landin.Types.Width (Into_Type, Facts)) - 1;
+                             2 ** (Natural (Into_Bits) - 1) - 1;
+                        begin
+                           if Landin.Types.Is_Signed (From) then
+                              Emit
+                                ("movabsq $-"
+                                 & Trimmed
+                                     (Landin.Types.Magnitude'Image
+                                        (Maximum + 1))
+                                 & ", %rcx");
+                              Emit ("cmpq %rcx, %rax");
+                              Emit ("jge " & Safe_Lower);
+                              Emit ("ud2");
+                              Put (Safe_Lower & ":");
+                           end if;
+                           Emit
+                             ("movabsq $"
+                              & Trimmed
+                                  (Landin.Types.Magnitude'Image (Maximum))
+                              & ", %rcx");
+                           Emit ("cmpq %rcx, %rax");
+                           Emit
+                             ((if Landin.Types.Is_Signed (From)
+                               then "jle " else "jbe ") & Safe_Upper);
+                           Emit ("ud2");
+                           Put (Safe_Upper & ":");
+                        end;
+                     elsif Landin.Types.Is_Signed (From) then
+                        Emit ("testq %rax, %rax");
+                        Emit ("jns " & Safe_Lower);
+                        Emit ("ud2");
+                        Put (Safe_Lower & ":");
+                     end if;
+
+                     if not Landin.Types.Is_Signed (Into_Type)
+                       and then Into_Bits < 64
+                     then
+                        declare
+                           Maximum : constant Landin.Types.Magnitude :=
+                             2 ** Natural (Into_Bits) - 1;
                         begin
                            Emit
                              ("movabsq $"
@@ -1495,9 +1537,9 @@ package body Landin.Backend.X86_64 is
                                   (Landin.Types.Magnitude'Image (Maximum))
                               & ", %rcx");
                            Emit ("cmpq %rcx, %rax");
-                           Emit ("jbe " & Safe_Range);
+                           Emit ("jbe " & Safe_Upper);
                            Emit ("ud2");
-                           Put (Safe_Range & ":");
+                           Put (Safe_Upper & ":");
                         end;
                      end if;
                      Emit ("mov" & Suffix (Into_Size) & " "
