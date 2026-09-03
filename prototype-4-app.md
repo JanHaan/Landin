@@ -10,16 +10,13 @@ point is not the program.
 
 What it presses on, none of which the first three prototypes touched:
 
-any        real heterogeneous dispatch. The chain is built from
-```text
-     argv, so its shape is unknown until run time and no
-     generic can express it
-```
-arenas     one for the program and blocks for scratch, side by side
-Io         which the tour has never specified at all
-the root   where a capability comes from when nobody handed you one
-entry      argc and argv, and what a hosted program is handed
-callbacks  a function and a state pointer, since nothing captures
+- `any` — real heterogeneous dispatch. The chain is built from argv, so its
+  shape is unknown until run time and no generic can express it
+- arenas — one for the program and blocks for scratch, side by side
+- `Io` — which the tour has never specified at all
+- the root — where a capability comes from when nobody handed you one
+- entry — argc and argv, and what a hosted program is handed
+- callbacks — a function and a state pointer, since nothing captures
 
 Where a spelling had to be invented, the line is marked [Wn] and the
 question is written out at the end.

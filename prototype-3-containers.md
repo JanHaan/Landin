@@ -10,29 +10,14 @@ barely does. A container library does nothing else.
 
 Four containers, deliberately different in shape:
 
-vec    a growing array — the one that reallocates, so it is where
-
-```text
- the borrow rule earns its keep or fails to
-```
-
-small  inline capacity spilling to the heap — a fixed value
-
-```text
- parameter and a variant holding storage
-```
-
-map    open addressing — a composed concept, and no null to use
-
-```text
- as an empty marker
-```
-
-tree   arena-backed, children as indices — the idiom the language
-
-```text
- keeps recommending, tested for once
-```
+- `vec` — a growing array: the one that reallocates, so it is where the
+  borrow rule earns its keep or fails to
+- `small` — inline capacity spilling to the heap: a fixed value parameter
+  and a variant holding storage
+- `map` — open addressing: a composed concept, and no null to use as an
+  empty marker
+- `tree` — arena-backed, with children as indices: the idiom the language
+  keeps recommending, tested for once
 
 Two conventions this file adopts, because calls could not be written
 without deciding them, and both follow the tour rather than inventing:
