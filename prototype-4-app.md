@@ -225,7 +225,7 @@ match_filter is filter (keep: match_keep)
 
 ```
 3. Every nth line, which is why the concept is inout: this one
-writes to itself on every call.
+   writes to itself on every call.
 ```landin
 public sample_filter: type = struct
     every: u32
