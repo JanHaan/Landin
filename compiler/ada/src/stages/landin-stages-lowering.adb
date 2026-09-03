@@ -37,6 +37,7 @@ package body Landin.Stages.Lowering is
    use type IR.Path_Step_Array;
    use type IR.Value_Id;
    use type Landin.Checking.Array_Element_Form;
+   use type Landin.Checking.Actual_Kind;
    use type Landin.Checking.Atom_Set_Id;
    use type Landin.Checking.Concept_Id;
    use type Landin.Checking.Conformance_Id;
@@ -771,6 +772,9 @@ package body Landin.Stages.Lowering is
         return IR.Path_Step_Array;
 
       function Has_Computed_Index
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
+
+      function Has_Pointer_Dereference
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
 
       --  Evaluate every computed index in a storage chain from its root
@@ -1952,6 +1956,32 @@ package body Landin.Stages.Lowering is
          end loop;
          return False;
       end Has_Computed_Index;
+
+      --  A `.val` reached inside a selection chain changes the root from named
+      --  storage to a runtime address.  Scalar loads already recognize that
+      --  boundary directly; aggregate arguments and copies must choose the
+      --  same Lower_Stored_Place path instead of encoding `.val` as field
+      --  zero.
+      function Has_Pointer_Dereference
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
+      is
+         Where : Syn.Node_Id := Node;
+      begin
+         while Syn.Kind (Of_Tree, Where)
+           in Syn.Member_Selection | Syn.Element_Index
+         loop
+            if Syn.Kind (Of_Tree, Where) = Syn.Member_Selection
+              and then Landin.Checking.Field_Index
+                (Types.all, Of_Tree, Where) = 0
+              and then Type_At
+                (Of_Tree, Syn.Target_Of (Of_Tree, Where)) = Ty.Pointer_Value
+            then
+               return True;
+            end if;
+            Where := Syn.Target_Of (Of_Tree, Where);
+         end loop;
+         return False;
+      end Has_Pointer_Dereference;
 
       function Lower_Stored_Place
         (Of_Tree : Syn.Tree;
@@ -3527,7 +3557,9 @@ package body Landin.Stages.Lowering is
                            Site_Of (Of_Tree, Argument));
                      end;
                   else
-                     if Has_Computed_Index (Of_Tree, Argument) then
+                     if Has_Computed_Index (Of_Tree, Argument)
+                       or else Has_Pointer_Dereference (Of_Tree, Argument)
+                     then
                         declare
                            Reached : constant Stored_Place :=
                              Lower_Stored_Place
@@ -4077,6 +4109,9 @@ package body Landin.Stages.Lowering is
          --  is one Number here, and not a Negation over one.
          function Magnitude_Of (Literal : Syn.Node_Id) return Ty.Magnitude;
 
+         function Fixed_Actual_Of
+           (Formal : Res.Declaration_Id) return Ty.Magnitude;
+
          function Magnitude_Of (Literal : Syn.Node_Id) return Ty.Magnitude
          is
             Text : constant String :=
@@ -4096,6 +4131,58 @@ package body Landin.Stages.Lowering is
 
             return Value;
          end Magnitude_Of;
+
+         --  Fixed routine formals are static arguments rather than runtime
+         --  ABI parameters.  The checker interns each concrete routine with
+         --  its ordered actual tuple; use the same declaration-order mapping
+         --  here and materialize the value as an IR constant.
+         function Fixed_Actual_Of
+           (Formal : Res.Declaration_Id) return Ty.Magnitude
+         is
+            View : constant Landin.Checking.Routine_Instance_Id :=
+              Landin.Checking.Current_Routine_View (Types.all);
+         begin
+            if View = Landin.Checking.No_Routine_Instance then
+               raise Landin.Compiler_Defect with
+                 "a fixed formal reached lowering outside a routine instance";
+            end if;
+
+            declare
+               Template : constant Res.Declaration_Id :=
+                 Landin.Checking.Routine_Template_Of (Types.all, View);
+               Template_Tree : constant not null access constant Syn.Tree :=
+                 Tree_For (Res.Source_Of (Meanings.all, Template));
+               Function_Node : constant Syn.Node_Id :=
+                 Res.Node_Of (Meanings.all, Template);
+            begin
+               for Position in 1 .. Syn.Generic_Formal_Count
+                 (Template_Tree.all, Function_Node)
+               loop
+                  if Declaration_At
+                    (Syn.Source_Of (Template_Tree.all),
+                     Syn.Nth_Generic_Formal
+                       (Template_Tree.all, Function_Node, Position)) = Formal
+                  then
+                     declare
+                        Actual : constant Landin.Checking.Actual_Key :=
+                          Landin.Checking.Nth_Routine_Actual
+                            (Types.all, View, Position);
+                     begin
+                        if Landin.Checking.Actual_Kind_Of (Actual)
+                             /= Landin.Checking.Fixed_Actual_Kind
+                        then
+                           raise Landin.Compiler_Defect with
+                             "a fixed formal maps to a type actual";
+                        end if;
+                        return Landin.Checking.Fixed_Magnitude_Of (Actual);
+                     end;
+                  end if;
+               end loop;
+            end;
+
+            raise Landin.Compiler_Defect with
+              "a fixed formal is absent from its routine instance";
+         end Fixed_Actual_Of;
 
       begin
          case Syn.Kind (Of_Tree, Node) is
@@ -4929,6 +5016,14 @@ package body Landin.Stages.Lowering is
                   Means : constant Res.Declaration_Id :=
                     Res.Bound_To (Meanings.all, Of_Tree, Node);
                begin
+                  if Res.Sort_Of (Meanings.all, Means)
+                       = Res.Fixed_Parameter
+                  then
+                     return IR.Emit_Number
+                       (Unit.all, Filling, Scalar_At (Of_Tree, Node),
+                        Fixed_Actual_Of (Means), False, Site);
+                  end if;
+
                   if Aliases (Declared (Means)).Active then
                      declare
                         Alias : Payload_Alias renames
@@ -5937,6 +6032,7 @@ package body Landin.Stages.Lowering is
                   end loop;
 
                   if Has_Computed_Index (Of_Tree, Source_Node)
+                    or else Has_Pointer_Dereference (Of_Tree, Source_Node)
                     or else Destination.Kind = IR.Runtime_Address
                   then
                      Source := Lower_Stored_Place

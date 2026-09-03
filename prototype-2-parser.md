@@ -136,6 +136,17 @@ streaming is log (note: stream_note, failed: stream_failed)
 
 ```
 
+R3.60 derives this sketch as `core/diag` against the smaller enabled kernel.
+Until R4.10 supplies `utf8`, messages are escaping byte slices and positions are
+the byte positions from `core/text`. The object-safe entry therefore has a
+declared `io_failed` outcome: the bounded logger never raises it and counts
+overflow directly, while the streaming logger propagates a failed hosted write.
+The bounded representation retains message address and length behind a private
+type, with checked accessors; `escaping` keeps a frame-backed message from being
+passed to either implementation. The runtime derivation sends one ordered
+sequence through `any log` to both implementations rather than calling either
+concrete logger directly.
+
 ## config/lex
 
 ```landin

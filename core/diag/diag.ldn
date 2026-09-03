@@ -1,0 +1,194 @@
+--  Diagnostics are an ordinary capability.  A producer sees only `log`;
+--  callers choose whether notes are retained in bounded storage or written
+--  immediately to a hosted stream.
+
+import core/io
+import core/text
+
+public severity: type = u8
+public warning: severity = 0
+public error: severity = 1
+
+entry_value: type = struct
+    where: usize
+    kind: severity
+    what_data: usize
+    what_length: usize
+end entry_value
+
+public entry: type = entry_value
+public out_of_bounds: atom
+
+public log: type = concept (logger: type)
+    note: (self: ptr mut logger, where: text.position, kind: severity,
+           escaping what: []u8) -> none ! io.io_failed
+    failed: (self: ptr logger) -> (yes: bool)
+end log
+
+bounded_value: type (fixed capacity: usize) = struct
+    notes: [capacity]entry
+    stored: usize
+    dropped: usize
+    errors: usize
+end bounded_value
+
+public bounded: type (fixed capacity: usize) = bounded_value(capacity)
+
+bounded_note: (fixed capacity: usize, self: ptr mut bounded(capacity),
+               where: text.position, kind: severity, escaping what: []u8)
+              -> none ! io.io_failed =
+    if self.val.stored < capacity then
+        mut data: usize = 0
+        if lenof what > 0 then
+            data = usize(addr what[0])
+        end if
+        self.val.notes[self.val.stored] =
+            entry(where: text.ordinal(where), kind: kind,
+                  what_data: data, what_length: lenof what)
+        inc self.val.stored
+    else
+        inc self.val.dropped
+    end if
+    if kind == error then
+        inc self.val.errors
+    end if
+end bounded_note
+
+bounded_failed: (fixed capacity: usize, self: ptr bounded(capacity))
+                -> (yes: bool) =
+    yes = self.val.errors > 0
+end bounded_failed
+
+public new_log: (fixed capacity: usize) -> (result: bounded(capacity)) =
+    result = zeroed
+end new_log
+
+public stored: (fixed capacity: usize, value: bounded(capacity))
+               -> (count: usize) =
+    count = value.stored
+end stored
+
+public dropped: (fixed capacity: usize, value: bounded(capacity))
+                -> (count: usize) =
+    count = value.dropped
+end dropped
+
+public note_at: (fixed capacity: usize, value: bounded(capacity), index: usize)
+                -> (result: entry) ! out_of_bounds =
+    fail out_of_bounds when index >= value.stored
+    result = value.notes[index]
+end note_at
+
+public position_of: (value: entry) -> (where: usize) =
+    where = value.where
+end position_of
+
+public severity_of: (value: entry) -> (kind: severity) =
+    kind = value.kind
+end severity_of
+
+public message_length: (value: entry) -> (length: usize) =
+    length = value.what_length
+end message_length
+
+public message_byte: (value: entry, index: usize)
+                     -> (byte: u8) ! out_of_bounds =
+    fail out_of_bounds when index >= value.what_length
+    address: usize = value.what_data + index
+    source: ptr u8 = ptr(address)
+    byte = source.val
+end message_byte
+
+(fixed capacity: usize) bounded_value(capacity) is log
+    (note: bounded_note, failed: bounded_failed)
+
+streaming_value: type = struct
+    state: ptr mut io.system
+    where_to: ptr io.file
+    errors: usize
+end streaming_value
+
+public streaming: type = streaming_value
+
+warning_prefix: [2]u8 = [87, 58]
+error_prefix: [2]u8 = [69, 58]
+separator: [1]u8 = [58]
+digit_0: [1]u8 = [48]
+digit_1: [1]u8 = [49]
+digit_2: [1]u8 = [50]
+digit_3: [1]u8 = [51]
+digit_4: [1]u8 = [52]
+digit_5: [1]u8 = [53]
+digit_6: [1]u8 = [54]
+digit_7: [1]u8 = [55]
+digit_8: [1]u8 = [56]
+digit_9: [1]u8 = [57]
+
+write_digit: (inout state: io.system, where_to: io.file, digit: usize)
+             -> none ! io.io_failed =
+    if digit == 0 then
+        try io.write(state, where_to, digit_0[0..<1])
+    end if
+    if digit == 1 then
+        try io.write(state, where_to, digit_1[0..<1])
+    end if
+    if digit == 2 then
+        try io.write(state, where_to, digit_2[0..<1])
+    end if
+    if digit == 3 then
+        try io.write(state, where_to, digit_3[0..<1])
+    end if
+    if digit == 4 then
+        try io.write(state, where_to, digit_4[0..<1])
+    end if
+    if digit == 5 then
+        try io.write(state, where_to, digit_5[0..<1])
+    end if
+    if digit == 6 then
+        try io.write(state, where_to, digit_6[0..<1])
+    end if
+    if digit == 7 then
+        try io.write(state, where_to, digit_7[0..<1])
+    end if
+    if digit == 8 then
+        try io.write(state, where_to, digit_8[0..<1])
+    end if
+    if digit == 9 then
+        try io.write(state, where_to, digit_9[0..<1])
+    end if
+end write_digit
+
+write_position: (inout state: io.system, where_to: io.file, value: usize)
+                -> none ! io.io_failed =
+    if value >= 10 then
+        try write_position(state, where_to, value / 10)
+    end if
+    try write_digit(state, where_to, value % 10)
+end write_position
+
+public to: (state: ptr mut io.system, where_to: ptr io.file)
+           -> (result: streaming from state, where_to) =
+    result = streaming(state: state, where_to: where_to, errors: 0)
+end to
+
+stream_note: (self: ptr mut streaming, where: text.position,
+              kind: severity, escaping what: []u8) -> none ! io.io_failed =
+    state: ptr mut io.system = self.val.state
+    where_to: ptr io.file = self.val.where_to
+    if kind == error then
+        inc self.val.errors
+        try io.write(state.val, where_to.val, error_prefix[0..<2])
+    else
+        try io.write(state.val, where_to.val, warning_prefix[0..<2])
+    end if
+
+    try write_position(state.val, where_to.val, text.ordinal(where))
+    try io.write(state.val, where_to.val, separator[0..<1])
+    try io.write(state.val, where_to.val, what)
+end stream_note
+
+stream_failed: (self: ptr streaming) -> (yes: bool) =
+    yes = self.val.errors > 0
+end stream_failed
+
+streaming_value is log (note: stream_note, failed: stream_failed)

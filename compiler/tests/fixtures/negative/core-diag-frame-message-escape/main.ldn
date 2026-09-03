@@ -1,0 +1,12 @@
+import core/diag
+import core/text
+
+bad: () -> none =
+    mut collected := diag.new_log(capacity: 2)
+    mut logger: any diag.log = any(addr collected)
+    message: [1]u8 = [65]
+    logger.note(text.first(message[0..<1]), diag.error, message[0..<1])
+      else (problem)
+        _ = problem
+    end
+end bad

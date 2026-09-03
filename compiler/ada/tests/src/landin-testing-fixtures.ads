@@ -47,6 +47,9 @@ package Landin.Testing.Fixtures is
    --  Arguments handed to a compiled runtime program, separately from the
    --  `args` used to invoke refine for recorded command-line fixtures.
    function Run_Args (Item : Fixture) return String;
+   --  Bytes expected from that runtime program's merged output.  This is
+   --  separate from `expect`, which records refine's own output.
+   function Run_Expect (Item : Fixture) return String;
    function Status  (Item : Fixture) return Integer;
 
    --  Whether the fixture's program must end without exiting.  [1960] says
@@ -123,6 +126,7 @@ private
       Targets : Unbounded.Unbounded_String;
       Args    : Unbounded.Unbounded_String;
       Run_Args : Unbounded.Unbounded_String;
+      Run_Expect : Unbounded.Unbounded_String;
       Codes   : Unbounded.Unbounded_String;
       Status  : Integer := 0;
       Traps   : Boolean := False;
