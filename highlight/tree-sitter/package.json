@@ -1,0 +1,37 @@
+{
+  "name": "tree-sitter-landin",
+  "version": "0.0.0",
+  "description": "Tree-sitter grammar for the Landin language",
+  "license": "MIT OR Apache-2.0",
+  "main": "grammar.js",
+  "keywords": [
+    "incremental",
+    "parsing",
+    "tree-sitter",
+    "landin"
+  ],
+  "files": [
+    "grammar.js",
+    "queries",
+    "src/**"
+  ],
+  "scripts": {
+    "generate": "tree-sitter generate",
+    "test": "tree-sitter test"
+  },
+  "devDependencies": {
+    "tree-sitter-cli": "0.26.9"
+  },
+  "tree-sitter": [
+    {
+      "scope": "source.landin",
+      "file-types": [
+        "ldn"
+      ],
+      "injection-regex": "^landin$"
+    }
+  ],
+  "allowScripts": {
+    "tree-sitter-cli@0.26.9": true
+  }
+}

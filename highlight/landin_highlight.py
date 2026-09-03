@@ -8,14 +8,15 @@ that every highlighter the repository ships is a rendering of this file
 rather than another scanner that drifts away from it:
 
     docs/site/render_html.py    the reading copies, as HTML spans
-    highlight/pygments/         a Pygments lexer, for forges and doc builds
+    landin_pygments.py          a Pygments lexer, for forges and doc builds
+    generate.py                 TextMate, Vim, Notepad++, Nano and Kate
 
 Nothing here is a parser. It is a token scanner with a symbol table
 collected from the file itself, which is how a name the file declares
 reads the same everywhere it is used. A regex cannot tell the `set` of
 [0410] from a variable called `set`, and this does not pretend to: the
-contextual words are coloured by position, and a tree-sitter grammar is
-what will eventually get them right.
+contextual words are coloured by position.  The checked tree-sitter grammar
+in this directory provides the structural alternative for capable editors.
 
 Standard library only, and no knowledge of any output format. The site
 adds citation links and HTML escaping; Pygments maps the classes onto its

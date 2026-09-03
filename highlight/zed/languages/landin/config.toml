@@ -1,0 +1,13 @@
+name = "Landin"
+grammar = "landin"
+path_suffixes = ["ldn"]
+line_comments = ["-- "]
+block_comment = ["--(", ")--"]
+tab_size = 4
+hard_tabs = false
+brackets = [
+  { start = "(", end = ")", close = true, newline = false },
+  { start = "[", end = "]", close = true, newline = false },
+  { start = "\"", end = "\"", close = true, newline = false },
+  { start = "'", end = "'", close = true, newline = false },
+]
