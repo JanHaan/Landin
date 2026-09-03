@@ -57,6 +57,12 @@ the four prototypes, the roadmap, and the implementation notes. Every
 `[NNNN]` citation links to the construct it names, and hovering one shows what
 it says.
 
+The site also has an [editor and IDE support guide](https://www.701.dev/editors.html)
+with installation paths for the Landin extensions and plugins for Zed, VS
+Code and its relatives, Neovim, Vim, Emacs, Helix, Sublime Text, Visual
+Studio, JetBrains IDEs, Eclipse, Notepad++, Kate and Nano, plus the Pygments
+lexer.
+
 The canonical repository the pages are generated from is at
 **<https://git.sr.ht/~sinnfrei/landin>**:
 
