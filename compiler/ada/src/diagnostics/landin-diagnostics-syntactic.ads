@@ -94,7 +94,6 @@ package Landin.Diagnostics.Syntactic is
      (Declared_Type,
       Float_Type,
       Text_Type,
-      For_Statement,
       Struct_Type,
       Wide_Integer_Type,
       Distinct_Type,
@@ -120,7 +119,6 @@ package Landin.Diagnostics.Syntactic is
             when Declared_Type        => "[0120]",
             when Float_Type           => "[0170]",
             when Text_Type            => "[0600]",
-            when For_Statement        => "[1150]",
             when Struct_Type          => "[0670]",
             when Wide_Integer_Type    => "[0150]",
             when Distinct_Type        => "[0650]",
@@ -162,8 +160,6 @@ private
      is (case Item is
             --  R2.20 implements the types a program declares.
             when Declared_Type        => "R2.20",
-            --  R4.10 owns the remaining hosted traversal surface.
-            when For_Statement        => "R4.10",
             --  The remaining R2.20 constructs each wait for their own
             --  aggregate slice.
             when Struct_Type

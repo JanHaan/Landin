@@ -140,6 +140,11 @@ package Landin.Syntax is
       Continue_Statement,
       Loop_Statement,
       While_Statement,
+      --  [1150]'s traversal.  The first two slots are its source/lower
+      --  expression and optional range upper bound, the next two are the
+      --  element and optional index bindings, then body and completion.
+      --  Fill distinguishes `..` from `..<` when an upper bound is present.
+      For_Statement,
       --  [1050], D124: the same nodes stand in statement and expression
       --  positions.  A control expression carries its answer in the final
       --  expression of each child Block.  Checking decides whether the
@@ -393,7 +398,7 @@ package Landin.Syntax is
                     | Return_Source | Member_Selection | Field_Value
                     | Import_Segment
                     | Call_Argument | Break_Statement | Continue_Statement
-                    | Loop_Statement | While_Statement);
+                    | Loop_Statement | While_Statement | For_Statement);
 
    ------------------------------------------------------------------
    --  Trees
@@ -774,7 +779,8 @@ package Landin.Syntax is
    function Loop_Body (Of_Tree : Tree; Id : Node_Id) return Node_Id
      with Pre  => Contains (Of_Tree, Id)
                   and then Kind (Of_Tree, Id)
-                             in Loop_Statement | While_Statement,
+                             in Loop_Statement | While_Statement
+                                | For_Statement,
           Post => Contains (Of_Tree, Loop_Body'Result)
                   and then Kind (Of_Tree, Loop_Body'Result) = Block;
 
@@ -783,7 +789,32 @@ package Landin.Syntax is
    function Complete_Body (Of_Tree : Tree; Id : Node_Id) return Node_Id
      with Pre => Contains (Of_Tree, Id)
                  and then Kind (Of_Tree, Id)
-                            in Loop_Statement | While_Statement;
+                            in Loop_Statement | While_Statement
+                               | For_Statement;
+
+   function Traversal_Lower (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     with Pre  => Contains (Of_Tree, Id)
+                  and then Kind (Of_Tree, Id) = For_Statement,
+          Post => Contains (Of_Tree, Traversal_Lower'Result);
+
+   function Traversal_Upper (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id) = For_Statement;
+
+   function Traversal_Element (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     with Pre  => Contains (Of_Tree, Id)
+                  and then Kind (Of_Tree, Id) = For_Statement,
+          Post => Contains (Of_Tree, Traversal_Element'Result)
+                  and then Kind (Of_Tree, Traversal_Element'Result) = Binding;
+
+   function Traversal_Index (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id) = For_Statement;
+
+   function Traversal_Is_Inclusive
+     (Of_Tree : Tree; Id : Node_Id) return Boolean
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id) = For_Statement;
 
    --  D139's declaration conditional and its arms.  An arm's first slot is
    --  its condition, or No_Node for `else`; the remaining slots are ordinary

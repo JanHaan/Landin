@@ -33,6 +33,7 @@ package body Landin.Syntax is
             when Continue_Statement         => 1,
             when Loop_Statement            => 2,
             when While_Statement           => 3,
+            when For_Statement             => 6,
             when If_Statement             => 1,
             when Match_Statement          => 1,
             when Bare_Block               => 1,
@@ -395,12 +396,36 @@ package body Landin.Syntax is
    function Loop_Body (Of_Tree : Tree; Id : Node_Id) return Node_Id
      is (Slot
            (Of_Tree, Id,
-            (if Kind (Of_Tree, Id) = Loop_Statement then 1 else 2)));
+            (case Kind (Of_Tree, Id) is
+                when Loop_Statement => 1,
+                when While_Statement => 2,
+                when For_Statement => 5,
+                when others => raise Program_Error)));
 
    function Complete_Body (Of_Tree : Tree; Id : Node_Id) return Node_Id
      is (Slot
            (Of_Tree, Id,
-            (if Kind (Of_Tree, Id) = Loop_Statement then 2 else 3)));
+            (case Kind (Of_Tree, Id) is
+                when Loop_Statement => 2,
+                when While_Statement => 3,
+                when For_Statement => 6,
+                when others => raise Program_Error)));
+
+   function Traversal_Lower (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     is (Slot (Of_Tree, Id, 1));
+
+   function Traversal_Upper (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     is (Slot (Of_Tree, Id, 2));
+
+   function Traversal_Element (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     is (Slot (Of_Tree, Id, 3));
+
+   function Traversal_Index (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     is (Slot (Of_Tree, Id, 4));
+
+   function Traversal_Is_Inclusive
+     (Of_Tree : Tree; Id : Node_Id) return Boolean
+     is (Element (Of_Tree, Id).Fill);
 
    --  A function's return list is slot 1 and an arm's condition is slot 1, so
    --  both put what they run in slot 2.  A bare block has only the body in

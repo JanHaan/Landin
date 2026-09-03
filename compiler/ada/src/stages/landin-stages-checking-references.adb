@@ -875,7 +875,8 @@ package body Landin.Stages.Checking.References is
             when Syn.Bare_Block =>
                Process_Block (Tree, Syn.Body_Of (Tree, Node));
 
-            when Syn.Loop_Statement | Syn.While_Statement =>
+            when Syn.Loop_Statement | Syn.While_Statement
+               | Syn.For_Statement =>
                --  A conditional loop may execute zero times; an
                --  unconditional one can leave through `break`.  Origin
                --  facts only grow, so joining one body pass with entry is
@@ -883,6 +884,18 @@ package body Landin.Stages.Checking.References is
                declare
                   Before : constant Origin_Table := Origins;
                begin
+                  if Syn.Kind (Tree, Node) = Syn.For_Statement then
+                     declare
+                        Ignored : Origin_Fact :=
+                          Fact_Of (Tree, Syn.Traversal_Lower (Tree, Node));
+                     begin
+                        if Syn.Traversal_Upper (Tree, Node) /= Syn.No_Node then
+                           Ignored := Fact_Of
+                             (Tree, Syn.Traversal_Upper (Tree, Node));
+                        end if;
+                        pragma Unreferenced (Ignored);
+                     end;
+                  end if;
                   Process_Block (Tree, Syn.Loop_Body (Tree, Node));
                   if Syn.Complete_Body (Tree, Node) /= Syn.No_Node then
                      Process_Block (Tree, Syn.Complete_Body (Tree, Node));
