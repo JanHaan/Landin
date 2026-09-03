@@ -3176,6 +3176,7 @@ def check_coverage_registers(full_run):
             "source.lexical", "source.structure", "declarations.names",
             "types.values", "text.literal-storage", "float.ieee",
             "conversion.integer", "conversion.float-width",
+            "conversion.integer-to-float",
             "arithmetic.known",
             "arithmetic.runtime",
             "arithmetic.total", "ranges.measurements", "assignment.flow",

@@ -1,5 +1,5 @@
 class: negative
-summary: float-width conversion is enabled but integer and float conversion remains a named R4.10 boundary
+summary: integer-to-float conversion is enabled but float-to-integer conversion remains a named R4.10 boundary
 constructs: 0170, 0210, 0310, 0700
 program: program.ldn
 codes: L0304

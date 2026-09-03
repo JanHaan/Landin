@@ -1516,6 +1516,68 @@ package body Landin.Backend.X86_64 is
                               end;
                            end if;
                         end;
+                     elsif Into_Kind in Landin.Types.Float_Name then
+                        declare
+                           From : constant Landin.Types.Integer_Name :=
+                             Landin.Types.Integer_Name (From_Kind);
+                           Into_Type : constant Landin.Types.Float_Name :=
+                             Landin.Types.Float_Name (Into_Kind);
+                           From_Size : constant Held_Size :=
+                             Size_Of (From, Facts);
+                           High_Unsigned : constant String :=
+                             Value_Label (Value) & "_unsigned";
+                           Converted : constant String :=
+                             Value_Label (Value) & "_converted";
+                           Convert : constant String :=
+                             (if Into_Type = Landin.Types.F32
+                              then "cvtsi2ssq" else "cvtsi2sdq");
+                           Add : constant String :=
+                             (if Into_Type = Landin.Types.F32
+                              then "addss" else "addsd");
+                           Store : constant String :=
+                             (if Into_Type = Landin.Types.F32
+                              then "movss" else "movsd");
+                        begin
+                           if Landin.Types.Is_Signed (From) then
+                              Emit
+                                ((case From_Size is
+                                    when Landin.Targets.Byte_1 => "movsbq ",
+                                    when Landin.Targets.Byte_2 => "movswq ",
+                                    when Landin.Targets.Byte_4 => "movslq ",
+                                    when Landin.Targets.Byte_8 => "movq ")
+                                 & Value_Cell (Source) & ", %rax");
+                           else
+                              Emit ("movq $0, %rax");
+                              Emit ("mov" & Suffix (From_Size) & " "
+                                    & Value_Cell (Source) & ", "
+                                    & Accumulator (From_Size));
+                           end if;
+
+                           if not Landin.Types.Is_Signed (From)
+                             and then From_Size = Landin.Targets.Byte_8
+                           then
+                              --  SSE converts a signed qword.  For the upper
+                              --  half of u64, convert the sticky half and
+                              --  double it; this is the same nearest-even
+                              --  answer as converting the unsigned value.
+                              Emit ("testq %rax, %rax");
+                              Emit ("js " & High_Unsigned);
+                              Emit (Convert & " %rax, %xmm0");
+                              Emit ("jmp " & Converted);
+                              Put (High_Unsigned & ":");
+                              Emit ("movq %rax, %rdx");
+                              Emit ("shrq $1, %rax");
+                              Emit ("andq $1, %rdx");
+                              Emit ("orq %rdx, %rax");
+                              Emit (Convert & " %rax, %xmm0");
+                              Emit (Add & " %xmm0, %xmm0");
+                              Put (Converted & ":");
+                           else
+                              Emit (Convert & " %rax, %xmm0");
+                           end if;
+                           Emit
+                             (Store & " %xmm0, " & Value_Cell (Value));
+                        end;
                      else
                         declare
                            From : constant Landin.Types.Integer_Name :=
@@ -3308,6 +3370,14 @@ package body Landin.Backend.X86_64 is
                                  Held (Natural (Value)) :=
                                    Landin.Types.Folded (Converted);
                               end;
+                           elsif From in Landin.Types.Integer_Name
+                             and then Into_Type in Landin.Types.Float_Name
+                           then
+                              Held (Natural (Value)) :=
+                                Landin.Types.Folded
+                                  (Landin.Types.Convert_Integer_To_Float
+                                     (Of_Value (Source),
+                                      Landin.Types.Float_Name (Into_Type)));
                            else
                               Held (Natural (Value)) := Of_Value (Source);
                            end if;

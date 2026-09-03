@@ -3150,6 +3150,12 @@ signed zero and the infinity/NaN class, folds module-known carrier bits without
 host float arithmetic, and gives a finite f64-to-f32 overflow L0300 when known
 or a runtime trap otherwise. Integer/float and bool conversions remain named
 R4.10 refusals.
+The sixteenth increment enables explicit conversion from every enabled integer
+type to f32 or f64. D170 rounds the mathematical integer to nearest with ties
+to even, folds module images without host floating-point arithmetic, and
+handles the upper half of u64 explicitly in the Linux backend. Every enabled
+integer lies in both floats' finite range, so this direction never traps;
+float-to-integer and bool conversions remain named R4.10 refusals.
 
 Exit evidence: every hosted `[NNNN]` row has implementation and positive or
 negative evidence; no omission is hidden by prototype coverage.

@@ -587,6 +587,66 @@ package body Landin.Types is
       end;
    end Convert_Float_Width;
 
+   ------------------------------
+   --  Convert_Integer_To_Float  --
+   ------------------------------
+
+   function Convert_Integer_To_Float
+     (Value : Folded; Into : Float_Name) return Magnitude
+   is
+      Fraction_Bits : constant Natural :=
+        (case Into is when F32 => 23, when F64 => 52);
+      Bias : constant Natural :=
+        (case Into is when F32 => 127, when F64 => 1023);
+      Sign_Bit : constant Magnitude :=
+        (case Into is when F32 => 2 ** 31, when F64 => 2 ** 63);
+      Negative : constant Boolean := Value < 0;
+      Absolute : constant Magnitude :=
+        (if Negative then Magnitude (-Value) else Magnitude (Value));
+      Highest : Natural := 0;
+      Scan : Magnitude := Absolute;
+      Exponent : Natural;
+      Significant : Magnitude;
+   begin
+      if Absolute = 0 then
+         return 0;
+      end if;
+
+      while Scan >= 2 loop
+         Scan := Scan / 2;
+         Highest := Highest + 1;
+      end loop;
+      Exponent := Highest;
+
+      if Highest <= Fraction_Bits then
+         Significant := Absolute * 2 ** (Fraction_Bits - Highest);
+      else
+         declare
+            Shift : constant Natural := Highest - Fraction_Bits;
+            Divisor : constant Magnitude := 2 ** Shift;
+            Quotient : constant Magnitude := Absolute / Divisor;
+            Remainder : constant Magnitude := Absolute mod Divisor;
+            Half : constant Magnitude := Divisor / 2;
+         begin
+            Significant := Quotient;
+            if Remainder > Half
+              or else (Remainder = Half and then Quotient mod 2 = 1)
+            then
+               Significant := Significant + 1;
+            end if;
+         end;
+      end if;
+
+      if Significant = 2 ** (Fraction_Bits + 1) then
+         Significant := 2 ** Fraction_Bits;
+         Exponent := Exponent + 1;
+      end if;
+
+      return (if Negative then Sign_Bit else 0)
+        + Magnitude (Exponent + Bias) * 2 ** Fraction_Bits
+        + Significant - 2 ** Fraction_Bits;
+   end Convert_Integer_To_Float;
+
    ------------------------
    --  Float_Special_Bits  --
    ------------------------

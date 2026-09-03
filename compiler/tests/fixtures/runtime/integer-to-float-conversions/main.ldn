@@ -1,0 +1,35 @@
+module_max: u64 = 18446744073709551615
+module_max_f64: f64 = f64(module_max)
+module_halfway: u32 = 16777217
+module_rounded: f32 = f32(module_halfway)
+
+signed_to_f32: (value: i64) -> (result: f32) =
+    result = f32(value)
+end signed_to_f32
+
+unsigned_to_f32: (value: u64) -> (result: f32) =
+    result = f32(value)
+end unsigned_to_f32
+
+unsigned_to_f64: (value: u64) -> (result: f64) =
+    result = f64(value)
+end unsigned_to_f64
+
+public main: () -> (code: i32) =
+    maximum: u64 = 18446744073709551615
+    minimum: i64 = -9223372036854775808
+    exact: u64 = 9007199254740991
+
+    if signed_to_f32(-37) == -37.0
+      and signed_to_f32(minimum) == -0x1.0p63
+      and unsigned_to_f32(maximum) == 0x1.0p64
+      and unsigned_to_f64(maximum) == 0x1.0p64
+      and unsigned_to_f64(exact) == 9007199254740991.0
+      and f64(42) == 42.0
+      and module_max_f64 == 0x1.0p64
+      and module_rounded == 16777216.0 then
+        code = 42
+    else
+        code = 1
+    end if
+end main
