@@ -1,5 +1,5 @@
 class: negative
-summary: the first scalar conversion increment leaves integer and float conversion as a named R4.10 boundary
+summary: float-width conversion is enabled but integer and float conversion remains a named R4.10 boundary
 constructs: 0170, 0210, 0310, 0700
 program: program.ldn
 codes: L0304

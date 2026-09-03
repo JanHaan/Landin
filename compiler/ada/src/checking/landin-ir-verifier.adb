@@ -4486,17 +4486,32 @@ package body Landin.IR.Verifier is
                               end if;
 
                            when Conversion =>
-                              if Result_Of (Of_Unit, Id, V)
-                                   not in Landin.Types.Integer_Name
-                                or else Result_Of
-                                  (Of_Unit, Id,
-                                   Nth_Operand (Of_Unit, Id, V, 1))
-                                    not in Landin.Types.Integer_Name
-                              then
-                                 return (Kind => Result_Disagrees,
-                                         Item => Id, Block => Block,
-                                         Value => V);
-                              end if;
+                              declare
+                                 Result_Kind : constant
+                                   Landin.Types.Type_Kind :=
+                                     Result_Of (Of_Unit, Id, V);
+                                 Operand_Kind : constant
+                                   Landin.Types.Type_Kind :=
+                                     Result_Of
+                                       (Of_Unit, Id,
+                                        Nth_Operand
+                                          (Of_Unit, Id, V, 1));
+                              begin
+                                 if Result_Kind
+                                      not in Landin.Types.Numeric_Name
+                                   or else Operand_Kind
+                                     not in Landin.Types.Numeric_Name
+                                   or else
+                                     ((Result_Kind
+                                         in Landin.Types.Integer_Name)
+                                      /= (Operand_Kind
+                                         in Landin.Types.Integer_Name))
+                                 then
+                                    return (Kind => Result_Disagrees,
+                                            Item => Id, Block => Block,
+                                            Value => V);
+                                 end if;
+                              end;
 
                            when Slice_Address =>
                               if Field_Shape_Is_Malformed

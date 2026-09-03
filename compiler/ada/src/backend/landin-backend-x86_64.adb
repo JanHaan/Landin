@@ -1459,92 +1459,157 @@ package body Landin.Backend.X86_64 is
                when Landin.IR.Conversion =>
                   declare
                      Source : constant Landin.IR.Value_Id := Operand (1);
-                     From : constant Landin.Types.Integer_Name :=
+                     From_Kind : constant Landin.Types.Type_Kind :=
                        Landin.IR.Result_Of (Of_Unit, Item, Source);
-                     Into_Type : constant Landin.Types.Integer_Name :=
+                     Into_Kind : constant Landin.Types.Type_Kind :=
                        Landin.IR.Result_Of (Of_Unit, Item, Value);
-                     From_Size : constant Held_Size := Size_Of (From, Facts);
-                     Into_Size : constant Held_Size :=
-                       Size_Of (Into_Type, Facts);
-                     Into_Bits : constant Landin.Targets.Bit_Width :=
-                       Landin.Types.Width (Into_Type, Facts);
-                     Safe_Lower : constant String :=
-                       Value_Label (Value) & "_lower";
-                     Safe_Upper : constant String :=
-                       Value_Label (Value) & "_upper";
                   begin
-                     if Landin.Types.Is_Signed (From) then
-                        Emit
-                          ((case From_Size is
-                              when Landin.Targets.Byte_1 => "movsbq ",
-                              when Landin.Targets.Byte_2 => "movswq ",
-                              when Landin.Targets.Byte_4 => "movslq ",
-                              when Landin.Targets.Byte_8 => "movq ")
-                           & Value_Cell (Source) & ", %rax");
-                     else
-                        Emit ("movq $0, %rax");
-                        Emit ("mov" & Suffix (From_Size) & " "
-                              & Value_Cell (Source) & ", "
-                              & Accumulator (From_Size));
-                     end if;
-
-                     if Landin.Types.Is_Signed (Into_Type) then
+                     if From_Kind in Landin.Types.Float_Name
+                       and then Into_Kind in Landin.Types.Float_Name
+                     then
                         declare
-                           Maximum : constant Landin.Types.Magnitude :=
-                             2 ** (Natural (Into_Bits) - 1) - 1;
+                           From : constant Landin.Types.Float_Name :=
+                             Landin.Types.Float_Name (From_Kind);
+                           Into_Type : constant Landin.Types.Float_Name :=
+                             Landin.Types.Float_Name (Into_Kind);
+                        begin
+                           if From = Into_Type then
+                              Carry
+                                (Size_Of (From, Facts), Value_Cell (Source),
+                                 Value_Cell (Value));
+                           elsif From = Landin.Types.F32 then
+                              Emit
+                                ("movss " & Value_Cell (Source)
+                                 & ", %xmm0");
+                              Emit ("cvtss2sd %xmm0, %xmm0");
+                              Emit
+                                ("movsd %xmm0, " & Value_Cell (Value));
+                           else
+                              declare
+                                 Safe : constant String :=
+                                   Value_Label (Value) & "_finite";
+                              begin
+                                 Emit
+                                   ("movsd " & Value_Cell (Source)
+                                    & ", %xmm0");
+                                 Emit ("cvtsd2ss %xmm0, %xmm0");
+                                 --  Infinity and NaN are values of both
+                                 --  widths.  Only a finite source which
+                                 --  rounded to infinity must trap [0310].
+                                 Emit ("movd %xmm0, %eax");
+                                 Emit ("andl $2139095040, %eax");
+                                 Emit ("cmpl $2139095040, %eax");
+                                 Emit ("jne " & Safe);
+                                 Emit
+                                   ("movq " & Value_Cell (Source)
+                                    & ", %rdx");
+                                 Emit
+                                   ("movabsq $9218868437227405312, %rax");
+                                 Emit ("movq %rdx, %rcx");
+                                 Emit ("andq %rax, %rcx");
+                                 Emit ("cmpq %rax, %rcx");
+                                 Emit ("je " & Safe);
+                                 Emit ("ud2");
+                                 Put (Safe & ":");
+                                 Emit
+                                   ("movss %xmm0, " & Value_Cell (Value));
+                              end;
+                           end if;
+                        end;
+                     else
+                        declare
+                           From : constant Landin.Types.Integer_Name :=
+                             Landin.Types.Integer_Name (From_Kind);
+                           Into_Type : constant Landin.Types.Integer_Name :=
+                             Landin.Types.Integer_Name (Into_Kind);
+                           From_Size : constant Held_Size :=
+                             Size_Of (From, Facts);
+                           Into_Size : constant Held_Size :=
+                             Size_Of (Into_Type, Facts);
+                           Into_Bits : constant Landin.Targets.Bit_Width :=
+                             Landin.Types.Width (Into_Type, Facts);
+                           Safe_Lower : constant String :=
+                             Value_Label (Value) & "_lower";
+                           Safe_Upper : constant String :=
+                             Value_Label (Value) & "_upper";
                         begin
                            if Landin.Types.Is_Signed (From) then
                               Emit
-                                ("movabsq $-"
-                                 & Trimmed
-                                     (Landin.Types.Magnitude'Image
-                                        (Maximum + 1))
-                                 & ", %rcx");
-                              Emit ("cmpq %rcx, %rax");
-                              Emit ("jge " & Safe_Lower);
+                                ((case From_Size is
+                                    when Landin.Targets.Byte_1 => "movsbq ",
+                                    when Landin.Targets.Byte_2 => "movswq ",
+                                    when Landin.Targets.Byte_4 => "movslq ",
+                                    when Landin.Targets.Byte_8 => "movq ")
+                                 & Value_Cell (Source) & ", %rax");
+                           else
+                              Emit ("movq $0, %rax");
+                              Emit ("mov" & Suffix (From_Size) & " "
+                                    & Value_Cell (Source) & ", "
+                                    & Accumulator (From_Size));
+                           end if;
+
+                           if Landin.Types.Is_Signed (Into_Type) then
+                              declare
+                                 Maximum : constant Landin.Types.Magnitude :=
+                                   2 ** (Natural (Into_Bits) - 1) - 1;
+                              begin
+                                 if Landin.Types.Is_Signed (From) then
+                                    Emit
+                                      ("movabsq $-"
+                                       & Trimmed
+                                           (Landin.Types.Magnitude'Image
+                                              (Maximum + 1))
+                                       & ", %rcx");
+                                    Emit ("cmpq %rcx, %rax");
+                                    Emit ("jge " & Safe_Lower);
+                                    Emit ("ud2");
+                                    Put (Safe_Lower & ":");
+                                 end if;
+                                 Emit
+                                   ("movabsq $"
+                                    & Trimmed
+                                        (Landin.Types.Magnitude'Image
+                                           (Maximum))
+                                    & ", %rcx");
+                                 Emit ("cmpq %rcx, %rax");
+                                 Emit
+                                   ((if Landin.Types.Is_Signed (From)
+                                     then "jle " else "jbe ")
+                                    & Safe_Upper);
+                                 Emit ("ud2");
+                                 Put (Safe_Upper & ":");
+                              end;
+                           elsif Landin.Types.Is_Signed (From) then
+                              Emit ("testq %rax, %rax");
+                              Emit ("jns " & Safe_Lower);
                               Emit ("ud2");
                               Put (Safe_Lower & ":");
                            end if;
-                           Emit
-                             ("movabsq $"
-                              & Trimmed
-                                  (Landin.Types.Magnitude'Image (Maximum))
-                              & ", %rcx");
-                           Emit ("cmpq %rcx, %rax");
-                           Emit
-                             ((if Landin.Types.Is_Signed (From)
-                               then "jle " else "jbe ") & Safe_Upper);
-                           Emit ("ud2");
-                           Put (Safe_Upper & ":");
-                        end;
-                     elsif Landin.Types.Is_Signed (From) then
-                        Emit ("testq %rax, %rax");
-                        Emit ("jns " & Safe_Lower);
-                        Emit ("ud2");
-                        Put (Safe_Lower & ":");
-                     end if;
 
-                     if not Landin.Types.Is_Signed (Into_Type)
-                       and then Into_Bits < 64
-                     then
-                        declare
-                           Maximum : constant Landin.Types.Magnitude :=
-                             2 ** Natural (Into_Bits) - 1;
-                        begin
-                           Emit
-                             ("movabsq $"
-                              & Trimmed
-                                  (Landin.Types.Magnitude'Image (Maximum))
-                              & ", %rcx");
-                           Emit ("cmpq %rcx, %rax");
-                           Emit ("jbe " & Safe_Upper);
-                           Emit ("ud2");
-                           Put (Safe_Upper & ":");
+                           if not Landin.Types.Is_Signed (Into_Type)
+                             and then Into_Bits < 64
+                           then
+                              declare
+                                 Maximum : constant Landin.Types.Magnitude :=
+                                   2 ** Natural (Into_Bits) - 1;
+                              begin
+                                 Emit
+                                   ("movabsq $"
+                                    & Trimmed
+                                        (Landin.Types.Magnitude'Image
+                                           (Maximum))
+                                    & ", %rcx");
+                                 Emit ("cmpq %rcx, %rax");
+                                 Emit ("jbe " & Safe_Upper);
+                                 Emit ("ud2");
+                                 Put (Safe_Upper & ":");
+                              end;
+                           end if;
+                           Emit ("mov" & Suffix (Into_Size) & " "
+                                 & Accumulator (Into_Size) & ", "
+                                 & Value_Cell (Value));
                         end;
                      end if;
-                     Emit ("mov" & Suffix (Into_Size) & " "
-                           & Accumulator (Into_Size) & ", "
-                           & Value_Cell (Value));
                   end;
 
                when Landin.IR.Slice_Address =>
@@ -3214,8 +3279,39 @@ package body Landin.Backend.X86_64 is
                           := Of_Value (Operand_Of (Value, 1));
 
                      when Landin.IR.Conversion =>
-                        Held (Natural (Value)) :=
-                          Of_Value (Operand_Of (Value, 1));
+                        declare
+                           Source : constant Landin.IR.Value_Id :=
+                             Operand_Of (Value, 1);
+                           From : constant Landin.Types.Type_Kind :=
+                             Landin.IR.Result_Of (Of_Unit, Item, Source);
+                           Into_Type : constant Landin.Types.Type_Kind :=
+                             Landin.IR.Result_Of (Of_Unit, Item, Value);
+                        begin
+                           if From in Landin.Types.Float_Name
+                             and then Into_Type in Landin.Types.Float_Name
+                           then
+                              declare
+                                 Converted : Landin.Types.Magnitude;
+                                 Overflowed : Boolean;
+                              begin
+                                 Landin.Types.Convert_Float_Width
+                                   (Landin.Types.Magnitude
+                                      (Of_Value (Source)),
+                                    Landin.Types.Float_Name (From),
+                                    Landin.Types.Float_Name (Into_Type),
+                                    Converted, Overflowed);
+                                 if Overflowed then
+                                    raise Compiler_Defect with
+                                      "an overflowing module float"
+                                      & " conversion passed checking";
+                                 end if;
+                                 Held (Natural (Value)) :=
+                                   Landin.Types.Folded (Converted);
+                              end;
+                           else
+                              Held (Natural (Value)) := Of_Value (Source);
+                           end if;
+                        end;
 
                      when Landin.IR.Negation =>
                         Held (Natural (Value)) :=

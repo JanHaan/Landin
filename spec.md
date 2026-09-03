@@ -972,8 +972,9 @@ The enabled reference slice admits the two directions [0470] requires: an
 integer type applied to a pointer checks that the address fits, and
 `ptr(integer)` takes its complete pointer type from context and produces an
 untracked pointer. D168 also admits an enabled integer type applied to an
-integer value. Conversion to or from a float, conversion involving bool, and
-the deferred integer widths remain refused by [1830].
+integer value. D169 admits f32 or f64 applied to a float value. Conversion
+between the integer and float classes, conversion involving bool, and the
+deferred integer widths remain refused by [1830].
 
 ### [1930] What may be discarded
 
@@ -8486,6 +8487,7 @@ classified failure boundary before the repository gate can pass.
 | `types.values` | static | 0070, 0160, 0170, 0180, 0190, 0200, 0210, 0250, 1870, 1880, 1890 | L0300, L0301 or L0304 | `negative/character-literal-needs-u32`, `negative/float-literal-not-enabled`, `negative/float-type-not-enabled`, `negative/integer-literal-not-a-float`, `negative/literal-above-its-type`, `negative/type-name-is-not-a-type` |
 | `float.ieee` | static | 0170, 0210, 0220, 0230, 0240, 0290, 0350 | f32/f64 decimal and hexadecimal literals plus inherently typed infinity and canonical quiet NaN names follow IEEE binary32/binary64 through runtime arithmetic and comparison, preserving exact hexadecimal values, signed zero and unordered NaN behavior; L0300 rejects a finite literal that becomes infinity, L0301 rejects an invalid named special, a width mismatch, mixed classes and integer-only operators, and L0304 retains the static-fold boundary | `negative/float-remainder-is-integer-only`, `negative/float-special-name-unknown`, `negative/float-special-on-integer-type`, `negative/float-special-width-mismatch`, `negative/hex-float-overflows-context`, `negative/module-float-arithmetic-not-enabled`, `runtime/float-decimal-runtime`, `runtime/float-hexadecimal-runtime`, `runtime/float-named-specials` |
 | `conversion.integer` | trap | 0150, 0190, 0310, 0470, 0700, 1460, 1670, 1880, 1940, 1950, 1960 | explicit conversion among enabled integer types preserves the mathematical value; L0300 rejects a known value outside the destination range and a runtime value outside it traps, without truncation, wrapping or signedness reinterpretation | `negative/integer-conversion-known-binding-out-of-range`, `negative/integer-conversion-known-out-of-range`, `runtime/integer-conversion-out-of-range-traps`, `runtime/integer-conversion-signed-overflow-traps`, `runtime/integer-conversion-unsigned-overflow-traps`, `runtime/integer-conversions` |
+| `conversion.float-width` | trap | 0170, 0210, 0230, 0240, 0310, 0700, 1880, 1940, 1950, 1960 | explicit f32/f64 conversion widens exactly or narrows to nearest with ties to even, preserving signed zero and the infinity/NaN class; L0300 rejects a known finite narrowing overflow and an equivalent runtime conversion traps | `negative/float-width-conversion-known-out-of-range`, `runtime/float-width-conversion-overflow-traps`, `runtime/float-width-conversions` |
 | `text.literal-storage` | static | 0260, 0270, 0280, 0570, 1770, 1880, 1900, 1940 | L0301 for a non-byte, writable or codepoint context; L0303 for a write through its read-only view; L0304 for the default deferred `utf8`; equal decoded quoted or raw contents share read-only storage with one trailing NUL excluded from the slice length | `negative/raw-literal-needs-byte-slice`, `negative/raw-literal-needs-read-only-slice`, `negative/raw-literal-write`, `negative/text-literal-codepoint-in-byte-context`, `negative/text-literal-needs-byte-slice`, `negative/text-literal-needs-read-only-slice`, `negative/text-literal-not-enabled`, `negative/text-literal-write`, `runtime/raw-literal-bytes`, `runtime/text-literal-bytes` |
 | `arithmetic.known` | static | 0290, 0300, 0390, 1950 | L0300 or L0306 | `negative/compound-assignment-zero-divisor`, `negative/divisor-is-zero`, `negative/literal-above-its-type` |
 | `arithmetic.runtime` | trap | 0290, 0300, 0320, 0390, 1950, 1960 | trap | `runtime/compound-assignment-overflow-traps`, `runtime/checked-overflow-traps`, `runtime/checked-subtraction-traps`, `runtime/checked-multiplication-traps`, `runtime/checked-negation-traps`, `runtime/signed-division-overflow-traps`, `runtime/a-zero-divisor-traps`, `runtime/a-zero-remainder-divisor-traps`, `runtime/negative-left-shift-traps`, `runtime/negative-right-shift-traps` |
@@ -9490,9 +9492,10 @@ destination bounds. An out-of-range value reaches [1950]'s existing `ud2` trap;
 an in-range value stores the destination-width pattern. The same conversion
 opcode continues to carry [0470]'s pointer-to-integer address check.
 
-Conversions to or from f32 or f64 and conversions involving bool remain L0304
-under R4.10. The deferred u128, i128 and packed integer widths gain no spelling
-through this increment.
+Conversions between the integer and float classes and conversions involving
+bool remain L0304 under R4.10. D169 subsequently admits conversion between the
+two enabled float widths. The deferred u128, i128 and packed integer widths
+gain no spelling through this increment.
 
 **The alternatives:** reinterpret the low bits, make narrowing wrap, allow a
 negative signed value to cross to same-width unsigned, or give module
@@ -9508,3 +9511,49 @@ that nothing runs before the entry point. All were declined.
 `negative/integer-conversion-known-out-of-range`,
 `negative/float-conversion-not-yet-enabled`, and the `conversion.integer`
 guarantee row.
+
+### D169 — Float-width conversion rounds an IEEE value, not its carrier
+
+**The tour said** that [0310] writes conversion as a type applied to a value,
+rejects an impossible compile-time conversion, and traps when a runtime value
+cannot convert. It did not say how f64 narrows to f32, whether underflow or
+loss of precision is impossible, or what happens to signed zero, infinity and
+NaN.
+
+**Chosen:** the fifteenth R4.10 increment enables f32 or f64 applied to one
+float value. An untyped float literal is checked directly in the destination
+context, as every contextual literal is under [1880]. A typed f32-to-f64
+conversion is exact. A typed f64-to-f32 conversion rounds to nearest with ties
+to even, including at the subnormal boundary; loss of precision and underflow
+to signed zero are ordinary IEEE rounding rather than failures.
+
+Signed zero and infinity retain their sign and class. A NaN remains a quiet
+NaN with its sign; its payload after a width change is not a language-visible
+identity. A finite f64 which would round beyond f32's greatest finite value is
+the one impossible width conversion: L0300 rejects it when the source is known
+under [1880] or [1940], and an otherwise identical runtime conversion traps.
+Converting infinity is not overflow because infinity is a value of both float
+types.
+
+Module-known conversions fold their IEEE carrier bits with bounded integer
+work, including the narrowing round bit and sticky bits, so cross-compilation
+does not borrow the compiler host's float conversion. Runtime Linux x86-64
+uses the corresponding SSE width conversion and explicitly distinguishes a
+finite result overflow from an infinity or NaN source. The existing
+target-neutral conversion operation now admits every numeric result while its
+verifier still rejects mixed numeric classes. Conversion between an integer
+and a float, and conversion involving bool, remain L0304.
+
+**The alternatives:** require exact representability, silently produce
+infinity on finite overflow, trap on gradual underflow, expose a NaN payload
+mapping, or fold module conversions through a host float. Those choices make
+ordinary IEEE narrowing impractical, contradict [0310]'s impossible-conversion
+rule, discard gradual underflow, turn an unspecified IEEE payload into source
+identity, or make cross-target output depend on the compiler host. All were
+declined.
+
+**Pinned by** `runtime/float-width-conversions`,
+`runtime/float-width-conversion-overflow-traps`,
+`negative/float-width-conversion-known-out-of-range`,
+`negative/float-conversion-not-yet-enabled`, and the
+`conversion.float-width` guarantee row.

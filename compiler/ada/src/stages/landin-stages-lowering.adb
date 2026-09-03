@@ -5448,7 +5448,7 @@ package body Landin.Stages.Lowering is
                    (Types.all,
                     Syn.Name
                       (Of_Tree, Syn.Callee_Of (Of_Tree, Node)))
-                       in Ty.Integer_Name
+                       in Ty.Numeric_Name
                then
                   declare
                      Value : constant IR.Value_Id := Lower_Expression
@@ -5456,7 +5456,7 @@ package body Landin.Stages.Lowering is
                   begin
                      return IR.Emit_Conversion
                        (Unit.all, Filling, Value,
-                        Ty.Integer_Name
+                        Ty.Numeric_Name
                           (Landin.Checking.Named
                              (Types.all,
                               Syn.Name
@@ -11160,15 +11160,46 @@ package body Landin.Stages.Lowering is
                     and then Syn.Kind
                       (Of_Tree, Syn.Callee_Of (Of_Tree, Node))
                         = Syn.Name_Reference
-                    and then Landin.Checking.Named
-                      (Types.all,
-                       Syn.Name
-                         (Of_Tree, Syn.Callee_Of (Of_Tree, Node)))
-                           in Ty.Integer_Name
                   then
-                     Fold_Constant
-                       (Of_Tree, Syn.Nth_Argument (Of_Tree, Node, 1),
-                        Value, Known);
+                     declare
+                        Target : constant Ty.Type_Kind :=
+                          Landin.Checking.Named
+                            (Types.all,
+                             Syn.Name
+                               (Of_Tree, Syn.Callee_Of (Of_Tree, Node)));
+                     begin
+                        if Target in Ty.Integer_Name then
+                           Fold_Constant
+                             (Of_Tree,
+                              Syn.Nth_Argument (Of_Tree, Node, 1),
+                              Value, Known);
+                        elsif Target in Ty.Float_Name then
+                           declare
+                              Operand : constant Syn.Node_Id :=
+                                Syn.Nth_Argument (Of_Tree, Node, 1);
+                              Converted : Ty.Magnitude;
+                              Overflowed : Boolean;
+                           begin
+                              Fold_Constant
+                                (Of_Tree, Operand, Value, Known);
+                              if Known then
+                                 Ty.Convert_Float_Width
+                                   (Ty.Magnitude (Value),
+                                    Ty.Float_Name
+                                      (Landin.Checking.Type_Of
+                                         (Types.all, Of_Tree, Operand)),
+                                    Ty.Float_Name (Target), Converted,
+                                    Overflowed);
+                                 if Overflowed then
+                                    raise Landin.Compiler_Defect with
+                                      "an overflowing float conversion"
+                                      & " passed checking";
+                                 end if;
+                                 Value := Ty.Folded (Converted);
+                              end if;
+                           end;
+                        end if;
+                     end;
                   end if;
 
                when Syn.Name_Reference =>

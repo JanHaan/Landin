@@ -277,6 +277,17 @@ package Landin.Types is
       Bits       : out Magnitude;
       Overflowed : out Boolean);
 
+   --  Convert one IEEE carrier between the two enabled widths without using
+   --  the compiler host's floating-point arithmetic.  A finite f64 value
+   --  which rounds beyond f32's finite range is the one overflow outcome;
+   --  infinities and NaNs remain members of both float types.
+   procedure Convert_Float_Width
+     (Bits       : Magnitude;
+      From       : Float_Name;
+      Into       : Float_Name;
+      Result     : out Magnitude;
+      Overflowed : out Boolean);
+
    --  [0240]'s two type-qualified IEEE values.  A quiet NaN has one
    --  canonical payload in each enabled width; unary minus below changes
    --  only its sign bit.

@@ -444,6 +444,149 @@ package body Landin.Types is
          Overflowed := True;
    end Evaluate_Float;
 
+   -------------------------
+   --  Convert_Float_Width  --
+   -------------------------
+
+   procedure Convert_Float_Width
+     (Bits       : Magnitude;
+      From       : Float_Name;
+      Into       : Float_Name;
+      Result     : out Magnitude;
+      Overflowed : out Boolean)
+   is
+      function Rounded_Right
+        (Value : Magnitude; Shift : Natural) return Magnitude;
+
+      function Rounded_Right
+        (Value : Magnitude; Shift : Natural) return Magnitude
+      is
+         Divisor  : Magnitude;
+         Quotient : Magnitude;
+         Remainder : Magnitude;
+         Half     : Magnitude;
+      begin
+         if Shift = 0 then
+            return Value;
+         elsif Shift >= 64 then
+            return 0;
+         end if;
+
+         Divisor := 2 ** Shift;
+         Quotient := Value / Divisor;
+         Remainder := Value mod Divisor;
+         Half := Divisor / 2;
+         if Remainder > Half
+           or else (Remainder = Half and then Quotient mod 2 = 1)
+         then
+            return Quotient + 1;
+         end if;
+         return Quotient;
+      end Rounded_Right;
+   begin
+      Overflowed := False;
+      if From = Into then
+         Result := Bits;
+         return;
+      end if;
+
+      if From = F32 then
+         declare
+            Sign     : constant Magnitude := Bits / 2 ** 31;
+            Exponent : constant Natural :=
+              Natural ((Bits / 2 ** 23) mod 2 ** 8);
+            Fraction : constant Magnitude := Bits mod 2 ** 23;
+            Sign_Bits : constant Magnitude := Sign * 2 ** 63;
+         begin
+            if Exponent = 255 then
+               Result := Sign_Bits + 16#7FF0_0000_0000_0000#
+                 + Fraction * 2 ** 29;
+            elsif Exponent /= 0 then
+               Result := Sign_Bits
+                 + Magnitude (Exponent + 896) * 2 ** 52
+                 + Fraction * 2 ** 29;
+            elsif Fraction = 0 then
+               Result := Sign_Bits;
+            else
+               declare
+                  Lead : Natural := 0;
+                  Scan : Magnitude := Fraction;
+               begin
+                  while Scan >= 2 loop
+                     Scan := Scan / 2;
+                     Lead := Lead + 1;
+                  end loop;
+                  Result := Sign_Bits
+                    + Magnitude (Integer (Lead) - 149 + 1023) * 2 ** 52
+                    + (Fraction - 2 ** Lead) * 2 ** (52 - Lead);
+               end;
+            end if;
+         end;
+         return;
+      end if;
+
+      declare
+         Sign     : constant Magnitude := Bits / 2 ** 63;
+         Exponent : constant Natural :=
+           Natural ((Bits / 2 ** 52) mod 2 ** 11);
+         Fraction : constant Magnitude := Bits mod 2 ** 52;
+         Sign_Bits : constant Magnitude := Sign * 2 ** 31;
+      begin
+         if Exponent = 2 ** 11 - 1 then
+            if Fraction = 0 then
+               Result := Sign_Bits + 16#7F80_0000#;
+            else
+               declare
+                  Payload : Magnitude := Fraction / 2 ** 29;
+               begin
+                  --  IEEE conversion quiets a signalling payload.  Retain
+                  --  its high bits while ensuring the result remains NaN.
+                  if Payload < 2 ** 22 then
+                     Payload := Payload + 2 ** 22;
+                  end if;
+                  Result := Sign_Bits + 16#7F80_0000# + Payload;
+               end;
+            end if;
+            return;
+         elsif Exponent = 0 then
+            --  Every binary64 subnormal is below half of binary32's least
+            --  subnormal, so nearest-even conversion produces signed zero.
+            Result := Sign_Bits;
+            return;
+         end if;
+
+         declare
+            Unbiased : Integer := Integer (Exponent) - 1023;
+            Significant : constant Magnitude := 2 ** 52 + Fraction;
+            Rounded : Magnitude;
+         begin
+            if Unbiased > 127 then
+               Result := 0;
+               Overflowed := True;
+               return;
+            elsif Unbiased >= -126 then
+               Rounded := Rounded_Right (Significant, 29);
+               if Rounded = 2 ** 24 then
+                  Rounded := 2 ** 23;
+                  Unbiased := Unbiased + 1;
+               end if;
+               if Unbiased > 127 then
+                  Result := 0;
+                  Overflowed := True;
+                  return;
+               end if;
+               Result := Sign_Bits
+                 + Magnitude (Unbiased + 127) * 2 ** 23
+                 + Rounded - 2 ** 23;
+            else
+               Rounded := Rounded_Right
+                 (Significant, Natural (-Unbiased - 97));
+               Result := Sign_Bits + Rounded;
+            end if;
+         end;
+      end;
+   end Convert_Float_Width;
+
    ------------------------
    --  Float_Special_Bits  --
    ------------------------
