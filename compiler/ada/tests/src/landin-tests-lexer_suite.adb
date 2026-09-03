@@ -533,7 +533,6 @@ package body Landin.Tests.Lexer_Suite is
       Note ("0..<9");                              --  Dot_Dot_Less
       Note ("try f() ...");                        --  Dot_Dot_Dot
       Note ("xs[0]");                              --  the brackets
-      Note ("x += 1");                             --  Compound_Assign
       Note ("r: f32 = 0x1.0p0");                  --  Hex_Float_Literal
 
       for Kind in Landin.Tokens.Deferred_Kind loop

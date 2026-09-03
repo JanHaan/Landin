@@ -61,7 +61,6 @@ package body Landin.Tokens is
 
    function Construct (Of_Kind : Described_Kind) return Construct_Reference is
      (case Of_Kind is
-         when Compound_Assign   => "[0390]",   --  x += 1 says x = x + 1
          when Character_Literal => "[0250]",
          when Hex_Float_Literal => "[0230]",
          when Raw_Literal       => "[0280]",
@@ -78,6 +77,9 @@ package body Landin.Tokens is
 
    function Digit_Span (Item : Token) return Landin.Source.Span
      is (Item.Digit_Run);
+
+   function Assignment_Operation (Item : Token) return Assignment_Operator
+     is (Item.Assignment);
 
    function Kind (Item : Fault) return Fault_Kind is (Item.Kind);
 

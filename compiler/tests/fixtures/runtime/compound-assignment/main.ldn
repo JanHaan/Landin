@@ -1,0 +1,73 @@
+cell: type = struct
+    value: i32
+end cell
+
+mut aggregate_cells: [2]cell = zeroed
+
+next: (inout count: usize) -> (index: usize) =
+    index = count
+    count = count + 1
+end next
+
+amount_after_destination: (count: usize) -> (amount: i32) =
+    if count == 1 then
+        amount = 1
+    else
+        amount = 100
+    end if
+end amount_after_destination
+
+public main: () -> (code: i32) =
+    mut number: i32 = 20
+    number += 5
+    number -= 3
+    number *= 4
+    number /= 8
+    number %= 6
+    number &= 7
+    number |= 8
+    number ^= 1
+    number <<= 2
+    number >>= 1
+
+    mut wrapped: u8 = 250
+    wrapped +%= 10
+    wrapped -%= 5
+    wrapped *%= 2
+
+    mut real: f64 = 8.0
+    real += 2.0
+    real -= 1.0
+    real *= 0.5
+    real /= 1.5
+
+    mut count: usize = 0
+    mut cells: [2]i32 = [10, 20]
+    cells[next(count)] += amount_after_destination(count)
+
+    mut aggregate_count: usize = 0
+    aggregate_cells[0].value = 30
+    aggregate_cells[next(aggregate_count)].value +=
+      amount_after_destination(aggregate_count)
+
+    mut pointee: i32 = 6
+    pointer := addr pointee
+    pointer.val *= 7
+
+    mut branched: i32 = 4
+    branched += if true then
+        5
+    else
+        100
+    end if
+
+    if number == 24 and wrapped == 254 and real == 3.0
+      and count == 1 and cells[0] == 11
+      and cells[1] == 20 and pointee == 42
+      and aggregate_count == 1 and aggregate_cells[0].value == 31
+      and branched == 9 then
+        code = 42
+    else
+        code = 1
+    end if
+end main

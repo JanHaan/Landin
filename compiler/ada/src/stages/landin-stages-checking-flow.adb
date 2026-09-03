@@ -12,6 +12,7 @@ with Landin.Resolution;
 with Landin.Source.Names;
 with Landin.Source;
 with Landin.Syntax.Forest;
+with Landin.Tokens;
 with Landin.Types;
 
 package body Landin.Stages.Checking.Flow is
@@ -27,6 +28,7 @@ package body Landin.Stages.Checking.Flow is
    use type Landin.Provenance.Declaration_Id;
    use type Landin.Syntax.Node_Id;
    use type Landin.Syntax.Node_Kind;
+   use type Landin.Tokens.Assignment_Operator;
    use type Landin.Types.Type_Kind;
    use type Landin.Types.Magnitude;
    use type Landin.Checking.Element_Count;
@@ -2592,8 +2594,18 @@ package body Landin.Stages.Checking.Flow is
                              Syn.Target_Of (Of_Tree, Item);
                            Checked_Index : constant Boolean :=
                              Syn.Kind (Of_Tree, Place) = Syn.Element_Index;
+                           Updating : constant Boolean :=
+                             Syn.Assignment_Operation (Of_Tree, Item)
+                               /= Landin.Tokens.Plain_Assignment;
                         begin
-                           if Checked_Index then
+                           if Updating then
+                              --  [0390]/[0410]: the destination is the left
+                              --  operand as well as the place written, so it
+                              --  must already be assigned and is read before
+                              --  the right-hand side.
+                              Flow_Expression
+                                (Of_Tree, Place, Result, State, Step);
+                           elsif Checked_Index then
                               Flow_Expression
                                 (Of_Tree, Syn.Index_Of (Of_Tree, Place),
                                  Result, State, Step);

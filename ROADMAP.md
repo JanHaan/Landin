@@ -3119,6 +3119,12 @@ shorter quote runs content, escapes remain uninterpreted, and a line-leading
 closer's exact indentation is stripped from nonblank lines. D164 assigns
 malformed UTF-8 or indentation lexical L0323 and shares the pooled datum path
 with ordinary text.
+The eleventh increment enables [0390]'s thirteen compound assignments over
+scalar places. Each evaluates and retains its destination once, reads the old
+value before evaluating the right-hand side, applies the corresponding checked,
+wrapping, shift or bitwise operator, and writes through the ordinary assignment
+permission path. D165 preserves the existing operator diagnostics and traps
+and makes an unassigned destination a read-before-write failure.
 
 Exit evidence: every hosted `[NNNN]` row has implementation and positive or
 negative evidence; no omission is hidden by prototype coverage.
