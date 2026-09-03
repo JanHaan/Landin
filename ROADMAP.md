@@ -3087,7 +3087,13 @@ formation before cleanup. The fifth increment parses the complete `for`
 header and enables ascending half-open and inclusive integer ranges, including
 one-time bound evaluation, immutable element and `usize` index bindings,
 labels, `continue`, natural completion and loop values. D159 keeps this as
-ordinary CFG and reserves collection traversal for the next increment.
+ordinary CFG and reserves collection traversal for the next increment. The
+sixth increment enables traversal of slices and fixed arrays: the source is
+evaluated once, the element is an aliased place in its storage, writable
+through `[]mut T` or an assignable array and read-only otherwise, and the
+index is the hidden counter. D160 records the alias lowering and keeps
+array, slice and `any` elements and iterable-evidence sources as the named
+refusal.
 
 Exit evidence: every hosted `[NNNN]` row has implementation and positive or
 negative evidence; no omission is hidden by prototype coverage.

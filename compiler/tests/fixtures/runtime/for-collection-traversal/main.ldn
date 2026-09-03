@@ -1,0 +1,100 @@
+--  D160: `for item in items` walks a slice or a fixed array.  The element
+--  is a place in the traversed storage: writable through `[]mut T` or a
+--  mutable array, read-only otherwise.  The optional index counts from zero.
+pair: type = struct
+    left: i32
+    right: i32
+end pair
+
+module_words: [4]u32 = [10, 20, 30, 40]
+
+sum_slice: (values: []u32) -> (total: u32) =
+    total = 0
+    for value in values do
+        total = total + value
+    end for
+end sum_slice
+
+double_all: (values: []mut i32) -> none =
+    for value in values do
+        value = value * 2
+    end for
+end double_all
+
+weigh_pairs: (pairs: []mut pair) -> (weight: i32) =
+    weight = 0
+    mut bonus: i32 = 0
+    for item in pairs do
+        item.right = item.left + bonus
+        weight = weight + item.right
+        bonus = bonus + 1
+    end for
+end weigh_pairs
+
+fill: (inout cells: [3]usize, start: usize) -> none =
+    for cell, index in cells do
+        cell = start + index
+    end for
+end fill
+
+public main: () -> (code: i32) =
+    mut numbers: [5]i32 = [1, 2, 3, 4, 5]
+    double_all(numbers[1..<4])
+
+    mut pairs: [3]pair = zeroed
+    pairs[0].left = 5
+    pairs[1].left = 7
+    pairs[2].left = 9
+    weight: i32 = weigh_pairs(pairs[0..<lenof pairs])
+
+    mut cells: [3]usize = zeroed
+    fill(cells, 40)
+
+    mut array_total: i32 = 0
+    for value in numbers do
+        array_total = array_total + value
+    end for
+
+    mut indexed: usize = 0
+    for value, index in cells do
+        if value == 41 then
+            indexed = index
+        end if
+    end for
+
+    mut reached: i32 = 0
+    outer: for left in pairs do
+        for right in numbers do
+            continue outer when left.left == 7
+            reached = reached + right
+            break outer when left.left == 9 and right == 6
+        end for
+    end outer
+
+    selected: i32 = for value in numbers do
+        break with value when value > 5
+    complete
+        break with -1
+    end for
+
+    emptied: i32 = for value in numbers[2..<2] do
+        break with value
+    complete
+        break with 17
+    end for
+
+    if sum_slice(module_words[1..<4]) == 90
+      and numbers[0] == 1 and numbers[1] == 4 and numbers[2] == 6
+      and numbers[3] == 8 and numbers[4] == 5
+      and pairs[0].right == 5 and pairs[1].right == 8
+      and pairs[2].right == 11 and weight == 24
+      and cells[0] == 40 and cells[1] == 41 and cells[2] == 42
+      and array_total == 24 and indexed == 1
+      and reached == 24 + 11
+      and selected == 6 and emptied == 17
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

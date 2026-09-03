@@ -1,0 +1,8 @@
+public main: () -> (code: i32) =
+    values: [2]i32 = [1, 2]
+    view: []i32 = values[0..<2]
+    for item in view do
+        item = 0
+    end for
+    code = 1
+end main

@@ -1,0 +1,6 @@
+class: negative
+summary: an element traversed through a read-only slice is not a writable place
+program: program.ldn
+codes: L0303
+constructs: 0570, 1150, 1160
+targets: linux-x86-64, macos-arm64, synthetic-32

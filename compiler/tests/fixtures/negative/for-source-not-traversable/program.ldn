@@ -1,0 +1,7 @@
+public main: () -> (code: i32) =
+    flag: bool = true
+    for item in flag do
+        _ = item
+    end for
+    code = 1
+end main

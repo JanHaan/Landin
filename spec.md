@@ -423,9 +423,15 @@ empty when its first value is already beyond its last. The element binding is
 an immutable copy with the range's type; an optional index is an immutable
 `usize` beginning at zero. `continue` advances both before the next test, and
 the inclusive form completes at its maximum integer endpoint without first
-overflowing it. Collection traversal has the same parsed form but remains a
-named R4.10 refusal until its element permission and iterable evidence are
-implemented.
+overflowing it. D160 enables collection traversal over a slice or a fixed
+array: the source is evaluated once, the element binding is a place in that
+storage rather than a copy, and the optional index is an immutable `usize`
+beginning at zero. The element is writable over `[]mut T` and over a fixed
+array held in a place the body could assign; over `[]T` and over any other
+array it is read-only [1160]. A body that writes the storage by index observes
+the write through the element, and the reverse. Elements that are themselves
+arrays, slices or `any` values, and sources that would need [1320]'s iterable
+evidence, remain a named R4.10 refusal.
 
 ```landin-grammar
 statement   ::= binding | destructuring_binding | assignment | increment
@@ -8440,7 +8446,7 @@ classified failure boundary before the repository gate can pass.
 | `results.destructure` | static | 0990 | L0200, L0301, L0302 or L0308 | `negative/result-destructure-needs-multiple`, `runtime/r230-composition` |
 | `functions.anonymous` | static | 1010 | L0201 for capture; complete signature checks otherwise apply | `negative/anonymous-function-captures-local`, `runtime/inferred-function-values` |
 | `control.flow` | static | 1050, 1060, 1080, 1090 | L0301 or L0302 at every reachable join and exit | `negative/if-expression-missing-else`, `runtime/control-expression-edges-keep-source-order` |
-| `control.loops` | static | 1130, 1140, 1150, 1170, 1180, 1190 | L0301 for a non-bool condition, mismatched range, or incomplete/inconsistent value exit; L0304 for a deferred traversal source; a taken transfer runs active defers and targets its named or nearest loop edge, while natural completion alone enters `complete` | `negative/loop-condition-not-bool`, `negative/loop-value-missing-break-value`, `negative/loop-value-missing-completion`, `negative/loop-value-type-mismatch`, `negative/for-range-needs-integer`, `negative/for-range-endpoints-disagree`, `negative/for-collection-traversal-deferred`, `runtime/loop-control-flow`, `runtime/loop-values`, `runtime/for-range-traversal` |
+| `control.loops` | static | 1130, 1140, 1150, 1160, 1170, 1180, 1190 | L0301 for a non-bool condition, mismatched range, non-traversable source, or incomplete/inconsistent value exit; L0303 for a write to an element of read-only storage; L0304 for a deferred traversal source or element shape; a taken transfer runs active defers and targets its named or nearest loop edge, while natural completion alone enters `complete` | `negative/loop-condition-not-bool`, `negative/loop-value-missing-break-value`, `negative/loop-value-missing-completion`, `negative/loop-value-type-mismatch`, `negative/for-range-needs-integer`, `negative/for-range-endpoints-disagree`, `negative/for-source-not-traversable`, `negative/for-collection-element-read-only`, `negative/for-collection-traversal-deferred`, `runtime/loop-control-flow`, `runtime/loop-values`, `runtime/for-range-traversal`, `runtime/for-collection-traversal` |
 | `cleanup.defer` | static | 1100 | the registered call is checked at every ordinary and successful-return edge | `negative/defer-read-not-assigned-on-return`, `runtime/defer-cleanups-follow-control-edges` |
 | `cleanup.undo` | static | 1110 | the registered call is checked at every propagated-failure edge | `negative/undo-read-not-assigned-on-failure`, `runtime/undo-cleanups-follow-failure-edges` |
 | `generics.substitution` | static | 1220, 1280, 1290, 1300, 1310, 1350, 1500, 1650, 1660, 1700 | L0300, L0301, L0306, L0307, L0313 or L0318 | `negative/generic-routine-undeduced-formal`, `runtime/generic-structural-deduction`, `runtime/core-vec-pointer-storage` |
@@ -9001,5 +9007,56 @@ the two paths drift. All were declined.
 **Pinned by** `runtime/for-range-traversal`,
 `negative/for-range-needs-integer`,
 `negative/for-range-endpoints-disagree`,
+`negative/for-collection-traversal-deferred`, and the `control.loops`
+guarantee row.
+
+### D160 — Collection traversal aliases one element of the source's storage
+
+**The tour said** that [1150] traverses a collection with the same binding
+shape as a range, and [1160] that the binding carries no marker because the
+type already decided: over `[]mut T` the element is a writable place, over
+`[]T` it is not, and over anything else that satisfies iterable it is a
+copy. It did not say how a fixed array traverses, when the source is
+evaluated, what an index over a collection counts, or whether a read-only
+element is a copy or a place.
+
+**Chosen:** the source is evaluated once, before the first test, to a base
+address and an element count: a slice supplies both, and a fixed array
+supplies the address of its storage and its compile-time length. A hidden
+`usize` counter runs from zero while it is below that count; the optional
+index binding is that counter. Before each body run the element's address is
+formed from the base and the counter, and the element binding is an alias
+through that address for the whole body: reads and writes go through it, so
+a body that writes the storage by index sees the change through the element
+and vice versa. A slice element is writable when the slice is `[]mut T`; a
+fixed array's element is writable when the array itself sits in a place the
+body could assign, which is the same question `items[k] = v` asks of
+`items`. Every other element is a read-only place, refused at a write by
+L0303 with [1160]'s note. An element whose type is a scalar, pointer, atom,
+function or struct is enabled. An array, slice or `any` element, and a source
+that is a struct or `any` value awaiting [1320]'s iterable evidence, keep the
+named R4.10 refusal, L0304.
+
+Lowering keeps this inside the existing alias table that D78's payload
+bindings and [0990]'s named returns already use: the element declaration
+maps to a runtime-address alias whose slot is refreshed in the loop body's
+first block. Scalar reads and writes of the element load and store through
+that address; struct elements reach their fields through the same rooted
+storage a slice index produces. No new IR opcode, slot kind or verifier rule
+was added. Origin analysis gives the element the source's facts, so a
+reference read out of an element derives from wherever the storage came
+from. Definite assignment treats every part of a struct element as assigned
+on entry to the body, as it does a copied struct.
+
+**The alternatives:** copy each element into a local and write it back
+after the body, which would make `items[k]` and `item` disagree inside one
+iteration and would silently drop a write when the body leaves through
+`break`; hand out a pointer and require `item.val`, which contradicts [1160];
+or desugar the loop into an index loop over source nodes, which invents
+source that was not written. All were declined.
+
+**Pinned by** `runtime/for-collection-traversal`,
+`negative/for-collection-element-read-only`,
+`negative/for-source-not-traversable`,
 `negative/for-collection-traversal-deferred`, and the `control.loops`
 guarantee row.

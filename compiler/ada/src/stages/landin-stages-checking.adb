@@ -605,6 +605,48 @@ package body Landin.Stages.Checking is
 
       Loop_Values : Loop_Value_Vectors.Vector;
 
+      --  D160: a collection traversal's element binding is a place in the
+      --  traversed storage rather than a copy, and whether it may be
+      --  written is decided by that storage's permission when the loop is
+      --  checked.  The binding node carries no `mut` [1160], so the
+      --  answer lives here for Check_Place and Place_Is_Mutable to read.
+      type Traversal_Element_Entry is record
+         Id       : Res.Declaration_Id := Res.No_Declaration;
+         Writable : Boolean := False;
+      end record;
+
+      package Traversal_Element_Vectors is new Ada.Containers.Vectors
+        (Index_Type => Positive, Element_Type => Traversal_Element_Entry);
+
+      Traversal_Elements : Traversal_Element_Vectors.Vector;
+
+      function Is_Traversal_Element (Id : Res.Declaration_Id) return Boolean;
+      function Traversal_Element_Is_Writable
+        (Id : Res.Declaration_Id) return Boolean;
+
+      function Is_Traversal_Element (Id : Res.Declaration_Id) return Boolean
+      is
+      begin
+         for Item of Traversal_Elements loop
+            if Item.Id = Id then
+               return True;
+            end if;
+         end loop;
+         return False;
+      end Is_Traversal_Element;
+
+      function Traversal_Element_Is_Writable
+        (Id : Res.Declaration_Id) return Boolean
+      is
+      begin
+         for Item of Traversal_Elements loop
+            if Item.Id = Id then
+               return Item.Writable;
+            end if;
+         end loop;
+         return False;
+      end Traversal_Element_Is_Writable;
+
       function Target_Loop_Value
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Loop_Value_Entry;
 
@@ -12083,7 +12125,8 @@ package body Landin.Stages.Checking is
                when Res.Pattern_Binding =>
                   return Syn.Is_Mutable (Their_Tree.all, Their_Node);
                when Res.Module_Binding | Res.Local_Binding =>
-                  return Syn.Is_Mutable (Their_Tree.all, Their_Node);
+                  return Syn.Is_Mutable (Their_Tree.all, Their_Node)
+                    or else Traversal_Element_Is_Writable (Means);
                when others =>
                   return False;
             end case;
@@ -13866,7 +13909,8 @@ package body Landin.Stages.Checking is
                      Syn.Is_Mutable (Their_Tree.all, Their_Node),
                   when Res.Result_Binding => False,
                   when Res.Module_Binding | Res.Local_Binding =>
-                     Syn.Is_Mutable (Their_Tree.all, Their_Node));
+                     Syn.Is_Mutable (Their_Tree.all, Their_Node)
+                       or else Traversal_Element_Is_Writable (Means));
 
             if not Writable then
                Bad.Report
@@ -13883,10 +13927,22 @@ package body Landin.Stages.Checking is
                              "names a function, which is not a place",
                           when Res.Module_Atom =>
                              "names an atom identity, which is not a place",
+                          when Res.Local_Binding =>
+                             (if Is_Traversal_Element (Means)
+                              then "is an element of read-only storage,"
+                                   & " so it may not be written"
+                              else "is not mutable, so it may not be"
+                                   & " written"),
                           when others =>
                              "is not mutable, so it may not be written"),
-                  Note    => "[1900]: a mutable binding and a named return"
-                             & " may be written, and nothing else may",
+                  Note    =>
+                    (if Sort = Res.Local_Binding
+                       and then Is_Traversal_Element (Means)
+                     then "[1160]: over `[]mut T` or mutable array storage"
+                          & " an element is a writable place, and over"
+                          & " anything else it is not"
+                     else "[1900]: a mutable binding and a named return"
+                          & " may be written, and nothing else may"),
                   Related => Landin.Provenance.Origin'
                                (Source => Res.Source_Of
                                             (Meanings.all, Means),
@@ -16199,6 +16255,125 @@ package body Landin.Stages.Checking is
                Landin.Checking.Settle (Types.all, Id, Kind);
             end if;
          end Set_Traversal_Binding;
+
+         --  D160: the source is a slice or a fixed array, the element is
+         --  a place of the source's element type, and the index is a
+         --  `usize`.  A slice writes through its own permission; an array
+         --  writes when the place holding it does.  Element shapes the
+         --  alias lowering cannot yet carry, and sources that would need
+         --  [1320]'s iterable evidence, keep the named R4.10 refusal.
+         procedure Check_Collection_Traversal
+           (Of_Tree : Syn.Tree;
+            Node    : Syn.Node_Id;
+            Source  : Syn.Node_Id;
+            Element : Syn.Node_Id;
+            Index   : Syn.Node_Id);
+
+         procedure Check_Collection_Traversal
+           (Of_Tree : Syn.Tree;
+            Node    : Syn.Node_Id;
+            Source  : Syn.Node_Id;
+            Element : Syn.Node_Id;
+            Index   : Syn.Node_Id)
+         is
+            Held : constant Ty.Type_Kind := Indexed_From (Of_Tree, Source);
+            Kind : Ty.Type_Kind := Ty.Ill_Typed;
+            Writable : Boolean := False;
+            Descriptor : Landin.Checking.Reference_Descriptor;
+            Nominal : Landin.Checking.Nominal_Type_Id :=
+              Landin.Checking.No_Nominal_Type;
+            Id : constant Res.Declaration_Id :=
+              Declaration_At (Syn.Source_Of (Of_Tree), Element);
+         begin
+            if Held = Ty.Slice_Value then
+               Descriptor := Landin.Checking.Descriptor_Of
+                 (Types.all,
+                  Landin.Checking.Reference_Of (Types.all, Of_Tree, Source));
+               Kind := Descriptor.Referent;
+               Writable := Descriptor.Mutable;
+               if Kind = Ty.Aggregate then
+                  Nominal := Descriptor.Nominal;
+               end if;
+            elsif Held = Ty.Fixed_Array then
+               Nominal := Landin.Checking.Array_Element_Nominal
+                 (Types.all, Of_Tree, Source);
+               Kind :=
+                 (if Nominal /= Landin.Checking.No_Nominal_Type
+                  then Ty.Aggregate
+                  else Landin.Checking.Array_Element
+                    (Types.all, Of_Tree, Source));
+               Writable := Place_Is_Mutable (Of_Tree, Source);
+            elsif Held in Ty.Aggregate | Ty.Any_Value then
+               Bad.Report
+                 (Item    => Bad.Unsupported_Use,
+                  Source  => Syn.Source_Of (Of_Tree),
+                  Where   => Syn.Where (Of_Tree, Source),
+                  Message => "traversal through iterable evidence is not"
+                             & " enabled yet",
+                  Refused => Bad.Collection_Traversal,
+                  Into    => Found);
+               Landin.Checking.Refuse (Types.all, Of_Tree, Source);
+            elsif Decidable (Held) then
+               Bad.Report
+                 (Item    => Bad.Type_Mismatch,
+                  Source  => Syn.Source_Of (Of_Tree),
+                  Where   => Syn.Where (Of_Tree, Source),
+                  Message => "this traverses " & Shown (Held)
+                             & ", and a traversal source is a slice, a"
+                             & " fixed array or an integer range",
+                  Note    => "[1150]: `for item in items` walks the"
+                             & " elements of `items`",
+                  Related => Syn.Origin (Of_Tree, Node),
+                  Because => "this for loop",
+                  Into    => Found);
+               Landin.Checking.Refuse (Types.all, Of_Tree, Source);
+            end if;
+
+            if Kind in Ty.Fixed_Array | Ty.Slice_Value | Ty.Any_Value then
+               Bad.Report
+                 (Item    => Bad.Unsupported_Use,
+                  Source  => Syn.Source_Of (Of_Tree),
+                  Where   => Syn.Where (Of_Tree, Source),
+                  Message => "traversal of " & Shown (Kind)
+                             & " elements is not enabled yet",
+                  Refused => Bad.Collection_Traversal,
+                  Into    => Found);
+               Landin.Checking.Refuse (Types.all, Of_Tree, Source);
+               Kind := Ty.Ill_Typed;
+            end if;
+
+            if Id /= Res.No_Declaration
+              and then Landin.Checking.State_Of (Types.all, Id)
+                         = Landin.Checking.Untouched
+            then
+               Landin.Checking.Begin_Inference (Types.all, Id);
+               Landin.Checking.Settle (Types.all, Id, Kind);
+               case Kind is
+                  when Ty.Aggregate =>
+                     Landin.Checking.Note_Nominal (Types.all, Id, Nominal);
+                  when Ty.Pointer_Value =>
+                     Landin.Checking.Note_Reference
+                       (Types.all, Id, Descriptor.Reference);
+                  when Ty.Atom_Value =>
+                     Landin.Checking.Note_Atom_Set
+                       (Types.all, Id, Descriptor.Atoms);
+                  when Ty.Function_Value =>
+                     Landin.Checking.Note_Signature
+                       (Types.all, Id, Descriptor.Signature);
+                  when others =>
+                     null;
+               end case;
+               Traversal_Elements.Append
+                 (Traversal_Element_Entry'
+                    (Id => Id, Writable => Writable and Kind /= Ty.Ill_Typed));
+            end if;
+
+            if Index /= Syn.No_Node then
+               Set_Traversal_Binding
+                 (Index,
+                  (if Kind = Ty.Ill_Typed then Ty.Ill_Typed else Ty.Usize));
+            end if;
+         end Check_Collection_Traversal;
       begin
          if Syn.Kind (Of_Tree, Node) = Syn.While_Statement then
             Require
@@ -16217,13 +16392,8 @@ package body Landin.Stages.Checking is
                Range_Type : Ty.Type_Kind := Ty.Ill_Typed;
             begin
                if Upper = Syn.No_Node then
-                  Bad.Report
-                    (Item    => Bad.Unsupported_Use,
-                     Source  => Syn.Source_Of (Of_Tree),
-                     Where   => Syn.Where (Of_Tree, Lower),
-                     Message => "collection traversal is not enabled yet",
-                     Refused => Bad.Collection_Traversal,
-                     Into    => Found);
+                  Check_Collection_Traversal
+                    (Of_Tree, Node, Lower, Element, Index);
                else
                   Range_Type := Synthesise (Of_Tree, Lower);
                   if Range_Type = Ty.Untyped_Integer then
@@ -16252,12 +16422,14 @@ package body Landin.Stages.Checking is
                   end if;
                end if;
 
-               Set_Traversal_Binding (Element, Range_Type);
-               if Index /= Syn.No_Node then
-                  Set_Traversal_Binding
-                    (Index,
-                     (if Range_Type = Ty.Ill_Typed
-                      then Ty.Ill_Typed else Ty.Usize));
+               if Upper /= Syn.No_Node then
+                  Set_Traversal_Binding (Element, Range_Type);
+                  if Index /= Syn.No_Node then
+                     Set_Traversal_Binding
+                       (Index,
+                        (if Range_Type = Ty.Ill_Typed
+                         then Ty.Ill_Typed else Ty.Usize));
+                  end if;
                end if;
             end;
          end if;

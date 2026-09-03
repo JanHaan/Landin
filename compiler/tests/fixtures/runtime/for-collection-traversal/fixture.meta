@@ -1,0 +1,6 @@
+class: runtime
+summary: collection traversal walks slices and fixed arrays through element places that write back through mutable storage, with indices, labels, completion, and produced values
+program: main.ldn
+status: 42
+constructs: 0520, 0570, 0670, 1150, 1160, 1170, 1180, 1190, 1810
+targets: linux-x86-64
