@@ -444,6 +444,26 @@ package body Landin.Types is
          Overflowed := True;
    end Evaluate_Float;
 
+   ------------------------
+   --  Float_Special_Bits  --
+   ------------------------
+
+   function Float_Special_Bits
+     (Item : Float_Name; Special : Float_Special) return Magnitude
+   is
+   begin
+      return
+        (case Item is
+            when F32 =>
+              (case Special is
+                  when Infinity => 16#7F80_0000#,
+                  when Quiet_NaN => 16#7FC0_0000#),
+            when F64 =>
+              (case Special is
+                  when Infinity => 16#7FF0_0000_0000_0000#,
+                  when Quiet_NaN => 16#7FF8_0000_0000_0000#));
+   end Float_Special_Bits;
+
    -------------------
    --  Negated_Float  --
    -------------------

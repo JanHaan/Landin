@@ -479,6 +479,8 @@ package body Landin.Stages.Checking is
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
          Wanted  : Ty.Scalar_Name);
+      function Float_Special_Type
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind;
       function Character_Value
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Magnitude;
       procedure Commit_To
@@ -7782,6 +7784,34 @@ package body Landin.Stages.Checking is
          end if;
       end Check_Float_Literal;
 
+      function Float_Special_Type
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind
+      is
+      begin
+         if Syn.Kind (Of_Tree, Node) /= Syn.Member_Selection
+           or else Syn.Kind
+             (Of_Tree, Syn.Target_Of (Of_Tree, Node)) /= Syn.Type_Name
+           or else Spelled (Syn.Name (Of_Tree, Node))
+             not in "infinity" | "nan"
+         then
+            return Ty.Undecided;
+         end if;
+
+         declare
+            Root : constant String :=
+              Spelled
+                (Syn.Name
+                   (Of_Tree, Syn.Target_Of (Of_Tree, Node)));
+         begin
+            for Item in Ty.Float_Name loop
+               if Root = Ty.Spelling (Item) then
+                  return Item;
+               end if;
+            end loop;
+         end;
+         return Ty.Undecided;
+      end Float_Special_Type;
+
       function Character_Value
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Magnitude
       is
@@ -13356,6 +13386,38 @@ package body Landin.Stages.Checking is
                end;
 
             when Syn.Member_Selection =>
+               declare
+                  Special : constant Ty.Type_Kind :=
+                    Float_Special_Type (Of_Tree, Node);
+               begin
+                  if Special in Ty.Float_Name then
+                     return Kept (Special);
+                  end if;
+               end;
+
+               if Syn.Kind
+                 (Of_Tree, Syn.Target_Of (Of_Tree, Node)) = Syn.Type_Name
+               then
+                  declare
+                     From : constant Syn.Node_Id :=
+                       Syn.Target_Of (Of_Tree, Node);
+                     Held : constant Ty.Type_Kind := Type_At (Of_Tree, From);
+                  begin
+                     Bad.Report
+                       (Item    => Bad.Type_Mismatch,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Anchor (Of_Tree, Node),
+                        Message => Shown (Held) & " has no named value `"
+                                   & Spelled (Syn.Name (Of_Tree, Node)) & "`",
+                        Note    => "[0240]: f32 and f64 name only"
+                                   & " `infinity` and `nan`",
+                        Related => Syn.Origin (Of_Tree, From),
+                        Because => "the type selected here",
+                        Into    => Found);
+                     return Kept (Ty.Ill_Typed);
+                  end;
+               end if;
+
                if Res.Verdict_Of (Meanings.all, Of_Tree, Node) = Res.Bound
                then
                   return Bound_Value;
@@ -14259,6 +14321,13 @@ package body Landin.Stages.Checking is
                   when others               => ""));
       begin
          if Where = Syn.No_Node then
+            return;
+         end if;
+
+         --  [0240]'s IEEE names are constants selected from a type, not
+         --  fields read from runtime storage.  Their qualified spelling is
+         --  therefore a scalar static-image leaf just as a float literal is.
+         if Float_Special_Type (Of_Tree, Where) in Ty.Float_Name then
             return;
          end if;
 
@@ -19319,6 +19388,17 @@ package body Landin.Stages.Checking is
                return;
             end if;
 
+            --  A type-qualified name is checked as an inherent scalar value
+            --  later in this pass.  It does not select module storage, and
+            --  leaving even an unknown member to the ordinary type check
+            --  gives the source its precise L0301 report.
+            if Syn.Kind (Of_Tree, Where) = Syn.Member_Selection
+              and then Syn.Kind
+                (Of_Tree, Syn.Target_Of (Of_Tree, Where)) = Syn.Type_Name
+            then
+               return;
+            end if;
+
             declare
                What : constant String :=
                  (case Syn.Kind (Of_Tree, Where) is
@@ -21659,11 +21739,18 @@ package body Landin.Stages.Checking is
                  (Syn.Kind (Of_Tree, Each)
                     in Syn.Integer_Literal | Syn.Float_Literal
                        | Syn.Character_Literal
+                  or else Float_Special_Type (Of_Tree, Each)
+                            in Ty.Float_Name
                   or else
                     (Syn.Kind (Of_Tree, Each) = Syn.Negation
                      and then Syn.Kind
                        (Of_Tree, Syn.Operand_Of (Of_Tree, Each))
-                         in Syn.Integer_Literal | Syn.Float_Literal))
+                         in Syn.Integer_Literal | Syn.Float_Literal)
+                  or else
+                    (Syn.Kind (Of_Tree, Each) = Syn.Negation
+                     and then Float_Special_Type
+                       (Of_Tree, Syn.Operand_Of (Of_Tree, Each))
+                         in Ty.Float_Name))
               and then Landin.Checking.Type_Of
                          (Types.all, Of_Tree, Each) /= Ty.Ill_Typed
             then
@@ -22118,11 +22205,17 @@ package body Landin.Stages.Checking is
 
          if Wanted in Ty.Float_Name then
             if Syn.Kind (Of_Tree, Value) in Syn.Float_Literal
+              or else Float_Special_Type (Of_Tree, Value) in Ty.Float_Name
               or else
                 (Syn.Kind (Of_Tree, Value) = Syn.Negation
                  and then Syn.Kind
                    (Of_Tree, Syn.Operand_Of (Of_Tree, Value))
                      = Syn.Float_Literal)
+              or else
+                (Syn.Kind (Of_Tree, Value) = Syn.Negation
+                 and then Float_Special_Type
+                   (Of_Tree, Syn.Operand_Of (Of_Tree, Value))
+                     in Ty.Float_Name)
               or else Syn.Kind (Of_Tree, Value) = Syn.Zeroed_Literal
             then
                return;

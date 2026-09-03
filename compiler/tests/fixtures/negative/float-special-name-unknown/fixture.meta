@@ -1,0 +1,6 @@
+class: negative
+summary: float type qualification names only infinity and nan
+constructs: 0210, 0240, 1880
+program: program.ldn
+codes: L0301
+targets: linux-x86-64, macos-arm64

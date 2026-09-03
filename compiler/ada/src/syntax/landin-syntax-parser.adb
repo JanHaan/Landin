@@ -6105,20 +6105,39 @@ package body Landin.Syntax.Parser is
                         end;
                      end if;
 
-                     --  A selected function field is still a runtime value.
-                     --  Parentheses after the complete selection call that
-                     --  value; construction remains the direct-name branch
-                     --  above because a field cannot name a type.
                      declare
-                        Selected : constant Node_Id :=
-                          Parse_Selectors
-                            (Add
-                               (Name_Reference, At_Item, Named => Named));
+                        Root : Node_Id := No_Node;
                      begin
-                        if Peek = Tok.Left_Paren then
-                           return Parse_Call (Selected, At_Item);
+                        --  [0420] includes a named value selected from a
+                        --  scalar type.  In every other expression position
+                        --  a scalar spelling remains an ordinary name; the
+                        --  dot is what makes this a type-qualified root.
+                        if Peek = Tok.Dot then
+                           for Item in Scalar_Name loop
+                              if Scalar_Id (Item) = Named then
+                                 Root := Add
+                                   (Type_Name, At_Item, Named => Named);
+                              end if;
+                           end loop;
                         end if;
-                        return Selected;
+                        if Root = No_Node then
+                           Root := Add
+                             (Name_Reference, At_Item, Named => Named);
+                        end if;
+
+                        --  A selected function field is still a runtime
+                        --  value. Parentheses after the complete selection
+                        --  call it; construction remains the direct-name
+                        --  branch above because a field cannot name a type.
+                        declare
+                           Selected : constant Node_Id :=
+                             Parse_Selectors (Root);
+                        begin
+                           if Peek = Tok.Left_Paren then
+                              return Parse_Call (Selected, At_Item);
+                           end if;
+                           return Selected;
+                        end;
                      end;
                   end;
                end if;
