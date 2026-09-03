@@ -3103,7 +3103,7 @@ giving malformed spelling lexical L0320.
 The eighth increment enables contextual and default-f32 decimal literals for
 f32 and f64, their storage and internal call carriers, IEEE runtime `+`, `-`,
 `*`, `/`, unary minus and comparisons, including signed zero, infinities and
-unordered NaN comparisons. D162 keeps f16 and named special literals, scalar
+unordered NaN comparisons. D162 keeps f16 and named special values, scalar
 conversions, module float arithmetic and the floating-point C ABI as explicit
 later boundaries, leaves hexadecimal spelling to the twelfth increment, and
 gives malformed exponents lexical L0321.
@@ -3131,6 +3131,13 @@ bits without host floating-point arithmetic, preserves exact normal and
 subnormal values, rounds other values to nearest with ties to even, and removes
 the scanner's final deferred-token family. Malformed exponents remain L0321 and
 a finite spelling that becomes infinity remains L0300.
+The thirteenth increment enables [0240]'s `f32.infinity`, `f64.infinity`,
+`f32.nan` and `f64.nan` as inherently typed IEEE constants. D167 chooses one
+canonical quiet NaN pattern per width, makes unary minus flip only the sign
+bit, admits the names throughout scalar and aggregate module images, and gives
+unknown type-qualified members or a contextual width mismatch L0301. f16,
+explicit integer/float conversions, module float arithmetic and the external
+float ABI remain later boundaries.
 
 Exit evidence: every hosted `[NNNN]` row has implementation and positive or
 negative evidence; no omission is hidden by prototype coverage.

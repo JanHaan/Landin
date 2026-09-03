@@ -1,0 +1,6 @@
+class: negative
+summary: a named IEEE special has the type named by its qualifier rather than a contextual float type
+constructs: 0210, 0240, 1880
+program: program.ldn
+codes: L0301
+targets: linux-x86-64, macos-arm64

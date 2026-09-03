@@ -130,6 +130,8 @@ package body Landin.Stages.Lowering is
 
       Meanings : constant not null access Res.Table :=
         Landin.Stages.Meanings (Context);
+      Spellings : constant not null access Landin.Source.Names.Table :=
+        Landin.Stages.Identities (Context);
       Types : constant not null access Landin.Checking.Table :=
         Landin.Stages.Types (Context);
       Unit : constant not null access IR.Unit :=
@@ -657,6 +659,25 @@ package body Landin.Stages.Lowering is
       function Type_At (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
         return Ty.Type_Kind
         is (Landin.Checking.Type_Of (Types.all, Of_Tree, Node));
+
+      function Is_Float_Special
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
+        is (Syn.Kind (Of_Tree, Node) = Syn.Member_Selection
+            and then Syn.Kind
+              (Of_Tree, Syn.Target_Of (Of_Tree, Node)) = Syn.Type_Name
+            and then Type_At (Of_Tree, Node) in Ty.Float_Name
+            and then Landin.Source.Names.Spelling
+              (Spellings.all, Syn.Name (Of_Tree, Node))
+                in "infinity" | "nan");
+
+      function Float_Special_At
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Magnitude
+        is (Ty.Float_Special_Bits
+              (Ty.Float_Name (Type_At (Of_Tree, Node)),
+               (if Landin.Source.Names.Spelling
+                     (Spellings.all, Syn.Name (Of_Tree, Node)) = "infinity"
+                then Ty.Infinity else Ty.Quiet_NaN)))
+        with Pre => Is_Float_Special (Of_Tree, Node);
 
       function Scalar_At (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
         return Ty.Scalar_Name;
@@ -5056,6 +5077,13 @@ package body Landin.Stages.Lowering is
                end;
 
             when Syn.Member_Selection =>
+               if Is_Float_Special (Of_Tree, Node) then
+                  return IR.Emit_Float
+                    (Unit.all, Filling,
+                     Ty.Float_Name (Scalar_At (Of_Tree, Node)),
+                     Float_Special_At (Of_Tree, Node), Site);
+               end if;
+
                --  Resolution binds an imported `module.member` directly to
                --  the public declaration.  Its namespace target is not a
                --  runtime value, so lower the selected declaration exactly
@@ -11138,6 +11166,12 @@ package body Landin.Stages.Lowering is
                            Fold_Scalar_Datum (Means, Value, Known);
                         end if;
                      end;
+                  end if;
+
+               when Syn.Member_Selection =>
+                  if Is_Float_Special (Of_Tree, Node) then
+                     Value := Ty.Folded (Float_Special_At (Of_Tree, Node));
+                     Known := True;
                   end if;
 
                when Syn.Add | Syn.Subtract | Syn.Multiply | Syn.Divide

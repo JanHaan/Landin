@@ -1,0 +1,31 @@
+sample: type = struct
+    wide: f64
+    narrow: f32
+end sample
+
+module_infinity: f64 = f64.infinity
+module_nan: f32 = f32.nan
+module_values: [2]f64 = [f64.infinity, -f64.nan]
+module_sample: sample = sample(wide: -f64.infinity, narrow: f32.nan)
+
+public main: () -> (code: i32) =
+    inferred_infinity := f32.infinity
+    inferred_nan := f64.nan
+    negative_infinity := -f64.infinity
+    negative_nan := -f32.nan
+
+    if module_infinity > 1.0e300
+      and module_nan <> module_nan
+      and module_values[0] > 1.0e300
+      and module_values[1] <> module_values[1]
+      and module_sample.wide < -1.0e300
+      and module_sample.narrow <> module_sample.narrow
+      and inferred_infinity > 1.0e30
+      and inferred_nan <> inferred_nan
+      and negative_infinity < -1.0e300
+      and negative_nan <> negative_nan then
+        code = 42
+    else
+        code = 1
+    end if
+end main
