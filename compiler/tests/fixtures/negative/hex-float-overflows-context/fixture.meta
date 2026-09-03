@@ -1,0 +1,6 @@
+class: negative
+summary: a finite hexadecimal spelling that rounds to infinity is refused in its contextual IEEE width
+constructs: 0170, 0230, 1880
+program: program.ldn
+targets: linux-x86-64, macos-arm64
+codes: L0300

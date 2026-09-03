@@ -313,11 +313,6 @@ package body Landin.Tokens.Lexer is
                Emit
                  ((if Hexadecimal then Hex_Float_Literal else Float_Literal),
                   First, Position - 1);
-               if Hexadecimal then
-                  Complain
-                    (Not_Enabled, First, Position - 1,
-                     Refused => Hex_Float_Literal);
-               end if;
             else
                Emit (Malformed_Float, First, Position - 1);
                Complain
@@ -346,9 +341,8 @@ package body Landin.Tokens.Lexer is
             Position := Position + 1;
          end loop;
 
-         --  A decimal float is enabled as one recognisable token [0210].
-         --  [0230]'s hexadecimal form is likewise kept whole, but retains
-         --  its named R4.10 refusal until exact source conversion lands.
+         --  Decimal and hexadecimal floats are each one recognisable token
+         --  [0210] [0230].
          if (not Prefixed or else Base = Hexadecimal)
            and then Position + 1 <= Last
            and then Text (Position) = '.'
@@ -521,9 +515,6 @@ package body Landin.Tokens.Lexer is
                         First + Fault_Last - 1);
                   end if;
                end;
-            elsif Refused in Deferred_Kind then
-               Complain
-                 (Not_Enabled, First, Position - 1, Refused => Refused);
             end if;
          else
             Complain (Unterminated_Literal, First, Position - 1,
@@ -699,10 +690,6 @@ package body Landin.Tokens.Lexer is
                                   Assignment => Compound_At (First, Length)));
                      else
                         Emit (Kind, First, Position - 1);
-                     end if;
-                     if Kind in Deferred_Kind then
-                        Complain (Not_Enabled, First, Position - 1,
-                                  Refused => Kind);
                      end if;
                   end if;
                end;

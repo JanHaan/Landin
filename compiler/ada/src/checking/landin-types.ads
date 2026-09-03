@@ -43,8 +43,8 @@
 --                     and it is the message that differs.
 --    Untyped_Integer  an integer literal, or a run of operators over
 --                     nothing else, that no context has fixed yet [0190].
---    Untyped_Float    the corresponding state for [0210]'s recognisably
---                     distinct decimal float literal.
+--    Untyped_Float    the corresponding state for [0210]/[0230]'s
+--                     recognisably distinct float literal.
 --
 --  Nothing here reads a tree, a token or a snapshot.  What type each node
 --  has is Landin.Checking's, for the same reason a Declaration_Id lives in
@@ -266,9 +266,11 @@ package Landin.Types is
       Value      : out Magnitude;
       Overflowed : out Boolean);
 
-   --  Decode one scanner-validated decimal spelling into the IEEE pattern
-   --  of its contextual type.  The pattern, rather than a host float, is
-   --  what lowering and static images retain, preserving signed zero.
+   --  Decode one scanner-validated decimal or hexadecimal spelling into the
+   --  IEEE pattern of its contextual type.  Hexadecimal conversion is exact
+   --  integer work, including ties-to-even at the subnormal boundary.  The
+   --  pattern, rather than a host float, is what lowering and static images
+   --  retain, preserving signed zero.
    procedure Evaluate_Float
      (Text       : String;
       Item       : Float_Name;

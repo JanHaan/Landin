@@ -7775,8 +7775,9 @@ package body Landin.Stages.Checking is
                Where   => Syn.Where (Of_Tree, Node),
                Message => "no " & Shown (Wanted) & " holds this finite"
                           & " literal",
-               Note    => "D162: decimal literals round to their contextual"
-                          & " IEEE type, but may not overflow to infinity",
+               Note    => "D162/D166: finite literals round to their"
+                          & " contextual IEEE type, but may not overflow"
+                          & " to infinity",
                Into    => Found);
          end if;
       end Check_Float_Literal;

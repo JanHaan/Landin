@@ -131,18 +131,17 @@ package body Landin.Tests.Catalogue_Suite is
       Sources : Landin.Source.Sets.Source_Set;
       Report  : Landin.Diagnostics.Diagnostic_List;
    begin
-      --  A hexadecimal float is refused by [1830], and the span is the
-      --  whole lexeme
-      --  rather than the dot inside it.
-      Lex_And_Report ("r: f64 = 0x1.0p0", Sources, Report);
+      --  A malformed hexadecimal exponent is one fault over the whole
+      --  lexeme rather than a fault at only its trailing sign.
+      Lex_And_Report ("r: f64 = 0x1.0p+", Sources, Report);
 
       Landin.Testing.Check_Equal
         (Item, Landin.Diagnostics.Count (Report), 1, "one diagnostic");
       Landin.Testing.Check_Equal
         (Item,
          Landin.Diagnostics.Code (Landin.Diagnostics.Get (Report, 1)),
-         Rows.Code (Rows.Construct_Not_Enabled),
-         "the refusal carries the catalogue's code");
+         Rows.Code (Rows.Malformed_Float_Literal),
+         "the malformed exponent carries the catalogue's code");
       Landin.Testing.Check
         (Item,
          Landin.Diagnostics.Span_Of
@@ -154,12 +153,12 @@ package body Landin.Tests.Catalogue_Suite is
          Landin.Diagnostics.Span_Of
            (Landin.Diagnostics.Primary
            (Landin.Diagnostics.Get (Report, 1))).Last = 16,
-         "and ends at the end of it, not at the dot");
+         "and ends at the end of it, not at the exponent marker");
       Landin.Testing.Check_Equal
         (Item,
          Landin.Diagnostics.Note_Count
            (Landin.Diagnostics.Get (Report, 1)),
-         Rows.Required_Notes (Rows.Construct_Not_Enabled),
+         Rows.Required_Notes (Rows.Malformed_Float_Literal),
          "and carries the notes its row requires");
    end Codes_And_Spans_Without_Prose;
 
@@ -202,19 +201,20 @@ package body Landin.Tests.Catalogue_Suite is
       Report  : Landin.Diagnostics.Diagnostic_List;
 
       Expected : constant String :=
-        "error[L0010]: this construct is not enabled yet" & LF
+        "error[L0321]: this is not a well-formed floating-point literal" & LF
         & "  --> case.ldn:1:10" & LF
         & "  |" & LF
-        & "1 | r: f64 = 0x1.0p0" & LF
+        & "1 | r: f64 = 0x1.0p+" & LF
         & "  |          ^^^^^^^" & LF
-        & "  = note: the tour describes it at [0230]" & LF
-        & "  = note: ROADMAP.md R4.10 is where it is enabled" & LF;
+        & "  = note: a float has digits on both sides of its dot and a"
+        & " complete exponent when one is required [0210] [0220] [0230]"
+        & LF;
    begin
-      Lex_And_Report ("r: f64 = 0x1.0p0", Sources, Report);
+      Lex_And_Report ("r: f64 = 0x1.0p+", Sources, Report);
 
       Landin.Testing.Check_Equal
         (Item, Landin.Diagnostics.Text.Render (Report, Sources), Expected,
-         "a refusal renders exactly, and names the construct and the work");
+         "a malformed float renders exactly with its lexical rule");
    end Rendering_Is_Golden;
 
    procedure Register (Into : in out Landin.Testing.Registry) is

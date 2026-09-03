@@ -207,9 +207,9 @@ package Landin.Syntax is
       --  should bind.
       Struct_Literal,
       Integer_Literal,
-      --  [0210]'s contextual IEEE value.  Its scanner-validated decimal
-      --  spelling is retained in Anchor, then decoded once checking knows
-      --  whether its context is f32 or f64.
+      --  [0210]/[0230]'s contextual IEEE value.  Its scanner-validated
+      --  decimal or hexadecimal spelling is retained in Anchor, then
+      --  decoded once checking knows whether its context is f32 or f64.
       Float_Literal,
       --  [0250]'s Unicode scalar value, fixed as `u32`.  Like text, the
       --  node keeps its source span and the shared decoder reads it later.

@@ -21191,7 +21191,12 @@ file negative/generic-wrong-nominal-template/program.ldn tokens 93
   305 306 )
   307 310 end
   311 314 use
-file negative/hex-float-literal-not-enabled/program.ldn refused no rule spells a hexadecimal float literal
+file negative/hex-float-overflows-context/program.ldn tokens 5
+  0 9 too_large
+  9 10 :
+  11 14 f32
+  15 16 =
+  17 32 0x1.ffffffp+127
 file negative/if-expression-missing-else/program.ldn tokens 22
   0 1 f
   1 2 :
@@ -23416,6 +23421,7 @@ file negative/loop-value-type-mismatch/program.ldn tokens 23
   89 92 end
   93 97 main
 file negative/malformed-float-exponent/program.ldn refused a float exponent has no digit run
+file negative/malformed-hex-float-exponent/program.ldn refused a float exponent has no digit run
 file negative/malformed-integer-digit/main.ldn refused '0b102' is not an integer the rules spell
 file negative/match-scalar-not-enabled/program.ldn tokens 47
   0 6 choice

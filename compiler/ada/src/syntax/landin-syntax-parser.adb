@@ -4574,6 +4574,15 @@ package body Landin.Syntax.Parser is
                            Operation : Tok.Assignment_Operator;
                            Value  : Node_Id := No_Node;
                         begin
+                           --  After_Selectors is a non-consuming lookahead.
+                           --  A damaged selector can satisfy that lookahead
+                           --  while Parse_Place recovers somewhere else; do
+                           --  not read assignment metadata from that token.
+                           if Peek not in Tok.Equal | Tok.Compound_Assign then
+                              return Add
+                                (Error_Statement, Start,
+                                 Join (Start, After_Previous));
+                           end if;
                            At_Op := Here;
                            Operation := Tok.Assignment_Operation
                              (Tok.Token_At (From, Index));
@@ -5803,7 +5812,7 @@ package body Landin.Syntax.Parser is
                   end;
                end if;
 
-               if Peek = Tok.Float_Literal then
+               if Peek in Tok.Float_Literal | Tok.Hex_Float_Literal then
                   Advance;
                   return Add (Of_Kind => Float_Literal, At_Token => At_Item);
                end if;

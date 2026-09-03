@@ -53,7 +53,7 @@ L0317  Live     a whole-program conformance key has two declarations
 L0318  Live     a concrete type actual lacks the required concept conformance
 L0319  Live     a user attempts to declare the compiler-owned concept or one of its supplied conformances
 L0320  Live     [0270] [1750]: a text literal contains a malformed escape or invalid source encoding
-L0321  Live     [0210] [0220]: a decimal float has a complete fraction and exponent
+L0321  Live     [0210] [0220] [0230]: a float has a complete fraction and exponent when required
 L0322  Live     [0250] [0270]: a character literal spells exactly one Unicode scalar value
 L0323  Live     [0280] [1750]: raw content is UTF-8 and every nonblank line has the closing delimiter's indentation
 L0500  Live     [1550]: no assembler and linker for the target on this host
