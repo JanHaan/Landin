@@ -1,0 +1,1 @@
+extern(c) sine: (angle: f64) -> (value: f64)

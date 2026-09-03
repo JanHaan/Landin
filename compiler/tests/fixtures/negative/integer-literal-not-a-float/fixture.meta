@@ -1,5 +1,5 @@
 class: negative
-summary: [0210] keeps integer and floating-point literal classes distinct in an integer context
+summary: [0210] keeps integer and floating-point literal classes distinct in a float context
 constructs: 0210, 1880, 1890
 program: program.ldn
 targets: linux-x86-64, macos-arm64

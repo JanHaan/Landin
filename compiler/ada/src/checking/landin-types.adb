@@ -1,4 +1,10 @@
+with Ada.Unchecked_Conversion;
+with Interfaces;
+
 package body Landin.Types is
+
+   use type Interfaces.Unsigned_32;
+   use type Interfaces.Unsigned_64;
 
    --  How many digits a base has, which is the only thing Evaluate needs
    --  from one.  Landin.Tokens owns the prefix that selected it, because a
@@ -20,6 +26,11 @@ package body Landin.Types is
    begin
       if Item = Bool then
          return Landin.Targets.Byte_1;
+      elsif Item in Float_Name then
+         return
+           (case Float_Name (Item) is
+               when F32 => Landin.Targets.Byte_4,
+               when F64 => Landin.Targets.Byte_8);
       end if;
 
       case Width (Item, Facts) is
@@ -158,5 +169,72 @@ package body Landin.Types is
          end if;
       end loop;
    end Evaluate;
+
+   --------------------
+   --  Evaluate_Float  --
+   --------------------
+
+   procedure Evaluate_Float
+     (Text       : String;
+      Item       : Float_Name;
+      Bits       : out Magnitude;
+      Overflowed : out Boolean)
+   is
+      subtype F32_Value is Interfaces.IEEE_Float_32;
+      subtype F64_Value is Interfaces.IEEE_Float_64;
+      function Pattern_32 is new Ada.Unchecked_Conversion
+        (F32_Value, Interfaces.Unsigned_32);
+      function Pattern_64 is new Ada.Unchecked_Conversion
+        (F64_Value, Interfaces.Unsigned_64);
+      Clean : String (1 .. Text'Length);
+      Last  : Natural := 0;
+   begin
+      for Byte of Text loop
+         if Byte /= '_' then
+            Last := Last + 1;
+            Clean (Last) := Byte;
+         end if;
+      end loop;
+
+      Overflowed := False;
+      case Item is
+         when F32 =>
+            declare
+               Pattern : constant Interfaces.Unsigned_32 :=
+                 Pattern_32 (F32_Value'Value (Clean (1 .. Last)));
+            begin
+               Bits := Magnitude (Pattern);
+               Overflowed :=
+                 (Pattern and 16#7F80_0000#) = 16#7F80_0000#;
+            end;
+         when F64 =>
+            declare
+               Pattern : constant Interfaces.Unsigned_64 :=
+                 Pattern_64 (F64_Value'Value (Clean (1 .. Last)));
+            begin
+               Bits := Magnitude (Pattern);
+               Overflowed :=
+                 (Pattern and 16#7FF0_0000_0000_0000#)
+                   = 16#7FF0_0000_0000_0000#;
+            end;
+      end case;
+   exception
+      when Constraint_Error =>
+         Bits := 0;
+         Overflowed := True;
+   end Evaluate_Float;
+
+   -------------------
+   --  Negated_Float  --
+   -------------------
+
+   function Negated_Float
+     (Bits : Magnitude; Item : Float_Name) return Magnitude
+   is
+      Sign : constant Magnitude :=
+        (case Item is when F32 => 2 ** 31, when F64 => 2 ** 63);
+   begin
+      return (if Bits < Sign then Bits + Sign else Bits - Sign);
+   end Negated_Float;
 
 end Landin.Types;

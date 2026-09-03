@@ -394,15 +394,16 @@ package body Landin.Stages.Checking is
          return Res.No_Declaration;
       end Generic_Routine_Owner;
 
-      --  How a type is named in a sentence a user reads.  The five that are
-      --  not one of [1790]'s eleven are described and not spelled, because
+      --  How a type is named in a sentence a user reads.  The values that
+      --  are not one of [1790]'s scalars are described and not spelled,
       --  no program can write one of them down.
       function Shown (Item : Ty.Type_Kind) return String
         is (case Item is
                when Ty.Scalar_Name     => "`" & Ty.Spelling (Item) & "`",
                when Ty.Pointer_Value   => "a pointer",
                when Ty.Slice_Value     => "a slice",
-               when Ty.Untyped_Integer => "a number",
+               when Ty.Untyped_Integer => "an integer",
+               when Ty.Untyped_Float   => "a floating-point number",
                when Ty.No_Value        => "nothing",
                when Ty.Atom_Value      => "an atom",
                when others             => "something unknown");
@@ -473,6 +474,10 @@ package body Landin.Stages.Checking is
          Node    : Syn.Node_Id;
          Wanted  : Ty.Scalar_Name;
          Negated : Boolean);
+      procedure Check_Float_Literal
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Wanted  : Ty.Scalar_Name);
       procedure Commit_To
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
@@ -802,9 +807,9 @@ package body Landin.Stages.Checking is
       --  none.  Every declaration the kernel has except a module `:=`
       --  binding writes one, which is why pass two is so small.
       --  The type a declaring node writes down: [0110]'s right of the
-      --  colon, read as one of [1790]'s eleven.  Undecided when it writes
+      --  colon, read as one of [1790]'s scalars.  Undecided when it writes
       --  none, which in the kernel is only [1790]'s `:=` form.
-      --  What a type position names.  One of [1790]'s eleven, which the
+      --  What a type position names.  One of [1790]'s scalars, which the
       --  parser recognised; or [1795]'s declared name, which only
       --  resolution can answer for and which this follows to the type it
       --  was declared from.  D15 makes that an alias, so following it is
@@ -7004,6 +7009,9 @@ package body Landin.Stages.Checking is
                   if Got = Ty.Untyped_Integer then
                      Commit_To (Caller_Tree, Argument, Ty.Default_Integer);
                      Got := Ty.Default_Integer;
+                  elsif Got = Ty.Untyped_Float then
+                     Commit_To (Caller_Tree, Argument, Ty.Default_Float);
+                     Got := Ty.Default_Float;
                   end if;
                   if Got = Ty.Ill_Typed then
                      Good := False;
@@ -7691,10 +7699,14 @@ package body Landin.Stages.Checking is
               (Item    => Bad.Type_Mismatch,
                Source  => Syn.Source_Of (Of_Tree),
                Where   => Syn.Where (Of_Tree, Node),
-               Message => "this is a number, and " & Shown (Wanted)
-                          & " holds no number",
-               Note    => "[1890]: a bool has no arithmetic and no"
-                          & " bitwise set",
+               Message => "this integer literal cannot take the "
+                          & Shown (Wanted) & " context required here",
+               Note    =>
+                 (if Wanted in Ty.Float_Name
+                  then "[0210]: integer and float literals never slide"
+                       & " silently between classes"
+                  else "[1890]: a bool has no arithmetic and no"
+                       & " bitwise set"),
                Related => Syn.Origin (Of_Tree, Node),
                Because => "written here",
                Into    => Found);
@@ -7718,6 +7730,50 @@ package body Landin.Stages.Checking is
          end if;
       end Check_Literal;
 
+      procedure Check_Float_Literal
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Wanted  : Ty.Scalar_Name)
+      is
+         Snap : constant Landin.Source.Snapshot :=
+           Source (Context, Syn.Source_Of (Of_Tree));
+         Text : constant String :=
+           Landin.Source.Slice (Snap, Syn.Anchor (Of_Tree, Node));
+         Bits       : Ty.Magnitude;
+         Overflowed : Boolean;
+      begin
+         if Wanted not in Ty.Float_Name then
+            Landin.Checking.Refuse (Types.all, Of_Tree, Node);
+            Bad.Report
+              (Item    => Bad.Type_Mismatch,
+               Source  => Syn.Source_Of (Of_Tree),
+               Where   => Syn.Where (Of_Tree, Node),
+               Message => "this is a floating-point number, and "
+                          & Shown (Wanted) & " belongs here",
+               Note    => "[0210]: integer and float literals never slide"
+                          & " silently between classes",
+               Related => Syn.Origin (Of_Tree, Node),
+               Because => "written here",
+               Into    => Found);
+            return;
+         end if;
+
+         Ty.Evaluate_Float
+           (Text, Ty.Float_Name (Wanted), Bits, Overflowed);
+         if Overflowed then
+            Landin.Checking.Refuse (Types.all, Of_Tree, Node);
+            Bad.Report
+              (Item    => Bad.Literal_Out_Of_Range,
+               Source  => Syn.Source_Of (Of_Tree),
+               Where   => Syn.Where (Of_Tree, Node),
+               Message => "no " & Shown (Wanted) & " holds this finite"
+                          & " literal",
+               Note    => "D162: decimal literals round to their contextual"
+                          & " IEEE type, but may not overflow to infinity",
+               Into    => Found);
+         end if;
+      end Check_Float_Literal;
+
       --  [1880]: a context reaches inward through the arithmetic, bitwise,
       --  shift and unary levels.  The walk prunes at the first node that
       --  already has a type of its own, so a mixed expression stops at
@@ -7728,16 +7784,28 @@ package body Landin.Stages.Checking is
          Wanted  : Ty.Scalar_Name) is
       begin
          if Node = Syn.No_Node
-           or else Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
-                   /= Ty.Untyped_Integer
          then
             return;
          end if;
+
+         declare
+            Was : constant Ty.Type_Kind :=
+              Landin.Checking.Type_Of (Types.all, Of_Tree, Node);
+         begin
+            if Was not in Ty.Untyped_Integer | Ty.Untyped_Float then
+               return;
+            end if;
+         end;
 
          Landin.Checking.Commit (Types.all, Of_Tree, Node, Wanted);
 
          if Syn.Kind (Of_Tree, Node) = Syn.Integer_Literal then
             Check_Literal (Of_Tree, Node, Wanted, Negated => False);
+            return;
+         end if;
+
+         if Syn.Kind (Of_Tree, Node) = Syn.Float_Literal then
+            Check_Float_Literal (Of_Tree, Node, Wanted);
             return;
          end if;
 
@@ -7817,6 +7885,8 @@ package body Landin.Stages.Checking is
          if Got = Ty.Untyped_Integer then
             if Wanted in Ty.Integer_Name then
                Commit_To (Of_Tree, Node, Wanted);
+            elsif Wanted in Ty.Float_Name then
+               Commit_To (Of_Tree, Node, Ty.Scalar_Name (Wanted));
             else
                Commit_To (Of_Tree, Node, Ty.Bool);
             end if;
@@ -7824,7 +7894,20 @@ package body Landin.Stages.Checking is
             return;
          end if;
 
-         if Wanted = Ty.Untyped_Integer then
+         if Got = Ty.Untyped_Float then
+            if Wanted in Ty.Float_Name then
+               Commit_To (Of_Tree, Node, Wanted);
+               return;
+            elsif Wanted in Ty.Integer_Name | Ty.Bool then
+               Commit_To (Of_Tree, Node, Ty.Scalar_Name (Wanted));
+               return;
+            else
+               Commit_To (Of_Tree, Node, Ty.Default_Float);
+               Got := Ty.Default_Float;
+            end if;
+         end if;
+
+         if Wanted in Ty.Untyped_Integer | Ty.Untyped_Float then
             return;
          end if;
 
@@ -7963,35 +8046,83 @@ package body Landin.Stages.Checking is
             return Ty.Ill_Typed;
          end if;
 
-         if Left_Type = Ty.Untyped_Integer
-           and then Right_Type = Ty.Untyped_Integer
+         if Left_Type = Right_Type
+           and then Left_Type in Ty.Untyped_Integer | Ty.Untyped_Float
          then
             --  Nothing here has a type yet.  A comparison has one anyway,
             --  because [1890] says it gives a bool back, so its operands
             --  take [0200]'s default and the node is a bool.
             if not Comparing then
-               return Ty.Untyped_Integer;
+               if Left_Type = Ty.Untyped_Float
+                 and then Of_Kind not in
+                   Syn.Add | Syn.Subtract | Syn.Multiply | Syn.Divide
+               then
+                  Bad.Report
+                    (Item    => Bad.Type_Mismatch,
+                     Source  => Syn.Source_Of (Of_Tree),
+                     Where   => Syn.Anchor (Of_Tree, Node),
+                     Message => "this operator admits integers only",
+                     Note    => "[1890]: remainder, wrapping, shifts and"
+                                & " bitwise operators do not admit floats",
+                     Related => Syn.Origin (Of_Tree, Left),
+                     Because => "the floating-point operand",
+                     Into    => Found);
+                  Landin.Checking.Refuse (Types.all, Of_Tree, Node);
+                  return Ty.Ill_Typed;
+               end if;
+               return Left_Type;
             end if;
 
-            Commit_To (Of_Tree, Left, Ty.Default_Integer);
-            Commit_To (Of_Tree, Right, Ty.Default_Integer);
+            declare
+               Default : constant Ty.Scalar_Name :=
+                 (if Left_Type = Ty.Untyped_Integer then Ty.Default_Integer
+                  else Ty.Default_Float);
+            begin
+               Commit_To (Of_Tree, Left, Default);
+               Commit_To (Of_Tree, Right, Default);
+            end;
             return Ty.Bool;
          end if;
 
+         if Left_Type in Ty.Untyped_Integer | Ty.Untyped_Float
+           and then Right_Type in Ty.Untyped_Integer | Ty.Untyped_Float
+         then
+            Bad.Report
+              (Item    => Bad.Type_Mismatch,
+               Source  => Syn.Source_Of (Of_Tree),
+               Where   => Syn.Where (Of_Tree, Right),
+               Message => "integer and floating-point literals do not"
+                          & " acquire one another's type",
+               Note    => "[0210]: there is no silent slide between the"
+                          & " two numeric classes",
+               Related => Syn.Origin (Of_Tree, Left),
+               Because => "the other operand",
+               Into    => Found);
+            Landin.Checking.Refuse (Types.all, Of_Tree, Right);
+            return Ty.Ill_Typed;
+         end if;
+
          Decided :=
-           (if Left_Type = Ty.Untyped_Integer then Right_Type
+           (if Left_Type in Ty.Untyped_Integer | Ty.Untyped_Float
+            then Right_Type
             else Left_Type);
 
-         --  [1890]: only a comparison takes a bool, and it takes two.
-         if not Comparing and then Decided not in Ty.Integer_Name then
+         --  [1890]: ordinary arithmetic takes integers or floats; `%`,
+         --  wrapping, shifts and bitwise operators remain integer-only.
+         if not Comparing
+           and then
+             (if Of_Kind in Syn.Add | Syn.Subtract | Syn.Multiply | Syn.Divide
+              then Decided not in Ty.Numeric_Name
+              else Decided not in Ty.Integer_Name)
+         then
             Bad.Report
               (Item    => Bad.Type_Mismatch,
                Source  => Syn.Source_Of (Of_Tree),
                Where   => Syn.Anchor (Of_Tree, Node),
                Message => "this operator wants numbers and was given "
                           & Shown (Decided),
-               Note    => "[1890]: an integer has no logical words and a"
-                          & " bool has no arithmetic",
+               Note    => "[1890]: ordinary arithmetic admits integers and"
+                          & " floats; width and bit operators admit integers",
                Related => Syn.Origin (Of_Tree, Node),
                Because => "here",
                Into    => Found);
@@ -12701,6 +12832,9 @@ package body Landin.Stages.Checking is
             when Syn.Integer_Literal =>
                return Kept (Ty.Untyped_Integer);
 
+            when Syn.Float_Literal =>
+               return Kept (Ty.Untyped_Float);
+
             when Syn.Text_Literal =>
                --  [0260]: with no context a text literal is `utf8`, and
                --  D161 enables only the `[]u8` context.
@@ -12809,6 +12943,9 @@ package body Landin.Stages.Checking is
                      begin
                         if Got = Ty.Untyped_Integer then
                            Element := Ty.Default_Integer;
+                           Commit_To (Of_Tree, First, Element);
+                        elsif Got = Ty.Untyped_Float then
+                           Element := Ty.Default_Float;
                            Commit_To (Of_Tree, First, Element);
                         elsif Got in Ty.Scalar_Name then
                            Element := Ty.Scalar_Name (Got);
@@ -13784,15 +13921,38 @@ package body Landin.Stages.Checking is
                   Under : constant Ty.Type_Kind :=
                     Synthesise (Of_Tree, Syn.Operand_Of (Of_Tree, Node));
                begin
-                  if Under = Ty.Untyped_Integer then
-                     return Kept (Ty.Untyped_Integer);
+                  if Under in Ty.Untyped_Integer | Ty.Untyped_Float then
+                     if Syn.Kind (Of_Tree, Node) = Syn.Complement
+                       and then Under = Ty.Untyped_Float
+                     then
+                        Commit_To
+                          (Of_Tree, Syn.Operand_Of (Of_Tree, Node),
+                           Ty.Default_Float);
+                        Bad.Report
+                          (Item    => Bad.Type_Mismatch,
+                           Source  => Syn.Source_Of (Of_Tree),
+                           Where   => Syn.Anchor (Of_Tree, Node),
+                           Message => "`~` does not accept a floating-point"
+                                      & " operand",
+                           Note    => "[0330]: complement belongs to the"
+                                      & " integer bitwise set",
+                           Related => Syn.Origin (Of_Tree, Node),
+                           Because => "here",
+                           Into    => Found);
+                        return Kept (Ty.Ill_Typed);
+                     end if;
+                     return Kept (Under);
                   end if;
 
                   if not Decidable (Under) then
                      return Kept (Ty.Ill_Typed);
                   end if;
 
-                  if Under not in Ty.Integer_Name then
+                  if Under not in Ty.Integer_Name
+                    and then
+                      not (Syn.Kind (Of_Tree, Node) = Syn.Negation
+                           and then Under in Ty.Float_Name)
+                  then
                      Bad.Report
                        (Item    => Bad.Type_Mismatch,
                         Source  => Syn.Source_Of (Of_Tree),
@@ -16568,6 +16728,9 @@ package body Landin.Stages.Checking is
                               if Got = Ty.Untyped_Integer then
                                  Commit_To
                                    (Of_Tree, Value, Ty.Default_Integer);
+                              elsif Got = Ty.Untyped_Float then
+                                 Commit_To
+                                   (Of_Tree, Value, Ty.Default_Float);
                               elsif Got = Ty.No_Value then
                                  Bad.Report
                                    (Item    => Bad.Type_Mismatch,
@@ -17542,6 +17705,8 @@ package body Landin.Stages.Checking is
 
                   if Got = Ty.Untyped_Integer then
                      Commit_To (Of_Tree, Value, Ty.Default_Integer);
+                  elsif Got = Ty.Untyped_Float then
+                     Commit_To (Of_Tree, Value, Ty.Default_Float);
                   elsif Got = Ty.No_Value then
                      Bad.Report
                        (Item    => Bad.Type_Mismatch,
@@ -17623,6 +17788,8 @@ package body Landin.Stages.Checking is
                      begin
                         if Got = Ty.Untyped_Integer then
                            Commit_To (Of_Tree, Value, Ty.Default_Integer);
+                        elsif Got = Ty.Untyped_Float then
+                           Commit_To (Of_Tree, Value, Ty.Default_Float);
                         end if;
                      end;
                   elsif Syn.Kind (Of_Tree, Node) = Syn.Break_Statement
@@ -17745,6 +17912,8 @@ package body Landin.Stages.Checking is
                   begin
                      if Got = Ty.Untyped_Integer then
                         Commit_To (Of_Tree, Value, Ty.Default_Integer);
+                     elsif Got = Ty.Untyped_Float then
+                        Commit_To (Of_Tree, Value, Ty.Default_Float);
                      end if;
                   end;
                end if;
@@ -18839,6 +19008,10 @@ package body Landin.Stages.Checking is
                   Element_Type := Ty.Default_Integer;
                   Commit_To
                     (Of_Tree, Element_Node, Ty.Default_Integer);
+               elsif Element_Type = Ty.Untyped_Float then
+                  Element_Type := Ty.Default_Float;
+                  Commit_To
+                    (Of_Tree, Element_Node, Ty.Default_Float);
                end if;
 
                if Element_Type not in Ty.Scalar_Name then
@@ -18872,6 +19045,9 @@ package body Landin.Stages.Checking is
             if Got = Ty.Untyped_Integer then
                Got := Ty.Default_Integer;
                Commit_To (Of_Tree, First, Ty.Default_Integer);
+            elsif Got = Ty.Untyped_Float then
+               Got := Ty.Default_Float;
+               Commit_To (Of_Tree, First, Ty.Default_Float);
             end if;
 
             Expected.Kind := Got;
@@ -19331,6 +19507,9 @@ package body Landin.Stages.Checking is
                if Got = Ty.Untyped_Integer then
                   Element := Ty.Default_Integer;
                   Commit_To (Of_Tree.all, First, Element);
+               elsif Got = Ty.Untyped_Float then
+                  Element := Ty.Default_Float;
+                  Commit_To (Of_Tree.all, First, Element);
                elsif Got in Ty.Scalar_Name then
                   Element := Ty.Scalar_Name (Got);
                else
@@ -19466,6 +19645,9 @@ package body Landin.Stages.Checking is
                begin
                   if Got = Ty.Untyped_Integer then
                      Element := Ty.Default_Integer;
+                     Commit_To (Of_Tree.all, Repeated, Element);
+                  elsif Got = Ty.Untyped_Float then
+                     Element := Ty.Default_Float;
                      Commit_To (Of_Tree.all, Repeated, Element);
                   elsif Got in Ty.Scalar_Name then
                      Element := Ty.Scalar_Name (Got);
@@ -19607,6 +19789,10 @@ package body Landin.Stages.Checking is
                Commit_To (Of_Tree.all, Value, Ty.Default_Integer);
                Landin.Checking.Settle
                  (Types.all, Id, Ty.Type_Kind (Ty.Default_Integer));
+            elsif Got = Ty.Untyped_Float then
+               Commit_To (Of_Tree.all, Value, Ty.Default_Float);
+               Landin.Checking.Settle
+                 (Types.all, Id, Ty.Type_Kind (Ty.Default_Float));
             else
                if Got = Ty.Fixed_Array
                  and then (Direct_Array
@@ -21360,15 +21546,29 @@ package body Landin.Stages.Checking is
             --  Commit_To; skip it to keep the report from doubling.  A subtree
             --  the checker already refused likewise carries its own report.
             if not
-                 (Syn.Kind (Of_Tree, Each) = Syn.Integer_Literal
+                 (Syn.Kind (Of_Tree, Each)
+                    in Syn.Integer_Literal | Syn.Float_Literal
                   or else
                     (Syn.Kind (Of_Tree, Each) = Syn.Negation
                      and then Syn.Kind
                        (Of_Tree, Syn.Operand_Of (Of_Tree, Each))
-                         = Syn.Integer_Literal))
+                         in Syn.Integer_Literal | Syn.Float_Literal))
               and then Landin.Checking.Type_Of
                          (Types.all, Of_Tree, Each) /= Ty.Ill_Typed
             then
+               if Element in Ty.Float_Name then
+                  Bad.Report
+                    (Item    => Bad.Unsupported_Use,
+                     Source  => Syn.Source_Of (Of_Tree),
+                     Where   => Syn.Where (Of_Tree, Each),
+                     Message => "a module float image presently accepts a"
+                                & " literal or its unary minus only",
+                     Refused => Bad.Float_Static_Expression,
+                     Into    => Found);
+                  Landin.Checking.Refuse (Types.all, Of_Tree, Each);
+                  return;
+               end if;
+
                Fold (Of_Tree, Each, 0, Element_Held,
                      Element_Known, Element_Overflowed);
 
@@ -21408,7 +21608,7 @@ package body Landin.Stages.Checking is
            (Given : Syn.Node_Id; Element : Ty.Scalar_Name)
          is
          begin
-            if Element not in Ty.Integer_Name then
+            if Element not in Ty.Numeric_Name then
                return;
             elsif Syn.Kind (Of_Tree, Given) = Syn.Array_Repetition then
                Check_Image_Scalar
@@ -21460,7 +21660,7 @@ package body Landin.Stages.Checking is
                   begin
                      case Shape.Kind is
                         when Landin.Checking.Scalar_Field =>
-                           if Shape.Element in Ty.Integer_Name then
+                           if Shape.Element in Ty.Numeric_Name then
                               Check_Image_Scalar (Given, Shape.Element);
                            end if;
                         when Landin.Checking.Reference_Field =>
@@ -21562,6 +21762,15 @@ package body Landin.Stages.Checking is
             return;
          end if;
 
+         --  Contextual checking already explained an ill-typed value.  A
+         --  static-image boundary must not add a second, less fundamental
+         --  refusal for the same subtree.
+         if Landin.Checking.Type_Of (Types.all, Of_Tree, Value)
+              = Ty.Ill_Typed
+         then
+            return;
+         end if;
+
          Wanted := Declared_As_Node (Of_Tree, Node);
 
          --  [0050]'s inferred form has no declared type, so [0200]'s
@@ -21585,7 +21794,7 @@ package body Landin.Stages.Checking is
                  Landin.Checking.Array_Element
                    (Types.all, Of_Tree, Value);
             begin
-               if Element in Ty.Integer_Name then
+               if Element in Ty.Numeric_Name then
                   if Syn.Kind (Of_Tree, Value) = Syn.Array_Repetition then
                      Check_Image_Scalar
                        (Syn.Repeated_Element (Of_Tree, Value), Element);
@@ -21648,7 +21857,7 @@ package body Landin.Stages.Checking is
                                 Landin.Checking.Field_Type
                                   (Types.all, Wrote, Which);
                            begin
-                              if Element in Ty.Integer_Name then
+                              if Element in Ty.Numeric_Name then
                                  Check_Image_Scalar (Image_Value, Element);
                               end if;
                            end;
@@ -21735,7 +21944,7 @@ package body Landin.Stages.Checking is
                                        if Shape.Kind =
                                             Landin.Checking.Scalar_Field
                                          and then Shape.Element
-                                           in Ty.Integer_Name
+                                           in Ty.Numeric_Name
                                        then
                                           Check_Image_Scalar
                                             (Syn.Value_Of (Of_Tree, Label),
@@ -21743,7 +21952,7 @@ package body Landin.Stages.Checking is
                                        elsif Shape.Kind =
                                          Landin.Checking.Fixed_Array_Field
                                          and then Shape.Element
-                                           in Ty.Integer_Name
+                                           in Ty.Numeric_Name
                                        then
                                           declare
                                              Given : constant Syn.Node_Id :=
@@ -21796,7 +22005,28 @@ package body Landin.Stages.Checking is
             return;
          end if;
 
-         if Wanted not in Ty.Integer_Name then
+         if Wanted in Ty.Float_Name then
+            if Syn.Kind (Of_Tree, Value) in Syn.Float_Literal
+              or else
+                (Syn.Kind (Of_Tree, Value) = Syn.Negation
+                 and then Syn.Kind
+                   (Of_Tree, Syn.Operand_Of (Of_Tree, Value))
+                     = Syn.Float_Literal)
+              or else Syn.Kind (Of_Tree, Value) = Syn.Zeroed_Literal
+            then
+               return;
+            end if;
+
+            Bad.Report
+              (Item    => Bad.Unsupported_Use,
+               Source  => Syn.Source_Of (Of_Tree),
+               Where   => Syn.Where (Of_Tree, Value),
+               Message => "module float arithmetic is not folded yet",
+               Refused => Bad.Float_Static_Expression,
+               Into    => Found);
+            Landin.Checking.Refuse (Types.all, Of_Tree, Value);
+            return;
+         elsif Wanted not in Ty.Integer_Name then
             return;
          end if;
 
@@ -21969,6 +22199,15 @@ package body Landin.Stages.Checking is
          if Syn.Kind (Of_Tree, Node) not in
               Syn.Divide | Syn.Remainder | Syn.Shift_Left | Syn.Shift_Right
          then
+            return;
+         end if;
+
+         if Syn.Kind (Of_Tree, Node) = Syn.Divide
+           and then Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
+                    in Ty.Float_Name
+         then
+            --  IEEE division by either signed zero produces infinity or
+            --  NaN; it is not [1950]'s impossible integer operand.
             return;
          end if;
 
@@ -22925,7 +23164,7 @@ package body Landin.Stages.Checking is
                     Declaration_At (Syn.Source_Of (Of_Tree), Parameter));
             begin
                Supported := Supported
-                 and then Held in Ty.Scalar_Name | Ty.Pointer_Value
+                 and then Held in Ty.Integer_Name | Ty.Bool | Ty.Pointer_Value
                  and then Syn.Convention_Of (Of_Tree, Parameter)
                             in Syn.Implicit_In | Syn.Explicit_In
                  and then not Syn.Is_Escaping (Of_Tree, Parameter);
@@ -22942,7 +23181,7 @@ package body Landin.Stages.Checking is
                     Declaration_At (Syn.Source_Of (Of_Tree), Returned));
             begin
                Supported := Supported
-                 and then Held in Ty.Scalar_Name | Ty.Pointer_Value;
+                 and then Held in Ty.Integer_Name | Ty.Bool | Ty.Pointer_Value;
             end;
          end loop;
 

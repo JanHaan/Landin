@@ -96,6 +96,7 @@ negative/error-set-needs-an-atom | linux-x86-64, synthetic-32
 negative/escaping-frame-reference | linux-x86-64, macos-arm64, synthetic-32
 negative/external-aggregate-boundary | linux-x86-64
 negative/external-convention-not-closed | linux-x86-64
+negative/external-float-abi-not-enabled | linux-x86-64, macos-arm64
 negative/fail-needs-one-atom | linux-x86-64, synthetic-32
 negative/fail-outside-declared-set | linux-x86-64, synthetic-32
 negative/failing-function-signature-mismatch | linux-x86-64, synthetic-32
@@ -107,6 +108,8 @@ negative/fixed-conditional-active-reference-inactive | linux-x86-64, macos-arm64
 negative/fixed-conditional-evaluator | linux-x86-64, macos-arm64, synthetic-32
 negative/fixed-conditional-inactive-parser-error | linux-x86-64, macos-arm64, synthetic-32
 negative/float-literal-not-enabled | linux-x86-64, macos-arm64
+negative/float-literal-overflows-context | linux-x86-64, macos-arm64
+negative/float-remainder-is-integer-only | linux-x86-64, macos-arm64
 negative/float-type-not-enabled | linux-x86-64, macos-arm64
 negative/for-collection-element-read-only | linux-x86-64, macos-arm64, synthetic-32
 negative/for-collection-traversal-deferred | linux-x86-64, macos-arm64, synthetic-32
@@ -142,6 +145,7 @@ negative/generic-single-result-layout-too-large | linux-x86-64, macos-arm64
 negative/generic-structural-repeated-conflict | linux-x86-64, macos-arm64
 negative/generic-try-infallible-instance | linux-x86-64, synthetic-32
 negative/generic-wrong-nominal-template | linux-x86-64, macos-arm64
+negative/hex-float-literal-not-enabled | linux-x86-64, macos-arm64
 negative/if-expression-missing-else | linux-x86-64, macos-arm64, synthetic-32
 negative/immutable-array-copy | linux-x86-64, macos-arm64
 negative/immutable-array-element | linux-x86-64, macos-arm64
@@ -176,6 +180,7 @@ negative/inferred-module-array-repetition-element-not-static | linux-x86-64, mac
 negative/inferred-module-array-repetition-extent-overflow | linux-x86-64, macos-arm64
 negative/inferred-zeroed-not-enabled | linux-x86-64, macos-arm64
 negative/inout-same-place-twice | linux-x86-64, macos-arm64, synthetic-32
+negative/integer-literal-not-a-float | linux-x86-64, macos-arm64
 negative/keyword-as-name | linux-x86-64, macos-arm64
 negative/latin1-byte-in-name | linux-x86-64, macos-arm64
 negative/lenof-array-literal-element-mismatch | linux-x86-64, macos-arm64
@@ -209,6 +214,7 @@ negative/loop-condition-not-bool | linux-x86-64, macos-arm64
 negative/loop-value-missing-break-value | linux-x86-64, macos-arm64, synthetic-32
 negative/loop-value-missing-completion | linux-x86-64, macos-arm64, synthetic-32
 negative/loop-value-type-mismatch | linux-x86-64, macos-arm64, synthetic-32
+negative/malformed-float-exponent | linux-x86-64, macos-arm64
 negative/malformed-integer-digit | linux-x86-64, macos-arm64, synthetic-32
 negative/match-scalar-not-enabled | linux-x86-64, macos-arm64
 negative/measuring-refused-types | linux-x86-64, macos-arm64
@@ -240,6 +246,7 @@ negative/module-array-repetition-element-not-static | linux-x86-64, macos-arm64
 negative/module-array-repetition-fold-range | linux-x86-64, macos-arm64
 negative/module-array-repetition-index-element | linux-x86-64, macos-arm64
 negative/module-directory-invalid | linux-x86-64, macos-arm64
+negative/module-float-arithmetic-not-enabled | linux-x86-64, macos-arm64
 negative/module-fold-no-type-holds | linux-x86-64, macos-arm64
 negative/module-function-field-without-image | linux-x86-64, macos-arm64, synthetic-32
 negative/module-function-image-cycle | linux-x86-64, macos-arm64, synthetic-32
@@ -756,6 +763,7 @@ runtime/fixed-array-bound-zero | linux-x86-64
 runtime/fixed-conditional-generic-runtime | linux-x86-64
 runtime/fixed-conditional-runtime | linux-x86-64
 runtime/fizzbuzz | linux-x86-64
+runtime/float-decimal-runtime | linux-x86-64
 runtime/for-collection-traversal | linux-x86-64
 runtime/for-range-traversal | linux-x86-64
 runtime/function-valued-struct-fields | linux-x86-64

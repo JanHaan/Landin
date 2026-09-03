@@ -71,7 +71,7 @@
 --  and never an address.
 --
 --  Nothing here asks the host how wide anything is, and nothing here
---  names a machine.  A value's type is one of [1790]'s eleven, so usize
+--  names a machine.  A value's type is one of [1790]'s scalars, so usize
 --  stays usize: [1870] says "usize is not u64 on a machine whose pointer
 --  is eight bytes wide", and an IR that collapsed the two would have
 --  encoded a target's pointer width in a language fact.  A Number
@@ -260,7 +260,8 @@ package Landin.IR is
       Negation,
       Complement,
       Logical_Not,
-      --  [1890]: one integer type in, that type back.
+      --  [1890]/D162: ordinary arithmetic also admits floats; the remainder,
+      --  wrapping, shift and bitwise subset remains integer-only.
       Multiply,
       Divide,
       Remainder,
@@ -314,7 +315,7 @@ package Landin.IR is
 
    subtype Unary_Kind is Opcode range Negation .. Logical_Not;
 
-   subtype Integer_Kind is Opcode range Multiply .. Bitwise_Or;
+   subtype Numeric_Kind is Opcode range Multiply .. Bitwise_Or;
 
    subtype Comparison_Kind is Opcode range Equal_To .. Greater_Or_Equal;
 
@@ -729,7 +730,7 @@ package Landin.IR is
    --  D118's anonymous routine items in deterministic source/post-order
    --  and D161's content-pooled anonymous text datums.
    --
-   --  Result is [1800]'s returns for a Routine -- one of [1790]'s eleven,
+   --  Result is [1800]'s returns for a Routine -- one of [1790]'s scalars,
    --  or Landin.Types.No_Value for `-> none` -- and the declared type for
    --  a Datum.  No_Value is not a new spelling: Landin.Types already
    --  means by it "what a call to a `-> none` function hands back".
@@ -2542,6 +2543,19 @@ package Landin.IR is
      with Pre  => Is_Emitting (Into, Item)
                   and then Landin.Provenance.Is_Known (Site),
           Post => Emitted (Into, Item, Emit_Number'Result, Number);
+
+   --  A contextual decimal float travels as its IEEE bit pattern.  Keeping
+   --  that pattern target-neutral preserves signed zero and NaN payloads;
+   --  the native backend decides only how those bits enter storage.
+   function Emit_Float
+     (Into    : in out Unit;
+      Item    : Item_Id;
+      Of_Type : Landin.Types.Float_Name;
+      Bits    : Landin.Types.Magnitude;
+      Site    : Landin.Provenance.Origin) return Value_Id
+     with Pre  => Is_Emitting (Into, Item)
+                  and then Landin.Provenance.Is_Known (Site),
+          Post => Emitted (Into, Item, Emit_Float'Result, Number);
 
    function Emit_Truth
      (Into  : in out Unit;

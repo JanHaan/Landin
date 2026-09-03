@@ -1,0 +1,34 @@
+sample: type = struct
+    value: f64
+end sample
+
+scale: f64 = 1.5
+constants: [2]f64 = [1.25, 2.0]
+module_sample: sample = sample(value: -3.5)
+
+twice: (value: f64) -> (result: f64) =
+    result = value * 2.0
+end twice
+
+public main: () -> (code: i32) =
+    half := 1.0 / 2.0
+    result: f64 = twice(scale) + 0.25
+    values: [3]f64 = [1.0, 2.5, 4.0]
+    negative_infinity := 1.0 / -0.0
+    not_a_number: f64 = 0.0 / 0.0
+
+    if half == 0.5 and result == 3.25
+      and values[0] + values[1] + values[2] == 7.5
+      and constants[0] + constants[1] == 3.25
+      and module_sample.value == -3.5
+      and negative_infinity < -1000.0
+      and not_a_number <> not_a_number
+      and not (not_a_number == not_a_number)
+      and not (not_a_number < 0.0)
+      and 1.0e1 - 4.0 == 6.0
+      and 1_0.0e-1 == 1.0 then
+        code = 42
+    else
+        code = 1
+    end if
+end main

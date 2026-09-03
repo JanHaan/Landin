@@ -1,0 +1,6 @@
+class: runtime
+summary: decimal f32 and f64 literals retain IEEE values through storage, calls, arithmetic, comparisons, signed zero and NaN
+constructs: 0170, 0210, 0220, 0240, 0290, 0350, 1800, 1880, 1890, 1940
+program: main.ldn
+status: 42
+targets: linux-x86-64

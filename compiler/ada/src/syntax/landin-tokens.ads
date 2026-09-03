@@ -9,7 +9,7 @@
 --
 --  Two bands are not the kernel's, and both are tokens on purpose.
 --  Deferred_Kind is a lexeme the tour describes and the grammar omits,
---  refused by [1830]: `1.5`, `"text"`, `!` and `+=` are read as one thing
+--  refused by [1830]: `0x1.0p0`, `'x'`, `!` and `+=` are read as one thing
 --  each and named, rather than falling apart into signs that happen to be
 --  enabled. That also fixes the reading of a program now, because enabling
 --  compound assignment later cannot change how a file that never used it was
@@ -51,6 +51,7 @@ package Landin.Tokens is
      (End_Of_Input,
       Identifier,
       Integer_Literal,
+      Float_Literal,
       --  [0260]'s quoted bytes, one lexeme with its escapes unread; D161
       --  decodes them where the literal's context is known.
       Text_Literal,
@@ -70,9 +71,9 @@ package Landin.Tokens is
       Right_Bracket, Right_Paren, Slash, Star, Star_Percent, Tilde,
       Underscore, Bang, Dot_Dot_Dot, Dot_Dot, Dot_Dot_Less,
       --  Lexemes with more than one spelling that the kernel omits.
-      Compound_Assign, Character_Literal, Float_Literal, Raw_Literal,
+      Compound_Assign, Character_Literal, Hex_Float_Literal, Raw_Literal,
       --  Bytes that spell nothing at all.
-      Malformed_Integer, Unknown_Bytes);
+      Malformed_Integer, Malformed_Float, Unknown_Bytes);
 
    --  Everything the kernel grammar can derive. A stream of only these is a
    --  stream the parser may take at face value.
@@ -100,11 +101,12 @@ package Landin.Tokens is
    --  literal has as many as there are programs.
    subtype Spelled_Kind is Token_Kind range Kw_Addr .. Dot_Dot_Less;
 
-   --  `literal ::= integer | text | "true" | "false" | "zeroed"` [1770].
+   --  `literal ::= integer | float | text | "true" | "false" | "zeroed"`
+   --  [1770].
    --  The three words are reserved and literals at once, so this is a
    --  predicate rather than a band of the enumeration.
    function Is_Literal (Of_Kind : Token_Kind) return Boolean
-     is (Of_Kind in Integer_Literal | Text_Literal
+     is (Of_Kind in Integer_Literal | Float_Literal | Text_Literal
                     | Kw_True | Kw_False | Kw_Zeroed);
 
    --  The bytes of a kind that has only one spelling.  `escaping` is the
@@ -172,6 +174,7 @@ package Landin.Tokens is
 
    type Fault_Kind is
      (Malformed_Integer_Run,
+      Malformed_Float_Literal_Run,
       Malformed_Text_Literal_Run,
       Not_Enabled,
       Unknown_Byte_Run,

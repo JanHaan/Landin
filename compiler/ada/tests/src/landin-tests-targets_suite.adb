@@ -321,6 +321,8 @@ package body Landin.Tests.Targets_Suite is
                          (Bit_Width'Image
                             (if Named in Landin.Types.Integer_Name
                              then Landin.Types.Width (Named, Facts)
+                             elsif Named in Landin.Types.Float_Name
+                             then Landin.Types.Float_Width (Named)
                              else 1)), 6)
                   & Padded (Trimmed (Positive'Image (Bytes (Size))), 7)
                   & Trimmed

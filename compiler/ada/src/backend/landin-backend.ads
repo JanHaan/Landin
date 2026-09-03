@@ -149,7 +149,7 @@ package Landin.Backend is
      (Of_Frame : Frame; Value : Landin.IR.Value_Id)
      return Landin.Targets.Byte_Count;
 
-   --  How much room one of [1790]'s eleven needs.  Not a width: a width
+   --  How much room one of [1790]'s scalars needs.  Not a width: a width
    --  is bits and comes from Landin.Types, and bool has none.
    function Size_Of
      (Item : Landin.Types.Scalar_Name;

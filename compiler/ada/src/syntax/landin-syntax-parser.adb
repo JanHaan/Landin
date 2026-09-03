@@ -89,7 +89,7 @@ package body Landin.Syntax.Parser is
    type Scalar_Name is
      (Type_U8, Type_U16, Type_U32, Type_U64,
       Type_I8, Type_I16, Type_I32, Type_I64,
-      Type_Usize, Type_Isize, Type_Bool);
+      Type_Usize, Type_Isize, Type_F32, Type_F64, Type_Bool);
 
    function Spelling (Item : Scalar_Name) return String
      is (case Item is
@@ -103,6 +103,8 @@ package body Landin.Syntax.Parser is
             when Type_I64   => "i64",
             when Type_Usize => "usize",
             when Type_Isize => "isize",
+            when Type_F32   => "f32",
+            when Type_F64   => "f64",
             when Type_Bool  => "bool");
 
    ------------------------------------------------------------------
@@ -1769,7 +1771,7 @@ package body Landin.Syntax.Parser is
                end;
             end Parse_Type_Application;
 
-            --  type ::= the eleven scalar names                   [1790]
+            --  type ::= the scalar names                          [1790]
             --
             --  Not a closed set of keywords: [1760] says u32 and bool are
             --  ordinary declared names the kernel predeclares, so this
@@ -2059,7 +2061,8 @@ package body Landin.Syntax.Parser is
                      end loop;
 
                      --  [1795] lets a program declare a type, so a name
-                     --  that is not one of the eleven is no longer wrong
+                     --  that is not one of the built-in scalars is no
+                     --  longer wrong
                      --  here: whether it names one is resolution's to
                      --  answer, and this stage stops guessing.
                      declare
@@ -5796,6 +5799,11 @@ package body Landin.Syntax.Parser is
                         Radix     => Tok.Base (Item),
                         Digits_At => Tok.Digit_Span (Item));
                   end;
+               end if;
+
+               if Peek = Tok.Float_Literal then
+                  Advance;
+                  return Add (Of_Kind => Float_Literal, At_Token => At_Item);
                end if;
 
                if Peek = Tok.Text_Literal then

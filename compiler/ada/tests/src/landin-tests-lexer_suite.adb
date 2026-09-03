@@ -232,16 +232,55 @@ package body Landin.Tests.Lexer_Suite is
          Landin.Testing.Check
            (Item, Landin.Tokens.Kind (Float_Text, 5)
                   = Landin.Tokens.Float_Literal,
-            "a float is one lexeme, so [1830] can refuse it by name");
+            "a decimal float is one enabled lexeme");
+         Landin.Testing.Check_Equal
+           (Item, Landin.Tokens.Fault_Count (Float_Text), 0,
+            "an enabled decimal float carries no lexical refusal");
+      end;
+
+      declare
+         Hex_Float : Landin.Tokens.Token_Stream;
+      begin
+         Lex_Text ("ratio: f64 = 0x1.8p+1", Sources, Names, Hex_Float);
+         Landin.Testing.Check
+           (Item, Landin.Tokens.Kind (Hex_Float, 5)
+                  = Landin.Tokens.Hex_Float_Literal,
+            "a hexadecimal float remains one deferred lexeme");
          Landin.Testing.Check
            (Item,
-            Landin.Tokens.Refused (Landin.Tokens.Nth_Fault (Float_Text, 1))
-            = Landin.Tokens.Float_Literal,
+            Landin.Tokens.Refused (Landin.Tokens.Nth_Fault (Hex_Float, 1))
+            = Landin.Tokens.Hex_Float_Literal,
             "and the fault says which construct it was");
          Landin.Testing.Check_Equal
            (Item,
-            Landin.Tokens.Construct (Landin.Tokens.Float_Literal), "[0210]",
+            Landin.Tokens.Construct
+              (Landin.Tokens.Hex_Float_Literal), "[0230]",
             "which names the tour construct that describes it");
+      end;
+
+      declare
+         Binary_Fraction : Landin.Tokens.Token_Stream;
+      begin
+         Lex_Text ("0b1.1p0", Sources, Names, Binary_Fraction);
+         Landin.Testing.Check
+           (Item, Landin.Tokens.Kind (Binary_Fraction, 1)
+                  = Landin.Tokens.Integer_Literal,
+            "a binary prefix does not acquire hexadecimal float syntax");
+      end;
+
+      declare
+         Malformed : Landin.Tokens.Token_Stream;
+      begin
+         Lex_Text ("ratio := 1.0e-", Sources, Names, Malformed);
+         Landin.Testing.Check
+           (Item, Landin.Tokens.Kind (Malformed, 3)
+                  = Landin.Tokens.Malformed_Float,
+            "an incomplete exponent remains one malformed float");
+         Landin.Testing.Check
+           (Item,
+            Landin.Tokens.Kind (Landin.Tokens.Nth_Fault (Malformed, 1))
+              = Landin.Tokens.Malformed_Float_Literal_Run,
+            "and its fault identifies the malformed float spelling");
       end;
 
       declare
@@ -374,7 +413,7 @@ package body Landin.Tests.Lexer_Suite is
       Note ("xs[0]");                              --  the brackets
       Note ("x += 1");                             --  Compound_Assign
       Note ("c: u32 = 'a'");                       --  Character_Literal
-      Note ("r: f32 = 1.5");                       --  Float_Literal
+      Note ("r: f32 = 0x1.0p0");                  --  Hex_Float_Literal
       Note ("r: utf8 = """"""raw""""""");          --  Raw_Literal
 
       for Kind in Landin.Tokens.Deferred_Kind loop

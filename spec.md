@@ -131,10 +131,10 @@ keyword     ::= "addr" | "alignof" | "and" | "any" | "atom" | "dec" | "else"
 
 ```
 
-### [1770] The kernel's literals include contextual byte text
+### [1770] The kernel's literals include decimal floats and contextual byte text
 
-The kernel's literals are integers, quoted text, the two booleans, and
-contextual `zeroed`.
+The kernel's literals are integers, decimal floats, quoted text, the two
+booleans, and contextual `zeroed`.
 Integer literals are untyped and take
 the type of their context [0190], defaulting to i32 with none [0200]; the bases
 and the separator are [0220]'s. `zeroed` has no type of its own: [0540] gives it
@@ -148,17 +148,22 @@ where no enabled construct supplies that context. D161 admits [0260]'s quoted
 literal when its direct context is a read-only `[]u8`; the unescaped source
 content is UTF-8 [1750], and [0270]'s byte escapes are decoded into that view.
 With no context it still defaults to the not-yet-enabled `utf8`, and `utf8`,
-`utf16`, `cstring` and codepoint escapes remain R4.10 work. Floats [0210],
-characters [0250] and raw literals [0280] are also not enabled yet.
+`utf16`, `cstring` and codepoint escapes remain R4.10 work. D162 admits
+[0210]'s decimal float with [0220]'s optional exponent; hexadecimal floats
+[0230], characters [0250] and raw literals [0280] are not enabled yet.
 
 ```landin-grammar
-literal     ::= integer | text | "true" | "false" | "zeroed"
+literal     ::= integer | float | text | "true" | "false" | "zeroed"
 text        ::= "\"" (text_escape | text_byte)* "\""
 text_byte   ::= any byte except quote, backslash or line_end
 text_escape ::= "\\" ("n" | "r" | "t" | "e" | "\\" | "\"" | "'"
                   | "x" hex_digit hex_digit
                   | "u" "{" hex_digit+ "}")
 integer     ::= decimal | hex | octal | binary
+float       ::= decimal_fraction decimal_exponent?
+decimal_fraction ::= decimal_digits "." decimal_digits
+decimal_exponent ::= ("e" | "E") ("+" | "-")? decimal_digits
+decimal_digits ::= digit (digit | "_")*
 decimal     ::= digit (digit | "_")*
 hex         ::= "0x" hex_digit (hex_digit | "_")*
 octal       ::= "0o" octal_digit (octal_digit | "_")*
@@ -200,7 +205,7 @@ line_comment  ::= "--" (any byte except line_end)*
 A binding names one thing, and says how much it may change.
 The full form, the inferred form and the mutable form are [0040],
 [0050] and [0060]; a binding with no value must be assigned before
-it is read [0080]. The kernel's types are the eleven scalar names, atom sets, fixed arrays,
+it is read [0080]. The kernel's types are the thirteen scalar names, atom sets, fixed arrays,
 pointers, slices, D145's `any C`, function types with their complete declared
 error sets, and what [1795] declares from them: aliases, named ordinary structs and D74's named
 variant-bearing structs. `mut` in a pointer or slice type records permission to
@@ -215,7 +220,7 @@ length. Neither has an all-zero value [0540]. A function type is written with
 declare nothing; only a function declaration opens [1840]'s signature scope.
 The other TYPES YOU DECLARE
 remain deferred. A type position holds a declared name either way, since
-[1760] makes the eleven ordinary declared names the kernel
+[1760] makes the thirteen ordinary declared names the kernel
 predeclares; the grammar spells them out because they are the
 only ones a program does not have to declare for itself.
 An array [0520] is a type position too, and its length is part
@@ -243,7 +248,7 @@ type_application ::= declaration_reference "(" type_argument
 type_argument ::= type | integer
 scalar_name   ::= "u8" | "u16" | "u32" | "u64"
                 | "i8" | "i16" | "i32" | "i64"
-                | "usize" | "isize" | "bool"
+                | "usize" | "isize" | "f32" | "f64" | "bool"
 
 ```
 
@@ -659,7 +664,7 @@ runtime or type value and is likewise refused.
 ### [1870] The kernel's types, and what each of them holds
 
 The kernel's types, and what each of them holds.
-[1790] gives the kernel eleven spellings and nothing that
+[1790] gives the kernel thirteen spellings and nothing that
 says what one of them holds, so nothing yet says whether a
 u8 may be given 300. [0150] puts the width in the name,
 [0160] takes usize and isize from the machine and [0180]
@@ -670,6 +675,7 @@ gives bool its two values; written out, that is:
 | `u8` `u16` `u32` `u64` | every unsigned value of that many bits |
 | `i8` `i16` `i32` `i64` | every signed one, two's complement |
 | `usize` `isize` | the same pair, at the target's pointer width [0160] |
+| `f32` `f64` | IEEE 754 binary32 and binary64 values, including signed zero, infinities and NaNs [0170] [0240] |
 | `bool` | false and true [0180] |
 | `ptr T`, `ptr mut T` | one non-null target address, with tracked origin unless constructed from an integer [0430] [0470] |
 | `[]T`, `[]mut T` | one non-null aligned base and a `usize` length [0570] [0580] |
@@ -678,15 +684,15 @@ gives bool its two values; written out, that is:
 Two's complement is not a new decision. [0300]'s wrapping
 forms have to wrap somewhere and [0320]'s '>>' keeps a sign,
 and neither means anything without it.
-Each of the eleven is its own type. usize is not u64 on a
+Each of the thirteen is its own type. usize is not u64 on a
 machine whose pointer is eight bytes wide, because if it
 were, [0310] would refuse a program on one target and accept
 it on another for a reason no paragraph here could state.
 [1510]'s 'sizeof usize == 8' asks what a machine does; it
 does not say two names are one type.
-u128 and i128 [0150], the packed widths [0730] and the
-floats [0170] are described in this tour and are not enabled
-yet.
+u128 and i128 [0150], the packed widths [0730] and f16 [0170] are described in
+this tour and are not enabled yet. D162 enables f32 and f64 without making
+either an integer or one another.
 An atom declaration introduces one value and its singleton type. An atom union
 is structural: aliases are flattened, order and repeated members do not change
 identity, and assignment or argument passing may widen a singleton or smaller
@@ -733,11 +739,16 @@ A call with two or more results has [0990]'s anonymous structural aggregate:
 its declaration-order field names and complete field types are its value shape.
 That shape supplies an inferred whole binding and every arm of a control value.
 
-And two give none: the inferred form [0050] and a discard
-[1020], where [0200]'s i32 is what is left.
+And two give none: the inferred form [0050] and a discard [1020], where
+[0200]'s i32 is what is left for an integer and D162's f32 for a float.
 For [0260]'s text literal, those same direct positions may instead supply a
 complete text view. D161 currently admits only `[]u8`; with no supplied
 context the literal defaults to `utf8` and is refused by [1830].
+For [0210]'s float literal, the same positions supply f32 or f64. There is no
+implicit conversion from an integer literal or integer value; with no context
+the float defaults to f32. The decimal spelling rounds once to the contextual
+IEEE format. A finite spelling that would round to infinity is L0300 rather
+than silently becoming [0240]'s named special value.
 With no surrounding context, the first written answer of a control expression
 supplies its scalar type, fixed-array element and extent, or nominal aggregate
 body; every other answer must have that same complete shape. An edge that
@@ -774,12 +785,13 @@ second type to go.
 
 | operator | takes, and gives back |
 | --- | --- |
-| `+` `-` `*` `/` `%`, and [0300]'s `+%` `-%` `*%` | one integer type, and that type back [0290] |
+| `+` `-` `*` `/` | one integer or float type, and that type back [0290] |
+| `%`, and [0300]'s `+%` `-%` `*%` | one integer type, and that type back [0290] |
 | `&` `^` `\|`, and the unary `~` | one integer type, and that type back [0330] |
 | `<<` `>>` | an integer shifted by an integer of that same type, and that type back [0320]. The amount is not bounded by the width: [0320] fills with zeros beyond it for any amount. |
 | `==` `<>` `<` `<=` `>` `>=` | one type on both sides, and a bool back [0350]; atom sets have identity equality and inequality only |
 | `and` `or` `not` | bool, and a bool back [0340] |
-| unary `-` | one integer type, and that type back |
+| unary `-` | one integer or float type, and that type back |
 
 So an integer has no logical words and a bool has no
 arithmetic and no bitwise set: 'and' is what [0340] gave a
@@ -951,13 +963,18 @@ bound to a module binding whose value is known. Not a call.
 There is no compile-time execution in this language, so a
 call is not a value the compiler holds, and [1830] refuses
 it as the construct it is rather than as a type error.
-An operator in a module value is folded, and a fold no type
+An integer operator in a module value is folded, and a fold no type
 holds is refused. [0300]'s trap has nowhere to happen here:
 [1460] says nothing runs before the entry point, so a module
 value that overflows has no moment in which to trap and no
 value to stand for it. Inside a body the same expression
 traps [0300] and is not this, which is the one place the two
 readings of one sum come apart.
+D162's first float increment admits a decimal float literal, its unary minus,
+or `zeroed` as a module scalar or aggregate-field image. Module float
+arithmetic is a named R4.10 refusal: reproducing the runtime IEEE rounding and
+NaN rules in a target-neutral static folder is separate work, not permission
+to use the compiler host's floating-point behavior as language semantics.
 [0130] makes a module a set, so one module value may name
 another written below it. A chain of them that comes back to
 where it began names nothing at all: no member of it is
@@ -1009,7 +1026,7 @@ does.
 
 | the operation | the operand it cannot take |
 | --- | --- |
-| `/` `%` | a divisor of zero [0290] |
+| integer `/` `%` | a divisor of zero [0290] |
 | `<<` `>>` | a negative amount [0320] |
 | `[ ]` | an index outside the length [0520] |
 
@@ -1020,6 +1037,8 @@ checks the length before it computes an address, so what was
 left unsaid is only which of refusing and trapping applies
 where — and that is what the rest of this paragraph already
 decides for the other two.
+Float division follows IEEE 754: division by signed zero produces an infinity
+or NaN and does not use this refusal or trap rule.
 D18 makes an array index `usize`, so a negative expression is refused by
 its type before this row applies. The row asks only whether a well-typed
 index is below the array's length.
@@ -6895,7 +6914,7 @@ record, and `runtime/variant-struct-payloads` on Linux x86-64.
 struct's field may have any type a binding may have [0670] [0750], and it
 writes `w.items[i].x` and `xs[i].items` outright. D17 made an array's identity
 its length and its element, and every stage carried that element as one of
-[1790]'s eleven scalars.
+[1790]'s scalar types.
 
 **Chosen:** [0520]'s element may be an ordinary struct. Its extent is that
 struct's own padded layout repeated, so an array adds nothing but the
@@ -8423,10 +8442,11 @@ classified failure boundary before the repository gate can pass.
 
 | Operation | Class | Constructs | Behaviour | Evidence |
 | --- | --- | --- | --- | --- |
-| `source.lexical` | static | 0010, 0020, 0030, 0220, 0260, 0270, 1750, 1760, 1770, 1780, 1830 | L0010--L0014 or L0320 | `negative/malformed-integer-digit`, `negative/text-literal-unknown-escape`, `negative/unterminated-text-literal`, `negative/unknown-byte` |
+| `source.lexical` | static | 0010, 0020, 0030, 0210, 0220, 0260, 0270, 1750, 1760, 1770, 1780, 1830 | L0010--L0014, L0320 or L0321 | `negative/hex-float-literal-not-enabled`, `negative/malformed-float-exponent`, `negative/malformed-integer-digit`, `negative/text-literal-unknown-escape`, `negative/unterminated-text-literal`, `negative/unknown-byte` |
 | `source.structure` | static | 1740, 1800, 1810, 1820, 1840 | L0100--L0112 | `negative/variant-part-end-name-mismatch`, `unit/parser-nesting-limit` |
 | `declarations.names` | static | 0040, 0050, 0060, 0080, 0090, 0100, 0110, 0120, 0130, 0140, 1790, 1795, 1850 | L0200 or L0201 | `negative/duplicate-in-a-module`, `negative/local-used-above-its-declaration` |
-| `types.values` | static | 0070, 0160, 0180, 0190, 0200, 1870, 1880, 1890 | L0300, L0301 or L0304 | `negative/literal-above-its-type`, `negative/type-name-is-not-a-type` |
+| `types.values` | static | 0070, 0160, 0170, 0180, 0190, 0200, 0210, 1870, 1880, 1890 | L0300, L0301 or L0304 | `negative/float-literal-not-enabled`, `negative/float-type-not-enabled`, `negative/integer-literal-not-a-float`, `negative/literal-above-its-type`, `negative/type-name-is-not-a-type` |
+| `float.ieee` | static | 0170, 0210, 0220, 0240, 0290, 0350 | f32/f64 runtime arithmetic and comparison follow IEEE binary32/binary64, preserving signed zero and unordered NaN behavior; L0301 rejects mixed classes and integer-only operators, and L0304 retains the static-fold boundary | `negative/float-remainder-is-integer-only`, `negative/module-float-arithmetic-not-enabled`, `runtime/float-decimal-runtime` |
 | `text.literal-storage` | static | 0260, 0270, 0570, 1770, 1880, 1900, 1940 | L0301 for a non-byte, writable or codepoint context; L0303 for a write through its read-only view; L0304 for the default deferred `utf8`; equal decoded contents share read-only storage with one trailing NUL excluded from the slice length | `negative/text-literal-codepoint-in-byte-context`, `negative/text-literal-needs-byte-slice`, `negative/text-literal-needs-read-only-slice`, `negative/text-literal-not-enabled`, `negative/text-literal-write`, `runtime/text-literal-bytes` |
 | `arithmetic.known` | static | 0290, 0300, 1950 | L0300 or L0306 | `negative/divisor-is-zero`, `negative/literal-above-its-type` |
 | `arithmetic.runtime` | trap | 0290, 0300, 0320, 1950, 1960 | trap | `runtime/checked-overflow-traps`, `runtime/checked-subtraction-traps`, `runtime/checked-multiplication-traps`, `runtime/checked-negation-traps`, `runtime/signed-division-overflow-traps`, `runtime/a-zero-divisor-traps`, `runtime/a-zero-remainder-divisor-traps`, `runtime/negative-left-shift-traps`, `runtime/negative-right-shift-traps` |
@@ -8451,7 +8471,7 @@ classified failure boundary before the repository gate can pass.
 | `origins.escape` | static | 0770, 0780, 0790, 0800, 0830, 0840 | L0314--L0316 | `negative/frame-origin-return`, `negative/borrowed-source-inout`, `negative/returned-reference-missing-from`, `negative/core-arena-frame-escape`, `negative/core-text-frame-slice-escape`, `negative/core-diag-frame-message-escape`, `runtime/diagnostic-loggers-dispatch` |
 | `origins.aliasing-limit` | outside | 0770, 0910 | non-guarantee: a pre-existing copy or indistinguishable arena is not tracked | `positive/reference-origins-and-consume`, `negative/use-after-sink` |
 | `functions.abi` | static | 0870, 0880, 0890, 0900, 0920, 0930, 0980, 1000, 1020, 1030, 1460, 1920, 1970 | L0301, L0302 or L0502 | `negative/call-with-too-few-arguments`, `runtime/r230-composition` |
-| `extern.c-boundary` | static | 0430, 1570, 1580, 1975 | L0301 for a signature outside R3.50's fixed scalar/pointer subset | `positive/external-scalar-c-boundary`, `negative/external-aggregate-boundary` |
+| `extern.c-boundary` | static | 0430, 1570, 1580, 1975 | L0301 for a signature outside R3.50's fixed integer/bool/pointer subset | `positive/external-scalar-c-boundary`, `negative/external-aggregate-boundary`, `negative/external-float-abi-not-enabled` |
 | `host.io` | outside | 0430, 1580, 1650, 1660, 1680, 1975 | non-guarantee: files, descriptors, arguments and streams reflect mutable host state | `runtime/hosted-io-reads-parser-input`, `runtime/derived-parser` |
 | `host.io-failure` | static | 0940, 0960, 1030, 1975 | `core/io` reports foreseeable host failure as declared atoms which callers handle or declare | `runtime/hosted-io-reads-parser-input`, `runtime/diagnostic-loggers-dispatch`, `runtime/derived-parser` |
 | `diagnostics.retention` | outside | 0950, 1680 | non-guarantee: `core/diag.bounded(N)` retains at most N notes and reports every later note through its `dropped` count instead | `runtime/diagnostic-loggers-dispatch`, `runtime/derived-parser` |
@@ -9133,3 +9153,57 @@ permit two compiler stages to disagree about the bytes. All were declined.
 `negative/text-literal-unknown-escape`, `negative/text-literal-write`, the
 lexer and backend cases, and the `source.lexical` and `text.literal-storage`
 guarantee rows.
+
+### D162 — Decimal f32 and f64 values keep IEEE bits through runtime operations
+
+**The tour said** that f16, f32 and f64 exist [0170], that a float literal is
+recognisably distinct from an integer [0210], that decimal exponents and
+separators are accepted [0220], and that signed zero and arithmetic-produced
+IEEE special values are observable [0240]. It did not state the type of a
+contextless float, whether one width could arrive before the others, how a
+finite decimal overflow is treated, or whether module folding may inherit the
+compiler host's arithmetic.
+
+**Chosen:** the eighth R4.10 increment enables f32 and f64. A decimal literal
+has digits on both sides of its dot and may have `e` or `E`, an optional sign,
+and a nonempty decimal exponent; underscores follow the integer digit-run
+rule. It takes f32 or f64 from context and otherwise defaults to f32. Integer
+and float literals remain separate classes with no implicit conversion. The
+literal rounds once to IEEE binary32 or binary64; a finite spelling that would
+become infinity is L0300. Unary minus flips the IEEE sign bit, preserving
+negative zero and a NaN payload.
+
+At runtime `+`, `-`, `*`, `/`, unary minus and all six comparisons use the
+value's IEEE width. Division by signed zero yields infinity or NaN rather than
+[1950]'s integer refusal or trap. Equality is false for an unordered NaN,
+inequality true, and every ordered comparison false. Values retain their raw
+bits through local and module scalar storage, fixed arrays, ordinary structs,
+internal parameters and returns. Representation-class routine sharing treats
+a float as distinct from a same-width integer. The first external C boundary
+continues to refuse float signatures until R4.40 supplies its register classes.
+
+A module float may presently use a literal, its unary minus or `zeroed`, also
+inside a static aggregate image. Float arithmetic in a module image is a named
+R4.10 refusal: the target-neutral folder does not borrow the compiler host's
+rounding mode or NaN behavior. f16, hexadecimal floats [0230], the named
+`infinity` and `nan` members [0240], and explicit integer/float conversions
+[0310] remain separate hosted increments.
+
+**The alternatives:** default to f64, admit decimal literals only with an
+explicit type, treat a float's same-width integer carrier as interchangeable,
+lower float operations through integer arithmetic, or evaluate module values
+with the Ada host's float types. Those choices contradict the tour's inferred
+f32 examples, lose IEEE behavior, make routine sharing change operations, or
+make cross-compilation depend on the host.
+
+**Pinned by** `runtime/float-decimal-runtime`,
+`negative/float-literal-not-enabled`,
+`negative/float-literal-overflows-context`,
+`negative/float-remainder-is-integer-only`,
+`negative/float-type-not-enabled`,
+`negative/integer-literal-not-a-float`,
+`negative/hex-float-literal-not-enabled`,
+`negative/malformed-float-exponent`,
+`negative/module-float-arithmetic-not-enabled`,
+`negative/external-float-abi-not-enabled`, the lexer cases, and the
+`float.ieee` guarantee row.

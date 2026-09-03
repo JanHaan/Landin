@@ -20,6 +20,8 @@ target linux-x86-64
   i64     64    8      8
   usize   64    8      8
   isize   64    8      8
+  f32     32    4      4
+  f64     64    8      8
   bool    1     1      1
 
   aggregate       offsets     size   align
@@ -59,6 +61,8 @@ target synthetic-32
   i64     64    8      8
   usize   32    4      4
   isize   32    4      4
+  f32     32    4      4
+  f64     64    8      8
   bool    1     1      1
 
   aggregate       offsets     size   align
