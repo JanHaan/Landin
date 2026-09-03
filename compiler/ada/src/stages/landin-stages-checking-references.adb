@@ -875,6 +875,20 @@ package body Landin.Stages.Checking.References is
             when Syn.Bare_Block =>
                Process_Block (Tree, Syn.Body_Of (Tree, Node));
 
+            when Syn.Loop_Statement | Syn.While_Statement =>
+               --  A conditional loop may execute zero times; an
+               --  unconditional one can leave through `break`.  Origin
+               --  facts only grow, so joining one body pass with entry is
+               --  the conservative fixed point for this analysis.
+               declare
+                  Before : constant Origin_Table := Origins;
+               begin
+                  Process_Block (Tree, Syn.Loop_Body (Tree, Node));
+                  for Id in Origins'Range loop
+                     Join (Origins (Id), Before (Id));
+                  end loop;
+               end;
+
             when Syn.Return_Statement =>
                Check_Returns (Tree, Node);
 

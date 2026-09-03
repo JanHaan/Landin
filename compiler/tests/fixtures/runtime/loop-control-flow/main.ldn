@@ -1,0 +1,30 @@
+mut trace: i32 = 0
+
+mark: (value: i32) -> none =
+    trace = trace * 10 + value
+end mark
+
+public main: () -> (code: i32) =
+    mut i: i32 = 0
+    mut total: i32 = 0
+    while i < 8 do
+        inc i
+        continue when i == 3
+        total = total + i
+        break when i == 6
+    end while
+
+    mut j: i32 = 0
+    loop do
+        inc j
+        defer mark(j)
+        continue when j < 2
+        break
+    end loop
+
+    if i == 6 and total == 18 and j == 2 and trace == 12 then
+        code = 42
+    else
+        code = 1
+    end if
+end main

@@ -1,0 +1,5 @@
+f: () -> none =
+    while 1 do
+        break
+    end while
+end f

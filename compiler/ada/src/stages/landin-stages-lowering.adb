@@ -501,6 +501,17 @@ package body Landin.Stages.Lowering is
 
       Cleanup_Stack : Cleanup_Entries.Vector;
 
+      type Loop_Entry is record
+         Head         : IR.Block_Id := IR.No_Block;
+         Exit_Block   : IR.Block_Id := IR.No_Block;
+         Cleanup_Base : Natural := 0;
+      end record;
+
+      package Loop_Entries is new Ada.Containers.Vectors
+        (Index_Type => Positive, Element_Type => Loop_Entry);
+
+      Loop_Stack : Loop_Entries.Vector;
+
       function Site_Of (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
         return Landin.Provenance.Origin
         is (Syn.Origin (Of_Tree, Node));
@@ -936,6 +947,17 @@ package body Landin.Stages.Lowering is
          Destination : IR.Slot_Id := IR.No_Slot;
          Destination_Field : Natural := 0;
          Destination_Path : IR.Path_Step_Array := IR.No_Path_Steps);
+
+      procedure Lower_Loop
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Scope   : Res.Scope_Id;
+         Result  : IR.Slot_Id);
+
+      procedure Lower_Loop_Transfer
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Scope   : Res.Scope_Id);
 
       procedure Leave_With
         (Result : IR.Slot_Id; Site : Landin.Provenance.Origin);
@@ -5690,6 +5712,169 @@ package body Landin.Stages.Lowering is
          end if;
       end Lower_Bare_Block;
 
+      function Block_Has_Break
+        (Of_Tree : Syn.Tree; Block : Syn.Node_Id) return Boolean;
+
+      function Block_Has_Break
+        (Of_Tree : Syn.Tree; Block : Syn.Node_Id) return Boolean
+      is
+         function Statement_Has_Break (Node : Syn.Node_Id) return Boolean;
+
+         function Statement_Has_Break (Node : Syn.Node_Id) return Boolean is
+         begin
+            case Syn.Kind (Of_Tree, Node) is
+               when Syn.Break_Statement =>
+                  return True;
+               when Syn.Loop_Statement | Syn.While_Statement =>
+                  --  An unlabelled break belongs to this nested loop.
+                  return False;
+               when Syn.If_Statement =>
+                  for Arm in 1 .. Syn.Arm_Count (Of_Tree, Node) loop
+                     if Block_Has_Break
+                       (Of_Tree, Syn.Body_Of
+                          (Of_Tree, Syn.Nth_Arm (Of_Tree, Node, Arm)))
+                     then
+                        return True;
+                     end if;
+                  end loop;
+                  return Syn.Else_Body (Of_Tree, Node) /= Syn.No_Node
+                    and then Block_Has_Break
+                      (Of_Tree, Syn.Else_Body (Of_Tree, Node));
+               when Syn.Match_Statement =>
+                  for Arm in 1 .. Syn.Match_Arm_Count (Of_Tree, Node) loop
+                     if Block_Has_Break
+                       (Of_Tree, Syn.Body_Of
+                          (Of_Tree,
+                           Syn.Nth_Match_Arm (Of_Tree, Node, Arm)))
+                     then
+                        return True;
+                     end if;
+                  end loop;
+                  return False;
+               when Syn.Bare_Block =>
+                  return Block_Has_Break
+                    (Of_Tree, Syn.Body_Of (Of_Tree, Node));
+               when others =>
+                  return False;
+            end case;
+         end Statement_Has_Break;
+      begin
+         for Index in 1 .. Syn.Statement_Count (Of_Tree, Block) loop
+            if Statement_Has_Break
+              (Syn.Nth_Statement (Of_Tree, Block, Index))
+            then
+               return True;
+            end if;
+         end loop;
+         return False;
+      end Block_Has_Break;
+
+      procedure Lower_Loop
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Scope   : Res.Scope_Id;
+         Result  : IR.Slot_Id)
+      is
+         Site : constant Landin.Provenance.Origin := Site_Of (Of_Tree, Node);
+         Runs : constant Syn.Node_Id := Syn.Loop_Body (Of_Tree, Node);
+         Inside : constant Res.Scope_Id :=
+           Res.Scope_At (Meanings.all, Of_Tree, Runs);
+         Is_While : constant Boolean :=
+           Syn.Kind (Of_Tree, Node) = Syn.While_Statement;
+         Head : constant IR.Block_Id := Fresh (Of_Tree, Node, Scope);
+         Body_Block : constant IR.Block_Id := Fresh (Of_Tree, Runs, Inside);
+         Has_Exit : constant Boolean :=
+           Is_While or else Block_Has_Break (Of_Tree, Runs);
+         Exit_Block : constant IR.Block_Id :=
+           (if Has_Exit then Fresh (Of_Tree, Node, Scope) else IR.No_Block);
+      begin
+         Close_With_Jump (Head, Site);
+         Open (Head);
+         if Is_While then
+            declare
+               Test : constant IR.Value_Id :=
+                 Lower_Expression
+                   (Of_Tree, Syn.Condition_Of (Of_Tree, Node), Scope);
+            begin
+               if Current /= IR.No_Block then
+                  IR.Emit_Branch
+                    (Unit.all, Filling, Test, Body_Block, Exit_Block, Site);
+                  IR.Leave_Block (Unit.all, Filling);
+                  Current := IR.No_Block;
+               end if;
+            end;
+         else
+            Close_With_Jump (Body_Block, Site);
+         end if;
+
+         Loop_Stack.Append
+           (Loop_Entry'
+              (Head         => Head,
+               Exit_Block   => Exit_Block,
+               Cleanup_Base => Natural (Cleanup_Stack.Length)));
+         Open (Body_Block);
+         Lower_Statements (Of_Tree, Runs, Inside, Result);
+         if Current /= IR.No_Block then
+            Close_With_Jump (Head, Site);
+         end if;
+         Loop_Stack.Delete_Last;
+
+         if Has_Exit then
+            Open (Exit_Block);
+         end if;
+      end Lower_Loop;
+
+      procedure Lower_Loop_Transfer
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Scope   : Res.Scope_Id)
+      is
+         Site : constant Landin.Provenance.Origin := Site_Of (Of_Tree, Node);
+         Frame : constant Loop_Entry := Loop_Stack.Last_Element;
+         Target : constant IR.Block_Id :=
+           (if Syn.Kind (Of_Tree, Node) = Syn.Break_Statement
+            then Frame.Exit_Block else Frame.Head);
+
+         procedure Transfer;
+
+         procedure Transfer is
+         begin
+            Emit_Cleanups
+              (Of_Tree, Frame.Cleanup_Base + 1,
+               Cleanup.Structured_Transfer);
+            if Current /= IR.No_Block then
+               Close_With_Jump (Target, Site);
+            end if;
+         end Transfer;
+      begin
+         if Syn.Condition_Of (Of_Tree, Node) = Syn.No_Node then
+            Transfer;
+         else
+            declare
+               Test : constant IR.Value_Id :=
+                 Lower_Expression
+                   (Of_Tree, Syn.Condition_Of (Of_Tree, Node), Scope);
+            begin
+               if Current /= IR.No_Block then
+                  declare
+                     Goes : constant IR.Block_Id :=
+                       Fresh (Of_Tree, Node, Scope);
+                     Stays : constant IR.Block_Id :=
+                       Fresh (Of_Tree, Node, Scope);
+                  begin
+                     IR.Emit_Branch
+                       (Unit.all, Filling, Test, Goes, Stays, Site);
+                     IR.Leave_Block (Unit.all, Filling);
+                     Current := IR.No_Block;
+                     Open (Goes);
+                     Transfer;
+                     Open (Stays);
+                  end;
+               end if;
+            end;
+         end if;
+      end Lower_Loop_Transfer;
+
       ------------------------------------------------------------
       --  [1810]: statements
       ------------------------------------------------------------
@@ -8566,6 +8751,12 @@ package body Landin.Stages.Lowering is
                            end if;
                         end;
                      end if;
+
+                  when Syn.Break_Statement | Syn.Continue_Statement =>
+                     Lower_Loop_Transfer (Of_Tree, Stmt, Scope);
+
+                  when Syn.Loop_Statement | Syn.While_Statement =>
+                     Lower_Loop (Of_Tree, Stmt, Scope, Result);
 
                   when Syn.If_Statement =>
                      Lower_If (Of_Tree, Stmt, Scope, Result);

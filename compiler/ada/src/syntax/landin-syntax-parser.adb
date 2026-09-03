@@ -70,27 +70,18 @@ package body Landin.Syntax.Parser is
 
    type Refused_Word is
      (Word_None,
-      Word_Loop, Word_While, Word_For,
-      Word_Break, Word_Continue, Word_Distinct);
+      Word_For, Word_Distinct);
 
-   subtype Real_Word is Refused_Word range Word_Loop .. Word_Distinct;
+   subtype Real_Word is Refused_Word range Word_For .. Word_Distinct;
 
    function Spelling (Item : Real_Word) return String
      is (case Item is
-            when Word_Loop     => "loop",
-            when Word_While    => "while",
             when Word_For      => "for",
-            when Word_Break    => "break",
-            when Word_Continue => "continue",
             when Word_Distinct => "distinct");
 
    function Refusal (Item : Real_Word) return Syn.Refused_Construct
      is (case Item is
-            when Word_Loop     => Syn.Loop_Statement,
-            when Word_While    => Syn.While_Statement,
             when Word_For      => Syn.For_Statement,
-            when Word_Break    => Syn.Break_Statement,
-            when Word_Continue => Syn.Continue_Statement,
             when Word_Distinct => Syn.Distinct_Type);
 
    --  The scalar names [1790].  These are the types the kernel predeclares,
@@ -160,6 +151,10 @@ package body Landin.Syntax.Parser is
             --  end of a then/elsif arm the enclosing branch wins; wrapping a
             --  recovered call in parentheses makes its inner `else` explicit.
             Else_Closes_Arm : Boolean := False;
+            --  Transfers are contextual identifiers.  Keeping the nesting
+            --  count here lets a stray `break` or `continue` remain a source
+            --  diagnostic instead of reaching lowering without a target.
+            Loop_Depth : Natural := 0;
             --  A labelled RHS keeps direct positional applications neutral:
             --  their own arguments may recursively be type-only syntax.
             --  Outside that one parse, positional Call uses the unchanged
@@ -199,6 +194,21 @@ package body Landin.Syntax.Parser is
 
             Undo_Id : constant Landin.Source.Names.Name_Id :=
               Landin.Source.Names.Intern (Names, "undo");
+
+            Loop_Id : constant Landin.Source.Names.Name_Id :=
+              Landin.Source.Names.Intern (Names, "loop");
+
+            While_Id : constant Landin.Source.Names.Name_Id :=
+              Landin.Source.Names.Intern (Names, "while");
+
+            Break_Id : constant Landin.Source.Names.Name_Id :=
+              Landin.Source.Names.Intern (Names, "break");
+
+            Continue_Id : constant Landin.Source.Names.Name_Id :=
+              Landin.Source.Names.Intern (Names, "continue");
+
+            Do_Id : constant Landin.Source.Names.Name_Id :=
+              Landin.Source.Names.Intern (Names, "do");
 
             --  These remain ordinary identifiers except in the three
             --  contextual productions below.
@@ -366,6 +376,8 @@ package body Landin.Syntax.Parser is
                Seed        : Node_Id := No_Node;
                Allow_Value : Boolean := False) return Node_Id;
             function Parse_Statement (Context : Frame) return Node_Id;
+            function Parse_Loop (Context : Frame) return Node_Id;
+            function Parse_Loop_Transfer return Node_Id;
             function Parse_If (Context : Frame) return Node_Id;
             function Parse_Match (Context : Frame) return Node_Id;
             function Parse_Bare_Block (Context : Frame) return Node_Id;
@@ -4254,7 +4266,13 @@ package body Landin.Syntax.Parser is
                         Join (Start, After_Previous));
 
                   when Tok.Identifier =>
-                     if Named_Here in Defer_Id | Undo_Id then
+                     if Named_Here in Loop_Id | While_Id
+                     then
+                        return Parse_Loop (Context);
+                     elsif Named_Here in Break_Id | Continue_Id
+                     then
+                        return Parse_Loop_Transfer;
+                     elsif Named_Here in Defer_Id | Undo_Id then
                         declare
                            Is_Undo : constant Boolean :=
                              Named_Here = Undo_Id;
@@ -4472,6 +4490,133 @@ package body Landin.Syntax.Parser is
                      end;
                end case;
             end Parse_Statement;
+
+            --  loop_statement ::= "loop" "do" block "end" "loop"
+            --  while_statement ::= "while" expression "do" block
+            --                       "end" "while"                [1130/1140]
+            function Parse_Loop (Context : Frame) return Node_Id is
+               Starts : constant Landin.Source.Span := Here;
+               Is_While : constant Boolean :=
+                 Named_Here = While_Id;
+               Test : Node_Id := No_Node;
+               Runs : Node_Id;
+               Kept : Boolean;
+            begin
+               if Too_Deep (Starts) then
+                  Advance;
+                  Resync_Statement;
+                  return Add
+                    (Error_Statement, Starts, Join (Starts, After_Previous));
+               end if;
+
+               Depth := Depth + 1;
+               Advance;
+               if Is_While then
+                  Test := Parse_Expression;
+               end if;
+
+               if Peek = Tok.Identifier and then Named_Here = Do_Id then
+                  Advance;
+               else
+                  Complain
+                    (Item    => Syn.Token_Expected,
+                     Where   => (if Peek = Tok.End_Of_Input
+                                 then After_Previous else Here),
+                     Message => "a loop body opens with `do`",
+                     Note    => (if Is_While
+                                 then "[1140]: `while condition do`"
+                                 else "[1130]: `loop do`"),
+                     Related => Starts,
+                     Because => "this loop");
+               end if;
+
+               Loop_Depth := Loop_Depth + 1;
+               Runs := Parse_Block (Context);
+               Loop_Depth := Loop_Depth - 1;
+
+               Kept := Expect
+                 (Wanted  => Tok.Kw_End,
+                  Message => "this loop is never closed",
+                  Note    => (if Is_While
+                              then "[1140]: a while loop closes with"
+                                & " `end while`"
+                              else "[1130]: a loop closes with `end loop`"),
+                  Related => Starts,
+                  Because => "opened here");
+               if Kept then
+                  if Peek = Tok.Identifier
+                    and then Named_Here =
+                      (if Is_While then While_Id else Loop_Id)
+                  then
+                     Advance;
+                  else
+                     Complain
+                       (Item    => Syn.Token_Expected,
+                        Where   => (if Peek = Tok.End_Of_Input
+                                    then After_Previous else Here),
+                        Message => (if Is_While
+                                    then "a while loop closes with"
+                                      & " `end while`"
+                                    else "an unconditional loop closes"
+                                      & " with `end loop`"),
+                        Note    => (if Is_While then "[1140]" else "[1130]"),
+                        Related => Starts,
+                        Because => "this loop");
+                  end if;
+               end if;
+               Depth := Depth - 1;
+
+               if Is_While then
+                  return Add
+                    (Of_Kind  => While_Statement,
+                     At_Token => Starts,
+                     Extent   => Join (Starts, After_Previous),
+                     Children => [Test, Runs]);
+               else
+                  return Add
+                    (Of_Kind  => Loop_Statement,
+                     At_Token => Starts,
+                     Extent   => Join (Starts, After_Previous),
+                     Children => [1 => Runs]);
+               end if;
+            end Parse_Loop;
+
+            --  transfer ::= ("break" | "continue") ("when" expression)?
+            --  R4.10 begins with the nearest-loop form.  Labels, `with` and
+            --  value-producing `complete` remain the next loop increment.
+            function Parse_Loop_Transfer return Node_Id is
+               Starts : constant Landin.Source.Span := Here;
+               Is_Break : constant Boolean :=
+                 Named_Here = Break_Id;
+               Guard : Node_Id := No_Node;
+            begin
+               Advance;
+               if Peek = Tok.Kw_When then
+                  Advance;
+                  Guard := Parse_Expression;
+               end if;
+
+               if Loop_Depth = 0 then
+                  Complain
+                    (Item    => Syn.Stray_Token,
+                     Where   => Starts,
+                     Message => (if Is_Break
+                                 then "`break` has no enclosing loop"
+                                 else "`continue` has no enclosing loop"),
+                     Note    => "[1180]/[1190]: a loop transfer targets"
+                       & " an enclosing loop");
+                  return Add
+                    (Error_Statement, Starts, Join (Starts, After_Previous));
+               end if;
+
+               return Add
+                 (Of_Kind  =>
+                    (if Is_Break then Break_Statement
+                     else Continue_Statement),
+                  At_Token => Starts,
+                  Extent   => Join (Starts, After_Previous),
+                  Children => [1 => Guard]);
+            end Parse_Loop_Transfer;
 
             --  if ::= "if" expression "then" block
             --         ("elsif" expression "then" block)*

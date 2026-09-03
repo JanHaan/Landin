@@ -348,6 +348,14 @@ package body Landin.Stages.Checking.Flow is
 
       Cleanup_Stack : Cleanup_Entries.Vector;
 
+      package Loop_Cleanup_Entries is new Ada.Containers.Vectors
+        (Index_Type => Positive, Element_Type => Natural);
+
+      --  The cleanup depth outside each active loop.  A transfer unwinds
+      --  only lexical frames entered since that loop began, then either
+      --  reaches the loop exit or its next condition test.
+      Loop_Cleanup_Stack : Loop_Cleanup_Entries.Vector;
+
       --  Which declarations [1910] is about.  A parameter arrives assigned
       --  and a module binding is [1940]'s, so what is left is a local
       --  declared with no value and the named return.
@@ -1657,6 +1665,48 @@ package body Landin.Stages.Checking.Flow is
          Edges := No_Edges;
 
          case Syn.Kind (Of_Tree, Node) is
+            when Syn.Loop_Statement | Syn.While_Statement =>
+               declare
+                  Is_While : constant Boolean :=
+                    Syn.Kind (Of_Tree, Node) = Syn.While_Statement;
+                  Returned : Boolean := False;
+               begin
+                  if Is_While then
+                     declare
+                        Test_Edges : Edge_Facts;
+                     begin
+                        Flow_Expression
+                          (Of_Tree, Syn.Condition_Of (Of_Tree, Node),
+                           Result, State, Test_Edges);
+                        Returned := Test_Edges.Returns;
+                        if not Test_Edges.Falls_Through then
+                           Edges := Test_Edges;
+                           return;
+                        end if;
+                     end;
+                  end if;
+
+                  declare
+                     Body_State : Assigned_Set := State;
+                     Body_Edges : Edge_Facts;
+                  begin
+                     Loop_Cleanup_Stack.Append
+                       (Natural (Cleanup_Stack.Length));
+                     Flow_Block
+                       (Of_Tree, Syn.Loop_Body (Of_Tree, Node), Result,
+                        Syn.Origin (Of_Tree, Node), Body_State, Body_Edges);
+                     Loop_Cleanup_Stack.Delete_Last;
+                     Returned := Returned or Body_Edges.Returns;
+                  end;
+
+                  --  A while's false test and an unconditional loop's
+                  --  break edges are the only exits.  This first increment
+                  --  deliberately retains only facts present before an
+                  --  iteration; a later fixed-point refinement may prove
+                  --  more without weakening definite assignment.
+                  Edges := (Falls_Through => True, Returns => Returned);
+               end;
+
             when Syn.If_Statement =>
                declare
                   Remaining : Assigned_Set := State;
@@ -2422,9 +2472,32 @@ package body Landin.Stages.Checking.Flow is
 
                   when Syn.Discard | Syn.Call | Syn.Try_Expression
                      | Syn.If_Statement | Syn.Match_Statement
-                     | Syn.Bare_Block =>
+                     | Syn.Bare_Block | Syn.Loop_Statement
+                     | Syn.While_Statement =>
                      Flow_Expression
                        (Of_Tree, Item, Result, State, Step);
+
+                  when Syn.Break_Statement | Syn.Continue_Statement =>
+                     Flow_Expression
+                       (Of_Tree, Syn.Condition_Of (Of_Tree, Item), Result,
+                        State, Step);
+                     if Step.Falls_Through then
+                        declare
+                           Transfer_State : Assigned_Set := State;
+                           Cleanup_Edges : Edge_Facts;
+                           Guarded : constant Boolean :=
+                             Syn.Condition_Of (Of_Tree, Item) /= Syn.No_Node;
+                           First : constant Natural :=
+                             Loop_Cleanup_Stack.Last_Element + 1;
+                        begin
+                           Flow_Cleanups
+                             (Of_Tree, First, Cleanup.Structured_Transfer,
+                              Result, Transfer_State, Cleanup_Edges);
+                           Step.Returns := Step.Returns
+                             or Cleanup_Edges.Returns;
+                           Step.Falls_Through := Guarded;
+                        end;
+                     end if;
 
                   when Syn.Defer_Statement | Syn.Undo_Statement =>
                      --  Registration reads no callee or argument.  The
