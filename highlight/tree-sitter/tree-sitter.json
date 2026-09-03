@@ -1,0 +1,29 @@
+{
+  "grammars": [
+    {
+      "name": "landin",
+      "camelcase": "Landin",
+      "scope": "source.landin",
+      "path": ".",
+      "file-types": ["ldn"],
+      "injection-regex": "^landin$",
+      "highlights": "queries/highlights.scm",
+      "locals": "queries/locals.scm",
+      "tags": "queries/tags.scm"
+    }
+  ],
+  "metadata": {
+    "version": "0.0.0",
+    "license": "MIT OR Apache-2.0",
+    "description": "Tree-sitter grammar for the Landin language"
+  },
+  "bindings": {
+    "c": true,
+    "go": false,
+    "node": false,
+    "python": false,
+    "rust": false,
+    "swift": false,
+    "zig": false
+  }
+}

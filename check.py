@@ -3926,6 +3926,63 @@ def check_stale_backlog(paths, full_run):
     return out
 
 
+def check_highlighters(full_run):
+    """Editor packages exist and generated renderings match their source."""
+    if not full_run:
+        return []
+    out = []
+    generator = os.path.join(ROOT, "highlight/generate.py")
+    if not os.path.exists(generator):
+        return [("highlight/generate.py", 1,
+                 "the shared highlighter generator is missing")]
+
+    namespace = {"__name__": "landin_highlighter_generator",
+                 "__file__": generator}
+    highlight_dir = os.path.dirname(generator)
+    sys.path.insert(0, highlight_dir)
+    try:
+        source = io.open(generator, encoding="utf-8").read()
+        exec(compile(source, generator, "exec"), namespace)
+        generated = namespace["outputs"]()
+    except Exception as exc:
+        return [("highlight/generate.py", 1,
+                 "cannot render editor artifacts: %s" % exc)]
+    finally:
+        sys.path.pop(0)
+
+    for path, expected in generated.items():
+        relative = os.path.relpath(path, ROOT)
+        if not os.path.exists(path):
+            out.append((relative, 1, "generated editor artifact is missing"))
+        elif io.open(path, encoding="utf-8").read() != expected:
+            out.append((relative, 1,
+                        "generated editor artifact is stale; run highlight/generate.py"))
+
+    required = [
+        "highlight/emacs/landin-mode.el",
+        "highlight/helix/languages.toml",
+        "highlight/jetbrains/README.md",
+        "highlight/nvim/Makefile",
+        "highlight/sublime/Landin.sublime-settings",
+        "highlight/textmate/package.json",
+        "highlight/tree-sitter/grammar.js",
+        "highlight/tree-sitter/src/parser.c",
+        "highlight/tree-sitter/test/corpus/declarations.txt",
+        "highlight/tests/lexical.ldn",
+        "highlight/tests/nvim-smoke.lua",
+        "highlight/tests/structural.ldn",
+        "highlight/tests/textmate-smoke.mjs",
+        "highlight/tests/vim-smoke.vim",
+        "highlight/vim/ftdetect/landin.vim",
+        "highlight/visual-studio/install.ps1",
+        "highlight/zed/extension.toml",
+    ]
+    for relative in required:
+        if not os.path.isfile(os.path.join(ROOT, relative)):
+            out.append((relative, 1, "required editor package artifact is missing"))
+    return out
+
+
 def main(argv):
     here = os.path.dirname(os.path.abspath(__file__))
     if here:
@@ -4019,6 +4076,7 @@ def main(argv):
     extra += check_table_shape(full_run)
     extra += check_icon(full_run)
     extra += check_fonts(full_run)
+    extra += check_highlighters(full_run)
     extra += check_borrowed_icons(full_run)
     extra += check_named_files(full_run)
     extra += check_catalogue(full_run)

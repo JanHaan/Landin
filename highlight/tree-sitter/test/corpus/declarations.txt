@@ -1,0 +1,94 @@
+==================
+Declarations
+==================
+
+import core/io
+
+ready, stopped : atom
+public count : u32 = 1
+pair : type = struct
+  left : u32
+  right : u32
+end pair
+
+add : (a : u32, b : u32) -> (value : u32) =
+  value = a + b
+end add
+
+---
+
+(source_file
+  (import_declaration
+    (import_path
+      (identifier)
+      (identifier)))
+  (public_declaration
+    (atom_declaration
+      name: (identifier_list
+        (identifier)
+        (identifier))))
+  (public_declaration
+    (binding
+      name: (identifier)
+      type: (scalar_type)
+      value: (logical_or_expression
+        (logical_and_expression
+          (comparison_expression
+            (alternation_expression
+              (exclusion_expression
+                (conjunction_expression
+                  (shift_expression
+                    (sum_expression
+                      (product_expression
+                        (unary_expression
+                          (literal
+                            (integer_literal))))))))))))))
+  (public_declaration
+    (type_declaration
+      name: (identifier)
+      (struct_body
+        (field
+          name: (identifier)
+          type: (scalar_type))
+        (field
+          name: (identifier)
+          type: (scalar_type))
+        (identifier))))
+  (public_declaration
+    (function_declaration
+      name: (identifier)
+      (declared_signature
+        (routine_formals
+          (parameter
+            name: (identifier)
+            type: (scalar_type))
+          (parameter
+            name: (identifier)
+            type: (scalar_type)))
+        (arrow)
+        (returns
+          (named_return
+            name: (identifier)
+            type: (scalar_type))))
+      body: (block
+        (assignment_statement
+          left: (place
+            (indexed_expression
+              (identifier)))
+          right: (logical_or_expression
+            (logical_and_expression
+              (comparison_expression
+                (alternation_expression
+                  (exclusion_expression
+                    (conjunction_expression
+                      (shift_expression
+                        (sum_expression
+                          (product_expression
+                            (unary_expression
+                              (indexed_expression
+                                (identifier))))
+                          (product_expression
+                            (unary_expression
+                              (indexed_expression
+                                (identifier))))))))))))))
+      end_name: (identifier))))

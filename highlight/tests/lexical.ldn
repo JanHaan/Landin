@@ -1,0 +1,16 @@
+--- documentation comment
+-- ordinary comment
+--( outer block comment
+    --( nested block comment )--
+)--
+
+public sample: () -> (result: u23) =
+    text: utf8 = "escaped\nstring"
+    raw: utf8 = """raw
+-- this is part of the raw literal
+"""
+    result = compiler.member + invoke(0x2a)
+    if true and not false then
+        return
+    end if
+end sample

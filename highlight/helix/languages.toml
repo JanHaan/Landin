@@ -1,0 +1,12 @@
+[[language]]
+name = "landin"
+scope = "source.landin"
+file-types = ["ldn"]
+comment-tokens = ["--"]
+block-comment-tokens = { start = "--(", end = ")--" }
+indent = { tab-width = 4, unit = "    " }
+grammar = "landin"
+
+[[grammar]]
+name = "landin"
+source = { git = "https://github.com/JanHaan/Landin", rev = "main", subpath = "highlight/tree-sitter" }

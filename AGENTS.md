@@ -141,7 +141,7 @@ that no word count can see. Add a family there rather than in a consumer,
 keep it standard-library-only, and do not trim the subsets to today's
 documents. See `assets/fonts/README.md`.
 
-Syntax highlighting lives in `highlight/`, not in the site renderer. `highlight/landin_highlight.py` is the one token scanner every Landin highlighter renders — the pages as HTML spans, `highlight/landin_pygments.py` as Pygments tokens, and a TextMate and a tree-sitter grammar later. Add a keyword there rather than in a consumer, and keep it standard-library-only so the site keeps its no-dependency build. `check.py`'s own list of reserved words is deliberately separate: that one is about legality, this one about colour. See `highlight/README.md`.
+Syntax highlighting lives in `highlight/`, not in the site renderer. `highlight/landin_highlight.py` owns the lexical vocabulary rendered by the pages, Pygments, TextMate, Vim, Notepad++, Nano and Kate; `highlight/tree-sitter/` is the checked structural grammar whose queries feed Neovim, Helix and Zed. Emacs provides both native and tree-sitter modes. Generate copied artifacts with `highlight/generate.py`, add a keyword at the shared source rather than in a consumer, and keep the mandatory generator path standard-library-only so the site keeps its no-dependency build. `check.py`'s own list of reserved words is deliberately separate: that one is about legality, this one about colour. See `highlight/README.md`.
 
 ## Prototype coverage
 

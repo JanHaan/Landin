@@ -1,0 +1,43 @@
+{
+  "name": "landin-language",
+  "displayName": "Landin Language Support",
+  "description": "Syntax highlighting, comments, brackets, and file recognition for Landin",
+  "version": "0.0.0",
+  "publisher": "landin",
+  "license": "MIT OR Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/JanHaan/Landin"
+  },
+  "files": [
+    "language-configuration.json",
+    "LICENSE",
+    "README.md",
+    "syntaxes"
+  ],
+  "engines": {"vscode": "^1.75.0"},
+  "categories": ["Programming Languages"],
+  "keywords": ["Landin", "language", "syntax"],
+  "scripts": {
+    "test": "node ../tests/textmate-smoke.mjs",
+    "package:check": "vsce ls"
+  },
+  "devDependencies": {
+    "@vscode/vsce": "3.9.2",
+    "vscode-oniguruma": "2.0.1",
+    "vscode-textmate": "9.3.2"
+  },
+  "contributes": {
+    "languages": [{
+      "id": "landin",
+      "aliases": ["Landin", "landin"],
+      "extensions": [".ldn"],
+      "configuration": "./language-configuration.json"
+    }],
+    "grammars": [{
+      "language": "landin",
+      "scopeName": "source.landin",
+      "path": "./syntaxes/landin.tmLanguage.json"
+    }]
+  }
+}

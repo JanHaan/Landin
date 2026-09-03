@@ -1,0 +1,9 @@
+(function_declaration) @fold
+(anonymous_function) @fold
+(struct_body) @fold
+(concept_body) @fold
+(if_expression) @fold
+(fixed_conditional) @fold
+(match_expression) @fold
+(bare_block) @fold
+(comment) @fold
