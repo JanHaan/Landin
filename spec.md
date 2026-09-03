@@ -131,9 +131,9 @@ keyword     ::= "addr" | "alignof" | "and" | "any" | "atom" | "dec" | "else"
 
 ```
 
-### [1770] The kernel's literals include characters, decimal floats and byte text
+### [1770] The kernel's literals include characters, floats and byte text
 
-The kernel's literals are integers, decimal floats, characters, quoted text,
+The kernel's literals are integers, floats, characters, quoted text,
 the two booleans, and contextual `zeroed`.
 Integer literals are untyped and take
 the type of their context [0190], defaulting to i32 with none [0200]; the bases
@@ -151,8 +151,8 @@ Raw text [0280] takes the same direct byte-slice context by D164, but interprets
 no escape and removes a line-leading closing delimiter's indentation.
 With no context it still defaults to the not-yet-enabled `utf8`, and `utf8`,
 `utf16`, `cstring` and text codepoint escapes remain R4.10 work. D162 admits
-[0210]'s decimal float with [0220]'s optional exponent; hexadecimal floats
-[0230] are not enabled yet. D163 admits [0250]'s
+[0210]'s decimal float with [0220]'s optional exponent. D166 adds [0230]'s
+hexadecimal fraction and required binary exponent. D163 admits [0250]'s
 single-quoted character as exactly one Unicode scalar value of fixed type
 `u32`. A raw scalar is shortest-form UTF-8; [0270]'s simple escapes and
 `\u{...}` spell scalar values, while byte-only `\xNN` does not.
@@ -173,9 +173,13 @@ quote_run   ::= "\"" "\"" "\"" "\""*
 raw_content ::= any byte*
 integer     ::= decimal | hex | octal | binary
 float       ::= decimal_fraction decimal_exponent?
+              | hex_fraction binary_exponent
 decimal_fraction ::= decimal_digits "." decimal_digits
 decimal_exponent ::= ("e" | "E") ("+" | "-")? decimal_digits
+hex_fraction ::= "0x" hex_digits "." hex_digits
+binary_exponent ::= ("p" | "P") ("+" | "-")? decimal_digits
 decimal_digits ::= digit (digit | "_")*
+hex_digits  ::= hex_digit (hex_digit | "_")*
 decimal     ::= digit (digit | "_")*
 hex         ::= "0x" hex_digit (hex_digit | "_")*
 octal       ::= "0o" octal_digit (octal_digit | "_")*
@@ -8468,11 +8472,11 @@ classified failure boundary before the repository gate can pass.
 
 | Operation | Class | Constructs | Behaviour | Evidence |
 | --- | --- | --- | --- | --- |
-| `source.lexical` | static | 0010, 0020, 0030, 0210, 0220, 0250, 0260, 0270, 0280, 1750, 1760, 1770, 1780, 1830 | L0010--L0014 or L0320--L0323 | `negative/character-literal-empty`, `negative/character-literal-invalid-codepoint`, `negative/character-literal-multiple`, `negative/hex-float-literal-not-enabled`, `negative/malformed-float-exponent`, `negative/malformed-integer-digit`, `negative/raw-literal-inconsistent-indentation`, `negative/text-literal-unknown-escape`, `negative/unterminated-raw-literal`, `negative/unterminated-text-literal`, `negative/unknown-byte` |
+| `source.lexical` | static | 0010, 0020, 0030, 0210, 0220, 0230, 0250, 0260, 0270, 0280, 1750, 1760, 1770, 1780, 1830 | L0010--L0014 or L0320--L0323 | `negative/character-literal-empty`, `negative/character-literal-invalid-codepoint`, `negative/character-literal-multiple`, `negative/malformed-float-exponent`, `negative/malformed-hex-float-exponent`, `negative/malformed-integer-digit`, `negative/raw-literal-inconsistent-indentation`, `negative/text-literal-unknown-escape`, `negative/unterminated-raw-literal`, `negative/unterminated-text-literal`, `negative/unknown-byte` |
 | `source.structure` | static | 1740, 1800, 1810, 1820, 1840 | L0100--L0112 | `negative/variant-part-end-name-mismatch`, `unit/parser-nesting-limit` |
 | `declarations.names` | static | 0040, 0050, 0060, 0080, 0090, 0100, 0110, 0120, 0130, 0140, 1790, 1795, 1850 | L0200 or L0201 | `negative/duplicate-in-a-module`, `negative/local-used-above-its-declaration` |
 | `types.values` | static | 0070, 0160, 0170, 0180, 0190, 0200, 0210, 0250, 1870, 1880, 1890 | L0300, L0301 or L0304 | `negative/character-literal-needs-u32`, `negative/float-literal-not-enabled`, `negative/float-type-not-enabled`, `negative/integer-literal-not-a-float`, `negative/literal-above-its-type`, `negative/type-name-is-not-a-type` |
-| `float.ieee` | static | 0170, 0210, 0220, 0240, 0290, 0350 | f32/f64 runtime arithmetic and comparison follow IEEE binary32/binary64, preserving signed zero and unordered NaN behavior; L0301 rejects mixed classes and integer-only operators, and L0304 retains the static-fold boundary | `negative/float-remainder-is-integer-only`, `negative/module-float-arithmetic-not-enabled`, `runtime/float-decimal-runtime` |
+| `float.ieee` | static | 0170, 0210, 0220, 0230, 0240, 0290, 0350 | f32/f64 decimal and hexadecimal literals, runtime arithmetic and comparison follow IEEE binary32/binary64, preserving exact hexadecimal values, signed zero and unordered NaN behavior; L0300 rejects a finite literal that becomes infinity, L0301 rejects mixed classes and integer-only operators, and L0304 retains the static-fold boundary | `negative/float-remainder-is-integer-only`, `negative/hex-float-overflows-context`, `negative/module-float-arithmetic-not-enabled`, `runtime/float-decimal-runtime`, `runtime/float-hexadecimal-runtime` |
 | `text.literal-storage` | static | 0260, 0270, 0280, 0570, 1770, 1880, 1900, 1940 | L0301 for a non-byte, writable or codepoint context; L0303 for a write through its read-only view; L0304 for the default deferred `utf8`; equal decoded quoted or raw contents share read-only storage with one trailing NUL excluded from the slice length | `negative/raw-literal-needs-byte-slice`, `negative/raw-literal-needs-read-only-slice`, `negative/raw-literal-write`, `negative/text-literal-codepoint-in-byte-context`, `negative/text-literal-needs-byte-slice`, `negative/text-literal-needs-read-only-slice`, `negative/text-literal-not-enabled`, `negative/text-literal-write`, `runtime/raw-literal-bytes`, `runtime/text-literal-bytes` |
 | `arithmetic.known` | static | 0290, 0300, 0390, 1950 | L0300 or L0306 | `negative/compound-assignment-zero-divisor`, `negative/divisor-is-zero`, `negative/literal-above-its-type` |
 | `arithmetic.runtime` | trap | 0290, 0300, 0320, 0390, 1950, 1960 | trap | `runtime/compound-assignment-overflow-traps`, `runtime/checked-overflow-traps`, `runtime/checked-subtraction-traps`, `runtime/checked-multiplication-traps`, `runtime/checked-negation-traps`, `runtime/signed-division-overflow-traps`, `runtime/a-zero-divisor-traps`, `runtime/a-zero-remainder-divisor-traps`, `runtime/negative-left-shift-traps`, `runtime/negative-right-shift-traps` |
@@ -9211,9 +9215,9 @@ continues to refuse float signatures until R4.40 supplies its register classes.
 A module float may presently use a literal, its unary minus or `zeroed`, also
 inside a static aggregate image. Float arithmetic in a module image is a named
 R4.10 refusal: the target-neutral folder does not borrow the compiler host's
-rounding mode or NaN behavior. f16, hexadecimal floats [0230], the named
-`infinity` and `nan` members [0240], and explicit integer/float conversions
-[0310] remain separate hosted increments.
+rounding mode or NaN behavior. D166 subsequently enables hexadecimal floats
+[0230]. f16, the named `infinity` and `nan` members [0240], and explicit
+integer/float conversions [0310] remain separate hosted increments.
 
 **The alternatives:** default to f64, admit decimal literals only with an
 explicit type, treat a float's same-width integer carrier as interchangeable,
@@ -9228,7 +9232,6 @@ make cross-compilation depend on the host.
 `negative/float-remainder-is-integer-only`,
 `negative/float-type-not-enabled`,
 `negative/integer-literal-not-a-float`,
-`negative/hex-float-literal-not-enabled`,
 `negative/malformed-float-exponent`,
 `negative/module-float-arithmetic-not-enabled`,
 `negative/external-float-abi-not-enabled`, the lexer cases, and the
@@ -9363,3 +9366,48 @@ operation drift. All were declined.
 `negative/compound-assignment-unassigned`,
 `negative/compound-assignment-zero-divisor`, and the `arithmetic.known`,
 `arithmetic.runtime`, `arithmetic.total` and `assignment.flow` guarantee rows.
+
+### D166 — Hexadecimal floats are converted from source bits, not host floats
+
+**The tour said** that [0230]'s hexadecimal float literals express every
+representable value exactly, including subnormals. It did not define the
+required exponent syntax, the result of a spelling between two representable
+values, or whether the compiler may ask its own floating-point implementation
+to read the value.
+
+**Chosen:** a hexadecimal float is `0x`, a nonempty hexadecimal digit run, a
+dot, another nonempty hexadecimal digit run, and a required `p` or `P` binary
+exponent. The exponent has an optional sign and a nonempty decimal digit run.
+Each digit run admits [0220]'s separators but neither begins nor ends with one.
+Like D162's decimal form, the literal takes f32 or f64 from context and
+otherwise defaults to f32; it remains a float rather than sliding into the
+integer class.
+
+Conversion reads the hexadecimal significand as bits and combines it with the
+written binary exponent. An exactly representable normal or subnormal value
+therefore reaches its target with the exact bits [0230] promises. A value
+between target values rounds to nearest with ties to even, including at zero,
+the subnormal/normal boundary and an exponent carry. Underflow may produce
+zero. A finite spelling that rounds to infinity is L0300, as for D162's decimal
+form; a zero significand remains zero even with an arbitrarily large exponent.
+
+The conversion uses only bounded integer accumulation of the significant,
+round and sticky bits. It does not parse through an Ada floating-point type,
+so cross-compilation does not inherit the host's width, rounding mode or
+handling of subnormals. The resulting IEEE pattern follows every D162 storage,
+aggregate, internal-call, arithmetic and comparison path without new IR or
+backend operations. An absent or incomplete binary exponent is lexical L0321.
+Enabling this form removes the scanner's final deferred token family; L0010
+continues to name parser-level constructs that [1830] leaves disabled.
+
+**The alternatives:** use the compiler host's hexadecimal conversion, accept
+only spellings already exact in the contextual width, or retain an arbitrary
+precision significand. The first makes a target value host-dependent, the
+second contradicts ordinary literal rounding, and the third retains far more
+source state than the precision, round bit and sticky bit require. All were
+declined.
+
+**Pinned by** `runtime/float-hexadecimal-runtime`,
+`negative/hex-float-overflows-context`,
+`negative/malformed-hex-float-exponent`, the lexer cases, and the `float.ieee`
+and `source.lexical` guarantee rows.

@@ -2544,7 +2544,7 @@ package Landin.IR is
                   and then Landin.Provenance.Is_Known (Site),
           Post => Emitted (Into, Item, Emit_Number'Result, Number);
 
-   --  A contextual decimal float travels as its IEEE bit pattern.  Keeping
+   --  A contextual float travels as its IEEE bit pattern.  Keeping
    --  that pattern target-neutral preserves signed zero and NaN payloads;
    --  the native backend decides only how those bits enter storage.
    function Emit_Float

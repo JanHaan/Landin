@@ -155,7 +155,7 @@ negative/generic-single-result-layout-too-large | linux-x86-64, macos-arm64
 negative/generic-structural-repeated-conflict | linux-x86-64, macos-arm64
 negative/generic-try-infallible-instance | linux-x86-64, synthetic-32
 negative/generic-wrong-nominal-template | linux-x86-64, macos-arm64
-negative/hex-float-literal-not-enabled | linux-x86-64, macos-arm64
+negative/hex-float-overflows-context | linux-x86-64, macos-arm64
 negative/if-expression-missing-else | linux-x86-64, macos-arm64, synthetic-32
 negative/immutable-array-copy | linux-x86-64, macos-arm64
 negative/immutable-array-element | linux-x86-64, macos-arm64
@@ -225,6 +225,7 @@ negative/loop-value-missing-break-value | linux-x86-64, macos-arm64, synthetic-3
 negative/loop-value-missing-completion | linux-x86-64, macos-arm64, synthetic-32
 negative/loop-value-type-mismatch | linux-x86-64, macos-arm64, synthetic-32
 negative/malformed-float-exponent | linux-x86-64, macos-arm64
+negative/malformed-hex-float-exponent | linux-x86-64, macos-arm64
 negative/malformed-integer-digit | linux-x86-64, macos-arm64, synthetic-32
 negative/match-scalar-not-enabled | linux-x86-64, macos-arm64
 negative/measuring-refused-types | linux-x86-64, macos-arm64
@@ -782,6 +783,7 @@ runtime/fixed-conditional-generic-runtime | linux-x86-64
 runtime/fixed-conditional-runtime | linux-x86-64
 runtime/fizzbuzz | linux-x86-64
 runtime/float-decimal-runtime | linux-x86-64
+runtime/float-hexadecimal-runtime | linux-x86-64
 runtime/for-collection-traversal | linux-x86-64
 runtime/for-range-traversal | linux-x86-64
 runtime/function-valued-struct-fields | linux-x86-64

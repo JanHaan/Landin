@@ -62,7 +62,6 @@ package body Landin.Tokens is
    function Construct (Of_Kind : Described_Kind) return Construct_Reference is
      (case Of_Kind is
          when Character_Literal => "[0250]",
-         when Hex_Float_Literal => "[0230]",
          when Raw_Literal       => "[0280]",
          when Text_Literal      => "[0260]");
 

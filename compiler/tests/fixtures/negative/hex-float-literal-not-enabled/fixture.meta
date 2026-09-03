@@ -1,6 +1,0 @@
-class: negative
-summary: [0230]'s exact hexadecimal float spelling remains a named R4.10 refusal
-constructs: 0230, 1830
-program: program.ldn
-codes: L0010
-targets: linux-x86-64, macos-arm64

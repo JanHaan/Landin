@@ -245,17 +245,11 @@ package body Landin.Tests.Lexer_Suite is
          Landin.Testing.Check
            (Item, Landin.Tokens.Kind (Hex_Float, 5)
                   = Landin.Tokens.Hex_Float_Literal,
-            "a hexadecimal float remains one deferred lexeme");
-         Landin.Testing.Check
-           (Item,
-            Landin.Tokens.Refused (Landin.Tokens.Nth_Fault (Hex_Float, 1))
-            = Landin.Tokens.Hex_Float_Literal,
-            "and the fault says which construct it was");
+            "a hexadecimal float is one enabled lexeme");
          Landin.Testing.Check_Equal
            (Item,
-            Landin.Tokens.Construct
-              (Landin.Tokens.Hex_Float_Literal), "[0230]",
-            "which names the tour construct that describes it");
+            Landin.Tokens.Fault_Count (Hex_Float), 0,
+            "an enabled hexadecimal float carries no lexical refusal");
       end;
 
       declare
@@ -492,55 +486,6 @@ package body Landin.Tests.Lexer_Suite is
         (Item, Fault = Landin.Tokens.Text.Invalid_UTF8_Source,
          "raw source content is shortest-form UTF-8");
    end Raw_Literal_Decoding;
-
-   --  Every deferred kind has to be reachable.  Declared and never
-   --  produced is dead vocabulary, which is the same defect as an
-   --  unreachable rule in the grammar.  Text left this table in D161,
-   --  character in D163 and raw text in D164 as each became enabled.
-   procedure Every_Deferred_Kind_Is_Reachable
-     (Item : in out Landin.Testing.Context);
-
-   procedure Every_Deferred_Kind_Is_Reachable
-     (Item : in out Landin.Testing.Context)
-   is
-      Sources : Landin.Source.Sets.Source_Set;
-      Names   : Landin.Source.Names.Table;
-      Seen    : array (Landin.Tokens.Deferred_Kind) of Boolean :=
-        [others => False];
-
-      procedure Note (Text : String);
-
-      procedure Note (Text : String) is
-         Stream : Landin.Tokens.Token_Stream;
-      begin
-         Lex_Text (Text, Sources, Names, Stream);
-         for Index in 1 .. Landin.Tokens.Count (Stream) loop
-            declare
-               Kind : constant Landin.Tokens.Token_Kind :=
-                 Landin.Tokens.Kind (Stream, Index);
-            begin
-               if Kind in Landin.Tokens.Deferred_Kind then
-                  Seen (Kind) := True;
-               end if;
-            end;
-         end loop;
-      end Note;
-
-   begin
-      Note ("f: () -> (r: i32) ! oops = 1 end");   --  Bang
-      Note ("a.b");                                --  Dot
-      Note ("0..9");                               --  Dot_Dot
-      Note ("0..<9");                              --  Dot_Dot_Less
-      Note ("try f() ...");                        --  Dot_Dot_Dot
-      Note ("xs[0]");                              --  the brackets
-      Note ("r: f32 = 0x1.0p0");                  --  Hex_Float_Literal
-
-      for Kind in Landin.Tokens.Deferred_Kind loop
-         Landin.Testing.Check
-           (Item, Seen (Kind),
-            "the scanner produces " & Kind'Image);
-      end loop;
-   end Every_Deferred_Kind_Is_Reachable;
 
    procedure Unterminated_Literals_Are_Faults
      (Item : in out Landin.Testing.Context);
@@ -802,9 +747,6 @@ package body Landin.Tests.Lexer_Suite is
       Landin.Testing.Register
         (Into, "lexer", "unknown bytes recover",
          Unknown_Bytes_Recover'Access);
-      Landin.Testing.Register
-        (Into, "lexer", "every deferred kind is reachable",
-         Every_Deferred_Kind_Is_Reachable'Access);
       Landin.Testing.Register
         (Into, "lexer", "unterminated literals are faults",
          Unterminated_Literals_Are_Faults'Access);
