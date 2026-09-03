@@ -4969,6 +4969,26 @@ package body Landin.Stages.Checking is
               and then Landin.Checking.Nominal_Of
                 (Types.all, Of_Tree, Written)
                   /= Landin.Checking.No_Nominal_Type;
+            --  D125/D158: a local control expression fills the written
+            --  caller-owned shape directly.  Loops use the same carrier as
+            --  branches and bare blocks; no aggregate pseudo-value exists.
+            Is_Array_Control_Init : constant Boolean :=
+              Held = Ty.Fixed_Array
+              and then Is_Local_Binding (Of_Tree, Node)
+              and then Syn.Value_Of (Of_Tree, Node) /= Syn.No_Node
+              and then Syn.Kind (Of_Tree, Syn.Value_Of (Of_Tree, Node))
+                in Syn.If_Statement | Syn.Match_Statement | Syn.Bare_Block
+                   | Syn.Loop_Statement | Syn.While_Statement;
+            Is_Struct_Control_Init : constant Boolean :=
+              Held = Ty.Aggregate
+              and then Is_Local_Binding (Of_Tree, Node)
+              and then Syn.Value_Of (Of_Tree, Node) /= Syn.No_Node
+              and then Syn.Kind (Of_Tree, Syn.Value_Of (Of_Tree, Node))
+                in Syn.If_Statement | Syn.Match_Statement | Syn.Bare_Block
+                   | Syn.Loop_Statement | Syn.While_Statement
+              and then Landin.Checking.Nominal_Of
+                (Types.all, Of_Tree, Written)
+                  /= Landin.Checking.No_Nominal_Type;
             --  D57/D59: the written local or module struct supplies [0540]'s
             --  complete all-bits-zero image.  Inference and general values
             --  remain separate contextual positions.
@@ -5102,6 +5122,7 @@ package body Landin.Stages.Checking is
               and then not Is_Module_Zeroed_Init
               and then not Is_Local_Zeroed_Init
               and then not Is_Array_Call_Init
+              and then not Is_Array_Control_Init
               and then not Is_Array_Parameter
               and then not Is_Array_Return
             then
@@ -5144,6 +5165,7 @@ package body Landin.Stages.Checking is
               and then not Is_Struct_Literal_Init
               and then not Is_Direct_Struct_Init
               and then not Is_Struct_Call_Init
+              and then not Is_Struct_Control_Init
               and then not Is_Aggregate_Parameter
               and then not Is_Aggregate_Return
             then
@@ -5172,6 +5194,7 @@ package body Landin.Stages.Checking is
               and then not Is_Struct_Literal_Init
               and then not Is_Direct_Struct_Init
               and then not Is_Struct_Call_Init
+              and then not Is_Struct_Control_Init
               and then not Is_Aggregate_Parameter
               and then not Is_Aggregate_Return
             then
@@ -5197,6 +5220,7 @@ package body Landin.Stages.Checking is
               and then not Is_Zeroed_State
               and then not Is_Direct_Struct_Init
               and then not Is_Struct_Call_Init
+              and then not Is_Struct_Control_Init
               and then not Is_Struct_Zeroed_Init
               and then not Is_Struct_Literal_Init
               and then not Is_Aggregate_Parameter
@@ -18477,23 +18501,6 @@ package body Landin.Stages.Checking is
          end if;
 
          if not Decidable (Expected.Kind) then
-            return Ty.Ill_Typed;
-         end if;
-
-         if Syn.Kind (Of_Tree, Node)
-              in Syn.Loop_Statement | Syn.While_Statement
-           and then Expected.Kind not in Ty.Scalar_Name | Ty.Function_Value
-              | Ty.Pointer_Value | Ty.Atom_Value
-         then
-            Bad.Report
-              (Item    => Bad.Type_Mismatch,
-               Source  => Syn.Source_Of (Of_Tree),
-               Where   => Syn.Where (Of_Tree, Node),
-               Message => "this loop result needs a storage-shaped carrier",
-               Note    => "[1190]: this increment enables scalar, function,"
-                 & " pointer and atom loop values first",
-               Into    => Found);
-            Landin.Checking.Refuse (Types.all, Of_Tree, Node);
             return Ty.Ill_Typed;
          end if;
 

@@ -499,8 +499,8 @@ An `if`, exhaustive `match`, bare `begin` block, `loop`, or `while` is also a
 primary. A loop is value-producing when its targeted `break` edges carry
 `with` values. Every break edge then carries one value of the joined type; a
 finite conditional loop also needs `complete` to leave through such an edge.
-The current R4.10 increment carries scalar, function, pointer and atom values;
-storage-shaped array, struct, slice and `any` loop results remain in R4.10.
+Scalar values use the join's ordinary slot. Fixed arrays, structs, slices and
+`any` fill the caller-owned destination directly before cleanup runs.
 For the other controls, their
 conditions or subject run first, then exactly the selected block runs in source
 order. In a value context the final expression of every edge that can fall
@@ -8930,10 +8930,12 @@ are checked against the type and complete identity inferred from the first
 one or supplied by context. A conditional value loop must have `complete`,
 and that block must not fall through: it leaves through a compatible `break
 with`. An unconditional loop needs no synthetic exhaustion value because it
-has no natural exhaustion edge. This increment lowers scalar, function,
-pointer and atom results. Storage-shaped array, struct, slice and `any` results
-stay in R4.10 until the target frame can retain an arbitrary nested destination
-path without narrowing D125.
+has no natural exhaustion edge. Scalar, function, pointer and atom results use
+the join's ordinary slot. Fixed arrays, structs, slices and `any` use D125's
+destination-aware block-value path; a targeted break retains the complete
+destination path while nested control runs, fills it, and only then performs
+lexical cleanup. This keeps an arbitrarily nested result target-neutral without
+forming an aggregate IR value.
 
 **The alternatives:** add a loop-result IR instruction, store the result in a
 compiler-global temporary, evaluate a guarded value before its guard, or pass
@@ -8943,4 +8945,5 @@ explicit labelled target. All were declined.
 
 **Pinned by** `negative/loop-value-missing-break-value`,
 `negative/loop-value-missing-completion`, `negative/loop-value-type-mismatch`,
-`runtime/loop-values`, and the `control.loops` guarantee row.
+`runtime/loop-values`, `runtime/loop-any-values`, and the `control.loops`
+guarantee row.
