@@ -52,6 +52,9 @@ package Landin.Tokens is
       Identifier,
       Integer_Literal,
       Float_Literal,
+      --  [0250]'s one Unicode scalar value.  Its spelling remains in the
+      --  source span; checking gives the value the fixed type `u32`.
+      Character_Literal,
       --  [0260]'s quoted bytes, one lexeme with its escapes unread; D161
       --  decodes them where the literal's context is known.
       Text_Literal,
@@ -71,7 +74,7 @@ package Landin.Tokens is
       Right_Bracket, Right_Paren, Slash, Star, Star_Percent, Tilde,
       Underscore, Bang, Dot_Dot_Dot, Dot_Dot, Dot_Dot_Less,
       --  Lexemes with more than one spelling that the kernel omits.
-      Compound_Assign, Character_Literal, Hex_Float_Literal, Raw_Literal,
+      Compound_Assign, Hex_Float_Literal, Raw_Literal,
       --  Bytes that spell nothing at all.
       Malformed_Integer, Malformed_Float, Unknown_Bytes);
 
@@ -87,11 +90,11 @@ package Landin.Tokens is
    subtype Deferred_Kind is Token_Kind range Compound_Assign .. Raw_Literal;
 
    --  A literal the tour describes by paragraph: every deferred lexeme, and
-   --  the text literal, which stays here so an unterminated one can still
+   --  the quoted literals, which stay here so an unterminated one can still
    --  say what it was.
    subtype Described_Kind is Token_Kind
      with Static_Predicate =>
-       Described_Kind in Deferred_Kind | Text_Literal;
+       Described_Kind in Deferred_Kind | Character_Literal | Text_Literal;
 
    subtype Malformed_Kind is
      Token_Kind range Malformed_Integer .. Unknown_Bytes;
@@ -101,12 +104,14 @@ package Landin.Tokens is
    --  literal has as many as there are programs.
    subtype Spelled_Kind is Token_Kind range Kw_Addr .. Dot_Dot_Less;
 
-   --  `literal ::= integer | float | text | "true" | "false" | "zeroed"`
+   --  `literal ::= integer | float | character | text | "true" | "false"
+   --             | "zeroed"`
    --  [1770].
    --  The three words are reserved and literals at once, so this is a
    --  predicate rather than a band of the enumeration.
    function Is_Literal (Of_Kind : Token_Kind) return Boolean
-     is (Of_Kind in Integer_Literal | Float_Literal | Text_Literal
+     is (Of_Kind in Integer_Literal | Float_Literal | Character_Literal
+                    | Text_Literal
                     | Kw_True | Kw_False | Kw_Zeroed);
 
    --  The bytes of a kind that has only one spelling.  `escaping` is the
@@ -175,6 +180,7 @@ package Landin.Tokens is
    type Fault_Kind is
      (Malformed_Integer_Run,
       Malformed_Float_Literal_Run,
+      Malformed_Character_Literal_Run,
       Malformed_Text_Literal_Run,
       Not_Enabled,
       Unknown_Byte_Run,

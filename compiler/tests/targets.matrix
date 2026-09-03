@@ -59,6 +59,11 @@ negative/borrowed-source-inout | linux-x86-64, macos-arm64, synthetic-32
 negative/call-of-a-non-function | linux-x86-64, macos-arm64, synthetic-32
 negative/call-with-too-few-arguments | linux-x86-64, macos-arm64
 negative/chained-comparison | linux-x86-64, macos-arm64
+negative/character-literal-byte-escape | linux-x86-64, macos-arm64
+negative/character-literal-empty | linux-x86-64, macos-arm64
+negative/character-literal-invalid-codepoint | linux-x86-64, macos-arm64
+negative/character-literal-multiple | linux-x86-64, macos-arm64
+negative/character-literal-needs-u32 | linux-x86-64, macos-arm64
 negative/compiler-concept-reserved | linux-x86-64, macos-arm64, synthetic-32
 negative/compiler-conformance-reserved | linux-x86-64, macos-arm64, synthetic-32
 negative/composed-conformance-missing-parent | linux-x86-64, macos-arm64, synthetic-32
@@ -730,6 +735,7 @@ runtime/atom-values-cross-the-abi | linux-x86-64
 runtime/binary-search | linux-x86-64
 runtime/bools-cross-the-abi | linux-x86-64
 runtime/calls-return-through-the-abi | linux-x86-64
+runtime/character-literal-codepoints | linux-x86-64
 runtime/checked-multiplication-traps | linux-x86-64
 runtime/checked-negation-traps | linux-x86-64
 runtime/checked-overflow-traps | linux-x86-64

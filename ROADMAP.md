@@ -3105,6 +3105,12 @@ unordered NaN comparisons. D162 keeps f16, hexadecimal and named special
 literals, scalar conversions, module float arithmetic and the floating-point
 C ABI as explicit later boundaries, and gives malformed exponents lexical
 L0321.
+The ninth increment enables [0250]'s character literals as fixed-`u32`
+Unicode scalar values, accepting raw shortest-form UTF-8, the simple [0270]
+escapes and `\u{...}` while rejecting empty, multiple, nonscalar and
+byte-escape contents with lexical L0322. D163 shares one decoder across
+lexing, static folding and lowering and keeps the text representation types
+and their indexing work separate.
 
 Exit evidence: every hosted `[NNNN]` row has implementation and positive or
 negative evidence; no omission is hidden by prototype coverage.

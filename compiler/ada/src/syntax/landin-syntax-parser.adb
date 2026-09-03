@@ -5806,6 +5806,12 @@ package body Landin.Syntax.Parser is
                   return Add (Of_Kind => Float_Literal, At_Token => At_Item);
                end if;
 
+               if Peek = Tok.Character_Literal then
+                  Advance;
+                  return Add
+                    (Of_Kind => Character_Literal, At_Token => At_Item);
+               end if;
+
                if Peek = Tok.Text_Literal then
                   Advance;
                   return Add (Of_Kind => Text_Literal, At_Token => At_Item);

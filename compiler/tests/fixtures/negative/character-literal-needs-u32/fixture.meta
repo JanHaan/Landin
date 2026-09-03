@@ -1,0 +1,6 @@
+class: negative
+summary: [0250] fixes a character literal as u32 rather than borrowing an integer context
+constructs: 0250, 1880, 1890
+program: program.ldn
+codes: L0301
+targets: linux-x86-64, macos-arm64

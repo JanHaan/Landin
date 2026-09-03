@@ -352,11 +352,12 @@ package body Landin.Tokens.Lexer is
 
       procedure Scan_Quoted;
 
-      --  The quote-delimited literals: text [0260], which D161 enables,
-      --  and raw [0280] and character [0250], which the kernel refuses.
+      --  The quote-delimited literals: character [0250] and text [0260],
+      --  which D163 and D161 enable, and raw [0280], which the kernel
+      --  refuses.
       --  Each is read as one lexeme so [1830] can name the construct
       --  instead of reporting a stray quote, and so enabling one later
-      --  cannot change how a file that never used it was read.  A text
+      --  cannot change how a file that never used it was read.  A quoted
       --  literal's escapes [0270] are skipped while finding its end, then
       --  the shared decoder validates them here; `\"` therefore does not
       --  close the token and malformed spelling cannot hide in inactive
@@ -389,7 +390,8 @@ package body Landin.Tokens.Lexer is
                exit;
             end if;
 
-            if Refused = Text_Literal and then Text (Position) = '\'
+            if Refused in Character_Literal | Text_Literal
+              and then Text (Position) = '\'
               and then Position < Last
               and then Text (Position + 1) /= LF
               and then Text (Position + 1) /= CR
@@ -419,6 +421,21 @@ package body Landin.Tokens.Lexer is
                   then
                      Complain
                        (Malformed_Text_Literal_Run,
+                        First + Fault_First,
+                        First + Fault_Last - 1);
+                  end if;
+               end;
+            elsif Refused = Character_Literal then
+               declare
+                  Lexeme : constant String := Text (First .. Position - 1);
+                  Value, Fault_First, Fault_Last : Natural;
+                  Fault : Landin.Tokens.Text.Problem;
+               begin
+                  Landin.Tokens.Text.Decode_Character
+                    (Lexeme, Value, Fault, Fault_First, Fault_Last);
+                  if Fault not in Landin.Tokens.Text.Well_Formed then
+                     Complain
+                       (Malformed_Character_Literal_Run,
                         First + Fault_First,
                         First + Fault_Last - 1);
                   end if;

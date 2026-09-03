@@ -113,6 +113,8 @@ package Landin.Diagnostics.Catalogue is
       Malformed_Text_Literal,
       --  D162's decimal spelling has a complete optional exponent.
       Malformed_Float_Literal,
+      --  D163's character literal is exactly one Unicode scalar value.
+      Malformed_Character_Literal,
       --  The backend and its toolchain, assigned from R1.80 onwards.  None
       --  is about a frontend construct: two are the host failing to finish
       --  an accepted program, one is [1970]'s missing entry shape, one is a
@@ -181,6 +183,7 @@ package Landin.Diagnostics.Catalogue is
             when Compiler_Conformance_Reserved => "L0319",
             when Malformed_Text_Literal         => "L0320",
             when Malformed_Float_Literal        => "L0321",
+            when Malformed_Character_Literal    => "L0322",
             when No_Toolchain              => "L0500",
             when Toolchain_Failed          => "L0501",
             when Entry_Point_Missing       => "L0502",
@@ -206,7 +209,7 @@ package Landin.Diagnostics.Catalogue is
             when Unresolved_Name       => Error,
             when Inaccessible_Name     => Error,
             when Literal_Out_Of_Range
-               .. Malformed_Float_Literal => Error,
+               .. Malformed_Character_Literal => Error,
             when No_Toolchain .. Frame_Not_Addressable => Error);
 
    --  Argument_Not_In_A_Register retired at R2.30: the internal scalar
@@ -235,7 +238,7 @@ package Landin.Diagnostics.Catalogue is
             when Unresolved_Name       => Live,
             when Inaccessible_Name     => Live,
             when Literal_Out_Of_Range
-               .. Malformed_Float_Literal => Live,
+               .. Malformed_Character_Literal => Live,
             when No_Toolchain .. Entry_Point_Missing => Live,
             when Argument_Not_In_A_Register => Retired,
             when Frame_Not_Addressable => Live);
@@ -353,6 +356,9 @@ package Landin.Diagnostics.Catalogue is
             when Malformed_Float_Literal =>
                "[0210] [0220]: a decimal float has a complete fraction"
                & " and exponent",
+            when Malformed_Character_Literal =>
+               "[0250] [0270]: a character literal spells exactly one"
+               & " Unicode scalar value",
             when No_Toolchain          =>
                "[1550]: no assembler and linker for the target on this"
                & " host",
@@ -396,7 +402,7 @@ package Landin.Diagnostics.Catalogue is
             when Unresolved_Name       => True,
             when Inaccessible_Name     => True,
             when Literal_Out_Of_Range
-               .. Malformed_Float_Literal => True,
+               .. Malformed_Character_Literal => True,
             --  None of the backend codes is about a place in a file: they
             --  are the host failing to finish an accepted program or a
             --  verified shape this backend cannot encode.
@@ -428,7 +434,7 @@ package Landin.Diagnostics.Catalogue is
             when Inaccessible_Name     => True,
             --  Every one of these points at something a program wrote.
             when Literal_Out_Of_Range
-               .. Malformed_Float_Literal =>
+               .. Malformed_Character_Literal =>
                True,
             when No_Toolchain .. Frame_Not_Addressable => False);
 
@@ -476,7 +482,8 @@ package Landin.Diagnostics.Catalogue is
                | Return_Sources_Disagree
                | Conformance_Collision | Unsatisfied_Constraint => 1,
             when Compiler_Conformance_Reserved => 0,
-            when Malformed_Text_Literal | Malformed_Float_Literal => 0,
+            when Malformed_Text_Literal | Malformed_Float_Literal
+               | Malformed_Character_Literal => 0,
             when Literal_Out_Of_Range  => 0,
             when Unsupported_Use       => 0,
             when Not_Known_At_Compile_Time => 0,
@@ -526,7 +533,8 @@ package Landin.Diagnostics.Catalogue is
                | Return_Sources_Disagree
                | Conformance_Collision | Unsatisfied_Constraint
                | Compiler_Conformance_Reserved
-               | Malformed_Text_Literal | Malformed_Float_Literal => 1,
+               | Malformed_Text_Literal | Malformed_Float_Literal
+               | Malformed_Character_Literal => 1,
             --  The one diagnostic here a user is stuck on rather than
             --  informed by, so it owes them the way out: which program
             --  was looked for, and how to name another.
