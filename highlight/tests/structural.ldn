@@ -1,0 +1,28 @@
+import core/io
+
+--( outer block comment
+    --( nested block comment )--
+)--
+
+ready, stopped: atom
+
+pair: type = struct
+    left: i32
+    right: i32
+end pair
+
+extern(c) host_write: (value: i32) -> (written: i32)
+
+add: (left: i32, right: i32) -> (result: i32) =
+    result = left + right
+end add
+
+public main: () -> (code: i32) =
+    values: [3]i32 = [1, 2, 3]
+    length: usize = lenof values
+    if length == 3 then
+        code = add(values[0], values[1])
+    else
+        code = 0
+    end if
+end main

@@ -11,8 +11,13 @@ away from it.
 | `landin_highlight.py` | the scanner itself; standard library only, no output format | here |
 | `landin_pygments.py` | Pygments: sourcehut's blob view, Sphinx, MkDocs, `pygmentize` | here |
 | `docs/site/render_html.py` | the reading copies at www.701.dev, as HTML spans | imports the scanner |
-| a TextMate grammar | VS Code and its forks, Sublime Text, `bat` and other syntect tools, Shiki | planned |
-| a tree-sitter grammar | Neovim, Helix, Zed, Emacs 29+, and folds, indent and textobjects | planned |
+| `textmate/` | VS Code, VSCodium, Cursor, Windsurf, TextMate, Shiki and `bat`; importable by JetBrains IDEs | generated grammar plus extension |
+| `tree-sitter/` | the incremental concrete-syntax grammar and canonical queries | generated C parser and corpus |
+| `nvim/`, `helix/`, `zed/` | tree-sitter editor packages | ready-to-install adapters |
+| `vim/`, `emacs/` | native Vim and Emacs packages, including Emacs tree-sitter mode | ready-to-install adapters |
+| `sublime/`, `visual-studio/`, `jetbrains/` | TextMate consumers with native packaging or installation instructions | ready-to-install adapters |
+| `eclipse/` | Eclipse Generic Editor through its TM4E integration | importable adapter |
+| `notepad-plus-plus/`, `nano/`, `kate/` | widely used and lightweight native syntax definitions | generated adapters |
 
 The two grammars are the reason this directory exists rather than the
 scanner living under `docs/site/`: the reading copies are a consumer of
@@ -28,10 +33,10 @@ rather than a line.
 What it cannot do is tell the `set` of `[0410]` from a variable called
 `set`. The contextual words — `from`, `of`, `at`, `set`, `range`, `option`,
 `link`, `align` — are coloured by position, and some of them will be
-coloured wrongly. A regex cannot fix that; a tree-sitter grammar can, and
-an editor talking to `refine` eventually will. Until then the scanner is
-deliberately the cheap answer, and being wrong about `at` in an unusual
-position is a smaller cost than a second scanner to maintain.
+coloured wrongly. A regex cannot fix that. The tree-sitter grammar handles
+the enabled structural surface, including contextual `lenof` and `of`, while
+remaining deliberately non-normative and tolerant enough for incomplete
+editor buffers.
 
 `check.py` keeps its own list of reserved words on purpose. That one is
 about legality and this one is about colour, they have drifted apart
@@ -56,3 +61,34 @@ but the standard library.
 Nothing installs this automatically, and the package is unreleased: the
 version in `pyproject.toml` says only that, and `ROADMAP.md` decides when
 it becomes a claim.
+
+## Generating and checking packages
+
+The TextMate, Vim, Nano, Kate and copied query files are deterministic
+renderings. Regenerate or verify them with:
+
+```sh
+python3 highlight/generate.py
+python3 highlight/generate.py --check
+./highlight/test.sh                 # isolated: only highlight/ fixtures
+./highlight/test.sh --integration   # also parse compiler and core fixtures
+```
+
+The default test never builds or invokes the compiler. Its mandatory path is
+standard-library-only: it scans the lexical fixture, exercises the TextMate
+patterns, parses every manifest and generated format, checks file associations
+and verifies copied artifacts byte for byte. If Pygments, tree-sitter, Vim,
+Neovim, Emacs, Lua or PowerShell are installed, it also runs their native
+smoke checks; absent optional tools are reported and skipped. Neovim's parser
+is compiled into a temporary directory rather than the product tree. With
+`npm install` run in `highlight/textmate`, the suite also tokenizes the fixture
+through VS Code's actual TextMate engine and builds a temporary valid VSIX.
+
+To exercise Pygments without installing anything into the repository, create
+a temporary virtual environment, `pip install -e ./highlight`, and run the
+suite with that environment's `python3` first on `PATH`.
+
+`--integration` adds the 392 positive, runtime and `core/*` sources to the
+tree-sitter pass. It remains useful as language-wide evidence, but is not
+needed to test or package the highlighters themselves. Each editor directory
+contains the shortest installation path for that editor.

@@ -6,4 +6,9 @@ docs/site/site/
 docs/site/landin-site.tar.gz
 .claude/worktrees/
 highlight/build/
+highlight/tree-sitter/node_modules/
+highlight/textmate/node_modules/
+highlight/nvim/parser/*.so
+highlight/nvim/parser/*.dylib
+highlight/nvim/parser/*.dll
 *.egg-info/

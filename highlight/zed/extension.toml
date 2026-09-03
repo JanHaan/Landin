@@ -1,0 +1,12 @@
+id = "landin"
+name = "Landin"
+description = "Landin language support"
+version = "0.0.0"
+schema_version = 1
+authors = ["Landin contributors"]
+repository = "https://github.com/JanHaan/Landin"
+
+[grammars.landin]
+repository = "https://github.com/JanHaan/Landin"
+rev = "main"
+path = "highlight/tree-sitter"
