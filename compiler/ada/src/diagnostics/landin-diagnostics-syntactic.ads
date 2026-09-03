@@ -87,22 +87,17 @@ package Landin.Diagnostics.Syntactic is
    --  where a parameter's does, which is why the parser names the construct
    --  and not the lexeme it saw.
    --
-   --  Several are ordinary identifiers to the scan, because [1760]
-   --  reserves none of `loop`, `while`, `for`, `break` or `continue`.
-   --  Without this table the compiler would say that `loop` is a name that
-   --  needs a `:` after it, which is true and useless.
+   --  Several are ordinary identifiers to the scan, because [1760] does
+   --  not reserve them.  The table keeps those omissions distinguishable
+   --  from ordinary names.
    type Refused_Construct is
      (Declared_Type,
       Float_Type,
       Text_Type,
-      Loop_Statement,
-      While_Statement,
       For_Statement,
-      Continue_Statement,
       Struct_Type,
       Wide_Integer_Type,
       Distinct_Type,
-      Break_Statement,
       Type_Parameter,
       Parameterized_Atom_Union,
       --  Bracketed constructs whose spelling the parser alone can tell
@@ -125,14 +120,10 @@ package Landin.Diagnostics.Syntactic is
             when Declared_Type        => "[0120]",
             when Float_Type           => "[0170]",
             when Text_Type            => "[0600]",
-            when Loop_Statement       => "[1130]",
-            when While_Statement      => "[1140]",
             when For_Statement        => "[1150]",
-            when Continue_Statement   => "[1180]",
             when Struct_Type          => "[0670]",
             when Wide_Integer_Type    => "[0150]",
             when Distinct_Type        => "[0650]",
-            when Break_Statement      => "[1190]",
             when Type_Parameter       => "[1290]",
             when Parameterized_Atom_Union => "[1350]",
             when Array_Repetition     => "[0560]",
@@ -171,13 +162,8 @@ private
      is (case Item is
             --  R2.20 implements the types a program declares.
             when Declared_Type        => "R2.20",
-            --  R4.10 owns the remaining hosted loop surface, including
-            --  its transfers.
-            when Loop_Statement
-               | While_Statement
-               | For_Statement
-               | Continue_Statement
-               | Break_Statement      => "R4.10",
+            --  R4.10 owns the remaining hosted traversal surface.
+            when For_Statement        => "R4.10",
             --  The remaining R2.20 constructs each wait for their own
             --  aggregate slice.
             when Struct_Type

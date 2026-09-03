@@ -22916,7 +22916,7 @@ file negative/logical-words-on-numbers/program.ldn tokens 23
   41 42 b
   43 46 end
   47 48 f
-file negative/loop-not-enabled/program.ldn tokens 13
+file negative/loop-condition-not-bool/program.ldn tokens 15
   0 1 f
   1 2 :
   3 4 (
@@ -22924,12 +22924,14 @@ file negative/loop-not-enabled/program.ldn tokens 13
   6 8 ->
   9 13 none
   14 15 =
-  20 24 loop
-  25 27 do
-  32 35 end
-  36 40 loop
-  41 44 end
-  45 46 f
+  20 25 while
+  26 27 1
+  28 30 do
+  39 44 break
+  49 52 end
+  53 58 while
+  59 62 end
+  63 64 f
 file negative/malformed-integer-digit/main.ldn refused '0b102' is not an integer the rules spell
 file negative/match-scalar-not-enabled/program.ldn tokens 47
   0 6 choice

@@ -3072,6 +3072,13 @@ Implement or explicitly amend every remaining hosted normative construct,
 including text, literals, patterns, loops, `unchecked`, modules, builtin
 directives and hosted entry behavior.
 
+The first increment enables unlabelled `loop` and `while` statements with
+unlabelled, valueless `break` and `continue`, including guarded transfers,
+backward neutral-IR edges, conservative definite assignment and lexical
+`defer` cleanup on iteration transfers. D156 records why no loop opcode was
+added and leaves labels, values, `complete` and `for` traversal in this active
+item.
+
 Exit evidence: every hosted `[NNNN]` row has implementation and positive or
 negative evidence; no omission is hidden by prototype coverage.
 
