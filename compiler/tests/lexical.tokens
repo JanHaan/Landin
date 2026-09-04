@@ -19525,7 +19525,7 @@ file negative/float-width-conversion-known-out-of-range/program.ldn tokens 13
   40 41 (
   41 45 huge
   45 46 )
-file negative/for-any-element-traversal-deferred/program.ldn tokens 48
+file negative/for-any-element-read-only/program.ldn tokens 54
   0 6 marker
   6 7 :
   8 12 type
@@ -19538,42 +19538,48 @@ file negative/for-any-element-traversal-deferred/program.ldn tokens 48
   34 35 )
   36 39 end
   40 46 marker
-  48 54 public
-  55 59 main
-  59 60 :
-  61 62 (
-  62 63 )
-  64 66 ->
-  67 68 (
-  68 72 code
-  72 73 :
-  74 77 i32
+  48 55 replace
+  55 56 :
+  57 58 (
+  58 63 items
+  63 64 :
+  65 66 [
+  66 67 ]
+  67 70 any
+  71 77 marker
   77 78 )
-  79 80 =
-  85 90 items
-  90 91 :
-  92 93 [
-  93 94 ]
-  94 97 any
-  98 104 marker
-  105 106 =
-  107 108 [
-  108 109 ]
-  114 117 for
-  118 122 item
-  123 125 in
-  126 131 items
-  132 134 do
-  143 144 _
-  145 146 =
-  147 151 item
-  156 159 end
-  160 163 for
-  168 172 code
-  173 174 =
-  175 176 1
-  177 180 end
-  181 185 main
+  79 81 ->
+  82 86 none
+  87 88 =
+  93 96 for
+  97 101 item
+  102 104 in
+  105 110 items
+  111 113 do
+  122 126 item
+  127 128 =
+  129 133 item
+  138 141 end
+  142 145 for
+  146 149 end
+  150 157 replace
+  159 165 public
+  166 170 main
+  170 171 :
+  172 173 (
+  173 174 )
+  175 177 ->
+  178 179 (
+  179 183 code
+  183 184 :
+  185 188 i32
+  188 189 )
+  190 191 =
+  196 200 code
+  201 202 =
+  203 204 1
+  205 208 end
+  209 213 main
 file negative/for-array-element-read-only/program.ldn tokens 47
   0 6 reject
   6 7 :

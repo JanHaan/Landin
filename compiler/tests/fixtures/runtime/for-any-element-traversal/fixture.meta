@@ -1,0 +1,6 @@
+class: runtime
+summary: fixed-array and slice traversal preserve aliased any elements, evidence, indices, cleanup and loop values
+program: main.ldn
+status: 42
+constructs: 1150, 1160, 1370, 1390
+targets: linux-x86-64
