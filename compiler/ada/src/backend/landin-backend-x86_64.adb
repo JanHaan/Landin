@@ -1516,6 +1516,25 @@ package body Landin.Backend.X86_64 is
                               end;
                            end if;
                         end;
+                     elsif From_Kind = Landin.Types.Bool
+                       and then Into_Kind in Landin.Types.Float_Name
+                     then
+                        declare
+                           Into_Type : constant Landin.Types.Float_Name :=
+                             Landin.Types.Float_Name (Into_Kind);
+                           Convert : constant String :=
+                             (if Into_Type = Landin.Types.F32
+                              then "cvtsi2ssq" else "cvtsi2sdq");
+                           Store : constant String :=
+                             (if Into_Type = Landin.Types.F32
+                              then "movss" else "movsd");
+                        begin
+                           Emit ("movq $0, %rax");
+                           Emit ("movb " & Value_Cell (Source) & ", %al");
+                           Emit (Convert & " %rax, %xmm0");
+                           Emit
+                             (Store & " %xmm0, " & Value_Cell (Value));
+                        end;
                      elsif Into_Kind in Landin.Types.Float_Name then
                         declare
                            From : constant Landin.Types.Integer_Name :=
@@ -3646,6 +3665,14 @@ package body Landin.Backend.X86_64 is
                                  Held (Natural (Value)) :=
                                    Landin.Types.Folded (Converted);
                               end;
+                           elsif From = Landin.Types.Bool
+                             and then Into_Type in Landin.Types.Float_Name
+                           then
+                              Held (Natural (Value)) :=
+                                Landin.Types.Folded
+                                  (Landin.Types.Convert_Bool_To_Float
+                                     (Of_Value (Source),
+                                      Landin.Types.Float_Name (Into_Type)));
                            elsif From in Landin.Types.Integer_Name
                              and then Into_Type in Landin.Types.Float_Name
                            then

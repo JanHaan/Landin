@@ -753,6 +753,7 @@ runtime/array-returns-cross-calls | linux-x86-64
 runtime/array-zeroed-assignment-clears-storage | linux-x86-64
 runtime/atom-values-cross-the-abi | linux-x86-64
 runtime/binary-search | linux-x86-64
+runtime/bool-to-float-conversions | linux-x86-64
 runtime/bool-to-integer-conversions | linux-x86-64
 runtime/bools-cross-the-abi | linux-x86-64
 runtime/calls-return-through-the-abi | linux-x86-64

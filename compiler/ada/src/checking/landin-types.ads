@@ -294,6 +294,12 @@ package Landin.Types is
    function Convert_Integer_To_Float
      (Value : Folded; Into : Float_Name) return Magnitude;
 
+   --  Map bool's two canonical images to the corresponding exact positive
+   --  IEEE values.  Both results are representable in either enabled width.
+   function Convert_Bool_To_Float
+     (Value : Folded; Into : Float_Name) return Magnitude
+     with Pre => Value in 0 .. 1;
+
    --  Truncate an IEEE value toward zero and then check whether the result
    --  belongs to the requested enabled integer type.  NaN, infinity and an
    --  out-of-range whole part are the overflow outcome.

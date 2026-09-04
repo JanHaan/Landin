@@ -4501,13 +4501,9 @@ package body Landin.IR.Verifier is
                                    ((Result_Kind
                                        in Landin.Types.Numeric_Name
                                      and then
-                                       (Operand_Kind
-                                          in Landin.Types.Numeric_Name
-                                        or else
-                                          (Result_Kind
-                                             in Landin.Types.Integer_Name
-                                           and then Operand_Kind
-                                             = Landin.Types.Bool)))
+                                       Operand_Kind
+                                         in Landin.Types.Numeric_Name
+                                             | Landin.Types.Bool)
                                     or else
                                       (Result_Kind = Landin.Types.Bool
                                        and then Operand_Kind
