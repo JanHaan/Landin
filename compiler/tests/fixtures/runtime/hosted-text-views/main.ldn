@@ -1,0 +1,67 @@
+texts: type = struct
+    narrow: utf8
+    wide: utf16
+    terminated: cstring
+end texts
+
+module_utf8: utf8 = "A\u{2603}\u{1f600}"
+module_utf16: utf16 = "A\u{2603}\u{1f600}"
+module_cstring: cstring = "A\u{2603}"
+module_cstring_alias: cstring = module_cstring
+module_texts: texts = texts(
+    narrow: "field",
+    wide: "\u{1f600}",
+    terminated: module_cstring_alias)
+
+returned: () -> (text: utf8) =
+    text = "return"
+end returned
+
+generic_text: (item: type, text: item) -> (answer: item from text) =
+    answer = text
+end generic_text
+
+byte_at: (text: cstring, index: usize) -> (byte: u8) =
+    pointer: ptr u8 = ptr(usize(text) + index)
+    byte = pointer.val
+end byte_at
+
+public main: () -> (code: i32) =
+    inferred := "inferred"
+    raw := """raw"""
+    narrow: utf8 = "\u{1f600}"
+    wide: utf16 = "\u{1f600}"
+    terminated: cstring = "\u{1f600}"
+    local_texts: texts = texts(
+        narrow: "local",
+        wide: "\u{2603}",
+        terminated: "local")
+    module_narrow: utf8 = module_texts.narrow
+    module_wide: utf16 = module_texts.wide
+    local_narrow: utf8 = local_texts.narrow
+    local_wide: utf16 = local_texts.wide
+    result: utf8 = returned()
+    generic: utf16 = generic_text(item: utf16, text: wide)
+    chosen: cstring = if true then "chosen" else "wrong" end if
+
+    if lenof inferred == 8 and lenof raw == 3
+      and lenof narrow == 4 and lenof wide == 2
+      and lenof module_utf8 == 8 and lenof module_utf16 == 4
+      and lenof module_narrow == 5 and lenof module_wide == 2
+      and lenof local_narrow == 5 and lenof local_wide == 1
+      and lenof result == 6 and lenof generic == 2
+      and byte_at(terminated, 0) == 240
+      and byte_at(terminated, 3) == 128
+      and byte_at(terminated, 4) == 0
+      and byte_at(module_cstring, 0) == 65
+      and byte_at(module_cstring, 3) == 131
+      and byte_at(module_cstring, 4) == 0
+      and byte_at(module_texts.terminated, 4) == 0
+      and byte_at(local_texts.terminated, 5) == 0
+      and byte_at(chosen, 6) == 0
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

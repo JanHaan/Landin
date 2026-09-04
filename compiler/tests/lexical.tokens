@@ -18483,6 +18483,26 @@ file negative/core-text-private-position/main.ldn tokens 67
   227 228 0
   229 232 end
   233 237 main
+file negative/cstring-literal-write/program.ldn tokens 19
+  0 3 bad
+  3 4 :
+  5 6 (
+  6 7 )
+  8 10 ->
+  11 15 none
+  16 17 =
+  22 26 text
+  26 27 :
+  28 35 cstring
+  36 37 =
+  38 46 "landin"
+  51 55 text
+  55 56 .
+  56 59 val
+  60 61 =
+  62 64 76
+  65 68 end
+  69 72 bad
 file negative/deep-nested-child-copy-unassigned/program.ldn tokens 60
   0 4 core
   4 5 :
@@ -29550,10 +29570,6 @@ file negative/public-on-statement/program.ldn tokens 15
   38 41 end
   42 43 f
 file negative/raw-literal-inconsistent-indentation/program.ldn refused a raw literal has inconsistent indentation
-file negative/raw-literal-needs-byte-slice/program.ldn tokens 3
-  0 4 name
-  5 7 :=
-  8 20 """landin"""
 file negative/raw-literal-needs-read-only-slice/program.ldn tokens 8
   0 4 name
   4 5 :
@@ -33515,10 +33531,6 @@ file negative/text-literal-needs-read-only-slice/program.ldn tokens 8
   12 14 u8
   15 16 =
   17 25 "landin"
-file negative/text-literal-not-enabled/program.ldn tokens 3
-  0 4 name
-  5 7 :=
-  8 16 "landin"
 file negative/text-literal-short-byte-escape/program.ldn refused a text literal has a malformed escape
 file negative/text-literal-unknown-escape/program.ldn refused a text literal has an unknown escape
 file negative/text-literal-write/program.ldn tokens 22
@@ -33544,12 +33556,68 @@ file negative/text-literal-write/program.ldn tokens 22
   58 60 76
   61 64 end
   65 68 bad
-file negative/text-type-not-enabled/program.ldn tokens 5
+file negative/text-view-byte-escape/program.ldn tokens 5
   0 4 name
   4 5 :
   6 10 utf8
   11 12 =
-  13 14 1
+  13 22 "bad\x41"
+file negative/text-view-identities-are-distinct/program.ldn tokens 32
+  0 10 take_bytes
+  10 11 :
+  12 13 (
+  13 17 text
+  17 18 :
+  19 20 [
+  20 21 ]
+  21 23 u8
+  23 24 )
+  25 27 ->
+  28 32 none
+  33 34 =
+  35 38 end
+  39 49 take_bytes
+  51 54 bad
+  54 55 :
+  56 57 (
+  57 58 )
+  59 61 ->
+  62 66 none
+  67 68 =
+  73 77 text
+  77 78 :
+  79 83 utf8
+  84 85 =
+  86 94 "landin"
+  99 109 take_bytes
+  109 110 (
+  110 114 text
+  114 115 )
+  116 119 end
+  120 123 bad
+file negative/text-view-indexing-deferred/program.ldn tokens 22
+  0 3 bad
+  3 4 :
+  5 6 (
+  6 10 text
+  10 11 :
+  12 16 utf8
+  16 17 )
+  18 20 ->
+  21 22 (
+  22 26 byte
+  26 27 :
+  28 30 u8
+  30 31 )
+  32 33 =
+  38 42 byte
+  43 44 =
+  45 49 text
+  49 50 [
+  50 51 0
+  51 52 ]
+  53 56 end
+  57 60 bad
 file negative/try-infallible-call/program.ldn tokens 37
   0 4 leaf
   4 5 :

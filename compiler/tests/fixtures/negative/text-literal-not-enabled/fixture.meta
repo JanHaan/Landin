@@ -1,6 +1,0 @@
-class: negative
-summary: a text literal without context defaults to the deferred utf8 type
-constructs: 0260, 0600, 1830
-program: program.ldn
-targets: linux-x86-64, macos-arm64
-codes: L0304

@@ -107,6 +107,14 @@ package body Landin.Syntax.Parser is
             when Type_F64   => "f64",
             when Type_Bool  => "bool");
 
+   type Text_Name is (Type_Utf8, Type_Utf16, Type_C_String);
+
+   function Spelling (Item : Text_Name) return String
+     is (case Item is
+            when Type_Utf8     => "utf8",
+            when Type_Utf16    => "utf16",
+            when Type_C_String => "cstring");
+
    ------------------------------------------------------------------
 
    type Slot_List is array (Positive range <>) of Node_Id;
@@ -245,6 +253,11 @@ package body Landin.Syntax.Parser is
               of Landin.Source.Names.Name_Id :=
                 [for S in Scalar_Name =>
                    Landin.Source.Names.Intern (Names, Spelling (S))];
+
+            Text_Id : constant array (Text_Name)
+              of Landin.Source.Names.Name_Id :=
+                [for T in Text_Name =>
+                   Landin.Source.Names.Intern (Names, Spelling (T))];
 
             ------------------------------------------------------------
             --  Reading the stream
@@ -2063,6 +2076,13 @@ package body Landin.Syntax.Parser is
                                  then Parse_Type_Application (Base, At_Type)
                                  else Base);
                            end;
+                        end if;
+                     end loop;
+
+                     for Item in Text_Name loop
+                        if Text_Id (Item) = Spelled then
+                           Advance;
+                           return Add (Type_Name, At_Type, Named => Spelled);
                         end if;
                      end loop;
 

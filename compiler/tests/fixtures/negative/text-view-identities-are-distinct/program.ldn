@@ -1,0 +1,7 @@
+take_bytes: (text: []u8) -> none =
+end take_bytes
+
+bad: () -> none =
+    text: utf8 = "landin"
+    take_bytes(text)
+end bad

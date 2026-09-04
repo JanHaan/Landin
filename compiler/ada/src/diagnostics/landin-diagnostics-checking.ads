@@ -140,7 +140,9 @@ package Landin.Diagnostics.Checking is
       --  the kernel lacks is a question about what it resolved to.
       Wide_Integer_Type,
       Float_Type,
-      Text_Type,
+      --  [0610]'s codepoint-ordinal access remains a separate R4.10
+      --  increment after the text view identities themselves.
+      Text_Indexing,
       --  [0670] declares one.  R2.20 admits contextual storage, copies,
       --  zero images and labelled literals but not a general aggregate
       --  value.
@@ -173,7 +175,7 @@ package Landin.Diagnostics.Checking is
             when Scalar_Conversion  => "[0700]",
             when Wide_Integer_Type  => "[0150]",
             when Float_Type         => "[0170]",
-            when Text_Type          => "[0600]",
+            when Text_Indexing      => "[0610]",
             when Struct_Value       => "[0670]",
             when Variant_Value      => "[0680]",
             when Array_Value        => "[0520]",
@@ -188,26 +190,19 @@ package Landin.Diagnostics.Checking is
    --  name nothing in either document writes as a type, and resolution has
    --  already reported it as declared nowhere.
    type Refused_Type_Name is
-     (Wide_Unsigned, Wide_Signed, Float_16,
-      Text_Utf8, Text_Utf16, Text_C_String);
+     (Wide_Unsigned, Wide_Signed, Float_16);
 
    function Spelling (Item : Refused_Type_Name) return String
      is (case Item is
             when Wide_Unsigned => "u128",
             when Wide_Signed   => "i128",
-            when Float_16      => "f16",
-            when Text_Utf8     => "utf8",
-            when Text_Utf16    => "utf16",
-            when Text_C_String => "cstring");
+            when Float_16      => "f16");
 
    function Refusal (Item : Refused_Type_Name) return Refused_Use
      is (case Item is
             when Wide_Unsigned
                | Wide_Signed   => Wide_Integer_Type,
-            when Float_16      => Float_Type,
-            when Text_Utf8
-               | Text_Utf16
-               | Text_C_String => Text_Type);
+            when Float_16      => Float_Type);
 
    procedure Report
      (Item    : Failure;
@@ -228,11 +223,11 @@ private
    function Enabled_By (Item : Refused_Use) return String
      is (case Item is
             when Scalar_Conversion => "R4.10",
-            --  R4.10 closes the hosted construct matrix, which is where
-            --  the wide integers, the floats and the text views arrive.
+            --  R4.10 closes the hosted construct matrix, including the wide
+            --  integers, f16 and [0610]'s remaining text indexing.
             when Wide_Integer_Type
                | Float_Type
-               | Text_Type         => "R4.10",
+               | Text_Indexing     => "R4.10",
             when Struct_Value
                | Variant_Value
                | Array_Value

@@ -67,7 +67,9 @@ package body Landin.Stages.Lowering is
    use type Syn.Node_Id;
    use type Syn.Node_Kind;
    use type Syn.Parameter_Convention;
+   use type Landin.Checking.Reference_Id;
    use type Ty.Type_Kind;
+   use type Ty.Reference_View;
 
    --  D118: the neutral subobject path one child identity spells.  The
    --  contextual forms below still reach exactly one depth, so this is
@@ -482,16 +484,24 @@ package body Landin.Stages.Lowering is
       type Alias_Map is array (Declared) of Payload_Alias;
       Aliases : Alias_Map := [others => (others => <>)];
 
-      --  D161: every text literal is one read-only datum holding its bytes
-      --  and [0260]'s trailing NUL, shared by content, so two spellings of
-      --  one string are one object.
+      --  D161/D181: every text literal is one read-only datum holding its
+      --  contextual code units and [0260]'s trailing NUL.  The key includes
+      --  the element width, so equal UTF-8 and cstring contents share bytes
+      --  while UTF-16 remains a separately shaped object.
       package Text_Datum_Maps is new Ada.Containers.Indefinite_Ordered_Maps
         (Key_Type => String, Element_Type => IR.Item_Id, "=" => IR."=");
 
       Text_Data : Text_Datum_Maps.Map;
 
-      function Text_Content
+      function Text_Units
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
+         return Landin.Tokens.Text.Code_Unit_Array;
+
+      function Text_Key
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return String;
+
+      function Text_Element
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Scalar_Name;
 
       function Character_Magnitude
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Magnitude;
@@ -502,31 +512,73 @@ package body Landin.Stages.Lowering is
       procedure Register_Text_Datum
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
 
-      function Text_Content
-        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return String
+      function Text_Units
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
+         return Landin.Tokens.Text.Code_Unit_Array
       is
          Snap : constant Landin.Source.Snapshot :=
            Source (Context, Syn.Source_Of (Of_Tree));
          Lexeme : constant String :=
            Landin.Source.Slice (Snap, Syn.Where (Of_Tree, Node));
-         Decoded : String (1 .. Lexeme'Length);
+         Decoded : Landin.Tokens.Text.Code_Unit_Array (1 .. Lexeme'Length);
          Length : Natural;
          Fault : Landin.Tokens.Text.Problem;
          Fault_First, Fault_Last : Natural;
+         Descriptor : constant Landin.Checking.Reference_Descriptor :=
+           Landin.Checking.Descriptor_Of
+             (Types.all,
+              Landin.Checking.Reference_Of (Types.all, Of_Tree, Node));
+         Encoding : constant Landin.Tokens.Text.Literal_Encoding :=
+           (if Descriptor.View = Ty.Ordinary_View
+            then Landin.Tokens.Text.Byte_Units
+            elsif Descriptor.View = Ty.Utf16_View
+            then Landin.Tokens.Text.UTF16_Units
+            else Landin.Tokens.Text.UTF8_Units);
       begin
-         if Syn.Kind (Of_Tree, Node) = Syn.Raw_Literal then
-            Landin.Tokens.Text.Decode_Raw
-              (Lexeme, Decoded, Length, Fault, Fault_First, Fault_Last);
-         else
-            Landin.Tokens.Text.Decode
-              (Lexeme, Decoded, Length, Fault, Fault_First, Fault_Last);
-         end if;
+         Landin.Tokens.Text.Decode_View
+           (Lexeme, Syn.Kind (Of_Tree, Node) = Syn.Raw_Literal,
+            Encoding, Decoded, Length, Fault, Fault_First, Fault_Last);
          if Fault not in Landin.Tokens.Text.Well_Formed then
             raise Landin.Compiler_Defect with
               "a malformed text literal reached lowering";
          end if;
          return Decoded (1 .. Length);
-      end Text_Content;
+      end Text_Units;
+
+      function Text_Element
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Scalar_Name
+      is
+         Descriptor : constant Landin.Checking.Reference_Descriptor :=
+           Landin.Checking.Descriptor_Of
+             (Types.all,
+              Landin.Checking.Reference_Of (Types.all, Of_Tree, Node));
+      begin
+         return
+           (if Descriptor.View = Ty.Utf16_View then Ty.U16 else Ty.U8);
+      end Text_Element;
+
+      function Text_Key
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return String
+      is
+         Units : constant Landin.Tokens.Text.Code_Unit_Array :=
+           Text_Units (Of_Tree, Node);
+         Element : constant Ty.Scalar_Name := Text_Element (Of_Tree, Node);
+         Key : String
+           (1 .. 1 + Units'Length * (if Element = Ty.U16 then 2 else 1));
+         Cursor : Positive := 2;
+      begin
+         Key (1) := (if Element = Ty.U16 then Character'Val (16) else
+                       Character'Val (8));
+         for Unit of Units loop
+            if Element = Ty.U16 then
+               Key (Cursor) := Character'Val (Natural (Unit) / 256);
+               Cursor := Cursor + 1;
+            end if;
+            Key (Cursor) := Character'Val (Natural (Unit) mod 256);
+            Cursor := Cursor + 1;
+         end loop;
+         return Key;
+      end Text_Key;
 
       function Character_Magnitude
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Magnitude
@@ -550,8 +602,8 @@ package body Landin.Stages.Lowering is
       function Text_Datum
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return IR.Item_Id
       is
-         Content : constant String := Text_Content (Of_Tree, Node);
-         Found : constant Text_Datum_Maps.Cursor := Text_Data.Find (Content);
+         Key : constant String := Text_Key (Of_Tree, Node);
+         Found : constant Text_Datum_Maps.Cursor := Text_Data.Find (Key);
       begin
          if Text_Datum_Maps.Has_Element (Found) then
             return Text_Datum_Maps.Element (Found);
@@ -565,24 +617,27 @@ package body Landin.Stages.Lowering is
       is
          Site : constant Landin.Provenance.Origin :=
            Syn.Origin (Of_Tree, Node);
-         Content : constant String := Text_Content (Of_Tree, Node);
-         Image : Ty.Folded_Array (1 .. Content'Length + 1);
+         Key : constant String := Text_Key (Of_Tree, Node);
+         Units : constant Landin.Tokens.Text.Code_Unit_Array :=
+           Text_Units (Of_Tree, Node);
+         Image : Ty.Folded_Array (1 .. Units'Length + 1);
          Made : IR.Item_Id;
       begin
-         if Text_Data.Contains (Content) then
+         if Text_Data.Contains (Key) then
             return;
          end if;
-         for Index in Content'Range loop
-            Image (Index) := Ty.Folded (Character'Pos (Content (Index)));
+         for Index in Units'Range loop
+            Image (Index) := Ty.Folded (Units (Index));
          end loop;
          Image (Image'Last) := 0;
          Made := IR.Add_Item
            (Unit.all, IR.Datum, Res.No_Declaration, Ty.Fixed_Array, Site);
          IR.Set_Array
-           (Unit.all, Made, Ty.U8, IR.Element_Total (Image'Length));
+           (Unit.all, Made, Text_Element (Of_Tree, Node),
+            IR.Element_Total (Image'Length));
          IR.Set_Array_Image (Unit.all, Made, Image);
          IR.Mark_Read_Only (Unit.all, Made);
-         Text_Data.Insert (Content, Made);
+         Text_Data.Insert (Key, Made);
       end Register_Text_Datum;
 
       --  The item being filled, and the block instructions go into.
@@ -4488,6 +4543,19 @@ package body Landin.Stages.Lowering is
                return IR.Emit_Number
                         (Unit.all, Filling, Ty.U32,
                          Character_Magnitude (Of_Tree, Node), False, Site);
+
+            when Syn.Text_Literal | Syn.Raw_Literal =>
+               --  The slice-shaped views are lowered through
+               --  Lower_Stored_Expression.  A cstring is its pooled datum's
+               --  one-word base address, with no runtime length carrier.
+               if Type_At (Of_Tree, Node) /= Ty.Pointer_Value then
+                  raise Landin.Compiler_Defect with
+                    "a slice text literal reached scalar lowering";
+               end if;
+               return IR.Emit_Storage_Address
+                 (Unit.all, Filling,
+                  (Kind => IR.Module_Datum,
+                   Datum => Text_Datum (Of_Tree, Node)), Site);
 
             when Syn.True_Literal =>
                return IR.Emit_Truth (Unit.all, Filling, True, Site);
@@ -11056,7 +11124,8 @@ package body Landin.Stages.Lowering is
                if Syn.Kind (Of_Tree, Node)
                     in Syn.Text_Literal | Syn.Raw_Literal
                  and then Landin.Checking.Type_Of
-                   (Types.all, Of_Tree, Node) = Ty.Slice_Value
+                   (Types.all, Of_Tree, Node)
+                     in Ty.Pointer_Value | Ty.Slice_Value
                then
                   Register_Text_Datum (Of_Tree, Node);
                end if;
@@ -12200,6 +12269,54 @@ package body Landin.Stages.Lowering is
          --  gathers that field's compact descriptor.
          procedure Resolve_Image (Id : Res.Declaration_Id);
 
+         function Is_C_String_Value
+           (Of_Tree : Syn.Tree; Value : Syn.Node_Id) return Boolean;
+
+         function Static_Address_Target
+           (Of_Tree : Syn.Tree; Value : Syn.Node_Id) return IR.Item_Id;
+
+         function Is_C_String_Value
+           (Of_Tree : Syn.Tree; Value : Syn.Node_Id) return Boolean
+         is
+            Reference : constant Landin.Checking.Reference_Id :=
+              Landin.Checking.Reference_Of (Types.all, Of_Tree, Value);
+         begin
+            return Landin.Checking.Type_Of (Types.all, Of_Tree, Value)
+                     = Ty.Pointer_Value
+              and then Reference /= Landin.Checking.No_Reference
+              and then Landin.Checking.Descriptor_Of
+                (Types.all, Reference).View = Ty.C_String_View;
+         end Is_C_String_Value;
+
+         function Static_Address_Target
+           (Of_Tree : Syn.Tree; Value : Syn.Node_Id) return IR.Item_Id
+         is
+         begin
+            if Syn.Kind (Of_Tree, Value)
+                 in Syn.Text_Literal | Syn.Raw_Literal
+            then
+               return Text_Datum (Of_Tree, Value);
+            elsif Syn.Kind (Of_Tree, Value) = Syn.Zeroed_Literal then
+               return IR.No_Item;
+            elsif Syn.Kind (Of_Tree, Value) = Syn.Name_Reference
+              and then Res.Verdict_Of (Meanings.all, Of_Tree, Value)
+                           = Res.Bound
+            then
+               declare
+                  Source_Id : constant Res.Declaration_Id :=
+                    Res.Bound_To (Meanings.all, Of_Tree, Value);
+                  Source_Item : constant IR.Item_Id :=
+                    IR.Item_For (Unit.all, Source_Id);
+               begin
+                  Resolve_Image (Source_Id);
+                  return IR.Address_Target (Unit.all, Source_Item);
+               end;
+            end if;
+
+            raise Landin.Compiler_Defect with
+              "a static cstring field has no data target";
+         end Static_Address_Target;
+
          procedure Copy_Field_Descriptor
            (Source_Item  : IR.Item_Id;
             Source_Field : Positive;
@@ -12916,7 +13033,11 @@ package body Landin.Stages.Lowering is
             begin
                case Shape.Kind is
                   when IR.Scalar_Field_Shape =>
-                     if Shape.Signature /= IR.No_Signature then
+                     if Given /= Syn.No_Node
+                       and then Is_C_String_Value (Of_Tree, Given)
+                     then
+                        Target := Static_Address_Target (Of_Tree, Given);
+                     elsif Shape.Signature /= IR.No_Signature then
                         if Given = Syn.No_Node
                           or else Syn.Kind (Of_Tree, Given)
                                     = Syn.Zeroed_Literal
@@ -13291,7 +13412,11 @@ package body Landin.Stages.Lowering is
                           IR.Nth_Field_Shape (Unit.all, Item, Which);
                      begin
                         if Shape.Kind = IR.Scalar_Field_Shape then
-                           if Shape.Signature /= IR.No_Signature then
+                           if Is_C_String_Value (Of_Tree, Value)
+                           then
+                              Images (Which).Target :=
+                                Static_Address_Target (Of_Tree, Value);
+                           elsif Shape.Signature /= IR.No_Signature then
                               Images (Which).Target :=
                                 Static_Field_Target (Of_Tree, Value);
                            else
@@ -13370,7 +13495,13 @@ package body Landin.Stages.Lowering is
                                               (Of_Tree,
                                                Payload_Nodes (Payload));
                                        begin
-                                          if Leaf.Signature /=
+                                          if Is_C_String_Value
+                                            (Of_Tree, Given)
+                                          then
+                                             Image.Target :=
+                                               Static_Address_Target
+                                                 (Of_Tree, Given);
+                                          elsif Leaf.Signature /=
                                                IR.No_Signature
                                           then
                                              Image.Target :=
@@ -14105,6 +14236,46 @@ package body Landin.Stages.Lowering is
                return;
             end if;
 
+            if Landin.Checking.Type_Of (Types.all, Id) = Ty.Pointer_Value
+              and then Landin.Checking.Descriptor_Of
+                (Types.all, Landin.Checking.Reference_Of (Types.all, Id)).View
+                  = Ty.C_String_View
+            then
+               if Value /= Syn.No_Node
+                 and then Syn.Kind (Their_Tree.all, Value)
+                    in Syn.Text_Literal | Syn.Raw_Literal
+               then
+                  IR.Set_Address_Target
+                    (Unit.all, IR.Item_For (Unit.all, Id),
+                     Text_Datum (Their_Tree.all, Value));
+                  Made (Id) := True;
+               elsif Value /= Syn.No_Node
+                 and then Syn.Kind (Their_Tree.all, Value)
+                            = Syn.Name_Reference
+                 and then Res.Verdict_Of
+                   (Meanings.all, Their_Tree.all, Value) = Res.Bound
+               then
+                  declare
+                     Source_Id : constant Res.Declaration_Id :=
+                       Res.Bound_To (Meanings.all, Their_Tree.all, Value);
+                  begin
+                     Resolve_Image (Source_Id);
+                     if IR.Address_Target
+                       (Unit.all, IR.Item_For (Unit.all, Source_Id))
+                         /= IR.No_Item
+                     then
+                        IR.Set_Address_Target
+                          (Unit.all, IR.Item_For (Unit.all, Id),
+                           IR.Address_Target
+                             (Unit.all, IR.Item_For (Unit.all, Source_Id)));
+                        Made (Id) := True;
+                     end if;
+                  end;
+               end if;
+               Where (Id) := Resolved;
+               return;
+            end if;
+
             if Landin.Checking.Type_Of (Types.all, Id) = Ty.Slice_Value then
                declare
                   Element : constant IR.Field_Shape :=
@@ -14260,7 +14431,7 @@ package body Landin.Stages.Lowering is
                if Res.Sort_Of (Meanings.all, Id) = Res.Module_Binding
                  and then Landin.Checking.Type_Of (Types.all, Id)
                           in Ty.Bool | Ty.Fixed_Array | Ty.Aggregate
-                             | Ty.Slice_Value
+                             | Ty.Pointer_Value | Ty.Slice_Value
                then
                   Resolve_Image (Id);
                end if;

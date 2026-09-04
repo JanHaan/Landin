@@ -37,6 +37,7 @@ package body Landin.Stages.Checking is
    use type Landin.Targets.Bit_Width;
    use type Landin.Targets.Byte_Count;
    use type Landin.Types.Type_Kind;
+   use type Landin.Types.Reference_View;
    use type Landin.Types.Folded;
    use type Landin.Types.Magnitude;
    use type Landin.Checking.Progress;
@@ -848,6 +849,30 @@ package body Landin.Stages.Checking is
       --  D135 substitutes only while expanding an application.  The result
       --  is a value local to this walk; in particular, an array node in a
       --  generic alias never receives the length of one instantiation.
+      function Text_Reference
+        (View : Ty.Text_View) return Landin.Checking.Reference_Id;
+
+      function Text_Descriptor
+        (View : Ty.Text_View) return Type_Descriptor;
+
+      function Text_Reference
+        (View : Ty.Text_View) return Landin.Checking.Reference_Id
+        is (Landin.Checking.Text_Reference_Of (Types.all, View));
+
+      function Text_Descriptor
+        (View : Ty.Text_View) return Type_Descriptor
+      is
+         Reference : constant Landin.Checking.Reference_Id :=
+           Text_Reference (View);
+      begin
+         return
+           (Kind =>
+              (if View = Ty.C_String_View
+               then Ty.Pointer_Value else Ty.Slice_Value),
+            Reference => Reference,
+            others => <>);
+      end Text_Descriptor;
+
       function Normalized_Type
         (Of_Tree    : Syn.Tree;
          Written    : Syn.Node_Id;
@@ -1833,9 +1858,20 @@ package body Landin.Stages.Checking is
          end Require_Type_Actual;
       begin
          if Syn.Kind (Of_Tree, Written) = Syn.Type_Name then
-            return (Kind    => Landin.Checking.Named
-                      (Types.all, Syn.Name (Of_Tree, Written)),
-                    others => <>);
+            declare
+               Name : constant Landin.Source.Names.Name_Id :=
+                 Syn.Name (Of_Tree, Written);
+               Scalar : constant Ty.Type_Kind :=
+                 Landin.Checking.Named (Types.all, Name);
+            begin
+               if Scalar in Ty.Scalar_Name then
+                  return (Kind => Scalar, others => <>);
+               elsif Landin.Checking.Is_Text_Name (Types.all, Name) then
+                  return Text_Descriptor
+                    (Landin.Checking.Named_Text_View (Types.all, Name));
+               end if;
+               return Invalid;
+            end;
          end if;
 
          if Syn.Kind (Of_Tree, Written) = Syn.Any_Type then
@@ -1863,6 +1899,7 @@ package body Landin.Stages.Checking is
                     (if Syn.Kind (Of_Tree, Written) = Syn.Pointer_Type
                      then Ty.Pointer_Value else Ty.Slice_Value),
                   Mutable => Syn.Is_Referent_Mutable (Of_Tree, Written),
+                  View => Ty.Ordinary_View,
                   Referent => Target.Kind,
                   Nominal => Target.Nominal,
                   Length => Target.Length,
@@ -2138,6 +2175,12 @@ package body Landin.Stages.Checking is
                   begin
                      if Scalar in Ty.Scalar_Name then
                         return (Kind => Scalar, others => <>);
+                     elsif Landin.Checking.Is_Text_Name
+                       (Types.all, Syn.Name (Of_Tree, Written))
+                     then
+                        return Text_Descriptor
+                          (Landin.Checking.Named_Text_View
+                             (Types.all, Syn.Name (Of_Tree, Written)));
                      end if;
                   end;
                end if;
@@ -3354,6 +3397,9 @@ package body Landin.Stages.Checking is
                   when Ty.Function_Value =>
                      Landin.Checking.Note_Signature
                        (Types.all, Of_Tree, Written, Result.Signature);
+                  when Ty.Pointer_Value | Ty.Slice_Value =>
+                     Landin.Checking.Note_Reference
+                       (Types.all, Of_Tree, Written, Result.Reference);
                   when others =>
                      null;
                end case;
@@ -4116,8 +4162,32 @@ package body Landin.Stages.Checking is
          end if;
 
          if Syn.Kind (Of_Tree, Written) = Syn.Type_Name then
-            return Landin.Checking.Named
-              (Types.all, Syn.Name (Of_Tree, Written));
+            declare
+               Name : constant Landin.Source.Names.Name_Id :=
+                 Syn.Name (Of_Tree, Written);
+               Scalar : constant Ty.Type_Kind :=
+                 Landin.Checking.Named (Types.all, Name);
+            begin
+               if Scalar in Ty.Scalar_Name then
+                  return Scalar;
+               elsif Landin.Checking.Is_Text_Name (Types.all, Name) then
+                  if Landin.Checking.Reference_Of
+                    (Types.all, Of_Tree, Written)
+                      = Landin.Checking.No_Reference
+                  then
+                     Landin.Checking.Note_Reference
+                       (Types.all, Of_Tree, Written,
+                        Text_Reference
+                          (Landin.Checking.Named_Text_View
+                             (Types.all, Name)));
+                  end if;
+                  return Landin.Checking.Descriptor_Of
+                    (Types.all,
+                     Landin.Checking.Reference_Of
+                       (Types.all, Of_Tree, Written)).Kind;
+               end if;
+               return Ty.Ill_Typed;
+            end;
          end if;
 
          if Syn.Kind (Of_Tree, Written)
@@ -13568,17 +13638,16 @@ package body Landin.Stages.Checking is
                return Kept (Ty.U32);
 
             when Syn.Text_Literal | Syn.Raw_Literal =>
-               --  [0260]: with no context a text literal is `utf8`, and
-               --  D161 enables only the `[]u8` context.
-               Bad.Report
-                 (Item    => Bad.Unsupported_Use,
-                  Source  => Syn.Source_Of (Of_Tree),
-                  Where   => Syn.Where (Of_Tree, Node),
-                  Message => "a text literal with no `[]u8` context is"
-                             & " `utf8`, which is not enabled yet",
-                  Refused => Bad.Text_Type,
-                  Into    => Found);
-               return Kept (Ty.Ill_Typed);
+               --  [0260]: with no context either literal defaults to the
+               --  distinct, read-only UTF-8 view.
+               declare
+                  Reference : constant Landin.Checking.Reference_Id :=
+                    Text_Reference (Ty.Utf8_View);
+               begin
+                  Landin.Checking.Note_Reference
+                    (Types.all, Of_Tree, Node, Reference);
+                  return Kept (Ty.Slice_Value);
+               end;
 
             when Syn.True_Literal | Syn.False_Literal =>
                return Kept (Ty.Bool);
@@ -13841,6 +13910,26 @@ package body Landin.Stages.Checking is
                      Referent => Ty.Ill_Typed,
                      others => <>);
                begin
+                  if Held = Ty.Slice_Value
+                    and then Landin.Checking.Descriptor_Of
+                      (Types.all,
+                       Landin.Checking.Reference_Of
+                         (Types.all, Of_Tree, From)).View
+                           /= Ty.Ordinary_View
+                  then
+                     Bad.Report
+                       (Item    => Bad.Unsupported_Use,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Where (Of_Tree, From),
+                        Message => "a distinct text view does not take a"
+                                   & " byte or code-unit slice here",
+                        Note    => "[0600]: validated text remains distinct"
+                                   & " from its storage slice",
+                        Refused => Bad.Text_Indexing,
+                        Into    => Found);
+                     return Kept (Ty.Ill_Typed);
+                  end if;
+
                   Require
                     (Of_Tree, Syn.Slice_Lower (Of_Tree, Node), Ty.Usize,
                      Syn.Origin (Of_Tree, From), "the sliced storage");
@@ -13931,6 +14020,26 @@ package body Landin.Stages.Checking is
                     Indexed_From (Of_Tree, From);
                begin
                   if Held = Ty.Ill_Typed then
+                     return Kept (Ty.Ill_Typed);
+                  end if;
+
+                  if Held = Ty.Slice_Value
+                    and then Landin.Checking.Descriptor_Of
+                      (Types.all,
+                       Landin.Checking.Reference_Of
+                         (Types.all, Of_Tree, From)).View
+                           /= Ty.Ordinary_View
+                  then
+                     Bad.Report
+                       (Item    => Bad.Unsupported_Use,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Where (Of_Tree, From),
+                        Message => "integer indexing of this text view is"
+                                   & " not enabled yet",
+                        Note    => "[0610]: utf8 integer indexing is a"
+                                   & " separate linear codepoint scan",
+                        Refused => Bad.Text_Indexing,
+                        Into    => Found);
                      return Kept (Ty.Ill_Typed);
                   end if;
 
@@ -17592,6 +17701,21 @@ package body Landin.Stages.Checking is
                Descriptor := Landin.Checking.Descriptor_Of
                  (Types.all,
                   Landin.Checking.Reference_Of (Types.all, Of_Tree, Source));
+               if Descriptor.View /= Ty.Ordinary_View then
+                  Bad.Report
+                    (Item    => Bad.Unsupported_Use,
+                     Source  => Syn.Source_Of (Of_Tree),
+                     Where   => Syn.Where (Of_Tree, Source),
+                     Message => "a distinct text view is not traversed as"
+                                & " its backing code-unit slice",
+                     Note    => "[0600]/[1320]: text traversal requires its"
+                                & " own iterable evidence",
+                     Refused => Bad.Collection_Traversal,
+                     Into    => Found);
+                  Landin.Checking.Refuse (Types.all, Of_Tree, Source);
+                  Kind := Ty.Ill_Typed;
+                  goto Traversal_Source_Done;
+               end if;
                Kind := Descriptor.Referent;
                Item :=
                  (Kind            => Kind,
@@ -17692,6 +17816,8 @@ package body Landin.Stages.Checking is
                   Into    => Found);
                Landin.Checking.Refuse (Types.all, Of_Tree, Source);
             end if;
+
+            <<Traversal_Source_Done>>
 
             if Id /= Res.No_Declaration
               and then Kind not in Ty.Undecided | Ty.Not_Typed
@@ -19414,10 +19540,9 @@ package body Landin.Stages.Checking is
          Landin.Checking.Refuse (Types.all, Of_Tree, Node);
       end Context_Mismatch;
 
-      --  D161: a text literal is contextual like `zeroed`, and its one
-      --  enabled context is a read-only `[]u8`.  Lexing has already
-      --  rejected malformed spelling; this contextual pass distinguishes
-      --  a valid codepoint escape from byte content.
+      --  D161/D181: a text literal is contextual like `zeroed`.  Lexing has
+      --  already rejected malformed spelling; this pass selects byte, UTF-8
+      --  or UTF-16 decoding from the complete reference identity.
       procedure Check_Text_Literal
         (Of_Tree   : Syn.Tree;
          Node      : Syn.Node_Id;
@@ -19438,11 +19563,16 @@ package body Landin.Stages.Checking is
            Source (Context, Syn.Source_Of (Of_Tree));
          Where : constant Landin.Source.Span := Syn.Where (Of_Tree, Node);
          Lexeme : constant String := Landin.Source.Slice (Snap, Where);
-         Bytes : String (1 .. Lexeme'Length);
+         Units : Landin.Tokens.Text.Code_Unit_Array (1 .. Lexeme'Length);
          Length, Fault_First, Fault_Last : Natural;
          Fault : Landin.Tokens.Text.Problem;
+         Encoding : Landin.Tokens.Text.Literal_Encoding;
       begin
-         if Descriptor.Referent /= Ty.U8 then
+         if Descriptor.View = Ty.Ordinary_View
+           and then
+             (Descriptor.Kind /= Ty.Slice_Value
+              or else Descriptor.Referent /= Ty.U8)
+         then
             Bad.Report
               (Item    => Bad.Type_Mismatch,
                Source  => Syn.Source_Of (Of_Tree),
@@ -19462,7 +19592,22 @@ package body Landin.Stages.Checking is
             return;
          end if;
 
-         if Descriptor.Mutable then
+         if Descriptor.Mutable or else
+           (Descriptor.View /= Ty.Ordinary_View
+            and then
+              not
+                ((Descriptor.View = Ty.Utf8_View
+                  and then Descriptor.Kind = Ty.Slice_Value
+                  and then Descriptor.Referent = Ty.U8)
+                 or else
+                   (Descriptor.View = Ty.Utf16_View
+                    and then Descriptor.Kind = Ty.Slice_Value
+                    and then Descriptor.Referent = Ty.U16)
+                 or else
+                   (Descriptor.View = Ty.C_String_View
+                    and then Descriptor.Kind = Ty.Pointer_Value
+                    and then Descriptor.Referent = Ty.U8)))
+         then
             Bad.Report
               (Item    => Bad.Type_Mismatch,
                Source  => Syn.Source_Of (Of_Tree),
@@ -19478,13 +19623,15 @@ package body Landin.Stages.Checking is
             return;
          end if;
 
-         if Syn.Kind (Of_Tree, Node) = Syn.Raw_Literal then
-            Landin.Tokens.Text.Decode_Raw
-              (Lexeme, Bytes, Length, Fault, Fault_First, Fault_Last);
-         else
-            Landin.Tokens.Text.Decode
-              (Lexeme, Bytes, Length, Fault, Fault_First, Fault_Last);
-         end if;
+         Encoding :=
+           (if Descriptor.View = Ty.Ordinary_View
+            then Landin.Tokens.Text.Byte_Units
+            elsif Descriptor.View = Ty.Utf16_View
+            then Landin.Tokens.Text.UTF16_Units
+            else Landin.Tokens.Text.UTF8_Units);
+         Landin.Tokens.Text.Decode_View
+           (Lexeme, Syn.Kind (Of_Tree, Node) = Syn.Raw_Literal,
+            Encoding, Units, Length, Fault, Fault_First, Fault_Last);
          if Fault = Landin.Tokens.Text.Codepoint_Where_Bytes_Are_Meant then
             Bad.Report
               (Item    => Bad.Type_Mismatch,
@@ -19503,12 +19650,31 @@ package body Landin.Stages.Checking is
                Into    => Found);
             Landin.Checking.Refuse (Types.all, Of_Tree, Node);
             return;
+         elsif Fault = Landin.Tokens.Text.Byte_Where_Text_Is_Meant then
+            Bad.Report
+              (Item    => Bad.Type_Mismatch,
+               Source  => Syn.Source_Of (Of_Tree),
+               Where   =>
+                 (First => Where.First
+                            + Landin.Source.Byte_Offset (Fault_First),
+                  Last  => Where.First
+                            + Landin.Source.Byte_Offset (Fault_Last)),
+               Message => "`\\xNN` spells a byte, and this text context"
+                          & " requires Unicode scalar values",
+               Note    => "[0270]: `\\xNN` is only valid where bytes"
+                          & " are meant",
+               Related => Site,
+               Because => Because,
+               Into    => Found);
+            Landin.Checking.Refuse (Types.all, Of_Tree, Node);
+            return;
          elsif Fault /= Landin.Tokens.Text.Well_Formed then
             raise Landin.Compiler_Defect with
               "a malformed text literal passed lexical analysis";
          end if;
 
-         Landin.Checking.Note (Types.all, Of_Tree, Node, Ty.Slice_Value);
+         Landin.Checking.Note
+           (Types.all, Of_Tree, Node, Descriptor.Kind);
          Landin.Checking.Note_Reference
            (Types.all, Of_Tree, Node, Reference);
       end Check_Text_Literal;
@@ -19529,7 +19695,7 @@ package body Landin.Stages.Checking is
          if Syn.Kind (Of_Tree, Node)
               in Syn.Text_Literal | Syn.Raw_Literal
          then
-            if Expected.Kind = Ty.Slice_Value then
+            if Expected.Kind in Ty.Pointer_Value | Ty.Slice_Value then
                Check_Text_Literal
                  (Of_Tree, Node, Expected.Reference, Site, Because);
             else

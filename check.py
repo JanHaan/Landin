@@ -2389,6 +2389,8 @@ def check_refused_constructs(full_run):
     #  `type` now spells no name of its own.
     scalars = set(re.findall(r'"([a-z0-9]+)"',
                              rules.get("scalar_name", "")))
+    texts = set(re.findall(r'"([a-z0-9]+)"',
+                           rules.get("text_name", "")))
 
     words = spellings("Real_Word")
     if words is None:
@@ -2459,6 +2461,17 @@ def check_refused_constructs(full_run):
             % (", ".join(sorted(declared.values())),
                ", ".join(sorted(scalars)))))
 
+    text_declared = spellings("Text_Name")
+    if text_declared is None:
+        out.append(("compiler/ada/src/syntax/landin-syntax-parser.adb", 1,
+                    "the text-type table could not be read"))
+    elif set(text_declared.values()) != texts:
+        out.append((
+            "compiler/ada/src/syntax/landin-syntax-parser.adb", 1,
+            "the parser's text types are %s and the grammar's are %s"
+            % (", ".join(sorted(text_declared.values())),
+               ", ".join(sorted(texts)))))
+
     #  Landin.Types spells the thirteen a second time, because it is the
     #  package that maps each onto a machine width.  Two transcriptions of
     #  one rule is one more than the repository allows to drift, so both
@@ -2486,6 +2499,23 @@ def check_refused_constructs(full_run):
                 out.append((
                     "compiler/ada/src/checking/landin-types.ads", 1,
                     "Landin.Types and the parser spell different types"))
+
+        text_found = re.search(r"function Spelling \(Item : Text_View\)"
+                               r"[^;]*?is \(case Item is(.*?)\);",
+                               io.open(types, encoding="utf-8").read(), re.S)
+        if not text_found:
+            out.append(("compiler/ada/src/checking/landin-types.ads", 1,
+                        "the text-view table could not be read"))
+        else:
+            text_spelled = set(re.findall(
+                r'=>\s*"([a-z0-9]+)"', text_found.group(1)))
+            if text_spelled != texts:
+                out.append((
+                    "compiler/ada/src/checking/landin-types.ads", 1,
+                    "Landin.Types spells text views %s and the grammar's "
+                    "text rule spells %s"
+                    % (", ".join(sorted(text_spelled)) or "nothing",
+                       ", ".join(sorted(texts)))))
 
     #  A negative fixture that names no codes is a rejection nobody
     #  checked the shape of.
