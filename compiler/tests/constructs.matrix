@@ -31,7 +31,7 @@
 0150   tour        accepted emitted executed refused refused-by-name Integers: u8 u16 u32 u64 u128, i8 i16 i32 i64 i128
 0160   tour        accepted emitted executed refused  Pointer-width integers: usize, isize
 0170   tour        accepted emitted executed refused refused-by-name Floating point: f16, f32, f64
-0180   tour        accepted emitted refused           bool, with true and false
+0180   tour        accepted emitted executed refused  bool, with true and false
 0190   tour        accepted emitted executed refused  Integer literals are untyped
 0200   tour        accepted emitted executed refused  With no context, an integer literal defaults to i32
 0210   tour        accepted emitted executed refused  Float literals are always recognisable as such
