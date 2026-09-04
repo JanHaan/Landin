@@ -1,0 +1,4 @@
+bad: (source: utf8) -> none =
+    mut view: utf8 = source[0..<lenof source]
+    view[0][0] = 0
+end bad

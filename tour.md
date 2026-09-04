@@ -822,9 +822,14 @@ content at the same element width may share its read-only static datum.
 The three view identities remain distinct from one another and from their
 backing pointer or slice types through calls, aggregates and generics.
 
-Slicing and traversal do not become operations on a text view merely because
-its representation is a slice. [0610] supplies indexing separately, and the
-library concepts remain the owners of the other operations.
+Range slicing is an operation on `utf8` and `utf16`, not an exposure of their
+backing slices. Its exact `usize` bounds count the view's bytes or UTF-16 code
+units, and both endpoints must lie on Unicode-scalar boundaries. The half-open
+form may end at the view's length. The inclusive form includes the complete
+scalar beginning at its upper bound. Either form returns the same immutable,
+source-derived text identity; `cstring` has no length and cannot be sliced.
+An invalid bound or a bound that splits an encoding traps. Traversal remains a
+separate library-concept operation. [0610] supplies indexing separately.
 
 ### [0610] Indexing utf8 by an integer yields the bytes of one
 

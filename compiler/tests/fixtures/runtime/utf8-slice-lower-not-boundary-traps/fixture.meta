@@ -1,0 +1,6 @@
+class: runtime
+summary: a utf8 range lower endpoint on a continuation byte traps
+constructs: 0260, 0270, 0570, 0600, 1950, 1960
+program: main.ldn
+traps: yes
+targets: linux-x86-64

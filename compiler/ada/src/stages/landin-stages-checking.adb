@@ -13947,28 +13947,34 @@ package body Landin.Stages.Checking is
                     Syn.Target_Of (Of_Tree, Node);
                   Held : constant Ty.Type_Kind :=
                     Indexed_From (Of_Tree, From);
+                  Source : Landin.Checking.Reference_Descriptor;
                   Item : Landin.Checking.Reference_Descriptor :=
                     (Kind => Ty.Slice_Value,
                      Mutable => Place_Is_Mutable (Of_Tree, From),
                      Referent => Ty.Ill_Typed,
                      others => <>);
                begin
-                  if Held = Ty.Slice_Value
-                    and then Landin.Checking.Descriptor_Of
-                      (Types.all,
-                       Landin.Checking.Reference_Of
-                         (Types.all, Of_Tree, From)).View
-                           /= Ty.Ordinary_View
+                  if Held in Ty.Pointer_Value | Ty.Slice_Value then
+                     Source := Landin.Checking.Descriptor_Of
+                       (Types.all,
+                        Landin.Checking.Reference_Of
+                          (Types.all, Of_Tree, From));
+                  end if;
+
+                  if Held = Ty.Pointer_Value
+                    and then Source.View = Ty.C_String_View
                   then
                      Bad.Report
-                       (Item    => Bad.Unsupported_Use,
+                       (Item    => Bad.Type_Mismatch,
                         Source  => Syn.Source_Of (Of_Tree),
                         Where   => Syn.Where (Of_Tree, From),
-                        Message => "a distinct text view does not take a"
-                                   & " byte or code-unit slice here",
-                        Note    => "[0600]: validated text remains distinct"
-                                   & " from its storage slice",
-                        Refused => Bad.Text_Slicing,
+                        Message => "a cstring has no length, so it cannot"
+                                   & " be range sliced",
+                        Note    => "[0600]: cstring carries only a pointer;"
+                                   & " utf8 and utf16 carry code-unit"
+                                   & " lengths",
+                        Related => Syn.Origin (Of_Tree, From),
+                        Because => "the text value sliced here",
                         Into    => Found);
                      return Kept (Ty.Ill_Typed);
                   end if;
@@ -14021,25 +14027,18 @@ package body Landin.Stages.Checking is
                         end case;
                      end;
                   elsif Held = Ty.Slice_Value then
-                     declare
-                        Source : constant
-                          Landin.Checking.Reference_Descriptor :=
-                            Landin.Checking.Descriptor_Of
-                              (Types.all,
-                               Landin.Checking.Reference_Of
-                                 (Types.all, Of_Tree, From));
-                     begin
-                        Item.Mutable := Source.Mutable;
-                        Item.Referent := Source.Referent;
-                        Item.Nominal := Source.Nominal;
-                        Item.Length := Source.Length;
-                        Item.Element := Source.Element;
-                        Item.Element_Nominal := Source.Element_Nominal;
-                        Item.Reference := Source.Reference;
-                        Item.Signature := Source.Signature;
-                        Item.Concept := Source.Concept;
-                        Item.Atoms := Source.Atoms;
-                     end;
+                     Item.View := Source.View;
+                     Item.Mutable :=
+                       Source.Mutable and then Source.View = Ty.Ordinary_View;
+                     Item.Referent := Source.Referent;
+                     Item.Nominal := Source.Nominal;
+                     Item.Length := Source.Length;
+                     Item.Element := Source.Element;
+                     Item.Element_Nominal := Source.Element_Nominal;
+                     Item.Reference := Source.Reference;
+                     Item.Signature := Source.Signature;
+                     Item.Concept := Source.Concept;
+                     Item.Atoms := Source.Atoms;
                   else
                      return Kept (Ty.Ill_Typed);
                   end if;
