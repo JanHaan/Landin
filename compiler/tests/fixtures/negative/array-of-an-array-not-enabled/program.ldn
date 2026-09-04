@@ -1,3 +1,0 @@
---  The grammar derives this on purpose: an element is a type like any
---  other, and which elements can be laid out end to end is the checker's.
-grid: type = [2][3]u8

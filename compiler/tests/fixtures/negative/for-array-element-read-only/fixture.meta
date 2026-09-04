@@ -1,0 +1,6 @@
+class: negative
+summary: a fixed-array element traversed through a read-only slice is not writable
+program: program.ldn
+codes: L0303
+constructs: 0520, 0570, 1150, 1160
+targets: linux-x86-64, macos-arm64, synthetic-32

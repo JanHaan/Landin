@@ -1676,6 +1676,38 @@ package Landin.Checking is
      (Of_Table : Table; Id : Declaration_Id) return Nominal_Type_Id
      with Pre => Is_Prepared (Of_Table) and then Contains (Of_Table, Id);
 
+   --  D178: an array element can itself be one fixed array or slice.  The
+   --  existing scalar and nominal queries remain the compact common path;
+   --  this complete shape distinguishes the aggregate carriers.
+   function Array_Element_Shape
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id) return Field_Shape
+     with Pre => Is_Prepared (Of_Table)
+                 and then Covers (Of_Table, Of_Tree)
+                 and then Landin.Syntax.Contains (Of_Tree, Node);
+
+   function Array_Element_Shape
+     (Of_Table : Table; Id : Declaration_Id) return Field_Shape
+     with Pre => Is_Prepared (Of_Table) and then Contains (Of_Table, Id);
+
+   procedure Note_Array_Element_Shape
+     (Into    : in out Table;
+      Of_Tree : Landin.Syntax.Tree;
+      Node    : Landin.Syntax.Node_Id;
+      Shape   : Field_Shape)
+     with Pre  => Is_Prepared (Into)
+                  and then Covers (Into, Of_Tree)
+                  and then Landin.Syntax.Contains (Of_Tree, Node),
+          Post => Array_Element_Shape (Into, Of_Tree, Node) = Shape;
+
+   procedure Note_Array_Element_Shape
+     (Into  : in out Table;
+      Id    : Declaration_Id;
+      Shape : Field_Shape)
+     with Pre  => Is_Prepared (Into) and then Contains (Into, Id),
+          Post => Array_Element_Shape (Into, Id) = Shape;
+
    procedure Note_Array_Element_Nominal
      (Into    : in out Table;
       Of_Tree : Landin.Syntax.Tree;
@@ -2005,6 +2037,8 @@ private
       --  D121: which nominal ordinary struct instance the elements have,
       --  when they are not one of [1790]'s scalars.
       Element_Nominal : Nominal_Type_Id := No_Nominal_Type;
+      Has_Complex_Element : Boolean := False;
+      Complex_Element : Field_Shape;
    end record;
 
    package Shape_Vectors is new Ada.Containers.Vectors

@@ -3095,7 +3095,11 @@ evaluated once, the element is an aliased place in its storage, writable
 through `[]mut T` or an assignable array and read-only otherwise, and the
 index is the hidden counter. D160 records the alias lowering and keeps
 array, slice and `any` elements and iterable-evidence sources as the named
-refusal. The seventh increment enables quoted text in a direct read-only
+refusal. A later collection increment enables fixed-array and slice elements,
+carrying their complete storage shape through the element alias and through
+fixed-array or slice loop results while retaining `any` elements and
+iterable-evidence sources as the named refusal. D178 records the boundary. The
+seventh increment enables quoted text in a direct read-only
 `[]u8` context, including byte escapes, UTF-8 source validation, an uncounted
 trailing NUL, content-pooled read-only data and static slice relocations.
 D161 keeps `utf8`, `utf16`, `cstring` and codepoint escapes deferred while

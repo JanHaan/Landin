@@ -468,8 +468,9 @@ beginning at zero. The element is writable over `[]mut T` and over a fixed
 array held in a place the body could assign; over `[]T` and over any other
 array it is read-only [1160]. A body that writes the storage by index observes
 the write through the element, and the reverse. Elements that are themselves
-arrays, slices or `any` values, and sources that would need [1320]'s iterable
-evidence, remain a named R4.10 refusal.
+fixed arrays or slices retain their complete shape under D178, including when
+copied out through a loop value. An `any` element, and a source that would need
+[1320]'s iterable evidence, remains a named R4.10 refusal.
 
 ```landin-grammar
 statement   ::= binding | destructuring_binding | assignment | increment
@@ -8535,7 +8536,7 @@ classified failure boundary before the repository gate can pass.
 | `results.destructure` | static | 0990 | L0200, L0301, L0302 or L0308 | `negative/result-destructure-needs-multiple`, `runtime/r230-composition` |
 | `functions.anonymous` | static | 1010 | L0201 for capture; complete signature checks otherwise apply | `negative/anonymous-function-captures-local`, `runtime/inferred-function-values` |
 | `control.flow` | static | 1050, 1060, 1080, 1090 | L0301 or L0302 at every reachable join and exit | `negative/if-expression-missing-else`, `runtime/control-expression-edges-keep-source-order` |
-| `control.loops` | static | 1130, 1140, 1150, 1160, 1170, 1180, 1190 | L0301 for a non-bool condition, mismatched range, non-traversable source, or incomplete/inconsistent value exit; L0303 for a write to an element of read-only storage; L0304 for a deferred traversal source or element shape; a taken transfer runs active defers and targets its named or nearest loop edge, while natural completion alone enters `complete` | `negative/loop-condition-not-bool`, `negative/loop-value-missing-break-value`, `negative/loop-value-missing-completion`, `negative/loop-value-type-mismatch`, `negative/for-range-needs-integer`, `negative/for-range-endpoints-disagree`, `negative/for-source-not-traversable`, `negative/for-collection-element-read-only`, `negative/for-collection-traversal-deferred`, `runtime/loop-control-flow`, `runtime/loop-values`, `runtime/for-range-traversal`, `runtime/for-collection-traversal` |
+| `control.loops` | static | 1130, 1140, 1150, 1160, 1170, 1180, 1190 | L0301 for a non-bool condition, mismatched range, non-traversable source, or incomplete/inconsistent value exit; L0303 for a write to an element of read-only storage, including an aggregate element; L0304 for an `any` element or deferred iterable-evidence source; a taken transfer runs active defers and targets its named or nearest loop edge, while natural completion alone enters `complete` | `negative/loop-condition-not-bool`, `negative/loop-value-missing-break-value`, `negative/loop-value-missing-completion`, `negative/loop-value-type-mismatch`, `negative/for-range-needs-integer`, `negative/for-range-endpoints-disagree`, `negative/for-source-not-traversable`, `negative/for-collection-element-read-only`, `negative/for-array-element-read-only`, `negative/for-any-element-traversal-deferred`, `negative/for-collection-traversal-deferred`, `runtime/loop-control-flow`, `runtime/loop-values`, `runtime/for-range-traversal`, `runtime/for-collection-traversal`, `runtime/for-aggregate-element-traversal` |
 | `cleanup.defer` | static | 1100 | the registered call is checked at every ordinary and successful-return edge | `negative/defer-read-not-assigned-on-return`, `runtime/defer-cleanups-follow-control-edges` |
 | `cleanup.undo` | static | 1110 | the registered call is checked at every propagated-failure edge | `negative/undo-read-not-assigned-on-failure`, `runtime/undo-cleanups-follow-failure-edges` |
 | `generics.substitution` | static | 1220, 1280, 1290, 1300, 1310, 1350, 1500, 1650, 1660, 1700 | L0300, L0301, L0306, L0307, L0313 or L0318 | `negative/generic-routine-undeduced-formal`, `runtime/generic-structural-deduction`, `runtime/core-vec-pointer-storage` |
@@ -9865,3 +9866,56 @@ Those choices respectively turn static data into executable control, contradict
 **Pinned by** the lowering case `module bools become static images`,
 `runtime/module-known-short-circuit-bools`, the generated IR, and the
 `module.images` guarantee row.
+
+### D178 — Aggregate traversal elements keep their storage shape
+
+**The tour said** that a fixed array's element type is part of its structural
+identity [0520], that a slice carries its element type and permission [0570],
+and that collection traversal binds an element place [1150] [1160]. D160
+enabled scalar, pointer, atom, function and ordinary-struct elements but left
+fixed-array, slice and `any` elements together behind L0304. It did not require
+those three runtime representations to advance together.
+
+**Chosen:** the next collection-traversal increment enables an element whose
+type is a fixed array or slice. The containing fixed array records the complete
+immediate element shape: an inner fixed array retains its length, scalar or
+nominal element and nominal identity; an inner slice retains its full reference
+descriptor. A slice source already carries the equivalent descriptor. The
+element binding receives that shape before its body is checked, and definite
+assignment treats the complete fixed-array value or the two slice cells as
+assigned on every entered iteration.
+
+D160's source and control rules do not change. The collection expression runs
+once, the hidden `usize` counter visits addresses in increasing index order,
+and the binding remains an alias to the selected storage for the complete body.
+Replacing a whole fixed-array or slice element requires the write permission of
+the containing collection. Indexing through a slice element separately follows
+the `mut` permission carried by that inner slice. `continue`, labelled or
+unlabelled `break`, natural `complete`, and lexical cleanup retain their D157
+and D158 edges.
+
+A `break with` may copy the fixed-array value or the two-cell slice descriptor
+from the current alias into the caller-owned loop destination before cleanup.
+Target-neutral lowering represents the runtime alias with the existing
+address-shaped slot. A computed scalar index below a fixed-array alias forms an
+address and uses the existing indirect load or store; recursive neutral shape
+transport handles the complete fixed-array copy. No new IR operation, verifier
+rule, backend-only type fact or host-width query is introduced.
+
+An `any` element and a struct or `any` source requiring [1320]'s iterable
+evidence remain the named R4.10 refusal, L0304. They need erased element
+identity or evidence-driven value production, neither of which is implied by
+the fixed-size storage shapes enabled here.
+
+**The alternatives:** copy an aggregate element into a detached local, flatten
+an inner array or slice into a scalar placeholder, enable `any` by treating its
+two cells as a slice, or invoke iterable evidence during lowering. Those
+choices lose element aliasing, lose structural identity or permission, confuse
+two unrelated two-cell representations, or bypass the checked evidence call.
+All were declined.
+
+**Pinned by** `runtime/for-aggregate-element-traversal`,
+`negative/for-array-element-read-only`,
+`negative/for-any-element-traversal-deferred`, the retained
+`negative/for-collection-traversal-deferred`, and the `control.loops`
+guarantee row.

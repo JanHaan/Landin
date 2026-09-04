@@ -1554,35 +1554,20 @@ package body Landin.Stages.Lowering is
       function Neutral_Element
         (Id : Res.Declaration_Id) return IR.Field_Shape
       is
-         Element : constant Landin.Checking.Nominal_Type_Id :=
-           Landin.Checking.Array_Element_Nominal (Types.all, Id);
+         Element : constant Landin.Checking.Field_Shape :=
+           Landin.Checking.Array_Element_Shape (Types.all, Id);
       begin
-         if Element /= Landin.Checking.No_Nominal_Type then
-            return Neutral_Body (Element);
-         end if;
-         return
-           (Kind    => IR.Scalar_Field_Shape,
-            Element => Landin.Checking.Array_Element (Types.all, Id),
-            Length  => 1,
-            others  => <>);
+         return Neutral_Shape (Element);
       end Neutral_Element;
 
       function Neutral_Element
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return IR.Field_Shape
       is
-         Element : constant Landin.Checking.Nominal_Type_Id :=
-           Landin.Checking.Array_Element_Nominal
+         Element : constant Landin.Checking.Field_Shape :=
+           Landin.Checking.Array_Element_Shape
              (Types.all, Of_Tree, Node);
       begin
-         if Element /= Landin.Checking.No_Nominal_Type then
-            return Neutral_Body (Element);
-         end if;
-         return
-           (Kind    => IR.Scalar_Field_Shape,
-            Element =>
-              Landin.Checking.Array_Element (Types.all, Of_Tree, Node),
-            Length  => 1,
-            others  => <>);
+         return Neutral_Shape (Element);
       end Neutral_Element;
 
       function Neutral_Element
@@ -4108,34 +4093,58 @@ package body Landin.Stages.Lowering is
            Lower_Stored_Place (Of_Tree, Node, Scope);
          Field : IR.Part_Position;
          Steps : Stored_Path_Vectors.Vector := Place.Steps;
+         Site : constant Landin.Provenance.Origin :=
+           Site_Of (Of_Tree, Node);
+         Descriptor_Shape : constant IR.Field_Shape :=
+           (Kind => IR.Array_Field_Shape, Element => Ty.Usize,
+            Length => 2, others => <>);
       begin
-         if Place.Base = 0 then
-            Field := Position;
-         else
-            Field := IR.Part_Position (Place.Base);
-            Steps.Append
-              (IR.Path_Step'(Field => Position, Case_Index => 0));
+         if Place.Place.Kind /= IR.Runtime_Address
+           and then (Place.Base /= 0 or else Place.Steps.Is_Empty)
+         then
+            if Place.Base = 0 then
+               Field := Position;
+            else
+               Field := IR.Part_Position (Place.Base);
+               Steps.Append
+                 (IR.Path_Step'(Field => Position, Case_Index => 0));
+            end if;
+            declare
+               Made : IR.Path_Step_Array (1 .. Natural (Steps.Length));
+            begin
+               for Index in Made'Range loop
+                  Made (Index) := Steps (Index);
+               end loop;
+               case Place.Place.Kind is
+                  when IR.Module_Datum =>
+                     return IR.Emit_Load_Field
+                       (Unit.all, Filling, Place.Place.Datum, Field,
+                        Ty.Usize, Site, Nested => Made);
+                  when IR.Frame_Slot =>
+                     return IR.Emit_Load_Slot_Field
+                       (Unit.all, Filling, Place.Place.Slot, Field,
+                        Ty.Usize, Site, Nested => Made);
+                  when IR.Runtime_Address =>
+                     raise Landin.Compiler_Defect with
+                       "a runtime slice descriptor bypassed its address";
+               end case;
+            end;
          end if;
+
          declare
-            Made : IR.Path_Step_Array (1 .. Natural (Steps.Length));
+            --  D178: the descriptor can itself be an array element.  First
+            --  retain the complete path to those two words, then address
+            --  the selected word below it; prepending Position would walk
+            --  the descriptor before its containing array element.
+            Descriptor : constant IR.Storage :=
+              Addressed_Storage (Place, Descriptor_Shape, Site);
+            Address : constant IR.Value_Id :=
+              IR.Emit_Place_Address
+                (Unit.all, Filling, Descriptor, Site,
+                 Field => Natural (Position));
          begin
-            for Index in Made'Range loop
-               Made (Index) := Steps (Index);
-            end loop;
-            case Place.Place.Kind is
-               when IR.Module_Datum =>
-                  return IR.Emit_Load_Field
-                    (Unit.all, Filling, Place.Place.Datum, Field,
-                     Ty.Usize, Site_Of (Of_Tree, Node), Nested => Made);
-               when IR.Frame_Slot =>
-                  return IR.Emit_Load_Slot_Field
-                    (Unit.all, Filling, Place.Place.Slot, Field,
-                     Ty.Usize, Site_Of (Of_Tree, Node), Nested => Made);
-               when IR.Runtime_Address =>
-                  return IR.Emit_Load_Slot_Field
-                    (Unit.all, Filling, Place.Place.Address, Field,
-                     Ty.Usize, Site_Of (Of_Tree, Node), Nested => Made);
-            end case;
+            return IR.Emit_Load_Indirect
+              (Unit.all, Filling, Address, Ty.Usize, Site);
          end;
       end Load_Slice_Component;
 
@@ -5015,9 +5024,16 @@ package body Landin.Stages.Lowering is
                                  Variant_Payload_Field =>
                                    Alias.Payload_Field);
                            when IR.Runtime_Address =>
-                              raise Landin.Compiler_Defect with
-                                "an indexed runtime match alias reached"
-                                & " scalar lowering";
+                              declare
+                                 Address : constant IR.Value_Id :=
+                                   IR.Emit_Storage_Address
+                                     (Unit.all, Filling, Alias.Source, Site,
+                                      Index => Index);
+                              begin
+                                 return IR.Emit_Load_Indirect
+                                   (Unit.all, Filling, Address,
+                                    Scalar_At (Of_Tree, Node), Site);
+                              end;
                         end case;
                      end;
                   end if;
@@ -7931,8 +7947,16 @@ package body Landin.Stages.Lowering is
                                        Alias.Source.Slot, Index, Value, Site,
                                        Field => Alias.Field);
                                  when IR.Runtime_Address =>
-                                    raise Landin.Compiler_Defect with
-                                      "a runtime alias reached scalar write";
+                                    declare
+                                       Address : constant IR.Value_Id :=
+                                         IR.Emit_Storage_Address
+                                           (Unit.all, Filling, Alias.Source,
+                                            Site, Index => Index);
+                                    begin
+                                       IR.Emit_Store_Indirect
+                                         (Unit.all, Filling, Address, Value,
+                                          Site);
+                                    end;
                               end case;
                            else
                               case Alias.Source.Kind is
