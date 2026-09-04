@@ -1,0 +1,6 @@
+class: negative
+summary: range slicing a text view preserves its exact identity rather than exposing its storage slice
+constructs: 0310, 0430, 0570, 0600
+program: program.ldn
+codes: L0301
+targets: linux-x86-64, macos-arm64

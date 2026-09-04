@@ -1,0 +1,6 @@
+class: negative
+summary: a text range result remains immutable through nested indexing
+constructs: 0430, 0570, 0600, 0610, 1900
+program: program.ldn
+codes: L0303
+targets: linux-x86-64, macos-arm64

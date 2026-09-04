@@ -1,0 +1,3 @@
+bad: (source: cstring) -> (result: cstring from source) =
+    result = source[0..<1]
+end bad

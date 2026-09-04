@@ -1,0 +1,5 @@
+public main: () -> (code: i32) =
+    source: utf16 = "\u{1f600}"
+    bad: utf16 = source[0..<1]
+    code = i32(lenof bad)
+end main
