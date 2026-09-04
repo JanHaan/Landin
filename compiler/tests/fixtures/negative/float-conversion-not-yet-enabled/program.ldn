@@ -1,2 +1,0 @@
-fraction: f32 = 7.0
-whole := i32(fraction)

@@ -4501,11 +4501,6 @@ package body Landin.IR.Verifier is
                                       not in Landin.Types.Numeric_Name
                                    or else Operand_Kind
                                      not in Landin.Types.Numeric_Name
-                                   or else
-                                     (Result_Kind
-                                        in Landin.Types.Integer_Name
-                                      and then Operand_Kind
-                                        not in Landin.Types.Integer_Name)
                                  then
                                     return (Kind => Result_Disagrees,
                                             Item => Id, Block => Block,

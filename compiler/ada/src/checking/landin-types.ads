@@ -294,6 +294,17 @@ package Landin.Types is
    function Convert_Integer_To_Float
      (Value : Folded; Into : Float_Name) return Magnitude;
 
+   --  Truncate an IEEE value toward zero and then check whether the result
+   --  belongs to the requested enabled integer type.  NaN, infinity and an
+   --  out-of-range whole part are the overflow outcome.
+   procedure Convert_Float_To_Integer
+     (Bits       : Magnitude;
+      From       : Float_Name;
+      Into       : Integer_Name;
+      Facts      : Landin.Targets.Target_Facts;
+      Result     : out Folded;
+      Overflowed : out Boolean);
+
    --  [0240]'s two type-qualified IEEE values.  A quiet NaN has one
    --  canonical payload in each enabled width; unary minus below changes
    --  only its sign bit.

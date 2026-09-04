@@ -1,0 +1,2 @@
+source: f64 = 128.0
+bad: i8 = i8(source)

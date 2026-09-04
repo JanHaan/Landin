@@ -1,0 +1,7 @@
+to_i32: (value: f64) -> (result: i32) =
+    result = i32(value)
+end to_i32
+
+public main: () -> (code: i32) =
+    code = to_i32(f64.nan)
+end main
