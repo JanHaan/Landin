@@ -169,6 +169,7 @@ package Landin.Syntax.Precedence is
                     | Landin.Tokens.Kw_Fixed | Landin.Tokens.Kw_Extern
                     | Landin.Tokens.Identifier
                     | Landin.Tokens.Left_Paren
-                    | Landin.Tokens.Left_Bracket | Landin.Tokens.Kw_Ptr);
+                    | Landin.Tokens.Left_Bracket | Landin.Tokens.Kw_Ptr
+                    | Landin.Tokens.Kw_Any);
 
 end Landin.Syntax.Precedence;

@@ -572,7 +572,13 @@ package body Landin.Stages.Checking is
         (Actual      : Type_Descriptor;
          Constraint  : Syn.Node_Id;
          Of_Tree     : Syn.Tree;
-         Application : Landin.Provenance.Origin) return Boolean;
+         Application : Landin.Provenance.Origin;
+         Inputs      : Landin.Checking.Actual_Tuple :=
+           Landin.Checking.Empty_Actuals) return Boolean;
+      function Select_Iterable_Conformance
+        (Actual  : Type_Descriptor;
+         Of_Tree : Syn.Tree;
+         Source  : Syn.Node_Id) return Landin.Checking.Conformance_Id;
       procedure Check_Aggregate_Zeroed
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
@@ -10849,12 +10855,12 @@ package body Landin.Stages.Checking is
         (Actual      : Type_Descriptor;
          Constraint  : Syn.Node_Id;
          Of_Tree     : Syn.Tree;
-         Application : Landin.Provenance.Origin) return Boolean
+         Application : Landin.Provenance.Origin;
+         Inputs      : Landin.Checking.Actual_Tuple :=
+           Landin.Checking.Empty_Actuals) return Boolean
       is
          Concept : constant Landin.Checking.Concept_Id :=
            Concept_For (Of_Tree, Constraint);
-         Inputs : constant Landin.Checking.Actual_Tuple :=
-           Landin.Checking.Empty_Actuals;
          Existing : Landin.Checking.Conformance_Id :=
            Landin.Checking.No_Conformance;
 
@@ -10863,6 +10869,13 @@ package body Landin.Stages.Checking is
          function Parents_Hold return Boolean is
             Good : Boolean := True;
          begin
+            --  D180's associated Cur and Item identities are part of the
+            --  selected iterable key.  Its exact four-entry contract has no
+            --  parent or constrained formal to close here; ordinary direct
+            --  constraints retain the one-formal rule below.
+            if Landin.Checking.Actual_Count (Inputs) /= 0 then
+               return True;
+            end if;
             if Landin.Checking.Is_Compiler_Concept (Types.all, Concept) then
                return True;
             end if;
@@ -11277,6 +11290,79 @@ package body Landin.Stages.Checking is
                      end;
                   end loop;
 
+                  --  D180 is the first implicit consumer of a concept key
+                  --  with associated input types.  A parameterized family
+                  --  is selected only when its substituted labelled inputs
+                  --  are exactly the Cur and Item identities requested by
+                  --  the traversal; no declaration-order guess is allowed.
+                  declare
+                     Concept_Declaration : constant Res.Declaration_Id :=
+                       Landin.Checking.Concept_Declaration
+                         (Types.all, Concept);
+                     Concept_Tree : constant not null access constant
+                       Syn.Tree := Tree_For
+                         (Res.Source_Of
+                            (Meanings.all, Concept_Declaration));
+                     Concept_Node : constant Syn.Node_Id :=
+                       Res.Node_Of (Meanings.all, Concept_Declaration);
+                  begin
+                     if Syn.Concept_Formal_Count
+                          (Concept_Tree.all, Concept_Node)
+                            /= Landin.Checking.Actual_Count (Inputs) + 1
+                     then
+                        return;
+                     end if;
+
+                     for Position in 1 .. Landin.Checking.Actual_Count
+                       (Inputs)
+                     loop
+                        declare
+                           Formal : constant Syn.Node_Id :=
+                             Syn.Nth_Concept_Formal
+                               (Concept_Tree.all, Concept_Node,
+                                Position + 1);
+                           Supplied : Syn.Node_Id := Syn.No_Node;
+                        begin
+                           for Given in 1 .. Syn.Conformance_Entry_Count
+                             (Candidate_Tree, Candidate)
+                           loop
+                              declare
+                                 Supplied_Entry : constant Syn.Node_Id :=
+                                   Syn.Nth_Conformance_Entry
+                                     (Candidate_Tree, Candidate, Given);
+                              begin
+                                 if Syn.Name (Candidate_Tree, Supplied_Entry)
+                                      = Syn.Name (Concept_Tree.all, Formal)
+                                 then
+                                    Supplied := Syn.Conformance_RHS
+                                      (Candidate_Tree, Supplied_Entry);
+                                    exit;
+                                 end if;
+                              end;
+                           end loop;
+                           if Supplied = Syn.No_Node then
+                              return;
+                           end if;
+                           declare
+                              Associated : constant Type_Descriptor :=
+                                Normalized_Type
+                                  (Candidate_Tree, Supplied, Bound,
+                                   Application, Identity_Only);
+                           begin
+                              if Associated.Kind = Ty.Ill_Typed
+                                or else not Type_Descriptors_Agree
+                                  (Associated,
+                                   Descriptor_For
+                                     (Landin.Checking.Nth_Actual
+                                        (Inputs, Position)))
+                              then
+                                 return;
+                              end if;
+                           end;
+                        end;
+                     end loop;
+                  end;
+
                   declare
                      Bindings : Landin.Checking.Actual_Tuple :=
                        Landin.Checking.Empty_Actuals;
@@ -11684,6 +11770,444 @@ package body Landin.Stages.Checking is
             Into    => Found);
          return False;
       end Require_Conformance;
+
+      function Select_Iterable_Conformance
+        (Actual  : Type_Descriptor;
+         Of_Tree : Syn.Tree;
+         Source  : Syn.Node_Id) return Landin.Checking.Conformance_Id
+      is
+         Concept : Landin.Checking.Concept_Id :=
+           Landin.Checking.No_Concept;
+         Selected : Landin.Checking.Conformance_Id :=
+           Landin.Checking.No_Conformance;
+         Matches : Natural := 0;
+         Concept_Matches : Natural := 0;
+
+         procedure Report (Message : String; Note : String);
+
+         procedure Report (Message : String; Note : String) is
+         begin
+            Bad.Report
+              (Item    => Bad.Type_Mismatch,
+               Source  => Syn.Source_Of (Of_Tree),
+               Where   => Syn.Where (Of_Tree, Source),
+               Message => Message,
+               Note    => Note,
+               Related => Syn.Origin (Of_Tree, Source),
+               Because => "this traversal source",
+               Into    => Found);
+            Landin.Checking.Refuse (Types.all, Of_Tree, Source);
+         end Report;
+
+         function Provider_Signature
+           (Row : Landin.Checking.Conformance_Id;
+            Position : Positive) return Landin.Checking.Signature_Id;
+
+         function Contract_Holds
+           (Row : Landin.Checking.Conformance_Id) return Boolean;
+
+         function Provider_Signature
+           (Row : Landin.Checking.Conformance_Id;
+            Position : Positive) return Landin.Checking.Signature_Id
+         is
+            Instance : constant Landin.Checking.Routine_Instance_Id :=
+              Landin.Checking.Conformance_Provider_Instance
+                (Types.all, Row, Position);
+            Provider : constant Res.Declaration_Id :=
+              Landin.Checking.Conformance_Provider_Declaration
+                (Types.all, Row, Position);
+         begin
+            if Instance /= Landin.Checking.No_Routine_Instance then
+               return Landin.Checking.Routine_Signature_Of
+                 (Types.all, Instance);
+            elsif Provider /= Res.No_Declaration then
+               return Landin.Checking.Signature_Of (Types.all, Provider);
+            end if;
+            return Landin.Checking.No_Signature;
+         end Provider_Signature;
+
+         function Contract_Holds
+           (Row : Landin.Checking.Conformance_Id) return Boolean
+         is
+            Cursor : constant Type_Descriptor := Descriptor_For
+              (Landin.Checking.Nth_Conformance_Input
+                 (Types.all, Row, 1));
+            Item : constant Type_Descriptor := Descriptor_For
+              (Landin.Checking.Nth_Conformance_Input
+                 (Types.all, Row, 2));
+            Site : constant Landin.Provenance.Origin :=
+              Syn.Origin (Of_Tree, Source);
+            Source_Part : constant Landin.Checking.Signature_Part :=
+              Signature_Part_For
+                (Actual, Landin.Source.Names.No_Name, Site);
+            Cursor_Part : constant Landin.Checking.Signature_Part :=
+              Signature_Part_For
+                (Cursor, Landin.Source.Names.No_Name, Site);
+            Item_Part : constant Landin.Checking.Signature_Part :=
+              Signature_Part_For
+                (Item, Landin.Source.Names.No_Name, Site);
+            Bool_Part : constant Landin.Checking.Signature_Part :=
+              Signature_Part_For
+                ((Kind => Ty.Bool, others => <>),
+                 Landin.Source.Names.No_Name, Site);
+            First_Signature : constant Landin.Checking.Signature_Id :=
+              Landin.Checking.Add_Signature
+                (Types.all,
+                 Landin.Checking.Signature_Part_Array'[1 => Source_Part],
+                 Landin.Checking.Signature_Part_Array'[1 => Cursor_Part],
+                 Site);
+            At_End_Signature : constant Landin.Checking.Signature_Id :=
+              Landin.Checking.Add_Signature
+                (Types.all,
+                 Landin.Checking.Signature_Part_Array'
+                   [Source_Part, Cursor_Part],
+                 Landin.Checking.Signature_Part_Array'[1 => Bool_Part],
+                 Site);
+            Item_Signature : constant Landin.Checking.Signature_Id :=
+              Landin.Checking.Add_Signature
+                (Types.all,
+                 Landin.Checking.Signature_Part_Array'
+                   [Source_Part, Cursor_Part],
+                 Landin.Checking.Signature_Part_Array'[1 => Item_Part],
+                 Site);
+            Next_Signature : constant Landin.Checking.Signature_Id :=
+              Landin.Checking.Add_Signature
+                (Types.all,
+                 Landin.Checking.Signature_Part_Array'
+                   [Source_Part, Cursor_Part],
+                 Landin.Checking.Signature_Part_Array'[1 => Cursor_Part],
+                 Site);
+            Expected : constant array (Positive range 1 .. 4) of
+              Landin.Checking.Signature_Id :=
+                [First_Signature, At_End_Signature,
+                 Item_Signature, Next_Signature];
+         begin
+            for Position in Expected'Range loop
+               declare
+                  Got : constant Landin.Checking.Signature_Id :=
+                    Provider_Signature (Row, Position);
+               begin
+                  if Got = Landin.Checking.No_Signature
+                    or else not Landin.Checking.Signatures_Agree
+                      (Types.all, Got, Expected (Position))
+                  then
+                     return False;
+                  end if;
+               end;
+            end loop;
+            return True;
+         end Contract_Holds;
+
+         procedure Find_Existing;
+
+         procedure Find_Existing is
+         begin
+            Selected := Landin.Checking.No_Conformance;
+            Matches := 0;
+            for Position in 1 .. Landin.Checking.Conformance_Count
+              (Types.all)
+            loop
+               declare
+                  Candidate : constant Landin.Checking.Conformance_Id :=
+                    Landin.Checking.Conformance_Identities.Nth
+                      (Types.all, Position);
+               begin
+                  if Landin.Checking.Conformance_Concept
+                       (Types.all, Candidate) = Concept
+                    and then Landin.Checking.Conformance_Input_Count
+                      (Types.all, Candidate) = 2
+                    and then Type_Descriptors_Agree
+                      (Descriptor_For
+                         (Landin.Checking.Conformance_Target
+                            (Types.all, Candidate)),
+                       Actual)
+                  then
+                     Matches := Matches + 1;
+                     Selected := Candidate;
+                  end if;
+               end;
+            end loop;
+         end Find_Existing;
+      begin
+         for Position in 1 .. Landin.Checking.Concept_Count (Types.all) loop
+            declare
+               Candidate : constant Landin.Checking.Concept_Id :=
+                 Landin.Checking.Concept_Identities.Nth
+                   (Types.all, Position);
+            begin
+               if not Landin.Checking.Is_Compiler_Concept
+                 (Types.all, Candidate)
+               then
+                  declare
+                     Declaration : constant Res.Declaration_Id :=
+                       Landin.Checking.Concept_Declaration
+                         (Types.all, Candidate);
+                     Concept_Tree : constant not null access constant
+                       Syn.Tree := Tree_For
+                         (Res.Source_Of (Meanings.all, Declaration));
+                     Concept_Node : constant Syn.Node_Id :=
+                       Res.Node_Of (Meanings.all, Declaration);
+                  begin
+                     if Spelled (Syn.Name (Concept_Tree.all, Concept_Node))
+                          = "iterable"
+                     then
+                        Concept_Matches := Concept_Matches + 1;
+                        Concept := Candidate;
+                     end if;
+                  end;
+               end if;
+            end;
+         end loop;
+
+         if Concept = Landin.Checking.No_Concept then
+            Report
+              ("this type has no [1320] iterable conformance",
+               "[1150]: a struct or `any C` traversal uses the named"
+               & " iterable evidence");
+            return Landin.Checking.No_Conformance;
+         elsif Concept_Matches > 1 then
+            Report
+              ("more than one concept is named `iterable`",
+               "D180: implicit traversal requires one unambiguous [1320]"
+               & " concept identity");
+            return Landin.Checking.No_Conformance;
+         end if;
+
+         declare
+            Declaration : constant Res.Declaration_Id :=
+              Landin.Checking.Concept_Declaration (Types.all, Concept);
+            Concept_Tree : constant not null access constant Syn.Tree :=
+              Tree_For (Res.Source_Of (Meanings.all, Declaration));
+            Concept_Node : constant Syn.Node_Id :=
+              Res.Node_Of (Meanings.all, Declaration);
+            Names_Agree : Boolean :=
+              Syn.Concept_Formal_Count (Concept_Tree.all, Concept_Node) = 3
+              and then Syn.Concept_Entry_Count
+                (Concept_Tree.all, Concept_Node) = 4
+              and then Syn.Concept_Parent_Count
+                (Concept_Tree.all, Concept_Node) = 0;
+         begin
+            if Names_Agree then
+               for Position in 1 .. 3 loop
+                  declare
+                     Formal : constant Syn.Node_Id :=
+                       Syn.Nth_Concept_Formal
+                         (Concept_Tree.all, Concept_Node, Position);
+                  begin
+                     Names_Agree :=
+                       Syn.Kind (Concept_Tree.all, Formal) = Syn.Type_Formal
+                       and then Syn.Constraint_Of
+                         (Concept_Tree.all, Formal) = Syn.No_Node;
+                     exit when not Names_Agree;
+                  end;
+               end loop;
+            end if;
+            if Names_Agree then
+               Names_Agree :=
+                 Spelled
+                   (Syn.Name
+                      (Concept_Tree.all,
+                       Syn.Nth_Concept_Entry
+                         (Concept_Tree.all, Concept_Node, 1))) = "first"
+                 and then Spelled
+                   (Syn.Name
+                      (Concept_Tree.all,
+                       Syn.Nth_Concept_Entry
+                         (Concept_Tree.all, Concept_Node, 2))) = "at_end"
+                 and then Spelled
+                   (Syn.Name
+                      (Concept_Tree.all,
+                       Syn.Nth_Concept_Entry
+                         (Concept_Tree.all, Concept_Node, 3))) = "item"
+                 and then Spelled
+                   (Syn.Name
+                      (Concept_Tree.all,
+                       Syn.Nth_Concept_Entry
+                         (Concept_Tree.all, Concept_Node, 4))) = "next";
+            end if;
+            if not Names_Agree then
+               Report
+                 ("the named iterable concept does not have [1320]'s"
+                  & " ordered contract",
+                  "[1320]: iterable declares T, Cur and Item, then first,"
+                  & " at_end, item and next");
+               return Landin.Checking.No_Conformance;
+            end if;
+         end;
+
+         Find_Existing;
+
+         --  A parameterized conformance is a retained family pattern until
+         --  a concrete consumer supplies its nominal target.  The target's
+         --  canonical actual tuple supplies the complete binder tuple; its
+         --  Cur and Item RHSs are then substituted before ordinary evidence
+         --  finalization is asked to materialize the exact row.
+         if Matches = 0 and then Actual.Kind = Ty.Aggregate then
+            for Probe of Conformance_Probes loop
+               if Probe.Concept = Concept
+                 and then Probe.Template /= Res.No_Declaration
+                 and then Landin.Checking.Template_Of
+                   (Types.all, Actual.Nominal) = Probe.Template
+               then
+                  declare
+                     Probe_Tree : constant not null access constant Syn.Tree
+                       := Tree_For (Probe.Source);
+                     Count : constant Natural :=
+                       Syn.Conformance_Binder_Count
+                         (Probe_Tree.all, Probe.Node);
+                  begin
+                     if Count = Landin.Checking.Instance_Actual_Count
+                       (Types.all, Actual.Nominal)
+                     then
+                        declare
+                           Bound : Formal_Actual_Array (1 .. Count) :=
+                             [others => (others => <>)];
+                           Inputs : Landin.Checking.Actual_Tuple :=
+                             Landin.Checking.Empty_Actuals;
+                           Valid : Boolean := True;
+                        begin
+                           for Position in Bound'Range loop
+                              Bound (Position).Formal := Declaration_At
+                                (Probe.Source,
+                                 Syn.Nth_Conformance_Binder
+                                   (Probe_Tree.all, Probe.Node, Position));
+                              declare
+                                 Stored : constant Landin.Checking.Actual_Key
+                                   := Landin.Checking.Nth_Instance_Actual
+                                     (Types.all, Actual.Nominal, Position);
+                              begin
+                                 if Landin.Checking.Actual_Kind_Of (Stored)
+                                      = Landin.Checking.Type_Actual_Kind
+                                 then
+                                    Bound (Position).Value :=
+                                      Descriptor_For (Stored);
+                                 else
+                                    Bound (Position).Fixed :=
+                                      Landin.Checking.Fixed_Magnitude_Of
+                                        (Stored);
+                                    Bound (Position).Fixed_Known := True;
+                                 end if;
+                              end;
+                           end loop;
+
+                           declare
+                              Concept_Declaration : constant
+                                Res.Declaration_Id :=
+                                  Landin.Checking.Concept_Declaration
+                                    (Types.all, Concept);
+                              Concept_Tree : constant not null access
+                                constant Syn.Tree := Tree_For
+                                  (Res.Source_Of
+                                     (Meanings.all, Concept_Declaration));
+                              Concept_Node : constant Syn.Node_Id :=
+                                Res.Node_Of
+                                  (Meanings.all, Concept_Declaration);
+                           begin
+                              for Input_Position in 2 .. 3 loop
+                                 declare
+                                    Formal : constant Syn.Node_Id :=
+                                      Syn.Nth_Concept_Formal
+                                        (Concept_Tree.all, Concept_Node,
+                                         Input_Position);
+                                    Supplied : Syn.Node_Id := Syn.No_Node;
+                                 begin
+                                    for Given in 1 ..
+                                      Syn.Conformance_Entry_Count
+                                        (Probe_Tree.all, Probe.Node)
+                                    loop
+                                       declare
+                                          Supplied_Entry : constant
+                                            Syn.Node_Id :=
+                                            Syn.Nth_Conformance_Entry
+                                              (Probe_Tree.all, Probe.Node,
+                                               Given);
+                                       begin
+                                          if Syn.Name
+                                            (Probe_Tree.all, Supplied_Entry)
+                                               = Syn.Name
+                                                 (Concept_Tree.all, Formal)
+                                          then
+                                             Supplied := Syn.Conformance_RHS
+                                               (Probe_Tree.all,
+                                                Supplied_Entry);
+                                             exit;
+                                          end if;
+                                       end;
+                                    end loop;
+                                    if Supplied = Syn.No_Node then
+                                       Valid := False;
+                                    else
+                                       declare
+                                          Associated : constant
+                                            Type_Descriptor :=
+                                              Normalized_Type
+                                                (Probe_Tree.all, Supplied,
+                                                 Bound,
+                                                 Syn.Origin
+                                                   (Of_Tree, Source),
+                                                 Identity_Only);
+                                       begin
+                                          if Associated.Kind = Ty.Ill_Typed
+                                          then
+                                             Valid := False;
+                                          else
+                                             Landin.Checking.Append_Actual
+                                               (Inputs,
+                                                Actual_For (Associated));
+                                          end if;
+                                       end;
+                                    end if;
+                                 end;
+                              end loop;
+                           end;
+
+                           if Valid
+                             and then Landin.Checking.Actual_Count (Inputs) = 2
+                           then
+                              declare
+                                 Accepted : constant Boolean :=
+                                   Require_Conformance
+                                     (Actual,
+                                      Syn.Conforming_Concept
+                                        (Probe_Tree.all, Probe.Node),
+                                      Probe_Tree.all,
+                                      Syn.Origin (Of_Tree, Source), Inputs);
+                              begin
+                                 pragma Unreferenced (Accepted);
+                              end;
+                           end if;
+                        end;
+                     end if;
+                  end;
+                  exit;
+               end if;
+            end loop;
+            Find_Existing;
+         end if;
+
+         if Matches = 0 then
+            Report
+              ("this type has no [1320] iterable conformance",
+               "[1150]: a struct or `any C` traversal selects one exact"
+               & " Cur and Item pair");
+            return Landin.Checking.No_Conformance;
+         elsif Matches > 1 then
+            Report
+              ("this type has more than one iterable Cur and Item pair",
+               "D180: a traversal source selects one exact iterable"
+               & " conformance without declaration-order precedence");
+            return Landin.Checking.No_Conformance;
+         elsif not Contract_Holds (Selected) then
+            Report
+              ("this iterable evidence does not implement [1320]'s exact"
+               & " call contract",
+               "D180: first, at_end, item and next are infallible in-value"
+               & " calls with one retained Cur and Item identity");
+            return Landin.Checking.No_Conformance;
+         end if;
+
+         return Selected;
+      end Select_Iterable_Conformance;
 
       procedure Validate_Composed_Conformances is
          Initial_Count : constant Natural :=
@@ -17028,13 +17552,11 @@ package body Landin.Stages.Checking is
             end if;
          end Set_Traversal_Binding;
 
-         --  D160: the source is a slice or a fixed array, the element is
-         --  a place of the source's element type, and the index is a
-         --  `usize`.  A slice writes through its own permission; an array
-         --  writes when the place holding it does.  Element shapes the
-         --  alias lowering can carry are admitted; [1320]'s iterable
-         --  evidence keeps the named R4.10 refusal.  D179 carries an `any`
-         --  element's concept independently from its two-word runtime shape.
+         --  D160's slice or fixed-array source binds an element place and
+         --  D179 carries an aliased `any` element's concept independently
+         --  from its two-word runtime shape.  D180 instead selects [1320]
+         --  evidence for a struct or `any C` source and binds the exact Item
+         --  as an immutable copy; both forms keep the optional `usize` index.
          procedure Check_Collection_Traversal
            (Of_Tree : Syn.Tree;
             Node    : Syn.Node_Id;
@@ -17049,27 +17571,40 @@ package body Landin.Stages.Checking is
             Element : Syn.Node_Id;
             Index   : Syn.Node_Id)
          is
-            Held : constant Ty.Type_Kind := Indexed_From (Of_Tree, Source);
+            Held : Ty.Type_Kind := Indexed_From (Of_Tree, Source);
             Kind : Ty.Type_Kind := Ty.Ill_Typed;
             Writable : Boolean := False;
+            Item : Type_Descriptor := (Kind => Ty.Ill_Typed, others => <>);
             Descriptor : Landin.Checking.Reference_Descriptor;
-            Element_Reference : Landin.Checking.Reference_Id :=
-              Landin.Checking.No_Reference;
-            Nominal : Landin.Checking.Nominal_Type_Id :=
-              Landin.Checking.No_Nominal_Type;
             Id : constant Res.Declaration_Id :=
               Declaration_At (Syn.Source_Of (Of_Tree), Element);
          begin
+            --  The storage question preserves a direct array or slice
+            --  place.  A computed struct is not such a place, but D180
+            --  admits its ordinary value in this one contextual position
+            --  before copying it into evidence-owned traversal state.
+            if Held not in Ty.Fixed_Array | Ty.Slice_Value
+                           | Ty.Aggregate | Ty.Any_Value
+            then
+               Held := Synthesise (Of_Tree, Source);
+            end if;
             if Held = Ty.Slice_Value then
                Descriptor := Landin.Checking.Descriptor_Of
                  (Types.all,
                   Landin.Checking.Reference_Of (Types.all, Of_Tree, Source));
                Kind := Descriptor.Referent;
-               Element_Reference := Descriptor.Reference;
+               Item :=
+                 (Kind            => Kind,
+                  Length          => Descriptor.Length,
+                  Element         => Descriptor.Element,
+                  Element_Nominal => Descriptor.Element_Nominal,
+                  Nominal         => Descriptor.Nominal,
+                  Atoms           => Descriptor.Atoms,
+                  Signature       => Descriptor.Signature,
+                  Reference       => Descriptor.Reference,
+                  Concept         => Descriptor.Concept,
+                  others          => <>);
                Writable := Descriptor.Mutable;
-               if Kind = Ty.Aggregate then
-                  Nominal := Descriptor.Nominal;
-               end if;
             elsif Held = Ty.Fixed_Array then
                declare
                   Shape : constant Landin.Checking.Field_Shape :=
@@ -17079,16 +17614,35 @@ package body Landin.Stages.Checking is
                   case Shape.Kind is
                      when Landin.Checking.Scalar_Field =>
                         Kind := Shape.Element;
+                        Item := (Kind => Kind, others => <>);
                      when Landin.Checking.Aggregate_Field =>
                         Kind := Ty.Aggregate;
-                        Nominal := Shape.Nominal;
+                        Item :=
+                          (Kind => Kind, Nominal => Shape.Nominal,
+                           others => <>);
                      when Landin.Checking.Fixed_Array_Field =>
                         Kind := Ty.Fixed_Array;
+                        Item :=
+                          (Kind            => Kind,
+                           Length          => Shape.Length,
+                           Element         => Shape.Element,
+                           Element_Nominal => Shape.Nominal,
+                           others          => <>);
                      when Landin.Checking.Reference_Field =>
-                        Element_Reference := Shape.Reference;
                         Descriptor := Landin.Checking.Descriptor_Of
                           (Types.all, Shape.Reference);
                         Kind := Descriptor.Kind;
+                        Item :=
+                          (Kind            => Kind,
+                           Length          => Descriptor.Length,
+                           Element         => Descriptor.Element,
+                           Element_Nominal => Descriptor.Element_Nominal,
+                           Nominal         => Descriptor.Nominal,
+                           Atoms           => Descriptor.Atoms,
+                           Signature       => Descriptor.Signature,
+                           Reference       => Shape.Reference,
+                           Concept         => Descriptor.Concept,
+                           others          => <>);
                      when Landin.Checking.Variant_Field =>
                         raise Landin.Compiler_Defect with
                           "a variant became an array element";
@@ -17096,15 +17650,33 @@ package body Landin.Stages.Checking is
                end;
                Writable := Place_Is_Mutable (Of_Tree, Source);
             elsif Held in Ty.Aggregate | Ty.Any_Value then
-               Bad.Report
-                 (Item    => Bad.Unsupported_Use,
-                  Source  => Syn.Source_Of (Of_Tree),
-                  Where   => Syn.Where (Of_Tree, Source),
-                  Message => "traversal through iterable evidence is not"
-                             & " enabled yet",
-                  Refused => Bad.Collection_Traversal,
-                  Into    => Found);
-               Landin.Checking.Refuse (Types.all, Of_Tree, Source);
+               declare
+                  Actual : constant Type_Descriptor :=
+                    (if Held = Ty.Aggregate
+                     then
+                       (Kind    => Held,
+                        Nominal => Landin.Checking.Nominal_Of
+                          (Types.all, Of_Tree, Source),
+                        others  => <>)
+                     else
+                       (Kind    => Held,
+                        Concept => Landin.Checking.Any_Concept_Of
+                          (Types.all, Of_Tree, Source),
+                        others  => <>));
+                  Evidence : constant Landin.Checking.Conformance_Id :=
+                    Select_Iterable_Conformance
+                      (Actual, Of_Tree, Source);
+               begin
+                  if Evidence /= Landin.Checking.No_Conformance then
+                     Item := Descriptor_For
+                       (Landin.Checking.Nth_Conformance_Input
+                          (Types.all, Evidence, 2));
+                     Kind := Item.Kind;
+                     Writable := False;
+                     Landin.Checking.Note_Traversal_Evidence
+                       (Types.all, Of_Tree, Node, Evidence);
+                  end if;
+               end;
             elsif Decidable (Held) then
                Bad.Report
                  (Item    => Bad.Type_Mismatch,
@@ -17131,61 +17703,50 @@ package body Landin.Stages.Checking is
                Landin.Checking.Note (Types.all, Of_Tree, Element, Kind);
                case Kind is
                   when Ty.Fixed_Array =>
-                     declare
-                        Shape : constant Landin.Checking.Field_Shape :=
-                          (if Held = Ty.Slice_Value
-                           then
-                             (Kind    => Landin.Checking.Fixed_Array_Field,
-                              Length  => Descriptor.Length,
-                              Element => Descriptor.Element,
-                              Nominal => Descriptor.Element_Nominal,
-                              others  => <>)
-                           else Landin.Checking.Array_Element_Shape
-                             (Types.all, Of_Tree, Source));
-                     begin
-                        Landin.Checking.Note_Array
-                          (Types.all, Id, Shape.Length, Shape.Element);
-                        Landin.Checking.Note_Array
+                     Landin.Checking.Note_Array
+                       (Types.all, Id, Item.Length, Item.Element);
+                     Landin.Checking.Note_Array
+                       (Types.all, Of_Tree, Element,
+                        Item.Length, Item.Element);
+                     if Item.Element_Nominal
+                       /= Landin.Checking.No_Nominal_Type
+                     then
+                        Landin.Checking.Note_Array_Element_Nominal
+                          (Types.all, Id, Item.Element_Nominal);
+                        Landin.Checking.Note_Array_Element_Nominal
                           (Types.all, Of_Tree, Element,
-                           Shape.Length, Shape.Element);
-                        if Shape.Nominal
-                          /= Landin.Checking.No_Nominal_Type
-                        then
-                           Landin.Checking.Note_Array_Element_Nominal
-                             (Types.all, Id, Shape.Nominal);
-                           Landin.Checking.Note_Array_Element_Nominal
-                             (Types.all, Of_Tree, Element, Shape.Nominal);
-                        end if;
-                     end;
+                           Item.Element_Nominal);
+                     end if;
                   when Ty.Slice_Value =>
                      Landin.Checking.Note_Reference
-                       (Types.all, Id, Element_Reference);
+                       (Types.all, Id, Item.Reference);
                      Landin.Checking.Note_Reference
-                       (Types.all, Of_Tree, Element, Element_Reference);
+                       (Types.all, Of_Tree, Element, Item.Reference);
                   when Ty.Aggregate =>
-                     Landin.Checking.Note_Nominal (Types.all, Id, Nominal);
                      Landin.Checking.Note_Nominal
-                       (Types.all, Of_Tree, Element, Nominal);
+                       (Types.all, Id, Item.Nominal);
+                     Landin.Checking.Note_Nominal
+                       (Types.all, Of_Tree, Element, Item.Nominal);
                   when Ty.Pointer_Value =>
                      Landin.Checking.Note_Reference
-                       (Types.all, Id, Descriptor.Reference);
+                       (Types.all, Id, Item.Reference);
                      Landin.Checking.Note_Reference
-                       (Types.all, Of_Tree, Element, Descriptor.Reference);
+                       (Types.all, Of_Tree, Element, Item.Reference);
                   when Ty.Atom_Value =>
                      Landin.Checking.Note_Atom_Set
-                       (Types.all, Id, Descriptor.Atoms);
+                       (Types.all, Id, Item.Atoms);
                      Landin.Checking.Note_Atom_Set
-                       (Types.all, Of_Tree, Element, Descriptor.Atoms);
+                       (Types.all, Of_Tree, Element, Item.Atoms);
                   when Ty.Function_Value =>
                      Landin.Checking.Note_Signature
-                       (Types.all, Id, Descriptor.Signature);
+                       (Types.all, Id, Item.Signature);
                      Landin.Checking.Note_Signature
-                       (Types.all, Of_Tree, Element, Descriptor.Signature);
+                       (Types.all, Of_Tree, Element, Item.Signature);
                   when Ty.Any_Value =>
                      Landin.Checking.Note_Any_Concept
-                       (Types.all, Id, Descriptor.Concept);
+                       (Types.all, Id, Item.Concept);
                      Landin.Checking.Note_Any_Concept
-                       (Types.all, Of_Tree, Element, Descriptor.Concept);
+                       (Types.all, Of_Tree, Element, Item.Concept);
                   when others =>
                      null;
                end case;

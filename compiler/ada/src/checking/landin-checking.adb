@@ -2405,6 +2405,38 @@ package body Landin.Checking is
       return Of_Table.Node_Evidence_Entries (Where);
    end Evidence_Entry_Of;
 
+   function Traversal_Evidence_Of
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id) return Conformance_Id
+     is (Evidence_Of (Of_Table, Of_Tree, Node));
+
+   procedure Note_Traversal_Evidence
+     (Into       : in out Table;
+      Of_Tree    : Landin.Syntax.Tree;
+      Node       : Landin.Syntax.Node_Id;
+      Conformance : Conformance_Id)
+   is
+      Where : constant Positive := Slot (Into, Of_Tree, Node);
+   begin
+      if Traversal_Evidence_Of (Into, Of_Tree, Node) /= No_Conformance then
+         raise Landin.Compiler_Defect with
+           "one traversal was assigned two iterable conformances";
+      end if;
+      if Into.Current_Routine = No_Routine_Instance then
+         Into.Node_Evidence (Where) := Conformance;
+         Into.Node_Evidence_Entries (Where) := 0;
+      else
+         declare
+            Overlay : constant Positive := Ensure_Node_Overlay (Into, Where);
+         begin
+            Into.Node_Overlays (Overlay).Has_Evidence := True;
+            Into.Node_Overlays (Overlay).Evidence := Conformance;
+            Into.Node_Overlays (Overlay).Evidence_Entry := 0;
+         end;
+      end if;
+   end Note_Traversal_Evidence;
+
    procedure Note_Any_Construction
      (Into       : in out Table;
       Of_Tree    : Landin.Syntax.Tree;

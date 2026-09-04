@@ -1,0 +1,6 @@
+class: negative
+summary: traversal refuses two iterable Cur and Item pairs for one source type instead of choosing by declaration order
+program: main.ldn
+codes: L0301
+constructs: 1150, 1320
+targets: linux-x86-64, macos-arm64, synthetic-32

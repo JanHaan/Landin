@@ -302,7 +302,7 @@ conformance_declaration ::= type_formals? conformance_target "is"
                             ("," conformance_argument)* ")"
                           | type_formals? conformance_target "is"
                             concept_reference "(" ")"
-conformance_target ::= array_type | pointer_type | slice_type
+conformance_target ::= array_type | pointer_type | slice_type | any_type
                      | type_application | declaration_reference
 conformance_argument ::= identifier ":" argument_rhs
 concept_reference ::= declaration_reference
@@ -471,7 +471,24 @@ the write through the element, and the reverse. Elements that are themselves
 fixed arrays or slices retain their complete shape under D178, including when
 copied out through a loop value. An `any C` element retains its erased identity
 and evidence under D179. A source that would need [1320]'s iterable evidence
-remains a named R4.10 refusal.
+is enabled by D180 when its type is a struct or `any C` and exactly one
+conformance to the unambiguous concept named `iterable` supplies `Cur`, `Item`, and
+[1320]'s four exact, infallible signatures. The source expression is evaluated
+once and copied into private traversal state. `first` is called once. Each
+test calls `at_end`; a false result calls `item` before entering the body.
+Fallthrough and `continue` run applicable cleanup and then call `next`; a
+`break` runs applicable cleanup and skips `next`. The optional immutable
+`usize` index begins at zero and advances with each `next` call.
+
+The cursor keeps its complete type identity between calls. The element is an
+immutable copy of the exact `Item` result, not an alias into the source, and
+therefore carries only the origin allowed by [1320]'s source-free result.
+An `any C` source and an `any C` item each retain their own erased concept and
+evidence identities; neither two-cell value is ever interpreted as a slice.
+Missing or ambiguous concept identity, or missing, ambiguous, or non-exact
+iterable evidence, is L0301. Integer ranges
+and fixed-array or slice storage traversal retain D159--D160 and D178--D179
+unchanged.
 
 ```landin-grammar
 statement   ::= binding | destructuring_binding | assignment | increment
@@ -8537,7 +8554,7 @@ classified failure boundary before the repository gate can pass.
 | `results.destructure` | static | 0990 | L0200, L0301, L0302 or L0308 | `negative/result-destructure-needs-multiple`, `runtime/r230-composition` |
 | `functions.anonymous` | static | 1010 | L0201 for capture; complete signature checks otherwise apply | `negative/anonymous-function-captures-local`, `runtime/inferred-function-values` |
 | `control.flow` | static | 1050, 1060, 1080, 1090 | L0301 or L0302 at every reachable join and exit | `negative/if-expression-missing-else`, `runtime/control-expression-edges-keep-source-order` |
-| `control.loops` | static | 1130, 1140, 1150, 1160, 1170, 1180, 1190 | L0301 for a non-bool condition, mismatched range, non-traversable source, or incomplete/inconsistent value exit; L0303 for a write to an element of read-only storage, including an aggregate or `any` element; L0304 for a deferred iterable-evidence source; a taken transfer runs active defers and targets its named or nearest loop edge, while natural completion alone enters `complete` | `negative/loop-condition-not-bool`, `negative/loop-value-missing-break-value`, `negative/loop-value-missing-completion`, `negative/loop-value-type-mismatch`, `negative/for-range-needs-integer`, `negative/for-range-endpoints-disagree`, `negative/for-source-not-traversable`, `negative/for-collection-element-read-only`, `negative/for-array-element-read-only`, `negative/for-any-element-read-only`, `negative/for-collection-traversal-deferred`, `runtime/loop-control-flow`, `runtime/loop-values`, `runtime/for-range-traversal`, `runtime/for-collection-traversal`, `runtime/for-aggregate-element-traversal`, `runtime/for-any-element-traversal` |
+| `control.loops` | static | 1130, 1140, 1150, 1160, 1170, 1180, 1190, 1320 | L0301 for a non-bool condition, mismatched range, non-traversable source, missing/ambiguous/non-exact iterable evidence, or incomplete/inconsistent value exit; L0303 for a write to a read-only storage element or copied iterable item; a taken transfer runs active defers and targets its named or nearest loop edge, while natural completion alone enters `complete` | `negative/loop-condition-not-bool`, `negative/loop-value-missing-break-value`, `negative/loop-value-missing-completion`, `negative/loop-value-type-mismatch`, `negative/for-range-needs-integer`, `negative/for-range-endpoints-disagree`, `negative/for-source-not-traversable`, `negative/for-collection-element-read-only`, `negative/for-array-element-read-only`, `negative/for-any-element-read-only`, `negative/for-iterable-ambiguous-evidence`, `negative/for-iterable-item-read-only`, `negative/for-iterable-missing-conformance`, `runtime/loop-control-flow`, `runtime/loop-values`, `runtime/for-range-traversal`, `runtime/for-collection-traversal`, `runtime/for-aggregate-element-traversal`, `runtime/for-any-element-traversal`, `runtime/for-iterable-evidence-traversal` |
 | `cleanup.defer` | static | 1100 | the registered call is checked at every ordinary and successful-return edge | `negative/defer-read-not-assigned-on-return`, `runtime/defer-cleanups-follow-control-edges` |
 | `cleanup.undo` | static | 1110 | the registered call is checked at every propagated-failure edge | `negative/undo-read-not-assigned-on-failure`, `runtime/undo-cleanups-follow-failure-edges` |
 | `generics.substitution` | static | 1220, 1280, 1290, 1300, 1310, 1350, 1500, 1650, 1660, 1700 | L0300, L0301, L0306, L0307, L0313 or L0318 | `negative/generic-routine-undeduced-formal`, `runtime/generic-structural-deduction`, `runtime/core-vec-pointer-storage` |
@@ -9099,7 +9116,7 @@ the two paths drift. All were declined.
 **Pinned by** `runtime/for-range-traversal`,
 `negative/for-range-needs-integer`,
 `negative/for-range-endpoints-disagree`,
-`negative/for-collection-traversal-deferred`, and the `control.loops`
+`negative/for-iterable-missing-conformance`, and the `control.loops`
 guarantee row.
 
 ### D160 — Collection traversal aliases one element of the source's storage
@@ -9150,7 +9167,7 @@ source that was not written. All were declined.
 **Pinned by** `runtime/for-collection-traversal`,
 `negative/for-collection-element-read-only`,
 `negative/for-source-not-traversable`,
-`negative/for-collection-traversal-deferred`, and the `control.loops`
+`negative/for-iterable-missing-conformance`, and the `control.loops`
 guarantee row.
 
 ### D161 — Byte-context text is a pooled read-only datum and slice
@@ -9918,7 +9935,7 @@ All were declined.
 **Pinned by** `runtime/for-aggregate-element-traversal`,
 `negative/for-array-element-read-only`,
 `runtime/for-any-element-traversal`, the retained
-`negative/for-collection-traversal-deferred`, and the `control.loops` guarantee
+`negative/for-iterable-missing-conformance`, and the `control.loops` guarantee
 row.
 
 ### D179 — An `any` traversal element keeps erased identity and evidence
@@ -9961,5 +9978,60 @@ storage walk to an unimplemented evidence call. All were declined.
 
 **Pinned by** `runtime/for-any-element-traversal`,
 `negative/for-any-element-read-only`, the retained
-`negative/for-collection-traversal-deferred`, and the `control.loops`
-guarantee row.
+`runtime/for-iterable-evidence-traversal`, and the `control.loops` guarantee
+row.
+
+### D180 — Struct and erased sources traverse through exact iterable evidence
+
+**The tour said** that traversal uses [1320]'s `iterable` concept [1150],
+that its `item` result makes a non-storage element binding a copy [1160], and
+that evidence tables follow concept declaration order [1310]. D160--D179 had
+only enabled direct fixed-array and slice storage. Treating an `any C` source
+as the other existing two-cell carrier would instead confuse erased data and
+evidence with a slice base and length.
+
+**Chosen:** the next collection-traversal increment admits a source whose
+type is a struct or `any C` when there is one unambiguous concept named
+`iterable` and exactly one conformance to it
+`iterable` supplies two associated type inputs and [1320]'s four entries in
+that order. The entries have the exact infallible signatures shown at [1320]:
+no convention, permission, error-set, result-origin, cursor identity, Item
+identity, or erased concept is inferred or converted. Conformance arguments
+remain label-addressed, while the retained provider table and calls remain in
+concept declaration order. Missing, multiple, malformed, or non-exact
+evidence is L0301.
+
+The source expression is evaluated once and copied into independent traversal
+storage. `first` runs once against that stored source. Each head calls
+`at_end`; false calls `item` and copies its result into the immutable element
+binding. Body fallthrough or `continue` runs applicable cleanup, calls `next`,
+copies the returned cursor into the retained cursor, advances the optional
+immutable `usize` index, and tests again. `break` runs applicable cleanup but
+does not call `next`; natural completion alone enters `complete`. Aggregate,
+fixed-array, slice and `any` cursors and Items retain their complete checked
+identity. Aggregate cursor replacement uses separate result and retained
+storage, so a provider never receives an aliased input/output cursor. An
+`any` Item and an `any` loop result copy both erased cells.
+
+Because [1320]'s `item` result has no `from`, its binding has no source-derived
+origin; an implementation returning such a reference must satisfy the
+ordinary exact result-origin rule at its own declaration. Assigning to the
+copied binding is L0303. The stored source is passed as [1320]'s ordinary
+in-value parameter, so no traversal call obtains a new write permission.
+Ranges and direct array/slice traversal retain D159--D160 and D178--D179
+unchanged. In particular, an `any C` source remains a data/evidence pair for C
+through every provider call and is never decoded as a slice.
+
+**The alternatives:** choose the first conformance in source order, derive
+Cur or Item from provider bodies, share an aggregate cursor's result and input
+storage, make Item an alias, call `next` before cleanup, or reinterpret `any`
+as a slice. Those choices respectively make declaration order semantic, lose
+associated-type identity, permit hidden result/input aliasing, contradict
+[1160], move effects across a loop edge, or confuse unrelated representations.
+All were declined.
+
+**Pinned by** `runtime/for-iterable-evidence-traversal`,
+`negative/for-iterable-ambiguous-evidence`,
+`negative/for-iterable-item-read-only`,
+`negative/for-iterable-missing-conformance`, retained range and collection
+runtime fixtures, and the `control.loops` guarantee row.

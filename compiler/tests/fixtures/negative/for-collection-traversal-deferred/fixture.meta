@@ -1,6 +1,0 @@
-class: negative
-summary: traversal through iterable evidence remains a named checking-stage deferral after slices and arrays traverse
-program: program.ldn
-codes: L0304
-constructs: 1150, 1320
-targets: linux-x86-64, macos-arm64, synthetic-32

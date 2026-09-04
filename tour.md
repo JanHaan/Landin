@@ -1964,6 +1964,11 @@ An integer range is ascending. Its bounds are evaluated once, left to right;
 shape, with writability decided by [1160]. A collection element may itself be
 a fixed array, slice or `any C`; the loop binding keeps the complete element
 shape or erased concept identity and evidence.
+For a struct or `any C` source, the loop selects one conformance to [1320]'s
+named `iterable` concept. The source expression runs once. `first` produces
+one cursor; `at_end`, `item`, and (after fallthrough or `continue`) `next`
+then drive each iteration in that order. The optional `usize` index still
+begins at zero and advances with `next`.
 
 ```landin
     for item in items do
@@ -1988,6 +1993,9 @@ place, over a []T it is not. Over anything else that
 satisfies iterable the binding is a copy, since item at
 [1320] hands out a value — so assigning to it is an error
 rather than a silent write to nothing.
+The cursor and item keep their exact declared type identities. In particular,
+an `any C` item keeps C and its evidence, while an `any C` source remains an
+erased value passed to the providers; neither pair is interpreted as a slice.
 When `T` is a fixed array, slice or `any C`, replacing that whole element
 follows this same rule. Writing through a slice element still follows the
 `mut` permission carried by that inner slice. An `any C` element remains an
@@ -2374,14 +2382,20 @@ the general optimization policy above remain R4.50 work.
 Traversal is a concept. This is what 'for x in s' uses.
 
 ```landin
-iterable: type = concept (T: type, Cur: type, Item: type)
-    first:  (s: T) -> (c: Cur)
-    at_end: (s: T, c: Cur) -> (yes: bool)
-    item:   (s: T, c: Cur) -> (v: Item)
-    next:   (s: T, c: Cur) -> (c2: Cur)
+iterable: type = concept (t: type, cur: type, item_type: type)
+    first:  (s: t) -> (c: cur)
+    at_end: (s: t, c: cur) -> (yes: bool)
+    item:   (s: t, c: cur) -> (v: item_type)
+    next:   (s: t, c: cur) -> (c2: cur)
 end iterable
 
 ```
+
+The conformance supplies `cur` and `item_type` as associated type inputs.
+Those identities and the four infallible signatures above are exact. Provider
+labels may be written in any order, but calls use concept declaration order.
+The source is retained as a value for every call; `item` returns a fresh loop
+binding value rather than an alias into it.
 
 ### [1330] A range is not a concept
 

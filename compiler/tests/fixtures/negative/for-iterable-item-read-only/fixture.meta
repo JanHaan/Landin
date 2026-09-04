@@ -1,0 +1,6 @@
+class: negative
+summary: an iterable evidence item is an immutable copy rather than an alias into its source
+program: main.ldn
+codes: L0303
+constructs: 1150, 1160, 1320
+targets: linux-x86-64, macos-arm64, synthetic-32

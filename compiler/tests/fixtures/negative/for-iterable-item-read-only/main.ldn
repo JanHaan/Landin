@@ -1,0 +1,27 @@
+iterable: type = concept (t: type, cur: type, item_type: type)
+    first:  (s: t) -> (c: cur)
+    at_end: (s: t, c: cur) -> (yes: bool)
+    item:   (s: t, c: cur) -> (v: item_type)
+    next:   (s: t, c: cur) -> (c2: cur)
+end iterable
+
+bag: type = struct
+    value: i32
+end bag
+
+bag_first: (s: bag) -> (c: usize) = c = 0 end bag_first
+bag_at_end: (s: bag, c: usize) -> (yes: bool) = yes = true end bag_at_end
+bag_item: (s: bag, c: usize) -> (v: i32) = v = s.value end bag_item
+bag_next: (s: bag, c: usize) -> (c2: usize) = c2 = c + 1 end bag_next
+
+bag is iterable
+    (cur: usize, item_type: i32, first: bag_first,
+     at_end: bag_at_end, item: bag_item, next: bag_next)
+
+public main: () -> (code: i32) =
+    source: bag = (value: 1)
+    for item in source do
+        item = 2
+    end for
+    code = 0
+end main

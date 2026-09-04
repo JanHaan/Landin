@@ -1227,6 +1227,7 @@ package body Landin.Syntax.Parser is
                end if;
 
                if Peek in Tok.Left_Paren | Tok.Left_Bracket | Tok.Kw_Ptr
+                    | Tok.Kw_Any
                  or else (Peek = Tok.Identifier and then Starts_Conformance)
                then
                   return Parse_Conformance (Exported, Public_At);
