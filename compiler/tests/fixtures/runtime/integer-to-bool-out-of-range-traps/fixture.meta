@@ -1,0 +1,6 @@
+class: runtime
+summary: a dynamic integer-to-bool conversion traps unless its value is zero or one
+constructs: 0150, 0180, 0190, 0200, 0310, 0700, 1950, 1960
+program: main.ldn
+traps: yes
+targets: linux-x86-64

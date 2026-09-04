@@ -1,0 +1,11 @@
+to_bool: (value: i64) -> (result: bool) =
+    result = bool(value)
+end to_bool
+
+public main: () -> (code: i32) =
+    if to_bool(-1) then
+        code = 1
+    else
+        code = 2
+    end if
+end main

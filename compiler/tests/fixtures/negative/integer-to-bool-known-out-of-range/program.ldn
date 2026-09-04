@@ -1,0 +1,2 @@
+source: i32 = 2
+bad: bool = bool(source)

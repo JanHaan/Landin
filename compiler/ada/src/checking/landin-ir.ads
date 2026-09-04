@@ -2628,7 +2628,7 @@ package Landin.IR is
      (Into  : in out Unit;
       Item  : Item_Id;
       Value : Value_Id;
-      Result : Landin.Types.Numeric_Name;
+      Result : Landin.Types.Scalar_Name;
       Site  : Landin.Provenance.Origin) return Value_Id
      with Pre  => Is_Emitting (Into, Item)
                   and then Holds (Into, Item, Value)
