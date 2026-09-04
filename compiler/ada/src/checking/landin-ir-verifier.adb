@@ -4511,7 +4511,7 @@ package body Landin.IR.Verifier is
                                     or else
                                       (Result_Kind = Landin.Types.Bool
                                        and then Operand_Kind
-                                         in Landin.Types.Integer_Name))
+                                         in Landin.Types.Numeric_Name))
                                  then
                                     return (Kind => Result_Disagrees,
                                             Item => Id, Block => Block,

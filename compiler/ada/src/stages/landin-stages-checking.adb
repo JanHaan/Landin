@@ -14006,27 +14006,24 @@ package body Landin.Stages.Checking is
                               return Kept (Ty.Ill_Typed);
                            end if;
                            Got := Ty.Default_Integer;
-                        elsif Got in Ty.Float_Name | Ty.Untyped_Float then
-                           Bad.Report
-                             (Item    => Bad.Unsupported_Use,
-                              Source  => Syn.Source_Of (Of_Tree),
-                              Where   => Syn.Where (Of_Tree, Node),
-                              Message => "float-to-bool conversion is not"
-                                         & " enabled yet",
-                              Refused => Bad.Scalar_Conversion,
-                              Into    => Found);
-                           Landin.Checking.Refuse
-                             (Types.all, Of_Tree, Node);
-                           return Kept (Ty.Ill_Typed);
+                        elsif Got = Ty.Untyped_Float then
+                           Commit_To (Of_Tree, Value, Ty.Default_Float);
+                           if Landin.Checking.Type_Of
+                             (Types.all, Of_Tree, Value) = Ty.Ill_Typed
+                           then
+                              return Kept (Ty.Ill_Typed);
+                           end if;
+                           Got := Ty.Default_Float;
                         elsif Got /= Ty.Ill_Typed
-                          and then Got not in Ty.Integer_Name
+                          and then Got
+                            not in Ty.Integer_Name | Ty.Float_Name
                         then
                            Bad.Report
                              (Item    => Bad.Type_Mismatch,
                               Source  => Syn.Source_Of (Of_Tree),
                               Where   => Syn.Where (Of_Tree, Value),
-                              Message => "this bool conversion requires an"
-                                         & " integer value",
+                              Message => "this bool conversion requires a"
+                                         & " numeric value",
                               Note    => "[0310]: conversion is explicit",
                               Related => Syn.Origin (Of_Tree, Callee),
                               Because => "the bool type applied here",
@@ -14076,6 +14073,37 @@ package body Landin.Stages.Checking is
                                     Source  => Syn.Source_Of (Of_Tree),
                                     Where   => Syn.Where (Of_Tree, Node),
                                     Message => "this known integer is not a"
+                                               & " bool value",
+                                    Note    => "[0310]: only zero and one"
+                                               & " convert to bool",
+                                    Into    => Found);
+                                 Landin.Checking.Refuse
+                                   (Types.all, Of_Tree, Node);
+                                 return Kept (Ty.Ill_Typed);
+                              end if;
+                           end;
+                        elsif Got in Ty.Float_Name then
+                           declare
+                              Bits       : Ty.Magnitude;
+                              From       : Ty.Type_Kind;
+                              Result     : Ty.Folded;
+                              Known      : Boolean;
+                              Overflowed : Boolean;
+                           begin
+                              Fold_Float
+                                (Of_Tree, Value, Bits, From, Known,
+                                 Overflowed);
+                              if Known and then not Overflowed then
+                                 Ty.Convert_Float_To_Bool
+                                   (Bits, Ty.Float_Name (From), Result,
+                                    Overflowed);
+                              end if;
+                              if Overflowed then
+                                 Bad.Report
+                                   (Item    => Bad.Literal_Out_Of_Range,
+                                    Source  => Syn.Source_Of (Of_Tree),
+                                    Where   => Syn.Where (Of_Tree, Node),
+                                    Message => "this known float is not a"
                                                & " bool value",
                                     Note    => "[0310]: only zero and one"
                                                & " convert to bool",
@@ -21754,9 +21782,33 @@ package body Landin.Stages.Checking is
 
             when Syn.Call =>
                if Conversion_Target (Of_Tree, Node) = Ty.Bool then
-                  Fold
-                    (Of_Tree, Syn.Nth_Argument (Of_Tree, Node, 1),
-                     Depth + 1, Value, Known, Overflowed);
+                  declare
+                     Operand : constant Syn.Node_Id :=
+                       Syn.Nth_Argument (Of_Tree, Node, 1);
+                     Got : constant Ty.Type_Kind :=
+                       Landin.Checking.Type_Of
+                         (Types.all, Of_Tree, Operand);
+                  begin
+                     if Got in Ty.Float_Name then
+                        declare
+                           Bits : Ty.Magnitude;
+                           Kind : Ty.Type_Kind;
+                        begin
+                           Fold_Float
+                             (Of_Tree, Operand, Bits, Kind, Known,
+                              Overflowed);
+                           if Known then
+                              Ty.Convert_Float_To_Bool
+                                (Bits, Ty.Float_Name (Kind), Value,
+                                 Overflowed);
+                           end if;
+                        end;
+                     else
+                        Fold
+                          (Of_Tree, Operand, Depth + 1, Value, Known,
+                           Overflowed);
+                     end if;
+                  end;
                elsif Conversion_Target (Of_Tree, Node) in Ty.Integer_Name then
                   declare
                      Operand : constant Syn.Node_Id :=
@@ -22720,9 +22772,29 @@ package body Landin.Stages.Checking is
             return;
          elsif Wanted = Ty.Bool then
             if Conversion_Target (Of_Tree, Value) = Ty.Bool then
-               Fold
-                 (Of_Tree, Syn.Nth_Argument (Of_Tree, Value, 1), 0,
-                  Held, Known, Overflowed);
+               declare
+                  Operand : constant Syn.Node_Id :=
+                    Syn.Nth_Argument (Of_Tree, Value, 1);
+                  Got : constant Ty.Type_Kind :=
+                    Landin.Checking.Type_Of
+                      (Types.all, Of_Tree, Operand);
+               begin
+                  if Got in Ty.Float_Name then
+                     declare
+                        Bits : Ty.Magnitude;
+                        Kind : Ty.Type_Kind;
+                     begin
+                        Fold_Float
+                          (Of_Tree, Operand, Bits, Kind, Known, Overflowed);
+                        if Known then
+                           Ty.Convert_Float_To_Bool
+                             (Bits, Ty.Float_Name (Kind), Held, Overflowed);
+                        end if;
+                     end;
+                  else
+                     Fold (Of_Tree, Operand, 0, Held, Known, Overflowed);
+                  end if;
+               end;
                if Overflowed
                  or else (Known and then Held not in 0 .. 1)
                then

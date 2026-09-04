@@ -1,6 +1,0 @@
-class: negative
-summary: float-to-bool conversion remains a named R4.10 boundary after integer-to-bool conversion
-constructs: 0180, 0210, 0310, 0700
-program: program.ldn
-codes: L0304
-targets: linux-x86-64, macos-arm64

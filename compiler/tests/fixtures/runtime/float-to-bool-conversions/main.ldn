@@ -1,0 +1,24 @@
+module_zero: f64 = -0.0
+module_false: bool = bool(module_zero)
+module_true: bool = bool(f32(1.0))
+
+to_bool_f32: (value: f32) -> (result: bool) =
+    result = bool(value)
+end to_bool_f32
+
+to_bool_f64: (value: f64) -> (result: bool) =
+    result = bool(value)
+end to_bool_f64
+
+public main: () -> (code: i32) =
+    if bool(0.0) == false
+      and bool(1.0) == true
+      and to_bool_f32(-0.0) == false
+      and to_bool_f64(1.0) == true
+      and not module_false
+      and module_true then
+        code = 42
+    else
+        code = 1
+    end if
+end main
