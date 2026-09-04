@@ -1,0 +1,55 @@
+mut order: u32 = 0
+
+mark_source: () -> (value: usize) =
+    order = order * 10 + 1
+    value = 0
+end mark_source
+
+mark_lower: () -> (value: usize) =
+    order = order * 10 + 2
+    value = 1
+end mark_lower
+
+mark_upper: () -> (value: usize) =
+    order = order * 10 + 3
+    value = 4
+end mark_upper
+
+middle: (source: utf8) -> (result: utf8 from source) =
+    result = source[1..<4]
+end middle
+
+public main: () -> (code: i32) =
+    narrow: utf8 = "A\u{2603}\u{1f600}Z"
+    mut sources: [1]utf8
+    sources[0] = narrow
+    snowman: utf8 = middle(narrow)
+    emoji: utf8 = narrow[4..4]
+    empty_narrow: utf8 = narrow[8..<8]
+    ordered: utf8 = sources[mark_source()]
+      [mark_lower()..<mark_upper()]
+
+    wide: utf16 = "A\u{1f600}Z"
+    wide_emoji: utf16 = wide[1..<3]
+    wide_inclusive: utf16 = wide[1..1]
+    empty_wide: utf16 = wide[4..<4]
+
+    snowman_bytes: []u8 = snowman[0]
+    emoji_bytes: []u8 = emoji[0]
+    ordered_bytes: []u8 = ordered[0]
+
+    if order == 123
+      and lenof snowman == 3 and lenof snowman_bytes == 3
+      and snowman_bytes[0] == 226 and snowman_bytes[2] == 131
+      and lenof emoji == 4 and lenof emoji_bytes == 4
+      and emoji_bytes[0] == 240 and emoji_bytes[3] == 128
+      and lenof ordered == 3 and ordered_bytes[1] == 152
+      and lenof empty_narrow == 0
+      and lenof wide_emoji == 2 and lenof wide_inclusive == 2
+      and lenof empty_wide == 0
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

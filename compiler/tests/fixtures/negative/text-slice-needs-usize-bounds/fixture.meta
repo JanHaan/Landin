@@ -1,0 +1,6 @@
+class: negative
+summary: a text range takes exact usize code-unit offsets without implicit integer conversion
+constructs: 0310, 0570, 0600, 1820
+program: program.ldn
+codes: L0301
+targets: linux-x86-64, macos-arm64

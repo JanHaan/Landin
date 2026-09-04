@@ -1,0 +1,6 @@
+class: runtime
+summary: utf8 and utf16 ranges retain their identities, scalar boundaries, origins and source-first evaluation order
+constructs: 0260, 0270, 0410, 0430, 0570, 0600, 0790, 1050, 1820, 1950, 1960
+program: main.ldn
+status: 42
+targets: linux-x86-64

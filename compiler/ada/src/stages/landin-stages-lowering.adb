@@ -4282,7 +4282,252 @@ package body Landin.Stages.Lowering is
          Site : constant Landin.Provenance.Origin :=
            Site_Of (Of_Tree, Node);
 
+         function Text_Unit_Width
+           (Base, Total, Offset : IR.Value_Id;
+            View                : Ty.Text_View;
+            Allow_End           : Boolean) return IR.Value_Id;
          procedure Lower_Utf8_Index;
+
+         --  D183: a text range is still represented by a base/length pair,
+         --  but each endpoint must preserve the encoded scalar boundary.
+         --  The returned width is used only by the inclusive form, whose
+         --  written upper endpoint names the first code unit of its final
+         --  scalar rather than the final code unit of that scalar.
+         function Text_Unit_Width
+           (Base, Total, Offset : IR.Value_Id;
+            View                : Ty.Text_View;
+            Allow_End           : Boolean) return IR.Value_Id
+         is
+            Base_Slot : constant IR.Slot_Id := IR.Add_Slot
+              (Unit.all, Filling, Ty.Usize, Res.No_Declaration, Site);
+            Total_Slot : constant IR.Slot_Id := IR.Add_Slot
+              (Unit.all, Filling, Ty.Usize, Res.No_Declaration, Site);
+            Offset_Slot : constant IR.Slot_Id := IR.Add_Slot
+              (Unit.all, Filling, Ty.Usize, Res.No_Declaration, Site);
+            Width_Slot : constant IR.Slot_Id := IR.Add_Slot
+              (Unit.all, Filling, Ty.Usize, Res.No_Declaration, Site);
+            Inspect : constant IR.Block_Id := Fresh (Of_Tree, Node, Scope);
+            Invalid : constant IR.Block_Id := Fresh (Of_Tree, Node, Scope);
+            At_End : constant IR.Block_Id :=
+              (if Allow_End then Fresh (Of_Tree, Node, Scope) else Invalid);
+            Join : constant IR.Block_Id := Fresh (Of_Tree, Node, Scope);
+
+            procedure Store_Width (Value : Ty.Magnitude);
+
+            procedure Store_Width (Value : Ty.Magnitude) is
+            begin
+               IR.Emit_Store
+                 (Unit.all, Filling, Width_Slot,
+                  IR.Emit_Number
+                    (Unit.all, Filling, Ty.Usize, Value, False, Site),
+                  Site);
+               Close_With_Jump (Join, Site);
+            end Store_Width;
+         begin
+            IR.Emit_Store (Unit.all, Filling, Base_Slot, Base, Site);
+            IR.Emit_Store (Unit.all, Filling, Total_Slot, Total, Site);
+            IR.Emit_Store (Unit.all, Filling, Offset_Slot, Offset, Site);
+            IR.Emit_Branch
+              (Unit.all, Filling,
+               IR.Emit_Binary
+                 (Unit.all, Filling, IR.Equal_To, Offset, Total,
+                  Ty.Bool, Site),
+               (if Allow_End then At_End else Invalid), Inspect, Site);
+            IR.Leave_Block (Unit.all, Filling);
+            Current := IR.No_Block;
+
+            if Allow_End then
+               Open (At_End);
+               Store_Width (0);
+            end if;
+
+            Open (Inspect);
+            declare
+               Saved_Base : constant IR.Value_Id := IR.Emit_Load
+                 (Unit.all, Filling, Base_Slot, Site);
+               Saved_Total : constant IR.Value_Id := IR.Emit_Load
+                 (Unit.all, Filling, Total_Slot, Site);
+               Saved_Offset : constant IR.Value_Id := IR.Emit_Load
+                 (Unit.all, Filling, Offset_Slot, Site);
+               Address : constant IR.Value_Id := IR.Emit_Slice_Address
+                 (Unit.all, Filling, Saved_Base, Saved_Total,
+                  Saved_Offset, Saved_Offset, Slice_Shape (Of_Tree, Node),
+                  True, Site);
+               Code_Unit : constant IR.Value_Id := IR.Emit_Load_Indirect
+                 (Unit.all, Filling, Address,
+                  (if View = Ty.Utf8_View then Ty.U8 else Ty.U16), Site);
+            begin
+               if View = Ty.Utf8_View then
+                  declare
+                     Unit_Slot : constant IR.Slot_Id := IR.Add_Slot
+                       (Unit.all, Filling, Ty.U8, Res.No_Declaration, Site);
+                     Non_ASCII : constant IR.Block_Id :=
+                       Fresh (Of_Tree, Node, Scope);
+                     Test_Two : constant IR.Block_Id :=
+                       Fresh (Of_Tree, Node, Scope);
+                     Test_Three : constant IR.Block_Id :=
+                       Fresh (Of_Tree, Node, Scope);
+                     Test_Four : constant IR.Block_Id :=
+                       Fresh (Of_Tree, Node, Scope);
+                     One_Byte : constant IR.Block_Id :=
+                       Fresh (Of_Tree, Node, Scope);
+                     Two_Bytes : constant IR.Block_Id :=
+                       Fresh (Of_Tree, Node, Scope);
+                     Three_Bytes : constant IR.Block_Id :=
+                       Fresh (Of_Tree, Node, Scope);
+                     Four_Bytes : constant IR.Block_Id :=
+                       Fresh (Of_Tree, Node, Scope);
+
+                     function Unit_Is
+                       (Op : IR.Comparison_Kind; Value : Ty.Magnitude)
+                        return IR.Value_Id;
+
+                     function Unit_Is
+                       (Op : IR.Comparison_Kind; Value : Ty.Magnitude)
+                        return IR.Value_Id
+                     is
+                     begin
+                        return IR.Emit_Binary
+                          (Unit.all, Filling, Op,
+                           IR.Emit_Load
+                             (Unit.all, Filling, Unit_Slot, Site),
+                           IR.Emit_Number
+                             (Unit.all, Filling, Ty.U8, Value, False, Site),
+                           Ty.Bool, Site);
+                     end Unit_Is;
+                  begin
+                     IR.Emit_Store
+                       (Unit.all, Filling, Unit_Slot, Code_Unit, Site);
+                     IR.Emit_Branch
+                       (Unit.all, Filling,
+                        Unit_Is (IR.Less_Than, 16#80#),
+                        One_Byte, Non_ASCII, Site);
+                     IR.Leave_Block (Unit.all, Filling);
+                     Current := IR.No_Block;
+
+                     Open (Non_ASCII);
+                     IR.Emit_Branch
+                       (Unit.all, Filling,
+                        Unit_Is (IR.Less_Than, 16#C2#),
+                        Invalid, Test_Two, Site);
+                     IR.Leave_Block (Unit.all, Filling);
+                     Current := IR.No_Block;
+
+                     Open (Test_Two);
+                     IR.Emit_Branch
+                       (Unit.all, Filling,
+                        Unit_Is (IR.Less_Than, 16#E0#),
+                        Two_Bytes, Test_Three, Site);
+                     IR.Leave_Block (Unit.all, Filling);
+                     Current := IR.No_Block;
+
+                     Open (Test_Three);
+                     IR.Emit_Branch
+                       (Unit.all, Filling,
+                        Unit_Is (IR.Less_Than, 16#F0#),
+                        Three_Bytes, Test_Four, Site);
+                     IR.Leave_Block (Unit.all, Filling);
+                     Current := IR.No_Block;
+
+                     Open (Test_Four);
+                     IR.Emit_Branch
+                       (Unit.all, Filling,
+                        Unit_Is (IR.Less_Or_Equal, 16#F4#),
+                        Four_Bytes, Invalid, Site);
+                     IR.Leave_Block (Unit.all, Filling);
+                     Current := IR.No_Block;
+
+                     Open (One_Byte);
+                     Store_Width (1);
+                     Open (Two_Bytes);
+                     Store_Width (2);
+                     Open (Three_Bytes);
+                     Store_Width (3);
+                     Open (Four_Bytes);
+                     Store_Width (4);
+                  end;
+               else
+                  declare
+                     Unit_Slot : constant IR.Slot_Id := IR.Add_Slot
+                       (Unit.all, Filling, Ty.U16, Res.No_Declaration, Site);
+                     Test_High : constant IR.Block_Id :=
+                       Fresh (Of_Tree, Node, Scope);
+                     Test_Low : constant IR.Block_Id :=
+                       Fresh (Of_Tree, Node, Scope);
+                     One_Unit : constant IR.Block_Id :=
+                       Fresh (Of_Tree, Node, Scope);
+                     Two_Units : constant IR.Block_Id :=
+                       Fresh (Of_Tree, Node, Scope);
+
+                     function Unit_Is
+                       (Op : IR.Comparison_Kind; Value : Ty.Magnitude)
+                        return IR.Value_Id;
+
+                     function Unit_Is
+                       (Op : IR.Comparison_Kind; Value : Ty.Magnitude)
+                        return IR.Value_Id
+                     is
+                     begin
+                        return IR.Emit_Binary
+                          (Unit.all, Filling, Op,
+                           IR.Emit_Load
+                             (Unit.all, Filling, Unit_Slot, Site),
+                           IR.Emit_Number
+                             (Unit.all, Filling, Ty.U16, Value, False, Site),
+                           Ty.Bool, Site);
+                     end Unit_Is;
+                  begin
+                     IR.Emit_Store
+                       (Unit.all, Filling, Unit_Slot, Code_Unit, Site);
+                     IR.Emit_Branch
+                       (Unit.all, Filling,
+                        Unit_Is (IR.Less_Than, 16#D800#),
+                        One_Unit, Test_High, Site);
+                     IR.Leave_Block (Unit.all, Filling);
+                     Current := IR.No_Block;
+
+                     Open (Test_High);
+                     IR.Emit_Branch
+                       (Unit.all, Filling,
+                        Unit_Is (IR.Less_Than, 16#DC00#),
+                        Two_Units, Test_Low, Site);
+                     IR.Leave_Block (Unit.all, Filling);
+                     Current := IR.No_Block;
+
+                     Open (Test_Low);
+                     IR.Emit_Branch
+                       (Unit.all, Filling,
+                        Unit_Is (IR.Less_Or_Equal, 16#DFFF#),
+                        Invalid, One_Unit, Site);
+                     IR.Leave_Block (Unit.all, Filling);
+                     Current := IR.No_Block;
+
+                     Open (One_Unit);
+                     Store_Width (1);
+                     Open (Two_Units);
+                     Store_Width (2);
+                  end;
+               end if;
+            end;
+
+            Open (Invalid);
+            declare
+               Saved_Base : constant IR.Value_Id := IR.Emit_Load
+                 (Unit.all, Filling, Base_Slot, Site);
+               Saved_Total : constant IR.Value_Id := IR.Emit_Load
+                 (Unit.all, Filling, Total_Slot, Site);
+               Traps : constant IR.Value_Id := IR.Emit_Slice_Address
+                 (Unit.all, Filling, Saved_Base, Saved_Total,
+                  Saved_Total, Saved_Total, Slice_Shape (Of_Tree, Node),
+                  True, Site);
+            begin
+               pragma Unreferenced (Traps);
+               Store_Width (0);
+            end;
+
+            Open (Join);
+            return IR.Emit_Load (Unit.all, Filling, Width_Slot, Site);
+         end Text_Unit_Width;
 
          procedure Lower_Utf8_Index is
             From : constant Syn.Node_Id := Syn.Target_Of (Of_Tree, Node);
@@ -4671,17 +4916,52 @@ package body Landin.Stages.Lowering is
          then
             declare
                Source : constant Syn.Node_Id := Syn.Target_Of (Of_Tree, Node);
+               Descriptor : constant Landin.Checking.Reference_Descriptor :=
+                 Landin.Checking.Descriptor_Of
+                   (Types.all,
+                    Landin.Checking.Reference_Of (Types.all, Of_Tree, Node));
+               Is_Text : constant Boolean :=
+                 Descriptor.View in Ty.Utf8_View | Ty.Utf16_View;
+               Base_Slot : constant IR.Slot_Id := IR.Add_Slot
+                 (Unit.all, Filling, Ty.Usize, Res.No_Declaration, Site);
+               Total_Slot : constant IR.Slot_Id := IR.Add_Slot
+                 (Unit.all, Filling, Ty.Usize, Res.No_Declaration, Site);
+               Saved_Lower : constant IR.Slot_Id := IR.Add_Slot
+                 (Unit.all, Filling, Ty.Usize, Res.No_Declaration, Site);
+               Saved_Upper : constant IR.Slot_Id := IR.Add_Slot
+                 (Unit.all, Filling, Ty.Usize, Res.No_Declaration, Site);
+               Saved_Address : constant IR.Slot_Id := IR.Add_Slot
+                 (Unit.all, Filling, Ty.Usize, Res.No_Declaration, Site);
                Base : IR.Value_Id;
                Total : IR.Value_Id;
             begin
                if Type_At (Of_Tree, Source) = Ty.Slice_Value then
-                  declare
-                     Parts : constant Slice_Values :=
-                       Lower_Slice (Of_Tree, Source, Scope);
-                  begin
-                     Base := Parts.Base;
-                     Total := Parts.Length;
-                  end;
+                  if Is_Text then
+                     declare
+                        --  D183 retains the complete source carrier before
+                        --  either bound runs.  In particular, an indexed
+                        --  aggregate field that holds text evaluates its
+                        --  own index only once rather than once per word.
+                        Temporary : constant IR.Slot_Id := IR.Add_Array_Slot
+                          (Unit.all, Filling, Ty.Usize, 2,
+                           Res.No_Declaration, Site);
+                     begin
+                        Lower_Slice_Into
+                          (Of_Tree, Source, Scope, Temporary);
+                        Base := IR.Emit_Load_Slot_Field
+                          (Unit.all, Filling, Temporary, 1, Ty.Usize, Site);
+                        Total := IR.Emit_Load_Slot_Field
+                          (Unit.all, Filling, Temporary, 2, Ty.Usize, Site);
+                     end;
+                  else
+                     declare
+                        Parts : constant Slice_Values :=
+                          Lower_Slice (Of_Tree, Source, Scope);
+                     begin
+                        Base := Parts.Base;
+                        Total := Parts.Length;
+                     end;
+                  end if;
                else
                   declare
                      Place : constant Stored_Place :=
@@ -4698,41 +4978,115 @@ package body Landin.Stages.Lowering is
                   end;
                end if;
 
+               IR.Emit_Store (Unit.all, Filling, Base_Slot, Base, Site);
+               IR.Emit_Store (Unit.all, Filling, Total_Slot, Total, Site);
+
                declare
                   Lower_Value : constant IR.Value_Id := Lower_Expression
                     (Of_Tree, Syn.Slice_Lower (Of_Tree, Node), Scope);
-                  Saved_Lower : constant IR.Slot_Id := IR.Add_Slot
-                    (Unit.all, Filling, Ty.Usize, Res.No_Declaration, Site);
                begin
                   IR.Emit_Store
                     (Unit.all, Filling, Saved_Lower, Lower_Value, Site);
                   declare
                      Upper : constant IR.Value_Id := Lower_Expression
                        (Of_Tree, Syn.Slice_Upper (Of_Tree, Node), Scope);
-                     Lower : constant IR.Value_Id := IR.Emit_Load
-                       (Unit.all, Filling, Saved_Lower, Site);
-                     Address : constant IR.Value_Id := IR.Emit_Slice_Address
-                       (Unit.all, Filling, Base, Total, Lower, Upper,
-                        Slice_Shape (Of_Tree, Node),
-                        Syn.Kind (Of_Tree, Node) = Syn.Inclusive_Slice, Site);
-                     Difference : IR.Value_Id := IR.Emit_Binary
-                       (Unit.all, Filling, IR.Subtract, Upper, Lower,
-                        Ty.Usize, Site);
                   begin
-                     if Syn.Kind (Of_Tree, Node) = Syn.Inclusive_Slice then
+                     IR.Emit_Store
+                       (Unit.all, Filling, Saved_Upper, Upper, Site);
+                     declare
+                        Lower : constant IR.Value_Id := IR.Emit_Load
+                          (Unit.all, Filling, Saved_Lower, Site);
+                        Kept_Upper : constant IR.Value_Id := IR.Emit_Load
+                          (Unit.all, Filling, Saved_Upper, Site);
+                        Kept_Base : constant IR.Value_Id := IR.Emit_Load
+                          (Unit.all, Filling, Base_Slot, Site);
+                        Kept_Total : constant IR.Value_Id := IR.Emit_Load
+                          (Unit.all, Filling, Total_Slot, Site);
+                        Address : constant IR.Value_Id :=
+                          IR.Emit_Slice_Address
+                            (Unit.all, Filling, Kept_Base, Kept_Total,
+                             Lower, Kept_Upper, Slice_Shape (Of_Tree, Node),
+                             Syn.Kind (Of_Tree, Node)
+                               = Syn.Inclusive_Slice,
+                             Site);
+                        End_Offset : IR.Value_Id := IR.No_Value;
+                     begin
+                        IR.Emit_Store
+                          (Unit.all, Filling, Saved_Address, Address, Site);
+                        if Is_Text then
+                           declare
+                              Lower_Width : constant IR.Value_Id :=
+                                Text_Unit_Width
+                                  (IR.Emit_Load
+                                     (Unit.all, Filling, Base_Slot, Site),
+                                   IR.Emit_Load
+                                     (Unit.all, Filling, Total_Slot, Site),
+                                   IR.Emit_Load
+                                     (Unit.all, Filling, Saved_Lower, Site),
+                                   Ty.Text_View (Descriptor.View),
+                                   Syn.Kind (Of_Tree, Node)
+                                     = Syn.Half_Open_Slice);
+                              pragma Unreferenced (Lower_Width);
+                              Upper_Width : constant IR.Value_Id :=
+                                Text_Unit_Width
+                                  (IR.Emit_Load
+                                     (Unit.all, Filling, Base_Slot, Site),
+                                   IR.Emit_Load
+                                     (Unit.all, Filling, Total_Slot, Site),
+                                   IR.Emit_Load
+                                     (Unit.all, Filling, Saved_Upper, Site),
+                                   Ty.Text_View (Descriptor.View),
+                                   Syn.Kind (Of_Tree, Node)
+                                     = Syn.Half_Open_Slice);
+                           begin
+                              if Syn.Kind (Of_Tree, Node)
+                                = Syn.Inclusive_Slice
+                              then
+                                 End_Offset := IR.Emit_Binary
+                                   (Unit.all, Filling, IR.Add,
+                                    IR.Emit_Load
+                                      (Unit.all, Filling, Saved_Upper, Site),
+                                    Upper_Width, Ty.Usize, Site);
+                              else
+                                 End_Offset := IR.Emit_Load
+                                   (Unit.all, Filling, Saved_Upper, Site);
+                              end if;
+                           end;
+                        elsif Syn.Kind (Of_Tree, Node)
+                          = Syn.Inclusive_Slice
+                        then
+                           declare
+                              One : constant IR.Value_Id := IR.Emit_Number
+                                (Unit.all, Filling, Ty.Usize, 1, False, Site);
+                           begin
+                              End_Offset := IR.Emit_Binary
+                                (Unit.all, Filling, IR.Add,
+                                 IR.Emit_Load
+                                   (Unit.all, Filling, Saved_Upper, Site), One,
+                                 Ty.Usize, Site);
+                           end;
+                        else
+                           End_Offset := IR.Emit_Load
+                             (Unit.all, Filling, Saved_Upper, Site);
+                        end if;
                         declare
-                           One : constant IR.Value_Id := IR.Emit_Number
-                             (Unit.all, Filling, Ty.Usize, 1, False, Site);
-                        begin
-                           Difference := IR.Emit_Binary
-                             (Unit.all, Filling, IR.Add, Difference, One,
+                           Difference : constant IR.Value_Id := IR.Emit_Binary
+                             (Unit.all, Filling, IR.Subtract,
+                              End_Offset,
+                              IR.Emit_Load
+                                (Unit.all, Filling, Saved_Lower, Site),
                               Ty.Usize, Site);
+                        begin
+                           IR.Emit_Store_Slot_Field
+                             (Unit.all, Filling, Destination, 1,
+                              IR.Emit_Load
+                                (Unit.all, Filling, Saved_Address, Site),
+                              Site);
+                           IR.Emit_Store_Slot_Field
+                             (Unit.all, Filling, Destination, 2, Difference,
+                              Site);
                         end;
-                     end if;
-                     IR.Emit_Store_Slot_Field
-                       (Unit.all, Filling, Destination, 1, Address, Site);
-                     IR.Emit_Store_Slot_Field
-                       (Unit.all, Filling, Destination, 2, Difference, Site);
+                     end;
                   end;
                end;
             end;

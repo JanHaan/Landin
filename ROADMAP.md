@@ -3128,6 +3128,15 @@ positions at the end or off a codepoint boundary trap through the existing
 checked slice-address path. The other text identities, pooling, terminators,
 permissions and errors retain D181's rules, while text slicing and traversal
 remain separate work.
+The next text increment enables range slicing for the exact length-bearing
+`utf8` and `utf16` identities. D183 gives both exact `usize` code-unit bounds,
+requires scalar-boundary endpoints, makes the inclusive form consume the
+complete upper scalar, and preserves the immutable source identity and origin.
+It evaluates and retains the source before evaluating each bound once in
+written order. `cstring` remains unsliceable because it has no length; invalid
+bounds and split encodings trap through checked slice addresses. D181/D182
+validation, pooling, terminators, indexing, errors and ordinary range behavior
+remain unchanged, and traversal remains separate work.
 The seventh increment enables quoted text in a direct read-only
 `[]u8` context, including byte escapes, UTF-8 source validation, an uncounted
 trailing NUL, content-pooled read-only data and static slice relocations.

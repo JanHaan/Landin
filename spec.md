@@ -569,6 +569,13 @@ an address is formed. Neither form derives from a call, because nothing
 selects from one and nothing indexes one either. A call may consume that
 complete selection as its callee, which is how a function-valued field is
 called; the call itself still cannot be selected or indexed.
+D183 extends range selection to the exact `utf8` and `utf16` identities. Both
+bounds are exact `usize` code-unit offsets. They must name scalar boundaries;
+the half-open upper bound may equal the code-unit length, while the inclusive
+upper bound names and includes a complete scalar. The result retains the
+source's immutable text identity and origin. `cstring` has no corresponding
+operation. Source, lower and upper are evaluated once in that order, and an
+invalid ordinary bound or encoded boundary traps.
 An ordinary-struct literal is [0710]'s nonempty run of labelled field values,
 optionally followed by [0720]'s contextual fill. D64--D71 state the contexts
 that admit it. D72's construction and [0980]'s direct named call have one
@@ -8527,6 +8534,7 @@ classified failure boundary before the repository gate can pass.
 | `conversion.float-to-bool` | trap | 0150, 0170, 0180, 0190, 0210, 0240, 0310, 0700, 1880, 1940, 1950, 1960 | explicit conversion from f32 or f64 to bool maps either signed zero to false and exactly positive one to true; L0300 rejects every other known finite or nonfinite value and an equivalent runtime conversion traps | `negative/float-to-bool-known-invalid`, `runtime/float-to-bool-conversions`, `runtime/float-to-bool-invalid-traps` |
 | `text.literal-storage` | static | 0260, 0270, 0280, 0430, 0570, 0600, 1770, 1880, 1900, 1940 | L0301 for a mismatched identity, writable context, byte escape in text or codepoint escape in bytes; L0303 for a write through a read-only view; quoted and raw literals default to `utf8`, decode to validated UTF-8 or UTF-16, preserve canonical view identity and static origin, and share width-keyed read-only storage with one trailing zero element excluded from slice lengths | `negative/cstring-literal-write`, `negative/raw-literal-needs-read-only-slice`, `negative/raw-literal-write`, `negative/text-literal-codepoint-in-byte-context`, `negative/text-literal-needs-byte-slice`, `negative/text-literal-needs-read-only-slice`, `negative/text-literal-write`, `negative/text-view-byte-escape`, `negative/text-view-identities-are-distinct`, `runtime/hosted-text-views`, `runtime/raw-literal-bytes`, `runtime/text-literal-bytes` |
 | `text.indexing` | trap | 0430, 0570, 0600, 0610, 0790, 1050, 1950, 1960 | utf8 indexed by exact u32 scans linearly by codepoint ordinal; exact core/text.position supplies an O(1) byte offset; either returns one codepoint's read-only source-derived []u8, L0301 rejects every other argument or text identity, L0303 rejects mutation, L0316 enforces its declared return source, and an absent ordinal, end position or non-boundary position traps | `negative/utf16-indexing-is-not-utf8-indexing`, `negative/utf8-index-needs-u32-or-position`, `negative/utf8-index-position-identity-is-exact`, `negative/utf8-index-result-is-read-only`, `negative/utf8-index-result-keeps-origin`, `runtime/utf8-indexing`, `runtime/utf8-ordinal-out-of-range-traps`, `runtime/utf8-position-at-end-traps`, `runtime/utf8-position-not-boundary-traps` |
+| `text.slicing` | trap | 0310, 0410, 0430, 0570, 0600, 0790, 1050, 1820, 1950, 1960 | utf8 and utf16 ranges take exact usize code-unit bounds, require scalar-boundary endpoints, preserve the immutable source-derived text identity, include the complete upper scalar for `..`, and evaluate source then bounds once; cstring and other bound types are L0301, mutation is L0303, L0316 enforces the return origin, and an invalid bound or split scalar traps | `negative/cstring-range-slicing-has-no-length`, `negative/text-slice-needs-usize-bounds`, `negative/text-slice-result-is-read-only`, `negative/text-slice-result-keeps-identity`, `negative/text-slice-result-keeps-origin`, `runtime/text-range-slicing`, `runtime/utf16-slice-not-boundary-traps`, `runtime/utf8-slice-lower-not-boundary-traps`, `runtime/utf8-slice-upper-not-boundary-traps` |
 | `arithmetic.known` | static | 0290, 0300, 0390, 1950 | L0300 or L0306 | `negative/compound-assignment-zero-divisor`, `negative/divisor-is-zero`, `negative/literal-above-its-type` |
 | `arithmetic.runtime` | trap | 0290, 0300, 0320, 0390, 1950, 1960 | trap | `runtime/compound-assignment-overflow-traps`, `runtime/checked-overflow-traps`, `runtime/checked-subtraction-traps`, `runtime/checked-multiplication-traps`, `runtime/checked-negation-traps`, `runtime/signed-division-overflow-traps`, `runtime/a-zero-divisor-traps`, `runtime/a-zero-remainder-divisor-traps`, `runtime/negative-left-shift-traps`, `runtime/negative-right-shift-traps` |
 | `arithmetic.total` | static | 0320, 0330, 0340, 0350, 0390 | L0301 for an inapplicable operand; admitted nonnegative shifts and wrapping operations are total | `negative/compound-assignment-float-remainder`, `negative/condition-is-not-believed`, `runtime/compound-assignment`, `runtime/shifts-fill-with-zeros-beyond-the-width` |
@@ -10162,4 +10170,69 @@ indexing. All were declined.
 `negative/utf8-index-result-is-read-only`,
 `negative/utf8-index-result-keeps-origin`, retained hosted-text and
 byte-slice/range fixtures, the generated IR record, and the `text.indexing`
+guarantee row.
+
+### D183 — Text ranges preserve identity at scalar boundaries
+
+**The tour said** that [0570]'s range selection copies no elements, [0600]
+makes `utf8` and `utf16` distinct length-bearing views whose lengths count
+code units, and `cstring` carries no length. D181 kept range selection separate
+so the backing slice did not leak accidentally. It did not say which text
+identities have ranges, which type names their endpoints, how an endpoint
+interacts with a multibyte or surrogate encoding, or what identity, permission
+and origin the result retains.
+
+**Chosen:** the exact `utf8` and `utf16` identities admit `lower..<upper` and
+`lower..upper`; `cstring` does not. Both endpoints are exact `usize` code-unit
+offsets, receiving that context when written as integer literals. A `utf8`
+offset counts bytes and a `utf16` offset counts 16-bit code units. No other
+integer type converts implicitly.
+
+Both endpoints must be Unicode-scalar boundaries. For UTF-8, an in-bounds
+boundary is a shortest-form leading byte, never a continuation byte. For
+UTF-16 it is any non-low-surrogate code unit, including the high surrogate of
+a valid pair. The half-open form requires
+`0 <= lower <= upper <= lenof source`; the length itself is a valid boundary,
+so an empty view at the end is valid. The inclusive form requires
+`0 <= lower <= upper < lenof source`, and includes the whole scalar beginning
+at `upper`: one to four bytes or one to two UTF-16 code units. It never returns
+half a scalar. An invalid ordinary bound or a split-scalar endpoint traps
+synchronously through [1950]/[1960]'s checked-address mechanism and declares
+no atom error.
+
+The result retains the source's exact `utf8` or `utf16` identity, immutable
+permission and complete source-derived origin. Binding mutability cannot make
+it writable, returning it requires the ordinary exact `from source`, and it
+cannot satisfy the other text identity or its ordinary backing-slice type.
+The source expression is evaluated and retained once, then the lower and upper
+expressions are each evaluated once in written order [0410].
+
+Lowering copies the source's base/length carrier into temporary storage before
+either bound, applies the existing ordinary range check, classifies the two
+encoded boundaries with target-neutral scalar comparisons, and emits an
+ordinary base/length result. Inclusive selection advances its physical upper
+end by the selected scalar width. No text opcode, allocation, new datum,
+writable alias or evidence entry is introduced. D181's validation, pooling,
+terminator and literal errors, D182's indexing, and existing ordinary
+slice/range/array/evidence behavior remain unchanged. Collection traversal
+remains separate.
+
+**The alternatives:** expose `[]u8`/`[]u16`, admit `cstring`, use `u32`
+codepoint ordinals, inherit ordinary range behavior without boundary checks,
+make inclusive upper select one physical code unit, or report a declared
+encoding error. Those choices erase the declared view, require a length that
+does not exist, turn constant-time code-unit slicing into scans, construct an
+invalid text value, split a scalar, or make the same checked-address failure
+recoverable only for text. All were declined.
+
+**Pinned by** `runtime/text-range-slicing`,
+`runtime/utf8-slice-lower-not-boundary-traps`,
+`runtime/utf8-slice-upper-not-boundary-traps`,
+`runtime/utf16-slice-not-boundary-traps`,
+`negative/cstring-range-slicing-has-no-length`,
+`negative/text-slice-needs-usize-bounds`,
+`negative/text-slice-result-keeps-identity`,
+`negative/text-slice-result-is-read-only`,
+`negative/text-slice-result-keeps-origin`, retained D181/D182 and ordinary
+slice/range fixtures, the generated IR record, and the `text.slicing`
 guarantee row.
