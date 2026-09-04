@@ -305,6 +305,12 @@ package Landin.Types is
       Result     : out Folded;
       Overflowed : out Boolean);
 
+   procedure Convert_Float_To_Bool
+     (Bits       : Magnitude;
+      From       : Float_Name;
+      Result     : out Folded;
+      Overflowed : out Boolean);
+
    --  [0240]'s two type-qualified IEEE values.  A quiet NaN has one
    --  canonical payload in each enabled width; unary minus below changes
    --  only its sign bit.

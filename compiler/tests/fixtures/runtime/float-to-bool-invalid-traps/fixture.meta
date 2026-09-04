@@ -1,0 +1,6 @@
+class: runtime
+summary: a dynamic float-to-bool conversion traps unless its value is signed zero or positive one
+constructs: 0150, 0170, 0180, 0190, 0210, 0240, 0310, 0700, 1950, 1960
+program: main.ldn
+traps: yes
+targets: linux-x86-64
