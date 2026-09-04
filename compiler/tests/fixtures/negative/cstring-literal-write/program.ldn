@@ -1,0 +1,4 @@
+bad: () -> none =
+    text: cstring = "landin"
+    text.val = 76
+end bad

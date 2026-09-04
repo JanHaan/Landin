@@ -135,6 +135,21 @@ package Landin.Types is
             when F64   => "f64",
             when Bool  => "bool");
 
+   --  [0600]'s three built-in text identities are views rather than scalar
+   --  storage.  Their pointer/slice carriers live in Checking's reference
+   --  descriptors; keeping the identity here prevents either the carrier or
+   --  a backend width from becoming the language type.
+   type Reference_View is
+     (Ordinary_View, Utf8_View, Utf16_View, C_String_View);
+
+   subtype Text_View is Reference_View range Utf8_View .. C_String_View;
+
+   function Spelling (Item : Text_View) return String
+     is (case Item is
+            when Utf8_View     => "utf8",
+            when Utf16_View    => "utf16",
+            when C_String_View => "cstring");
+
    --  [0200]: with no context, an integer literal defaults to i32.  Named
    --  rather than written at each site, because it is one decision of the
    --  tour's and a checker applies it in five places.

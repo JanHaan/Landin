@@ -1,5 +1,7 @@
 package body Landin.Checking is
 
+   use type Landin.Types.Reference_View;
+
    package body Nominal_Identities is
       function None return Id is (0);
 
@@ -1023,7 +1025,28 @@ package body Landin.Checking is
              (Spellings, Landin.Types.Spelling (Item));
       end loop;
 
+      for Item in Landin.Types.Text_View loop
+         Into.Texts (Item) :=
+           Landin.Source.Names.Intern
+             (Spellings, Landin.Types.Spelling (Item));
+      end loop;
+
       Into.Ready := True;
+      for View in Landin.Types.Text_View loop
+         Into.Text_References (View) :=
+           Add_Reference
+             (Into,
+              (Kind =>
+                 (if View = Landin.Types.C_String_View
+                  then Landin.Types.Pointer_Value
+                  else Landin.Types.Slice_Value),
+               View => View,
+               Mutable => False,
+               Referent =>
+                 (if View = Landin.Types.Utf16_View
+                  then Landin.Types.U16 else Landin.Types.U8),
+               others => <>));
+      end loop;
    end Prepare;
 
    ------------------------------------------------------------------
@@ -1041,6 +1064,31 @@ package body Landin.Checking is
 
       return Landin.Types.Ill_Typed;
    end Named;
+
+   function Is_Text_Name
+     (Of_Table : Table; Id : Landin.Source.Names.Name_Id) return Boolean
+   is
+   begin
+      for Item in Landin.Types.Text_View loop
+         if Of_Table.Texts (Item) = Id then
+            return True;
+         end if;
+      end loop;
+      return False;
+   end Is_Text_Name;
+
+   function Named_Text_View
+     (Of_Table : Table; Id : Landin.Source.Names.Name_Id)
+      return Landin.Types.Text_View
+   is
+   begin
+      for Item in Landin.Types.Text_View loop
+         if Of_Table.Texts (Item) = Id then
+            return Item;
+         end if;
+      end loop;
+      raise Landin.Compiler_Defect with "a non-text name reached text lookup";
+   end Named_Text_View;
 
    ------------------------------------------------------------------
    --  What a node has
@@ -1487,6 +1535,10 @@ package body Landin.Checking is
      (Of_Table : Table; Id : Reference_Id) return Reference_Descriptor
      is (Of_Table.References (Positive (Id)));
 
+   function Text_Reference_Of
+     (Of_Table : Table; View : Landin.Types.Text_View) return Reference_Id
+     is (Of_Table.Text_References (View));
+
    function Referents_Agree
      (Of_Table : Table; Left, Right : Reference_Descriptor) return Boolean;
 
@@ -1537,6 +1589,7 @@ package body Landin.Checking is
       B : constant Reference_Descriptor := Descriptor_Of (Of_Table, Right);
    begin
       return A.Kind = B.Kind
+        and then A.View = B.View
         and then A.Mutable = B.Mutable
         and then Referents_Agree (Of_Table, A, B);
    end References_Agree;
@@ -1548,6 +1601,7 @@ package body Landin.Checking is
       E : constant Reference_Descriptor := Descriptor_Of (Of_Table, Expected);
    begin
       return A.Kind = E.Kind
+        and then A.View = E.View
         and then (A.Mutable = E.Mutable or else not E.Mutable)
         and then Referents_Agree (Of_Table, A, E);
    end Reference_Satisfies;

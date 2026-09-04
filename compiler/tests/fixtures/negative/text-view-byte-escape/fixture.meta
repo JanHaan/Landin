@@ -1,0 +1,6 @@
+class: negative
+summary: a byte escape cannot initialize a scalar-encoded hosted text view
+constructs: 0260, 0270, 0600
+program: program.ldn
+codes: L0301
+targets: linux-x86-64, macos-arm64

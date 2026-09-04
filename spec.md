@@ -131,7 +131,7 @@ keyword     ::= "addr" | "alignof" | "and" | "any" | "atom" | "dec" | "else"
 
 ```
 
-### [1770] The kernel's literals include characters, floats and byte text
+### [1770] The kernel's literals include characters, floats and text
 
 The kernel's literals are integers, floats, characters, quoted text,
 the two booleans, and contextual `zeroed`.
@@ -148,9 +148,10 @@ where no enabled construct supplies that context. D161 admits [0260]'s quoted
 literal when its direct context is a read-only `[]u8`; the unescaped source
 content is UTF-8 [1750], and [0270]'s byte escapes are decoded into that view.
 Raw text [0280] takes the same direct byte-slice context by D164, but interprets
-no escape and removes a line-leading closing delimiter's indentation.
-With no context it still defaults to the not-yet-enabled `utf8`, and `utf8`,
-`utf16`, `cstring` and text codepoint escapes remain R4.10 work. D162 admits
+no escape and removes a line-leading closing delimiter's indentation. D181
+adds `utf8`, `utf16` and `cstring` contexts and makes `utf8` the contextless
+default. A scalar escape is encoded as UTF-8 or UTF-16 for those views; a byte
+escape remains exclusive to `[]u8`. D162 admits
 [0210]'s decimal float with [0220]'s optional exponent. D166 adds [0230]'s
 hexadecimal fraction and required binary exponent. D167 admits [0240]'s
 type-qualified `infinity` and `nan` values for f32 and f64. D163 admits
@@ -253,7 +254,7 @@ template and normalized actual tuple, then checks the substituted field shape.
 binding       ::= "mut"? identifier ":" type ("=" expression)?
                 | "mut"? identifier ":=" expression
 type          ::= function_type | array_type | pointer_type | slice_type
-                | any_type | type_application | scalar_name
+                | any_type | type_application | scalar_name | text_name
                 | declaration_reference
 function_type ::= signature
 array_type    ::= "[" expression "]" type
@@ -266,6 +267,7 @@ type_argument ::= type | integer
 scalar_name   ::= "u8" | "u16" | "u32" | "u64"
                 | "i8" | "i16" | "i32" | "i64"
                 | "usize" | "isize" | "f32" | "f64" | "bool"
+text_name     ::= "utf8" | "utf16" | "cstring"
 
 ```
 
@@ -711,7 +713,7 @@ runtime or type value and is likewise refused.
 ### [1870] The kernel's types, and what each of them holds
 
 The kernel's types, and what each of them holds.
-[1790] gives the kernel thirteen spellings and nothing that
+[1790] gives the kernel scalar and text spellings and nothing that
 says what one of them holds, so nothing yet says whether a
 u8 may be given 300. [0150] puts the width in the name,
 [0160] takes usize and isize from the machine and [0180]
@@ -726,6 +728,9 @@ gives bool its two values; written out, that is:
 | `bool` | false and true [0180] |
 | `ptr T`, `ptr mut T` | one non-null target address, with tracked origin unless constructed from an integer [0430] [0470] |
 | `[]T`, `[]mut T` | one non-null aligned base and a `usize` length [0570] [0580] |
+| `utf8` | a distinct immutable `[]u8` view of validated shortest-form UTF-8; its length counts bytes [0600] |
+| `utf16` | a distinct immutable `[]u16` view of valid UTF-16; its length counts code units [0600] |
+| `cstring` | a distinct immutable `ptr u8` view of validated UTF-8 followed by NUL, with no length [0600] |
 | an atom union | exactly the declaration identities in its flattened set [0630] [0640] |
 
 Two's complement is not a new decision. [0300]'s wrapping
@@ -791,9 +796,10 @@ And two give none: the inferred form [0050] and a discard [1020], where
 [0250]'s character literal is different: it already has type `u32`, so a
 surrounding context must agree and an inferred binding keeps `u32`.
 For [0260]'s text literal, those same direct positions may instead supply a
-complete text view. D161 and D164 currently admit quoted and raw literals only
-as `[]u8`; with no supplied context either defaults to `utf8` and is refused
-by [1830].
+complete text view. D161 and D164 admit quoted and raw literals as `[]u8`;
+D181 admits `utf8`, `utf16` and `cstring`, and with no supplied context either
+literal defaults to `utf8`. These identities remain distinct in a generic
+actual and in every reference-bearing signature or aggregate field.
 For [0210]'s float literal, the same positions supply f32 or f64. There is no
 implicit conversion from an integer literal or integer value; with no context
 the float defaults to f32. The decimal spelling rounds once to the contextual
@@ -1055,9 +1061,10 @@ module struct image copies that relocation while retaining distinct storage.
 A module aggregate whose active all-zero shape contains a function field must
 therefore write an explicit static image too.
 
-A contextual `[]u8` text literal is also known: its module image is the base
-of D161's read-only byte datum and its decoded length. The datum's trailing NUL
-is present in storage but excluded from that length; it is an address
+A contextual text literal is also known. A `[]u8`, `utf8` or `utf16` module
+image is the base of its read-only datum and its decoded code-unit length; a
+`cstring` image is the base relocation alone. Each datum has exactly one
+trailing zero element excluded from a slice length. It is an address
 relocation rather than an integer fold or code run before the entry point.
 
 An atom-valued module binding must name an initializer. There is no zero atom,
@@ -8518,7 +8525,7 @@ classified failure boundary before the repository gate can pass.
 | `conversion.bool-to-float` | static | 0170, 0180, 0190, 0210, 0310, 0700, 1880, 1940, 1960 | explicit conversion from bool to f32 or f64 maps false to positive zero and true to exactly positive one; both values are exact in either enabled destination | `runtime/bool-to-float-conversions` |
 | `conversion.integer-to-bool` | trap | 0150, 0180, 0190, 0200, 0310, 0700, 1880, 1940, 1950, 1960 | explicit conversion from every enabled integer to bool maps zero to false and one to true; L0300 rejects every other known value and an equivalent runtime conversion traps | `negative/integer-to-bool-known-out-of-range`, `runtime/integer-to-bool-conversions`, `runtime/integer-to-bool-out-of-range-traps` |
 | `conversion.float-to-bool` | trap | 0150, 0170, 0180, 0190, 0210, 0240, 0310, 0700, 1880, 1940, 1950, 1960 | explicit conversion from f32 or f64 to bool maps either signed zero to false and exactly positive one to true; L0300 rejects every other known finite or nonfinite value and an equivalent runtime conversion traps | `negative/float-to-bool-known-invalid`, `runtime/float-to-bool-conversions`, `runtime/float-to-bool-invalid-traps` |
-| `text.literal-storage` | static | 0260, 0270, 0280, 0570, 1770, 1880, 1900, 1940 | L0301 for a non-byte, writable or codepoint context; L0303 for a write through its read-only view; L0304 for the default deferred `utf8`; equal decoded quoted or raw contents share read-only storage with one trailing NUL excluded from the slice length | `negative/raw-literal-needs-byte-slice`, `negative/raw-literal-needs-read-only-slice`, `negative/raw-literal-write`, `negative/text-literal-codepoint-in-byte-context`, `negative/text-literal-needs-byte-slice`, `negative/text-literal-needs-read-only-slice`, `negative/text-literal-not-enabled`, `negative/text-literal-write`, `runtime/raw-literal-bytes`, `runtime/text-literal-bytes` |
+| `text.literal-storage` | static | 0260, 0270, 0280, 0430, 0570, 0600, 0610, 1770, 1880, 1900, 1940 | L0301 for a mismatched identity, writable context, byte escape in text or codepoint escape in bytes; L0303 for a write through a read-only view; L0304 keeps text indexing separate; quoted and raw literals default to `utf8`, decode to validated UTF-8 or UTF-16, preserve canonical view identity and static origin, and share width-keyed read-only storage with one trailing zero element excluded from slice lengths | `negative/cstring-literal-write`, `negative/raw-literal-needs-read-only-slice`, `negative/raw-literal-write`, `negative/text-literal-codepoint-in-byte-context`, `negative/text-literal-needs-byte-slice`, `negative/text-literal-needs-read-only-slice`, `negative/text-literal-write`, `negative/text-view-byte-escape`, `negative/text-view-identities-are-distinct`, `negative/text-view-indexing-deferred`, `runtime/hosted-text-views`, `runtime/raw-literal-bytes`, `runtime/text-literal-bytes` |
 | `arithmetic.known` | static | 0290, 0300, 0390, 1950 | L0300 or L0306 | `negative/compound-assignment-zero-divisor`, `negative/divisor-is-zero`, `negative/literal-above-its-type` |
 | `arithmetic.runtime` | trap | 0290, 0300, 0320, 0390, 1950, 1960 | trap | `runtime/compound-assignment-overflow-traps`, `runtime/checked-overflow-traps`, `runtime/checked-subtraction-traps`, `runtime/checked-multiplication-traps`, `runtime/checked-negation-traps`, `runtime/signed-division-overflow-traps`, `runtime/a-zero-divisor-traps`, `runtime/a-zero-remainder-divisor-traps`, `runtime/negative-left-shift-traps`, `runtime/negative-right-shift-traps` |
 | `arithmetic.total` | static | 0320, 0330, 0340, 0350, 0390 | L0301 for an inapplicable operand; admitted nonnegative shifts and wrapping operations are total | `negative/compound-assignment-float-remainder`, `negative/condition-is-not-believed`, `runtime/compound-assignment`, `runtime/shifts-fill-with-zeros-beyond-the-width` |
@@ -9185,7 +9192,8 @@ shortest-form UTF-8; `\n`, `\r`, `\t`, `\e`, `\\`, `\"`, `\'` and `\xNN` decode
 to bytes, including an arbitrary byte from `\xNN`. A well-formed `\u{...}` is
 text rather than bytes and is L0301 in this context. A literal with no context
 still defaults to the deferred `utf8` and is L0304; `utf8`, `utf16`, `cstring`
-and their codepoint representation remain later R4.10 work.
+and their codepoint representation remain later R4.10 work at this decision.
+D181 supplies them.
 
 Malformed UTF-8 source content or an unknown, incomplete or nonscalar escape
 is lexical L0320 at the offending run. The scanner first retains the complete
@@ -9220,7 +9228,7 @@ permit two compiler stages to disagree about the bytes. All were declined.
 `negative/text-literal-malformed-codepoint-escape`,
 `negative/text-literal-needs-byte-slice`,
 `negative/text-literal-needs-read-only-slice`,
-`negative/text-literal-not-enabled`, `negative/text-literal-short-byte-escape`,
+`negative/text-literal-short-byte-escape`,
 `negative/text-literal-unknown-escape`, `negative/text-literal-write`, the
 lexer and backend cases, and the `source.lexical` and `text.literal-storage`
 guarantee rows.
@@ -9328,8 +9336,9 @@ later run of at least `N` quotes closes the token, consumes exactly `N`, and
 leaves any additional quotes for following tokens. Runs shorter than `N` are
 content. Backslashes and [0270]'s apparent escapes are ordinary bytes. Raw
 source content must remain shortest-form UTF-8, and the view carries the same
-uncounted trailing NUL as quoted text. With no direct byte-slice context the
-literal defaults to the still-deferred `utf8` type.
+uncounted trailing NUL as quoted text. At this decision a literal without a
+direct byte-slice context defaults to the then-deferred `utf8`; D181 later
+enables that default.
 
 A closer is line-leading when an earlier line ending is followed only by
 spaces or tabs before it. That exact byte prefix is removed at the start of
@@ -9354,7 +9363,6 @@ were declined.
 
 **Pinned by** `runtime/raw-literal-bytes`,
 `negative/raw-literal-inconsistent-indentation`,
-`negative/raw-literal-needs-byte-slice`,
 `negative/raw-literal-needs-read-only-slice`,
 `negative/raw-literal-write`, `negative/unterminated-raw-literal`, the raw
 decoder and lexer cases, and the `source.lexical` and `text.literal-storage`
@@ -10035,3 +10043,65 @@ All were declined.
 `negative/for-iterable-item-read-only`,
 `negative/for-iterable-missing-conformance`, retained range and collection
 runtime fixtures, and the `control.loops` guarantee row.
+
+### D181 — Hosted text views retain identity over pooled encoded storage
+
+**The tour said** that [0600]'s `utf8`, `utf16` and `cstring` are distinct
+views over `[]u8`, `[]u16` and `ptr u8`; that [0260]'s quoted and [0280]'s raw
+literals take one of those contexts and default to `utf8`; and that [0270]
+separates byte escapes from Unicode scalar escapes. D161/D164 had enabled only
+the direct `[]u8` contexts. The tour did not settle whether representation
+identity could leak through structural generics, whether the terminator was a
+byte or an element, or how static pointer images name pooled data.
+
+**Chosen:** the next R4.10 text increment admits quoted and raw literals in
+direct `utf8`, `utf16` and `cstring` contexts and makes contextless literals
+`utf8`. Each is a canonical immutable reference identity distinct from the
+other two and from its backing pointer or slice type. That identity is carried
+by parameters, results, struct fields, control joins, exact generic actuals and
+evidence descriptors. Binding mutability remains separate and cannot grant
+write permission through a text view. Literal storage has static origin, so a
+literal may be returned without inventing a parameter-derived origin.
+
+Unescaped source is validated as shortest-form UTF-8. In a text context,
+`\u{...}` must name one Unicode scalar value and is encoded as shortest-form
+UTF-8 for `utf8` and `cstring`, or as one UTF-16 code unit or surrogate pair
+for `utf16`. The simple [0270] escapes denote the corresponding scalar values.
+`\xNN` remains exclusive to D161's byte-slice context, and `\u{...}` remains
+excluded from it. Raw content has no escapes: after D164's indentation rule,
+its validated UTF-8 scalars are retained for `utf8`/`cstring` or transcoded to
+UTF-16. Malformed source and escape spelling retain L0320/L0323; a valid
+escape used in the wrong context is L0301.
+
+Lowering pools decoded content by element width. Equal UTF-8 byte sequences
+may therefore share one `u8` datum across `[]u8`, `utf8` and `cstring`, while a
+UTF-16 sequence names a separate `u16` datum. Exactly one zero element follows
+every datum. A slice image excludes it from its code-unit length; `cstring`
+carries only the base address. Module and aggregate images hold verified data
+relocations, including cstring fields, and the Linux backend emits every pool
+entry in read-only storage. No runtime initialization or text-specific opcode
+is introduced.
+
+This decision does not inherit operations from a representation. `lenof`
+continues to expose the existing slice length for `utf8` and `utf16`, but
+integer or position indexing remains [0610]'s separate R4.10 work. Range
+slicing and collection traversal likewise require their own text operation or
+evidence instead of treating a hosted view as an ordinary slice. Existing
+byte-slice literals, ranges, arrays, origins and evidence behavior are
+unchanged.
+
+**The alternatives:** erase each view to its backing reference, give each
+occurrence distinct storage, count the terminator, store a cstring as a slice,
+accept byte escapes as Unicode scalars, or enable integer indexing with the
+representation. Those choices lose declared identity, duplicate read-only
+data, contradict [0260]'s length and C boundary, admit invalid text, or decide
+[0610]'s linear codepoint semantics without its own evidence. All were
+declined.
+
+**Pinned by** `runtime/hosted-text-views`, retained byte-literal runtime
+fixtures, `negative/cstring-literal-write`,
+`negative/text-literal-codepoint-in-byte-context`,
+`negative/text-view-byte-escape`,
+`negative/text-view-identities-are-distinct`,
+`negative/text-view-indexing-deferred`, the decoder, IR verifier and backend
+cases, and the `source.lexical` and `text.literal-storage` guarantee rows.

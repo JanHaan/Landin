@@ -1,6 +1,0 @@
-class: negative
-summary: [0600] names the three text views and [1790]'s types omit them, so the checker refuses one by name
-constructs: 0600, 1790, 1830
-program: program.ldn
-codes: L0304
-targets: linux-x86-64, macos-arm64

@@ -27,6 +27,7 @@ package body Landin.Tests.Lexer_Suite is
    use type Landin.Tokens.Integer_Base;
    use type Landin.Tokens.Token_Index;
    use type Landin.Tokens.Fault_Kind;
+   use type Landin.Tokens.Text.Code_Unit;
    use type Landin.Tokens.Text.Problem;
 
    LF : constant Character := Character'Val (10);
@@ -326,9 +327,9 @@ package body Landin.Tests.Lexer_Suite is
       end;
    end Literals_And_Refusals;
 
-   --  D161 keeps escape decoding shared by checking and lowering.  Exercise
-   --  the byte result and the failures that source text cannot conveniently
-   --  carry as an invalid UTF-8 file in the repository.
+   --  D161/D181 keep escape decoding shared by checking and lowering.
+   --  Exercise byte, UTF-8 and UTF-16 results, including failures that
+   --  source text cannot conveniently carry as an invalid UTF-8 file.
    procedure Text_Literal_Decoding
      (Item : in out Landin.Testing.Context);
 
@@ -339,6 +340,7 @@ package body Landin.Tests.Lexer_Suite is
       Length : Natural;
       Fault : Landin.Tokens.Text.Problem;
       First, Last : Natural;
+      Units : Landin.Tokens.Text.Code_Unit_Array (1 .. 32);
 
       procedure Decode (Lexeme : String);
 
@@ -378,6 +380,47 @@ package body Landin.Tests.Lexer_Suite is
         (Item,
          Fault = Landin.Tokens.Text.Malformed_Codepoint_Escape,
          "an empty codepoint escape is malformed");
+
+      Landin.Tokens.Text.Decode_View
+        ("""\u{1f600}""", False, Landin.Tokens.Text.UTF8_Units,
+         Units, Length, Fault, First, Last);
+      Landin.Testing.Check
+        (Item,
+         Fault = Landin.Tokens.Text.Well_Formed
+           and then Length = 4
+           and then Units (1) = 16#F0#
+           and then Units (2) = 16#9F#
+           and then Units (3) = 16#98#
+           and then Units (4) = 16#80#,
+         "a scalar escape is encoded as shortest-form UTF-8");
+
+      Landin.Tokens.Text.Decode_View
+        ("""A\u{2603}\u{1f600}""", False,
+         Landin.Tokens.Text.UTF16_Units,
+         Units, Length, Fault, First, Last);
+      Landin.Testing.Check
+        (Item,
+         Fault = Landin.Tokens.Text.Well_Formed
+           and then Length = 4
+           and then Units (1) = Character'Pos ('A')
+           and then Units (2) = 16#2603#
+           and then Units (3) = 16#D83D#
+           and then Units (4) = 16#DE00#,
+         "UTF-16 uses code units and a surrogate pair for a large scalar");
+
+      Landin.Tokens.Text.Decode_View
+        ("""\x41""", False, Landin.Tokens.Text.UTF8_Units,
+         Units, Length, Fault, First, Last);
+      Landin.Testing.Check
+        (Item, Fault = Landin.Tokens.Text.Byte_Where_Text_Is_Meant,
+         "a byte escape is not a Unicode scalar in a text context");
+
+      Landin.Tokens.Text.Decode_View
+        ("""\u{41}""", False, Landin.Tokens.Text.Byte_Units,
+         Units, Length, Fault, First, Last);
+      Landin.Testing.Check
+        (Item, Fault = Landin.Tokens.Text.Codepoint_Where_Bytes_Are_Meant,
+         "a scalar escape is not accepted in a byte context");
    end Text_Literal_Decoding;
 
    --  D163 uses the same decoder in lexing, checking and lowering.  Hold
