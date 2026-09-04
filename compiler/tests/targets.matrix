@@ -866,6 +866,7 @@ runtime/module-array-literal-holds-its-image | linux-x86-64
 runtime/module-array-literal-infers-static-image | linux-x86-64
 runtime/module-array-zeroed-reads-zero | linux-x86-64
 runtime/module-float-arithmetic | linux-x86-64
+runtime/module-known-short-circuit-bools | linux-x86-64
 runtime/module-mixed-array-repetition-holds-hybrid | linux-x86-64
 runtime/module-scalar-zeroed-reads-zero | linux-x86-64
 runtime/module-struct-initializers-copy-images | linux-x86-64

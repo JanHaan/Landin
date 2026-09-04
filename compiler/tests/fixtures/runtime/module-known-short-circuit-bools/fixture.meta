@@ -1,0 +1,6 @@
+class: runtime
+summary: module-known not, and and or fold into scalar and aggregate bool images without initializer CFG
+constructs: 0130, 0180, 0340, 0350, 0410, 0520, 0670, 1460, 1740, 1890, 1940
+program: main.ldn
+status: 42
+targets: linux-x86-64

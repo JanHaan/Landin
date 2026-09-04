@@ -635,9 +635,9 @@ package body Landin.Tests.Lowering_Suite is
       end;
    end A_Module_Value_Becomes_A_Datum;
 
-   --  D39 lowers contextual scalar `zeroed` through D10's existing scalar
-   --  zero operations, so no new IR value form or runtime initialization is
-   --  introduced.  The alias has already settled to its scalar here.
+   --  D39 lowers contextual scalar `zeroed` through D10's existing zero
+   --  representation.  D177 records the bool directly as a static image;
+   --  the integer keeps its existing scalar IR fold.
    procedure A_Zeroed_Module_Scalar_Reuses_The_Zero_IR
      (Item : in out Landin.Testing.Context);
 
@@ -667,9 +667,11 @@ package body Landin.Tests.Lowering_Suite is
                   and then IR.Number_Of (Unit, 1, 1) = 0,
             "the integer initializer is D10's zero number");
          Landin.Testing.Check
-           (Item, IR.Op_Of (Unit, 2, 1) = IR.Truth
-                  and then not IR.Truth_Of (Unit, 2, 1),
-            "the bool initializer is D10's false truth");
+           (Item, IR.Has_Bool_Image (Unit, 2)
+                  and then IR.Bool_Image (Unit, 2) = 0
+                  and then IR.Value_Count (Unit, 2) = 1
+                  and then IR.Op_Of (Unit, 2, 1) = IR.Leave,
+            "the bool initializer is D10's false static image");
          Check_Terminators (Item, Unit, "two zeroed scalar datums");
       end;
    end A_Zeroed_Module_Scalar_Reuses_The_Zero_IR;
@@ -2886,24 +2888,38 @@ package body Landin.Tests.Lowering_Suite is
 
    ------------------------------------------------------------------
 
-   procedure A_Logical_Module_Value_Becomes_Blocks
+   procedure Module_Bools_Become_Static_Images
      (Item : in out Landin.Testing.Context);
 
-   procedure A_Logical_Module_Value_Becomes_Blocks
+   procedure Module_Bools_Become_Static_Images
      (Item : in out Landin.Testing.Context)
    is
       Work : Landin.Stages.Compilation :=
         Landin.Stages.Create (Landin.Targets.Linux_X86_64);
       Ran  : Natural;
    begin
-      --  [1940] admits an operator of [1820] over literals, and [0410]
-      --  makes the logical words short-circuit, so a module value can
-      --  contain the one construct Landin.IR has no opcode for.  It gets
-      --  the same blocks a body would: the alternative was a second
-      --  constant folder beside the checker's, over the whole operator
-      --  set including the widths, and two authorities on one question is
-      --  what this compiler refuses everywhere else.
-      Lower (Work, "k: bool = true and false" & LF, Ran);
+      --  [1940] admits every [1820] operator over module-known values, D24
+      --  already folds the logical words into aggregate images, and [0410]
+      --  makes `and` and `or` short-circuit.  D177 gives scalar bool datums
+      --  that same static-image path: no initializer runs and routine CFG
+      --  cannot escape into data emission.
+      Lower
+        (Work,
+         "sample: type = struct" & LF
+         & "    first: bool" & LF
+         & "    second: bool" & LF
+         & "end sample" & LF
+         & "forward: bool = later and true" & LF
+         & "chain: bool = forward" & LF
+         & "literal: bool = not false" & LF
+         & "comparison: bool = 3 < 4" & LF
+         & "later: bool = false or true" & LF
+         & "values: [6]bool = [not true, true and false," & LF
+         & "    false or true, chain and comparison, 7 == 7, 9 < 2]" & LF
+         & "record: sample = sample(" & LF
+         & "    first: not chain," & LF
+         & "    second: forward and comparison)" & LF,
+         Ran);
 
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work), "the program is accepted");
@@ -2912,22 +2928,51 @@ package body Landin.Tests.Lowering_Suite is
          Unit : IR.Unit renames Landin.Stages.Code (Work).all;
          Branches : Natural := 0;
       begin
-         Landin.Testing.Check
-           (Item, IR.Block_Count (Unit, 1) = 3,
-            "the short circuit gave the datum its blocks");
+         for Datum in IR.Item_Id range 1 .. 5 loop
+            Landin.Testing.Check
+              (Item,
+               IR.Has_Bool_Image (Unit, Datum)
+               and then IR.Bool_Image (Unit, Datum) = 1
+               and then IR.Block_Count (Unit, Datum) = 1
+               and then IR.Value_Count (Unit, Datum) = 1
+               and then IR.Op_Of (Unit, Datum, 1) = IR.Leave,
+               "each scalar bool is one true static image without code");
+         end loop;
 
-         for V in 1 .. IR.Value_Count (Unit, 1) loop
-            if IR.Op_Of (Unit, 1, IR.Value_Id (V)) = IR.Branch then
-               Branches := Branches + 1;
-            end if;
+         for Datum in IR.Item_Id range 1 .. IR.Item_Id
+           (IR.Item_Count (Unit))
+         loop
+            for V in 1 .. IR.Value_Count (Unit, Datum) loop
+               if IR.Op_Of (Unit, Datum, IR.Value_Id (V)) = IR.Branch then
+                  Branches := Branches + 1;
+               end if;
+            end loop;
          end loop;
 
          Landin.Testing.Check_Equal
-           (Item, Branches, 1, "one branch");
+           (Item, Branches, 0, "no datum carries a CFG branch");
 
-         Check_Terminators (Item, Unit, "a logical module value");
+         Landin.Testing.Check
+           (Item,
+            IR.Has_Image (Unit, 6)
+            and then IR.Nth_Image (Unit, 6, 1) = 0
+            and then IR.Nth_Image (Unit, 6, 2) = 0
+            and then IR.Nth_Image (Unit, 6, 3) = 1
+            and then IR.Nth_Image (Unit, 6, 4) = 1
+            and then IR.Nth_Image (Unit, 6, 5) = 1
+            and then IR.Nth_Image (Unit, 6, 6) = 0,
+            "array leaves fold not, and, or, names and comparisons");
+
+         Landin.Testing.Check
+           (Item,
+            IR.Has_Image (Unit, 7)
+            and then IR.Nth_Field_Image (Unit, 7, 1) = 0
+            and then IR.Nth_Field_Image (Unit, 7, 2) = 1,
+            "struct leaves use the same module bool fold");
+
+         Check_Terminators (Item, Unit, "module bool images");
       end;
-   end A_Logical_Module_Value_Becomes_Blocks;
+   end Module_Bools_Become_Static_Images;
 
    ------------------------------------------------------------------
    --  A computed destination is evaluated in source order
@@ -6164,8 +6209,8 @@ package body Landin.Tests.Lowering_Suite is
         (Into, "lowering", "nominal identity maps through public IR",
          Nominal_Identity_Maps_Through_The_Public_IR_Seam'Access);
       Landin.Testing.Register
-        (Into, "lowering", "a logical module value becomes blocks",
-         A_Logical_Module_Value_Becomes_Blocks'Access);
+        (Into, "lowering", "module bools become static images",
+         Module_Bools_Become_Static_Images'Access);
       Landin.Testing.Register
         (Into, "lowering", "a struct state carries its fields",
          A_Struct_State_Carries_Its_Fields'Access);
