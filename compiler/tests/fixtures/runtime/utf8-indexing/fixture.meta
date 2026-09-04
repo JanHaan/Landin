@@ -1,0 +1,7 @@
+class: runtime
+summary: utf8 indexing selects linear codepoint ordinals or constant-time opaque byte positions and returns read-only source-derived bytes
+constructs: 0260, 0270, 0430, 0570, 0600, 0610, 0790, 1050, 1290, 1410, 1420, 1800, 1810, 1820, 1950, 1960
+program: main.ldn
+root: ../../../../..
+status: 42
+targets: linux-x86-64

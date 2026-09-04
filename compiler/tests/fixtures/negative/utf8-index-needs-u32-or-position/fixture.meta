@@ -1,0 +1,6 @@
+class: negative
+summary: utf8 indexing accepts u32 ordinals or core/text.position and no implicit integer conversion
+constructs: 0600, 0610, 1050
+program: program.ldn
+codes: L0301
+targets: linux-x86-64, macos-arm64

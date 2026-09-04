@@ -1,0 +1,7 @@
+class: runtime
+summary: a utf8 position at the excluded byte end traps instead of exposing the terminator
+constructs: 0260, 0270, 0570, 0600, 0610, 1410, 1420, 1950, 1960
+program: main.ldn
+root: ../../../../..
+traps: yes
+targets: linux-x86-64

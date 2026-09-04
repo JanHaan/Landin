@@ -855,6 +855,9 @@ package body Landin.Stages.Checking is
       function Text_Descriptor
         (View : Ty.Text_View) return Type_Descriptor;
 
+      function Is_Text_Position
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
+
       function Text_Reference
         (View : Ty.Text_View) return Landin.Checking.Reference_Id
         is (Landin.Checking.Text_Reference_Of (Types.all, View));
@@ -872,6 +875,46 @@ package body Landin.Stages.Checking is
             Reference => Reference,
             others => <>);
       end Text_Descriptor;
+
+      --  [0610]'s O(1) overload takes the repository-owned opaque
+      --  core/text.position identity.  Match the public alias rather than
+      --  its private representation declaration, so the compiler does not
+      --  depend on the library's backing type name or field visibility.
+      function Is_Text_Position
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
+      is
+         Wanted : constant Landin.Checking.Nominal_Type_Id :=
+           Landin.Checking.Nominal_Of (Types.all, Of_Tree, Node);
+      begin
+         if Landin.Checking.Type_Of (Types.all, Of_Tree, Node) /= Ty.Aggregate
+           or else Wanted = Landin.Checking.No_Nominal_Type
+         then
+            return False;
+         end if;
+
+         for Position in 1 .. Res.Declaration_Count (Meanings.all) loop
+            declare
+               Id : constant Res.Declaration_Id :=
+                 Res.Declaration_Id (Position);
+               Module : constant Landin.Modules.Module_Id :=
+                 Landin.Modules.Module_Of
+                   (Grouped.all, Res.Source_Of (Meanings.all, Id));
+            begin
+               if Res.Sort_Of (Meanings.all, Id) = Res.Module_Type
+                 and then Res.Is_Public (Meanings.all, Id)
+                 and then Spelled (Res.Name_Of (Meanings.all, Id)) = "position"
+                 and then Landin.Modules.Logical_Path (Grouped.all, Module)
+                              = "core/text"
+                 and then Landin.Checking.Type_Of (Types.all, Id)
+                              = Ty.Aggregate
+                 and then Landin.Checking.Nominal_Of (Types.all, Id) = Wanted
+               then
+                  return True;
+               end if;
+            end;
+         end loop;
+         return False;
+      end Is_Text_Position;
 
       function Normalized_Type
         (Of_Tree    : Syn.Tree;
@@ -13925,7 +13968,7 @@ package body Landin.Stages.Checking is
                                    & " byte or code-unit slice here",
                         Note    => "[0600]: validated text remains distinct"
                                    & " from its storage slice",
-                        Refused => Bad.Text_Indexing,
+                        Refused => Bad.Text_Slicing,
                         Into    => Found);
                      return Kept (Ty.Ill_Typed);
                   end if;
@@ -14018,29 +14061,92 @@ package body Landin.Stages.Checking is
                   Where : constant Syn.Node_Id := Syn.Index_Of (Of_Tree, Node);
                   Held : constant Ty.Type_Kind :=
                     Indexed_From (Of_Tree, From);
+                  Source : Landin.Checking.Reference_Descriptor;
                begin
                   if Held = Ty.Ill_Typed then
                      return Kept (Ty.Ill_Typed);
                   end if;
 
+                  if Held = Ty.Slice_Value then
+                     Source := Landin.Checking.Descriptor_Of
+                       (Types.all,
+                        Landin.Checking.Reference_Of
+                          (Types.all, Of_Tree, From));
+                  end if;
+
                   if Held = Ty.Slice_Value
-                    and then Landin.Checking.Descriptor_Of
-                      (Types.all,
-                       Landin.Checking.Reference_Of
-                         (Types.all, Of_Tree, From)).View
-                           /= Ty.Ordinary_View
+                    and then Source.View /= Ty.Ordinary_View
                   then
-                     Bad.Report
-                       (Item    => Bad.Unsupported_Use,
-                        Source  => Syn.Source_Of (Of_Tree),
-                        Where   => Syn.Where (Of_Tree, From),
-                        Message => "integer indexing of this text view is"
-                                   & " not enabled yet",
-                        Note    => "[0610]: utf8 integer indexing is a"
-                                   & " separate linear codepoint scan",
-                        Refused => Bad.Text_Indexing,
-                        Into    => Found);
-                     return Kept (Ty.Ill_Typed);
+                     if Source.View /= Ty.Utf8_View then
+                        Bad.Report
+                          (Item    => Bad.Type_Mismatch,
+                           Source  => Syn.Source_Of (Of_Tree),
+                           Where   => Syn.Where (Of_Tree, From),
+                           Message => "only utf8 has an indexing operation",
+                           Note    => "[0610]: integer and position indexing"
+                                      & " are operations on utf8",
+                           Related => Syn.Origin (Of_Tree, From),
+                           Because => "the non-utf8 value indexed here",
+                           Into    => Found);
+                        return Kept (Ty.Ill_Typed);
+                     end if;
+
+                     --  D182: the argument type selects one of [0610]'s
+                     --  two operations.  A literal receives u32 context;
+                     --  an existing value must be exactly u32 or the
+                     --  repository core/text.position nominal identity.
+                     declare
+                        Got : Ty.Type_Kind :=
+                          (if Syn.Kind (Of_Tree, Where)
+                                in Syn.Name_Reference
+                                   | Syn.Member_Selection
+                                   | Syn.Element_Index
+                           then Selected_From (Of_Tree, Where)
+                           else Synthesise (Of_Tree, Where));
+                     begin
+                        if Got = Ty.Untyped_Integer then
+                           Commit_To (Of_Tree, Where, Ty.U32);
+                           Got := Ty.U32;
+                        end if;
+
+                        if Got = Ty.Ill_Typed then
+                           return Kept (Ty.Ill_Typed);
+                        elsif Got /= Ty.U32
+                          and then
+                            (Got /= Ty.Aggregate
+                             or else not Is_Text_Position (Of_Tree, Where))
+                        then
+                           Bad.Report
+                             (Item    => Bad.Type_Mismatch,
+                              Source  => Syn.Source_Of (Of_Tree),
+                              Where   => Syn.Where (Of_Tree, Where),
+                              Message => "utf8 indexing takes u32 or"
+                                         & " core/text.position, not "
+                                         & Shown (Got),
+                              Note    => "[0610]: the argument type selects"
+                                         & " the linear ordinal or O(1)"
+                                         & " position operation",
+                              Related => Syn.Origin (Of_Tree, From),
+                              Because => "the utf8 value indexed here",
+                              Into    => Found);
+                           return Kept (Ty.Ill_Typed);
+                        end if;
+                     end;
+
+                     declare
+                        Result : constant Landin.Checking.Reference_Id :=
+                          Landin.Checking.Add_Reference
+                            (Types.all,
+                             (Kind     => Ty.Slice_Value,
+                              View     => Ty.Ordinary_View,
+                              Mutable  => False,
+                              Referent => Ty.U8,
+                              others   => <>));
+                     begin
+                        Landin.Checking.Note_Reference
+                          (Types.all, Of_Tree, Node, Result);
+                        return Kept (Ty.Slice_Value);
+                     end;
                   end if;
 
                   --  [0520]/[0570]: fixed arrays and slices are indexable.

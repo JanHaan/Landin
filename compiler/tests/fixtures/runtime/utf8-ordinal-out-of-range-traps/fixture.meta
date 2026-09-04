@@ -1,0 +1,6 @@
+class: runtime
+summary: a utf8 codepoint ordinal outside the decoded text traps
+constructs: 0260, 0570, 0600, 0610, 1950, 1960
+program: main.ldn
+traps: yes
+targets: linux-x86-64

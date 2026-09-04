@@ -140,9 +140,9 @@ package Landin.Diagnostics.Checking is
       --  the kernel lacks is a question about what it resolved to.
       Wide_Integer_Type,
       Float_Type,
-      --  [0610]'s codepoint-ordinal access remains a separate R4.10
-      --  increment after the text view identities themselves.
-      Text_Indexing,
+      --  D182 enables [0610]'s two utf8 index arguments while keeping
+      --  range slicing of a distinct text view separate.
+      Text_Slicing,
       --  [0670] declares one.  R2.20 admits contextual storage, copies,
       --  zero images and labelled literals but not a general aggregate
       --  value.
@@ -175,7 +175,7 @@ package Landin.Diagnostics.Checking is
             when Scalar_Conversion  => "[0700]",
             when Wide_Integer_Type  => "[0150]",
             when Float_Type         => "[0170]",
-            when Text_Indexing      => "[0610]",
+            when Text_Slicing       => "[0600]",
             when Struct_Value       => "[0670]",
             when Variant_Value      => "[0680]",
             when Array_Value        => "[0520]",
@@ -224,10 +224,10 @@ private
      is (case Item is
             when Scalar_Conversion => "R4.10",
             --  R4.10 closes the hosted construct matrix, including the wide
-            --  integers, f16 and [0610]'s remaining text indexing.
+            --  integers and f16.
             when Wide_Integer_Type
                | Float_Type
-               | Text_Indexing     => "R4.10",
+               | Text_Slicing       => "R4.10",
             when Struct_Value
                | Variant_Value
                | Array_Value
