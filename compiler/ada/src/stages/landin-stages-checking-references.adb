@@ -13,6 +13,7 @@ package body Landin.Stages.Checking.References is
    package Ty renames Landin.Types;
 
    use type Landin.Checking.Element_Count;
+   use type Landin.Checking.Conformance_Id;
    use type Landin.Checking.Nominal_Type_Id;
    use type Landin.Checking.Routine_Instance_Id;
    use type Landin.Checking.Signature_Id;
@@ -898,11 +899,24 @@ package body Landin.Stages.Checking.References is
                         elsif Element /= Res.No_Declaration
                           and then Element in Origins'Range
                         then
-                           --  D160: the element is a place inside the
-                           --  traversed storage, so a reference read out
-                           --  of it derives from wherever that storage
-                           --  came from.
-                           Origins (Element) := Source_Fact;
+                           if Landin.Checking.Traversal_Evidence_Of
+                             (Types.all, Tree, Node)
+                                = Landin.Checking.No_Conformance
+                           then
+                              --  D160: the element is a place inside the
+                              --  traversed storage, so a reference read out
+                              --  of it derives from wherever that storage
+                              --  came from.
+                              Origins (Element) := Source_Fact;
+                           else
+                              --  D180: iterable.item returns an ordinary
+                              --  value with [1320]'s source-free result
+                              --  signature.  Its origin is therefore the
+                              --  same empty fact an explicit call with that
+                              --  signature produces, not the source alias
+                              --  fact used by arrays and slices.
+                              Origins (Element) := No_Origin;
+                           end if;
                         end if;
                      end;
                   end if;

@@ -1,0 +1,18 @@
+iterable: type = concept (t: type, cur: type, item_type: type)
+    first:  (s: t) -> (c: cur)
+    at_end: (s: t, c: cur) -> (yes: bool)
+    item:   (s: t, c: cur) -> (v: item_type)
+    next:   (s: t, c: cur) -> (c2: cur)
+end iterable
+
+bag: type = struct
+    count: usize
+end bag
+
+public main: () -> (code: i32) =
+    items: bag = (count: 2)
+    for item in items do
+        _ = item
+    end for
+    code = 1
+end main

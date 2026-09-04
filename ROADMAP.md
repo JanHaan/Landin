@@ -3104,6 +3104,14 @@ retaining their erased concept identity and evidence through the storage alias
 and `any` loop-result transport. Computed slice sources still run once, and
 permissions, indices, control transfers and cleanup retain D160's rules.
 Iterable-evidence sources remain the named refusal. D179 records the boundary.
+The following collection increment enables [1320] traversal of struct and
+`any C` sources through one exact `iterable` conformance. It evaluates and
+retains the source once, preserves the complete cursor and copied Item
+identities, calls providers in concept order through ordinary evidence,
+advances an optional `usize` index with `next`, and retains existing cleanup,
+control and loop-result transport. An erased source remains an `any` pair and
+is never treated as slice storage. D180 records the rule and its L0301/L0303
+boundaries.
 The seventh increment enables quoted text in a direct read-only
 `[]u8` context, including byte escapes, UTF-8 source validation, an uncounted
 trailing NUL, content-pooled read-only data and static slice relocations.

@@ -6134,6 +6134,15 @@ package body Landin.Stages.Lowering is
          Is_Collection : constant Boolean :=
            Is_For
            and then Syn.Traversal_Upper (Of_Tree, Node) = Syn.No_Node;
+         Traversal_Evidence : constant Landin.Checking.Conformance_Id :=
+           (if Is_Collection
+            then Landin.Checking.Traversal_Evidence_Of
+              (Types.all, Of_Tree, Node)
+            else Landin.Checking.No_Conformance);
+         Is_Evidence : constant Boolean :=
+           Traversal_Evidence /= Landin.Checking.No_Conformance;
+         Is_Storage_Collection : constant Boolean :=
+           Is_Collection and then not Is_Evidence;
          Is_Range : constant Boolean := Is_For and then not Is_Collection;
          Head : constant IR.Block_Id := Fresh (Of_Tree, Node, Scope);
          Body_Block : constant IR.Block_Id := Fresh (Of_Tree, Runs, Inside);
@@ -6168,7 +6177,7 @@ package body Landin.Stages.Lowering is
             then Declaration_At (Syn.Source_Of (Of_Tree), Element_Node)
             else Res.No_Declaration);
          Element_Slot : constant IR.Slot_Id :=
-           (if Is_Range
+           (if Is_Range or else Is_Evidence
             then Slot_For (Of_Tree, Element_Node, Element_Id)
             else IR.No_Slot);
          Index_Node : constant Syn.Node_Id :=
@@ -6197,8 +6206,199 @@ package body Landin.Stages.Lowering is
          Counter_Slot : IR.Slot_Id := IR.No_Slot;
          Address_Slot : IR.Slot_Id := IR.No_Slot;
          Element_Shape : IR.Field_Shape;
+         Source_Slot : IR.Slot_Id := IR.No_Slot;
+         Cursor_Slot : IR.Slot_Id := IR.No_Slot;
+         Cursor_Part : Landin.Checking.Signature_Part;
+
+         function Provider_Signature
+           (Position : Positive) return Landin.Checking.Signature_Id;
+
+         function Provider_Signature
+           (Position : Positive) return Landin.Checking.Signature_Id
+         is
+            Instance : constant Landin.Checking.Routine_Instance_Id :=
+              Landin.Checking.Conformance_Provider_Instance
+                (Types.all, Traversal_Evidence, Position);
+            Provider : constant Res.Declaration_Id :=
+              Landin.Checking.Conformance_Provider_Declaration
+                (Types.all, Traversal_Evidence, Position);
+         begin
+            if Instance /= Landin.Checking.No_Routine_Instance then
+               return Landin.Checking.Routine_Signature_Of
+                 (Types.all, Instance);
+            end if;
+            return Landin.Checking.Signature_Of (Types.all, Provider);
+         end Provider_Signature;
+
+         function Is_Stored
+           (Part : Landin.Checking.Signature_Part) return Boolean
+           is (Part.Kind in Ty.Aggregate | Ty.Fixed_Array | Ty.Slice_Value
+                 | Ty.Any_Value);
+
+         function Add_Part_Slot
+           (Part : Landin.Checking.Signature_Part) return IR.Slot_Id;
+
+         function Add_Part_Slot
+           (Part : Landin.Checking.Signature_Part) return IR.Slot_Id
+         is
+            Made : IR.Slot_Id;
+         begin
+            if Part.Kind in Ty.Slice_Value | Ty.Any_Value then
+               return IR.Add_Array_Slot
+                 (Unit.all, Filling, Ty.Usize, 2, Res.No_Declaration, Site);
+            elsif Part.Kind = Ty.Fixed_Array then
+               return IR.Add_Array_Slot
+                 (Unit.all, Filling, Neutral_Element (Part),
+                  IR.Element_Total (Part.Length), Res.No_Declaration, Site);
+            elsif Part.Kind = Ty.Aggregate then
+               Made := IR.Add_Aggregate_Slot
+                 (Unit.all, Filling, Res.No_Declaration, Site,
+                  Nominal_For (Part.Nominal));
+               for Field in 1 .. Landin.Checking.Layout_Field_Count
+                 (Types.all, Part.Nominal)
+               loop
+                  Add_Stored_Field (Part.Nominal, Field, Slot => Made);
+               end loop;
+               return Made;
+            end if;
+            return IR.Add_Slot
+              (Unit.all, Filling,
+               (if Part.Kind in Ty.Function_Value | Ty.Pointer_Value
+                then Ty.Usize
+                elsif Part.Kind = Ty.Atom_Value then Ty.U32
+                else Ty.Scalar_Name (Part.Kind)),
+               Res.No_Declaration, Site,
+               Signature =>
+                 (if Part.Kind = Ty.Function_Value
+                  then Signature_For (Part.Signature)
+                  else IR.No_Signature),
+               Atoms =>
+                 (if Part.Kind = Ty.Atom_Value
+                  then Atom_Set_For (Part.Atoms)
+                  else IR.No_Atom_Set));
+         end Add_Part_Slot;
+
+         function Part_Argument
+           (Slot : IR.Slot_Id;
+            Part : Landin.Checking.Signature_Part) return IR.Value_Id;
+
+         function Part_Argument
+           (Slot : IR.Slot_Id;
+            Part : Landin.Checking.Signature_Part) return IR.Value_Id is
+         begin
+            if Is_Stored (Part) then
+               return IR.Emit_Storage_Address
+                 (Unit.all, Filling,
+                  (Kind => IR.Frame_Slot, Slot => Slot), Site);
+            end if;
+            return IR.Emit_Load (Unit.all, Filling, Slot, Site);
+         end Part_Argument;
+
+         procedure Copy_Part
+           (Source, Destination : IR.Slot_Id;
+            Part : Landin.Checking.Signature_Part);
+
+         procedure Copy_Part
+           (Source, Destination : IR.Slot_Id;
+            Part : Landin.Checking.Signature_Part) is
+         begin
+            if Part.Kind = Ty.Aggregate then
+               declare
+                  Shape : constant IR.Field_Shape :=
+                    Neutral_Body (Part.Nominal);
+                  Source_Address : constant IR.Slot_Id :=
+                    IR.Add_Address_Slot (Unit.all, Filling, Shape, Site);
+                  Destination_Address : constant IR.Slot_Id :=
+                    IR.Add_Address_Slot (Unit.all, Filling, Shape, Site);
+               begin
+                  IR.Emit_Store
+                    (Unit.all, Filling, Source_Address,
+                     IR.Emit_Storage_Address
+                       (Unit.all, Filling,
+                        (Kind => IR.Frame_Slot, Slot => Source), Site),
+                     Site);
+                  IR.Emit_Store
+                    (Unit.all, Filling, Destination_Address,
+                     IR.Emit_Storage_Address
+                       (Unit.all, Filling,
+                        (Kind => IR.Frame_Slot, Slot => Destination), Site),
+                     Site);
+                  IR.Emit_Array_Copy
+                    (Unit.all, Filling,
+                     (Kind => IR.Runtime_Address,
+                      Address => Source_Address),
+                     (Kind => IR.Runtime_Address,
+                      Address => Destination_Address), Site);
+               end;
+            elsif Is_Stored (Part) then
+               IR.Emit_Array_Copy
+                 (Unit.all, Filling,
+                  (Kind => IR.Frame_Slot, Slot => Source),
+                  (Kind => IR.Frame_Slot, Slot => Destination), Site);
+            else
+               IR.Emit_Store
+                 (Unit.all, Filling, Destination,
+                  IR.Emit_Load (Unit.all, Filling, Source, Site), Site);
+            end if;
+         end Copy_Part;
+
+         function Call_Entry
+           (Position    : Positive;
+            Result_Part : Landin.Checking.Signature_Part;
+            Destination : IR.Slot_Id;
+            With_Cursor : Boolean) return IR.Value_Id;
+
+         function Call_Entry
+           (Position    : Positive;
+            Result_Part : Landin.Checking.Signature_Part;
+            Destination : IR.Slot_Id;
+            With_Cursor : Boolean) return IR.Value_Id
+         is
+            Source_Signature : constant Landin.Checking.Signature_Id :=
+              Provider_Signature (Position);
+            Signature : constant IR.Signature_Id :=
+              Signature_For (Source_Signature);
+            Table : constant IR.Value_Id := IR.Emit_Evidence_Address
+              (Unit.all, Filling, Evidence_For (Traversal_Evidence), Site);
+            Callee : constant IR.Value_Id := IR.Emit_Evidence_Function
+              (Unit.all, Filling, Table, Evidence_For (Traversal_Evidence),
+               Position, Site);
+            Hidden : constant IR.Value_Id :=
+              (if Is_Stored (Result_Part)
+               then IR.Emit_Storage_Address
+                 (Unit.all, Filling,
+                  (Kind => IR.Frame_Slot, Slot => Destination), Site)
+               else IR.No_Value);
+            Source_Argument : constant IR.Value_Id :=
+              IR.Emit_Storage_Address
+                (Unit.all, Filling,
+                 (Kind => IR.Frame_Slot, Slot => Source_Slot), Site);
+            Cursor_Argument : constant IR.Value_Id :=
+              (if With_Cursor
+               then Part_Argument (Cursor_Slot, Cursor_Part)
+               else IR.No_Value);
+            Made : constant IR.Value_Id := IR.Emit_Indirect_Call
+              (Unit.all, Filling, Signature,
+               (if Is_Stored (Result_Part) then Ty.No_Value
+                elsif Result_Part.Kind
+                  in Ty.Function_Value | Ty.Pointer_Value
+                then Ty.Usize
+                elsif Result_Part.Kind = Ty.Atom_Value then Ty.U32
+                else Ty.Scalar_Name (Result_Part.Kind)),
+               Site);
+         begin
+            IR.Add_Argument (Unit.all, Filling, Made, Callee);
+            if Hidden /= IR.No_Value then
+               IR.Add_Argument (Unit.all, Filling, Made, Hidden);
+            end if;
+            IR.Add_Argument (Unit.all, Filling, Made, Source_Argument);
+            if Cursor_Argument /= IR.No_Value then
+               IR.Add_Argument (Unit.all, Filling, Made, Cursor_Argument);
+            end if;
+            return Made;
+         end Call_Entry;
       begin
-         if Is_Collection then
+         if Is_Storage_Collection then
             declare
                Source : constant Syn.Node_Id :=
                  Syn.Traversal_Lower (Of_Tree, Node);
@@ -6275,6 +6475,69 @@ package body Landin.Stages.Lowering is
                   Which         => 0,
                   Payload_Field => 0);
             end;
+         elsif Is_Evidence then
+            declare
+               Source : constant Syn.Node_Id :=
+                 Syn.Traversal_Lower (Of_Tree, Node);
+               First_Signature : constant Landin.Checking.Signature_Id :=
+                 Provider_Signature (1);
+               Made : IR.Value_Id;
+            begin
+               --  D180: retain one source value for every evidence call.
+               --  A struct and an `any C` both use their ordinary stored
+               --  copy shape; the latter remains a data/evidence pair and
+               --  is never interpreted as a slice base and length.
+               Source_Slot := Add_Value_Temporary (Of_Tree, Source);
+               if Type_At (Of_Tree, Source) = Ty.Aggregate
+                 and then Syn.Kind (Of_Tree, Source)
+                   in Syn.Name_Reference | Syn.Member_Selection
+                      | Syn.Element_Index
+               then
+                  declare
+                     Nominal : constant Landin.Checking.Nominal_Type_Id :=
+                       Landin.Checking.Nominal_Of
+                         (Types.all, Of_Tree, Source);
+                     Shape : constant IR.Field_Shape :=
+                       Neutral_Body (Nominal);
+                     From : constant Stored_Place :=
+                       Lower_Stored_Place (Of_Tree, Source, Scope);
+                     Into : constant Stored_Place :=
+                       (Place => (Kind => IR.Frame_Slot, Slot => Source_Slot),
+                        Base => 0,
+                        Steps => Stored_Path_Vectors.Empty_Vector);
+                  begin
+                     IR.Emit_Array_Copy
+                       (Unit.all, Filling,
+                        Addressed_Storage (From, Shape, Site),
+                        Addressed_Storage (Into, Shape, Site), Site);
+                  end;
+               else
+                  Lower_Stored_Expression
+                    (Of_Tree, Source, Scope, Source_Slot);
+               end if;
+               if Current = IR.No_Block then
+                  return;
+               end if;
+
+               Cursor_Part := Landin.Checking.Nth_Signature_Result
+                 (Types.all, First_Signature, 1);
+               Cursor_Slot := Add_Part_Slot (Cursor_Part);
+               Made := Call_Entry
+                 (1, Cursor_Part, Cursor_Slot, With_Cursor => False);
+               if not Is_Stored (Cursor_Part) then
+                  IR.Emit_Store
+                    (Unit.all, Filling, Cursor_Slot, Made, Site);
+               end if;
+
+               Counter_Slot :=
+                 (if Index_Slot /= IR.No_Slot then Index_Slot
+                  else IR.Add_Slot
+                    (Unit.all, Filling, Ty.Usize, Res.No_Declaration, Site));
+               IR.Emit_Store
+                 (Unit.all, Filling, Counter_Slot,
+                  IR.Emit_Number
+                    (Unit.all, Filling, Ty.Usize, 0, False, Site), Site);
+            end;
          end if;
 
          if Is_Range then
@@ -6337,7 +6600,7 @@ package body Landin.Stages.Lowering is
                   Current := IR.No_Block;
                end if;
             end;
-         elsif Is_Collection then
+         elsif Is_Storage_Collection then
             declare
                Position : constant IR.Value_Id :=
                  IR.Emit_Load (Unit.all, Filling, Counter_Slot, Site);
@@ -6350,6 +6613,21 @@ package body Landin.Stages.Lowering is
             begin
                IR.Emit_Branch
                  (Unit.all, Filling, Test, Body_Block, Natural_Exit, Site);
+               IR.Leave_Block (Unit.all, Filling);
+               Current := IR.No_Block;
+            end;
+         elsif Is_Evidence then
+            declare
+               At_End_Signature : constant
+                 Landin.Checking.Signature_Id := Provider_Signature (2);
+               At_End_Part : constant Landin.Checking.Signature_Part :=
+                 Landin.Checking.Nth_Signature_Result
+                   (Types.all, At_End_Signature, 1);
+               Ended : constant IR.Value_Id := Call_Entry
+                 (2, At_End_Part, IR.No_Slot, With_Cursor => True);
+            begin
+               IR.Emit_Branch
+                 (Unit.all, Filling, Ended, Natural_Exit, Body_Block, Site);
                IR.Leave_Block (Unit.all, Filling);
                Current := IR.No_Block;
             end;
@@ -6393,7 +6671,7 @@ package body Landin.Stages.Lowering is
             Loop_Stack.Append (Frame);
          end;
          Open (Body_Block);
-         if Is_Collection then
+         if Is_Storage_Collection then
             --  The element's address for this iteration.  The bound check
             --  is structural: the head already proved the counter is below
             --  the length, and the verifier sees an ordinary element
@@ -6411,6 +6689,24 @@ package body Landin.Stages.Lowering is
                IR.Emit_Store
                  (Unit.all, Filling, Address_Slot, Address, Site);
             end;
+         elsif Is_Evidence then
+            declare
+               Item_Signature : constant Landin.Checking.Signature_Id :=
+                 Provider_Signature (3);
+               Item_Part : constant Landin.Checking.Signature_Part :=
+                 Landin.Checking.Nth_Signature_Result
+                   (Types.all, Item_Signature, 1);
+               Made : constant IR.Value_Id := Call_Entry
+                 (3, Item_Part, Element_Slot, With_Cursor => True);
+            begin
+               --  [1160]: item hands out a value.  Stored answers are
+               --  written directly into the binding's own slot; scalar
+               --  answers cross the same explicit store as a source call.
+               if not Is_Stored (Item_Part) then
+                  IR.Emit_Store
+                    (Unit.all, Filling, Element_Slot, Made, Site);
+               end if;
+            end;
          end if;
          Lower_Statements (Of_Tree, Runs, Inside, Result);
          if Current /= IR.No_Block then
@@ -6418,7 +6714,7 @@ package body Landin.Stages.Lowering is
               ((if Is_For then Step_Block else Head), Site);
          end if;
 
-         if Is_Collection then
+         if Is_Storage_Collection then
             Open (Step_Block);
             declare
                Position : constant IR.Value_Id :=
@@ -6432,6 +6728,38 @@ package body Landin.Stages.Lowering is
             begin
                IR.Emit_Store
                  (Unit.all, Filling, Counter_Slot, Next_Position, Site);
+               Close_With_Jump (Head, Site);
+            end;
+         elsif Is_Evidence then
+            Open (Step_Block);
+            declare
+               Next_Slot : constant IR.Slot_Id :=
+                 Add_Part_Slot (Cursor_Part);
+               Made : constant IR.Value_Id := Call_Entry
+                 (4, Cursor_Part, Next_Slot, With_Cursor => True);
+            begin
+               if Is_Stored (Cursor_Part) then
+                  --  The next provider receives the old cursor by value.
+                  --  Keep its destination separate until the call returns,
+                  --  then copy the complete retained Cur identity back.
+                  Copy_Part (Next_Slot, Cursor_Slot, Cursor_Part);
+               else
+                  IR.Emit_Store
+                    (Unit.all, Filling, Cursor_Slot, Made, Site);
+               end if;
+
+               declare
+                  Current_Index : constant IR.Value_Id :=
+                    IR.Emit_Load (Unit.all, Filling, Counter_Slot, Site);
+                  One : constant IR.Value_Id := IR.Emit_Number
+                    (Unit.all, Filling, Ty.Usize, 1, False, Site);
+                  Next_Index : constant IR.Value_Id := IR.Emit_Binary
+                    (Unit.all, Filling, IR.Add,
+                     Current_Index, One, Ty.Usize, Site);
+               begin
+                  IR.Emit_Store
+                    (Unit.all, Filling, Counter_Slot, Next_Index, Site);
+               end;
                Close_With_Jump (Head, Site);
             end;
          elsif Is_For then
