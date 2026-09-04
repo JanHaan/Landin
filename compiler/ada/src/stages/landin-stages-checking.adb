@@ -13816,7 +13816,7 @@ package body Landin.Stages.Checking is
                      declare
                         Value : constant Syn.Node_Id :=
                           Syn.Nth_Argument (Of_Tree, Node, 1);
-                        Got : constant Ty.Type_Kind :=
+                        Got : Ty.Type_Kind :=
                           Synthesise (Of_Tree, Value);
                      begin
                         if Got = Ty.Untyped_Integer then
@@ -13827,14 +13827,20 @@ package body Landin.Stages.Checking is
                            then
                               return Kept (Ty.Ill_Typed);
                            end if;
-                        elsif Got
-                          in Ty.Float_Name | Ty.Untyped_Float | Ty.Bool
-                        then
+                        elsif Got = Ty.Untyped_Float then
+                           Commit_To (Of_Tree, Value, Ty.Default_Float);
+                           if Landin.Checking.Type_Of
+                             (Types.all, Of_Tree, Value) = Ty.Ill_Typed
+                           then
+                              return Kept (Ty.Ill_Typed);
+                           end if;
+                           Got := Ty.Default_Float;
+                        elsif Got = Ty.Bool then
                            Bad.Report
                              (Item    => Bad.Unsupported_Use,
                               Source  => Syn.Source_Of (Of_Tree),
                               Where   => Syn.Where (Of_Tree, Node),
-                              Message => "this scalar conversion is not"
+                              Message => "conversion involving bool is not"
                                          & " enabled yet",
                               Refused => Bad.Scalar_Conversion,
                               Into    => Found);
@@ -13842,7 +13848,8 @@ package body Landin.Stages.Checking is
                              (Types.all, Of_Tree, Node);
                            return Kept (Ty.Ill_Typed);
                         elsif Got /= Ty.Ill_Typed
-                          and then Got not in Ty.Integer_Name
+                          and then Got
+                            not in Ty.Integer_Name | Ty.Float_Name
                           and then Got /= Ty.Pointer_Value
                         then
                            Bad.Report
@@ -13850,8 +13857,7 @@ package body Landin.Stages.Checking is
                               Source  => Syn.Source_Of (Of_Tree),
                               Where   => Syn.Where (Of_Tree, Value),
                               Message => "this integer conversion requires a"
-                                         & " numeric integer or pointer"
-                                         & " value",
+                                         & " numeric or pointer value",
                               Note    => "[0310]/[0470]: conversion is"
                                          & " explicit and preserves its"
                                          & " source class",
@@ -13860,6 +13866,44 @@ package body Landin.Stages.Checking is
                               Into    => Found);
                            Landin.Checking.Refuse
                              (Types.all, Of_Tree, Node);
+                           return Kept (Ty.Ill_Typed);
+                        end if;
+
+                        if Got in Ty.Float_Name then
+                           declare
+                              Bits       : Ty.Magnitude;
+                              From       : Ty.Type_Kind;
+                              Result     : Ty.Folded;
+                              Known      : Boolean;
+                              Overflowed : Boolean;
+                           begin
+                              Fold_Float
+                                (Of_Tree, Value, Bits, From, Known,
+                                 Overflowed);
+                              if Known and then not Overflowed then
+                                 Ty.Convert_Float_To_Integer
+                                   (Bits, Ty.Float_Name (From),
+                                    Ty.Integer_Name (Conversion), Facts,
+                                    Result, Overflowed);
+                              end if;
+                              if Overflowed then
+                                 Bad.Report
+                                   (Item    => Bad.Literal_Out_Of_Range,
+                                    Source  => Syn.Source_Of (Of_Tree),
+                                    Where   => Syn.Where (Of_Tree, Node),
+                                    Message => "this known float cannot be"
+                                               & " converted to "
+                                               & Shown (Conversion),
+                                    Note    => "[0310]: an impossible known"
+                                               & " conversion is a compile"
+                                               & " error",
+                                    Into    => Found);
+                                 Landin.Checking.Refuse
+                                   (Types.all, Of_Tree, Node);
+                                 return Kept (Ty.Ill_Typed);
+                              end if;
+                           end;
+                        elsif Got = Ty.Ill_Typed then
                            return Kept (Ty.Ill_Typed);
                         end if;
                         return Kept (Conversion);
@@ -21620,9 +21664,34 @@ package body Landin.Stages.Checking is
 
             when Syn.Call =>
                if Conversion_Target (Of_Tree, Node) in Ty.Integer_Name then
-                  Fold
-                    (Of_Tree, Syn.Nth_Argument (Of_Tree, Node, 1),
-                     Depth + 1, Value, Known, Overflowed);
+                  declare
+                     Operand : constant Syn.Node_Id :=
+                       Syn.Nth_Argument (Of_Tree, Node, 1);
+                     Target : constant Ty.Integer_Name :=
+                       Ty.Integer_Name (Conversion_Target (Of_Tree, Node));
+                  begin
+                     if Landin.Checking.Type_Of
+                          (Types.all, Of_Tree, Operand) in Ty.Float_Name
+                     then
+                        declare
+                           Bits : Ty.Magnitude;
+                           Kind : Ty.Type_Kind;
+                        begin
+                           Fold_Float
+                             (Of_Tree, Operand, Bits, Kind, Known,
+                              Overflowed);
+                           if Known then
+                              Ty.Convert_Float_To_Integer
+                                (Bits, Ty.Float_Name (Kind), Target, Facts,
+                                 Value, Overflowed);
+                           end if;
+                        end;
+                     else
+                        Fold
+                          (Of_Tree, Operand, Depth + 1, Value, Known,
+                           Overflowed);
+                     end if;
+                  end;
                end if;
 
             when Syn.Name_Reference =>

@@ -647,6 +647,85 @@ package body Landin.Types is
         + Significant - 2 ** Fraction_Bits;
    end Convert_Integer_To_Float;
 
+   ------------------------------
+   --  Convert_Float_To_Integer  --
+   ------------------------------
+
+   procedure Convert_Float_To_Integer
+     (Bits       : Magnitude;
+      From       : Float_Name;
+      Into       : Integer_Name;
+      Facts      : Landin.Targets.Target_Facts;
+      Result     : out Folded;
+      Overflowed : out Boolean)
+   is
+      Fraction_Bits : constant Natural :=
+        (case From is when F32 => 23, when F64 => 52);
+      Exponent_Bits : constant Natural :=
+        (case From is when F32 => 8, when F64 => 11);
+      Bias : constant Natural :=
+        (case From is when F32 => 127, when F64 => 1023);
+      Sign_Shift : constant Natural :=
+        (case From is when F32 => 31, when F64 => 63);
+      Exponent : constant Natural :=
+        Natural ((Bits / 2 ** Fraction_Bits) mod 2 ** Exponent_Bits);
+      Fraction : constant Magnitude := Bits mod 2 ** Fraction_Bits;
+      Negative : constant Boolean := (Bits / 2 ** Sign_Shift) mod 2 = 1;
+      Unbiased : Integer;
+      Absolute : Magnitude;
+   begin
+      Result := 0;
+      Overflowed := False;
+
+      if Exponent = 2 ** Exponent_Bits - 1 then
+         Overflowed := True;
+         return;
+      elsif Exponent = 0 then
+         --  Zero and every subnormal have no whole part.
+         return;
+      end if;
+
+      Unbiased := Integer (Exponent) - Bias;
+      if Unbiased < 0 then
+         return;
+      elsif Unbiased > 63 then
+         Overflowed := True;
+         return;
+      end if;
+
+      Absolute := 2 ** Fraction_Bits + Fraction;
+      if Unbiased >= Fraction_Bits then
+         declare
+            Scale : constant Magnitude :=
+              2 ** (Unbiased - Fraction_Bits);
+         begin
+            if Absolute > Magnitude'Last / Scale then
+               Overflowed := True;
+               return;
+            end if;
+            Absolute := Absolute * Scale;
+         end;
+      else
+         Absolute := Absolute / 2 ** (Fraction_Bits - Unbiased);
+      end if;
+
+      if Absolute = 0 then
+         return;
+      elsif Negative then
+         if not Is_Signed (Into)
+           or else not Fits (Absolute, Into, Facts, Negated => True)
+         then
+            Overflowed := True;
+            return;
+         end if;
+         Result := -Folded (Absolute);
+      elsif not Fits (Absolute, Into, Facts, Negated => False) then
+         Overflowed := True;
+      else
+         Result := Folded (Absolute);
+      end if;
+   end Convert_Float_To_Integer;
+
    ------------------------
    --  Float_Special_Bits  --
    ------------------------

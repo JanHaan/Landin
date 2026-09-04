@@ -1578,6 +1578,189 @@ package body Landin.Backend.X86_64 is
                            Emit
                              (Store & " %xmm0, " & Value_Cell (Value));
                         end;
+                     elsif From_Kind in Landin.Types.Float_Name then
+                        declare
+                           From : constant Landin.Types.Float_Name :=
+                             Landin.Types.Float_Name (From_Kind);
+                           Into_Type : constant Landin.Types.Integer_Name :=
+                             Landin.Types.Integer_Name (Into_Kind);
+                           Into_Size : constant Held_Size :=
+                             Size_Of (Into_Type, Facts);
+                           Into_Bits : constant Landin.Targets.Bit_Width :=
+                             Landin.Types.Width (Into_Type, Facts);
+                           Fraction_Bits : constant Natural :=
+                             (case From is
+                                 when Landin.Types.F32 => 23,
+                                 when Landin.Types.F64 => 52);
+                           Exponent_All : constant Natural :=
+                             (case From is
+                                 when Landin.Types.F32 => 255,
+                                 when Landin.Types.F64 => 2_047);
+                           Bias : constant Natural :=
+                             (case From is
+                                 when Landin.Types.F32 => 127,
+                                 when Landin.Types.F64 => 1_023);
+                           Sign_Shift : constant Natural :=
+                             (case From is
+                                 when Landin.Types.F32 => 31,
+                                 when Landin.Types.F64 => 63);
+                           Fraction_Mask : constant
+                             Landin.Types.Magnitude :=
+                               (case From is
+                                   when Landin.Types.F32 => 8_388_607,
+                                   when Landin.Types.F64 =>
+                                     4_503_599_627_370_495);
+                           Hidden : constant Landin.Types.Magnitude :=
+                             2 ** Fraction_Bits;
+                           Shift_Right : constant String :=
+                             Value_Label (Value) & "_right";
+                           Magnitude_Ready : constant String :=
+                             Value_Label (Value) & "_magnitude";
+                           Negative : constant String :=
+                             Value_Label (Value) & "_negative";
+                           Zero : constant String :=
+                             Value_Label (Value) & "_zero";
+                           Store : constant String :=
+                             Value_Label (Value) & "_store";
+                           Trap : constant String :=
+                             Value_Label (Value) & "_trap";
+                           Done : constant String :=
+                             Value_Label (Value) & "_done";
+                        begin
+                           --  Decode the IEEE carrier rather than relying on
+                           --  cvttss2si/cvttsd2si: those instructions cannot
+                           --  distinguish every valid u64 result from their
+                           --  indefinite overflow result.  This is exactly
+                           --  the target-neutral truncation and range check.
+                           Emit
+                             ((if From = Landin.Types.F32
+                               then "movl " else "movq ")
+                              & Value_Cell (Source)
+                              & (if From = Landin.Types.F32
+                                 then ", %eax" else ", %rax"));
+                           Emit ("movq %rax, %r8");
+                           Emit
+                             ("shrq $" & Trimmed (Natural'Image (Sign_Shift))
+                              & ", %r8");
+                           Emit ("movq %rax, %rcx");
+                           Emit
+                             ("shrq $"
+                              & Trimmed (Natural'Image (Fraction_Bits))
+                              & ", %rcx");
+                           Emit
+                             ("andq $"
+                              & Trimmed (Natural'Image (Exponent_All))
+                              & ", %rcx");
+                           Emit ("movq %rax, %rdx");
+                           Emit
+                             ("movabsq $"
+                              & Trimmed
+                                  (Landin.Types.Magnitude'Image
+                                     (Fraction_Mask))
+                              & ", %r9");
+                           Emit ("andq %r9, %rdx");
+
+                           Emit
+                             ("cmpq $"
+                              & Trimmed (Natural'Image (Exponent_All))
+                              & ", %rcx");
+                           Emit ("je " & Trap);
+                           Emit ("testq %rcx, %rcx");
+                           Emit ("jz " & Zero);
+                           Emit
+                             ("cmpq $" & Trimmed (Natural'Image (Bias))
+                              & ", %rcx");
+                           Emit ("jb " & Zero);
+                           Emit
+                             ("subq $" & Trimmed (Natural'Image (Bias))
+                              & ", %rcx");
+                           Emit ("cmpq $63, %rcx");
+                           Emit ("ja " & Trap);
+                           Emit
+                             ("movabsq $"
+                              & Trimmed
+                                  (Landin.Types.Magnitude'Image (Hidden))
+                              & ", %r9");
+                           Emit ("addq %r9, %rdx");
+                           Emit
+                             ("cmpq $"
+                              & Trimmed (Natural'Image (Fraction_Bits))
+                              & ", %rcx");
+                           Emit ("jb " & Shift_Right);
+                           Emit
+                             ("subq $"
+                              & Trimmed (Natural'Image (Fraction_Bits))
+                              & ", %rcx");
+                           Emit ("shlq %cl, %rdx");
+                           Emit ("jmp " & Magnitude_Ready);
+                           Put (Shift_Right & ":");
+                           Emit
+                             ("movq $"
+                              & Trimmed (Natural'Image (Fraction_Bits))
+                              & ", %r9");
+                           Emit ("subq %rcx, %r9");
+                           Emit ("movq %r9, %rcx");
+                           Emit ("shrq %cl, %rdx");
+
+                           Put (Magnitude_Ready & ":");
+                           Emit ("testq %rdx, %rdx");
+                           Emit ("jz " & Zero);
+                           Emit ("testq %r8, %r8");
+                           Emit ("jnz " & Negative);
+                           if Landin.Types.Is_Signed (Into_Type)
+                             or else Into_Bits < 64
+                           then
+                              declare
+                                 Maximum : constant Landin.Types.Magnitude :=
+                                   (if Landin.Types.Is_Signed (Into_Type)
+                                    then 2 ** (Natural (Into_Bits) - 1) - 1
+                                    else 2 ** Natural (Into_Bits) - 1);
+                              begin
+                                 Emit
+                                   ("movabsq $"
+                                    & Trimmed
+                                        (Landin.Types.Magnitude'Image
+                                           (Maximum))
+                                    & ", %r9");
+                                 Emit ("cmpq %r9, %rdx");
+                                 Emit ("ja " & Trap);
+                              end;
+                           end if;
+                           Emit ("jmp " & Store);
+
+                           Put (Negative & ":");
+                           if Landin.Types.Is_Signed (Into_Type) then
+                              declare
+                                 Maximum : constant Landin.Types.Magnitude :=
+                                   2 ** (Natural (Into_Bits) - 1);
+                              begin
+                                 Emit
+                                   ("movabsq $"
+                                    & Trimmed
+                                        (Landin.Types.Magnitude'Image
+                                           (Maximum))
+                                    & ", %r9");
+                                 Emit ("cmpq %r9, %rdx");
+                                 Emit ("ja " & Trap);
+                                 Emit ("negq %rdx");
+                                 Emit ("jmp " & Store);
+                              end;
+                           else
+                              Emit ("jmp " & Trap);
+                           end if;
+
+                           Put (Zero & ":");
+                           Emit ("xorq %rdx, %rdx");
+                           Put (Store & ":");
+                           Emit ("movq %rdx, %rax");
+                           Emit ("mov" & Suffix (Into_Size) & " "
+                                 & Accumulator (Into_Size) & ", "
+                                 & Value_Cell (Value));
+                           Emit ("jmp " & Done);
+                           Put (Trap & ":");
+                           Emit ("ud2");
+                           Put (Done & ":");
+                        end;
                      else
                         declare
                            From : constant Landin.Types.Integer_Name :=
@@ -3378,6 +3561,26 @@ package body Landin.Backend.X86_64 is
                                   (Landin.Types.Convert_Integer_To_Float
                                      (Of_Value (Source),
                                       Landin.Types.Float_Name (Into_Type)));
+                           elsif From in Landin.Types.Float_Name
+                             and then Into_Type in Landin.Types.Integer_Name
+                           then
+                              declare
+                                 Converted : Landin.Types.Folded;
+                                 Overflowed : Boolean;
+                              begin
+                                 Landin.Types.Convert_Float_To_Integer
+                                   (Landin.Types.Magnitude
+                                      (Of_Value (Source)),
+                                    Landin.Types.Float_Name (From),
+                                    Landin.Types.Integer_Name (Into_Type),
+                                    Facts, Converted, Overflowed);
+                                 if Overflowed then
+                                    raise Compiler_Defect with
+                                      "an overflowing module float-to-"
+                                      & "integer conversion passed checking";
+                                 end if;
+                                 Held (Natural (Value)) := Converted;
+                              end;
                            else
                               Held (Natural (Value)) := Of_Value (Source);
                            end if;

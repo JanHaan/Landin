@@ -1,0 +1,7 @@
+to_i8: (value: f64) -> (result: i8) =
+    result = i8(value)
+end to_i8
+
+public main: () -> (code: i32) =
+    code = i32(to_i8(128.0))
+end main
