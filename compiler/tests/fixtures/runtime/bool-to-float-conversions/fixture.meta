@@ -1,0 +1,6 @@
+class: runtime
+summary: explicit bool-to-float conversion maps false and true to exact positive zero and one across both widths
+constructs: 0170, 0180, 0190, 0210, 0310, 0350, 0700, 1880, 1940, 1960
+program: main.ldn
+status: 42
+targets: linux-x86-64
