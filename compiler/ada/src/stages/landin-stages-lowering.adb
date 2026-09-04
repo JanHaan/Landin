@@ -4157,9 +4157,16 @@ package body Landin.Stages.Lowering is
          if Syn.Kind (Of_Tree, Node)
               in Syn.Inclusive_Slice | Syn.Half_Open_Slice
                  | Syn.Empty_Slice_Literal | Syn.Text_Literal
-                 | Syn.Raw_Literal
+                 | Syn.Raw_Literal | Syn.Call | Syn.Labeled_Application
+                 | Syn.Try_Expression | Syn.If_Statement
+                 | Syn.Match_Statement | Syn.Bare_Block
+                 | Syn.Loop_Statement | Syn.While_Statement
+                 | Syn.For_Statement
          then
             declare
+               --  D179: a collection source may be a computed slice.  Fill
+               --  one temporary before loading either carrier cell, so a
+               --  call or control expression is evaluated exactly once.
                Temporary : constant IR.Slot_Id := IR.Add_Array_Slot
                  (Unit.all, Filling, Ty.Usize, 2, Res.No_Declaration,
                   Site_Of (Of_Tree, Node));
