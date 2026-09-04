@@ -3699,8 +3699,21 @@ package body Landin.Backend.X86_64 is
                         end;
 
                      when Landin.IR.Negation =>
-                        Held (Natural (Value)) :=
-                          -Of_Value (Operand_Of (Value, 1));
+                        if Landin.IR.Result_Of (Of_Unit, Item, Value)
+                             in Landin.Types.Float_Name
+                        then
+                           Held (Natural (Value)) :=
+                             Landin.Types.Folded
+                               (Landin.Types.Negated_Float
+                                  (Landin.Types.Magnitude
+                                     (Of_Value (Operand_Of (Value, 1))),
+                                   Landin.Types.Float_Name
+                                     (Landin.IR.Result_Of
+                                        (Of_Unit, Item, Value))));
+                        else
+                           Held (Natural (Value)) :=
+                             -Of_Value (Operand_Of (Value, 1));
+                        end if;
 
                      when Landin.IR.Logical_Not =>
                         Held (Natural (Value)) :=
@@ -3778,8 +3791,56 @@ package body Landin.Backend.X86_64 is
                                  | Landin.IR.Shift_Right
                              and then B >= Landin.Types.Folded (Bits);
                         begin
-                           Held (Natural (Value)) :=
-                             (case Op is
+                           if Landin.IR.Result_Of
+                                (Of_Unit, Item, Left_Id)
+                                  in Landin.Types.Float_Name
+                           then
+                              if Compares then
+                                 Held (Natural (Value)) :=
+                                   Truth
+                                     (Landin.Types.Float_Comparison_Result
+                                        (Landin.Types.Magnitude (A),
+                                         Landin.Types.Magnitude (B),
+                                         Landin.Types.Float_Name
+                                           (Landin.IR.Result_Of
+                                              (Of_Unit, Item, Left_Id)),
+                                         (case Op is
+                                             when Landin.IR.Equal_To =>
+                                               Landin.Types.Float_Equal,
+                                             when Landin.IR.Not_Equal_To =>
+                                               Landin.Types.Float_Not_Equal,
+                                             when Landin.IR.Less_Than =>
+                                               Landin.Types.Float_Less,
+                                             when Landin.IR.Less_Or_Equal =>
+                                               Landin.Types
+                                                 .Float_Less_Or_Equal,
+                                             when Landin.IR.Greater_Than =>
+                                               Landin.Types.Float_Greater,
+                                             when others =>
+                                               Landin.Types
+                                                 .Float_Greater_Or_Equal)));
+                              else
+                                 Held (Natural (Value)) :=
+                                   Landin.Types.Folded
+                                     (Landin.Types.Float_Arithmetic_Result
+                                        (Landin.Types.Magnitude (A),
+                                         Landin.Types.Magnitude (B),
+                                         Landin.Types.Float_Name
+                                           (Landin.IR.Result_Of
+                                              (Of_Unit, Item, Left_Id)),
+                                         (case Op is
+                                             when Landin.IR.Add =>
+                                               Landin.Types.Float_Add,
+                                             when Landin.IR.Subtract =>
+                                               Landin.Types.Float_Subtract,
+                                             when Landin.IR.Multiply =>
+                                               Landin.Types.Float_Multiply,
+                                             when others =>
+                                               Landin.Types.Float_Divide)));
+                              end if;
+                           else
+                              Held (Natural (Value)) :=
+                                (case Op is
                                  --  A checked operator has no width to
                                  --  answer at: [1460] gives a module value
                                  --  no moment in which to trap, so the
@@ -3833,7 +3894,8 @@ package body Landin.Backend.X86_64 is
                                    Truth (A <= B),
                                  when Landin.IR.Greater_Than =>
                                    Truth (A > B),
-                                 when others => Truth (A >= B));
+                                    when others => Truth (A >= B));
+                           end if;
                         end;
 
                      when Landin.IR.Leave =>

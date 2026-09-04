@@ -11308,10 +11308,27 @@ package body Landin.Stages.Lowering is
                        (Of_Tree, Syn.Right_Of (Of_Tree, Node),
                         Right, Right_Known);
                      if Left_Known and then Right_Known then
-                        Combine
-                          (Left, Right, Syn.Kind (Of_Tree, Node),
-                           Value, Fits);
-                        Known := Fits;
+                        if Landin.Checking.Type_Of
+                             (Types.all, Of_Tree, Node) in Ty.Float_Name
+                        then
+                           Value := Ty.Folded
+                             (Ty.Float_Arithmetic_Result
+                                (Ty.Magnitude (Left), Ty.Magnitude (Right),
+                                 Ty.Float_Name
+                                   (Landin.Checking.Type_Of
+                                      (Types.all, Of_Tree, Node)),
+                                 (case Syn.Kind (Of_Tree, Node) is
+                                     when Syn.Add => Ty.Float_Add,
+                                     when Syn.Subtract => Ty.Float_Subtract,
+                                     when Syn.Multiply => Ty.Float_Multiply,
+                                     when others => Ty.Float_Divide)));
+                           Known := True;
+                        else
+                           Combine
+                             (Left, Right, Syn.Kind (Of_Tree, Node),
+                              Value, Fits);
+                           Known := Fits;
+                        end if;
                      end if;
                   end;
 
@@ -11517,20 +11534,46 @@ package body Landin.Stages.Lowering is
                        (Of_Tree, Syn.Right_Of (Of_Tree, Node),
                         Right, Right_Known);
                      if Left_Known and then Right_Known then
-                        Value :=
-                          (case Op is
-                              when Syn.Equal_To =>
-                                (if Left = Right then 1 else 0),
-                              when Syn.Not_Equal_To =>
-                                (if Left /= Right then 1 else 0),
-                              when Syn.Less_Than =>
-                                (if Left < Right then 1 else 0),
-                              when Syn.Less_Or_Equal =>
-                                (if Left <= Right then 1 else 0),
-                              when Syn.Greater_Than =>
-                                (if Left > Right then 1 else 0),
-                              when others =>
-                                (if Left >= Right then 1 else 0));
+                        if Landin.Checking.Type_Of
+                             (Types.all, Of_Tree,
+                              Syn.Left_Of (Of_Tree, Node)) in Ty.Float_Name
+                        then
+                           Value := Ty.Folded
+                             (Boolean'Pos
+                                (Ty.Float_Comparison_Result
+                                   (Ty.Magnitude (Left),
+                                    Ty.Magnitude (Right),
+                                    Ty.Float_Name
+                                      (Landin.Checking.Type_Of
+                                         (Types.all, Of_Tree,
+                                          Syn.Left_Of (Of_Tree, Node))),
+                                    (case Op is
+                                        when Syn.Equal_To => Ty.Float_Equal,
+                                        when Syn.Not_Equal_To =>
+                                          Ty.Float_Not_Equal,
+                                        when Syn.Less_Than => Ty.Float_Less,
+                                        when Syn.Less_Or_Equal =>
+                                          Ty.Float_Less_Or_Equal,
+                                        when Syn.Greater_Than =>
+                                          Ty.Float_Greater,
+                                        when others =>
+                                          Ty.Float_Greater_Or_Equal))));
+                        else
+                           Value :=
+                             (case Op is
+                                 when Syn.Equal_To =>
+                                   (if Left = Right then 1 else 0),
+                                 when Syn.Not_Equal_To =>
+                                   (if Left /= Right then 1 else 0),
+                                 when Syn.Less_Than =>
+                                   (if Left < Right then 1 else 0),
+                                 when Syn.Less_Or_Equal =>
+                                   (if Left <= Right then 1 else 0),
+                                 when Syn.Greater_Than =>
+                                   (if Left > Right then 1 else 0),
+                                 when others =>
+                                   (if Left >= Right then 1 else 0));
+                        end if;
                         Known := True;
                      end if;
                   end;
