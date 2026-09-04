@@ -18,7 +18,7 @@ item 1 ROUTINE thing_code result i32 signature 1 params 1 slots 3 blocks 1 value
     5 STORE slot 2 <- 4
     6 LOAD i32 slot 2
     7 LEAVE <- 6
-item 2 ROUTINE first result i32 signature 2 params 1 slots 7 blocks 1 values 31
+item 2 ROUTINE first result i32 signature 2 params 1 slots 7 blocks 1 values 35
   slot 1 items elements 2 of usize param 1
   slot 2 value i32 return
   slot 3 - usize signature 1
@@ -26,38 +26,42 @@ item 2 ROUTINE first result i32 signature 2 params 1 slots 7 blocks 1 values 31
   slot 5 - usize
   slot 6 - usize
   slot 7 - usize
-  block 1 scope 9 BLOCK length 31
+  block 1 scope 9 BLOCK length 35
     1 LOAD_FIELD usize slot 1 field 1
     2 LOAD_FIELD usize slot 1 field 2
     3 NUMBER usize 0
     4 SLICE_ADDRESS usize <- 1 2 3 3
     5 STORE slot 4 <- 4
-    6 LOAD_FIELD usize slot 4 field 1
-    7 LOAD_FIELD usize slot 1 field 1
-    8 LOAD_FIELD usize slot 1 field 2
-    9 NUMBER usize 0
-    10 SLICE_ADDRESS usize <- 7 8 9 9
-    11 STORE slot 5 <- 10
-    12 LOAD_FIELD usize slot 5 field 2
-    13 EVIDENCE_FUNCTION usize evidence 2 entry 1 signature 1 <- 12
-    14 STORE slot 3 <- 13
-    15 LOAD_FIELD usize slot 1 field 1
-    16 LOAD_FIELD usize slot 1 field 2
-    17 NUMBER usize 0
-    18 SLICE_ADDRESS usize <- 15 16 17 17
-    19 STORE slot 6 <- 18
-    20 LOAD_FIELD usize slot 6 field 1
-    21 LOAD_FIELD usize slot 1 field 1
-    22 LOAD_FIELD usize slot 1 field 2
-    23 NUMBER usize 0
-    24 SLICE_ADDRESS usize <- 21 22 23 23
-    25 STORE slot 7 <- 24
-    26 LOAD_FIELD usize slot 7 field 2
-    27 LOAD usize slot 3
-    28 INDIRECT_CALL i32 signature 1 <- 27 20
-    29 STORE slot 2 <- 28
-    30 LOAD i32 slot 2
-    31 LEAVE <- 30
+    6 PLACE_ADDRESS usize
+    7 LOAD_INDIRECT usize <- 6
+    8 LOAD_FIELD usize slot 1 field 1
+    9 LOAD_FIELD usize slot 1 field 2
+    10 NUMBER usize 0
+    11 SLICE_ADDRESS usize <- 8 9 10 10
+    12 STORE slot 5 <- 11
+    13 PLACE_ADDRESS usize
+    14 LOAD_INDIRECT usize <- 13
+    15 EVIDENCE_FUNCTION usize evidence 2 entry 1 signature 1 <- 14
+    16 STORE slot 3 <- 15
+    17 LOAD_FIELD usize slot 1 field 1
+    18 LOAD_FIELD usize slot 1 field 2
+    19 NUMBER usize 0
+    20 SLICE_ADDRESS usize <- 17 18 19 19
+    21 STORE slot 6 <- 20
+    22 PLACE_ADDRESS usize
+    23 LOAD_INDIRECT usize <- 22
+    24 LOAD_FIELD usize slot 1 field 1
+    25 LOAD_FIELD usize slot 1 field 2
+    26 NUMBER usize 0
+    27 SLICE_ADDRESS usize <- 24 25 26 26
+    28 STORE slot 7 <- 27
+    29 PLACE_ADDRESS usize
+    30 LOAD_INDIRECT usize <- 29
+    31 LOAD usize slot 3
+    32 INDIRECT_CALL i32 signature 1 <- 31 23
+    33 STORE slot 2 <- 32
+    34 LOAD i32 slot 2
+    35 LEAVE <- 34
 item 3 ROUTINE main result i32 signature 3 params 0 slots 1 blocks 1 values 4
   slot 1 code i32 return
   block 1 scope 11 BLOCK length 4

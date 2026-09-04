@@ -1,0 +1,10 @@
+marker: type = concept (item: type)
+end marker
+
+public main: () -> (code: i32) =
+    items: []any marker = []
+    for item in items do
+        _ = item
+    end for
+    code = 1
+end main

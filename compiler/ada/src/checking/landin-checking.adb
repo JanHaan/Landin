@@ -3053,6 +3053,50 @@ package body Landin.Checking is
       end;
    end Note_Array_Element_Nominal;
 
+   function Array_Element_Shape
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id) return Field_Shape
+   is
+      Where : constant Positive := Slot (Of_Table, Of_Tree, Node);
+      Overlay : constant Natural := Node_Overlay_Position (Of_Table, Where);
+      Shape : constant Array_Shape :=
+        (if Overlay /= 0 and then Of_Table.Node_Overlays (Overlay).Has_Array
+         then Of_Table.Node_Overlays (Overlay).Shape
+         else Of_Table.Node_Shapes (Where));
+      Nominal : constant Nominal_Type_Id :=
+        Array_Element_Nominal (Of_Table, Of_Tree, Node);
+   begin
+      if Shape.Has_Complex_Element then
+         return Shape.Complex_Element;
+      elsif Nominal /= No_Nominal_Type then
+         return (Kind => Aggregate_Field, Nominal => Nominal, others => <>);
+      end if;
+      return (Kind => Scalar_Field, Element => Shape.Element, others => <>);
+   end Array_Element_Shape;
+
+   procedure Note_Array_Element_Shape
+     (Into    : in out Table;
+      Of_Tree : Landin.Syntax.Tree;
+      Node    : Landin.Syntax.Node_Id;
+      Shape   : Field_Shape)
+   is
+      Where : constant Positive := Slot (Into, Of_Tree, Node);
+   begin
+      if Into.Current_Routine = No_Routine_Instance then
+         Into.Node_Shapes (Where).Has_Complex_Element := True;
+         Into.Node_Shapes (Where).Complex_Element := Shape;
+      else
+         declare
+            Overlay : constant Positive := Ensure_Node_Overlay (Into, Where);
+         begin
+            Into.Node_Overlays (Overlay).Has_Array := True;
+            Into.Node_Overlays (Overlay).Shape.Has_Complex_Element := True;
+            Into.Node_Overlays (Overlay).Shape.Complex_Element := Shape;
+         end;
+      end if;
+   end Note_Array_Element_Shape;
+
    function Array_Length
      (Of_Table : Table; Id : Declaration_Id) return Element_Count
    is
@@ -3135,6 +3179,49 @@ package body Landin.Checking is
          end;
       end if;
    end Note_Array_Element_Nominal;
+
+   function Array_Element_Shape
+     (Of_Table : Table; Id : Declaration_Id) return Field_Shape
+   is
+      Overlay : constant Natural :=
+        Declaration_Overlay_Position (Of_Table, Id);
+      Shape : constant Array_Shape :=
+        (if Overlay /= 0
+              and then Of_Table.Declaration_Overlays (Overlay).Has_Array
+         then Of_Table.Declaration_Overlays (Overlay).Shape
+         else Of_Table.Shapes (Natural (Id)));
+      Nominal : constant Nominal_Type_Id :=
+        Array_Element_Nominal (Of_Table, Id);
+   begin
+      if Shape.Has_Complex_Element then
+         return Shape.Complex_Element;
+      elsif Nominal /= No_Nominal_Type then
+         return (Kind => Aggregate_Field, Nominal => Nominal, others => <>);
+      end if;
+      return (Kind => Scalar_Field, Element => Shape.Element, others => <>);
+   end Array_Element_Shape;
+
+   procedure Note_Array_Element_Shape
+     (Into  : in out Table;
+      Id    : Declaration_Id;
+      Shape : Field_Shape)
+   is
+   begin
+      if Into.Current_Routine = No_Routine_Instance then
+         Into.Shapes (Natural (Id)).Has_Complex_Element := True;
+         Into.Shapes (Natural (Id)).Complex_Element := Shape;
+      else
+         declare
+            Overlay : constant Positive :=
+              Ensure_Declaration_Overlay (Into, Id);
+         begin
+            Into.Declaration_Overlays (Overlay).Has_Array := True;
+            Into.Declaration_Overlays (Overlay).Shape.Has_Complex_Element :=
+              True;
+            Into.Declaration_Overlays (Overlay).Shape.Complex_Element := Shape;
+         end;
+      end if;
+   end Note_Array_Element_Shape;
 
    procedure Array_Extent
      (Length    : Element_Count;

@@ -1961,7 +1961,8 @@ Traversal. Bindings default to in; inout implies mut.
 An integer range is ascending. Its bounds are evaluated once, left to right;
 `..<` excludes the upper bound and `..` includes it. The optional index is a
 `usize` beginning at zero. Collection traversal supplies the same binding
-shape, with writability decided by [1160].
+shape, with writability decided by [1160]. A collection element may itself be
+a fixed array or slice; the loop binding keeps that complete element shape.
 
 ```landin
     for item in items do
@@ -1986,6 +1987,9 @@ place, over a []T it is not. Over anything else that
 satisfies iterable the binding is a copy, since item at
 [1320] hands out a value — so assigning to it is an error
 rather than a silent write to nothing.
+When `T` is a fixed array or slice, replacing that whole element follows this
+same rule. Writing through a slice element still follows the `mut` permission
+carried by that inner slice.
 
 ```landin
     xs := vec.used(l)               -- []mut i32

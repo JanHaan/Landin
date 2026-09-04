@@ -1725,6 +1725,13 @@ package body Landin.Stages.Checking.Flow is
                      end if;
                      Into.Fields (Positive (Id), 0) := True;
 
+                     if Landin.Checking.Type_Of (Types.all, Id)
+                          = Ty.Fixed_Array
+                     then
+                        Array_Sets.Include
+                          (Into.Whole_Arrays, (Id, No_Path));
+                     end if;
+
                      --  D160: a struct element is a whole struct the
                      --  traversed storage already holds, so every one of
                      --  its parts arrives assigned, as a copied struct's do.

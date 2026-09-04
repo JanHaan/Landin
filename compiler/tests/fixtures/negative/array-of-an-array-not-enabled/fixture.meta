@@ -1,6 +1,0 @@
-class: negative
-summary: the grammar derives an array of an array and the checker refuses the element it cannot lay out yet
-constructs: 0520, 1790, 1830
-program: program.ldn
-codes: L0304
-targets: linux-x86-64, macos-arm64

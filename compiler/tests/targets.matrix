@@ -35,7 +35,6 @@ negative/array-mixed-repetition-assignment-prefix-too-long | linux-x86-64, macos
 negative/array-mixed-repetition-assignment-reads-incoming-state | linux-x86-64, macos-arm64
 negative/array-mixed-repetition-general-value-not-enabled | linux-x86-64, macos-arm64
 negative/array-mixed-repetition-prefix-too-long | linux-x86-64, macos-arm64
-negative/array-of-an-array-not-enabled | linux-x86-64, macos-arm64
 negative/array-repetition-argument-shape-mismatch | linux-x86-64, macos-arm64
 negative/array-repetition-count-mismatch | linux-x86-64, macos-arm64
 negative/array-repetition-countless-inferred-initializer-not-enabled | linux-x86-64, macos-arm64
@@ -128,6 +127,8 @@ negative/float-to-integer-known-nan | linux-x86-64, macos-arm64
 negative/float-to-integer-known-out-of-range | linux-x86-64, macos-arm64
 negative/float-type-not-enabled | linux-x86-64, macos-arm64
 negative/float-width-conversion-known-out-of-range | linux-x86-64, macos-arm64
+negative/for-any-element-traversal-deferred | linux-x86-64, macos-arm64, synthetic-32
+negative/for-array-element-read-only | linux-x86-64, macos-arm64, synthetic-32
 negative/for-collection-element-read-only | linux-x86-64, macos-arm64, synthetic-32
 negative/for-collection-traversal-deferred | linux-x86-64, macos-arm64, synthetic-32
 negative/for-range-endpoints-disagree | linux-x86-64, macos-arm64, synthetic-32
@@ -803,6 +804,7 @@ runtime/float-to-integer-nan-traps | linux-x86-64
 runtime/float-to-integer-out-of-range-traps | linux-x86-64
 runtime/float-width-conversion-overflow-traps | linux-x86-64
 runtime/float-width-conversions | linux-x86-64
+runtime/for-aggregate-element-traversal | linux-x86-64
 runtime/for-collection-traversal | linux-x86-64
 runtime/for-range-traversal | linux-x86-64
 runtime/function-valued-struct-fields | linux-x86-64
