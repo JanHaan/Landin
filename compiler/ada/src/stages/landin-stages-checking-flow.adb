@@ -30,6 +30,7 @@ package body Landin.Stages.Checking.Flow is
    use type Landin.Syntax.Node_Kind;
    use type Landin.Tokens.Assignment_Operator;
    use type Landin.Types.Type_Kind;
+   use type Landin.Types.Reference_View;
    use type Landin.Types.Magnitude;
    use type Landin.Checking.Element_Count;
    use type Landin.Checking.Field_Kind;
@@ -2210,6 +2211,25 @@ package body Landin.Stages.Checking.Flow is
                   Id : Res.Declaration_Id;
                   Path : Field_Path;
                begin
+                  if Landin.Checking.Type_Of
+                       (Types.all, Of_Tree, From) = Ty.Slice_Value
+                    and then Landin.Checking.Descriptor_Of
+                      (Types.all,
+                       Landin.Checking.Reference_Of
+                         (Types.all, Of_Tree, From)).View = Ty.Utf8_View
+                  then
+                     --  D182's result derives from the complete utf8 view,
+                     --  not one independently assigned array element.  The
+                     --  source is evaluated before the selecting argument.
+                     Flow_Expression
+                       (Of_Tree, From, Result, State, Edges);
+                     if Edges.Falls_Through then
+                        Flow_Expression
+                          (Of_Tree, Where, Result, State, Edges);
+                     end if;
+                     return;
+                  end if;
+
                   Flow_Expression
                     (Of_Tree, Where, Result, State, Edges);
                   if not Edges.Falls_Through then

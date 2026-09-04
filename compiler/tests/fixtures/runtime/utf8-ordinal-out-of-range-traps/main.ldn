@@ -1,0 +1,5 @@
+public main: () -> (code: i32) =
+    source: utf8 = "one"
+    missing: []u8 = source[3]
+    code = i32(missing[0])
+end main

@@ -1,6 +1,8 @@
 --  R3's parser-support text layer is deliberately byte-oriented. Full text
 --  types, literals, UTF-8 scalar decoding and codepoint indexing stay with
 --  R4.10; this module supplies opaque byte positions and bounded byte views.
+--  D182 also accepts this exact public position identity for O(1) utf8
+--  indexing; a position used that way must begin a codepoint.
 
 position_value: type = struct
     offset: usize

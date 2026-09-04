@@ -491,7 +491,6 @@ negative/text-literal-unknown-escape | linux-x86-64, macos-arm64
 negative/text-literal-write | linux-x86-64, macos-arm64
 negative/text-view-byte-escape | linux-x86-64, macos-arm64
 negative/text-view-identities-are-distinct | linux-x86-64, macos-arm64
-negative/text-view-indexing-deferred | linux-x86-64, macos-arm64
 negative/try-infallible-call | linux-x86-64, synthetic-32
 negative/type-alias-cycle | linux-x86-64, macos-arm64, synthetic-32
 negative/type-name-is-not-a-type | linux-x86-64, macos-arm64
@@ -507,6 +506,11 @@ negative/unterminated-text-literal | linux-x86-64, macos-arm64, synthetic-32
 negative/upper-case-name | linux-x86-64, macos-arm64
 negative/use-after-sink | linux-x86-64, macos-arm64, synthetic-32
 negative/usize-is-not-u64 | linux-x86-64, macos-arm64
+negative/utf16-indexing-is-not-utf8-indexing | linux-x86-64, macos-arm64
+negative/utf8-index-needs-u32-or-position | linux-x86-64, macos-arm64
+negative/utf8-index-position-identity-is-exact | linux-x86-64, macos-arm64
+negative/utf8-index-result-is-read-only | linux-x86-64, macos-arm64
+negative/utf8-index-result-keeps-origin | linux-x86-64, macos-arm64
 negative/variant-case-does-not-belong | linux-x86-64, macos-arm64
 negative/variant-case-duplicate | linux-x86-64, macos-arm64
 negative/variant-case-payload-disagrees | linux-x86-64, macos-arm64
@@ -949,6 +953,10 @@ runtime/unary-and-bitwise-exit-with-their-results | linux-x86-64
 runtime/undo-call-shapes | linux-x86-64
 runtime/undo-cleanups-follow-failure-edges | linux-x86-64
 runtime/undo-does-not-unwind-traps | linux-x86-64
+runtime/utf8-indexing | linux-x86-64
+runtime/utf8-ordinal-out-of-range-traps | linux-x86-64
+runtime/utf8-position-at-end-traps | linux-x86-64
+runtime/utf8-position-not-boundary-traps | linux-x86-64
 runtime/variant-case-construction-runs-in-source-order | linux-x86-64
 runtime/variant-inside-an-element | linux-x86-64
 runtime/variant-match-array-payload-bindings-update-storage | linux-x86-64

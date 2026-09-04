@@ -8525,7 +8525,8 @@ classified failure boundary before the repository gate can pass.
 | `conversion.bool-to-float` | static | 0170, 0180, 0190, 0210, 0310, 0700, 1880, 1940, 1960 | explicit conversion from bool to f32 or f64 maps false to positive zero and true to exactly positive one; both values are exact in either enabled destination | `runtime/bool-to-float-conversions` |
 | `conversion.integer-to-bool` | trap | 0150, 0180, 0190, 0200, 0310, 0700, 1880, 1940, 1950, 1960 | explicit conversion from every enabled integer to bool maps zero to false and one to true; L0300 rejects every other known value and an equivalent runtime conversion traps | `negative/integer-to-bool-known-out-of-range`, `runtime/integer-to-bool-conversions`, `runtime/integer-to-bool-out-of-range-traps` |
 | `conversion.float-to-bool` | trap | 0150, 0170, 0180, 0190, 0210, 0240, 0310, 0700, 1880, 1940, 1950, 1960 | explicit conversion from f32 or f64 to bool maps either signed zero to false and exactly positive one to true; L0300 rejects every other known finite or nonfinite value and an equivalent runtime conversion traps | `negative/float-to-bool-known-invalid`, `runtime/float-to-bool-conversions`, `runtime/float-to-bool-invalid-traps` |
-| `text.literal-storage` | static | 0260, 0270, 0280, 0430, 0570, 0600, 0610, 1770, 1880, 1900, 1940 | L0301 for a mismatched identity, writable context, byte escape in text or codepoint escape in bytes; L0303 for a write through a read-only view; L0304 keeps text indexing separate; quoted and raw literals default to `utf8`, decode to validated UTF-8 or UTF-16, preserve canonical view identity and static origin, and share width-keyed read-only storage with one trailing zero element excluded from slice lengths | `negative/cstring-literal-write`, `negative/raw-literal-needs-read-only-slice`, `negative/raw-literal-write`, `negative/text-literal-codepoint-in-byte-context`, `negative/text-literal-needs-byte-slice`, `negative/text-literal-needs-read-only-slice`, `negative/text-literal-write`, `negative/text-view-byte-escape`, `negative/text-view-identities-are-distinct`, `negative/text-view-indexing-deferred`, `runtime/hosted-text-views`, `runtime/raw-literal-bytes`, `runtime/text-literal-bytes` |
+| `text.literal-storage` | static | 0260, 0270, 0280, 0430, 0570, 0600, 1770, 1880, 1900, 1940 | L0301 for a mismatched identity, writable context, byte escape in text or codepoint escape in bytes; L0303 for a write through a read-only view; quoted and raw literals default to `utf8`, decode to validated UTF-8 or UTF-16, preserve canonical view identity and static origin, and share width-keyed read-only storage with one trailing zero element excluded from slice lengths | `negative/cstring-literal-write`, `negative/raw-literal-needs-read-only-slice`, `negative/raw-literal-write`, `negative/text-literal-codepoint-in-byte-context`, `negative/text-literal-needs-byte-slice`, `negative/text-literal-needs-read-only-slice`, `negative/text-literal-write`, `negative/text-view-byte-escape`, `negative/text-view-identities-are-distinct`, `runtime/hosted-text-views`, `runtime/raw-literal-bytes`, `runtime/text-literal-bytes` |
+| `text.indexing` | trap | 0430, 0570, 0600, 0610, 0790, 1050, 1950, 1960 | utf8 indexed by exact u32 scans linearly by codepoint ordinal; exact core/text.position supplies an O(1) byte offset; either returns one codepoint's read-only source-derived []u8, L0301 rejects every other argument or text identity, L0303 rejects mutation, L0316 enforces its declared return source, and an absent ordinal, end position or non-boundary position traps | `negative/utf16-indexing-is-not-utf8-indexing`, `negative/utf8-index-needs-u32-or-position`, `negative/utf8-index-position-identity-is-exact`, `negative/utf8-index-result-is-read-only`, `negative/utf8-index-result-keeps-origin`, `runtime/utf8-indexing`, `runtime/utf8-ordinal-out-of-range-traps`, `runtime/utf8-position-at-end-traps`, `runtime/utf8-position-not-boundary-traps` |
 | `arithmetic.known` | static | 0290, 0300, 0390, 1950 | L0300 or L0306 | `negative/compound-assignment-zero-divisor`, `negative/divisor-is-zero`, `negative/literal-above-its-type` |
 | `arithmetic.runtime` | trap | 0290, 0300, 0320, 0390, 1950, 1960 | trap | `runtime/compound-assignment-overflow-traps`, `runtime/checked-overflow-traps`, `runtime/checked-subtraction-traps`, `runtime/checked-multiplication-traps`, `runtime/checked-negation-traps`, `runtime/signed-division-overflow-traps`, `runtime/a-zero-divisor-traps`, `runtime/a-zero-remainder-divisor-traps`, `runtime/negative-left-shift-traps`, `runtime/negative-right-shift-traps` |
 | `arithmetic.total` | static | 0320, 0330, 0340, 0350, 0390 | L0301 for an inapplicable operand; admitted nonnegative shifts and wrapping operations are total | `negative/compound-assignment-float-remainder`, `negative/condition-is-not-believed`, `runtime/compound-assignment`, `runtime/shifts-fill-with-zeros-beyond-the-width` |
@@ -10103,5 +10104,62 @@ fixtures, `negative/cstring-literal-write`,
 `negative/text-literal-codepoint-in-byte-context`,
 `negative/text-view-byte-escape`,
 `negative/text-view-identities-are-distinct`,
-`negative/text-view-indexing-deferred`, the decoder, IR verifier and backend
+the decoder, IR verifier and backend
 cases, and the `source.lexical` and `text.literal-storage` guarantee rows.
+
+### D182 — UTF-8 index type selects ordinal scan or direct position
+
+**The tour said** that [0610] gives `utf8` two indexing conformances: an
+integer selects one codepoint by ordinal with a linear scan, while a position
+selects in O(1), and either returns that codepoint's bytes. [0600] had already
+made `core/text.position` an opaque byte offset for parser support. It did not
+say which integer type is exact, what happens at an invalid ordinal or byte
+position, which origin and permission the returned bytes have, or whether the
+operation reaches other text identities through their representations.
+
+**Chosen:** `utf8[u32]` counts Unicode scalar values from zero by decoding
+their shortest-form leading-byte widths. An untyped integer literal in this
+position receives `u32`; every other integer value is L0301 rather than an
+implicit conversion. `utf8[core/text.position]` reads the exact public opaque
+position identity supplied by the repository-owned module and uses its byte
+offset without scanning the preceding text. A same-shaped nominal type is not
+that position. The source expression is evaluated and retained once before
+the index or position expression.
+
+Both forms produce an ordinary read-only `[]u8` containing exactly the one to
+four encoded bytes of the selected codepoint. The slice excludes D181's
+terminator and derives from the complete `utf8` source, so mutation is L0303
+and returning it requires the ordinary exact `from source` declaration. An
+ordinal equal to or beyond the codepoint count traps. A position at the byte
+length or on a UTF-8 continuation byte likewise traps; only an in-bounds
+leading-byte boundary names a codepoint. These are [1950]/[1960]'s synchronous
+checked-address failures, not declared atom errors.
+
+Lowering expresses both operations with existing target-neutral scalar
+comparisons, backward CFG edges, checked slice addresses and an ordinary slice
+result. It introduces no text opcode, allocation, writable alias, new datum or
+evidence-table representation. `utf16` and `cstring` do not acquire indexing,
+and text slicing and traversal remain separate work. D181's validation,
+identity, pooling, terminator, origin and literal-error rules, plus existing
+array, byte-slice, range and evidence behavior, are unchanged.
+
+**The alternatives:** take `usize` because arrays do, accept every integer,
+expose a raw byte for position indexing, scan positions from the start, return
+`u32`, include the terminator, inherit indexing through every text carrier, or
+report a declared error. Those choices contradict [1270]'s written `u32`
+conformance, introduce implicit conversion, disagree on the two result types,
+erase the promised O(1) operation, lose the encoded-byte view, expose storage
+outside the text, or make one checked-address failure unlike all other
+indexing. All were declined.
+
+**Pinned by** `runtime/utf8-indexing`,
+`runtime/utf8-ordinal-out-of-range-traps`,
+`runtime/utf8-position-at-end-traps`,
+`runtime/utf8-position-not-boundary-traps`,
+`negative/utf16-indexing-is-not-utf8-indexing`,
+`negative/utf8-index-needs-u32-or-position`,
+`negative/utf8-index-position-identity-is-exact`,
+`negative/utf8-index-result-is-read-only`,
+`negative/utf8-index-result-keeps-origin`, retained hosted-text and
+byte-slice/range fixtures, the generated IR record, and the `text.indexing`
+guarantee row.

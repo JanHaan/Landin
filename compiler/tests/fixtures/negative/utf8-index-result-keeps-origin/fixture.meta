@@ -1,0 +1,6 @@
+class: negative
+summary: a utf8-index result derives from its source and cannot escape without a declared return origin
+constructs: 0430, 0570, 0600, 0610, 0790, 1050
+program: program.ldn
+codes: L0316
+targets: linux-x86-64, macos-arm64

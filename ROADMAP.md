@@ -3120,6 +3120,14 @@ UTF-16; and extends pooled static literal images to `u16` data and cstring
 relocations. Every datum has one uncounted trailing zero element. [0610]
 indexing remains a separate named refusal, as do slicing and traversal that
 would otherwise expose a backing slice accidentally.
+The following text increment enables [0610]'s two `utf8` indexing operations.
+D182 selects a linear codepoint-ordinal scan for an exact `u32` and O(1)
+access for the exact public `core/text.position` identity; both return one
+codepoint's read-only source-derived byte slice. Out-of-range ordinals and
+positions at the end or off a codepoint boundary trap through the existing
+checked slice-address path. The other text identities, pooling, terminators,
+permissions and errors retain D181's rules, while text slicing and traversal
+remain separate work.
 The seventh increment enables quoted text in a direct read-only
 `[]u8` context, including byte escapes, UTF-8 source validation, an uncounted
 trailing NUL, content-pooled read-only data and static slice relocations.
@@ -3725,7 +3733,7 @@ and record the reopening explicitly.
 | C4 — Generational observers for graphs and inferred uniqueness | Preserve both parked ideas together. The legacy item gave no trigger or citation; do not invent one. | Parked; transfer to Language evolution unless later evidence supplies a trigger. |
 | C5 — SoA collections | Deferred design record. Trigger: a simulation prototype needing one field contiguous. Source: `[0620]`. | Parked; transfer to Language evolution if untriggered. |
 | C6 — `unchecked` | Already normative but not first; optimizer assumptions wait for a measurable compiler. Sources: `[1120]`, `[1720]`, `H§5`. | Implement Linux semantics in R4.10; prove applicable target parity in R5 and R6. |
-| D1 — Integer indexing of UTF-8 | Keep linear codepoint-ordinal indexing for ergonomics despite three independent objections. Source: `[0610]`. | Implement in R4.10; reopen only with new program/measurement evidence. |
+| D1 — Integer indexing of UTF-8 | Keep linear codepoint-ordinal indexing for ergonomics despite three independent objections. Source: `[0610]`. | Implemented in R4.10 by D182; reopen only with new program/measurement evidence. |
 | D2 — No weak conformances or orphan rule yet | Weak conformances let applications silently change generic library behavior. Collisions remain errors; use `distinct` or explicit functions. Ecosystem-scale composition remains the trigger. Sources: `[1280]`, `R§11`. | Implemented in R2.60; reopen only on concrete ecosystem evidence. |
 | D3 — No comptime or macros | Generated tables, SoA and SVD bindings move to programs, making build/generator design load-bearing. Two cases exist; a third is the review trigger. Source: `[1540]`. | Held throughout; generator work follows B4 or Companion tool and ecosystem. |
 | D4 — Write `escaping` and `from` | Preserve local compilation and the allocator counterexample to inferred `from`. Sources: `[0790]`, `[0900]`. | Implement in R2.50; reopen only with evidence preserving both properties. |

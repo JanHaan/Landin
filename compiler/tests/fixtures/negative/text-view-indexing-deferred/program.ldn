@@ -1,3 +1,0 @@
-bad: (text: utf8) -> (byte: u8) =
-    byte = text[0]
-end bad

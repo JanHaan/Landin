@@ -1,0 +1,10 @@
+import core/text
+
+public main: () -> (code: i32) =
+    source: utf8 = "\u{2603}"
+    mut dummy: [1]u8 = [0]
+    zero := text.first(dummy[0..<1])
+    continuation := text.next(zero)
+    invalid: []u8 = source[continuation]
+    code = i32(invalid[0])
+end main
