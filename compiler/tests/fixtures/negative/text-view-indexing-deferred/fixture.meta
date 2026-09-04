@@ -1,6 +1,0 @@
-class: negative
-summary: hosted text-view integer indexing remains owned by [0610]
-constructs: 0600, 0610, 1050
-program: program.ldn
-codes: L0304
-targets: linux-x86-64, macos-arm64

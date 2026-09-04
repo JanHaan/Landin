@@ -74,7 +74,7 @@
 0580   tour        accepted emitted executed refused  An empty slice still has a base
 0590   tour        -                                  Fixed arrays are the vector type
 0600   tour        accepted emitted executed refused  Text types are distinct views
-0610   tour        refused                            Indexing utf8 by an integer yields the bytes of one
+0610   tour        accepted emitted executed refused  Indexing utf8 by an integer yields the bytes of one
 0620   tour        -                                  DEFERRED to a later version, kept here as a design record
 0630   tour        accepted emitted executed refused  Atoms: one declaration, one value, its own type
 0640   tour        accepted emitted executed refused  An enumeration is a union of atoms

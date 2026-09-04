@@ -3,8 +3,8 @@ error[L0202]: this type's representation is module-internal
   |
 9 |     leaked := cursor.offset
   |                      ^^^^^^
-  --> ../../core/text/text.ldn:5:1
+  --> ../../core/text/text.ldn:7:1
   |
-5 | position_value: type = struct
+7 | position_value: type = struct
   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ declared without `public` here
   = note: D150: a private identity may cross a public signature without exposing its fields

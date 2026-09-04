@@ -3204,7 +3204,8 @@ def check_coverage_registers(full_run):
         keys, covered = set(), set()
         required_guarantees = {
             "source.lexical", "source.structure", "declarations.names",
-            "types.values", "text.literal-storage", "float.ieee",
+            "types.values", "text.literal-storage", "text.indexing",
+            "float.ieee",
             "conversion.integer", "conversion.float-width",
             "conversion.integer-to-float",
             "conversion.float-to-integer",

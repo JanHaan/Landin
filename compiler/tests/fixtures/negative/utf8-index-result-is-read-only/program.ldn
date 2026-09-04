@@ -1,0 +1,3 @@
+bad: (source: utf8) -> none =
+    source[0][0] = 65
+end bad

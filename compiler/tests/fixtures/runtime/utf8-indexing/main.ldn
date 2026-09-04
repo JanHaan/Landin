@@ -1,0 +1,48 @@
+import core/text
+
+nth: (source: utf8, index: u32) -> (result: []u8 from source) =
+    result = source[index]
+end nth
+
+at: (source: utf8, cursor: text.position)
+    -> (result: []u8 from source) =
+    result = source[cursor]
+end at
+
+position_of_emoji: () -> (result: text.position) =
+    mut dummy: [1]u8 = [0]
+    zero := text.first(dummy[0..<1])
+    first := text.next(zero)
+    result = text.next(text.next(text.next(first)))
+end position_of_emoji
+
+public main: () -> (code: i32) =
+    source: utf8 = "A\u{2603}\u{1f600}Z"
+    a: []u8 = source[0]
+    snowman: []u8 = nth(source, 1)
+    emoji: []u8 = source[2]
+    z: []u8 = source[3]
+    mut dummy: [1]u8 = [0]
+    zero := text.first(dummy[0..<1])
+    snowman_at: []u8 = at(source, text.next(zero))
+    emoji_at: []u8 = source[position_of_emoji()]
+
+    mut bytes: [2]u8 = [10, 20]
+    ordinary: []u8 = bytes[0..<2]
+
+    if lenof a == 1 and a[0] == 65
+      and lenof snowman == 3
+      and snowman[0] == 226 and snowman[1] == 152 and snowman[2] == 131
+      and lenof emoji == 4
+      and emoji[0] == 240 and emoji[1] == 159
+      and emoji[2] == 152 and emoji[3] == 128
+      and lenof z == 1 and z[0] == 90
+      and lenof snowman_at == 3 and snowman_at[2] == 131
+      and lenof emoji_at == 4 and emoji_at[3] == 128
+      and ordinary[0] == 10 and ordinary[1] == 20
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

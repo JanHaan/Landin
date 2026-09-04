@@ -822,16 +822,19 @@ content at the same element width may share its read-only static datum.
 The three view identities remain distinct from one another and from their
 backing pointer or slice types through calls, aggregates and generics.
 
-Integer or position indexing, slicing and traversal do not become operations
-on a text view merely because its representation is a slice. [0610] remains
-the owner of indexing and the library concepts remain the owners of the other
-operations.
+Slicing and traversal do not become operations on a text view merely because
+its representation is a slice. [0610] supplies indexing separately, and the
+library concepts remain the owners of the other operations.
 
 ### [0610] Indexing utf8 by an integer yields the bytes of one
 
-Indexing utf8 by an integer yields the bytes of one
-codepoint and is a linear scan. Indexing by a position is
-O(1). Both conformances exist; the argument type decides.
+Indexing utf8 by a `u32` yields a read-only `[]u8` containing the bytes of one
+codepoint and is a linear scan by codepoint ordinal. Indexing by the opaque
+`core/text.position` byte offset returns the same source-derived view in O(1).
+The position must be in bounds and at a codepoint boundary. An ordinal outside
+the text, or a position at the end or on a continuation byte, traps. Both
+conformances exist; the argument type decides without an implicit integer
+conversion.
 
 ### [0620] DEFERRED to a later version, kept here as a design record
 

@@ -1,0 +1,6 @@
+class: negative
+summary: [0610] adds indexing to utf8 without inheriting it through the utf16 representation
+constructs: 0600, 0610, 1050
+program: program.ldn
+codes: L0301
+targets: linux-x86-64, macos-arm64

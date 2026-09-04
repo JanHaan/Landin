@@ -1,0 +1,6 @@
+class: negative
+summary: a structural lookalike is not the opaque core/text.position indexing argument
+constructs: 0600, 0610, 0710, 1050
+program: program.ldn
+codes: L0301
+targets: linux-x86-64, macos-arm64
