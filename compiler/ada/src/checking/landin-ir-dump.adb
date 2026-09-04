@@ -832,6 +832,13 @@ package body Landin.IR.Dump is
                  & " values "
                  & Trimmed (Natural'Image (Value_Count (Of_Unit, Id))));
 
+            if Has_Bool_Image (Of_Unit, Id) then
+               Put
+                 ("  bool image "
+                  & (if Landin.Types."=" (Bool_Image (Of_Unit, Id), 0)
+                     then "false" else "true"));
+            end if;
+
             --  [0520]'s shape, which is the whole of what an array item
             --  says about itself: how many bytes that comes to needs a
             --  target and a dump has none.

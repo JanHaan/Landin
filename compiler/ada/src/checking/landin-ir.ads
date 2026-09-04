@@ -121,7 +121,10 @@
 --  [0320]'s zero-fill beyond the width needs a width and a width needs a
 --  target; so `k: u32 = 1 << 40` arrives folded by nobody.  Carrying
 --  instructions covers that case without this package learning what a
---  width is.
+--  width is.  D177 is the deliberate bool exception: aggregate image
+--  lowering already owns the complete [1820] fold, so a module bool carries
+--  that folder's canonical zero-or-one image beside an otherwise empty datum
+--  block.  Routine short-circuit CFG therefore never becomes data.
 
 private with Ada.Containers.Vectors;
 
@@ -1086,6 +1089,33 @@ package Landin.IR is
      with Pre => Holds (Of_Unit, Item)
                  and then Result_Of (Of_Unit, Item)
                           = Landin.Types.Fixed_Array;
+
+   --  D177: a module bool is a static image, including when its source
+   --  expression uses [0340]'s short-circuit words.  Keeping that fold beside
+   --  the datum prevents routine-only CFG from becoming part of data
+   --  emission; false and true retain [1870]'s canonical zero/one images.
+   procedure Set_Bool_Image
+     (Into : in out Unit;
+      Item  : Item_Id;
+      Value : Landin.Types.Folded)
+     with Pre  => Holds (Into, Item)
+                  and then Kind_Of (Into, Item) = Datum
+                  and then Result_Of (Into, Item) = Landin.Types.Bool
+                  and then not Has_Bool_Image (Into, Item)
+                  and then Value in 0 | 1,
+          Post => Has_Bool_Image (Into, Item)
+                  and then Landin.Types."="
+                    (Bool_Image (Into, Item), Value);
+
+   function Has_Bool_Image (Of_Unit : Unit; Item : Item_Id) return Boolean
+     with Pre => Holds (Of_Unit, Item);
+
+   function Bool_Image
+     (Of_Unit : Unit; Item : Item_Id) return Landin.Types.Folded
+     with Pre => Holds (Of_Unit, Item)
+                 and then Kind_Of (Of_Unit, Item) = Datum
+                 and then Result_Of (Of_Unit, Item) = Landin.Types.Bool
+                 and then Has_Bool_Image (Of_Unit, Item);
 
    type Field_Image_Form is
      (Absent, Finite, Repeated, Hybrid, Selected, Nested);
@@ -3313,6 +3343,8 @@ private
       Image       : Run;
       Aggregate_Images : Run;
       Has_Image   : Boolean                   := False;
+      Has_Bool_Image : Boolean                := False;
+      Bool_Image  : Landin.Types.Folded       := 0;
       Repeated_Image : Boolean                := False;
       Slice_Image : Boolean                   := False;
       Slice_Source : Item_Id                  := No_Item;

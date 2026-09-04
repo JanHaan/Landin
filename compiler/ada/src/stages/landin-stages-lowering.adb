@@ -10059,6 +10059,18 @@ package body Landin.Stages.Lowering is
          --  none.  So the block carries the scope the resolver read it in.
          Open (Fresh (Of_Tree, Node, Res.Program_Scope));
 
+         if Held = Ty.Bool then
+            --  D177: a module bool is resolved by the same static folder as
+            --  an aggregate bool leaf in pass three.  Logical words are CFG
+            --  inside a routine, but a datum is an image and nothing executes
+            --  before the entry point [1460].
+            IR.Emit_Leave (Unit.all, Filling, IR.No_Value, Site);
+            IR.Leave_Block (Unit.all, Filling);
+            Current := IR.No_Block;
+            Filling := IR.No_Item;
+            return;
+         end if;
+
          if Held = Ty.Function_Value then
             declare
                Target : constant IR.Item_Id := Static_Function_Target (Id);
@@ -13716,6 +13728,24 @@ package body Landin.Stages.Lowering is
 
             Where (Id) := Visiting;
 
+            if Landin.Checking.Type_Of (Types.all, Id) = Ty.Bool then
+               declare
+                  Held  : Ty.Folded;
+                  Known : Boolean;
+               begin
+                  Fold_Scalar_Datum (Id, Held, Known);
+                  if not Known or else Held not in 0 | 1 then
+                     raise Landin.Compiler_Defect with
+                       "a checked module bool did not fold to its image";
+                  end if;
+                  IR.Set_Bool_Image
+                    (Unit.all, IR.Item_For (Unit.all, Id), Held);
+                  Made (Id) := True;
+               end;
+               Where (Id) := Resolved;
+               return;
+            end if;
+
             if Landin.Checking.Type_Of (Types.all, Id) = Ty.Slice_Value then
                declare
                   Element : constant IR.Field_Shape :=
@@ -13870,7 +13900,8 @@ package body Landin.Stages.Lowering is
             loop
                if Res.Sort_Of (Meanings.all, Id) = Res.Module_Binding
                  and then Landin.Checking.Type_Of (Types.all, Id)
-                          in Ty.Fixed_Array | Ty.Aggregate | Ty.Slice_Value
+                          in Ty.Bool | Ty.Fixed_Array | Ty.Aggregate
+                             | Ty.Slice_Value
                then
                   Resolve_Image (Id);
                end if;

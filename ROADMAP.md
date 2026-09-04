@@ -3188,6 +3188,12 @@ positive floating one for module-known scalar expressions, aggregate images
 and runtime values. Both results are exact and this direction is total. It
 completes the enabled scalar conversion matrix while f16 and the external
 floating-point ABI remain deferred.
+The twenty-third increment repairs module-known bool conformance already
+required by [0340], [0410], [1460] and [1940]. D177 folds `not`, `and` and `or`
+over literal, named, forward, chained and comparison operands into scalar and
+aggregate static images, preserving left-to-right short-circuiting without
+executing an initializer. Scalar bool datums now carry their zero-or-one image
+directly, so routine CFG `Branch` instructions cannot reach datum emission.
 
 Exit evidence: every hosted `[NNNN]` row has implementation and positive or
 negative evidence; no omission is hidden by prototype coverage.

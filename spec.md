@@ -2072,12 +2072,13 @@ arithmetic, [0300]'s wrapping forms at the operand type's own width so
 way, [0320]'s shifts, [0330]'s bitwise set, [0340]'s logical words with
 short-circuiting, [0350]'s comparisons and [0370]'s measurements. Both
 walks take their widths from Landin.Types.Width against the compilation's
-target facts; the backend separately folds verified scalar IR, whose
-representation is no longer syntax. Thus a shift past the width gives zero
-at exactly the width [0320] promises and a bitwise `not` occupies the same
-bytes the backend emits. The positive operator corpus and the negative fold
-agreement fixtures pin that checking settles every value or invalid operand
-before lowering is allowed to record an image. A member selection [0420], an array element
+target facts; the backend separately folds verified numeric scalar IR, while
+D177 records a bool datum directly from this same static-image walk so logical
+CFG cannot reach datum emission. Thus a shift past the width gives zero at
+exactly the width [0320] promises and a bitwise `not` occupies the same bytes
+the backend emits. The positive operator corpus and the negative fold agreement
+fixtures pin that checking settles every value or invalid operand before
+lowering is allowed to record an image. A member selection [0420], an array element
 index [0570] and a nested array literal are refused as D24-excluded
 constructs; [1940] admits an operator of [1820] applied to leaves, and
 these three would need the source aggregate or array to have its own
@@ -8543,7 +8544,7 @@ classified failure boundary before the repository gate can pass.
 | `any.dispatch` | static | 1390 | malformed table positions cannot be produced by accepted source; verifier failure is a compiler defect | `negative/any-entry-not-object-safe`, `runtime/any-heterogeneous-dispatch` |
 | `modules.visibility` | static | 1410, 1420, 1450, 1480 | L0006 or L0007 for an unresolved root; L0202 for a private member or representation | `negative/module-not-found`, `negative/imported-private-name`, `negative/core-mem-private-representation`, `negative/core-text-private-position`, `runtime/core-mem-raw-storage` |
 | `entry.point` | static | 1540 | L0502 before executable emission | `runtime/constant-return-exits-with-its-code` |
-| `module.images` | static | 1930, 1940 | L0300, L0304 or L0305 | `negative/module-value-from-a-call`, `runtime/recursive-module-images-are-laid-out-and-distinct` |
+| `module.images` | static | 0180, 0340, 0350, 0410, 1460, 1890, 1930, 1940 | L0300, L0304 or L0305; module-known bool `not`, `and` and `or` fold left to right into scalar and aggregate images, short-circuit `and`/`or`, and execute no initializer CFG | `negative/module-value-from-a-call`, `runtime/module-known-short-circuit-bools`, `runtime/recursive-module-images-are-laid-out-and-distinct` |
 | `configuration.fixed` | static | 1980 | L0300, L0301, L0305 or L0306 in the selected declaration view | `negative/fixed-conditional-evaluator`, `runtime/fixed-conditional-generic-runtime` |
 
 This is a coverage register, not an optimizer contract. `unchecked` [1120], C
@@ -9827,3 +9828,40 @@ program, or leave the claimed scalar matrix incomplete. All were declined.
 
 **Pinned by** `runtime/bool-to-float-conversions` and the
 `conversion.bool-to-float` guarantee row.
+
+### D177 — A module bool is a static image, not routine control flow
+
+**The tour said** that bool has only `false` and `true` [0180], that its
+logical words return bool [0340], and that `and` and `or` short-circuit from
+left to right [0410]. [1460] says nothing runs before the entry point, while
+[1940] admits every [1820] operator over module-known values. D24 already
+applies those rules to scalar leaves of module aggregate images. The remaining
+scalar path nevertheless lowered `and` and `or` through routine-style CFG, and
+the backend's datum fold correctly rejected its `Branch` instruction.
+
+**Chosen:** the twenty-third R4.10 increment makes every scalar module bool a
+target-neutral static image. The one shared lowering-time folder evaluates
+literal, named, forward and chained module-known operands, comparisons, `not`,
+`and` and `or`; its existing logical cases visit the left operand first and
+visit the right operand only when the result still depends on it. The same
+folder continues to write bool leaves in fixed arrays, repetitions, structs
+and variants. A bool datum's neutral block carries no computed value, and datum
+emission reads its canonical zero-or-one image directly, so no initializer is
+executed and no CFG `Branch` reaches data emission. Routine expressions keep
+their existing CFG and observable short-circuit behavior.
+
+This is an implementation conformance repair, not a new source rule. Checking
+still validates every written subtree before folding: short-circuiting does not
+hide an ill-typed operand, a call, an impossible integer operand, or another
+initializer that [1940] refuses. Module declaration order remains irrelevant
+[0130], and a cycle remains refused even if another declaration could skip a
+reference to it.
+
+**The alternatives:** teach the backend datum fold to interpret CFG, add a
+non-short-circuit logical opcode, or retain a second scalar-only syntax folder.
+Those choices respectively turn static data into executable control, contradict
+[0410], or let scalar and aggregate images disagree. All were declined.
+
+**Pinned by** the lowering case `module bools become static images`,
+`runtime/module-known-short-circuit-bools`, the generated IR, and the
+`module.images` guarantee row.

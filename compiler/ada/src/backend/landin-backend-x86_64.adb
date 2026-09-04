@@ -3550,6 +3550,13 @@ package body Landin.Backend.X86_64 is
            return Landin.IR.Value_Id
            is (Landin.IR.Nth_Operand (Of_Unit, Item, Value, Index));
       begin
+         --  D177 resolves every module bool through the shared static-image
+         --  folder.  In particular, a short-circuit Branch is routine CFG
+         --  and never reaches this datum-emission walk.
+         if Landin.IR.Has_Bool_Image (Of_Unit, Item) then
+            return Landin.IR.Bool_Image (Of_Unit, Item);
+         end if;
+
          case Fold_At (Natural (Item)) is
             when Settled =>
                return Fold_Of (Natural (Item));
