@@ -1,0 +1,9 @@
+reject: (values: [][2]i32) -> none =
+    for value in values do
+        value[0] = 1
+    end for
+end reject
+
+public main: () -> (code: i32) =
+    code = 1
+end main

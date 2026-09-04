@@ -1,0 +1,74 @@
+--  D178: aggregate traversal elements remain aliases in their source storage.
+mut source_calls: usize = 0
+mut cleanups: usize = 0
+
+source_start: () -> (result: usize) =
+    inc source_calls
+    result = 0
+end source_start
+
+cleaned: () -> none =
+    inc cleanups
+end cleaned
+
+public main: () -> (code: i32) =
+    mut first: [3]i32 = [1, 2, 3]
+    mut second: [3]i32 = [4, 5, 6]
+    mut rows: [2][3]i32
+    rows[0] = first
+    rows[1] = second
+    mut picked_runs: usize = 0
+    mut picked_completes: usize = 0
+
+    mut row_index_sum: usize = 0
+    outer: for row, index in rows[source_start()..<2] do
+        defer cleaned()
+        row_index_sum = row_index_sum + index
+        if index == 0 then row = second end if
+        row[index] = row[index] + 10
+        continue outer when index == 0
+        row[2] = 24
+    end outer
+
+    picked: [3]i32 = for row in rows do
+        inc picked_runs
+        break with row
+    complete
+        inc picked_completes
+        break with first
+    end for
+
+    mut spans: [2][]mut i32
+    spans[0] = first[0..<3]
+    spans[1] = second[0..<3]
+    mut span_index_sum: usize = 0
+    for span, index in spans do
+        span_index_sum = span_index_sum + index
+        if index == 1 then span = first[0..<3] end if
+        for value in span do
+            value = value + 1
+        end for
+    end for
+
+    chosen: []mut i32 = for span in spans do
+        break with span
+    complete
+        break with first[0..<0]
+    end for
+    chosen[1] = chosen[1] + 10
+
+    if source_calls == 1 and cleanups == 2
+      and picked_runs == 1 and picked_completes == 0
+      and row_index_sum == 1 and span_index_sum == 1
+      and rows[0][0] == 14 and rows[0][1] == 5 and rows[0][2] == 6
+      and rows[1][0] == 4 and rows[1][1] == 15 and rows[1][2] == 24
+      and picked[0] == 14 and picked[1] == 5 and picked[2] == 6
+      and first[0] == 3 and first[1] == 14 and first[2] == 5
+      and second[0] == 4 and second[1] == 5 and second[2] == 6
+      and spans[1][1] == 14 and chosen[1] == 14
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main
