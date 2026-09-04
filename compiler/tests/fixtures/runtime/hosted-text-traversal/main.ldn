@@ -1,0 +1,69 @@
+mut utf8_sources: usize = 0
+mut utf16_sources: usize = 0
+mut cstring_sources: usize = 0
+mut cleanups: usize = 0
+
+counted_utf8: () -> (text: utf8) =
+    inc utf8_sources
+    text = "A\u{2603}\u{1f600}"
+end counted_utf8
+
+counted_utf16: () -> (text: utf16) =
+    inc utf16_sources
+    text = "A\u{2603}\u{1f600}"
+end counted_utf16
+
+counted_cstring: () -> (text: cstring) =
+    inc cstring_sources
+    text = "B\u{0}C"
+end counted_cstring
+
+cleaned: () -> none =
+    inc cleanups
+end cleaned
+
+public main: () -> (code: i32) =
+    mut utf8_sum: u32 = 0
+    mut utf8_indexes: usize = 0
+    for scalar, index in counted_utf8() do
+        defer cleaned()
+        utf8_sum += scalar
+        utf8_indexes += index
+    end for
+
+    mut utf16_sum: u32 = 0
+    mut utf16_indexes: usize = 0
+    for scalar, index in counted_utf16() do
+        defer cleaned()
+        utf16_sum += scalar
+        utf16_indexes += index
+        continue when scalar == '\u{2603}'
+    end for
+
+    mut cstring_sum: u32 = 0
+    mut cstring_count: usize = 0
+    for scalar, index in counted_cstring() do
+        defer cleaned()
+        cstring_sum += scalar
+        cstring_count = index + 1
+    end for
+
+    empty: utf8 = ""
+    mut completed: bool = false
+    for scalar in empty do
+        _ = scalar
+    complete
+        completed = true
+    end for
+
+    if utf8_sources == 1 and utf16_sources == 1
+      and cstring_sources == 1 and cleanups == 7
+      and utf8_sum == 138308 and utf16_sum == 138308
+      and utf8_indexes == 3 and utf16_indexes == 3
+      and cstring_sum == 66 and cstring_count == 1 and completed
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

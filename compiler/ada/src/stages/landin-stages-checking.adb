@@ -17770,7 +17770,9 @@ package body Landin.Stages.Checking is
          --  D179 carries an aliased `any` element's concept independently
          --  from its two-word runtime shape.  D180 instead selects [1320]
          --  evidence for a struct or `any C` source and binds the exact Item
-         --  as an immutable copy; both forms keep the optional `usize` index.
+         --  as an immutable copy.  D184 gives each exact hosted text view its
+         --  own intrinsic [1320] contract with `usize` Cur and copied `u32`
+         --  Item; every form keeps the optional `usize` index.
          procedure Check_Collection_Traversal
            (Of_Tree : Syn.Tree;
             Node    : Syn.Node_Id;
@@ -17797,7 +17799,7 @@ package body Landin.Stages.Checking is
             --  place.  A computed struct is not such a place, but D180
             --  admits its ordinary value in this one contextual position
             --  before copying it into evidence-owned traversal state.
-            if Held not in Ty.Fixed_Array | Ty.Slice_Value
+            if Held not in Ty.Fixed_Array | Ty.Pointer_Value | Ty.Slice_Value
                            | Ty.Aggregate | Ty.Any_Value
             then
                Held := Synthesise (Of_Tree, Source);
@@ -17806,34 +17808,55 @@ package body Landin.Stages.Checking is
                Descriptor := Landin.Checking.Descriptor_Of
                  (Types.all,
                   Landin.Checking.Reference_Of (Types.all, Of_Tree, Source));
-               if Descriptor.View /= Ty.Ordinary_View then
+               if Descriptor.View in Ty.Utf8_View | Ty.Utf16_View then
+                  --  D184: these are scalar traversals, not storage aliases.
+                  --  Keeping this branch before the ordinary slice path is
+                  --  what prevents identity, permission and origin from
+                  --  leaking through the representation.
+                  Kind := Ty.U32;
+                  Item := (Kind => Ty.U32, others => <>);
+                  Writable := False;
+               elsif Descriptor.View /= Ty.Ordinary_View then
+                  raise Landin.Compiler_Defect with
+                    "a pointer-shaped text view reached slice traversal";
+               else
+                  Kind := Descriptor.Referent;
+                  Item :=
+                    (Kind            => Kind,
+                     Length          => Descriptor.Length,
+                     Element         => Descriptor.Element,
+                     Element_Nominal => Descriptor.Element_Nominal,
+                     Nominal         => Descriptor.Nominal,
+                     Atoms           => Descriptor.Atoms,
+                     Signature       => Descriptor.Signature,
+                     Reference       => Descriptor.Reference,
+                     Concept         => Descriptor.Concept,
+                     others          => <>);
+                  Writable := Descriptor.Mutable;
+               end if;
+            elsif Held = Ty.Pointer_Value then
+               Descriptor := Landin.Checking.Descriptor_Of
+                 (Types.all,
+                  Landin.Checking.Reference_Of (Types.all, Of_Tree, Source));
+               if Descriptor.View = Ty.C_String_View then
+                  Kind := Ty.U32;
+                  Item := (Kind => Ty.U32, others => <>);
+                  Writable := False;
+               elsif Decidable (Held) then
                   Bad.Report
-                    (Item    => Bad.Unsupported_Use,
+                    (Item    => Bad.Type_Mismatch,
                      Source  => Syn.Source_Of (Of_Tree),
                      Where   => Syn.Where (Of_Tree, Source),
-                     Message => "a distinct text view is not traversed as"
-                                & " its backing code-unit slice",
-                     Note    => "[0600]/[1320]: text traversal requires its"
-                                & " own iterable evidence",
-                     Refused => Bad.Collection_Traversal,
+                     Message => "this traverses a pointer, and only the exact"
+                                & " `cstring` view has text traversal",
+                     Note    => "D184: an ordinary pointer does not inherit"
+                                & " [0600]'s iterable conformance",
+                     Related => Syn.Origin (Of_Tree, Node),
+                     Because => "this for loop",
                      Into    => Found);
                   Landin.Checking.Refuse (Types.all, Of_Tree, Source);
                   Kind := Ty.Ill_Typed;
-                  goto Traversal_Source_Done;
                end if;
-               Kind := Descriptor.Referent;
-               Item :=
-                 (Kind            => Kind,
-                  Length          => Descriptor.Length,
-                  Element         => Descriptor.Element,
-                  Element_Nominal => Descriptor.Element_Nominal,
-                  Nominal         => Descriptor.Nominal,
-                  Atoms           => Descriptor.Atoms,
-                  Signature       => Descriptor.Signature,
-                  Reference       => Descriptor.Reference,
-                  Concept         => Descriptor.Concept,
-                  others          => <>);
-               Writable := Descriptor.Mutable;
             elsif Held = Ty.Fixed_Array then
                declare
                   Shape : constant Landin.Checking.Field_Shape :=
@@ -17921,8 +17944,6 @@ package body Landin.Stages.Checking is
                   Into    => Found);
                Landin.Checking.Refuse (Types.all, Of_Tree, Source);
             end if;
-
-            <<Traversal_Source_Done>>
 
             if Id /= Res.No_Declaration
               and then Kind not in Ty.Undecided | Ty.Not_Typed

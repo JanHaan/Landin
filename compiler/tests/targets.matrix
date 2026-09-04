@@ -494,6 +494,8 @@ negative/text-slice-needs-usize-bounds | linux-x86-64, macos-arm64
 negative/text-slice-result-is-read-only | linux-x86-64, macos-arm64
 negative/text-slice-result-keeps-identity | linux-x86-64, macos-arm64
 negative/text-slice-result-keeps-origin | linux-x86-64, macos-arm64
+negative/text-traversal-item-is-read-only | linux-x86-64, macos-arm64, synthetic-32
+negative/text-traversal-ordinary-pointer-is-not-cstring | linux-x86-64, macos-arm64, synthetic-32
 negative/text-view-byte-escape | linux-x86-64, macos-arm64
 negative/text-view-identities-are-distinct | linux-x86-64, macos-arm64
 negative/try-infallible-call | linux-x86-64, synthetic-32
@@ -838,6 +840,7 @@ runtime/generic-try-effective-signature | linux-x86-64
 runtime/generic-zero-nominal-array-signatures | linux-x86-64
 runtime/greatest-common-divisor | linux-x86-64
 runtime/hosted-io-reads-parser-input | linux-x86-64
+runtime/hosted-text-traversal | linux-x86-64
 runtime/hosted-text-views | linux-x86-64
 runtime/indirect-function-abi | linux-x86-64
 runtime/infallible-function-values | linux-x86-64

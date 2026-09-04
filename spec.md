@@ -492,6 +492,34 @@ iterable evidence, is L0301. Integer ranges
 and fixed-array or slice storage traversal retain D159--D160 and D178--D179
 unchanged.
 
+D184 admits the exact `utf8`, `utf16`, and `cstring` identities through three
+intrinsic conformances to [1320]'s four-operation traversal contract. These do
+not search, add, reorder, or expose a source-declared evidence table, and an
+ordinary slice or pointer does not acquire them from its representation. Each
+uses exact `usize` Cur and `u32` Item identities. Cur is a private physical
+code-unit offset: bytes for `utf8` and `cstring`, UTF-16 code units for `utf16`.
+Item is an immutable copied Unicode scalar with no reference origin. It is not
+an encoded subview and is never an alias into the retained read-only source.
+
+The source expression is evaluated once and its complete carrier and origin
+are retained before conceptual `first` produces offset zero. Every test calls
+`at_end`; a false result calls `item`, which decodes exactly one validated
+scalar before the body. Fallthrough and `continue` run applicable cleanup and
+then `next`, which advances Cur by that scalar's physical width and advances
+the optional immutable `usize` loop index by one. `break` skips `next`.
+For `utf8` and `utf16`, `at_end` is Cur equal to the retained code-unit length.
+For `cstring`, it is the first zero byte; that terminator is not an Item, so an
+embedded U+0000 ends the C string in the same way as its trailing terminator.
+
+D181 admits only validated hosted views and D183 preserves that validity
+across text slices, so these intrinsic providers are infallible and
+declare no atom error. A well-formed view neither traps nor reports a decoding
+error during traversal. Invalid or stale storage remains [0430]'s existing
+pointer non-guarantee rather than a recoverable text outcome. D181--D183's
+validation, pooling, single trailing terminator, identities, indexing, slicing,
+permissions, origins, traps and errors remain unchanged, as do D159--D160 and
+D178--D180 range, array, slice and declared-evidence traversal.
+
 ```landin-grammar
 statement   ::= binding | destructuring_binding | assignment | increment
               | discard | call | defer | undo | try | return | fail
@@ -8535,6 +8563,7 @@ classified failure boundary before the repository gate can pass.
 | `text.literal-storage` | static | 0260, 0270, 0280, 0430, 0570, 0600, 1770, 1880, 1900, 1940 | L0301 for a mismatched identity, writable context, byte escape in text or codepoint escape in bytes; L0303 for a write through a read-only view; quoted and raw literals default to `utf8`, decode to validated UTF-8 or UTF-16, preserve canonical view identity and static origin, and share width-keyed read-only storage with one trailing zero element excluded from slice lengths | `negative/cstring-literal-write`, `negative/raw-literal-needs-read-only-slice`, `negative/raw-literal-write`, `negative/text-literal-codepoint-in-byte-context`, `negative/text-literal-needs-byte-slice`, `negative/text-literal-needs-read-only-slice`, `negative/text-literal-write`, `negative/text-view-byte-escape`, `negative/text-view-identities-are-distinct`, `runtime/hosted-text-views`, `runtime/raw-literal-bytes`, `runtime/text-literal-bytes` |
 | `text.indexing` | trap | 0430, 0570, 0600, 0610, 0790, 1050, 1950, 1960 | utf8 indexed by exact u32 scans linearly by codepoint ordinal; exact core/text.position supplies an O(1) byte offset; either returns one codepoint's read-only source-derived []u8, L0301 rejects every other argument or text identity, L0303 rejects mutation, L0316 enforces its declared return source, and an absent ordinal, end position or non-boundary position traps | `negative/utf16-indexing-is-not-utf8-indexing`, `negative/utf8-index-needs-u32-or-position`, `negative/utf8-index-position-identity-is-exact`, `negative/utf8-index-result-is-read-only`, `negative/utf8-index-result-keeps-origin`, `runtime/utf8-indexing`, `runtime/utf8-ordinal-out-of-range-traps`, `runtime/utf8-position-at-end-traps`, `runtime/utf8-position-not-boundary-traps` |
 | `text.slicing` | trap | 0310, 0410, 0430, 0570, 0600, 0790, 1050, 1820, 1950, 1960 | utf8 and utf16 ranges take exact usize code-unit bounds, require scalar-boundary endpoints, preserve the immutable source-derived text identity, include the complete upper scalar for `..`, and evaluate source then bounds once; cstring and other bound types are L0301, mutation is L0303, L0316 enforces the return origin, and an invalid bound or split scalar traps | `negative/cstring-range-slicing-has-no-length`, `negative/text-slice-needs-usize-bounds`, `negative/text-slice-result-is-read-only`, `negative/text-slice-result-keeps-identity`, `negative/text-slice-result-keeps-origin`, `runtime/text-range-slicing`, `runtime/utf16-slice-not-boundary-traps`, `runtime/utf8-slice-lower-not-boundary-traps`, `runtime/utf8-slice-upper-not-boundary-traps` |
+| `text.traversal` | static | 0250, 0410, 0430, 0600, 1130, 1150, 1160, 1320 | the exact utf8, utf16 and cstring identities retain one source, use private usize code-unit cursors, and yield immutable copied u32 Unicode scalars in first/at_end/item/next order; cstring stops before its first NUL, ordinary carriers are L0301, mutation is L0303, and validated hosted views add no traversal trap or declared error | `negative/text-traversal-item-is-read-only`, `negative/text-traversal-ordinary-pointer-is-not-cstring`, `runtime/hosted-text-traversal` |
 | `arithmetic.known` | static | 0290, 0300, 0390, 1950 | L0300 or L0306 | `negative/compound-assignment-zero-divisor`, `negative/divisor-is-zero`, `negative/literal-above-its-type` |
 | `arithmetic.runtime` | trap | 0290, 0300, 0320, 0390, 1950, 1960 | trap | `runtime/compound-assignment-overflow-traps`, `runtime/checked-overflow-traps`, `runtime/checked-subtraction-traps`, `runtime/checked-multiplication-traps`, `runtime/checked-negation-traps`, `runtime/signed-division-overflow-traps`, `runtime/a-zero-divisor-traps`, `runtime/a-zero-remainder-divisor-traps`, `runtime/negative-left-shift-traps`, `runtime/negative-right-shift-traps` |
 | `arithmetic.total` | static | 0320, 0330, 0340, 0350, 0390 | L0301 for an inapplicable operand; admitted nonnegative shifts and wrapping operations are total | `negative/compound-assignment-float-remainder`, `negative/condition-is-not-believed`, `runtime/compound-assignment`, `runtime/shifts-fill-with-zeros-beyond-the-width` |
@@ -8570,7 +8599,7 @@ classified failure boundary before the repository gate can pass.
 | `results.destructure` | static | 0990 | L0200, L0301, L0302 or L0308 | `negative/result-destructure-needs-multiple`, `runtime/r230-composition` |
 | `functions.anonymous` | static | 1010 | L0201 for capture; complete signature checks otherwise apply | `negative/anonymous-function-captures-local`, `runtime/inferred-function-values` |
 | `control.flow` | static | 1050, 1060, 1080, 1090 | L0301 or L0302 at every reachable join and exit | `negative/if-expression-missing-else`, `runtime/control-expression-edges-keep-source-order` |
-| `control.loops` | static | 1130, 1140, 1150, 1160, 1170, 1180, 1190, 1320 | L0301 for a non-bool condition, mismatched range, non-traversable source, missing/ambiguous/non-exact iterable evidence, or incomplete/inconsistent value exit; L0303 for a write to a read-only storage element or copied iterable item; a taken transfer runs active defers and targets its named or nearest loop edge, while natural completion alone enters `complete` | `negative/loop-condition-not-bool`, `negative/loop-value-missing-break-value`, `negative/loop-value-missing-completion`, `negative/loop-value-type-mismatch`, `negative/for-range-needs-integer`, `negative/for-range-endpoints-disagree`, `negative/for-source-not-traversable`, `negative/for-collection-element-read-only`, `negative/for-array-element-read-only`, `negative/for-any-element-read-only`, `negative/for-iterable-ambiguous-evidence`, `negative/for-iterable-item-read-only`, `negative/for-iterable-missing-conformance`, `runtime/loop-control-flow`, `runtime/loop-values`, `runtime/for-range-traversal`, `runtime/for-collection-traversal`, `runtime/for-aggregate-element-traversal`, `runtime/for-any-element-traversal`, `runtime/for-iterable-evidence-traversal` |
+| `control.loops` | static | 1130, 1140, 1150, 1160, 1170, 1180, 1190, 1320 | L0301 for a non-bool condition, mismatched range, non-traversable source, missing/ambiguous/non-exact iterable evidence, or incomplete/inconsistent value exit; L0303 for a write to a read-only storage element or copied iterable item; a taken transfer runs active defers and targets its named or nearest loop edge, while natural completion alone enters `complete` | `negative/loop-condition-not-bool`, `negative/loop-value-missing-break-value`, `negative/loop-value-missing-completion`, `negative/loop-value-type-mismatch`, `negative/for-range-needs-integer`, `negative/for-range-endpoints-disagree`, `negative/for-source-not-traversable`, `negative/for-collection-element-read-only`, `negative/for-array-element-read-only`, `negative/for-any-element-read-only`, `negative/for-iterable-ambiguous-evidence`, `negative/for-iterable-item-read-only`, `negative/for-iterable-missing-conformance`, `negative/text-traversal-item-is-read-only`, `runtime/loop-control-flow`, `runtime/loop-values`, `runtime/for-range-traversal`, `runtime/for-collection-traversal`, `runtime/for-aggregate-element-traversal`, `runtime/for-any-element-traversal`, `runtime/for-iterable-evidence-traversal`, `runtime/hosted-text-traversal` |
 | `cleanup.defer` | static | 1100 | the registered call is checked at every ordinary and successful-return edge | `negative/defer-read-not-assigned-on-return`, `runtime/defer-cleanups-follow-control-edges` |
 | `cleanup.undo` | static | 1110 | the registered call is checked at every propagated-failure edge | `negative/undo-read-not-assigned-on-failure`, `runtime/undo-cleanups-follow-failure-edges` |
 | `generics.substitution` | static | 1220, 1280, 1290, 1300, 1310, 1350, 1500, 1650, 1660, 1700 | L0300, L0301, L0306, L0307, L0313 or L0318 | `negative/generic-routine-undeduced-formal`, `runtime/generic-structural-deduction`, `runtime/core-vec-pointer-storage` |
@@ -8610,6 +8639,7 @@ operation can travel through several physical mechanisms:
 | `verifier-boundaries` | D144, D147 | `unit/evidence-verifier` |
 | `target-layout-64` | D144, D147 | `unit/evidence-layout`, `runtime/any-aggregate-storage` |
 | `target-layout-32` | D144, D147 | `unit/evidence-layout` |
+| `intrinsic-text-traversal` | D184 | `runtime/hosted-text-traversal`, `negative/text-traversal-ordinary-pointer-is-not-cstring` |
 
 **The alternatives:** classifying syntax-node kinds gives internal recovery
 nodes equal standing with user operations and misses one operation's several
@@ -10236,3 +10266,68 @@ recoverable only for text. All were declined.
 `negative/text-slice-result-keeps-origin`, retained D181/D182 and ordinary
 slice/range fixtures, the generated IR record, and the `text.slicing`
 guarantee row.
+
+### D184 — Hosted text traversal decodes scalar Items
+
+**The tour said** that [0600]'s hosted text types are distinct views and that
+traversal is [1320]'s concept operation [1150]. D181 kept traversal separate
+from each backing carrier, and D183 again preserved that boundary after range
+slicing. The tour did not say which text identities traverse, whether an Item
+is an encoded unit, encoded view or Unicode scalar, which cursor identity is
+exact, where a C string ends, or how validation, origin and provider order
+apply.
+
+**Chosen:** each exact `utf8`, `utf16`, and `cstring` identity has one closed
+intrinsic conformance to [1320]'s `first`, `at_end`, `item`, and `next`
+contract. It is a direct language realization like the existing range and
+storage traversals, not a source-declared evidence row: it neither searches
+nor changes the ordinary conformance register, and an ordinary `[]u8`,
+`[]u16`, or `ptr u8` does not inherit it. The exact Cur type is `usize`, kept
+privately as a physical code-unit offset. The exact Item type is `u32`, the
+same Unicode scalar identity as [0250], copied immutably into the loop binding
+with no reference origin.
+
+For `utf8` and `cstring`, Cur counts bytes and `item` decodes one shortest-form
+UTF-8 scalar. For `utf16`, Cur counts 16-bit code units and `item` combines a
+surrogate pair when present. `next` advances by the decoded scalar's one-to-four
+bytes or one-to-two UTF-16 code units. The optional loop index remains [1150]'s
+scalar ordinal: it begins at zero and advances once with `next`, independently
+of Cur's physical increment. `utf8` and `utf16` end at their retained lengths.
+`cstring` ends before the first zero byte, whether that byte is an embedded
+U+0000 or D181's trailing terminator; the zero is never an Item.
+
+The complete source expression is evaluated and retained once before `first`.
+Every test calls `at_end`; false calls `item` before the body; fallthrough and
+`continue` run cleanup and then `next`; `break` runs cleanup and skips `next`.
+This is D180's provider order exactly, without observable provider-expression
+evaluation because the four implementations are intrinsic. The retained text
+source stays immutable and keeps its complete origin until traversal ends.
+
+D181 validation and D183 boundary-preserving slices make every reachable
+encoded unit sequence valid. The four intrinsic operations are therefore
+infallible, declare no atom error and do not trap for a well-formed hosted
+view. A missing terminator, malformed units or stale storage cannot be formed
+through these text operations; violating the underlying pointer validity is
+still [0430]'s existing non-guarantee rather than a text error. Lowering uses
+ordinary target-neutral scalar loads, comparisons, conversions, arithmetic
+and CFG. It introduces no text opcode, allocation, datum, mutable alias or
+evidence-table entry. D181--D183 validation, pooling, terminators, identities,
+indexing, slicing, permissions, origins, traps and errors remain unchanged,
+as do range, array, slice and declared-evidence traversal.
+
+**The alternatives:** traverse only the length-bearing identities, expose
+encoded `u8`/`u16` units or codepoint byte slices, use
+`core/text.position` for one view, scan `cstring` past NUL to the pooled
+datum's unobservable end, let a user conformance replace the built-in
+semantics, or report decoding atoms. Those choices respectively lose the C
+text boundary, make one source character take several iterations or give two
+Item types, confuse the parser's public byte position with an intrinsic
+cross-encoding cursor, contradict NUL termination, make direct text traversal
+module-dependent, or add a recoverable failure after validation already made
+it impossible. All were declined.
+
+**Pinned by** `runtime/hosted-text-traversal`,
+`negative/text-traversal-item-is-read-only`,
+`negative/text-traversal-ordinary-pointer-is-not-cstring`, retained D181--D183
+and range/array/slice/evidence fixtures, the generated IR record, and the
+`text.traversal` guarantee row.
