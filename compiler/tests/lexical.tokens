@@ -24572,14 +24572,6 @@ file negative/module-directory-invalid/entry.ldn tokens 5
   7 10 i32
   11 12 =
   13 14 1
-file negative/module-float-arithmetic-not-enabled/program.ldn tokens 7
-  0 5 ratio
-  5 6 :
-  7 10 f64
-  11 12 =
-  13 16 3.0
-  17 18 /
-  19 22 2.0
 file negative/module-fold-no-type-holds/program.ldn tokens 7
   0 4 over
   4 5 :

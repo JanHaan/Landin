@@ -110,6 +110,9 @@ package body Landin.Tests.Checking_Suite is
    procedure Float_Specials_Have_Canonical_Bits
      (Item : in out Landin.Testing.Context);
 
+   procedure Float_Arithmetic_Uses_IEEE_Bits
+     (Item : in out Landin.Testing.Context);
+
    procedure Failed_Generic_Deduction_Has_No_Target
      (Item : in out Landin.Testing.Context);
 
@@ -6753,8 +6756,72 @@ package body Landin.Tests.Checking_Suite is
          "unary minus changes only the nan sign bit");
    end Float_Specials_Have_Canonical_Bits;
 
+   procedure Float_Arithmetic_Uses_IEEE_Bits
+     (Item : in out Landin.Testing.Context)
+   is
+   begin
+      Landin.Testing.Check
+        (Item,
+         Landin.Types.Float_Arithmetic_Result
+           (16#3F80_0000#, 16#3380_0000#, Landin.Types.F32,
+            Landin.Types.Float_Add) = 16#3F80_0000#,
+         "binary32 addition rounds a halfway result to even");
+      Landin.Testing.Check
+        (Item,
+         Landin.Types.Float_Arithmetic_Result
+           (1, 1, Landin.Types.F32, Landin.Types.Float_Add) = 2
+         and then Landin.Types.Float_Arithmetic_Result
+           (16#0010_0000_0000_0000#, 16#4000_0000_0000_0000#,
+            Landin.Types.F64, Landin.Types.Float_Divide)
+              = 16#0008_0000_0000_0000#,
+         "arithmetic retains gradual underflow in both widths");
+      Landin.Testing.Check
+        (Item,
+         Landin.Types.Float_Arithmetic_Result
+           (16#3F80_0000#, 16#4040_0000#, Landin.Types.F32,
+            Landin.Types.Float_Divide) = 16#3EAA_AAAB#
+         and then Landin.Types.Float_Arithmetic_Result
+           (16#3FF0_0000_0000_0000#, 16#4008_0000_0000_0000#,
+            Landin.Types.F64, Landin.Types.Float_Divide)
+              = 16#3FD5_5555_5555_5555#,
+         "division rounds recurring quotients in each IEEE width");
+      Landin.Testing.Check
+        (Item,
+         Landin.Types.Float_Arithmetic_Result
+           (16#7F7F_FFFF#, 16#4000_0000#, Landin.Types.F32,
+            Landin.Types.Float_Multiply) = 16#7F80_0000#
+         and then Landin.Types.Float_Arithmetic_Result
+           (0, 0, Landin.Types.F64, Landin.Types.Float_Divide)
+              = 16#7FF8_0000_0000_0000#,
+         "overflow becomes infinity and invalid arithmetic canonicalizes nan");
+      Landin.Testing.Check
+        (Item,
+         Landin.Types.Float_Arithmetic_Result
+           (16#3FF0_0000_0000_0000#, 16#3FF0_0000_0000_0000#,
+            Landin.Types.F64, Landin.Types.Float_Subtract) = 0
+         and then Landin.Types.Float_Arithmetic_Result
+           (16#8000_0000#, 16#4000_0000#, Landin.Types.F32,
+            Landin.Types.Float_Divide) = 16#8000_0000#,
+         "exact cancellation and division preserve IEEE zero signs");
+      Landin.Testing.Check
+        (Item,
+         Landin.Types.Float_Comparison_Result
+           (16#8000_0000#, 0, Landin.Types.F32,
+            Landin.Types.Float_Equal)
+         and then Landin.Types.Float_Comparison_Result
+           (16#7FC0_0000#, 16#7FC0_0000#, Landin.Types.F32,
+            Landin.Types.Float_Not_Equal)
+         and then not Landin.Types.Float_Comparison_Result
+           (16#7FC0_0000#, 0, Landin.Types.F32,
+            Landin.Types.Float_Less),
+         "comparison equates signed zeros and leaves nan unordered");
+   end Float_Arithmetic_Uses_IEEE_Bits;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "checking", "float arithmetic uses ieee bits",
+         Float_Arithmetic_Uses_IEEE_Bits'Access);
       Landin.Testing.Register
         (Into, "checking", "float specials have canonical bits",
          Float_Specials_Have_Canonical_Bits'Access);

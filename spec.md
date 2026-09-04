@@ -1011,12 +1011,13 @@ value that overflows has no moment in which to trap and no
 value to stand for it. Inside a body the same expression
 traps [0300] and is not this, which is the one place the two
 readings of one sum come apart.
-D162's first float increment admits a decimal float literal, its unary minus,
+D162's first float increment admitted a decimal float literal, its unary minus,
 `zeroed`, or D167's named infinity and NaN as a module scalar or
-aggregate-field image. Module float arithmetic is a named R4.10 refusal:
-reproducing the runtime IEEE rounding and NaN rules in a target-neutral static
-folder is separate work, not permission to use the compiler host's
-floating-point behavior as language semantics.
+aggregate-field image. D175 admits `+`, `-`, `*`, `/` and comparisons over
+module-known f32 and f64 values, including scalar and aggregate images. The
+target-neutral folder evaluates IEEE carrier bits with bounded integer work;
+it does not use the compiler host's floating-point operations as language
+semantics.
 [0130] makes a module a set, so one module value may name
 another written below it. A chain of them that comes back to
 where it began names nothing at all: no member of it is
@@ -8488,7 +8489,7 @@ classified failure boundary before the repository gate can pass.
 | `source.structure` | static | 1740, 1800, 1810, 1820, 1840 | L0100--L0112 | `negative/variant-part-end-name-mismatch`, `unit/parser-nesting-limit` |
 | `declarations.names` | static | 0040, 0050, 0060, 0080, 0090, 0100, 0110, 0120, 0130, 0140, 1790, 1795, 1850 | L0200 or L0201 | `negative/duplicate-in-a-module`, `negative/local-used-above-its-declaration` |
 | `types.values` | static | 0070, 0160, 0170, 0180, 0190, 0200, 0210, 0250, 1870, 1880, 1890 | L0300, L0301 or L0304 | `negative/character-literal-needs-u32`, `negative/float-literal-not-enabled`, `negative/float-type-not-enabled`, `negative/integer-literal-not-a-float`, `negative/literal-above-its-type`, `negative/type-name-is-not-a-type` |
-| `float.ieee` | static | 0170, 0210, 0220, 0230, 0240, 0290, 0350 | f32/f64 decimal and hexadecimal literals plus inherently typed infinity and canonical quiet NaN names follow IEEE binary32/binary64 through runtime arithmetic and comparison, preserving exact hexadecimal values, signed zero and unordered NaN behavior; L0300 rejects a finite literal that becomes infinity, L0301 rejects an invalid named special, a width mismatch, mixed classes and integer-only operators, and L0304 retains the static-fold boundary | `negative/float-remainder-is-integer-only`, `negative/float-special-name-unknown`, `negative/float-special-on-integer-type`, `negative/float-special-width-mismatch`, `negative/hex-float-overflows-context`, `negative/module-float-arithmetic-not-enabled`, `runtime/float-decimal-runtime`, `runtime/float-hexadecimal-runtime`, `runtime/float-named-specials` |
+| `float.ieee` | static | 0170, 0210, 0220, 0230, 0240, 0290, 0350, 1940 | f32/f64 decimal and hexadecimal literals plus inherently typed infinity and canonical quiet NaN names follow IEEE binary32/binary64 through runtime and module arithmetic and comparison, preserving exact hexadecimal values, nearest-even rounding, gradual underflow, signed zero and unordered NaN behavior; arithmetic NaNs use the canonical quiet pattern, L0300 rejects a finite literal that becomes infinity, and L0301 rejects an invalid named special, a width mismatch, mixed classes and integer-only operators | `negative/float-remainder-is-integer-only`, `negative/float-special-name-unknown`, `negative/float-special-on-integer-type`, `negative/float-special-width-mismatch`, `negative/hex-float-overflows-context`, `runtime/float-decimal-runtime`, `runtime/float-hexadecimal-runtime`, `runtime/float-named-specials`, `runtime/module-float-arithmetic` |
 | `conversion.integer` | trap | 0150, 0190, 0310, 0470, 0700, 1460, 1670, 1880, 1940, 1950, 1960 | explicit conversion among enabled integer types preserves the mathematical value; L0300 rejects a known value outside the destination range and a runtime value outside it traps, without truncation, wrapping or signedness reinterpretation | `negative/integer-conversion-known-binding-out-of-range`, `negative/integer-conversion-known-out-of-range`, `runtime/integer-conversion-out-of-range-traps`, `runtime/integer-conversion-signed-overflow-traps`, `runtime/integer-conversion-unsigned-overflow-traps`, `runtime/integer-conversions` |
 | `conversion.float-width` | trap | 0170, 0210, 0230, 0240, 0310, 0700, 1880, 1940, 1950, 1960 | explicit f32/f64 conversion widens exactly or narrows to nearest with ties to even, preserving signed zero and the infinity/NaN class; L0300 rejects a known finite narrowing overflow and an equivalent runtime conversion traps | `negative/float-width-conversion-known-out-of-range`, `runtime/float-width-conversion-overflow-traps`, `runtime/float-width-conversions` |
 | `conversion.integer-to-float` | static | 0150, 0170, 0190, 0210, 0310, 0700, 1880, 1940, 1960 | explicit conversion from every enabled integer to f32 or f64 preserves the mathematical value when exact and otherwise rounds to nearest with ties to even; the enabled integer range cannot overflow either float width | `runtime/integer-to-float-conversions` |
@@ -9231,13 +9232,13 @@ internal parameters and returns. Representation-class routine sharing treats
 a float as distinct from a same-width integer. The first external C boundary
 continues to refuse float signatures until R4.40 supplies its register classes.
 
-A module float may presently use a literal, its unary minus or `zeroed`, also
-inside a static aggregate image. Float arithmetic in a module image is a named
-R4.10 refusal: the target-neutral folder does not borrow the compiler host's
-rounding mode or NaN behavior. D166 subsequently enables hexadecimal floats
-[0230], and D167 enables the named `infinity` and `nan` members [0240]. f16
-and explicit integer/float conversions [0310] remain separate hosted
-increments.
+A module float at this increment may use a literal, its unary minus or
+`zeroed`, also inside a static aggregate image. Float arithmetic in a module
+image remains a named R4.10 refusal: the target-neutral folder does not borrow
+the compiler host's rounding mode or NaN behavior. D166 subsequently enables
+hexadecimal floats [0230], D167 enables the named `infinity` and `nan` members
+[0240], and D175 enables module float arithmetic and comparison. f16 and
+explicit integer/float conversions [0310] remain separate hosted increments.
 
 **The alternatives:** default to f64, admit decimal literals only with an
 explicit type, treat a float's same-width integer carrier as interchangeable,
@@ -9253,7 +9254,6 @@ make cross-compilation depend on the host.
 `negative/float-type-not-enabled`,
 `negative/integer-literal-not-a-float`,
 `negative/malformed-float-exponent`,
-`negative/module-float-arithmetic-not-enabled`,
 `negative/external-float-abi-not-enabled`, the lexer cases, and the
 `float.ieee` guarantee row.
 
@@ -9457,8 +9457,9 @@ introduced.
 A named special and its unary minus are compile-time scalar leaves, not member
 reads from storage. They are therefore valid in module scalar images and in
 the scalar leaves of module arrays and structs wherever a float literal is
-valid. General module float arithmetic remains D162's L0304 boundary. f16 and
-explicit integer/float conversions remain separate hosted increments.
+valid. General module float arithmetic remains D162's L0304 boundary at this
+increment and is subsequently enabled by D175. f16 and explicit integer/float
+conversions remain separate hosted increments.
 
 **The alternatives:** infer the width from context despite the written type,
 spell the values as unqualified lexical literals, preserve an unspecified or
@@ -9747,3 +9748,46 @@ not. All were declined.
 `runtime/float-to-bool-invalid-traps`,
 `negative/float-to-bool-known-invalid`, and the
 `conversion.float-to-bool` guarantee row.
+
+### D175 — Module float arithmetic is an IEEE carrier fold
+
+**The tour said** that module values are known before execution [1460], that
+the known subset contains operators over known values [1940], and that f32 and
+f64 arithmetic and comparisons have IEEE behavior [0290], [0350]. D162 left
+module float operators deferred because using the compiler host's float
+operations would make cross-compilation inherit that host's rounding mode and
+NaN behavior.
+
+**Chosen:** the twenty-first R4.10 increment enables module-level f32 and f64
+`+`, `-`, `*`, `/` and all six comparisons. Operands may be any [1940]-known
+float expression, including forward or chained module names, conversions,
+named infinities and NaNs. Their results may initialize scalar bindings or
+scalar leaves of module arrays, repetitions, structs and variant images.
+
+The shared target-neutral evaluator decodes IEEE carrier bits and uses bounded
+integer significands for addition and division and a double-width integer for
+the exact product. Every finite result rounds once to nearest with ties to even
+and retains gradual underflow. Exact cancellation produces positive zero;
+otherwise the IEEE sign rules preserve signed zero. Arithmetic overflow and
+finite division by signed zero produce signed infinity rather than L0300 or a
+trap. Invalid operations and arithmetic with a NaN produce the width's D167
+canonical positive quiet NaN; NaN payload propagation is not a source-visible
+identity. Comparisons equate the two zeros, order finite values and infinities,
+and leave NaN unordered, so only `<>` is true for an unordered pair.
+
+Checking, static aggregate-image lowering and Linux datum emission call the
+same evaluator. No module initializer runs, no float operation is added to a
+datum at runtime, and no compiler-host floating-point operation decides an
+image. The ordinary runtime path remains the SSE implementation D162 already
+enabled.
+
+**The alternatives:** fold through Ada float operations, reject overflow or
+division by zero because integer module folds do, preserve a host-selected NaN
+payload, flush subnormals to zero, or keep float comparisons out of module bool
+images. Those choices respectively make cross-compilation host-dependent,
+contradict IEEE arithmetic, expose an unspecified carrier detail, lose gradual
+underflow, or leave [1940]'s operator subset inconsistent by operand class.
+All were declined.
+
+**Pinned by** `runtime/module-float-arithmetic`, the direct checking vectors,
+and the `float.ieee` guarantee row.

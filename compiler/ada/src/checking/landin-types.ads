@@ -311,6 +311,29 @@ package Landin.Types is
       Result     : out Folded;
       Overflowed : out Boolean);
 
+   --  Evaluate the IEEE operations [0290]/[0350] over carrier bits rather
+   --  than over the compiler host's floating-point types.  Module images
+   --  use these operations to reproduce runtime round-to-nearest,
+   --  ties-to-even behavior, gradual underflow, signed zero, infinities and
+   --  unordered NaNs without acquiring compile-time execution.
+   type Float_Arithmetic_Operation is
+     (Float_Add, Float_Subtract, Float_Multiply, Float_Divide);
+
+   function Float_Arithmetic_Result
+     (Left, Right : Magnitude;
+      Item        : Float_Name;
+      Operation   : Float_Arithmetic_Operation) return Magnitude;
+
+   type Float_Comparison_Operation is
+     (Float_Equal, Float_Not_Equal,
+      Float_Less, Float_Less_Or_Equal,
+      Float_Greater, Float_Greater_Or_Equal);
+
+   function Float_Comparison_Result
+     (Left, Right : Magnitude;
+      Item        : Float_Name;
+      Operation   : Float_Comparison_Operation) return Boolean;
+
    --  [0240]'s two type-qualified IEEE values.  A quiet NaN has one
    --  canonical payload in each enabled width; unary minus below changes
    --  only its sign bit.

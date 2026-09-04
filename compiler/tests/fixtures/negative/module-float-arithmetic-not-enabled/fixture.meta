@@ -1,6 +1,0 @@
-class: negative
-summary: D162 admits literal float images but leaves module float arithmetic as a named R4.10 refusal
-constructs: 0210, 0290, 1940
-program: program.ldn
-codes: L0304
-targets: linux-x86-64, macos-arm64
