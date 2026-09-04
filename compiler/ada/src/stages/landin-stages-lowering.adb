@@ -11242,6 +11242,13 @@ package body Landin.Stages.Lowering is
                                 (Of_Tree, Operand, Value, Known);
                               if Known then
                                  if Landin.Checking.Type_Of
+                                   (Types.all, Of_Tree, Operand) = Ty.Bool
+                                 then
+                                    Converted :=
+                                      Ty.Convert_Bool_To_Float
+                                        (Value, Ty.Float_Name (Target));
+                                    Overflowed := False;
+                                 elsif Landin.Checking.Type_Of
                                    (Types.all, Of_Tree, Operand)
                                       in Ty.Integer_Name
                                  then

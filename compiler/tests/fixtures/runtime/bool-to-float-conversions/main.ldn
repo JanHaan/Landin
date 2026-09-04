@@ -1,0 +1,41 @@
+sample: type = struct
+    narrow: f32
+    wide: f64
+end sample
+
+module_false: bool = 0 == 1
+module_true: bool = 1 == 1
+module_zero: f32 = f32(module_false)
+module_one: f64 = f64(module_true)
+array_image: [4]f32 =
+    [f32(false), f32(true), f32(module_false), f32(module_true)]
+struct_image: sample = sample(
+    narrow: f32(2 > 1),
+    wide: f64(2 < 1))
+
+to_f32: (value: bool) -> (result: f32) =
+    result = f32(value)
+end to_f32
+
+to_f64: (value: bool) -> (result: f64) =
+    result = f64(value)
+end to_f64
+
+public main: () -> (code: i32) =
+    if 1.0 / module_zero == f32.infinity
+      and module_one == 1.0
+      and array_image[0] == 0.0
+      and array_image[1] == 1.0
+      and array_image[2] == 0.0
+      and array_image[3] == 1.0
+      and struct_image.narrow == 1.0
+      and 1.0 / struct_image.wide == f64.infinity
+      and 1.0 / to_f32(false) == f32.infinity
+      and to_f32(true) == 1.0
+      and 1.0 / to_f64(false) == f64.infinity
+      and to_f64(true) == 1.0 then
+        code = 42
+    else
+        code = 1
+    end if
+end main

@@ -3174,13 +3174,20 @@ than implicit nonzero truthiness. Float-to-bool conversion remains refused.
 The twentieth increment enables explicit conversion from f32 or f64 to bool.
 D174 maps either signed zero to false and exactly positive one to true, while
 every other known value receives L0300 and its runtime equivalent traps. This
-completes the enabled scalar conversion matrix without implicit truthiness.
+was recorded as completing the enabled scalar conversion matrix, but the
+existing bool-to-float refusal remained and is reconciled below.
 The twenty-first increment enables module-level f32 and f64 `+`, `-`, `*`,
 `/` and comparisons, including scalar and aggregate images. D175 evaluates
 IEEE carriers with bounded integer work, rounds to nearest with ties to even,
 keeps gradual underflow and signed zero, produces infinities for arithmetic
 overflow or division by zero, canonicalizes arithmetic NaNs, and preserves
 unordered comparison without borrowing the compiler host's float operations.
+The twenty-second increment enables explicit conversion from bool to f32 and
+f64. D176 maps false to exactly positive floating zero and true to exactly
+positive floating one for module-known scalar expressions, aggregate images
+and runtime values. Both results are exact and this direction is total. It
+completes the enabled scalar conversion matrix while f16 and the external
+floating-point ABI remain deferred.
 
 Exit evidence: every hosted `[NNNN]` row has implementation and positive or
 negative evidence; no omission is hidden by prototype coverage.

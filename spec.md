@@ -976,8 +976,8 @@ integer value. D169 admits f32 or f64 applied to a float value. Conversion
 from an enabled integer to f32 or f64 is admitted by D170. D171 admits an
 enabled integer type applied to a float value, and D172 admits an enabled
 integer type applied to bool. D173 admits bool applied to an integer value.
-D174 admits bool applied to a float value. The deferred integer widths remain
-refused by [1830].
+D174 admits bool applied to a float value, and D176 admits f32 or f64 applied
+to bool. The deferred integer widths remain refused by [1830].
 
 ### [1930] What may be discarded
 
@@ -8495,6 +8495,7 @@ classified failure boundary before the repository gate can pass.
 | `conversion.integer-to-float` | static | 0150, 0170, 0190, 0210, 0310, 0700, 1880, 1940, 1960 | explicit conversion from every enabled integer to f32 or f64 preserves the mathematical value when exact and otherwise rounds to nearest with ties to even; the enabled integer range cannot overflow either float width | `runtime/integer-to-float-conversions` |
 | `conversion.float-to-integer` | trap | 0150, 0170, 0190, 0210, 0230, 0240, 0310, 0700, 1880, 1940, 1950, 1960 | explicit conversion from f32 or f64 to every enabled integer truncates toward zero and then requires the result to fit; L0300 rejects a known out-of-range, infinity or NaN source and an equivalent runtime conversion traps | `negative/float-to-integer-known-nan`, `negative/float-to-integer-known-out-of-range`, `runtime/float-to-integer-conversions`, `runtime/float-to-integer-nan-traps`, `runtime/float-to-integer-out-of-range-traps` |
 | `conversion.bool-to-integer` | static | 0150, 0180, 0190, 0310, 0700, 1880, 1940, 1960 | explicit conversion from bool to every enabled integer maps false to zero and true to one; both results fit every enabled destination | `runtime/bool-to-integer-conversions` |
+| `conversion.bool-to-float` | static | 0170, 0180, 0190, 0210, 0310, 0700, 1880, 1940, 1960 | explicit conversion from bool to f32 or f64 maps false to positive zero and true to exactly positive one; both values are exact in either enabled destination | `runtime/bool-to-float-conversions` |
 | `conversion.integer-to-bool` | trap | 0150, 0180, 0190, 0200, 0310, 0700, 1880, 1940, 1950, 1960 | explicit conversion from every enabled integer to bool maps zero to false and one to true; L0300 rejects every other known value and an equivalent runtime conversion traps | `negative/integer-to-bool-known-out-of-range`, `runtime/integer-to-bool-conversions`, `runtime/integer-to-bool-out-of-range-traps` |
 | `conversion.float-to-bool` | trap | 0150, 0170, 0180, 0190, 0210, 0240, 0310, 0700, 1880, 1940, 1950, 1960 | explicit conversion from f32 or f64 to bool maps either signed zero to false and exactly positive one to true; L0300 rejects every other known finite or nonfinite value and an equivalent runtime conversion traps | `negative/float-to-bool-known-invalid`, `runtime/float-to-bool-conversions`, `runtime/float-to-bool-invalid-traps` |
 | `text.literal-storage` | static | 0260, 0270, 0280, 0570, 1770, 1880, 1900, 1940 | L0301 for a non-byte, writable or codepoint context; L0303 for a write through its read-only view; L0304 for the default deferred `utf8`; equal decoded quoted or raw contents share read-only storage with one trailing NUL excluded from the slice length | `negative/raw-literal-needs-byte-slice`, `negative/raw-literal-needs-read-only-slice`, `negative/raw-literal-write`, `negative/text-literal-codepoint-in-byte-context`, `negative/text-literal-needs-byte-slice`, `negative/text-literal-needs-read-only-slice`, `negative/text-literal-not-enabled`, `negative/text-literal-write`, `runtime/raw-literal-bytes`, `runtime/text-literal-bytes` |
@@ -9553,8 +9554,9 @@ uses the corresponding SSE width conversion and explicitly distinguishes a
 finite result overflow from an infinity or NaN source. The existing
 target-neutral conversion operation now admits every numeric result. D170
 subsequently admits its integer-to-float direction, D171 admits its
-float-to-integer direction, D172 admits bool as an integer source, and D173
-admits integer-to-bool conversion, and D174 admits float-to-bool conversion.
+float-to-integer direction, D172 admits bool as an integer source, D173 admits
+integer-to-bool conversion, D174 admits float-to-bool conversion, and D176
+admits bool as a float source.
 
 **The alternatives:** require exact representability, silently produce
 infinity on finite overflow, trap on gradual underflow, expose a NaN payload
@@ -9596,8 +9598,8 @@ above i64's maximum is halved with its low bit retained as sticky information,
 converted, and doubled; this produces the same nearest-even result without
 reinterpreting the source as negative. The neutral conversion verifier admits
 this one mixed-class direction. D171 subsequently admits the other direction;
-D172 admits bool as an integer source and D173 admits integer-to-bool
-conversion, and D174 subsequently admits float-to-bool conversion.
+D172 admits bool as an integer source, D173 admits integer-to-bool conversion,
+D174 admits float-to-bool conversion, and D176 admits bool-to-float conversion.
 
 **The alternatives:** require exact representation, saturate at a float
 boundary, reinterpret an unsigned carrier as signed, use a compiler-host float
@@ -9670,7 +9672,8 @@ one-byte carrier before storing the destination width.
 This increment does not define truthiness. Applying bool to an integer or
 float remains L0304, as does applying a float type to bool. D173 subsequently
 admits only zero and one from the integer direction, and D174 settles the
-float-to-bool direction including negative zero, infinity and NaN.
+float-to-bool direction including negative zero, infinity and NaN. D176 later
+maps bool's already-fixed images into the two enabled float widths.
 
 **The alternatives:** use all-bits-one for true, preserve an unspecified bool
 carrier, or simultaneously admit numeric-to-bool truthiness. Those choices
@@ -9735,8 +9738,10 @@ A direct or module-known impossible source is L0300; the equivalent runtime
 case traps. Static folding decodes the IEEE carrier with bounded integer work.
 The Linux backend ignores the sign bit only while recognizing zero, then
 requires the complete positive-one carrier, so negative zero succeeds but
-negative one does not. This completes explicit conversion among the enabled
-scalar types without introducing implicit truthiness.
+negative one does not. This was recorded as completing explicit conversion
+among the enabled scalar types, but D172's bool-to-float refusal still remained
+in the checker; D176 closes that omitted direction without introducing
+implicit truthiness.
 
 **The alternatives:** make every nonzero float true, accept any value that
 truncates to zero or one, reject negative zero, or make NaN true because it is
@@ -9791,3 +9796,34 @@ All were declined.
 
 **Pinned by** `runtime/module-float-arithmetic`, the direct checking vectors,
 and the `float.ieee` guarantee row.
+
+### D176 — Bool converts to exact positive float images
+
+**The tour said** that conversion is explicit [0310], that bool has only false
+and true [0180], and that f32 and f64 carry IEEE binary32 and binary64 [0170].
+D172 fixed bool's mathematical images at zero and one but deliberately left a
+float type applied to bool refused. D174 was then recorded as completing the
+enabled scalar conversion matrix even though that refusal remained.
+
+**Chosen:** the twenty-second R4.10 increment enables f32 or f64 applied to a
+bool value. False converts to exactly positive floating zero and true converts
+to exactly positive floating one. Both images are exact in binary32 and
+binary64, so this direction is total: it cannot report L0300 or trap, and it
+does not introduce truthiness or an implicit conversion.
+
+The target-neutral fold writes the destination width's exact IEEE carrier for
+literal, named and computed module-known bool values, including scalar leaves
+of array and struct images. Runtime Linux code zero-extends the canonical
+one-byte bool and converts that zero or one into the selected SSE width. The
+neutral conversion verifier admits bool as a source for either numeric class.
+f16 remains refused, and [1975]'s external floating-point ABI remains deferred;
+neither boundary is changed by an internal scalar conversion.
+
+**The alternatives:** reinterpret bool's byte as float bits, produce negative
+zero for false, route through a contextual integer conversion, or keep the
+direction refused. Those choices contradict D172's mathematical images, make
+the result representation-dependent, add a conversion not written by the
+program, or leave the claimed scalar matrix incomplete. All were declined.
+
+**Pinned by** `runtime/bool-to-float-conversions` and the
+`conversion.bool-to-float` guarantee row.

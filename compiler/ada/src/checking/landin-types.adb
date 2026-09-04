@@ -647,6 +647,24 @@ package body Landin.Types is
         + Significant - 2 ** Fraction_Bits;
    end Convert_Integer_To_Float;
 
+   -----------------------------
+   --  Convert_Bool_To_Float  --
+   -----------------------------
+
+   function Convert_Bool_To_Float
+     (Value : Folded; Into : Float_Name) return Magnitude
+   is
+      Fraction_Bits : constant Natural :=
+        (case Into is when F32 => 23, when F64 => 52);
+      Bias : constant Natural :=
+        (case Into is when F32 => 127, when F64 => 1023);
+   begin
+      return
+        (if Value = 0
+         then 0
+         else Magnitude (Bias) * 2 ** Fraction_Bits);
+   end Convert_Bool_To_Float;
+
    ------------------------------
    --  Convert_Float_To_Integer  --
    ------------------------------

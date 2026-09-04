@@ -13922,28 +13922,16 @@ package body Landin.Stages.Checking is
                            then
                               return Kept (Ty.Ill_Typed);
                            end if;
-                        elsif Got = Ty.Bool then
-                           Bad.Report
-                             (Item    => Bad.Unsupported_Use,
-                              Source  => Syn.Source_Of (Of_Tree),
-                              Where   => Syn.Where (Of_Tree, Node),
-                              Message => "conversion involving bool is not"
-                                         & " enabled yet",
-                              Refused => Bad.Scalar_Conversion,
-                              Into    => Found);
-                           Landin.Checking.Refuse
-                             (Types.all, Of_Tree, Node);
-                           return Kept (Ty.Ill_Typed);
                         elsif Got /= Ty.Ill_Typed
                           and then Got
-                            not in Ty.Integer_Name | Ty.Float_Name
+                            not in Ty.Integer_Name | Ty.Float_Name | Ty.Bool
                         then
                            Bad.Report
                              (Item    => Bad.Type_Mismatch,
                               Source  => Syn.Source_Of (Of_Tree),
                               Where   => Syn.Where (Of_Tree, Value),
                               Message => "this float conversion requires a"
-                                         & " numeric value",
+                                         & " numeric or bool value",
                               Note    => "[0310]: conversion is explicit"
                                          & " and preserves its source class",
                               Related => Syn.Origin (Of_Tree, Callee),
