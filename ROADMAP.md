@@ -3171,6 +3171,10 @@ The nineteenth increment enables explicit conversion from every enabled
 integer type to bool. D173 accepts only the canonical images zero and one,
 giving other known values L0300 and equivalent runtime values a trap rather
 than implicit nonzero truthiness. Float-to-bool conversion remains refused.
+The twentieth increment enables explicit conversion from f32 or f64 to bool.
+D174 maps either signed zero to false and exactly positive one to true, while
+every other known value receives L0300 and its runtime equivalent traps. This
+completes the enabled scalar conversion matrix without implicit truthiness.
 
 Exit evidence: every hosted `[NNNN]` row has implementation and positive or
 negative evidence; no omission is hidden by prototype coverage.

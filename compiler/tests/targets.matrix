@@ -123,7 +123,7 @@ negative/float-remainder-is-integer-only | linux-x86-64, macos-arm64
 negative/float-special-name-unknown | linux-x86-64, macos-arm64
 negative/float-special-on-integer-type | linux-x86-64, macos-arm64
 negative/float-special-width-mismatch | linux-x86-64, macos-arm64
-negative/float-to-bool-not-yet-enabled | linux-x86-64, macos-arm64
+negative/float-to-bool-known-invalid | linux-x86-64, macos-arm64
 negative/float-to-integer-known-nan | linux-x86-64, macos-arm64
 negative/float-to-integer-known-out-of-range | linux-x86-64, macos-arm64
 negative/float-type-not-enabled | linux-x86-64, macos-arm64
@@ -796,6 +796,8 @@ runtime/fizzbuzz | linux-x86-64
 runtime/float-decimal-runtime | linux-x86-64
 runtime/float-hexadecimal-runtime | linux-x86-64
 runtime/float-named-specials | linux-x86-64
+runtime/float-to-bool-conversions | linux-x86-64
+runtime/float-to-bool-invalid-traps | linux-x86-64
 runtime/float-to-integer-conversions | linux-x86-64
 runtime/float-to-integer-nan-traps | linux-x86-64
 runtime/float-to-integer-out-of-range-traps | linux-x86-64

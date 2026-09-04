@@ -19473,13 +19473,20 @@ file negative/float-special-width-mismatch/program.ldn tokens 7
   13 16 f64
   16 17 .
   17 25 infinity
-file negative/float-to-bool-not-yet-enabled/program.ldn tokens 6
-  0 6 belief
-  7 9 :=
-  10 14 bool
-  14 15 (
-  15 18 1.0
-  18 19 )
+file negative/float-to-bool-known-invalid/program.ldn tokens 13
+  0 6 source
+  6 7 :
+  8 11 f64
+  12 13 =
+  14 17 0.5
+  18 21 bad
+  21 22 :
+  23 27 bool
+  28 29 =
+  30 34 bool
+  34 35 (
+  35 41 source
+  41 42 )
 file negative/float-to-integer-known-nan/program.ldn tokens 15
   0 6 source
   6 7 :

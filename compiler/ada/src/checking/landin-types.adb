@@ -726,6 +726,37 @@ package body Landin.Types is
       end if;
    end Convert_Float_To_Integer;
 
+   ---------------------------
+   --  Convert_Float_To_Bool  --
+   ---------------------------
+
+   procedure Convert_Float_To_Bool
+     (Bits       : Magnitude;
+      From       : Float_Name;
+      Result     : out Folded;
+      Overflowed : out Boolean)
+   is
+      Fraction_Bits : constant Natural :=
+        (case From is when F32 => 23, when F64 => 52);
+      Sign_Shift : constant Natural :=
+        (case From is when F32 => 31, when F64 => 63);
+      Bias : constant Natural :=
+        (case From is when F32 => 127, when F64 => 1023);
+      Magnitude_Bits : constant Magnitude := Bits mod 2 ** Sign_Shift;
+      One : constant Magnitude := Magnitude (Bias) * 2 ** Fraction_Bits;
+   begin
+      if Magnitude_Bits = 0 then
+         Result := 0;
+         Overflowed := False;
+      elsif Bits = One then
+         Result := 1;
+         Overflowed := False;
+      else
+         Result := 0;
+         Overflowed := True;
+      end if;
+   end Convert_Float_To_Bool;
+
    ------------------------
    --  Float_Special_Bits  --
    ------------------------

@@ -11169,10 +11169,36 @@ package body Landin.Stages.Lowering is
                                (Of_Tree, Syn.Callee_Of (Of_Tree, Node)));
                      begin
                         if Target = Ty.Bool then
-                           Fold_Constant
-                             (Of_Tree,
-                              Syn.Nth_Argument (Of_Tree, Node, 1),
-                              Value, Known);
+                           declare
+                              Operand : constant Syn.Node_Id :=
+                                Syn.Nth_Argument (Of_Tree, Node, 1);
+                           begin
+                              Fold_Constant
+                                (Of_Tree, Operand, Value, Known);
+                              if Known
+                                and then Landin.Checking.Type_Of
+                                  (Types.all, Of_Tree, Operand)
+                                    in Ty.Float_Name
+                              then
+                                 declare
+                                    Converted : Ty.Folded;
+                                    Overflowed : Boolean;
+                                 begin
+                                    Ty.Convert_Float_To_Bool
+                                      (Ty.Magnitude (Value),
+                                       Ty.Float_Name
+                                         (Landin.Checking.Type_Of
+                                            (Types.all, Of_Tree, Operand)),
+                                       Converted, Overflowed);
+                                    if Overflowed then
+                                       raise Landin.Compiler_Defect with
+                                         "an impossible float-to-bool"
+                                         & " conversion passed checking";
+                                    end if;
+                                    Value := Converted;
+                                 end;
+                              end if;
+                           end;
                         elsif Target in Ty.Integer_Name then
                            declare
                               Operand : constant Syn.Node_Id :=

@@ -1579,25 +1579,84 @@ package body Landin.Backend.X86_64 is
                              (Store & " %xmm0, " & Value_Cell (Value));
                         end;
                      elsif Into_Kind = Landin.Types.Bool then
-                        declare
-                           From : constant Landin.Types.Integer_Name :=
-                             Landin.Types.Integer_Name (From_Kind);
-                           From_Size : constant Held_Size :=
-                             Size_Of (From, Facts);
-                           Safe : constant String :=
-                             Value_Label (Value) & "_bool";
-                        begin
-                           Emit ("movq $0, %rax");
-                           Emit ("mov" & Suffix (From_Size) & " "
-                                 & Value_Cell (Source) & ", "
-                                 & Accumulator (From_Size));
-                           Emit ("cmpq $1, %rax");
-                           Emit ("jbe " & Safe);
-                           Emit ("ud2");
-                           Put (Safe & ":");
-                           Emit
-                             ("movb %al, " & Value_Cell (Value));
-                        end;
+                        if From_Kind in Landin.Types.Float_Name then
+                           declare
+                              From : constant Landin.Types.Float_Name :=
+                                Landin.Types.Float_Name (From_Kind);
+                              False_Value : constant String :=
+                                Value_Label (Value) & "_false";
+                              True_Value : constant String :=
+                                Value_Label (Value) & "_true";
+                              Store : constant String :=
+                                Value_Label (Value) & "_bool";
+                              Magnitude_Mask : constant
+                                Landin.Types.Magnitude :=
+                                  (case From is
+                                      when Landin.Types.F32 =>
+                                        2_147_483_647,
+                                      when Landin.Types.F64 =>
+                                        9_223_372_036_854_775_807);
+                              One : constant Landin.Types.Magnitude :=
+                                (case From is
+                                    when Landin.Types.F32 =>
+                                      1_065_353_216,
+                                    when Landin.Types.F64 =>
+                                      4_607_182_418_800_017_408);
+                           begin
+                              Emit
+                                ((if From = Landin.Types.F32
+                                  then "movl " else "movq ")
+                                 & Value_Cell (Source)
+                                 & (if From = Landin.Types.F32
+                                    then ", %eax" else ", %rax"));
+                              Emit ("movq %rax, %rdx");
+                              Emit
+                                ("movabsq $"
+                                 & Trimmed
+                                     (Landin.Types.Magnitude'Image
+                                        (Magnitude_Mask))
+                                 & ", %rcx");
+                              Emit ("andq %rcx, %rdx");
+                              Emit ("testq %rdx, %rdx");
+                              Emit ("jz " & False_Value);
+                              Emit
+                                ("movabsq $"
+                                 & Trimmed
+                                     (Landin.Types.Magnitude'Image (One))
+                                 & ", %rcx");
+                              Emit ("cmpq %rcx, %rax");
+                              Emit ("je " & True_Value);
+                              Emit ("ud2");
+                              Put (False_Value & ":");
+                              Emit ("movq $0, %rax");
+                              Emit ("jmp " & Store);
+                              Put (True_Value & ":");
+                              Emit ("movq $1, %rax");
+                              Put (Store & ":");
+                              Emit
+                                ("movb %al, " & Value_Cell (Value));
+                           end;
+                        else
+                           declare
+                              From : constant Landin.Types.Integer_Name :=
+                                Landin.Types.Integer_Name (From_Kind);
+                              From_Size : constant Held_Size :=
+                                Size_Of (From, Facts);
+                              Safe : constant String :=
+                                Value_Label (Value) & "_bool";
+                           begin
+                              Emit ("movq $0, %rax");
+                              Emit ("mov" & Suffix (From_Size) & " "
+                                    & Value_Cell (Source) & ", "
+                                    & Accumulator (From_Size));
+                              Emit ("cmpq $1, %rax");
+                              Emit ("jbe " & Safe);
+                              Emit ("ud2");
+                              Put (Safe & ":");
+                              Emit
+                                ("movb %al, " & Value_Cell (Value));
+                           end;
+                        end if;
                      elsif From_Kind = Landin.Types.Bool then
                         declare
                            Into_Type : constant Landin.Types.Integer_Name :=
@@ -3612,6 +3671,25 @@ package body Landin.Backend.X86_64 is
                                     raise Compiler_Defect with
                                       "an overflowing module float-to-"
                                       & "integer conversion passed checking";
+                                 end if;
+                                 Held (Natural (Value)) := Converted;
+                              end;
+                           elsif From in Landin.Types.Float_Name
+                             and then Into_Type = Landin.Types.Bool
+                           then
+                              declare
+                                 Converted : Landin.Types.Folded;
+                                 Overflowed : Boolean;
+                              begin
+                                 Landin.Types.Convert_Float_To_Bool
+                                   (Landin.Types.Magnitude
+                                      (Of_Value (Source)),
+                                    Landin.Types.Float_Name (From),
+                                    Converted, Overflowed);
+                                 if Overflowed then
+                                    raise Compiler_Defect with
+                                      "an impossible module float-to-bool"
+                                      & " conversion passed checking";
                                  end if;
                                  Held (Natural (Value)) := Converted;
                               end;
