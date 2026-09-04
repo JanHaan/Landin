@@ -4499,8 +4499,14 @@ package body Landin.IR.Verifier is
                               begin
                                  if Result_Kind
                                       not in Landin.Types.Numeric_Name
-                                   or else Operand_Kind
-                                     not in Landin.Types.Numeric_Name
+                                   or else
+                                     (Operand_Kind
+                                        not in Landin.Types.Numeric_Name
+                                      and then not
+                                        (Result_Kind
+                                           in Landin.Types.Integer_Name
+                                         and then Operand_Kind
+                                           = Landin.Types.Bool))
                                  then
                                     return (Kind => Result_Disagrees,
                                             Item => Id, Block => Block,

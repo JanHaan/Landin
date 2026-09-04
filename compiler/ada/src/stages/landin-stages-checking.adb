@@ -13835,21 +13835,9 @@ package body Landin.Stages.Checking is
                               return Kept (Ty.Ill_Typed);
                            end if;
                            Got := Ty.Default_Float;
-                        elsif Got = Ty.Bool then
-                           Bad.Report
-                             (Item    => Bad.Unsupported_Use,
-                              Source  => Syn.Source_Of (Of_Tree),
-                              Where   => Syn.Where (Of_Tree, Node),
-                              Message => "conversion involving bool is not"
-                                         & " enabled yet",
-                              Refused => Bad.Scalar_Conversion,
-                              Into    => Found);
-                           Landin.Checking.Refuse
-                             (Types.all, Of_Tree, Node);
-                           return Kept (Ty.Ill_Typed);
                         elsif Got /= Ty.Ill_Typed
                           and then Got
-                            not in Ty.Integer_Name | Ty.Float_Name
+                            not in Ty.Integer_Name | Ty.Float_Name | Ty.Bool
                           and then Got /= Ty.Pointer_Value
                         then
                            Bad.Report
@@ -13857,7 +13845,7 @@ package body Landin.Stages.Checking is
                               Source  => Syn.Source_Of (Of_Tree),
                               Where   => Syn.Where (Of_Tree, Value),
                               Message => "this integer conversion requires a"
-                                         & " numeric or pointer value",
+                                         & " numeric, bool or pointer value",
                               Note    => "[0310]/[0470]: conversion is"
                                          & " explicit and preserves its"
                                          & " source class",

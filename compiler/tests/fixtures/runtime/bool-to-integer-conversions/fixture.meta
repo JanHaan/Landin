@@ -1,0 +1,6 @@
+class: runtime
+summary: explicit bool-to-integer conversion maps false to zero and true to one across every integer width
+constructs: 0150, 0180, 0190, 0310, 0700, 1880, 1940, 1960
+program: main.ldn
+status: 42
+targets: linux-x86-64

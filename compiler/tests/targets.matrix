@@ -55,7 +55,6 @@ negative/atom-match-not-exhaustive | linux-x86-64, synthetic-32
 negative/atom-union-member-not-atom | linux-x86-64, synthetic-32
 negative/bare-block-scope-does-not-leak | linux-x86-64, macos-arm64, synthetic-32
 negative/bare-block-unclosed | linux-x86-64, macos-arm64, synthetic-32
-negative/bool-conversion-not-yet-enabled | linux-x86-64, macos-arm64
 negative/borrowed-source-inout | linux-x86-64, macos-arm64, synthetic-32
 negative/call-of-a-non-function | linux-x86-64, macos-arm64, synthetic-32
 negative/call-with-too-few-arguments | linux-x86-64, macos-arm64
@@ -200,6 +199,7 @@ negative/inout-same-place-twice | linux-x86-64, macos-arm64, synthetic-32
 negative/integer-conversion-known-binding-out-of-range | linux-x86-64, macos-arm64
 negative/integer-conversion-known-out-of-range | linux-x86-64, macos-arm64
 negative/integer-literal-not-a-float | linux-x86-64, macos-arm64
+negative/integer-to-bool-not-yet-enabled | linux-x86-64, macos-arm64
 negative/keyword-as-name | linux-x86-64, macos-arm64
 negative/latin1-byte-in-name | linux-x86-64, macos-arm64
 negative/lenof-array-literal-element-mismatch | linux-x86-64, macos-arm64
@@ -753,6 +753,7 @@ runtime/array-returns-cross-calls | linux-x86-64
 runtime/array-zeroed-assignment-clears-storage | linux-x86-64
 runtime/atom-values-cross-the-abi | linux-x86-64
 runtime/binary-search | linux-x86-64
+runtime/bool-to-integer-conversions | linux-x86-64
 runtime/bools-cross-the-abi | linux-x86-64
 runtime/calls-return-through-the-abi | linux-x86-64
 runtime/character-literal-codepoints | linux-x86-64
