@@ -1,0 +1,6 @@
+class: runtime
+summary: struct and any sources traverse through ordered iterable evidence with copied items, exact cursors, indices, dispatch, cleanup, control and any loop results
+program: main.ldn
+status: 42
+constructs: 1100, 1150, 1160, 1170, 1180, 1190, 1320, 1370, 1390
+targets: linux-x86-64

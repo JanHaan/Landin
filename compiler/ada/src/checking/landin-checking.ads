@@ -1290,6 +1290,30 @@ package Landin.Checking is
                  and then Covers (Of_Table, Of_Tree)
                  and then Landin.Syntax.Contains (Of_Tree, Node);
 
+   --  D180: a `for` over a struct or `any C` retains the exact iterable
+   --  conformance selected from the source type.  The four entry positions
+   --  remain the concept declaration's order; this fact names the table,
+   --  not one particular call through it.
+   function Traversal_Evidence_Of
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id) return Conformance_Id
+     with Pre => Is_Prepared (Of_Table)
+                 and then Covers (Of_Table, Of_Tree)
+                 and then Landin.Syntax.Contains (Of_Tree, Node);
+
+   procedure Note_Traversal_Evidence
+     (Into       : in out Table;
+      Of_Tree    : Landin.Syntax.Tree;
+      Node       : Landin.Syntax.Node_Id;
+      Conformance : Conformance_Id)
+     with Pre  => Is_Prepared (Into)
+                  and then Covers (Into, Of_Tree)
+                  and then Landin.Syntax.Contains (Of_Tree, Node)
+                  and then Holds (Into, Conformance),
+          Post => Traversal_Evidence_Of (Into, Of_Tree, Node)
+                    = Conformance;
+
    procedure Note_Any_Construction
      (Into       : in out Table;
       Of_Tree    : Landin.Syntax.Tree;

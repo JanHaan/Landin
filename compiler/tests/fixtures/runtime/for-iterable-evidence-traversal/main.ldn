@@ -1,0 +1,215 @@
+iterable: type = concept (t: type, cur: type, item_type: type)
+    first:  (s: t) -> (c: cur)
+    at_end: (s: t, c: cur) -> (yes: bool)
+    item:   (s: t, c: cur) -> (v: item_type)
+    next:   (s: t, c: cur) -> (c2: cur)
+end iterable
+
+token: type = struct
+    value: i32
+end token
+
+bag: type = struct
+    low: i32
+    count: usize
+end bag
+
+cursor: type = struct
+    position: usize
+end cursor
+
+cell: type (t: type) = struct
+    value: t
+    count: usize
+end cell
+
+cell_first: (t: type, s: cell(t)) -> (c: usize) =
+    c = 0
+end cell_first
+
+cell_at_end: (t: type, s: cell(t), c: usize) -> (yes: bool) =
+    yes = c == s.count
+end cell_at_end
+
+cell_item: (t: type, s: cell(t), c: usize) -> (v: t) =
+    v = s.value
+end cell_item
+
+cell_next: (t: type, s: cell(t), c: usize) -> (c2: usize) =
+    c2 = c + 1
+end cell_next
+
+(t: type) cell(t) is iterable
+    (next: cell_next, item_type: t, first: cell_first,
+     cur: usize, item: cell_item, at_end: cell_at_end)
+
+marker: type = concept (t: type)
+    code: (self: ptr t) -> (value: i32)
+end marker
+
+first_marker: type = struct
+    value: i32
+end first_marker
+
+second_marker: type = struct
+    value: i32
+end second_marker
+
+first_code: (self: ptr first_marker) -> (value: i32) =
+    value = self.val.value
+end first_code
+
+second_code: (self: ptr second_marker) -> (value: i32) =
+    value = self.val.value
+end second_code
+
+first_marker is marker (code: first_code)
+second_marker is marker (code: second_code)
+
+sequence: type = concept (t: type)
+    length: (self: ptr t) -> (value: usize)
+    at: (self: ptr t, index: usize) -> (value: any marker)
+end sequence
+
+pair: type = struct
+    count: usize
+end pair
+
+left: first_marker = (value: 17)
+right: second_marker = (value: 25)
+fallback: first_marker = (value: 1)
+
+pair_length: (self: ptr pair) -> (value: usize) =
+    value = self.val.count
+end pair_length
+
+pair_at: (self: ptr pair, index: usize) -> (value: any marker) =
+    if index == 0 then
+        value = any(addr left)
+    else
+        value = any(addr right)
+    end if
+end pair_at
+
+pair is sequence (at: pair_at, length: pair_length)
+
+mut bag_sources: usize = 0
+mut bag_firsts: usize = 0
+mut bag_tests: usize = 0
+mut bag_items: usize = 0
+mut bag_nexts: usize = 0
+mut any_sources: usize = 0
+mut any_firsts: usize = 0
+mut any_tests: usize = 0
+mut any_items: usize = 0
+mut any_nexts: usize = 0
+mut cleanups: usize = 0
+
+make_bag: () -> (value: bag) =
+    inc bag_sources
+    value = (low: 10, count: 3)
+end make_bag
+
+bag_first: (s: bag) -> (c: cursor) =
+    inc bag_firsts
+    c = (position: 0)
+end bag_first
+
+bag_at_end: (s: bag, c: cursor) -> (yes: bool) =
+    inc bag_tests
+    yes = c.position == s.count
+end bag_at_end
+
+bag_item: (s: bag, c: cursor) -> (v: token) =
+    inc bag_items
+    v = (value: s.low + i32(c.position))
+end bag_item
+
+bag_next: (s: bag, c: cursor) -> (c2: cursor) =
+    inc bag_nexts
+    c2 = (position: c.position + 1)
+end bag_next
+
+bag is iterable
+    (item_type: token, item: bag_item, next: bag_next,
+     cur: cursor, at_end: bag_at_end, first: bag_first)
+
+counted: (value: any sequence) -> (result: any sequence from value) =
+    inc any_sources
+    result = value
+end counted
+
+any_first: (s: any sequence) -> (c: usize) =
+    inc any_firsts
+    c = 0
+end any_first
+
+any_at_end: (s: any sequence, c: usize) -> (yes: bool) =
+    inc any_tests
+    yes = c == s.length()
+end any_at_end
+
+any_item: (s: any sequence, c: usize) -> (v: any marker) =
+    inc any_items
+    v = s.at(c)
+end any_item
+
+any_next: (s: any sequence, c: usize) -> (c2: usize) =
+    inc any_nexts
+    c2 = c + 1
+end any_next
+
+any sequence is iterable
+    (next: any_next, item_type: any marker, item: any_item,
+     first: any_first, cur: usize, at_end: any_at_end)
+
+cleaned: () -> none =
+    inc cleanups
+end cleaned
+
+public main: () -> (code: i32) =
+    mut index_sum: usize = 0
+    mut picked: token = (value: 0)
+    for item, index in make_bag() do
+        defer cleaned()
+        index_sum = index_sum + index
+        continue when index == 0
+        if index == 2 then
+            picked = item
+            break
+        end if
+    end for
+
+    concrete: pair = (count: 2)
+    erased: any sequence = any(addr concrete)
+    chosen: any marker = for item in counted(erased) do
+        defer cleaned()
+        continue when item.code() == 17
+        break with item
+    complete
+        break with any(addr fallback)
+    end for
+
+    numbers: cell(i32) = (value: 4, count: 2)
+    mut generic_sum: i32 = 0
+    mut generic_complete: bool = false
+    for item in numbers do
+        defer cleaned()
+        generic_sum += item
+    complete
+        generic_complete = true
+    end for
+
+    if bag_sources == 1 and bag_firsts == 1
+      and bag_tests == 3 and bag_items == 3 and bag_nexts == 2
+      and any_sources == 1 and any_firsts == 1
+      and any_tests == 2 and any_items == 2 and any_nexts == 1
+      and index_sum == 3 and cleanups == 7
+      and generic_sum == 8 and generic_complete
+      and picked.value == 12 and chosen.code() == 25
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

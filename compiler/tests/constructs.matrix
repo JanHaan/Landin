@@ -145,7 +145,7 @@
 1290   tour        accepted emitted executed refused refused-by-name A generic function takes the type as an ordinary parameter
 1300   tour        accepted emitted executed          At the call site the type is inferred from the arguments
 1310   tour        accepted emitted executed refused  Generic code can always be compiled once and handed a table
-1320   tour        refused                            Traversal is a concept
+1320   tour        accepted emitted executed refused  Traversal is a concept
 1330   tour        -                                  A range is not a concept
 1340   tour        accepted emitted executed refused  Concepts compose
 1350   tour        accepted emitted executed refused refused-by-name Types take parameters through a declaration form of their
