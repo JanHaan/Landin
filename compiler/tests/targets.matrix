@@ -123,6 +123,7 @@ negative/float-remainder-is-integer-only | linux-x86-64, macos-arm64
 negative/float-special-name-unknown | linux-x86-64, macos-arm64
 negative/float-special-on-integer-type | linux-x86-64, macos-arm64
 negative/float-special-width-mismatch | linux-x86-64, macos-arm64
+negative/float-to-bool-not-yet-enabled | linux-x86-64, macos-arm64
 negative/float-to-integer-known-nan | linux-x86-64, macos-arm64
 negative/float-to-integer-known-out-of-range | linux-x86-64, macos-arm64
 negative/float-type-not-enabled | linux-x86-64, macos-arm64
@@ -199,7 +200,7 @@ negative/inout-same-place-twice | linux-x86-64, macos-arm64, synthetic-32
 negative/integer-conversion-known-binding-out-of-range | linux-x86-64, macos-arm64
 negative/integer-conversion-known-out-of-range | linux-x86-64, macos-arm64
 negative/integer-literal-not-a-float | linux-x86-64, macos-arm64
-negative/integer-to-bool-not-yet-enabled | linux-x86-64, macos-arm64
+negative/integer-to-bool-known-out-of-range | linux-x86-64, macos-arm64
 negative/keyword-as-name | linux-x86-64, macos-arm64
 negative/latin1-byte-in-name | linux-x86-64, macos-arm64
 negative/lenof-array-literal-element-mismatch | linux-x86-64, macos-arm64
@@ -828,6 +829,8 @@ runtime/integer-conversion-out-of-range-traps | linux-x86-64
 runtime/integer-conversion-signed-overflow-traps | linux-x86-64
 runtime/integer-conversion-unsigned-overflow-traps | linux-x86-64
 runtime/integer-conversions | linux-x86-64
+runtime/integer-to-bool-conversions | linux-x86-64
+runtime/integer-to-bool-out-of-range-traps | linux-x86-64
 runtime/integer-to-float-conversions | linux-x86-64
 runtime/large-array-offset-is-addressed | linux-x86-64
 runtime/lenof-array-literal-is-compile-time | linux-x86-64

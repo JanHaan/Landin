@@ -3179,6 +3179,7 @@ def check_coverage_registers(full_run):
             "conversion.integer-to-float",
             "conversion.float-to-integer",
             "conversion.bool-to-integer",
+            "conversion.integer-to-bool",
             "arithmetic.known",
             "arithmetic.runtime",
             "arithmetic.total", "ranges.measurements", "assignment.flow",

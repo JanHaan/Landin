@@ -5448,7 +5448,7 @@ package body Landin.Stages.Lowering is
                    (Types.all,
                     Syn.Name
                       (Of_Tree, Syn.Callee_Of (Of_Tree, Node)))
-                       in Ty.Numeric_Name
+                       in Ty.Scalar_Name
                then
                   declare
                      Value : constant IR.Value_Id := Lower_Expression
@@ -5456,7 +5456,7 @@ package body Landin.Stages.Lowering is
                   begin
                      return IR.Emit_Conversion
                        (Unit.all, Filling, Value,
-                        Ty.Numeric_Name
+                        Ty.Scalar_Name
                           (Landin.Checking.Named
                              (Types.all,
                               Syn.Name
@@ -11168,7 +11168,12 @@ package body Landin.Stages.Lowering is
                              Syn.Name
                                (Of_Tree, Syn.Callee_Of (Of_Tree, Node)));
                      begin
-                        if Target in Ty.Integer_Name then
+                        if Target = Ty.Bool then
+                           Fold_Constant
+                             (Of_Tree,
+                              Syn.Nth_Argument (Of_Tree, Node, 1),
+                              Value, Known);
+                        elsif Target in Ty.Integer_Name then
                            declare
                               Operand : constant Syn.Node_Id :=
                                 Syn.Nth_Argument (Of_Tree, Node, 1);

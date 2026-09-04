@@ -4497,16 +4497,21 @@ package body Landin.IR.Verifier is
                                         Nth_Operand
                                           (Of_Unit, Id, V, 1));
                               begin
-                                 if Result_Kind
-                                      not in Landin.Types.Numeric_Name
-                                   or else
-                                     (Operand_Kind
-                                        not in Landin.Types.Numeric_Name
-                                      and then not
-                                        (Result_Kind
-                                           in Landin.Types.Integer_Name
-                                         and then Operand_Kind
-                                           = Landin.Types.Bool))
+                                 if not
+                                   ((Result_Kind
+                                       in Landin.Types.Numeric_Name
+                                     and then
+                                       (Operand_Kind
+                                          in Landin.Types.Numeric_Name
+                                        or else
+                                          (Result_Kind
+                                             in Landin.Types.Integer_Name
+                                           and then Operand_Kind
+                                             = Landin.Types.Bool)))
+                                    or else
+                                      (Result_Kind = Landin.Types.Bool
+                                       and then Operand_Kind
+                                         in Landin.Types.Integer_Name))
                                  then
                                     return (Kind => Result_Disagrees,
                                             Item => Id, Block => Block,
