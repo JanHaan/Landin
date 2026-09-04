@@ -1,0 +1,7 @@
+class: runtime
+summary: hosted text traversal decodes Unicode scalars once per intrinsic iterable step and stops cstring at its first NUL
+constructs: 0250, 0260, 0270, 0600, 1130, 1150, 1160, 1170, 1180, 1190, 1320, 1810, 1820, 1950, 1960
+program: main.ldn
+root: ../../../../..
+status: 42
+targets: linux-x86-64

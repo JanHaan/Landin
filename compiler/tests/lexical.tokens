@@ -33705,6 +33705,63 @@ file negative/text-slice-result-keeps-origin/program.ldn tokens 25
   78 79 ]
   80 83 end
   84 87 bad
+file negative/text-traversal-item-is-read-only/program.ldn tokens 24
+  0 4 main
+  4 5 :
+  6 7 (
+  7 8 )
+  9 11 ->
+  12 16 none
+  17 18 =
+  23 27 text
+  27 28 :
+  29 33 utf8
+  34 35 =
+  36 39 "A"
+  44 47 for
+  48 54 scalar
+  55 57 in
+  58 62 text
+  63 65 do
+  74 80 scalar
+  81 82 =
+  83 84 0
+  89 92 end
+  93 96 for
+  97 100 end
+  101 105 main
+file negative/text-traversal-ordinary-pointer-is-not-cstring/program.ldn tokens 31
+  0 4 main
+  4 5 :
+  6 7 (
+  7 8 )
+  9 11 ->
+  12 16 none
+  17 18 =
+  23 28 value
+  28 29 :
+  30 32 u8
+  33 34 =
+  35 37 65
+  42 48 source
+  48 49 :
+  50 53 ptr
+  54 56 u8
+  57 58 =
+  59 63 addr
+  64 69 value
+  74 77 for
+  78 84 scalar
+  85 87 in
+  88 94 source
+  95 97 do
+  106 107 _
+  108 109 =
+  110 116 scalar
+  121 124 end
+  125 128 for
+  129 132 end
+  133 137 main
 file negative/text-view-byte-escape/program.ldn tokens 5
   0 4 name
   4 5 :

@@ -15,3 +15,4 @@ erased-parameterized-provider | D145--D147, D154, D155 | `runtime/any-parameteri
 verifier-boundaries | D144, D147 | `unit/evidence-verifier`
 target-layout-64 | D144, D147 | `unit/evidence-layout`, `runtime/any-aggregate-storage`
 target-layout-32 | D144, D147 | `unit/evidence-layout`
+intrinsic-text-traversal | D184 | `runtime/hosted-text-traversal`, `negative/text-traversal-ordinary-pointer-is-not-cstring`

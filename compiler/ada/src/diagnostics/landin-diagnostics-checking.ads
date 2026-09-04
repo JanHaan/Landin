@@ -155,8 +155,9 @@ package Landin.Diagnostics.Checking is
       --  [1150]'s collection traversal is parsed alongside ranges so the
       --  checker can distinguish the source's element shape.  D160 enables
       --  slices and fixed arrays of scalar, pointer, atom, function and
-      --  struct elements; the rest of the element shapes and [1320]'s
-      --  iterable-evidence sources stay here.
+      --  struct elements; D180 adds exact iterable-evidence sources and
+      --  D184 adds the exact hosted text identities.  Other sources stay
+      --  here.
       Collection_Traversal,
       --  D135's parameterized aliases are checked here, including an
       --  unapplied constructor and malformed positional application.

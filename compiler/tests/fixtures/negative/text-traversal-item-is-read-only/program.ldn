@@ -1,0 +1,6 @@
+main: () -> none =
+    text: utf8 = "A"
+    for scalar in text do
+        scalar = 0
+    end for
+end main

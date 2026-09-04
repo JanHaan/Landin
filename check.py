@@ -3205,7 +3205,7 @@ def check_coverage_registers(full_run):
         required_guarantees = {
             "source.lexical", "source.structure", "declarations.names",
             "types.values", "text.literal-storage", "text.indexing",
-            "text.slicing",
+            "text.slicing", "text.traversal",
             "float.ieee",
             "conversion.integer", "conversion.float-width",
             "conversion.integer-to-float",
@@ -3298,7 +3298,8 @@ def check_coverage_registers(full_run):
             "generic-direct-table", "generic-parent-tables",
             "erased-direct-table", "erased-parent-flattening",
             "erased-parameterized-provider", "verifier-boundaries",
-            "target-layout-64", "target-layout-32"}
+            "target-layout-64", "target-layout-32",
+            "intrinsic-text-traversal"}
         for line, row in conformances:
             key = row["Mechanism"].strip("`")
             if key in mechanisms:
