@@ -6903,6 +6903,20 @@ package body Landin.Stages.Lowering is
          Is_Collection : constant Boolean :=
            Is_For
            and then Syn.Traversal_Upper (Of_Tree, Node) = Syn.No_Node;
+         Collection_Source : constant Syn.Node_Id :=
+           (if Is_Collection
+            then Syn.Traversal_Lower (Of_Tree, Node) else Syn.No_Node);
+         Collection_View : constant Ty.Reference_View :=
+           (if Is_Collection
+              and then Type_At (Of_Tree, Collection_Source)
+                in Ty.Pointer_Value | Ty.Slice_Value
+            then Landin.Checking.Descriptor_Of
+              (Types.all,
+               Landin.Checking.Reference_Of
+                 (Types.all, Of_Tree, Collection_Source)).View
+            else Ty.Ordinary_View);
+         Is_Text : constant Boolean :=
+           Collection_View in Ty.Text_View;
          Traversal_Evidence : constant Landin.Checking.Conformance_Id :=
            (if Is_Collection
             then Landin.Checking.Traversal_Evidence_Of
@@ -6911,7 +6925,7 @@ package body Landin.Stages.Lowering is
          Is_Evidence : constant Boolean :=
            Traversal_Evidence /= Landin.Checking.No_Conformance;
          Is_Storage_Collection : constant Boolean :=
-           Is_Collection and then not Is_Evidence;
+           Is_Collection and then not Is_Evidence and then not Is_Text;
          Is_Range : constant Boolean := Is_For and then not Is_Collection;
          Head : constant IR.Block_Id := Fresh (Of_Tree, Node, Scope);
          Body_Block : constant IR.Block_Id := Fresh (Of_Tree, Runs, Inside);
@@ -6946,7 +6960,7 @@ package body Landin.Stages.Lowering is
             then Declaration_At (Syn.Source_Of (Of_Tree), Element_Node)
             else Res.No_Declaration);
          Element_Slot : constant IR.Slot_Id :=
-           (if Is_Range or else Is_Evidence
+           (if Is_Range or else Is_Evidence or else Is_Text
             then Slot_For (Of_Tree, Element_Node, Element_Id)
             else IR.No_Slot);
          Index_Node : constant Syn.Node_Id :=
@@ -6977,6 +6991,7 @@ package body Landin.Stages.Lowering is
          Element_Shape : IR.Field_Shape;
          Source_Slot : IR.Slot_Id := IR.No_Slot;
          Cursor_Slot : IR.Slot_Id := IR.No_Slot;
+         Text_Width_Slot : IR.Slot_Id := IR.No_Slot;
          Cursor_Part : Landin.Checking.Signature_Part;
 
          function Provider_Signature
@@ -7166,6 +7181,291 @@ package body Landin.Stages.Lowering is
             end if;
             return Made;
          end Call_Entry;
+
+         function Text_Unit_At
+           (Relative : Ty.Magnitude) return IR.Value_Id;
+         procedure Decode_Text_Item;
+
+         --  D184's intrinsic iterable providers retain a code-unit cursor.
+         --  Length-bearing text uses the verified slice-address operation;
+         --  cstring uses its read-only base and stops before asking for an
+         --  item at the first NUL.  No backing slice or pointer enters the
+         --  source program's type system through either path.
+         function Text_Unit_At
+           (Relative : Ty.Magnitude) return IR.Value_Id
+         is
+            Position : IR.Value_Id :=
+              IR.Emit_Load (Unit.all, Filling, Cursor_Slot, Site);
+            Address : IR.Value_Id;
+            Element : constant Ty.Scalar_Name :=
+              (if Collection_View = Ty.Utf16_View then Ty.U16 else Ty.U8);
+         begin
+            if Relative /= 0 then
+               Position := IR.Emit_Binary
+                 (Unit.all, Filling, IR.Add, Position,
+                  IR.Emit_Number
+                    (Unit.all, Filling, Ty.Usize, Relative, False, Site),
+                  Ty.Usize, Site);
+            end if;
+            if Collection_View = Ty.C_String_View then
+               Address := IR.Emit_Binary
+                 (Unit.all, Filling, IR.Add,
+                  IR.Emit_Load (Unit.all, Filling, Base_Slot, Site),
+                  Position, Ty.Usize, Site);
+            else
+               Address := IR.Emit_Slice_Address
+                 (Unit.all, Filling,
+                  IR.Emit_Load (Unit.all, Filling, Base_Slot, Site),
+                  IR.Emit_Load (Unit.all, Filling, Length_Slot, Site),
+                  Position, Position, Element_Shape, True, Site);
+            end if;
+            return IR.Emit_Load_Indirect
+              (Unit.all, Filling, Address, Element, Site);
+         end Text_Unit_At;
+
+         procedure Decode_Text_Item is
+            function As_U32 (Value : IR.Value_Id) return IR.Value_Id;
+            function Literal (Value : Ty.Magnitude) return IR.Value_Id;
+            function Minus
+              (Value : IR.Value_Id; Bias : Ty.Magnitude)
+               return IR.Value_Id;
+            function Times
+              (Value : IR.Value_Id; Factor : Ty.Magnitude)
+               return IR.Value_Id;
+            function Plus
+              (Left, Right : IR.Value_Id) return IR.Value_Id;
+            procedure Keep (Value : IR.Value_Id; Width : Ty.Magnitude);
+
+            function As_U32 (Value : IR.Value_Id) return IR.Value_Id is
+              (IR.Emit_Conversion
+                 (Unit.all, Filling, Value, Ty.U32, Site));
+
+            function Literal (Value : Ty.Magnitude) return IR.Value_Id is
+              (IR.Emit_Number
+                 (Unit.all, Filling, Ty.U32, Value, False, Site));
+
+            function Minus
+              (Value : IR.Value_Id; Bias : Ty.Magnitude)
+              return IR.Value_Id
+              is (IR.Emit_Binary
+                    (Unit.all, Filling, IR.Subtract, Value, Literal (Bias),
+                     Ty.U32, Site));
+
+            function Times
+              (Value : IR.Value_Id; Factor : Ty.Magnitude)
+              return IR.Value_Id
+              is (IR.Emit_Binary
+                    (Unit.all, Filling, IR.Multiply, Value,
+                     Literal (Factor), Ty.U32, Site));
+
+            function Plus
+              (Left, Right : IR.Value_Id) return IR.Value_Id
+              is (IR.Emit_Binary
+                    (Unit.all, Filling, IR.Add, Left, Right, Ty.U32, Site));
+
+            procedure Keep (Value : IR.Value_Id; Width : Ty.Magnitude) is
+            begin
+               IR.Emit_Store
+                 (Unit.all, Filling, Element_Slot, Value, Site);
+               IR.Emit_Store
+                 (Unit.all, Filling, Text_Width_Slot,
+                  IR.Emit_Number
+                    (Unit.all, Filling, Ty.Usize, Width, False, Site), Site);
+            end Keep;
+         begin
+            if Collection_View = Ty.Utf16_View then
+               declare
+                  Lead_Slot : constant IR.Slot_Id := IR.Add_Slot
+                    (Unit.all, Filling, Ty.U16, Res.No_Declaration, Site);
+                  Maybe_High : constant IR.Block_Id :=
+                    Fresh (Of_Tree, Node, Inside);
+                  Pair : constant IR.Block_Id :=
+                    Fresh (Of_Tree, Node, Inside);
+                  Single : constant IR.Block_Id :=
+                    Fresh (Of_Tree, Node, Inside);
+                  Join : constant IR.Block_Id :=
+                    Fresh (Of_Tree, Node, Inside);
+                  Lead : constant IR.Value_Id := Text_Unit_At (0);
+               begin
+                  IR.Emit_Store
+                    (Unit.all, Filling, Lead_Slot, Lead, Site);
+                  IR.Emit_Branch
+                    (Unit.all, Filling,
+                     IR.Emit_Binary
+                       (Unit.all, Filling, IR.Less_Than,
+                        IR.Emit_Load
+                          (Unit.all, Filling, Lead_Slot, Site),
+                        IR.Emit_Number
+                          (Unit.all, Filling, Ty.U16, 16#D800#, False, Site),
+                        Ty.Bool, Site),
+                     Single, Maybe_High, Site);
+                  IR.Leave_Block (Unit.all, Filling);
+                  Current := IR.No_Block;
+
+                  Open (Maybe_High);
+                  IR.Emit_Branch
+                    (Unit.all, Filling,
+                     IR.Emit_Binary
+                       (Unit.all, Filling, IR.Less_Than,
+                        IR.Emit_Load
+                          (Unit.all, Filling, Lead_Slot, Site),
+                        IR.Emit_Number
+                          (Unit.all, Filling, Ty.U16, 16#DC00#, False, Site),
+                        Ty.Bool, Site),
+                     Pair, Single, Site);
+                  IR.Leave_Block (Unit.all, Filling);
+                  Current := IR.No_Block;
+
+                  Open (Single);
+                  Keep
+                    (As_U32
+                       (IR.Emit_Load
+                          (Unit.all, Filling, Lead_Slot, Site)), 1);
+                  Close_With_Jump (Join, Site);
+
+                  Open (Pair);
+                  declare
+                     High : constant IR.Value_Id := Minus
+                       (As_U32
+                          (IR.Emit_Load
+                             (Unit.all, Filling, Lead_Slot, Site)),
+                        16#D800#);
+                     Low : constant IR.Value_Id := Minus
+                       (As_U32 (Text_Unit_At (1)), 16#DC00#);
+                  begin
+                     Keep
+                       (Plus
+                          (Literal (16#10000#),
+                           Plus (Times (High, 16#400#), Low)), 2);
+                  end;
+                  Close_With_Jump (Join, Site);
+
+                  Open (Join);
+               end;
+               return;
+            end if;
+
+            declare
+               Lead_Slot : constant IR.Slot_Id := IR.Add_Slot
+                 (Unit.all, Filling, Ty.U8, Res.No_Declaration, Site);
+               Non_ASCII : constant IR.Block_Id :=
+                 Fresh (Of_Tree, Node, Inside);
+               Test_Three : constant IR.Block_Id :=
+                 Fresh (Of_Tree, Node, Inside);
+               Test_Four : constant IR.Block_Id :=
+                 Fresh (Of_Tree, Node, Inside);
+               One_Byte : constant IR.Block_Id :=
+                 Fresh (Of_Tree, Node, Inside);
+               Two_Bytes : constant IR.Block_Id :=
+                 Fresh (Of_Tree, Node, Inside);
+               Three_Bytes : constant IR.Block_Id :=
+                 Fresh (Of_Tree, Node, Inside);
+               Four_Bytes : constant IR.Block_Id :=
+                 Fresh (Of_Tree, Node, Inside);
+               Join : constant IR.Block_Id :=
+                 Fresh (Of_Tree, Node, Inside);
+               Lead : constant IR.Value_Id := Text_Unit_At (0);
+
+               function Lead_Below
+                 (Limit : Ty.Magnitude) return IR.Value_Id;
+
+               function Lead_Below
+                 (Limit : Ty.Magnitude) return IR.Value_Id is
+               begin
+                  return IR.Emit_Binary
+                    (Unit.all, Filling, IR.Less_Than,
+                     IR.Emit_Load (Unit.all, Filling, Lead_Slot, Site),
+                     IR.Emit_Number
+                       (Unit.all, Filling, Ty.U8, Limit, False, Site),
+                     Ty.Bool, Site);
+               end Lead_Below;
+            begin
+               IR.Emit_Store (Unit.all, Filling, Lead_Slot, Lead, Site);
+               IR.Emit_Branch
+                 (Unit.all, Filling, Lead_Below (16#80#),
+                  One_Byte, Non_ASCII, Site);
+               IR.Leave_Block (Unit.all, Filling);
+               Current := IR.No_Block;
+
+               Open (Non_ASCII);
+               IR.Emit_Branch
+                 (Unit.all, Filling, Lead_Below (16#E0#),
+                  Two_Bytes, Test_Three, Site);
+               IR.Leave_Block (Unit.all, Filling);
+               Current := IR.No_Block;
+
+               Open (Test_Three);
+               IR.Emit_Branch
+                 (Unit.all, Filling, Lead_Below (16#F0#),
+                  Three_Bytes, Test_Four, Site);
+               IR.Leave_Block (Unit.all, Filling);
+               Current := IR.No_Block;
+
+               Open (Test_Four);
+               Close_With_Jump (Four_Bytes, Site);
+
+               Open (One_Byte);
+               Keep
+                 (As_U32
+                    (IR.Emit_Load
+                       (Unit.all, Filling, Lead_Slot, Site)), 1);
+               Close_With_Jump (Join, Site);
+
+               Open (Two_Bytes);
+               Keep
+                 (Plus
+                    (Times
+                       (Minus
+                          (As_U32
+                             (IR.Emit_Load
+                                (Unit.all, Filling, Lead_Slot, Site)),
+                           16#C0#), 16#40#),
+                     Minus (As_U32 (Text_Unit_At (1)), 16#80#)), 2);
+               Close_With_Jump (Join, Site);
+
+               Open (Three_Bytes);
+               Keep
+                 (Plus
+                    (Times
+                       (Minus
+                          (As_U32
+                             (IR.Emit_Load
+                                (Unit.all, Filling, Lead_Slot, Site)),
+                           16#E0#), 16#1000#),
+                     Plus
+                       (Times
+                          (Minus
+                             (As_U32 (Text_Unit_At (1)), 16#80#), 16#40#),
+                        Minus
+                          (As_U32 (Text_Unit_At (2)), 16#80#))), 3);
+               Close_With_Jump (Join, Site);
+
+               Open (Four_Bytes);
+               Keep
+                 (Plus
+                    (Times
+                       (Minus
+                          (As_U32
+                             (IR.Emit_Load
+                                (Unit.all, Filling, Lead_Slot, Site)),
+                           16#F0#), 16#40000#),
+                     Plus
+                       (Times
+                          (Minus
+                             (As_U32 (Text_Unit_At (1)), 16#80#),
+                           16#1000#),
+                        Plus
+                          (Times
+                             (Minus
+                                (As_U32 (Text_Unit_At (2)), 16#80#),
+                              16#40#),
+                           Minus
+                             (As_U32 (Text_Unit_At (3)), 16#80#)))), 4);
+               Close_With_Jump (Join, Site);
+
+               Open (Join);
+            end;
+         end Decode_Text_Item;
       begin
          if Is_Storage_Collection then
             declare
@@ -7243,6 +7543,64 @@ package body Landin.Stages.Lowering is
                   Subject       => Syn.No_Node,
                   Which         => 0,
                   Payload_Field => 0);
+            end;
+         elsif Is_Text then
+            declare
+               Source : constant Syn.Node_Id := Collection_Source;
+               Base : IR.Value_Id;
+               Length : IR.Value_Id := IR.No_Value;
+            begin
+               --  D184 evaluates and retains the complete source before its
+               --  intrinsic first provider establishes cursor zero.  The
+               --  two length-bearing identities keep both carrier words;
+               --  cstring keeps only its pointer-shaped identity.
+               if Collection_View = Ty.C_String_View then
+                  Base := Lower_Expression (Of_Tree, Source, Scope);
+                  Element_Shape :=
+                    (Kind => IR.Scalar_Field_Shape, Element => Ty.U8,
+                     Length => 1, others => <>);
+               else
+                  declare
+                     Parts : constant Slice_Values :=
+                       Lower_Slice (Of_Tree, Source, Scope);
+                  begin
+                     Base := Parts.Base;
+                     Length := Parts.Length;
+                  end;
+                  Element_Shape := Slice_Shape (Of_Tree, Source);
+               end if;
+               if Current = IR.No_Block then
+                  return;
+               end if;
+
+               Base_Slot := IR.Add_Slot
+                 (Unit.all, Filling, Ty.Usize, Res.No_Declaration, Site);
+               IR.Emit_Store (Unit.all, Filling, Base_Slot, Base, Site);
+               if Collection_View /= Ty.C_String_View then
+                  Length_Slot := IR.Add_Slot
+                    (Unit.all, Filling, Ty.Usize,
+                     Res.No_Declaration, Site);
+                  IR.Emit_Store
+                    (Unit.all, Filling, Length_Slot, Length, Site);
+               end if;
+
+               Cursor_Slot := IR.Add_Slot
+                 (Unit.all, Filling, Ty.Usize, Res.No_Declaration, Site);
+               Text_Width_Slot := IR.Add_Slot
+                 (Unit.all, Filling, Ty.Usize, Res.No_Declaration, Site);
+               Counter_Slot :=
+                 (if Index_Slot /= IR.No_Slot then Index_Slot
+                  else IR.Add_Slot
+                    (Unit.all, Filling, Ty.Usize,
+                     Res.No_Declaration, Site));
+               IR.Emit_Store
+                 (Unit.all, Filling, Cursor_Slot,
+                  IR.Emit_Number
+                    (Unit.all, Filling, Ty.Usize, 0, False, Site), Site);
+               IR.Emit_Store
+                 (Unit.all, Filling, Counter_Slot,
+                  IR.Emit_Number
+                    (Unit.all, Filling, Ty.Usize, 0, False, Site), Site);
             end;
          elsif Is_Evidence then
             declare
@@ -7385,6 +7743,35 @@ package body Landin.Stages.Lowering is
                IR.Leave_Block (Unit.all, Filling);
                Current := IR.No_Block;
             end;
+         elsif Is_Text then
+            declare
+               Ended : IR.Value_Id;
+            begin
+               --  D184's at_end provider compares a length-bearing cursor
+               --  with its retained code-unit length.  cstring instead
+               --  observes the first NUL and never exposes that terminator
+               --  as an Item.
+               if Collection_View = Ty.C_String_View then
+                  Ended := IR.Emit_Binary
+                    (Unit.all, Filling, IR.Equal_To, Text_Unit_At (0),
+                     IR.Emit_Number
+                       (Unit.all, Filling, Ty.U8, 0, False, Site),
+                     Ty.Bool, Site);
+               else
+                  Ended := IR.Emit_Binary
+                    (Unit.all, Filling, IR.Equal_To,
+                     IR.Emit_Load
+                       (Unit.all, Filling, Cursor_Slot, Site),
+                     IR.Emit_Load
+                       (Unit.all, Filling, Length_Slot, Site),
+                     Ty.Bool, Site);
+               end if;
+               IR.Emit_Branch
+                 (Unit.all, Filling, Ended,
+                  Natural_Exit, Body_Block, Site);
+               IR.Leave_Block (Unit.all, Filling);
+               Current := IR.No_Block;
+            end;
          elsif Is_Evidence then
             declare
                At_End_Signature : constant
@@ -7458,6 +7845,11 @@ package body Landin.Stages.Lowering is
                IR.Emit_Store
                  (Unit.all, Filling, Address_Slot, Address, Site);
             end;
+         elsif Is_Text then
+            --  The intrinsic item provider decodes one complete Unicode
+            --  scalar into the immutable copied `u32` loop binding.  Its
+            --  physical width is retained privately for next.
+            Decode_Text_Item;
          elsif Is_Evidence then
             declare
                Item_Signature : constant Landin.Checking.Signature_Id :=
@@ -7497,6 +7889,33 @@ package body Landin.Stages.Lowering is
             begin
                IR.Emit_Store
                  (Unit.all, Filling, Counter_Slot, Next_Position, Site);
+               Close_With_Jump (Head, Site);
+            end;
+         elsif Is_Text then
+            Open (Step_Block);
+            declare
+               Cursor : constant IR.Value_Id :=
+                 IR.Emit_Load (Unit.all, Filling, Cursor_Slot, Site);
+               Width : constant IR.Value_Id :=
+                 IR.Emit_Load (Unit.all, Filling, Text_Width_Slot, Site);
+               Index : constant IR.Value_Id :=
+                 IR.Emit_Load (Unit.all, Filling, Counter_Slot, Site);
+            begin
+               --  D184's next provider advances by the decoded scalar's
+               --  physical code-unit width; the optional loop index counts
+               --  Items and therefore advances exactly once per next call.
+               IR.Emit_Store
+                 (Unit.all, Filling, Cursor_Slot,
+                  IR.Emit_Binary
+                    (Unit.all, Filling, IR.Add,
+                     Cursor, Width, Ty.Usize, Site), Site);
+               IR.Emit_Store
+                 (Unit.all, Filling, Counter_Slot,
+                  IR.Emit_Binary
+                    (Unit.all, Filling, IR.Add, Index,
+                     IR.Emit_Number
+                       (Unit.all, Filling, Ty.Usize, 1, False, Site),
+                     Ty.Usize, Site), Site);
                Close_With_Jump (Head, Site);
             end;
          elsif Is_Evidence then

@@ -1,6 +1,7 @@
---  R3's parser-support text layer is deliberately byte-oriented. D181--D183
---  add the hosted text identities, literals, indexing and direct ranges
---  without changing this module's opaque positions or bounded byte views.
+--  R3's parser-support text layer is deliberately byte-oriented. D181--D184
+--  add the hosted text identities, literals, indexing, direct ranges and
+--  scalar traversal without changing this module's opaque positions or
+--  bounded byte views.
 --  D182 also accepts this exact public position identity for O(1) utf8
 --  indexing; a position used that way must begin a codepoint.
 

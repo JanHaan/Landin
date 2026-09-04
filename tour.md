@@ -829,7 +829,11 @@ form may end at the view's length. The inclusive form includes the complete
 scalar beginning at its upper bound. Either form returns the same immutable,
 source-derived text identity; `cstring` has no length and cannot be sliced.
 An invalid bound or a bound that splits an encoding traps. Traversal remains a
-separate library-concept operation. [0610] supplies indexing separately.
+separate [1320] operation rather than inheriting either backing carrier. Each
+exact hosted view has its own intrinsic iterable conformance, yielding Unicode
+scalar values as copied `u32` items with a private `usize` code-unit cursor;
+`cstring` stops before its first NUL.
+[0610] supplies indexing separately.
 
 ### [0610] Indexing utf8 by an integer yields the bytes of one
 
@@ -1989,6 +1993,12 @@ named `iterable` concept. The source expression runs once. `first` produces
 one cursor; `at_end`, `item`, and (after fallthrough or `continue`) `next`
 then drive each iteration in that order. The optional `usize` index still
 begins at zero and advances with `next`.
+The exact `utf8`, `utf16`, and `cstring` identities have distinct intrinsic
+conformances to that same four-operation contract. Their cursor is a private `usize` byte or
+UTF-16-code-unit offset and their item is the decoded Unicode scalar as `u32`,
+not an alias or encoded subview. `cstring`'s first NUL is the end and is not an
+item. The source still runs once, and provider order, index advancement,
+cleanup and loop transfers are the same as for ordinary iterable evidence.
 
 ```landin
     for item in items do
@@ -2016,6 +2026,8 @@ rather than a silent write to nothing.
 The cursor and item keep their exact declared type identities. In particular,
 an `any C` item keeps C and its evidence, while an `any C` source remains an
 erased value passed to the providers; neither pair is interpreted as a slice.
+Text traversal likewise yields an immutable copied `u32`; binding mutability
+cannot make either the item or the hosted view writable.
 When `T` is a fixed array, slice or `any C`, replacing that whole element
 follows this same rule. Writing through a slice element still follows the
 `mut` permission carried by that inner slice. An `any C` element remains an

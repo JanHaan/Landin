@@ -1,0 +1,7 @@
+main: () -> none =
+    value: u8 = 65
+    source: ptr u8 = addr value
+    for scalar in source do
+        _ = scalar
+    end for
+end main

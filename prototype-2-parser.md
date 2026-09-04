@@ -23,10 +23,11 @@ R3.40 implements the byte-oriented pressure this parser needs: `core/text`
 accepts byte slices, gives byte offsets an opaque `position` identity, retains
 origins through subslices, and reports an end read directly. D181 later adds
 the `utf8` distinct view plus contextual literals and scalar decoding without
-changing that byte API. D182 adds [0610]'s text-view indexing, and D183 adds
-identity-preserving direct ranges over validated text; neither changes the R3
-byte API. The R3 derived parser may classify its ASCII grammar from bytes while
-preserving unknown input as recoverable tokens.
+changing that byte API. D182 adds [0610]'s text-view indexing, D183 adds
+identity-preserving direct ranges over validated text, and D184 adds scalar
+traversal over the hosted identities; none changes the R3 byte API. The R3
+derived parser may classify its ASCII grammar from bytes while preserving
+unknown input as recoverable tokens.
 
 ```landin
 utf8       distinct []u8

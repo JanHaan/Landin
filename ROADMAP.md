@@ -3137,6 +3137,14 @@ written order. `cstring` remains unsliceable because it has no length; invalid
 bounds and split encodings trap through checked slice addresses. D181/D182
 validation, pooling, terminators, indexing, errors and ordinary range behavior
 remain unchanged, and traversal remains separate work.
+The following text increment enables [0600]/[1320] traversal of the exact
+`utf8`, `utf16` and `cstring` identities through three intrinsic conformances.
+D184 gives each a private `usize` code-unit cursor and immutable copied `u32`
+item, decodes one validated Unicode scalar per iteration, and stops `cstring`
+before its first NUL. It retains the source once, preserves D180's provider,
+cleanup, transfer and optional-index order, and neither searches nor changes
+ordinary evidence. D181--D183 and existing range/array/slice/evidence behavior
+remain unchanged.
 The seventh increment enables quoted text in a direct read-only
 `[]u8` context, including byte escapes, UTF-8 source validation, an uncounted
 trailing NUL, content-pooled read-only data and static slice relocations.
