@@ -3926,7 +3926,8 @@ package body Landin.Stages.Checking is
          --
          --  D17 makes it structural, so what is recorded is the length and
          --  the element and never where it was written.  D178 retains one
-         --  complete fixed-array or slice element shape; every other element
+         --  complete fixed-array or slice element shape; D179 adds an
+         --  `any` element's erased concept identity.  Every other element
          --  the kernel cannot lay out end to end is refused here rather than
          --  in the grammar.
          if Syn.Kind (Of_Tree, Written) = Syn.Array_Type then
@@ -3956,7 +3957,8 @@ package body Landin.Stages.Checking is
             begin
                if Held not in Ty.Scalar_Name
                  and then not Aggregate_Element
-                 and then Held not in Ty.Fixed_Array | Ty.Slice_Value
+                 and then Held not in
+                   Ty.Fixed_Array | Ty.Slice_Value | Ty.Any_Value
                then
                   --  Three passes reach a written type; the first to
                   --  refuse it records that, so a reader sees one report.
@@ -4026,7 +4028,7 @@ package body Landin.Stages.Checking is
                                            (Landin.Checking.Array_Element
                                               (Types.all, Of_Tree, Element),
                                             Facts))))
-                              elsif Held = Ty.Slice_Value
+                              elsif Held in Ty.Slice_Value | Ty.Any_Value
                               then 2 * Ty.Magnitude
                                 (Landin.Targets.Bytes
                                    (Landin.Targets.Pointer_Size (Facts)))
@@ -4062,7 +4064,8 @@ package body Landin.Stages.Checking is
                Landin.Checking.Note_Array
                  (Types.all, Of_Tree, Written, Length,
                   (if Aggregate_Element then Ty.U8 else Ty.Scalar_Name
-                     (if Held in Ty.Fixed_Array | Ty.Slice_Value
+                     (if Held in
+                       Ty.Fixed_Array | Ty.Slice_Value | Ty.Any_Value
                       then Ty.U8 else Held)));
                if Aggregate_Element then
                   Landin.Checking.Note_Array_Element_Nominal
@@ -4085,6 +4088,22 @@ package body Landin.Stages.Checking is
                       Reference => Landin.Checking.Reference_Of
                         (Types.all, Of_Tree, Element),
                       others    => <>));
+               elsif Held = Ty.Any_Value then
+                  declare
+                     Reference : constant Landin.Checking.Reference_Id :=
+                       Landin.Checking.Add_Reference
+                         (Types.all,
+                          (Kind    => Ty.Any_Value,
+                           Concept => Landin.Checking.Any_Concept_Of
+                             (Types.all, Of_Tree, Element),
+                           others  => <>));
+                  begin
+                     Landin.Checking.Note_Array_Element_Shape
+                       (Types.all, Of_Tree, Written,
+                        (Kind      => Landin.Checking.Reference_Field,
+                         Reference => Reference,
+                         others    => <>));
+                  end;
                end if;
                return Ty.Fixed_Array;
             end;
@@ -13331,6 +13350,14 @@ package body Landin.Stages.Checking is
                               begin
                                  Item.Referent := Nested.Kind;
                                  Item.Reference := Shape.Reference;
+                                 Item.Nominal := Nested.Nominal;
+                                 Item.Length := Nested.Length;
+                                 Item.Element := Nested.Element;
+                                 Item.Element_Nominal :=
+                                   Nested.Element_Nominal;
+                                 Item.Signature := Nested.Signature;
+                                 Item.Concept := Nested.Concept;
+                                 Item.Atoms := Nested.Atoms;
                               end;
                            when Landin.Checking.Variant_Field =>
                               raise Landin.Compiler_Defect with
@@ -13354,6 +13381,7 @@ package body Landin.Stages.Checking is
                         Item.Element_Nominal := Source.Element_Nominal;
                         Item.Reference := Source.Reference;
                         Item.Signature := Source.Signature;
+                        Item.Concept := Source.Concept;
                         Item.Atoms := Source.Atoms;
                      end;
                   else
@@ -13510,8 +13538,14 @@ package body Landin.Stages.Checking is
                         begin
                            Landin.Checking.Note
                              (Types.all, Of_Tree, Node, Descriptor.Kind);
-                           Landin.Checking.Note_Reference
-                             (Types.all, Of_Tree, Node, Shape.Reference);
+                           if Descriptor.Kind = Ty.Any_Value then
+                              Landin.Checking.Note_Any_Concept
+                                (Types.all, Of_Tree, Node,
+                                 Descriptor.Concept);
+                           else
+                              Landin.Checking.Note_Reference
+                                (Types.all, Of_Tree, Node, Shape.Reference);
+                           end if;
                            return Kept (Descriptor.Kind);
                         end;
                      end if;
@@ -16999,7 +17033,8 @@ package body Landin.Stages.Checking is
          --  `usize`.  A slice writes through its own permission; an array
          --  writes when the place holding it does.  Element shapes the
          --  alias lowering can carry are admitted; [1320]'s iterable
-         --  evidence and `any` elements keep the named R4.10 refusal.
+         --  evidence keeps the named R4.10 refusal.  D179 carries an `any`
+         --  element's concept independently from its two-word runtime shape.
          procedure Check_Collection_Traversal
            (Of_Tree : Syn.Tree;
             Node    : Syn.Node_Id;
@@ -17086,19 +17121,6 @@ package body Landin.Stages.Checking is
                Landin.Checking.Refuse (Types.all, Of_Tree, Source);
             end if;
 
-            if Kind = Ty.Any_Value then
-               Bad.Report
-                 (Item    => Bad.Unsupported_Use,
-                  Source  => Syn.Source_Of (Of_Tree),
-                  Where   => Syn.Where (Of_Tree, Source),
-                  Message => "traversal of " & Shown (Kind)
-                             & " elements is not enabled yet",
-                  Refused => Bad.Collection_Traversal,
-                  Into    => Found);
-               Landin.Checking.Refuse (Types.all, Of_Tree, Source);
-               Kind := Ty.Ill_Typed;
-            end if;
-
             if Id /= Res.No_Declaration
               and then Kind not in Ty.Undecided | Ty.Not_Typed
               and then Landin.Checking.State_Of (Types.all, Id)
@@ -17159,6 +17181,11 @@ package body Landin.Stages.Checking is
                        (Types.all, Id, Descriptor.Signature);
                      Landin.Checking.Note_Signature
                        (Types.all, Of_Tree, Element, Descriptor.Signature);
+                  when Ty.Any_Value =>
+                     Landin.Checking.Note_Any_Concept
+                       (Types.all, Id, Descriptor.Concept);
+                     Landin.Checking.Note_Any_Concept
+                       (Types.all, Of_Tree, Element, Descriptor.Concept);
                   when others =>
                      null;
                end case;

@@ -1676,9 +1676,10 @@ package Landin.Checking is
      (Of_Table : Table; Id : Declaration_Id) return Nominal_Type_Id
      with Pre => Is_Prepared (Of_Table) and then Contains (Of_Table, Id);
 
-   --  D178: an array element can itself be one fixed array or slice.  The
-   --  existing scalar and nominal queries remain the compact common path;
-   --  this complete shape distinguishes the aggregate carriers.
+   --  D178/D179: an array element can itself be one fixed array, slice or
+   --  `any`.  The existing scalar and nominal queries remain the compact
+   --  common path; this complete shape distinguishes the aggregate carriers
+   --  and retains an erased value's concept descriptor.
    function Array_Element_Shape
      (Of_Table : Table;
       Of_Tree  : Landin.Syntax.Tree;

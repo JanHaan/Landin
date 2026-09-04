@@ -3099,7 +3099,12 @@ refusal. A later collection increment enables fixed-array and slice elements,
 carrying their complete storage shape through the element alias and through
 fixed-array or slice loop results while retaining `any` elements and
 iterable-evidence sources as the named refusal. D178 records the boundary. The
-seventh increment enables quoted text in a direct read-only
+next collection increment enables `any C` elements in fixed arrays and slices,
+retaining their erased concept identity and evidence through the storage alias
+and `any` loop-result transport. Computed slice sources still run once, and
+permissions, indices, control transfers and cleanup retain D160's rules.
+Iterable-evidence sources remain the named refusal. D179 records the boundary.
+The seventh increment enables quoted text in a direct read-only
 `[]u8` context, including byte escapes, UTF-8 source validation, an uncounted
 trailing NUL, content-pooled read-only data and static slice relocations.
 D161 keeps `utf8`, `utf16`, `cstring` and codepoint escapes deferred while

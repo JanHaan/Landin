@@ -1,0 +1,79 @@
+marker: type = concept (t: type)
+    code: (self: ptr t) -> (value: i32)
+end marker
+
+first: type = struct
+    value: i32
+end first
+
+second: type = struct
+    value: i32
+end second
+
+first_code: (self: ptr first) -> (value: i32) =
+    value = self.val.value
+end first_code
+
+second_code: (self: ptr second) -> (value: i32) =
+    value = self.val.value
+end second_code
+
+first is marker (code: first_code)
+second is marker (code: second_code)
+
+mut source_calls: usize = 0
+mut cleanups: usize = 0
+
+counted: (items: []mut any marker) -> (result: []mut any marker from items) =
+    inc source_calls
+    result = items
+end counted
+
+cleaned: () -> none =
+    inc cleanups
+end cleaned
+
+public main: () -> (code: i32) =
+    left: first = (value: 10)
+    right: second = (value: 20)
+    replacement: second = (value: 30)
+    fallback: first = (value: 1)
+
+    mut items: [2]any marker
+    items[0] = any(addr left)
+    items[1] = any(addr right)
+
+    mut fixed_sum: i32 = 0
+    mut fixed_indices: usize = 0
+    for item, index in items do
+        defer cleaned()
+        fixed_sum += item.code()
+        fixed_indices = fixed_indices + index
+        if index == 0 then
+            item = any(addr replacement)
+        end if
+        continue when index == 0
+    end for
+
+    mut slice_sum: i32 = 0
+    mut slice_indices: usize = 0
+    chosen: any marker = for item, index in counted(items[0..<2]) do
+        defer cleaned()
+        slice_sum += item.code()
+        slice_indices = slice_indices + index
+        continue when index == 0
+        break with item
+    complete
+        break with any(addr fallback)
+    end for
+
+    if source_calls == 1 and cleanups == 4
+      and fixed_sum == 30 and fixed_indices == 1
+      and slice_sum == 50 and slice_indices == 1
+      and items[0].code() == 30 and chosen.code() == 20
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

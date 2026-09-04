@@ -1,10 +1,12 @@
 marker: type = concept (item: type)
 end marker
 
-public main: () -> (code: i32) =
-    items: []any marker = []
+replace: (items: []any marker) -> none =
     for item in items do
-        _ = item
+        item = item
     end for
+end replace
+
+public main: () -> (code: i32) =
     code = 1
 end main

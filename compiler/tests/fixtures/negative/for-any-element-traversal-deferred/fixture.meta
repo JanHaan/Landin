@@ -1,6 +1,0 @@
-class: negative
-summary: traversal of any elements remains a named checking-stage deferral
-program: program.ldn
-codes: L0304
-constructs: 1150, 1370
-targets: linux-x86-64, macos-arm64, synthetic-32
