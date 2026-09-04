@@ -17209,13 +17209,6 @@ file negative/bare-block-unclosed/program.ldn tokens 13
   23 24 =
   29 34 begin
   43 45 42
-file negative/bool-conversion-not-yet-enabled/program.ldn tokens 6
-  0 5 whole
-  6 8 :=
-  9 12 i32
-  12 13 (
-  13 17 true
-  17 18 )
 file negative/borrowed-source-inout/program.ldn tokens 49
   0 9 increment
   9 10 :
@@ -22510,6 +22503,13 @@ file negative/integer-literal-not-a-float/program.ldn tokens 5
   7 10 f32
   11 12 =
   13 14 1
+file negative/integer-to-bool-not-yet-enabled/program.ldn tokens 6
+  0 6 belief
+  7 9 :=
+  10 14 bool
+  14 15 (
+  15 16 1
+  16 17 )
 file negative/keyword-as-name/program.ldn tokens 5
   0 2 if
   2 3 :

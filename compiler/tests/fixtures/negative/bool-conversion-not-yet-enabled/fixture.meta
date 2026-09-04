@@ -1,6 +1,0 @@
-class: negative
-summary: conversion involving bool remains a named R4.10 boundary
-constructs: 0180, 0310, 0700
-program: program.ldn
-codes: L0304
-targets: linux-x86-64, macos-arm64

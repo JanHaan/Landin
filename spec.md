@@ -974,8 +974,9 @@ integer type applied to a pointer checks that the address fits, and
 untracked pointer. D168 also admits an enabled integer type applied to an
 integer value. D169 admits f32 or f64 applied to a float value. Conversion
 from an enabled integer to f32 or f64 is admitted by D170. D171 admits an
-enabled integer type applied to a float value. Conversion involving bool and
-the deferred integer widths remains refused by [1830].
+enabled integer type applied to a float value, and D172 admits an enabled
+integer type applied to bool. Conversion to bool and the deferred integer
+widths remain refused by [1830].
 
 ### [1930] What may be discarded
 
@@ -8491,6 +8492,7 @@ classified failure boundary before the repository gate can pass.
 | `conversion.float-width` | trap | 0170, 0210, 0230, 0240, 0310, 0700, 1880, 1940, 1950, 1960 | explicit f32/f64 conversion widens exactly or narrows to nearest with ties to even, preserving signed zero and the infinity/NaN class; L0300 rejects a known finite narrowing overflow and an equivalent runtime conversion traps | `negative/float-width-conversion-known-out-of-range`, `runtime/float-width-conversion-overflow-traps`, `runtime/float-width-conversions` |
 | `conversion.integer-to-float` | static | 0150, 0170, 0190, 0210, 0310, 0700, 1880, 1940, 1960 | explicit conversion from every enabled integer to f32 or f64 preserves the mathematical value when exact and otherwise rounds to nearest with ties to even; the enabled integer range cannot overflow either float width | `runtime/integer-to-float-conversions` |
 | `conversion.float-to-integer` | trap | 0150, 0170, 0190, 0210, 0230, 0240, 0310, 0700, 1880, 1940, 1950, 1960 | explicit conversion from f32 or f64 to every enabled integer truncates toward zero and then requires the result to fit; L0300 rejects a known out-of-range, infinity or NaN source and an equivalent runtime conversion traps | `negative/float-to-integer-known-nan`, `negative/float-to-integer-known-out-of-range`, `runtime/float-to-integer-conversions`, `runtime/float-to-integer-nan-traps`, `runtime/float-to-integer-out-of-range-traps` |
+| `conversion.bool-to-integer` | static | 0150, 0180, 0190, 0310, 0700, 1880, 1940, 1960 | explicit conversion from bool to every enabled integer maps false to zero and true to one; both results fit every enabled destination, while conversion to bool remains L0304 | `negative/integer-to-bool-not-yet-enabled`, `runtime/bool-to-integer-conversions` |
 | `text.literal-storage` | static | 0260, 0270, 0280, 0570, 1770, 1880, 1900, 1940 | L0301 for a non-byte, writable or codepoint context; L0303 for a write through its read-only view; L0304 for the default deferred `utf8`; equal decoded quoted or raw contents share read-only storage with one trailing NUL excluded from the slice length | `negative/raw-literal-needs-byte-slice`, `negative/raw-literal-needs-read-only-slice`, `negative/raw-literal-write`, `negative/text-literal-codepoint-in-byte-context`, `negative/text-literal-needs-byte-slice`, `negative/text-literal-needs-read-only-slice`, `negative/text-literal-not-enabled`, `negative/text-literal-write`, `runtime/raw-literal-bytes`, `runtime/text-literal-bytes` |
 | `arithmetic.known` | static | 0290, 0300, 0390, 1950 | L0300 or L0306 | `negative/compound-assignment-zero-divisor`, `negative/divisor-is-zero`, `negative/literal-above-its-type` |
 | `arithmetic.runtime` | trap | 0290, 0300, 0320, 0390, 1950, 1960 | trap | `runtime/compound-assignment-overflow-traps`, `runtime/checked-overflow-traps`, `runtime/checked-subtraction-traps`, `runtime/checked-multiplication-traps`, `runtime/checked-negation-traps`, `runtime/signed-division-overflow-traps`, `runtime/a-zero-divisor-traps`, `runtime/a-zero-remainder-divisor-traps`, `runtime/negative-left-shift-traps`, `runtime/negative-right-shift-traps` |
@@ -9498,9 +9500,9 @@ opcode continues to carry [0470]'s pointer-to-integer address check.
 Conversion from a float to an integer and conversions involving bool remain
 L0304 at this increment. D169 subsequently admits conversion between the two
 enabled float widths, D170 admits conversion from an enabled integer to either
-float width, and D171 admits the remaining float-to-integer direction. The
-deferred u128, i128 and packed integer widths gain no spelling through this
-increment.
+float width, D171 admits the remaining float-to-integer direction, and D172
+admits bool as an integer source. Conversion to bool and the deferred u128,
+i128 and packed integer widths gain no spelling through this increment.
 
 **The alternatives:** reinterpret the low bits, make narrowing wrap, allow a
 negative signed value to cross to same-width unsigned, or give module
@@ -9545,8 +9547,9 @@ does not borrow the compiler host's float conversion. Runtime Linux x86-64
 uses the corresponding SSE width conversion and explicitly distinguishes a
 finite result overflow from an infinity or NaN source. The existing
 target-neutral conversion operation now admits every numeric result. D170
-subsequently admits its integer-to-float direction and D171 admits its
-float-to-integer direction; conversion involving bool remains L0304.
+subsequently admits its integer-to-float direction, D171 admits its
+float-to-integer direction, and D172 admits bool as an integer source;
+conversion to bool remains L0304.
 
 **The alternatives:** require exact representability, silently produce
 infinity on finite overflow, trap on gradual underflow, expose a NaN payload
@@ -9588,7 +9591,7 @@ above i64's maximum is halved with its low bit retained as sticky information,
 converted, and doubled; this produces the same nearest-even result without
 reinterpreting the source as negative. The neutral conversion verifier admits
 this one mixed-class direction. D171 subsequently admits the other direction;
-conversion involving bool remains L0304.
+D172 admits bool as an integer source, while conversion to bool remains L0304.
 
 **The alternatives:** require exact representation, saturate at a float
 boundary, reinterpret an unsigned carrier as signed, use a compiler-host float
@@ -9598,7 +9601,7 @@ the upper half of u64, make cross-target output host-dependent, or contradict
 [0310]. All were declined.
 
 **Pinned by** `runtime/integer-to-float-conversions`,
-`negative/bool-conversion-not-yet-enabled`, and the
+`negative/integer-to-bool-not-yet-enabled`, and the
 `conversion.integer-to-float` guarantee row.
 
 ### D171 — Float-to-integer conversion truncates before checking range
@@ -9627,7 +9630,8 @@ host's floating-point conversion. The Linux backend performs the same carrier
 decode directly rather than using SSE's indefinite overflow result, which
 cannot distinguish every valid u64 value from failure. The neutral conversion
 operation consequently admits either numeric class in either direction;
-conversion involving bool remains L0304.
+D172 subsequently admits bool as an integer source; conversion to bool remains
+L0304.
 
 **The alternatives:** round to nearest, floor negative values, saturate at the
 destination boundary, reinterpret the carrier bits, use a compiler-host float
@@ -9641,5 +9645,33 @@ values a mathematical integer they do not have. All were declined.
 `runtime/float-to-integer-nan-traps`,
 `negative/float-to-integer-known-out-of-range`,
 `negative/float-to-integer-known-nan`,
-`negative/bool-conversion-not-yet-enabled`, and the
+`negative/integer-to-bool-not-yet-enabled`, and the
 `conversion.float-to-integer` guarantee row.
+
+### D172 — A bool has the integer image zero or one
+
+**The tour said** that bool is a scalar type [0180] and that conversion is an
+explicit type application [0310]. It did not assign a numeric image to false
+or true, or say whether every numeric value has a truth value.
+
+**Chosen:** the eighteenth R4.10 increment enables any enabled integer type
+applied to a bool value. False converts to zero and true converts to one. Both
+values lie in every enabled signed and unsigned integer range, so this
+direction is total: it cannot report L0300 or trap. Typed and inferred module
+values fold to the same image, and runtime conversion zero-extends the bool's
+one-byte carrier before storing the destination width.
+
+This increment does not define truthiness. Applying bool to an integer or
+float remains L0304, as does applying a float type to bool. Those directions
+need an independent rule for whether only zero and one convert, every nonzero
+value is true, and how negative zero, infinity and NaN behave; admitting the
+unambiguous image direction does not silently choose among them.
+
+**The alternatives:** use all-bits-one for true, preserve an unspecified bool
+carrier, or simultaneously admit numeric-to-bool truthiness. Those choices
+make the result depend on representation or settle a distinct semantic
+question without program evidence. All were declined.
+
+**Pinned by** `runtime/bool-to-integer-conversions`,
+`negative/integer-to-bool-not-yet-enabled`, and the
+`conversion.bool-to-integer` guarantee row.

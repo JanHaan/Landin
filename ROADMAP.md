@@ -3162,6 +3162,11 @@ the exact destination range, rejects known out-of-range, infinity and NaN
 sources with L0300, and gives the equivalent runtime cases a trap. Module and
 runtime conversion both decode IEEE carrier bits without host floating-point
 arithmetic, including the upper half of u64; bool conversion remains refused.
+The eighteenth increment enables explicit conversion from bool to every
+enabled integer type. D172 fixes false's image at zero and true's at one,
+making this direction total across every signed and unsigned width and across
+runtime and module values. Conversion to bool and float conversion from bool
+remain named refusals rather than acquiring an implicit truthiness rule.
 
 Exit evidence: every hosted `[NNNN]` row has implementation and positive or
 negative evidence; no omission is hidden by prototype coverage.
