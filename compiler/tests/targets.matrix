@@ -88,6 +88,7 @@ negative/core-diag-frame-message-escape | linux-x86-64, macos-arm64, synthetic-3
 negative/core-mem-private-representation | linux-x86-64, macos-arm64, synthetic-32
 negative/core-text-frame-slice-escape | linux-x86-64, macos-arm64, synthetic-32
 negative/core-text-private-position | linux-x86-64, macos-arm64, synthetic-32
+negative/cstring-literal-write | linux-x86-64, macos-arm64
 negative/deep-nested-child-copy-unassigned | linux-x86-64, macos-arm64
 negative/deep-nested-leaf-unassigned | linux-x86-64, macos-arm64
 negative/defer-cannot-see-later-local | linux-x86-64, macos-arm64, synthetic-32
@@ -384,7 +385,6 @@ negative/parameterized-struct-used-actual-overflow | linux-x86-64, macos-arm64
 negative/parameterized-struct-used-array-actual-overflow | linux-x86-64, macos-arm64
 negative/public-on-statement | linux-x86-64, macos-arm64
 negative/raw-literal-inconsistent-indentation | linux-x86-64, macos-arm64
-negative/raw-literal-needs-byte-slice | linux-x86-64, macos-arm64
 negative/raw-literal-needs-read-only-slice | linux-x86-64, macos-arm64
 negative/raw-literal-write | linux-x86-64, macos-arm64
 negative/read-before-it-is-assigned | linux-x86-64, macos-arm64
@@ -486,11 +486,12 @@ negative/text-literal-codepoint-in-byte-context | linux-x86-64, macos-arm64
 negative/text-literal-malformed-codepoint-escape | linux-x86-64, macos-arm64
 negative/text-literal-needs-byte-slice | linux-x86-64, macos-arm64
 negative/text-literal-needs-read-only-slice | linux-x86-64, macos-arm64
-negative/text-literal-not-enabled | linux-x86-64, macos-arm64
 negative/text-literal-short-byte-escape | linux-x86-64, macos-arm64
 negative/text-literal-unknown-escape | linux-x86-64, macos-arm64
 negative/text-literal-write | linux-x86-64, macos-arm64
-negative/text-type-not-enabled | linux-x86-64, macos-arm64
+negative/text-view-byte-escape | linux-x86-64, macos-arm64
+negative/text-view-identities-are-distinct | linux-x86-64, macos-arm64
+negative/text-view-indexing-deferred | linux-x86-64, macos-arm64
 negative/try-infallible-call | linux-x86-64, synthetic-32
 negative/type-alias-cycle | linux-x86-64, macos-arm64, synthetic-32
 negative/type-name-is-not-a-type | linux-x86-64, macos-arm64
@@ -828,6 +829,7 @@ runtime/generic-try-effective-signature | linux-x86-64
 runtime/generic-zero-nominal-array-signatures | linux-x86-64
 runtime/greatest-common-divisor | linux-x86-64
 runtime/hosted-io-reads-parser-input | linux-x86-64
+runtime/hosted-text-views | linux-x86-64
 runtime/indirect-function-abi | linux-x86-64
 runtime/infallible-function-values | linux-x86-64
 runtime/inferred-function-values | linux-x86-64

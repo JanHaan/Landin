@@ -4301,7 +4301,7 @@ package body Landin.Backend.X86_64 is
                when Landin.IR.Scalar_Field_Shape =>
                   Emit
                     (Directive (Size_Of (Shape.Element, Facts)) & " "
-                     & (if Shape.Signature /= Landin.IR.No_Signature
+                     & (if Image.Target /= Landin.IR.No_Item
                         then Symbol (Image.Target)
                         else Trimmed
                           (Landin.Types.Folded'Image
@@ -4485,8 +4485,8 @@ package body Landin.Backend.X86_64 is
                                 (Directive
                                    (Size_Of (Leaf.Element, Facts))
                                  & " "
-                                 & (if Leaf.Signature /=
-                                         Landin.IR.No_Signature
+                                 & (if Payload_Image.Target /=
+                                         Landin.IR.No_Item
                                     then Symbol (Payload_Image.Target)
                                     else Trimmed
                                       (Landin.Types.Folded'Image
@@ -4579,7 +4579,7 @@ package body Landin.Backend.X86_64 is
                elsif Shape.Kind = Landin.IR.Scalar_Field_Shape then
                   Emit
                     (Directive (Size_Of (Shape.Element, Facts)) & " "
-                     & (if Shape.Signature /= Landin.IR.No_Signature
+                     & (if Image.Target /= Landin.IR.No_Item
                         then Symbol (Image.Target)
                         else Trimmed
                           (Landin.Types.Folded'Image
@@ -4693,6 +4693,8 @@ package body Landin.Backend.X86_64 is
       begin
          if Landin.IR.Signature_Of (Of_Unit, Item)
               /= Landin.IR.No_Signature
+           or else Landin.IR.Address_Target (Of_Unit, Item)
+             /= Landin.IR.No_Item
          then
             return False;
          end if;
@@ -4880,12 +4882,16 @@ package body Landin.Backend.X86_64 is
            Landin.IR.Result_Of (Of_Unit, Item);
          Held : constant Held_Size := Size_Of (Kind, Facts);
          --  A function datum is a static relocation to its verified routine
-         --  target.  Every other scalar is the folded number the assembler
+         --  target; D181's cstring datum similarly relocates to read-only
+         --  bytes.  Every other scalar is the folded number the assembler
          --  encodes at this width.
          Written : constant String :=
            (if Landin.IR.Signature_Of (Of_Unit, Item)
                  /= Landin.IR.No_Signature
             then Symbol (Landin.IR.Function_Target (Of_Unit, Item))
+            elsif Landin.IR.Address_Target (Of_Unit, Item)
+                    /= Landin.IR.No_Item
+            then Symbol (Landin.IR.Address_Target (Of_Unit, Item))
             else Trimmed (Landin.Types.Folded'Image (Folded (Item))));
          Bytes : constant String :=
            Trimmed (Positive'Image (Landin.Targets.Bytes (Held)));

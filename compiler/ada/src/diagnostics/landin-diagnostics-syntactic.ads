@@ -93,7 +93,6 @@ package Landin.Diagnostics.Syntactic is
    type Refused_Construct is
      (Declared_Type,
       Float_Type,
-      Text_Type,
       Struct_Type,
       Wide_Integer_Type,
       Distinct_Type,
@@ -118,7 +117,6 @@ package Landin.Diagnostics.Syntactic is
      is (case Item is
             when Declared_Type        => "[0120]",
             when Float_Type           => "[0170]",
-            when Text_Type            => "[0600]",
             when Struct_Type          => "[0670]",
             when Wide_Integer_Type    => "[0150]",
             when Distinct_Type        => "[0650]",
@@ -174,7 +172,6 @@ private
                | Parameterized_Atom_Union => "R2.40",
             --  R4.10 closes the hosted construct matrix.
             when Wide_Integer_Type
-               | Float_Type
-               | Text_Type            => "R4.10");
+               | Float_Type            => "R4.10");
 
 end Landin.Diagnostics.Syntactic;

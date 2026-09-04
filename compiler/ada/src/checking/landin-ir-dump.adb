@@ -823,6 +823,10 @@ package body Landin.IR.Dump is
                     else " function target "
                       & Trimmed
                           (Item_Id'Image (Function_Target (Of_Unit, Id))))
+                 & (if Address_Target (Of_Unit, Id) = No_Item then ""
+                    else " address target "
+                      & Trimmed
+                          (Item_Id'Image (Address_Target (Of_Unit, Id))))
                  & " params "
                  & Trimmed (Natural'Image (Parameter_Count (Of_Unit, Id)))
                  & " slots "

@@ -229,11 +229,11 @@ package Landin.Checking is
      return Boolean
      with Pre => Is_Prepared (Of_Table);
 
-   --  Sizes both runs once, and interns the scalar spellings so that a
-   --  Type_Name node is answered by an identity comparison rather than by
-   --  bytes.  Once, for Landin.Resolution.Prepare's reason: the forest is
-   --  complete when the parse is and the declarations are complete when
-   --  resolution is, so a table that grew as either arrived would be a
+   --  Sizes both runs once, and interns the scalar and text-view spellings so
+   --  that a Type_Name node is answered by an identity comparison rather
+   --  than by bytes.  Once, for Landin.Resolution.Prepare's reason: the
+   --  forest is complete when the parse is and the declarations are complete
+   --  when resolution is, so a table that grew as either arrived would be a
    --  table whose size depends on when it was asked.
    procedure Prepare
      (Into      : in out Table;
@@ -261,6 +261,15 @@ package Landin.Checking is
      with Pre  => Is_Prepared (Of_Table),
           Post => Named'Result in Landin.Types.Scalar_Name
                   or else Named'Result = Landin.Types.Ill_Typed;
+
+   function Is_Text_Name
+     (Of_Table : Table; Id : Landin.Source.Names.Name_Id) return Boolean
+     with Pre => Is_Prepared (Of_Table);
+
+   function Named_Text_View
+     (Of_Table : Table; Id : Landin.Source.Names.Name_Id)
+      return Landin.Types.Text_View
+     with Pre => Is_Prepared (Of_Table) and then Is_Text_Name (Of_Table, Id);
 
    ------------------------------------------------------------------
    --  What a node has
@@ -463,6 +472,7 @@ package Landin.Checking is
 
    type Reference_Descriptor is record
       Kind      : Landin.Types.Type_Kind := Landin.Types.Pointer_Value;
+      View      : Landin.Types.Reference_View := Landin.Types.Ordinary_View;
       Mutable   : Boolean := False;
       Referent  : Landin.Types.Type_Kind := Landin.Types.Ill_Typed;
       Nominal   : Nominal_Type_Id := No_Nominal_Type;
@@ -492,6 +502,14 @@ package Landin.Checking is
    function Descriptor_Of
      (Of_Table : Table; Id : Reference_Id) return Reference_Descriptor
      with Pre => Holds (Of_Table, Id);
+
+   --  D181's three hosted text identities are canonical references.  Calls,
+   --  signatures and generic actuals therefore compare stable IDs while the
+   --  descriptor still records the representation and permission.
+   function Text_Reference_Of
+     (Of_Table : Table; View : Landin.Types.Text_View) return Reference_Id
+     with Pre  => Is_Prepared (Of_Table),
+          Post => Holds (Of_Table, Text_Reference_Of'Result);
 
    function References_Agree
      (Of_Table : Table; Left, Right : Reference_Id) return Boolean
@@ -1931,6 +1949,12 @@ private
    type Scalar_Identities is
      array (Landin.Types.Scalar_Name) of Landin.Source.Names.Name_Id;
 
+   type Text_Identities is
+     array (Landin.Types.Text_View) of Landin.Source.Names.Name_Id;
+
+   type Text_Reference_Identities is
+     array (Landin.Types.Text_View) of Reference_Id;
+
    package Nominal_Id_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Nominal_Type_Id);
 
@@ -2218,6 +2242,9 @@ private
       Case_Runs    : Case_Run_Vectors.Vector;
       Scalars      : Scalar_Identities :=
         [others => Landin.Source.Names.No_Name];
+      Texts        : Text_Identities :=
+        [others => Landin.Source.Names.No_Name];
+      Text_References : Text_Reference_Identities := [others => No_Reference];
    end record;
 
 end Landin.Checking;

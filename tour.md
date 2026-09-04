@@ -811,9 +811,21 @@ The parser-support `core/text` slice arrives before those full distinct text
 types. It accepts `[]u8`, gives byte offsets the opaque nominal name
 `text.position`, and supplies first/end, byte, advance, ordinal and subslice
 operations. A byte read at the end reports `past_end`; a returned subslice
-keeps its source origin. UTF-8 scalar decoding, text literals and integer
-codepoint indexing remain the complete hosted-text work, not hidden behavior
-in this byte layer.
+keeps its source origin.
+
+The hosted views themselves accept quoted and raw literals. `utf8` stores
+shortest-form UTF-8 bytes, `utf16` stores UTF-16 code units, and `cstring`
+stores UTF-8 bytes behind a read-only pointer. `lenof` on `utf8` and `utf16`
+counts those code units. Every literal datum has one trailing zero code unit;
+slice lengths exclude it, and `cstring` carries no length. Equal decoded
+content at the same element width may share its read-only static datum.
+The three view identities remain distinct from one another and from their
+backing pointer or slice types through calls, aggregates and generics.
+
+Integer or position indexing, slicing and traversal do not become operations
+on a text view merely because its representation is a slice. [0610] remains
+the owner of indexing and the library concepts remain the owners of the other
+operations.
 
 ### [0610] Indexing utf8 by an integer yields the bytes of one
 

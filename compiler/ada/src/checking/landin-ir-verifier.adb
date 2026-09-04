@@ -1486,6 +1486,18 @@ package body Landin.IR.Verifier is
               (Of_Unit, Shape.Signature,
                Signature_Of (Of_Unit, Target)));
 
+      function Address_Image_Target_Agrees
+        (Shape : Field_Shape; Target : Item_Id) return Boolean
+        is (Shape.Kind = Scalar_Field_Shape
+            and then Shape.Element = Landin.Types.Usize
+            and then Shape.Signature = No_Signature
+            and then Holds (Of_Unit, Target)
+            and then Kind_Of (Of_Unit, Target) = Datum
+            and then Result_Of (Of_Unit, Target)
+              = Landin.Types.Fixed_Array
+            and then Array_Element (Of_Unit, Target) = Landin.Types.U8
+            and then Is_Read_Only (Of_Unit, Target));
+
       function Atom_Metadata_Agrees
         (Left, Right : Atom_Set_Id) return Boolean
         is ((Left = No_Atom_Set and then Right = No_Atom_Set)
@@ -2157,6 +2169,28 @@ package body Landin.IR.Verifier is
                end;
             end if;
 
+            if Address_Target (Of_Unit, Id) /= No_Item then
+               declare
+                  Target : constant Item_Id := Address_Target (Of_Unit, Id);
+               begin
+                  if Kind_Of (Of_Unit, Id) /= Datum
+                    or else Result_Of (Of_Unit, Id) /= Landin.Types.Usize
+                    or else Signature_Of (Of_Unit, Id) /= No_Signature
+                    or else Function_Target (Of_Unit, Id) /= No_Item
+                    or else not Holds (Of_Unit, Target)
+                    or else Kind_Of (Of_Unit, Target) /= Datum
+                    or else Result_Of (Of_Unit, Target)
+                      /= Landin.Types.Fixed_Array
+                    or else Array_Element (Of_Unit, Target)
+                      /= Landin.Types.U8
+                    or else not Is_Read_Only (Of_Unit, Target)
+                  then
+                     return (Kind => Address_Value_Disagrees,
+                             Item => Id, others => <>);
+                  end if;
+               end;
+            end if;
+
             if Kind_Of (Of_Unit, Id) = Routine
               and then Signature_Of (Of_Unit, Id) /= No_Signature
             then
@@ -2630,10 +2664,13 @@ package body Landin.IR.Verifier is
                               return Function_Value_Signature_Disagrees;
                            elsif Shape.Signature = No_Signature
                              and then Image.Target /= No_Item
+                             and then not Address_Image_Target_Agrees
+                               (Shape, Image.Target)
                            then
-                              return Function_Value_Signature_Disagrees;
+                              return Address_Value_Disagrees;
                            elsif Check_Image
                              and then Shape.Signature = No_Signature
+                             and then Image.Target = No_Item
                              and then not Fits (Scalar_Value, Shape.Element)
                            then
                               return
@@ -3018,12 +3055,17 @@ package body Landin.IR.Verifier is
                                        elsif Leaf.Signature = No_Signature
                                          and then
                                            Payload_Image.Target /= No_Item
+                                         and then not
+                                           Address_Image_Target_Agrees
+                                             (Leaf, Payload_Image.Target)
                                        then
                                           return
-                                            (Kind => Function_Fault,
+                                            (Kind => Address_Value_Disagrees,
                                              Item => Id, others => <>);
                                        elsif Check_Image
                                          and then Leaf.Signature = No_Signature
+                                         and then
+                                           Payload_Image.Target = No_Item
                                          and then not Fits
                                            (Payload_Image.Value,
                                             Leaf.Element)
@@ -3160,12 +3202,15 @@ package body Landin.IR.Verifier is
                                  Item => Id, others => <>);
                            elsif Shape.Signature = No_Signature
                              and then Image.Target /= No_Item
+                             and then not Address_Image_Target_Agrees
+                               (Shape, Image.Target)
                            then
                               return
-                                (Kind => Function_Fault,
+                                (Kind => Address_Value_Disagrees,
                                  Item => Id, others => <>);
                            elsif Check_Image
                              and then Shape.Signature = No_Signature
+                             and then Image.Target = No_Item
                            then
                               if not Fits (Held, Shape.Element) then
                                  return
@@ -3418,8 +3463,22 @@ package body Landin.IR.Verifier is
                                  Bad : Fault_Kind := Nothing_Wrong;
                               begin
                                  if Is_Datum then
-                                    Bad :=
-                                      Storage_Address_Is_Not_An_Aggregate;
+                                    if Place.Kind = Module_Datum
+                                      and then Field = 0
+                                      and then Nested'Length = 0
+                                      and then not Storage_Address_Has_Index
+                                        (Of_Unit, Id, V)
+                                      and then Address_Target (Of_Unit, Id)
+                                                   = Place.Datum
+                                    then
+                                       --  D181: the instruction and static
+                                       --  cstring relocation describe the
+                                       --  same pooled read-only byte datum.
+                                       null;
+                                    else
+                                       Bad :=
+                                         Storage_Address_Is_Not_An_Aggregate;
+                                    end if;
                                  elsif Storage_Address_Has_Index
                                    (Of_Unit, Id, V)
                                  then

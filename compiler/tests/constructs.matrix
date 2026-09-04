@@ -11,7 +11,7 @@
 #
 #  A construct with no evidence and no refusal is this
 #  item's to answer for; see ROADMAP.md R1.90.
-#  200 constructs, 163 with evidence, 37 with neither.
+#  200 constructs, 164 with evidence, 36 with neither.
 #
 #  id    defined in  evidence
 0010   tour        accepted emitted                   Line comment, to end of line
@@ -73,8 +73,8 @@
 0570   tour        accepted emitted executed refused refused-by-name Slice: a view
 0580   tour        accepted emitted executed refused  An empty slice still has a base
 0590   tour        -                                  Fixed arrays are the vector type
-0600   tour        refused refused-by-name            Text types are distinct views
-0610   tour        -                                  Indexing utf8 by an integer yields the bytes of one
+0600   tour        accepted emitted executed refused  Text types are distinct views
+0610   tour        refused                            Indexing utf8 by an integer yields the bytes of one
 0620   tour        -                                  DEFERRED to a later version, kept here as a design record
 0630   tour        accepted emitted executed refused  Atoms: one declaration, one value, its own type
 0640   tour        accepted emitted executed refused  An enumeration is a union of atoms
@@ -190,7 +190,7 @@
 1740   spec        accepted emitted executed refused  A source file is an import prelude and declarations in any order
 1750   spec        accepted emitted executed refused  A source file is bytes
 1760   spec        accepted emitted executed refused  Identifiers are lower case, and no identifier is a keyword
-1770   spec        accepted emitted executed refused  The kernel's literals include characters, floats and byte text
+1770   spec        accepted emitted executed refused  The kernel's literals include characters, floats and text
 1780   spec        accepted emitted refused           A comment ends a token, and its opener says which kind it is
 1790   spec        accepted emitted executed refused  A binding names one thing, and says how much it may change
 1795   spec        accepted emitted executed refused  A type declaration names a type, and names nothing new

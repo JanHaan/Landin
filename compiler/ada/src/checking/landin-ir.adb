@@ -576,10 +576,11 @@ package body Landin.IR is
         or else Result_Of (Into, Item) not in Landin.Types.Fixed_Array
         or else not Has_Image (Into, Item)
         or else Has_Slice_Image (Into, Item)
-        or else Array_Element (Into, Item) not in Landin.Types.U8
+        or else Array_Element (Into, Item)
+          not in Landin.Types.U8 | Landin.Types.U16
       then
          raise Landin.Compiler_Defect with
-           "read-only IR data is not a finite byte image";
+           "read-only IR data is not a finite text-unit image";
       end if;
       Held.Read_Only := True;
       Into.Items (Positive (Item)) := Held;
@@ -624,6 +625,18 @@ package body Landin.IR is
 
    function Function_Target (Of_Unit : Unit; Item : Item_Id) return Item_Id
      is (Element (Of_Unit, Item).Function_Image);
+
+   procedure Set_Address_Target
+     (Into : in out Unit; Item : Item_Id; Target : Item_Id)
+   is
+      Held : Item_Record := Element (Into, Item);
+   begin
+      Held.Address_Image := Target;
+      Into.Items (Positive (Item)) := Held;
+   end Set_Address_Target;
+
+   function Address_Target (Of_Unit : Unit; Item : Item_Id) return Item_Id
+     is (Element (Of_Unit, Item).Address_Image);
 
    function Item_For (Of_Unit : Unit; Declared : Declaration_Id)
      return Item_Id

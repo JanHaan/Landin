@@ -842,9 +842,9 @@ package Landin.IR is
       return Signature_Id
      with Pre => Holds (Of_Unit, Item);
 
-   --  D161: a datum whose image may be placed in read-only storage, which
-   --  is where [0260] says a text literal lives.  Nothing stores through
-   --  it: the checker admits no writable reference to one.
+   --  D161/D181: a finite u8 or u16 datum whose image may be placed in
+   --  read-only storage, which is where [0260] says a text literal lives.
+   --  Nothing stores through it: the checker admits no writable reference.
    function Is_Read_Only (Of_Unit : Unit; Item : Item_Id) return Boolean
      with Pre => Holds (Of_Unit, Item);
 
@@ -905,6 +905,23 @@ package Landin.IR is
 
    function Function_Target (Of_Unit : Unit; Item : Item_Id) return Item_Id
      with Pre => Holds (Of_Unit, Item);
+
+   --  D181's cstring module image is one relocation to a pooled read-only
+   --  datum.  It is separate from Function_Target because the target is data
+   --  and the source item deliberately carries no function signature.
+   function Address_Target (Of_Unit : Unit; Item : Item_Id) return Item_Id
+     with Pre => Holds (Of_Unit, Item);
+
+   procedure Set_Address_Target
+     (Into : in out Unit; Item : Item_Id; Target : Item_Id)
+     with Pre  => Holds (Into, Item)
+                  and then Kind_Of (Into, Item) = Datum
+                  and then Result_Of (Into, Item) = Landin.Types.Usize
+                  and then Signature_Of (Into, Item) = No_Signature
+                  and then Holds (Into, Target)
+                  and then Is_Read_Only (Into, Target)
+                  and then Address_Target (Into, Item) = No_Item,
+          Post => Address_Target (Into, Item) = Target;
 
    --  Which item stands for a declaration, so a call and a module read
    --  cost one index.  No_Item for a declaration that is not a module
@@ -3323,6 +3340,7 @@ private
       Read_Only   : Boolean                   := False;
       Atom_Set    : Atom_Set_Id               := No_Atom_Set;
       Function_Image : Item_Id                := No_Item;
+      Address_Image  : Item_Id                := No_Item;
       Site        : Landin.Provenance.Origin  :=
                       Landin.Provenance.No_Origin;
       Slots       : Run;

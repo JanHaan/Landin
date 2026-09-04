@@ -395,7 +395,7 @@ context and puts its escape-aware scan, shared decoding and L0320 malformed
 spelling at this lexical seam. D163's ninth increment likewise enables one
 decoded `u32` character and gives malformed character spelling L0322. D164's
 tenth enables raw byte text with matching quote runs and indentation stripping.
-The remaining text contexts stay with R4.10.
+D181's later R4.10 increment supplies the remaining text contexts.
 
 ### R1.30 — Establish the diagnostic catalogue
 
@@ -3112,6 +3112,14 @@ advances an optional `usize` index with `next`, and retains existing cleanup,
 control and loop-result transport. An erased source remains an `any` pair and
 is never treated as slice storage. D180 records the rule and its L0301/L0303
 boundaries.
+The next increment enables [0600]'s distinct hosted `utf8`, `utf16` and
+`cstring` views in every direct [0260]/[0280] literal context. D181 preserves
+their immutable reference identities through signatures, aggregates, generic
+actuals and origins; validates and decodes Unicode scalars into UTF-8 or
+UTF-16; and extends pooled static literal images to `u16` data and cstring
+relocations. Every datum has one uncounted trailing zero element. [0610]
+indexing remains a separate named refusal, as do slicing and traversal that
+would otherwise expose a backing slice accidentally.
 The seventh increment enables quoted text in a direct read-only
 `[]u8` context, including byte escapes, UTF-8 source validation, an uncounted
 trailing NUL, content-pooled read-only data and static slice relocations.
