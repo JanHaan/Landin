@@ -118,13 +118,14 @@ negative/fixed-conditional-active-generic-error | linux-x86-64, macos-arm64, syn
 negative/fixed-conditional-active-reference-inactive | linux-x86-64, macos-arm64, synthetic-32
 negative/fixed-conditional-evaluator | linux-x86-64, macos-arm64, synthetic-32
 negative/fixed-conditional-inactive-parser-error | linux-x86-64, macos-arm64, synthetic-32
-negative/float-conversion-not-yet-enabled | linux-x86-64, macos-arm64
 negative/float-literal-not-enabled | linux-x86-64, macos-arm64
 negative/float-literal-overflows-context | linux-x86-64, macos-arm64
 negative/float-remainder-is-integer-only | linux-x86-64, macos-arm64
 negative/float-special-name-unknown | linux-x86-64, macos-arm64
 negative/float-special-on-integer-type | linux-x86-64, macos-arm64
 negative/float-special-width-mismatch | linux-x86-64, macos-arm64
+negative/float-to-integer-known-nan | linux-x86-64, macos-arm64
+negative/float-to-integer-known-out-of-range | linux-x86-64, macos-arm64
 negative/float-type-not-enabled | linux-x86-64, macos-arm64
 negative/float-width-conversion-known-out-of-range | linux-x86-64, macos-arm64
 negative/for-collection-element-read-only | linux-x86-64, macos-arm64, synthetic-32
@@ -793,6 +794,9 @@ runtime/fizzbuzz | linux-x86-64
 runtime/float-decimal-runtime | linux-x86-64
 runtime/float-hexadecimal-runtime | linux-x86-64
 runtime/float-named-specials | linux-x86-64
+runtime/float-to-integer-conversions | linux-x86-64
+runtime/float-to-integer-nan-traps | linux-x86-64
+runtime/float-to-integer-out-of-range-traps | linux-x86-64
 runtime/float-width-conversion-overflow-traps | linux-x86-64
 runtime/float-width-conversions | linux-x86-64
 runtime/for-collection-traversal | linux-x86-64

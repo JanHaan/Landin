@@ -1,0 +1,2 @@
+source: f32 = f32.nan
+bad: i32 = i32(source)

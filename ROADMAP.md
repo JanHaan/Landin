@@ -3155,7 +3155,13 @@ type to f32 or f64. D170 rounds the mathematical integer to nearest with ties
 to even, folds module images without host floating-point arithmetic, and
 handles the upper half of u64 explicitly in the Linux backend. Every enabled
 integer lies in both floats' finite range, so this direction never traps;
-float-to-integer and bool conversions remain named R4.10 refusals.
+bool conversion remains a named R4.10 refusal.
+The seventeenth increment enables explicit conversion from f32 or f64 to every
+enabled integer type. D171 truncates finite values toward zero before checking
+the exact destination range, rejects known out-of-range, infinity and NaN
+sources with L0300, and gives the equivalent runtime cases a trap. Module and
+runtime conversion both decode IEEE carrier bits without host floating-point
+arithmetic, including the upper half of u64; bool conversion remains refused.
 
 Exit evidence: every hosted `[NNNN]` row has implementation and positive or
 negative evidence; no omission is hidden by prototype coverage.
