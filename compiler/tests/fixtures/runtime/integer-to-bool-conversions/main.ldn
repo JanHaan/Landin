@@ -1,0 +1,20 @@
+module_one: i64 = 1
+module_true: bool = bool(module_one)
+module_false: bool = bool(u8(0))
+
+to_bool: (value: i64) -> (result: bool) =
+    result = bool(value)
+end to_bool
+
+public main: () -> (code: i32) =
+    if bool(0) == false
+      and bool(1) == true
+      and to_bool(0) == false
+      and to_bool(1) == true
+      and module_true
+      and not module_false then
+        code = 42
+    else
+        code = 1
+    end if
+end main

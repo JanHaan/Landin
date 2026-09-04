@@ -1578,6 +1578,26 @@ package body Landin.Backend.X86_64 is
                            Emit
                              (Store & " %xmm0, " & Value_Cell (Value));
                         end;
+                     elsif Into_Kind = Landin.Types.Bool then
+                        declare
+                           From : constant Landin.Types.Integer_Name :=
+                             Landin.Types.Integer_Name (From_Kind);
+                           From_Size : constant Held_Size :=
+                             Size_Of (From, Facts);
+                           Safe : constant String :=
+                             Value_Label (Value) & "_bool";
+                        begin
+                           Emit ("movq $0, %rax");
+                           Emit ("mov" & Suffix (From_Size) & " "
+                                 & Value_Cell (Source) & ", "
+                                 & Accumulator (From_Size));
+                           Emit ("cmpq $1, %rax");
+                           Emit ("jbe " & Safe);
+                           Emit ("ud2");
+                           Put (Safe & ":");
+                           Emit
+                             ("movb %al, " & Value_Cell (Value));
+                        end;
                      elsif From_Kind = Landin.Types.Bool then
                         declare
                            Into_Type : constant Landin.Types.Integer_Name :=

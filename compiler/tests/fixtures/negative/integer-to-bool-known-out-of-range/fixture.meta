@@ -1,0 +1,6 @@
+class: negative
+summary: a known integer other than zero or one cannot convert to bool
+constructs: 0180, 0190, 0200, 0310, 0700, 1940, 1950
+program: program.ldn
+codes: L0300
+targets: linux-x86-64, macos-arm64
