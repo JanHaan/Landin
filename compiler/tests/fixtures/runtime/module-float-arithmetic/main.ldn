@@ -1,0 +1,40 @@
+sample: type = struct
+    narrow: f32
+    wide: f64
+end sample
+
+halfway: f32 = 1.0 + 0x1.0p-24
+third32: f32 = 1.0 / 3.0
+third64: f64 = 1.0 / 3.0
+subnormal: f64 = 0x1.0p-1022 / 2.0
+overflow: f32 = 0x1.fffffep+127 * 2.0
+negative_zero: f64 = -0.0 / 2.0
+invalid: f64 = 0.0 / 0.0
+from_names: f64 = (f64.infinity - 1.0) / 2.0
+comparison: bool = invalid <> invalid
+values: [4]f32 = [1.5 + 2.25, 7.0 - 2.5, 1.5 * 3.0, 9.0 / 2.0]
+module_sample: sample = sample(
+    narrow: third32,
+    wide: (3.0 + 5.0) * 0.5)
+
+public main: () -> (code: i32) =
+    if halfway == 1.0
+      and third32 == 0x1.555556p-2
+      and third64 == 0x1.5555555555555p-2
+      and subnormal == 0x1.0p-1023
+      and overflow == f32.infinity
+      and 1.0 / negative_zero == -f64.infinity
+      and invalid <> invalid
+      and from_names == f64.infinity
+      and comparison
+      and values[0] == 3.75
+      and values[1] == 4.5
+      and values[2] == 4.5
+      and values[3] == 4.5
+      and module_sample.narrow == third32
+      and module_sample.wide == 4.0 then
+        code = 42
+    else
+        code = 1
+    end if
+end main

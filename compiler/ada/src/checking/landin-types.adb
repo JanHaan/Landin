@@ -757,6 +757,381 @@ package body Landin.Types is
       end if;
    end Convert_Float_To_Bool;
 
+   -------------------------------
+   --  Float_Arithmetic_Result  --
+   -------------------------------
+
+   function Float_Arithmetic_Result
+     (Left, Right : Magnitude;
+      Item        : Float_Name;
+      Operation   : Float_Arithmetic_Operation) return Magnitude
+   is
+      --  A binary64 product has at most 106 significant bits.  This
+      --  compiler already requires an integer wider than 64 bits for
+      --  Folded, and this modular counterpart keeps the exact product and
+      --  scaled division numerator without depending on a host float.
+      type Double_Magnitude is mod 2 ** 128;
+
+      type Float_Class is (Finite, Infinity, Not_A_Number);
+
+      Precision : constant Natural :=
+        (case Item is when F32 => 24, when F64 => 53);
+      Fraction_Bits : constant Natural := Precision - 1;
+      Exponent_Bits : constant Natural :=
+        (case Item is when F32 => 8, when F64 => 11);
+      Bias : constant Natural :=
+        (case Item is when F32 => 127, when F64 => 1023);
+      Minimum_Exponent : constant Integer := 1 - Bias;
+      Maximum_Exponent : constant Integer := Bias;
+      Sign_Shift : constant Natural :=
+        (case Item is when F32 => 31, when F64 => 63);
+      Sign_Bit : constant Magnitude := 2 ** Sign_Shift;
+      Exponent_Limit : constant Natural := 2 ** Exponent_Bits - 1;
+      Hidden_Bit : constant Magnitude := 2 ** Fraction_Bits;
+
+      type Decoded_Float is record
+         Class       : Float_Class := Finite;
+         Negative    : Boolean := False;
+         Zero        : Boolean := True;
+         Exponent    : Integer := Minimum_Exponent;
+         Significant : Magnitude := 0;
+      end record;
+
+      function Decode (Bits : Magnitude) return Decoded_Float;
+
+      function Decode (Bits : Magnitude) return Decoded_Float is
+         Exponent_Field : constant Natural :=
+           Natural ((Bits / Hidden_Bit) mod 2 ** Exponent_Bits);
+         Fraction : constant Magnitude := Bits mod Hidden_Bit;
+         Answer : Decoded_Float :=
+           (Negative => (Bits / Sign_Bit) mod 2 = 1, others => <>);
+      begin
+         if Exponent_Field = Exponent_Limit then
+            Answer.Class :=
+              (if Fraction = 0 then Infinity else Not_A_Number);
+            Answer.Zero := False;
+         elsif Exponent_Field = 0 then
+            Answer.Significant := Fraction;
+            Answer.Zero := Fraction = 0;
+            if Fraction /= 0 then
+               while Answer.Significant < Hidden_Bit loop
+                  Answer.Significant := Answer.Significant * 2;
+                  Answer.Exponent := Answer.Exponent - 1;
+               end loop;
+            end if;
+         else
+            Answer.Zero := False;
+            Answer.Exponent := Integer (Exponent_Field) - Bias;
+            Answer.Significant := Hidden_Bit + Fraction;
+         end if;
+         return Answer;
+      end Decode;
+
+      function Signed
+        (Negative : Boolean; Bits : Magnitude) return Magnitude
+        is (Bits + (if Negative then Sign_Bit else 0));
+
+      function Canonical_NaN return Magnitude
+        is (Float_Special_Bits (Item, Quiet_NaN));
+
+      function Shift_Right_Jam
+        (Value : Magnitude; Distance : Natural) return Magnitude;
+
+      function Shift_Right_Jam
+        (Value : Magnitude; Distance : Natural) return Magnitude
+      is
+         Quotient : Magnitude;
+         Remainder : Magnitude;
+      begin
+         if Distance = 0 then
+            return Value;
+         elsif Distance >= 64 then
+            return (if Value = 0 then 0 else 1);
+         end if;
+
+         Quotient := Value / 2 ** Distance;
+         Remainder := Value mod 2 ** Distance;
+         return Quotient
+           + (if Remainder /= 0 and then Quotient mod 2 = 0 then 1 else 0);
+      end Shift_Right_Jam;
+
+      function Shift_Right_Jam
+        (Value : Double_Magnitude; Distance : Natural) return Magnitude;
+
+      function Shift_Right_Jam
+        (Value : Double_Magnitude; Distance : Natural) return Magnitude
+      is
+         Divisor : constant Double_Magnitude :=
+           Double_Magnitude (2) ** Distance;
+         Quotient : constant Double_Magnitude := Value / Divisor;
+         Remainder : constant Double_Magnitude := Value mod Divisor;
+      begin
+         return Magnitude (Quotient)
+           + (if Remainder /= 0 and then Quotient mod 2 = 0 then 1 else 0);
+      end Shift_Right_Jam;
+
+      --  Significant carries the normalized significand followed by guard,
+      --  round and sticky bits.  Exponent is the unbiased exponent of its
+      --  leading bit.  This is the single rounding point for all four
+      --  operations.
+      function Rounded
+        (Negative    : Boolean;
+         Significant : Magnitude;
+         Exponent    : Integer) return Magnitude;
+
+      function Rounded
+        (Negative    : Boolean;
+         Significant : Magnitude;
+         Exponent    : Integer) return Magnitude
+      is
+         Sig : Magnitude := Significant;
+         Exp : Integer := Exponent;
+         Round_Bits : Magnitude;
+         Rounded_Sig : Magnitude;
+      begin
+         if Sig = 0 then
+            return (if Negative then Sign_Bit else 0);
+         end if;
+
+         while Sig >= 2 ** (Precision + 3) loop
+            Sig := Shift_Right_Jam (Sig, 1);
+            Exp := Exp + 1;
+         end loop;
+         while Sig < 2 ** (Precision + 2) loop
+            Sig := Sig * 2;
+            Exp := Exp - 1;
+         end loop;
+
+         if Exp < Minimum_Exponent then
+            Sig := Shift_Right_Jam
+              (Sig, Natural (Minimum_Exponent - Exp));
+            Exp := Minimum_Exponent;
+         end if;
+
+         Round_Bits := Sig mod 8;
+         Rounded_Sig := Sig / 8;
+         if Round_Bits > 4
+           or else (Round_Bits = 4 and then Rounded_Sig mod 2 = 1)
+         then
+            Rounded_Sig := Rounded_Sig + 1;
+         end if;
+
+         if Rounded_Sig >= 2 ** Precision then
+            Rounded_Sig := Rounded_Sig / 2;
+            Exp := Exp + 1;
+         end if;
+
+         if Exp > Maximum_Exponent then
+            return Signed
+              (Negative, Magnitude (Exponent_Limit) * Hidden_Bit);
+         elsif Rounded_Sig = 0 then
+            return (if Negative then Sign_Bit else 0);
+         elsif Exp = Minimum_Exponent and then Rounded_Sig < Hidden_Bit then
+            return Signed (Negative, Rounded_Sig);
+         end if;
+
+         return Signed
+           (Negative,
+            Magnitude (Exp + Bias) * Hidden_Bit
+              + Rounded_Sig - Hidden_Bit);
+      end Rounded;
+
+      A : Decoded_Float := Decode (Left);
+      B : Decoded_Float := Decode (Right);
+      Negative : Boolean;
+   begin
+      if A.Class = Not_A_Number or else B.Class = Not_A_Number then
+         return Canonical_NaN;
+      end if;
+
+      if Operation = Float_Subtract then
+         B.Negative := not B.Negative;
+      end if;
+      Negative := A.Negative xor B.Negative;
+
+      if Operation in Float_Add | Float_Subtract then
+         if A.Class = Infinity or else B.Class = Infinity then
+            if A.Class = Infinity and then B.Class = Infinity
+              and then A.Negative /= B.Negative
+            then
+               return Canonical_NaN;
+            end if;
+            return Signed
+              ((if A.Class = Infinity then A.Negative else B.Negative),
+               Magnitude (Exponent_Limit) * Hidden_Bit);
+         elsif A.Zero and then B.Zero then
+            return
+              (if A.Negative and then B.Negative then Sign_Bit else 0);
+         elsif A.Zero then
+            return Signed (B.Negative, Right mod Sign_Bit);
+         elsif B.Zero then
+            return Left;
+         end if;
+
+         --  Put the greater magnitude on the left, align the other with a
+         --  sticky low bit, then normalize the exact sum or difference.
+         if A.Exponent < B.Exponent
+           or else (A.Exponent = B.Exponent
+                    and then A.Significant < B.Significant)
+         then
+            declare
+               Swap : constant Decoded_Float := A;
+            begin
+               A := B;
+               B := Swap;
+            end;
+         end if;
+
+         declare
+            Sig_A : constant Magnitude := A.Significant * 8;
+            Sig_B : constant Magnitude :=
+              Shift_Right_Jam
+                (B.Significant * 8,
+                 Natural (A.Exponent - B.Exponent));
+            Sig : Magnitude;
+            Exp : Integer := A.Exponent;
+            Sign : constant Boolean := A.Negative;
+         begin
+            if A.Negative = B.Negative then
+               Sig := Sig_A + Sig_B;
+               if Sig >= 2 ** (Precision + 3) then
+                  Sig := Shift_Right_Jam (Sig, 1);
+                  Exp := Exp + 1;
+               end if;
+            else
+               Sig := Sig_A - Sig_B;
+               if Sig = 0 then
+                  return 0;
+               end if;
+               while Sig < 2 ** (Precision + 2) loop
+                  Sig := Sig * 2;
+                  Exp := Exp - 1;
+               end loop;
+            end if;
+            return Rounded (Sign, Sig, Exp);
+         end;
+      elsif Operation = Float_Multiply then
+         if (A.Class = Infinity and then B.Zero)
+           or else (B.Class = Infinity and then A.Zero)
+         then
+            return Canonical_NaN;
+         elsif A.Class = Infinity or else B.Class = Infinity then
+            return Signed
+              (Negative, Magnitude (Exponent_Limit) * Hidden_Bit);
+         elsif A.Zero or else B.Zero then
+            return (if Negative then Sign_Bit else 0);
+         end if;
+
+         declare
+            Product : constant Double_Magnitude :=
+              Double_Magnitude (A.Significant)
+                * Double_Magnitude (B.Significant);
+            High : constant Boolean :=
+              Product >= Double_Magnitude (2) ** (2 * Precision - 1);
+            Distance : constant Natural :=
+              (if High then Precision - 3 else Precision - 4);
+            Sig : constant Magnitude :=
+              Shift_Right_Jam (Product, Distance);
+            Exp : constant Integer :=
+              A.Exponent + B.Exponent + (if High then 1 else 0);
+         begin
+            return Rounded (Negative, Sig, Exp);
+         end;
+      else
+         if (A.Class = Infinity and then B.Class = Infinity)
+           or else (A.Zero and then B.Zero)
+         then
+            return Canonical_NaN;
+         elsif A.Class = Infinity then
+            return Signed
+              (Negative, Magnitude (Exponent_Limit) * Hidden_Bit);
+         elsif B.Class = Infinity then
+            return (if Negative then Sign_Bit else 0);
+         elsif B.Zero then
+            return Signed
+              (Negative, Magnitude (Exponent_Limit) * Hidden_Bit);
+         elsif A.Zero then
+            return (if Negative then Sign_Bit else 0);
+         end if;
+
+         declare
+            Below_One : constant Boolean :=
+              A.Significant < B.Significant;
+            Distance : constant Natural :=
+              (if Below_One then Precision + 3 else Precision + 2);
+            Numerator : constant Double_Magnitude :=
+              Double_Magnitude (A.Significant)
+                * Double_Magnitude (2) ** Distance;
+            Divisor : constant Double_Magnitude :=
+              Double_Magnitude (B.Significant);
+            Quotient : Double_Magnitude := Numerator / Divisor;
+            Remainder : constant Double_Magnitude := Numerator mod Divisor;
+            Exp : constant Integer :=
+              A.Exponent - B.Exponent - (if Below_One then 1 else 0);
+         begin
+            if Remainder /= 0 and then Quotient mod 2 = 0 then
+               Quotient := Quotient + 1;
+            end if;
+            return Rounded (Negative, Magnitude (Quotient), Exp);
+         end;
+      end if;
+   end Float_Arithmetic_Result;
+
+   -------------------------------
+   --  Float_Comparison_Result  --
+   -------------------------------
+
+   function Float_Comparison_Result
+     (Left, Right : Magnitude;
+      Item        : Float_Name;
+      Operation   : Float_Comparison_Operation) return Boolean
+   is
+      Fraction_Bits : constant Natural :=
+        (case Item is when F32 => 23, when F64 => 52);
+      Exponent_Bits : constant Natural :=
+        (case Item is when F32 => 8, when F64 => 11);
+      Sign_Shift : constant Natural :=
+        (case Item is when F32 => 31, when F64 => 63);
+      Sign_Bit : constant Magnitude := 2 ** Sign_Shift;
+      Exponent_Limit : constant Magnitude := 2 ** Exponent_Bits - 1;
+      Left_Magnitude : constant Magnitude := Left mod Sign_Bit;
+      Right_Magnitude : constant Magnitude := Right mod Sign_Bit;
+      Left_NaN : constant Boolean :=
+        (Left / 2 ** Fraction_Bits) mod 2 ** Exponent_Bits
+          = Exponent_Limit
+        and then Left mod 2 ** Fraction_Bits /= 0;
+      Right_NaN : constant Boolean :=
+        (Right / 2 ** Fraction_Bits) mod 2 ** Exponent_Bits
+          = Exponent_Limit
+        and then Right mod 2 ** Fraction_Bits /= 0;
+      Equal : constant Boolean :=
+        not (Left_NaN or else Right_NaN)
+        and then (Left = Right
+                  or else (Left_Magnitude = 0 and Right_Magnitude = 0));
+      Less : Boolean := False;
+   begin
+      if not (Left_NaN or else Right_NaN) and then not Equal then
+         if (Left / Sign_Bit) mod 2 /= (Right / Sign_Bit) mod 2 then
+            Less := (Left / Sign_Bit) mod 2 = 1;
+         elsif (Left / Sign_Bit) mod 2 = 0 then
+            Less := Left_Magnitude < Right_Magnitude;
+         else
+            Less := Left_Magnitude > Right_Magnitude;
+         end if;
+      end if;
+
+      return
+        (case Operation is
+            when Float_Equal => Equal,
+            when Float_Not_Equal => not Equal,
+            when Float_Less => Less,
+            when Float_Less_Or_Equal => Less or else Equal,
+            when Float_Greater =>
+              not (Left_NaN or else Right_NaN) and then not (Less or Equal),
+            when Float_Greater_Or_Equal =>
+              not (Left_NaN or else Right_NaN) and then not Less);
+   end Float_Comparison_Result;
+
    ------------------------
    --  Float_Special_Bits  --
    ------------------------

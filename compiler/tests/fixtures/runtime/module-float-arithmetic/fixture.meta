@@ -1,0 +1,6 @@
+class: runtime
+summary: module f32 and f64 arithmetic folds from IEEE bits through scalar and aggregate images
+constructs: 0170, 0210, 0230, 0240, 0290, 0350, 1880, 1890, 1940
+program: main.ldn
+status: 42
+targets: linux-x86-64

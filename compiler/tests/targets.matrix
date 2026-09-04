@@ -267,7 +267,6 @@ negative/module-array-repetition-element-not-static | linux-x86-64, macos-arm64
 negative/module-array-repetition-fold-range | linux-x86-64, macos-arm64
 negative/module-array-repetition-index-element | linux-x86-64, macos-arm64
 negative/module-directory-invalid | linux-x86-64, macos-arm64
-negative/module-float-arithmetic-not-enabled | linux-x86-64, macos-arm64
 negative/module-fold-no-type-holds | linux-x86-64, macos-arm64
 negative/module-function-field-without-image | linux-x86-64, macos-arm64, synthetic-32
 negative/module-function-image-cycle | linux-x86-64, macos-arm64, synthetic-32
@@ -865,6 +864,7 @@ runtime/module-array-initializers-copy-images | linux-x86-64
 runtime/module-array-literal-holds-its-image | linux-x86-64
 runtime/module-array-literal-infers-static-image | linux-x86-64
 runtime/module-array-zeroed-reads-zero | linux-x86-64
+runtime/module-float-arithmetic | linux-x86-64
 runtime/module-mixed-array-repetition-holds-hybrid | linux-x86-64
 runtime/module-scalar-zeroed-reads-zero | linux-x86-64
 runtime/module-struct-initializers-copy-images | linux-x86-64

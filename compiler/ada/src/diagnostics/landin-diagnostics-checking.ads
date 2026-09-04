@@ -140,9 +140,6 @@ package Landin.Diagnostics.Checking is
       --  the kernel lacks is a question about what it resolved to.
       Wide_Integer_Type,
       Float_Type,
-      --  D162 enables runtime IEEE arithmetic first.  A module has no
-      --  execution point, so folding those operations is a separate slice.
-      Float_Static_Expression,
       Text_Type,
       --  [0670] declares one.  R2.20 admits contextual storage, copies,
       --  zero images and labelled literals but not a general aggregate
@@ -176,7 +173,6 @@ package Landin.Diagnostics.Checking is
             when Scalar_Conversion  => "[0700]",
             when Wide_Integer_Type  => "[0150]",
             when Float_Type         => "[0170]",
-            when Float_Static_Expression => "[0290]",
             when Text_Type          => "[0600]",
             when Struct_Value       => "[0670]",
             when Variant_Value      => "[0680]",
@@ -236,7 +232,6 @@ private
             --  the wide integers, the floats and the text views arrive.
             when Wide_Integer_Type
                | Float_Type
-               | Float_Static_Expression
                | Text_Type         => "R4.10",
             when Struct_Value
                | Variant_Value
