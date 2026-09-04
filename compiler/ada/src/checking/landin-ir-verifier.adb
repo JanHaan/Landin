@@ -4222,17 +4222,11 @@ package body Landin.IR.Verifier is
                               end;
 
                            when Jump | Branch =>
-                              --  A datum may branch.  [0410] makes the
-                              --  logical words short-circuit and
-                              --  Landin.IR has no opcode for them, and
-                              --  [1940] admits an operator of [1820]
-                              --  over literals -- so `k: bool = true and
-                              --  false` is a legal module value whose
-                              --  only lowering is blocks.  R1.70
-                              --  considered folding it here instead and
-                              --  refused: that is a second constant
-                              --  folder beside the checker's, over the
-                              --  whole of [1820] including the widths.
+                              --  D177 keeps a module bool in its static image
+                              --  instead of routing [0340] through CFG here.
+                              --  The lowering therefore creates no such datum
+                              --  edge; this generic target check remains for
+                              --  hand-built IR and routine CFG.
                               if not Holds
                                        (Of_Unit, Id,
                                         Target_Of (Of_Unit, Id, V))
@@ -4285,6 +4279,10 @@ package body Landin.IR.Verifier is
                                  when Leave =>
                                     (if Result_Of (Of_Unit, Id)
                                         in Landin.Types.Scalar_Name
+                                       and then not
+                                         (Is_Datum
+                                          and then Has_Bool_Image
+                                            (Of_Unit, Id))
                                      then 1 else 0),
                                  when others => Wanted (Op));
                         begin

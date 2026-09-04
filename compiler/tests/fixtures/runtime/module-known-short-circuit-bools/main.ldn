@@ -1,0 +1,31 @@
+sample: type = struct
+    first: bool
+    second: bool
+end sample
+
+forward: bool = later and true
+chain: bool = forward
+literal_not: bool = not false
+compared: bool = 3 < 4
+later: bool = false or true
+short_and: bool = false and later
+short_or: bool = true or short_and
+
+array_image: [8]bool = [not true, true and false, false or true,
+    chain and compared, 7 == 7, 9 < 2, short_and, short_or]
+struct_image: sample = sample(
+    first: not chain,
+    second: forward and compared)
+
+public main: () -> (code: i32) =
+    if forward and chain and literal_not and compared and later
+      and not short_and and short_or
+      and not array_image[0] and not array_image[1]
+      and array_image[2] and array_image[3] and array_image[4]
+      and not array_image[5] and not array_image[6] and array_image[7]
+      and not struct_image.first and struct_image.second then
+        code = 42
+    else
+        code = 1
+    end if
+end main

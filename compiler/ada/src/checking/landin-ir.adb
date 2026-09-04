@@ -926,6 +926,35 @@ package body Landin.IR is
      (Of_Unit : Unit; Item : Item_Id) return Element_Total
      is (Element (Of_Unit, Item).Length);
 
+   procedure Set_Bool_Image
+     (Into : in out Unit;
+      Item  : Item_Id;
+      Value : Landin.Types.Folded)
+   is
+      Held : Item_Record := Element (Into, Item);
+   begin
+      --  Keep the invariant in release builds too: this metadata is consumed
+      --  directly by datum emission and a contract alone disappears there.
+      if Kind_Of (Into, Item) /= Datum
+        or else Result_Of (Into, Item) /= Landin.Types.Bool
+        or else Held.Has_Bool_Image
+        or else Value not in 0 | 1
+      then
+         raise Landin.Compiler_Defect with
+           "a bool datum received a malformed static image";
+      end if;
+      Held.Has_Bool_Image := True;
+      Held.Bool_Image := Value;
+      Into.Items (Positive (Item)) := Held;
+   end Set_Bool_Image;
+
+   function Has_Bool_Image (Of_Unit : Unit; Item : Item_Id) return Boolean
+     is (Element (Of_Unit, Item).Has_Bool_Image);
+
+   function Bool_Image
+     (Of_Unit : Unit; Item : Item_Id) return Landin.Types.Folded
+     is (Element (Of_Unit, Item).Bool_Image);
+
    function Field_Image_Element_Count
      (Fields : Aggregate_Field_Image_Array) return Element_Total
    is

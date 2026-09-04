@@ -1762,14 +1762,14 @@ item 4 DATUM d result u32 params 0 slots 0 blocks 1 values 2
     2 LEAVE <- 1
 file positive/literal-booleans/program.ldn
 unit signatures 0 items 2
-item 1 DATUM yes result bool params 0 slots 0 blocks 1 values 2
-  block 1 scope 1 PROGRAM length 2
-    1 TRUTH bool true
-    2 LEAVE <- 1
-item 2 DATUM no result bool params 0 slots 0 blocks 1 values 2
-  block 1 scope 1 PROGRAM length 2
-    1 TRUTH bool false
-    2 LEAVE <- 1
+item 1 DATUM yes result bool params 0 slots 0 blocks 1 values 1
+  bool image true
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 2 DATUM no result bool params 0 slots 0 blocks 1 values 1
+  bool image false
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
 file positive/literal-takes-a-sibling-type/program.ldn
 unit signatures 1 items 1
 signature 1 (in u8) -> u8
@@ -2891,10 +2891,10 @@ item 1 DATUM number result u64 params 0 slots 0 blocks 1 values 2
   block 1 scope 1 PROGRAM length 2
     1 NUMBER u64 0
     2 LEAVE <- 1
-item 2 DATUM flag result bool params 0 slots 0 blocks 1 values 2
-  block 1 scope 1 PROGRAM length 2
-    1 TRUTH bool false
-    2 LEAVE <- 1
+item 2 DATUM flag result bool params 0 slots 0 blocks 1 values 1
+  bool image false
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
 file positive/module-struct-image-with-a-child/program.ldn
 unit signatures 1 items 2
 signature 1 () -> none
@@ -3191,10 +3191,10 @@ item 1 DATUM seed result usize params 0 slots 0 blocks 1 values 2
   block 1 scope 1 PROGRAM length 2
     1 NUMBER usize 6
     2 LEAVE <- 1
-item 2 DATUM flag result bool params 0 slots 0 blocks 1 values 2
-  block 1 scope 1 PROGRAM length 2
-    1 TRUTH bool true
-    2 LEAVE <- 1
+item 2 DATUM flag result bool params 0 slots 0 blocks 1 values 1
+  bool image true
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
 item 3 DATUM origin result struct params 0 slots 0 blocks 1 values 1
   field 1 u8
   field 2 usize
