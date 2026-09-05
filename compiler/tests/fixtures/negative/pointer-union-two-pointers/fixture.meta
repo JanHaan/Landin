@@ -1,0 +1,6 @@
+class: negative
+summary: D189 a union holds at most one pointer type
+constructs: 0480, 0640
+program: program.ldn
+codes: L0301
+targets: linux-x86-64, macos-arm64, synthetic-32

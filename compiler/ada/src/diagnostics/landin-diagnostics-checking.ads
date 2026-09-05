@@ -164,7 +164,12 @@ package Landin.Diagnostics.Checking is
       --  excluded value would enter constrained storage unchecked.  A
       --  composite or reference position, and an `extern (c)` signature,
       --  therefore refuse one until R7.20 decides how the check composes.
-      Constrained_Composition);
+      Constrained_Composition,
+      --  D189 enables [0480]'s one-atom pointer union as a plain pointer
+      --  reserving zero.  Two or more atoms beside a pointer need the
+      --  tag-plus-pointer carrier [1870] describes, which is an IR pair,
+      --  storage, an ABI position and a backend of its own.
+      Tagged_Pointer_Union);
 
    function Construct (Item : Refused_Use)
      return Landin.Tokens.Construct_Reference
@@ -178,7 +183,8 @@ package Landin.Diagnostics.Checking is
             when Parameterized_Type_Alias => "[1350]",
             when Zeroed_Value       => "[0540]",
             when External_C_ABI     => "[1580]",
-            when Constrained_Composition => "[0660]")
+            when Constrained_Composition => "[0660]",
+            when Tagged_Pointer_Union => "[0480]")
      with Post => Landin.Tokens.Is_Valid_Construct (Construct'Result);
 
    --  The type names above, spelled once.  A name that is not here is a
@@ -230,6 +236,10 @@ private
             --  R7.20 owns how a constraint composes with a reference,
             --  element, field or foreign position; R4.10 closes [0660]
             --  itself and deliberately does not decide that.
-            when Constrained_Composition => "R7.20");
+            when Constrained_Composition => "R7.20",
+            --  R7.20 owns the tagged carrier a multi-atom pointer union
+            --  needs; D189 closes [0480]'s one-atom form and deliberately
+            --  does not decide that one.
+            when Tagged_Pointer_Union => "R7.20");
 
 end Landin.Diagnostics.Checking;

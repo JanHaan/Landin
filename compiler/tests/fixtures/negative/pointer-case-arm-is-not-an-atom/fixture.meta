@@ -1,0 +1,6 @@
+class: negative
+summary: D189 `ptr` names the present case of a pointer union and is not a case name in an atom match
+constructs: 0480, 0640, 1210
+program: program.ldn
+codes: L0301
+targets: linux-x86-64, macos-arm64, synthetic-32

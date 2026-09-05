@@ -359,6 +359,11 @@ package Landin.Syntax is
       Fixed_Arm,
       Match_Arm,
       Match_Binding,
+      --  D189's `ptr` arm head.  [0480]'s one-atom pointer union has two
+      --  cases and only one of them is a name, so the present case is a
+      --  node kind rather than a Name_Reference: the reserved word is not
+      --  a case name and resolution has nothing to bind it to.
+      Pointer_Case,
       --  One named selection in a destructuring binding, carrying the
       --  source result label as its own name and a Destructured_Name child.
       --  Result_Wildcard is [0990]'s `_`, and Return_List holds [0920]'s
@@ -1231,8 +1236,12 @@ package Landin.Syntax is
                   and then Kind (Of_Tree, Id) = Atom_Union_Type
                   and then Index <= Atom_Member_Count (Of_Tree, Id),
           Post => Contains (Of_Tree, Nth_Atom_Member'Result)
+                  --  D189/[0480]: `union_member` also admits one written
+                  --  pointer type, which is a Pointer_Type node and not a
+                  --  name the union could otherwise hold.
                   and then Kind (Of_Tree, Nth_Atom_Member'Result)
-                             in Type_Reference | Member_Selection;
+                             in Type_Reference | Member_Selection
+                                | Pointer_Type;
 
    --  D188's [0660] base type and its two written bounds.  The bounds are
    --  nodes and not numbers for Bound_Of's reason: what a literal means is

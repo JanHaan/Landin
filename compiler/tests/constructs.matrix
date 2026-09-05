@@ -11,7 +11,7 @@
 #
 #  A construct with no evidence and no refusal is this
 #  item's to answer for; see ROADMAP.md R1.90.
-#  200 constructs, 176 with evidence, 24 with neither.
+#  200 constructs, 177 with evidence, 23 with neither.
 #
 #  id    defined in  evidence
 0010   tour        accepted emitted                   Line comment, to end of line
@@ -60,8 +60,8 @@
 0440   tour        accepted emitted executed refused  A mut reference satisfies a plain one, never the reverse
 0450   tour        accepted emitted executed          Permission is shallow
 0460   tour        accepted emitted executed          Address literal
-0470   tour        accepted emitted executed          Both directions between a pointer and an integer are the
-0480   tour        -                                  There is no null
+0470   tour        accepted emitted executed refused  Both directions between a pointer and an integer are the
+0480   tour        accepted emitted executed refused refused-by-name There is no null
 0490   tour        -                                  Pointers are a system tool
 0500   tour        -                                  Three operations sit between pointers and slices
 0510   tour        accepted emitted executed refused  slice_from is where uninitialised storage is smuggled in

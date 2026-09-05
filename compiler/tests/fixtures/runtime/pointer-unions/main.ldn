@@ -1,0 +1,46 @@
+--  [0480]: there is no null.  A union of one atom and a pointer type is a
+--  plain pointer whose empty case is zero, and matching is the only way to
+--  reach the pointer.
+none_found: atom
+maybe_ptr: type = none_found | ptr mut u32
+
+opaque: (n: u32) -> (r: u32) =
+    r = n
+end opaque
+
+--  The empty case leaves through an ordinary named return.
+lookup: (want: u32, cell: ptr mut u32) -> (found: maybe_ptr from cell) =
+    if want == 1 then
+        found = cell
+    else
+        found = none_found
+    end if
+end lookup
+
+read_or: (m: maybe_ptr, fallback: u32) -> (value: u32) =
+    match m
+        none_found: value = fallback
+        ptr (p): value = p.val
+    end match
+end read_or
+
+present: (m: maybe_ptr) -> (yes: u32) =
+    match m
+        ptr: yes = 1
+        none_found: yes = 0
+    end match
+end present
+
+public main: () -> (code: i32) =
+    mut cell: u32 = 40
+    key: u32 = opaque(1)
+    other: u32 = opaque(2)
+    hit: maybe_ptr = lookup(key, addr cell)
+    miss: maybe_ptr = lookup(other, addr cell)
+    --  [1870]: one atom beside a pointer occupies one target pointer
+    --  carrier, so this is the pointer's own width and not a tagged pair.
+    carrier: usize = sizeof maybe_ptr
+    total: u32 = read_or(hit, 0) + read_or(miss, 1)
+        + present(hit) + present(miss) + u32(carrier)
+    code = i32(total) - 6
+end main

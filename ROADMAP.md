@@ -2794,7 +2794,7 @@ that has no implementation owner.
 | `[0450]` | hosted-now | R2.50 | matrix evidence |
 | `[0460]` | hosted-now | R2.50 | matrix evidence |
 | `[0470]` | hosted-now | R2.50 | matrix evidence |
-| `[0480]` | hosted-now | R4.10 | gap: atom-or-pointer unions are still rejected as non-atom unions |
+| `[0480]` | hosted-now | R4.10 | matrix evidence and named refusal |
 | `[0490]` | principle | none | system-tool policy; no implementation claim |
 | `[0500]` | hosted-now | R4.10 | gap: pointer-to-slice primitive ownership is unsettled |
 | `[0510]` | hosted-now | R3.30 | matrix evidence |
@@ -3469,8 +3469,8 @@ the u128/i128 part of [0150], the f16 part of
 [0170], and the ownership disposition for
 [0500]'s pointer/slice operations, [0810]'s derivation primitives and [0820]'s
 lexical `arena` block. No language decision is made by this inventory.
-D188 later closed [0660]; the remaining gap list is [0480]'s atom-or-pointer
-union, the u128/i128 part of [0150], the f16 part of [0170], and that ownership
+D188 later closed [0660] and D189 closed [0480]; the remaining gap list is the
+u128/i128 part of [0150], the f16 part of [0170], and that ownership
 disposition.
 
 The condition-declaration increment enables [1070]'s initialized inferred and
@@ -3516,6 +3516,25 @@ generic type argument are refused by name and belong to R7.20, because
 refuses one through [1580]'s existing hosted-scalar boundary.
 The increment also extends [0700]'s conversion to a declared scalar name, so
 D15's alias converts as the name it aliases does.
+
+The pointer-union increment enables [0480] with D189. A union that flattens to
+exactly one atom identity and one pointer type is that pointer type carrying
+the atom as its empty case, occupying one target pointer carrier with zero
+reserved for the atom, which is the measurement R2.50 recorded and now has a
+caller for. A plain pointer and the atom's singleton widen into the union and
+neither direction reverses, `match` is the only way back out, its two cases
+are the atom name and the reserved word `ptr` with an optional read-only
+binding, and exhaustiveness over the two is L0312. Every position that would
+read the empty case as an address is refused by name: `.val`, an integer
+conversion, `any` construction, a comparison, `ptr(n)` into a union position
+and a `ptr T` argument or result. The bound pointer carries the subject's own
+origin and the empty case carries none, so a union built from `addr local`
+still refuses an escaping use of the binding. A union of several atoms and a
+pointer needs [1870]'s tagged carrier and is refused by name against R7.20.
+D189 also records an unresolved contradiction it does not own: `ptr(0)` is
+accepted today [0470] and `runtime/core-mem-allocators` uses it as a failure
+sentinel five times, while [1580] states that it is refused, so null remains
+mintable on the pointer side. That belongs to [1580] and R4.40 below.
 
 Exit evidence: every hosted `[NNNN]` row has implementation and positive or
 negative evidence; no omission is hidden by prototype coverage.
@@ -3565,10 +3584,20 @@ binding generation sufficient to avoid a
 hand-written-declaration workflow, without turning the compiler into a header
 parser.
 
+D189 leaves one contradiction here rather than silently: [1580] states that
+`ptr(0)` is refused so that null cannot be minted on the Landin side, and it
+is not — [0470]'s integer-to-pointer conversion accepts it and
+`runtime/core-mem-allocators` uses it as a failure sentinel five times.
+Refusing it would break that fixture and needs the union to be usable as its
+replacement across the foreign boundary, which is this item's `extern (c)`
+signature work. Until then [0480] is closed for ordinary Landin code and
+evadable through [0470].
+
 Sources: legacy B2; `R§9`, `R§10`.
 
 Exit evidence: ABI differential tests call in both directions; unsupported C
-forms fail explicitly; generated declarations are deterministic.
+forms fail explicitly; generated declarations are deterministic; `ptr(0)` is
+refused as [1580] states, with the pointer union carrying what it stood for.
 
 ### R4.50 — Implement baseline code generation and specialization
 
@@ -3880,9 +3909,13 @@ SoA `[0620]` is not normative implementation work unless its trigger caused a
 tour amendment. D188 leaves `[0660]`'s composition here: a range subtype in a
 struct field, array element, pointer or slice target or generic type argument,
 and the address of a constrained place, are refused by name until this item
-decides how the check composes.
+decides how the check composes. D189 leaves `[0480]`'s multi-atom form here: a
+union of two or more atoms and a pointer needs the tag-plus-pointer carrier
+[1870] describes, which is an IR pair, storage, an ABI position and a backend
+of its own, and is refused by name until this item supplies them.
 
-Sources: [0660]'s composite and reference positions, refused by name in R4.10.
+Sources: `[0480]`'s multi-atom pointer union; [0660]'s composite and reference
+positions, refused by name in R4.10.
 
 Exit evidence: `[1310]` and every other formerly delayed normative row have
 implementation and tests or an evidence-backed tour amendment.

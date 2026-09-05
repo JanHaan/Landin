@@ -1,0 +1,15 @@
+none_found: atom
+maybe_ptr: type = none_found | ptr u32
+
+retain: (escaping pointer: ptr u32) -> none =
+    _ = pointer
+end retain
+
+bad: () -> none =
+    value: u32 = 1
+    m: maybe_ptr = addr value
+    match m
+        none_found: _ = 0
+        ptr (p): retain(p)
+    end match
+end bad

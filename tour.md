@@ -538,7 +538,25 @@ R2.50 measures that case against R2.20's variant representation.
 none_found: atom
 maybe_ptr: type = none_found | ptr mut u32
 
+lookup: (key: u32, cell: ptr mut u32) -> (found: maybe_ptr from cell) =
+    if key == 0 then
+        found = none_found
+    else
+        found = cell
+    end if
+end lookup
+
+read: (m: maybe_ptr, fallback: u32) -> (value: u32) =
+    match m
+        none_found: value = fallback
+        ptr (p):    value = p.val
+    end match
+end read
 ```
+
+A pointer goes into the union without being written down as anything; coming
+back out is a match, and both cases have to be named. `ptr` is the arm for
+the present case, and the name in brackets after it is the pointer itself.
 
 ### [0490] Pointers are a system tool
 

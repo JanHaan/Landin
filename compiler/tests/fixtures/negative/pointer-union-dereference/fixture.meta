@@ -1,0 +1,6 @@
+class: negative
+summary: D189 a pointer union is matched before it is read, so `.val` cannot name its referent
+constructs: 0430, 0480, 1210
+program: program.ldn
+codes: L0301
+targets: linux-x86-64, macos-arm64, synthetic-32

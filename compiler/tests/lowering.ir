@@ -4065,6 +4065,180 @@ item 1 ROUTINE f result i32 signature 1 params 0 slots 3 blocks 1 values 12
     10 STORE slot 1 <- 9
     11 LOAD i32 slot 1
     12 LEAVE <- 11
+file positive/pointer-unions/program.ldn
+unit signatures 6 items 6
+signature 1 (in usize) -> usize from 1
+signature 2 () -> usize
+signature 3 (in usize, in u32) -> u32
+signature 4 (in usize) -> bool
+signature 5 (in usize) -> bool
+signature 6 () -> u32
+item 1 ROUTINE widen result usize signature 1 params 1 slots 2 blocks 1 values 4
+  slot 1 p usize param 1
+  slot 2 m usize return
+  block 1 scope 5 BLOCK length 4
+    1 LOAD usize slot 1
+    2 STORE slot 2 <- 1
+    3 LOAD usize slot 2
+    4 LEAVE <- 3
+item 2 ROUTINE empty result usize signature 2 params 0 slots 1 blocks 1 values 4
+  slot 1 m usize return
+  block 1 scope 7 BLOCK length 4
+    1 NUMBER usize 0
+    2 STORE slot 1 <- 1
+    3 LOAD usize slot 1
+    4 LEAVE <- 3
+item 3 ROUTINE read_or result u32 signature 3 params 2 slots 5 blocks 5 values 18
+  slot 1 m usize param 1
+  slot 2 fallback u32 param 2
+  slot 3 value u32 return
+  slot 4 - usize
+  slot 5 p usize
+  block 1 scope 9 BLOCK length 6
+    1 LOAD usize slot 1
+    2 STORE slot 4 <- 1
+    3 LOAD usize slot 4
+    4 NUMBER usize 0
+    5 EQUAL_TO bool <- 3 4
+    6 BRANCH target 2 alternative 3 <- 5
+  block 2 scope 10 BLOCK length 3
+    7 LOAD u32 slot 2
+    8 STORE slot 3 <- 7
+    9 JUMP target 4
+  block 3 scope 9 BLOCK length 1
+    10 JUMP target 5
+  block 4 scope 9 BLOCK length 2
+    17 LOAD u32 slot 3
+    18 LEAVE <- 17
+  block 5 scope 11 BLOCK length 6
+    11 LOAD usize slot 4
+    12 STORE slot 5 <- 11
+    13 LOAD usize slot 5
+    14 LOAD_INDIRECT u32 <- 13
+    15 STORE slot 3 <- 14
+    16 JUMP target 4
+item 4 ROUTINE discard result bool signature 4 params 1 slots 3 blocks 5 values 15
+  slot 1 m usize param 1
+  slot 2 found bool return
+  slot 3 - usize
+  block 1 scope 13 BLOCK length 6
+    1 LOAD usize slot 1
+    2 STORE slot 3 <- 1
+    3 LOAD usize slot 3
+    4 NUMBER usize 0
+    5 NOT_EQUAL_TO bool <- 3 4
+    6 BRANCH target 2 alternative 3 <- 5
+  block 2 scope 14 BLOCK length 3
+    7 TRUTH bool true
+    8 STORE slot 2 <- 7
+    9 JUMP target 4
+  block 3 scope 13 BLOCK length 1
+    10 JUMP target 5
+  block 4 scope 13 BLOCK length 2
+    14 LOAD bool slot 2
+    15 LEAVE <- 14
+  block 5 scope 15 BLOCK length 3
+    11 TRUTH bool false
+    12 STORE slot 2 <- 11
+    13 JUMP target 4
+item 5 ROUTINE covered result bool signature 5 params 1 slots 3 blocks 5 values 15
+  slot 1 m usize param 1
+  slot 2 found bool return
+  slot 3 - usize
+  block 1 scope 17 BLOCK length 6
+    1 LOAD usize slot 1
+    2 STORE slot 3 <- 1
+    3 LOAD usize slot 3
+    4 NUMBER usize 0
+    5 NOT_EQUAL_TO bool <- 3 4
+    6 BRANCH target 2 alternative 3 <- 5
+  block 2 scope 18 BLOCK length 3
+    7 TRUTH bool true
+    8 STORE slot 2 <- 7
+    9 JUMP target 4
+  block 3 scope 17 BLOCK length 1
+    10 JUMP target 5
+  block 4 scope 17 BLOCK length 2
+    14 LOAD bool slot 2
+    15 LEAVE <- 14
+  block 5 scope 19 BLOCK length 3
+    11 TRUTH bool false
+    12 STORE slot 2 <- 11
+    13 JUMP target 4
+item 6 ROUTINE use result u32 signature 6 params 0 slots 10 blocks 11 values 52
+  slot 1 total u32 return
+  slot 2 cell u32
+  slot 3 held usize
+  slot 4 widened usize
+  slot 5 gone usize
+  slot 6 read usize
+  slot 7 - usize
+  slot 8 - bool
+  slot 9 - bool
+  slot 10 - u32
+  block 1 scope 21 BLOCK length 21
+    1 NUMBER u32 41
+    2 STORE slot 2 <- 1
+    3 PLACE_ADDRESS usize
+    4 STORE slot 3 <- 3
+    5 PLACE_ADDRESS usize
+    6 CALL usize callee 1 widen signature 1 <- 5
+    7 STORE slot 4 <- 6
+    8 CALL usize callee 2 empty signature 2
+    9 STORE slot 5 <- 8
+    10 PLACE_ADDRESS usize
+    11 STORE slot 6 <- 10
+    12 LOAD usize slot 6
+    13 STORE slot 7 <- 12
+    14 NUMBER u32 0
+    15 LOAD usize slot 7
+    16 CALL u32 callee 3 read_or signature 3 <- 15 14
+    17 STORE slot 1 <- 16
+    18 LOAD usize slot 3
+    19 CALL bool callee 4 discard signature 4 <- 18
+    20 STORE slot 9 <- 19
+    21 BRANCH target 2 alternative 3 <- 19
+  block 2 scope 21 BLOCK length 4
+    22 LOAD usize slot 4
+    23 CALL bool callee 4 discard signature 4 <- 22
+    24 STORE slot 9 <- 23
+    25 JUMP target 3
+  block 3 scope 21 BLOCK length 3
+    26 LOAD bool slot 9
+    27 STORE slot 8 <- 26
+    28 BRANCH target 4 alternative 5 <- 26
+  block 4 scope 21 BLOCK length 5
+    29 LOAD usize slot 5
+    30 CALL bool callee 4 discard signature 4 <- 29
+    31 LOGICAL_NOT bool <- 30
+    32 STORE slot 8 <- 31
+    33 JUMP target 5
+  block 5 scope 21 BLOCK length 2
+    34 LOAD bool slot 8
+    35 BRANCH target 6 alternative 7 <- 34
+  block 6 scope 22 BLOCK length 7
+    36 LOAD u32 slot 1
+    37 STORE slot 10 <- 36
+    38 NUMBER u32 1
+    39 LOAD u32 slot 10
+    40 ADD u32 <- 39 38
+    41 STORE slot 1 <- 40
+    42 JUMP target 8
+  block 7 scope 21 BLOCK length 1
+    43 JUMP target 8
+  block 8 scope 21 BLOCK length 3
+    44 LOAD usize slot 5
+    45 CALL bool callee 5 covered signature 5 <- 44
+    46 BRANCH target 9 alternative 10 <- 45
+  block 9 scope 23 BLOCK length 3
+    47 NUMBER u32 0
+    48 STORE slot 1 <- 47
+    49 JUMP target 11
+  block 10 scope 21 BLOCK length 1
+    50 JUMP target 11
+  block 11 scope 21 BLOCK length 2
+    51 LOAD u32 slot 1
+    52 LEAVE <- 51
 file positive/precedence-alternation-over-comparison/program.ldn
 unit signatures 1 items 1
 signature 1 () -> bool

@@ -1,0 +1,6 @@
+class: negative
+summary: D189 a pointer union has no address to convert, because its empty case is the reserved zero
+constructs: 0470, 0480
+program: program.ldn
+codes: L0301
+targets: linux-x86-64, macos-arm64, synthetic-32

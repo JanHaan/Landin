@@ -1286,6 +1286,17 @@ package body Landin.Stages.Lowering is
          Destination_Field : Natural := 0;
          Destination_Path : IR.Path_Step_Array := IR.No_Path_Steps);
 
+      --  D189/[0480]: a pointer union's two cases are told apart by the
+      --  reserved zero, so the whole form is one comparison against it.
+      procedure Lower_Pointer_Union_Match
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Scope   : Res.Scope_Id;
+         Result  : IR.Slot_Id;
+         Destination : IR.Slot_Id := IR.No_Slot;
+         Destination_Field : Natural := 0;
+         Destination_Path : IR.Path_Step_Array := IR.No_Path_Steps);
+
       procedure Lower_Bare_Block
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
@@ -6132,6 +6143,15 @@ package body Landin.Stages.Lowering is
                   begin
                      if Res.Sort_Of (Meanings.all, Means) = Res.Module_Atom
                      then
+                        --  D189/[0480]: in a pointer-union position the
+                        --  atom is the reserved zero, not its own dense
+                        --  atom code.  Checking has already noted this
+                        --  node as the union's pointer type, so the kind
+                        --  is what says which of the two is meant.
+                        if Type_At (Of_Tree, Node) = Ty.Pointer_Value then
+                           return IR.Emit_Number
+                             (Unit.all, Filling, Ty.Usize, 0, False, Site);
+                        end if;
                         return IR.Emit_Atom
                           (Unit.all, Filling, Means,
                            Atom_Set_For
@@ -6416,6 +6436,12 @@ package body Landin.Stages.Lowering is
                   end if;
 
                   if Res.Sort_Of (Meanings.all, Means) = Res.Module_Atom then
+                     --  D189/[0480]: see the Member_Selection arm above --
+                     --  a union's empty case lowers to the reserved zero.
+                     if Type_At (Of_Tree, Node) = Ty.Pointer_Value then
+                        return IR.Emit_Number
+                          (Unit.all, Filling, Ty.Usize, 0, False, Site);
+                     end if;
                      return IR.Emit_Atom
                        (Unit.all, Filling, Means,
                         Atom_Set_For
@@ -7005,6 +7031,142 @@ package body Landin.Stages.Lowering is
          end if;
       end Lower_Atom_Match;
 
+      procedure Lower_Pointer_Union_Match
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Scope   : Res.Scope_Id;
+         Result  : IR.Slot_Id;
+         Destination : IR.Slot_Id := IR.No_Slot;
+         Destination_Field : Natural := 0;
+         Destination_Path : IR.Path_Step_Array := IR.No_Path_Steps)
+      is
+         Site : constant Landin.Provenance.Origin :=
+           Site_Of (Of_Tree, Node);
+         Subject : constant Syn.Node_Id :=
+           Syn.Match_Subject (Of_Tree, Node);
+         Saved : constant IR.Slot_Id :=
+           IR.Add_Slot
+             (Unit.all, Filling, Ty.Usize, Res.No_Declaration, Site);
+         Merge : IR.Block_Id := IR.No_Block;
+
+         procedure Bind (Arm : Syn.Node_Id);
+         procedure Close_To_Merge;
+
+         --  The present case is the union's own carrier, so the binding is
+         --  the same value the subject already held.
+         procedure Bind (Arm : Syn.Node_Id) is
+         begin
+            if Syn.Kind (Of_Tree, Syn.Match_Pattern (Of_Tree, Arm))
+                 /= Syn.Pointer_Case
+              or else Syn.Match_Binding_Count (Of_Tree, Arm) = 0
+            then
+               return;
+            end if;
+            declare
+               Binding : constant Syn.Node_Id :=
+                 Syn.Nth_Match_Binding (Of_Tree, Arm, 1);
+               Id : constant Res.Declaration_Id :=
+                 Declaration_At (Syn.Source_Of (Of_Tree), Binding);
+            begin
+               if Id = Res.No_Declaration then
+                  return;
+               end if;
+               IR.Emit_Store
+                 (Unit.all, Filling, Slot_For (Of_Tree, Binding, Id),
+                  IR.Emit_Load (Unit.all, Filling, Saved, Site), Site);
+            end;
+         end Bind;
+
+         procedure Close_To_Merge is
+         begin
+            if Merge = IR.No_Block then
+               Merge := Fresh (Of_Tree, Node, Scope);
+            end if;
+            Close_With_Jump (Merge, Site);
+         end Close_To_Merge;
+      begin
+         declare
+            Value : constant IR.Value_Id :=
+              Lower_Expression (Of_Tree, Subject, Scope);
+         begin
+            if Current = IR.No_Block then
+               return;
+            end if;
+            IR.Emit_Store (Unit.all, Filling, Saved, Value, Site);
+         end;
+
+         for Position in 1 .. Syn.Match_Arm_Count (Of_Tree, Node) loop
+            declare
+               Arm : constant Syn.Node_Id :=
+                 Syn.Nth_Match_Arm (Of_Tree, Node, Position);
+               Pattern : constant Syn.Node_Id :=
+                 Syn.Match_Pattern (Of_Tree, Arm);
+               Runs : constant Syn.Node_Id := Syn.Body_Of (Of_Tree, Arm);
+               Inside : constant Res.Scope_Id :=
+                 Res.Scope_At (Meanings.all, Of_Tree, Runs);
+               Taken : constant IR.Block_Id :=
+                 Fresh (Of_Tree, Runs, Inside);
+               Present : constant Boolean :=
+                 Syn.Kind (Of_Tree, Pattern) = Syn.Pointer_Case;
+               Wildcard : constant Boolean :=
+                 not Present
+                 and then Syn.Name (Of_Tree, Pattern)
+                            = Landin.Source.Names.No_Name;
+               Last : constant Boolean :=
+                 Position = Syn.Match_Arm_Count (Of_Tree, Node);
+            begin
+               if Wildcard or else Last then
+                  Close_With_Jump (Taken, Site);
+                  Open (Taken);
+                  Bind (Arm);
+                  Lower_Statements
+                    (Of_Tree, Runs, Inside, Result, Destination,
+                     Destination_Field, Destination_Path);
+                  if Current /= IR.No_Block then
+                     Close_To_Merge;
+                  end if;
+                  exit when Wildcard;
+               else
+                  declare
+                     Next : constant IR.Block_Id :=
+                       Fresh (Of_Tree, Node, Scope);
+                     Got : constant IR.Value_Id :=
+                       IR.Emit_Load (Unit.all, Filling, Saved, Site);
+                     Zero : constant IR.Value_Id :=
+                       IR.Emit_Number
+                         (Unit.all, Filling, Ty.Usize, 0, False, Site);
+                     Test : constant IR.Value_Id :=
+                       IR.Emit_Binary
+                         (Unit.all, Filling,
+                          (if Present then IR.Not_Equal_To
+                           else IR.Equal_To),
+                          Got, Zero, Ty.Bool, Site);
+                  begin
+                     IR.Emit_Branch
+                       (Unit.all, Filling, Test, Taken, Next, Site);
+                     IR.Leave_Block (Unit.all, Filling);
+                     Current := IR.No_Block;
+
+                     Open (Taken);
+                     Bind (Arm);
+                     Lower_Statements
+                       (Of_Tree, Runs, Inside, Result, Destination,
+                        Destination_Field, Destination_Path);
+                     if Current /= IR.No_Block then
+                        Close_To_Merge;
+                     end if;
+
+                     Open (Next);
+                  end;
+               end if;
+            end;
+         end loop;
+
+         if Merge /= IR.No_Block then
+            Open (Merge);
+         end if;
+      end Lower_Pointer_Union_Match;
+
       procedure Lower_Match
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
@@ -7018,6 +7180,12 @@ package body Landin.Stages.Lowering is
               = Ty.Atom_Value
          then
             Lower_Atom_Match
+              (Of_Tree, Node, Scope, Result, Destination,
+               Destination_Field, Destination_Path);
+         elsif Type_At (Of_Tree, Syn.Match_Subject (Of_Tree, Node))
+                 = Ty.Pointer_Value
+         then
+            Lower_Pointer_Union_Match
               (Of_Tree, Node, Scope, Result, Destination,
                Destination_Field, Destination_Path);
          else

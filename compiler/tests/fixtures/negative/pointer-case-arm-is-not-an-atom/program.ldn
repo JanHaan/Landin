@@ -1,0 +1,11 @@
+north: atom
+south: atom
+heading: type = north | south
+
+bad: (h: heading) -> (value: u32) =
+    match h
+        north: value = 0
+        south: value = 1
+        ptr: value = 2
+    end match
+end bad

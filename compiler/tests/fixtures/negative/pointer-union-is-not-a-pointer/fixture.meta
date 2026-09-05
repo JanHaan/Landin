@@ -1,0 +1,6 @@
+class: negative
+summary: D189 a plain pointer widens into the union and the union does not narrow back
+constructs: 0440, 0480, 1870
+program: program.ldn
+codes: L0301
+targets: linux-x86-64, macos-arm64, synthetic-32
