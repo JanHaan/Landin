@@ -1,0 +1,27 @@
+--  The other half of runtime/unchecked-does-not-reach-an-outer-cleanup:
+--  this `defer` is written inside the region, so the region reaches its
+--  argument and 255 + 1 wraps to 0 instead of trapping.  Together the
+--  two say the region travels with the registration and never with the
+--  exit that happens to run it.
+mut trace: u8 = 9
+
+release: (handle: u8) -> none =
+    trace = handle
+end release
+
+hold: (n: u8) -> (r: u8) =
+    unchecked begin
+        defer release(n + 1)
+        r = 7
+        return
+    end unchecked
+end hold
+
+public main: () -> (code: i32) =
+    _ = hold(255)
+    if trace == 0 then
+        code = 42
+    else
+        code = 1
+    end if
+end main

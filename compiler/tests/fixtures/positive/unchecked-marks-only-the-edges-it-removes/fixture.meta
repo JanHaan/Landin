@@ -1,0 +1,5 @@
+class: positive
+summary: D187 marks the integer conversion inside [1120]'s region and leaves the float arithmetic and the bool and float conversions unmarked
+constructs: 0700, 1120
+program: program.ldn
+targets: linux-x86-64, macos-arm64

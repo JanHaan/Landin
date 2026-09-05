@@ -2021,8 +2021,9 @@ origins — and the edges whose absence is not one thing on every machine:
 a zero divisor, a negative shift count, a conversion to bool or from a
 float, and a text boundary. It reaches only the code written inside it,
 so a function called from a region is checked as that function is
-written, and that is what keeps the word honest where you read it. D187
-is where each of those is decided.
+written, and a deferred call is checked where you wrote it rather than
+where the exit that runs it stands. That is what keeps the word honest
+where you read it. D187 is where each of those is decided.
 
 ### [1130] Unconditional loop
 

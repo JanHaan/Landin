@@ -1,0 +1,18 @@
+--  [0470]'s direction is in D187's removable half with the integer one:
+--  what a removed destination-range edge leaves is the low-order bits of
+--  the address.  A stack address on this target does not fit in a u32,
+--  so the same conversion outside a region traps.
+public main: () -> (code: i32) =
+    mut cell: u8 = 0
+    cell = 1
+    here: ptr mut u8 = addr cell
+    mut low: u32 = 0
+    unchecked begin
+        low = u32(here)
+    end unchecked
+    if u64(low) == u64(here) % 4294967296 then
+        code = 42
+    else
+        code = 1
+    end if
+end main

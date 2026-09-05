@@ -1,0 +1,22 @@
+--  `release` is registered outside the region, so D187 checks its
+--  argument as it is written.  The `return` that runs it stands inside
+--  the region; if the region reached the exit rather than the source
+--  this returns 42 instead of trapping.
+mut trace: u8 = 0
+
+release: (handle: u8) -> none =
+    trace = handle
+end release
+
+hold: (n: u8) -> (r: u8) =
+    defer release(n + 1)
+    unchecked begin
+        r = 7
+        return
+    end unchecked
+end hold
+
+public main: () -> (code: i32) =
+    _ = hold(255)
+    code = 42
+end main

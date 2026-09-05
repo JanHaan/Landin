@@ -1,0 +1,13 @@
+--  [1870] fixes bool's image at zero or one, so a conversion to bool
+--  from any other value leaves nothing the destination type holds.  D187
+--  keeps that edge in every region; without it this returns 42.
+truthy: (raw: u8) -> (r: bool) =
+    unchecked begin
+        r = bool(raw)
+    end unchecked
+end truthy
+
+public main: () -> (code: i32) =
+    _ = truthy(7)
+    code = 42
+end main

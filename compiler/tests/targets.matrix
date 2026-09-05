@@ -771,6 +771,7 @@ positive/token-separation | linux-x86-64, macos-arm64
 positive/try-statement-before-return | linux-x86-64, macos-arm64
 positive/type-declaration-aliases-a-scalar | linux-x86-64, macos-arm64
 positive/unary-binds-tightest | linux-x86-64, macos-arm64
+positive/unchecked-marks-only-the-edges-it-removes | linux-x86-64, macos-arm64
 positive/unchecked-regions | linux-x86-64, macos-arm64
 positive/undo-evaluates-on-failure | linux-x86-64, macos-arm64, synthetic-32
 positive/variant-case-construction | linux-x86-64, macos-arm64
@@ -1018,10 +1019,15 @@ runtime/unary-and-bitwise-exit-with-their-results | linux-x86-64
 runtime/unchecked-arithmetic-wraps | linux-x86-64
 runtime/unchecked-does-not-cross-a-call | linux-x86-64
 runtime/unchecked-does-not-reach-an-anonymous-body | linux-x86-64
+runtime/unchecked-does-not-reach-an-outer-cleanup | linux-x86-64
 runtime/unchecked-integer-conversion-truncates | linux-x86-64
+runtime/unchecked-keeps-bool-conversion-traps | linux-x86-64
+runtime/unchecked-keeps-float-conversion-traps | linux-x86-64
 runtime/unchecked-keeps-text-boundary-traps | linux-x86-64
 runtime/unchecked-keeps-the-divisor-check | linux-x86-64
 runtime/unchecked-keeps-the-shift-check | linux-x86-64
+runtime/unchecked-pointer-conversion-truncates | linux-x86-64
+runtime/unchecked-reaches-a-cleanup-written-inside | linux-x86-64
 runtime/unchecked-slice-index-passes-the-length | linux-x86-64
 runtime/undo-call-shapes | linux-x86-64
 runtime/undo-cleanups-follow-failure-edges | linux-x86-64

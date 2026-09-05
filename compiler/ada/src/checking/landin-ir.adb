@@ -1662,7 +1662,19 @@ package body Landin.IR is
    end End_Unchecked;
 
    function In_Unchecked (Of_Unit : Unit; Item : Item_Id) return Boolean
-     is (Element (Of_Unit, Item).Unchecked_Depth > 0);
+     is (Unchecked_Depth (Of_Unit, Item) > 0);
+
+   function Unchecked_Depth (Of_Unit : Unit; Item : Item_Id) return Natural
+     is (Element (Of_Unit, Item).Unchecked_Depth);
+
+   procedure Set_Unchecked_Depth
+     (Into : in out Unit; Item : Item_Id; Depth : Natural)
+   is
+      Held : Item_Record := Element (Into, Item);
+   begin
+      Held.Unchecked_Depth := Depth;
+      Into.Items (Positive (Item)) := Held;
+   end Set_Unchecked_Depth;
 
    function Scope_Of
      (Of_Unit : Unit; Item : Item_Id; Block : Block_Id) return Scope_Id
@@ -2191,6 +2203,45 @@ package body Landin.IR is
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Boolean
      is (Held (Of_Unit, Item, Value).Unchecked);
 
+   --  D187's membership rule over one instruction, shared by Append,
+   --  which asks before the instruction has a Value_Id of its own, and
+   --  by Check_Is_Removable, which asks after it has one.  A conversion
+   --  reads its source's type as well as its own, and a pointer source
+   --  is carried here as Usize, which is how [0470]'s direction is in
+   --  the removable half without being named separately.
+   function Removable
+     (Of_Unit : Unit; Item : Item_Id; What : Instruction) return Boolean;
+
+   function Removable
+     (Of_Unit : Unit; Item : Item_Id; What : Instruction) return Boolean is
+   begin
+      case What.Op is
+         when Add | Subtract | Multiply | Negation =>
+            return What.Result in Landin.Types.Integer_Name;
+
+         when Conversion =>
+            return What.Result in Landin.Types.Integer_Name
+              and then Held
+                         (Of_Unit, Item,
+                          Of_Unit.Operands (What.First_Arg + 1)).Result
+                       in Landin.Types.Integer_Name;
+
+         --  An address whose index is static carries no edge to remove.
+         when Storage_Address =>
+            return What.Indexed_Address;
+
+         when Load_Element | Store_Element | Slice_Address =>
+            return True;
+
+         when others =>
+            return False;
+      end case;
+   end Removable;
+
+   function Check_Is_Removable
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Boolean
+     is (Removable (Of_Unit, Item, Held (Of_Unit, Item, Value)));
+
    function Truth_Of
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Boolean
      is (Held (Of_Unit, Item, Value).Truth);
@@ -2230,16 +2281,17 @@ package body Landin.IR is
    begin
       Made.In_Block := Held.Open;
 
-      --  D187: the region is recorded where an instruction is emitted, so
-      --  an edge the compiler emits outside the body -- cleanup at an exit,
-      --  or a separately filled item -- is checked as it is written.  An
-      --  address whose index is static carries no edge to remove, and a
-      --  Required operation is one the language emits for itself.
+      --  D187: the region is recorded where an instruction is emitted,
+      --  and lowering is what makes that the place the source was
+      --  written -- a separately filled item starts at depth zero, and
+      --  cleanup at an exit puts the depth of its own `defer` or `undo`
+      --  back for the length of the call.  A Required operation is one
+      --  the language emits for itself rather than for the source in the
+      --  region, and Removable is the decision's membership rule.
       Made.Unchecked :=
         Held.Unchecked_Depth > 0
         and then not Required
-        and then Check_Is_Removable (Made.Op)
-        and then (Made.Op /= Storage_Address or else Made.Indexed_Address);
+        and then Removable (Into, Item, Made);
       Open_Run (Held.Values, Natural (Into.Code.Length));
       Into.Code.Append (Made);
 

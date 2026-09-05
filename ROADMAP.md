@@ -3607,7 +3607,7 @@ optimizer may assume, and [1580]'s unminted null remain with R5/R6, R4.50 and
 R4.40 respectively.
 
 The complete pinned Linux x86-64 debug and release gates pass 394 cases and
-10,296 checks each, and `python3 check.py` is clean over all seven documents.
+10,307 checks each, and `python3 check.py` is clean over all seven documents.
 
 Exit evidence: every hosted `[NNNN]` row has implementation and positive or
 negative evidence; no omission is hidden by prototype coverage.
