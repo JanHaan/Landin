@@ -427,6 +427,7 @@ negative/recover-infallible-call | linux-x86-64, synthetic-32
 negative/recovery-clause-unclosed | linux-x86-64, synthetic-32
 negative/recursive-module-image-cycle | linux-x86-64, synthetic-32
 negative/recursive-module-image-nominal-mismatch | linux-x86-64, synthetic-32
+negative/refused-widths-name-their-owner | linux-x86-64, macos-arm64
 negative/remainder-by-zero | linux-x86-64, macos-arm64
 negative/result-aggregate-assignment-name-mismatch | linux-x86-64, macos-arm64, synthetic-32
 negative/result-destructure-duplicate-field | linux-x86-64, macos-arm64, synthetic-32

@@ -1,0 +1,8 @@
+class: negative
+summary: D190 makes the three refused widths name R7.20 as the work that enables them, in the rendered report
+expect: expected.txt
+targets: linux-x86-64, macos-arm64
+args: ../tests/fixtures/negative/refused-widths-name-their-owner/main.ldn
+codes: L0304, L0304, L0304
+status: 1
+constructs: 0150, 0170, 1790, 1830

@@ -2761,9 +2761,9 @@ that has no implementation owner.
 | `[0120]` | hosted-now | R2.20 | matrix evidence and named refusal |
 | `[0130]` | hosted-now | R1.50 | matrix evidence |
 | `[0140]` | hosted-now | R1.50 | matrix evidence |
-| `[0150]` | hosted-now | R4.10 | enabled widths have matrix evidence; u128 and i128 remain named refusals |
+| `[0150]` | hosted-now | R4.10 | matrix evidence for the enabled widths; u128 and i128 are named refusals owned by R7.20, the packed widths by R6.40 and R6.80 |
 | `[0160]` | hosted-now | R2.10 | matrix evidence |
-| `[0170]` | hosted-now | R4.10 | f32 and f64 have matrix evidence; f16 remains a named refusal |
+| `[0170]` | hosted-now | R4.10 | matrix evidence for f32 and f64; f16 is a named refusal owned by R7.20 |
 | `[0180]` | hosted-now | R1.60 | matrix evidence |
 | `[0190]` | hosted-now | R1.60 | matrix evidence |
 | `[0200]` | hosted-now | R1.60 | matrix evidence |
@@ -3469,9 +3469,9 @@ the u128/i128 part of [0150], the f16 part of
 [0170], and the ownership disposition for
 [0500]'s pointer/slice operations, [0810]'s derivation primitives and [0820]'s
 lexical `arena` block. No language decision is made by this inventory.
-D188 later closed [0660] and D189 closed [0480]; the remaining gap list is the
-u128/i128 part of [0150], the f16 part of [0170], and that ownership
-disposition.
+D188 later closed [0660], D189 closed [0480], and D190 re-owned the u128/i128
+part of [0150] and the f16 part of [0170] to R7.20; the remaining gap list is
+that ownership disposition.
 
 The condition-declaration increment enables [1070]'s initialized inferred and
 typed bindings in `if`, every `elsif`, and `while`. D185 gives each binding the
@@ -3535,6 +3535,23 @@ D189 also records an unresolved contradiction it does not own: `ptr(0)` is
 accepted today [0470] and `runtime/core-mem-allocators` uses it as a failure
 sentinel five times, while [1580] states that it is refused, so null remains
 mintable on the pointer side. That belongs to [1580] and R4.40 below.
+
+The scalar-width increment re-owns rather than implements. D190 records that
+u128, i128 and f16 are refused by name against R7.20 and not by this item.
+The refusal was already the specification's: [1790]'s `scalar_name` spells
+thirteen names and has never spelled these three, and [1870] already stated
+that they are described in the tour and not enabled. This item's scope names
+text, literals, patterns, loops, `unchecked`, modules, builtin directives and
+hosted entry behavior and has never included widening the scalar set; the
+compiler's table said R4.10 because D162 was an R4.10 increment when it
+deferred f16, which is an accident of order rather than a decision. [0150] is
+already split across owners, since the packed widths the same paragraph names
+belong to R6.40 and R6.80. Both constructs keep this item as their
+applicability owner, because it accounted for them as far as the kernel
+enables them, and only the residual refusal moves — the shape D188 gave
+[0660] and D189 gave [0480]. D190 enumerates what R7.20 inherits, and
+`negative/refused-widths-name-their-owner` pins the rendered report that
+names it.
 
 Exit evidence: every hosted `[NNNN]` row has implementation and positive or
 negative evidence; no omission is hidden by prototype coverage.
@@ -3914,8 +3931,26 @@ union of two or more atoms and a pointer needs the tag-plus-pointer carrier
 [1870] describes, which is an IR pair, storage, an ABI position and a backend
 of its own, and is refused by name until this item supplies them.
 
+D190 leaves `[0150]`'s u128 and i128 and `[0170]`'s f16 here, refused by name
+with the enumerated cost this item inherits. `Landin.Types.Magnitude` and
+`Folded` are 64-bit Ada range types across 371 and 364 references and neither
+is an Ada range type at 128 bits on any host, so both become software
+carriers along with the single `Pattern is mod 2 ** 64` the checker, the
+lowering stage and the x86-64 backend each fold with. A 128-bit scalar is the
+first the backend's one-accumulator model cannot hold in a register — its
+`Held_Size` is `Byte_1 .. Byte_8` — and needs two INTEGER eightbytes at
+16-byte alignment, add/adc and sub/sbb, a three-multiply `mul`, and a
+division x86-64 has no instruction for. f16 re-runs the D162--D176 float
+programme at binary16, whose arithmetic baseline x86-64 cannot do at all, and
+reopens D170's recorded invariant that the enabled integer range cannot
+overflow either float width: binary16 tops out at 65504, so
+`conversion.integer-to-float` would move from `static` to `trap`. D190
+records f32 promotion with a single rounding as the arithmetic model to
+inherit.
+
 Sources: `[0480]`'s multi-atom pointer union; [0660]'s composite and reference
-positions, refused by name in R4.10.
+positions, refused by name in R4.10; `[0150]`'s u128 and i128 and `[0170]`'s
+f16, refused by name and re-owned here by D190.
 
 Exit evidence: `[1310]` and every other formerly delayed normative row have
 implementation and tests or an evidence-backed tour amendment.

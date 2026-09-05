@@ -806,7 +806,10 @@ it on another for a reason no paragraph here could state.
 does not say two names are one type.
 u128 and i128 [0150], the packed widths [0730] and f16 [0170] are described in
 this tour and are not enabled yet. D162 enables f32 and f64 without making
-either an integer or one another.
+either an integer or one another. D190 says which work enables the rest: the
+wide integers and f16 are refused by name against R7.20, which owns the
+two-register carrier and the third float width they need, while the packed
+widths stay with the freestanding register work [0730].
 An atom declaration introduces one value and its singleton type. An atom union
 is structural: aliases are flattened, order and repeated members do not change
 identity, and assignment or argument passing may widen a singleton or smaller
@@ -8606,7 +8609,7 @@ classified failure boundary before the repository gate can pass.
 | `source.lexical` | static | 0010, 0020, 0030, 0210, 0220, 0230, 0250, 0260, 0270, 0280, 1750, 1760, 1770, 1780, 1830 | L0010--L0014 or L0320--L0323 | `negative/character-literal-empty`, `negative/character-literal-invalid-codepoint`, `negative/character-literal-multiple`, `negative/malformed-float-exponent`, `negative/malformed-hex-float-exponent`, `negative/malformed-integer-digit`, `negative/raw-literal-inconsistent-indentation`, `negative/text-literal-unknown-escape`, `negative/unterminated-raw-literal`, `negative/unterminated-text-literal`, `negative/unknown-byte` |
 | `source.structure` | static | 1740, 1800, 1810, 1820, 1840 | L0100--L0112 | `negative/variant-part-end-name-mismatch`, `unit/parser-nesting-limit` |
 | `declarations.names` | static | 0040, 0050, 0060, 0080, 0090, 0100, 0110, 0120, 0130, 0140, 1790, 1795, 1850 | L0200 or L0201 | `negative/duplicate-in-a-module`, `negative/local-used-above-its-declaration` |
-| `types.values` | static | 0070, 0160, 0170, 0180, 0190, 0200, 0210, 0250, 1870, 1880, 1890 | L0300, L0301 or L0304 | `negative/character-literal-needs-u32`, `negative/float-literal-not-enabled`, `negative/float-type-not-enabled`, `negative/integer-literal-not-a-float`, `negative/literal-above-its-type`, `negative/type-name-is-not-a-type` |
+| `types.values` | static | 0070, 0150, 0160, 0170, 0180, 0190, 0200, 0210, 0250, 1870, 1880, 1890 | L0300, L0301 or L0304 | `negative/character-literal-needs-u32`, `negative/float-literal-not-enabled`, `negative/float-type-not-enabled`, `negative/integer-literal-not-a-float`, `negative/literal-above-its-type`, `negative/refused-widths-name-their-owner`, `negative/type-name-is-not-a-type`, `negative/wide-integer-not-enabled` |
 | `float.ieee` | static | 0170, 0210, 0220, 0230, 0240, 0290, 0350, 1940 | f32/f64 decimal and hexadecimal literals plus inherently typed infinity and canonical quiet NaN names follow IEEE binary32/binary64 through runtime and module arithmetic and comparison, preserving exact hexadecimal values, nearest-even rounding, gradual underflow, signed zero and unordered NaN behavior; arithmetic NaNs use the canonical quiet pattern, L0300 rejects a finite literal that becomes infinity, and L0301 rejects an invalid named special, a width mismatch, mixed classes and integer-only operators | `negative/float-remainder-is-integer-only`, `negative/float-special-name-unknown`, `negative/float-special-on-integer-type`, `negative/float-special-width-mismatch`, `negative/hex-float-overflows-context`, `runtime/float-decimal-runtime`, `runtime/float-hexadecimal-runtime`, `runtime/float-named-specials`, `runtime/module-float-arithmetic` |
 | `conversion.integer` | trap | 0150, 0190, 0310, 0470, 0700, 1120, 1460, 1670, 1880, 1940, 1950, 1960 | explicit conversion among enabled integer types preserves the mathematical value; L0300 rejects a known value outside the destination range and a runtime value outside it traps, without truncation, wrapping or signedness reinterpretation, outside [1120]'s region | `negative/integer-conversion-known-binding-out-of-range`, `negative/integer-conversion-known-out-of-range`, `runtime/integer-conversion-out-of-range-traps`, `runtime/integer-conversion-signed-overflow-traps`, `runtime/integer-conversion-unsigned-overflow-traps`, `runtime/integer-conversions` |
 | `conversion.float-width` | trap | 0170, 0210, 0230, 0240, 0310, 0700, 1880, 1940, 1950, 1960 | explicit f32/f64 conversion widens exactly or narrows to nearest with ties to even, preserving signed zero and the infinity/NaN class; L0300 rejects a known finite narrowing overflow and an equivalent runtime conversion traps | `negative/float-width-conversion-known-out-of-range`, `runtime/float-width-conversion-overflow-traps`, `runtime/float-width-conversions` |
@@ -10793,3 +10796,113 @@ leaving [0480] looking closed while its headline sentence is evadable.
 `negative/pointer-union-zeroed`,
 `negative/pointer-case-arm-is-not-an-atom`, the generated lexical and IR
 records, and the `pointer.optional` guarantee row.
+
+### D190 — u128, i128 and f16 are refused by name against R7.20
+
+**The tour said** that the integers are u8, u16, u32, u64, u128, i8, i16,
+i32, i64 and i128 [0150], and that the floating-point types are f16, f32 and
+f64 [0170]. It teaches the language and does not schedule work, so it said
+nothing about which of those widths the kernel enables or about what would
+have to be built for the rest. [1870] answers the first half — "u128 and i128
+[0150], the packed widths [0730] and f16 [0170] are described in this tour and
+are not enabled yet" — and answered the second half nowhere.
+
+**Chosen:** the work that enables u128, i128 and f16 is R7.20's. The refusal
+itself is unchanged in every respect a program can observe: the checker still
+matches the resolved spelling, still reports L0304 with "`u128` is not enabled
+yet", and still attaches [1830]'s two notes naming the paragraph and the
+enabling work. The second note now reads R7.20, and that is the whole of the
+behavioural change.
+
+This is an ownership correction and not a language change, and the reason it
+can be one is that the refusal was already normative. [1790]'s `scalar_name`
+production spells thirteen names and has never spelled these three, so the
+enabled kernel grammar does not admit them and never has; a program writing
+one is refused by the specification and not by a schedule. What was wrong was
+a single word in the compiler's own table, which said R4.10 because D162
+happened to be an R4.10 increment when it enabled f32 and f64 and deferred
+f16 — not because R4.10's scope, "text, literals, patterns, loops,
+`unchecked`, modules, builtin directives and hosted entry behavior", ever
+included widening the scalar set. [0150] is already a paragraph split across
+owners: the packed widths u4, u12 and u23 that the same paragraph names
+belong to the freestanding register work [0730] under R6.40 and R6.80, and
+nobody reads that as R4.10 owing a bit-field allocator.
+
+The construct-applicability register keeps R4.10 as the owner of [0150] and
+[0170], because R4.10 is the item that accounted for those paragraphs as far
+as the kernel enables them — D162 gave [0170] its two enabled widths and D168
+through D176 gave [0150]'s enabled ones the complete conversion matrix. Only
+the residual refusal moves, which is exactly what D188 did for [0660]'s
+composite positions and D189 for [0480]'s multi-atom form. A row whose
+construct one item accounts for and whose remaining refusal another item owns
+is the register's ordinary shape, not an exception made here.
+
+What R7.20 inherits is written down so that the refusal is scoped rather than
+vague, and it is five things and not one.
+
+- `Landin.Types.Magnitude` is `range 0 .. 2 ** 64 - 1` and `Landin.Types.Folded`
+  is `range -(2 ** 64 - 1) .. 2 ** 64 - 1`, across 371 and 364 references. At
+  128 bits neither is an Ada range type on any host: `Folded`'s symmetric
+  form needs 129 bits and `Magnitude`'s upper bound needs an unsigned 128.
+  Both become software carriers, and so does the single `type Pattern is mod
+  2 ** 64` that `Landin.Stages.Checking`, `Landin.Stages.Lowering` and
+  `Landin.Backend.X86_64` each fold with.
+- A 128-bit scalar is the first one the backend's one-accumulator memory
+  model cannot hold in a register: `Held_Size` is `Byte_1 .. Byte_8` by
+  declaration, and the SysV classification is two INTEGER eightbytes at
+  16-byte alignment.
+- Its arithmetic is add/adc, sub/sbb and a three-multiply `mul`, and a
+  division and remainder x86-64 has no instruction for — `divq` divides a
+  128-bit dividend by a 64-bit divisor for a 64-bit quotient and faults when
+  that quotient does not fit. Either an emitted software sequence or a
+  dependency on a support library, and the second contradicts D166, D169 and
+  D175's standing refusal to borrow arithmetic this compiler does not own.
+- f16 is the whole D162--D176 float programme re-run at binary16: decimal and
+  hexadecimal literal conversion at p=11 and emax=15 with subnormals, D167's
+  canonical quiet NaN at that width, D169's rounding across a three-by-three
+  width matrix, D175's module fold, and runtime arithmetic that baseline
+  x86-64 cannot do at all, since F16C is Ivy Bridge and later. That is an ISA
+  baseline change affecting every emitted binary and the Linux gate, or a
+  software encode and decode around every operation.
+- Enabling f16 reopens a settled decision rather than extending one. D170
+  records that "the enabled integer range cannot overflow either float
+  width", which is true only while f16 is absent: binary16's largest finite
+  value is 65504, so a u32 of 65520 or more rounds to infinity, and the
+  `conversion.integer-to-float` guarantee row would move from class `static`
+  to class `trap` and would owe trapping runtime evidence.
+
+One design answer is recorded here so R7.20 does not rediscover it: f16
+arithmetic should promote through f32 and round once. binary32 carries 24
+significand bits and 24 >= 2 * 11 + 2, so a single rounding of the f32 result
+to binary16 is the correctly rounded binary16 result for `+`, `-`, `*` and
+`/`, and the double rounding is innocuous. Whether the promotion is emitted
+or the operations are done in software is a target question and stays open.
+
+**The alternatives:** implementing them inside R4.10 was weighed and declined
+as out of proportion to what the item is for. It is four to six increments —
+the two carriers above, the backend pair, the float programme at a third
+width, and the reopened conversion guarantee — and R4.10's exit evidence
+needs none of it. Giving the two widths a dedicated R4-series item so they
+land before the macOS arm64 and Cortex-M slices was the closest alternative;
+it was declined because f16 must exist on every target once it is enabled and
+the baseline Linux x86-64 ISA cannot do binary16 arithmetic at all, which
+makes it target work and not hosted work. Splitting the two owners — f16 to
+the freestanding float slice, u128 and i128 to R7.20 — was declined for the
+same reason. Amending [0150] or [0170] to delete the three names was declined
+because they are language the tour teaches and no evidence says the language
+should lose them. Leaving the compiler's table saying R4.10 while the roadmap
+said otherwise was declined because [1830]'s note is a promise to a user
+about where to look, and a note naming a closed item is a wrong answer to
+that question.
+
+No document exercises any of the three. Nothing in `tour.md`, `spec.md`,
+`examples.md` or the four prototypes writes u128, i128 or f16 in an example,
+which is the honest measure of how much design pressure exists for them
+today: none that has been recorded.
+
+**Pinned by** `negative/wide-integer-not-enabled`,
+`negative/float-type-not-enabled`,
+`negative/refused-widths-name-their-owner`, whose recorded report is where
+"ROADMAP.md R7.20 is where it is enabled" is executable text rather than a
+comment and which is the only fixture in the corpus that reaches `i128` at
+all, and the `types.values` guarantee row.

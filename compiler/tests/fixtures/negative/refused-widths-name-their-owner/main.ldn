@@ -1,0 +1,3 @@
+wide: u128 = 1
+signed: i128 = 1
+ratio: f16 = 1.0
