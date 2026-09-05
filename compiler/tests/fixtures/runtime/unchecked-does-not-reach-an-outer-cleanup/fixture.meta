@@ -1,0 +1,6 @@
+class: runtime
+summary: D187 a cleanup registered outside [1120]'s region keeps its edges when the exit that runs it is inside one
+constructs: 0300, 1100, 1120, 1960
+program: main.ldn
+traps: yes
+targets: linux-x86-64

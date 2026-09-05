@@ -724,6 +724,11 @@ package body Landin.Stages.Lowering is
          Call   : Syn.Node_Id := Syn.No_Node;
          Scope  : Res.Scope_Id := Res.No_Scope;
          Active : Boolean := True;
+         --  D187: [1120]'s region depth where this `defer` or `undo` was
+         --  written.  The call is evaluated at an exit, which may be
+         --  inside a region the registration is not in, so the depth
+         --  travels with the entry the way its scope already does.
+         Region : Natural := 0;
       end record;
 
       package Cleanup_Entries is new Ada.Containers.Vectors
@@ -1446,11 +1451,23 @@ package body Landin.Stages.Lowering is
       --  Evaluate and discard one registered call now.  Aggregate results
       --  still receive caller-owned shaped storage through completion; a
       --  scalar, function or no-value result needs no extra IR operation.
+      --
+      --  D187: this is the one emitter whose instructions come from
+      --  source written somewhere else, so it emits them in the region
+      --  the `defer` or `undo` stands in and not in the one the exit
+      --  reaching it stands in.  Without this a `return`, `break` or
+      --  `fail` inside `unchecked begin` would quietly take the overflow
+      --  edge off a cleanup argument written outside it, and [1120]'s
+      --  claim that the word reaches only the code written inside it
+      --  would be false where a reader stands.
       procedure Lower_Cleanup_Call
         (Of_Tree : Syn.Tree; Action : Cleanup_Entry)
       is
          Held : constant Ty.Type_Kind := Type_At (Of_Tree, Action.Call);
+         Reached_From : constant Natural :=
+           IR.Unchecked_Depth (Unit.all, Filling);
       begin
+         IR.Set_Unchecked_Depth (Unit.all, Filling, Action.Region);
          if Held in Ty.Aggregate | Ty.Fixed_Array then
             declare
                Temporary : constant IR.Slot_Id :=
@@ -1470,6 +1487,7 @@ package body Landin.Stages.Lowering is
                pragma Unreferenced (Ignored);
             end;
          end if;
+         IR.Set_Unchecked_Depth (Unit.all, Filling, Reached_From);
       end Lower_Cleanup_Call;
 
       procedure Emit_Cleanups
@@ -11527,7 +11545,9 @@ package body Landin.Stages.Lowering is
                               else Cleanup.Deferred_Call),
                            Call   => Syn.Cleanup_Call (Of_Tree, Stmt),
                            Scope  => Scope,
-                           Active => True));
+                           Active => True,
+                           Region =>
+                             IR.Unchecked_Depth (Unit.all, Filling)));
 
                   when Syn.Fail_Statement =>
                      if Syn.Condition_Of (Of_Tree, Stmt) = Syn.No_Node

@@ -1,0 +1,13 @@
+--  An out-of-range IEEE-to-integer result is a target instruction
+--  artefact rather than a value the destination type holds, so D187
+--  keeps every float conversion's edge.  Without it this returns 42.
+whole: (x: f64) -> (r: i32) =
+    unchecked begin
+        r = i32(x)
+    end unchecked
+end whole
+
+public main: () -> (code: i32) =
+    _ = whole(1.0e18)
+    code = 42
+end main

@@ -1,0 +1,6 @@
+class: runtime
+summary: D187 a cleanup written inside [1120]'s region wraps, so the region follows where the registration stands
+constructs: 0300, 0320, 1100, 1120
+program: main.ldn
+status: 42
+targets: linux-x86-64

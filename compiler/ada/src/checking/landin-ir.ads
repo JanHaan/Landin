@@ -2053,6 +2053,23 @@ package Landin.IR is
    function In_Unchecked (Of_Unit : Unit; Item : Item_Id) return Boolean
      with Pre => Holds (Of_Unit, Item);
 
+   --  The depth itself, for the one emitter that has to put a different
+   --  one back for the length of a call.  D187's region is lexical, and
+   --  cleanup at an exit [1100] [1110] is the only place the compiler
+   --  emits an instruction for source written somewhere else: the
+   --  `defer` or `undo` stands where it stands, and the exit that runs
+   --  it may stand inside a region it was not written in.  Lowering
+   --  reads this at the registration and restores it around the call, so
+   --  a cleanup argument is checked as it is written.  Nothing else may
+   --  move the depth; Begin_Unchecked and End_Unchecked are the region.
+   function Unchecked_Depth (Of_Unit : Unit; Item : Item_Id) return Natural
+     with Pre => Holds (Of_Unit, Item);
+
+   procedure Set_Unchecked_Depth
+     (Into : in out Unit; Item : Item_Id; Depth : Natural)
+     with Pre  => Holds (Into, Item),
+          Post => Unchecked_Depth (Into, Item) = Depth;
+
    --  True when the check this instruction would otherwise have emitted
    --  is not emitted.  The backend reads it at exactly the edges D187
    --  names and nowhere else.
@@ -2060,12 +2077,20 @@ package Landin.IR is
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Boolean
      with Pre => Holds (Of_Unit, Item, Value);
 
-   --  The opcodes whose check edge D187 makes removable.  Every other
-   --  opcode keeps its edge, and the verifier holds the flag to this set.
-   function Check_Is_Removable (Op : Opcode) return Boolean
-     is (Op in Add | Subtract | Multiply | Negation
-               | Load_Element | Store_Element | Storage_Address
-               | Slice_Address | Conversion);
+   --  Whether this instruction is one whose check edge D187 makes
+   --  removable, at the granularity the decision's membership rule
+   --  actually holds: an opcode is not enough.  Add, Subtract, Multiply
+   --  and Negation carry a removable overflow edge only over an integer,
+   --  because a float `+` has no overflow edge to remove and [0310]'s
+   --  infinity trap is not one; Conversion carries a removable
+   --  destination-range edge only from an integer or a pointer to an
+   --  integer, because every conversion to `bool` and every conversion
+   --  from a float keeps its trap.  A backend may therefore read
+   --  Is_Unchecked uniformly rather than having to know which of its own
+   --  cases D187 reaches, and the verifier holds the flag to this set.
+   function Check_Is_Removable
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Boolean
+     with Pre => Holds (Of_Unit, Item, Value);
    --  D188's edge is deliberately absent from that set: [1120]'s region
    --  removes an edge whose absence leaves a value the destination type
    --  holds, and a value outside a range subtype's bounds is not one.

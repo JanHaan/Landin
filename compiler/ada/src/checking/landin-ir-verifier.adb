@@ -3394,12 +3394,14 @@ package body Landin.IR.Verifier is
 
                         --  D187: the flag says a check edge this
                         --  instruction would have carried is not emitted,
-                        --  so it belongs only to an opcode that carries
-                        --  one, and never inside [1940]'s module value,
-                        --  which executes nothing at all.
+                        --  so it belongs only to an instruction that
+                        --  carries one -- which its opcode alone does not
+                        --  decide -- and never inside [1940]'s module
+                        --  value, which executes nothing at all.
                         if Is_Unchecked (Of_Unit, Id, V)
                           and then (Is_Datum
-                                    or else not Check_Is_Removable (Op))
+                                    or else not Check_Is_Removable
+                                                  (Of_Unit, Id, V))
                         then
                            return (Kind => Unchecked_Not_Removable,
                                    Item => Id, Block => Block, Value => V);

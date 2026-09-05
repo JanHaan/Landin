@@ -1,0 +1,28 @@
+--  D187's membership rule reads an instruction's types and not only its
+--  opcode.  One region holds a float `+` and a float unary `-`, which
+--  carry no overflow edge to remove at all; a float-to-integer and an
+--  integer-to-bool conversion, whose edges the decision keeps on every
+--  target; and an integer-to-integer conversion, which is the one
+--  instruction here whose edge the region takes off.  The recorded IR is
+--  where that is visible, because an edge that is not emitted is
+--  otherwise invisible in a dump.
+mixed: (x: f64, wide: u32, raw: u8) -> (r: u8) =
+    unchecked begin
+        summed: f64 = x + x
+        flipped: f64 = -summed
+        rounded: i32 = i32(flipped)
+        truth: bool = bool(raw)
+        _ = rounded
+        _ = truth
+        r = u8(wide)
+    end unchecked
+end mixed
+
+public main: () -> (code: i32) =
+    small: u8 = mixed(1.5, 300, 1)
+    if small == 44 then
+        code = 42
+    else
+        code = 1
+    end if
+end main
