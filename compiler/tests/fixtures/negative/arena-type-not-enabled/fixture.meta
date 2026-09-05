@@ -1,0 +1,6 @@
+class: negative
+summary: [0780] writes a parameter with [0820]'s built-in arena type and D191 leaves it to R4.20, so the checker refuses the name rather than reporting it as declared nowhere
+constructs: 0820, 0780, 1830
+program: program.ldn
+codes: L0304
+targets: linux-x86-64, macos-arm64

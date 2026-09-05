@@ -1,0 +1,6 @@
+class: negative
+summary: [0820] opens a scratch region as a lexical block and D191 owns its region semantics to R4.20, so the parser recognizes the shape and refuses it by name
+constructs: 0820, 1830
+program: program.ldn
+codes: L0010
+targets: linux-x86-64, macos-arm64

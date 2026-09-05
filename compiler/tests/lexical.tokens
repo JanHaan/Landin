@@ -17045,6 +17045,45 @@ file negative/any-source-not-pointer/main.ldn tokens 103
   372 373 0
   374 377 end
   378 382 main
+file negative/arena-block-not-enabled/program.ldn tokens 24
+  0 6 report
+  6 7 :
+  8 9 (
+  9 13 size
+  13 14 :
+  15 20 usize
+  20 21 )
+  22 24 ->
+  25 26 (
+  26 30 used
+  30 31 :
+  32 37 usize
+  37 38 )
+  39 40 =
+  45 50 arena
+  51 58 scratch
+  59 61 do
+  70 74 used
+  75 76 =
+  77 81 size
+  86 89 end
+  90 97 scratch
+  98 101 end
+  102 108 report
+file negative/arena-type-not-enabled/program.ldn tokens 13
+  0 6 report
+  6 7 :
+  8 9 (
+  9 10 a
+  10 11 :
+  12 17 arena
+  17 18 )
+  19 21 ->
+  22 26 none
+  27 28 =
+  33 39 return
+  40 43 end
+  44 50 report
 file negative/array-argument-unassigned/program.ldn tokens 41
   0 7 consume
   7 8 :

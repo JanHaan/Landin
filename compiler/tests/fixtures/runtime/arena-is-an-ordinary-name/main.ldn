@@ -1,0 +1,9 @@
+public main: () -> (code: i32) =
+    mut arena: i32 = 40
+    arena = arena + 1
+    arena: loop do
+        inc arena
+        break arena when arena > 41
+    end arena
+    code = arena
+end main

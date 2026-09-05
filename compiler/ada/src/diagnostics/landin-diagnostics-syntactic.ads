@@ -105,7 +105,11 @@ package Landin.Diagnostics.Syntactic is
       --  enabled expression grammar.
       Struct_All_Of,
       Import_Alias,
-      Selected_Import);
+      Selected_Import,
+      --  D191 recognises [0820]'s lexical arena block by its shape.  The
+      --  word is not reserved and names a library type today, so only a
+      --  statement-position `arena name do` is this construct.
+      Arena_Block);
 
    --  Where the tour describes it.  Ordered by construct so that a reader
    --  can check the column against tour.md by running down it, and
@@ -122,7 +126,8 @@ package Landin.Diagnostics.Syntactic is
             when Indexing             => "[0570]",
             when Struct_All_Of         => "[0720]",
             when Import_Alias          => "[1430]",
-            when Selected_Import       => "[1440]")
+            when Selected_Import       => "[1440]",
+            when Arena_Block           => "[0820]")
      with Post => Landin.Tokens.Is_Valid_Construct (Construct'Result);
 
    --  What the parser hands over: a rule, a place, and the sentence a user
@@ -163,6 +168,10 @@ private
                | Struct_All_Of         => "R2.20",
             when Import_Alias
                | Selected_Import       => "R4.30",
+            --  D191: the block is a region and an allocator before it is
+            --  syntax, and R4.20 owns the allocator surface it would have
+            --  to meet.
+            when Arena_Block           => "R4.20",
             --  R2.40 implements type and fixed parameters.
             when Type_Parameter
                | Parameterized_Atom_Union => "R2.40");

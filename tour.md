@@ -1370,6 +1370,20 @@ end bump_alloc
 
 ```
 
+Two of those three primitives are still scheduled and the third was rejected:
+[0500] records that `slice_from` may not exist, so the sentence above names a
+cut no operation makes. The cut an allocator actually needs is one the
+language already has. `core/mem`'s `arena_alloc` reaches its block by adding an
+offset to `usize(state.base)` and converting the sum back with `ptr`, and
+[0470] says exactly what that costs: an integer that used to be a pointer has
+no origin, so what comes back borrows nothing. That is what lets an allocator
+hand out storage that points into itself without the storage borrowing it, and
+it is the same one place to audit — the conversion is written in the library,
+in the open, and the compiler says nothing about the result afterwards.
+`offset` and `base_of` join it as named `core` functions when the library slice
+adds them; neither is a compiler operation, so neither needs a privilege of its
+own.
+
 ### [0820] arena is built in
 
 arena is built in, both as the block below and as the type
@@ -1407,6 +1421,13 @@ monotonic offset, and individual `free` calls do nothing. It is not the block
 construct above and receives no stronger pointer guarantee than its unsafe
 backing storage. The paired `failing` arena adds an allocation budget so an
 out-of-memory edge is deterministic in tests.
+The block above is a region before it is syntax: the type its name has, where
+its bytes come from, whether exhaustion fails or traps, and how "everything
+from it has frame origin, and allocated once the arena is passed on" survives
+[0790]'s rule that an allocator's result borrows nothing, are four questions
+the allocator surface answers and not this paragraph. Until R4.20 answers
+them, `arena name do` and a parameter written `a: arena` are each refused by
+name where they are written.
 
 ### [0830] A view derived from a local borrows it
 
