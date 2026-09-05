@@ -183,8 +183,15 @@ bounded-overflow accounting and propagated hosted-write failure. R3.70 composes
 those pieces into a complete arena-backed recursive configuration parser,
 executes it through bounded and streaming erased loggers, recovers three syntax
 faults in order, and separately proves allocation and diagnostic I/O failure.
+R4.10 closes the hosted construct surface: loop transfers, labels, values and
+every traversal form; the quoted, raw, character and float literal families;
+compound assignment; the complete enabled scalar conversion matrix; and
+condition declarations, caller parameters, `unchecked` regions, range subtypes
+and the atom-or-pointer union. Every hosted construct row now carries fixture
+evidence or a refusal that names the item enabling it, and `check.py` audits
+that whenever the item is not active.
 
-**Current roadmap work: R4.10 — Close the hosted construct matrix.**
+**Current roadmap work: R4.20 — Complete hosted core containers and library slice.**
 
 Language and architecture questions are resolved when the first vertical
 slice needs them.
