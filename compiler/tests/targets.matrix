@@ -394,6 +394,10 @@ negative/parameterized-struct-unused-unknown | linux-x86-64, macos-arm64
 negative/parameterized-struct-used-actual-overflow | linux-x86-64, macos-arm64
 negative/parameterized-struct-used-array-actual-overflow | linux-x86-64, macos-arm64
 negative/pointer-case-arm-is-not-an-atom | linux-x86-64, macos-arm64, synthetic-32
+negative/pointer-union-address-of-referent | linux-x86-64, macos-arm64, synthetic-32
+negative/pointer-union-any-construction | linux-x86-64, macos-arm64, synthetic-32
+negative/pointer-union-assignment-target | linux-x86-64, macos-arm64, synthetic-32
+negative/pointer-union-case-named-twice | linux-x86-64, macos-arm64, synthetic-32
 negative/pointer-union-comparison | linux-x86-64, macos-arm64, synthetic-32
 negative/pointer-union-dereference | linux-x86-64, macos-arm64, synthetic-32
 negative/pointer-union-frame-escape | linux-x86-64, macos-arm64, synthetic-32
@@ -402,6 +406,7 @@ negative/pointer-union-inout-binding | linux-x86-64, macos-arm64, synthetic-32
 negative/pointer-union-integer-conversion | linux-x86-64, macos-arm64, synthetic-32
 negative/pointer-union-is-not-a-pointer | linux-x86-64, macos-arm64, synthetic-32
 negative/pointer-union-match-not-exhaustive | linux-x86-64, macos-arm64, synthetic-32
+negative/pointer-union-present-arm-named-twice | linux-x86-64, macos-arm64, synthetic-32
 negative/pointer-union-several-atoms | linux-x86-64, macos-arm64, synthetic-32
 negative/pointer-union-two-pointers | linux-x86-64, macos-arm64, synthetic-32
 negative/pointer-union-zeroed | linux-x86-64, macos-arm64, synthetic-32

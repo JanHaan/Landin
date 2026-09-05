@@ -3528,7 +3528,8 @@ caller for. A plain pointer and the atom's singleton widen into the union and
 neither direction reverses, `match` is the only way back out, its two cases
 are the atom name and the reserved word `ptr` with an optional read-only
 binding, and exhaustiveness over the two is L0312. Every position that would
-read the empty case as an address is refused by name: `.val`, an integer
+read the empty case as an address is refused by name, one negative fixture
+each: `.val` in a read, in an assignment target and under `addr`, an integer
 conversion, `any` construction, a comparison, `ptr(n)` into a union position
 and a `ptr T` argument or result. The bound pointer carries the subject's own
 origin and the empty case carries none, so a union built from `addr local`

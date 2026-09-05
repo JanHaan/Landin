@@ -1,0 +1,6 @@
+none_found: atom
+maybe_ptr: type = none_found | ptr mut u32
+
+bad: (m: maybe_ptr) -> none =
+    m.val = 7
+end bad

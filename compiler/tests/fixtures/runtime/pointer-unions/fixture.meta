@@ -1,6 +1,6 @@
 class: runtime
 summary: D189 a pointer union crosses a parameter and a named return, both cases are told apart by matching, only the bound pointer is dereferenced, and one target pointer carries the whole type
-constructs: 0430, 0470, 0480, 0630, 0640, 1210, 1870
+constructs: 0380, 0430, 0480, 0630, 0640, 1210, 1870
 program: main.ldn
 status: 44
 targets: linux-x86-64
