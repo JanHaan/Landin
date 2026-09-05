@@ -3280,7 +3280,7 @@ baseline measured optimization.
 
 ### R4.10 — Close the hosted construct matrix
 
-Status: active
+Status: complete
 Depends on: R3.70
 
 Implement or explicitly amend every remaining hosted normative construct,
@@ -3574,12 +3574,47 @@ checker refuses the `arena` type name [0780] writes. `arena` stays unreserved
 by [1760], so `core/mem`'s own `arena` struct and every parameter spelled
 `arena` are untouched.
 
+Delivered: thirty-six decisions, D156 to D191, closed the hosted construct
+surface. Loops arrived first — transfers, labels, values, integer ranges and
+then traversal of slices, arrays, `any` elements, struct sources and the three
+text views — followed by the literal families (quoted, raw, character, decimal
+and hexadecimal float, and the IEEE special names), the thirteen compound
+assignments, the complete enabled scalar conversion matrix in both directions
+across integers, floats and bool, module-level float arithmetic and
+module-known bool folding, and finally [1070]'s condition declaration,
+[1040]'s caller parameter, [1120]'s `unchecked` region, [0660]'s range subtype
+and [0480]'s atom-or-pointer union. The accounting increment turned the
+question this item exists to answer into a command: the construct
+applicability register classifies all 200 normative constructs, and `check.py`
+audits it as soon as this item stops being active, so closing it requires that
+each of the 174 `hosted-now` rows carry fixture evidence or a refusal named
+against the item that enables it, and that neither refusal table still name
+R4.10. The matrix reads 178 of 200 constructs with evidence.
+
+What the item deliberately left is named rather than open, and every one of
+the twenty-two remaining bare rows is `later-r4`, `freestanding`, `deferred`
+or `principle`. The accounting increment left a gap list of six,
+and half of it was settled by re-owning rather than implementing, which is the
+honest outcome where the work belongs elsewhere: u128, i128 and f16 have never
+been spelled by [1790]'s `scalar_name`, so their refusal was already the
+specification's and D190 moved only the enabling item to R7.20; and [0500]'s
+derivation conveniences and [0820]'s lexical `arena` block are allocator
+semantics, so D191 moved them to R4.20 with the four questions neither
+document answers written down there. [0480], [0660] and [1120] were
+implemented. Both were paid for here with a refusal that names its
+inheritor rather than a parse cascade. Target parity for `unchecked`, what an
+optimizer may assume, and [1580]'s unminted null remain with R5/R6, R4.50 and
+R4.40 respectively.
+
+The complete pinned Linux x86-64 debug and release gates pass 394 cases and
+10,292 checks each, and `python3 check.py` is clean over all seven documents.
+
 Exit evidence: every hosted `[NNNN]` row has implementation and positive or
 negative evidence; no omission is hidden by prototype coverage.
 
 ### R4.20 — Complete hosted core containers and library slice
 
-Status: planned
+Status: active
 Depends on: R3.40, R4.10
 
 Complete the Landin `core/vec`, `core/map`, `core/tree`, allocator and hosted

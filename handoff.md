@@ -227,8 +227,15 @@ nodes while recovering three ordered syntax faults, runs unchanged through
 bounded and streaming `any diag.log` implementations, and separately executes
 allocation and diagnostic-delivery failures. Its derivation manifest keeps the
 executable evidence traceable to prototype 2.
+R4.10 closes the hosted construct surface: loop transfers, labels, values and
+every traversal form; the quoted, raw, character and float literal families;
+compound assignment; the complete enabled scalar conversion matrix; and
+condition declarations, caller parameters, `unchecked` regions, range subtypes
+and the atom-or-pointer union. Every hosted construct row now carries fixture
+evidence or a refusal that names the item enabling it, and `check.py` audits
+that whenever the item is not active.
 
-**Current roadmap work: R4.10 — Close the hosted construct matrix.**
+**Current roadmap work: R4.20 — Complete hosted core containers and library slice.**
 
 `refine` runs the frontend, lowers and
 verifies target-neutral IR, emits Linux x86-64 assembly, and can assemble and
