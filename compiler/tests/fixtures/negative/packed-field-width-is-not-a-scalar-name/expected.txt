@@ -1,0 +1,7 @@
+error[L0304]: `u12` is not declared in any scope this reaches
+  --> ../tests/fixtures/negative/packed-field-width-is-not-a-scalar-name/main.ldn:1:9
+  |
+1 | narrow: u12 = 1
+  |         ^^^
+  = note: the tour describes it at [0670]
+  = note: ROADMAP.md R2.20 is where it is enabled

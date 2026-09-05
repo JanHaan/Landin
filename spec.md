@@ -7211,8 +7211,8 @@ recursive function signature, not merely the broad `Fixed_Array`, `Aggregate`
 or function-value kind. Without a surrounding context the first written answer
 supplies that complete shape and every other answer must agree. Each arm and
 bare block retains [1840]'s own lexical scope. This decision introduces no loop
-syntax or loop edge: R4.10 still owns `loop`, `while`, `for`, `break`, and
-`continue`.
+syntax or loop edge: `loop`, `while`, `for`, `break` and `continue` were
+R4.10's, which has since enabled them.
 
 **Why two facts rather than one exited Boolean:** one Boolean cannot distinguish
 "no path reaches the join" from "this construct may return but also has a
@@ -7472,8 +7472,8 @@ The neutral selector has five edge kinds: ordinary fallthrough, successful
 return, failure propagation, structured transfer, and trap stop. A deferred
 call applies to every language edge that unwinds a block and never to a trap;
 a failure cleanup applies only to failure propagation. D133 enables that
-failure-only policy as [1110]'s `undo`, while R4.10 still owns every loop
-transfer. No trap unwinds, whether it occurs in the body, in a final expression,
+failure-only policy as [1110]'s `undo`, while every loop transfer was
+R4.10's. No trap unwinds, whether it occurs in the body, in a final expression,
 or while a cleanup call is running.
 
 Cleanup has no target-specific IR form. Once selected, a call lowers through
@@ -7709,8 +7709,8 @@ the failure left the callee.
 
 Undo never applies to ordinary fallthrough, successful return, structured
 transfer, or trap stop. No trap is converted to declared failure and no trap
-unwinds, including one raised while evaluating a cleanup. R4.10 still owns
-loops and their transfers, so this decision enables none of them.
+unwinds, including one raised while evaluating a cleanup. Loops and their
+transfers were R4.10's, so this decision enables none of them.
 
 Definite assignment uses only the failure edges on which an undo call actually
 runs. A delayed argument may consequently be unassigned on every normal,
@@ -8886,8 +8886,8 @@ handles retain `from base`; returning one over frame storage is L0314. Freeing
 does not reclaim monotonic space. The pointer and extent remain unsafe
 caller-supplied backing under [0430], [0470] and [1720]. This ordinary library
 allocator is not [0820]'s built-in lexical `arena` block, whose exact region
-semantics D191 re-owned to R4.20 and whose two written forms R4.10 refuses by
-name.
+semantics D191 re-owned to R4.20 and whose two written forms are refused by
+name against that item.
 
 `core/vec.list(item)` contains one D151 `mem.storage(item)`. It threads an
 allocator through `reserve`, `push` and `release`, while `length`, `capacity`,
@@ -8905,8 +8905,8 @@ byte access with `past_end`, and a half-open subslice whose result is `from
 source`. Positions are byte offsets because the parser consumes source bytes.
 This is not the complete [0600] text design: D161 subsequently adds the
 read-only `[]u8` literal view, while the other literal contexts, UTF-8 scalar
-decoding, codepoint indexing and the permanent text/string boundary remain
-R4.10.
+decoding, codepoint indexing and the permanent text/string boundary were
+later R4.10 work.
 
 The composition exposed four language rules needed by ordinary modules. D135
 aliases may normalize to a nominal aggregate, selected calls are statement
@@ -9018,10 +9018,11 @@ retains the first `capacity` entries in order, counts every later note in
 `dropped`, and counts error severity even when that note is dropped. Overflow
 therefore returns normally and never raises `io_failed`. Entry and logger
 representation stay private; checked accessors report `out_of_bounds` rather
-than exposing unused storage. Until R4.10 supplies the final text types, one
-entry retains the message address and byte length internally. The `escaping`
-parameter prevents a frame-backed slice at the capability boundary; explicit
-integer-pointer conversion remains subject to [0470]'s honest validity limit.
+than exposing unused storage. R4.10 had not yet supplied the final text
+types, so one entry retains the message address and byte length internally.
+The `escaping` parameter prevents a frame-backed slice at the capability
+boundary; explicit integer-pointer conversion remains subject to [0470]'s
+honest validity limit.
 
 `streaming` retains a mutable `core/io.system` pointer and a borrowed file. It
 writes `W:` or `E:`, the decimal byte position, `:`, and the message bytes as the
@@ -9070,10 +9071,10 @@ the public error set. Excess nesting is reported and recovered internally.
 Only `core/mem.out_of_memory` and `core/io.io_failed` leave `parse_file`.
 
 The same parser body runs with bounded and streaming D154 providers. No
-specialized parser copy is emitted or required. Until R4.10 enables loops and
-the complete UTF-8 text model, scanner, recovery and sequence walks use
-recursion over R3's byte positions; that is an implementation substitution,
-not a second parser design.
+specialized parser copy is emitted or required. R4.10 had not yet enabled
+loops and the complete UTF-8 text model, so scanner, recovery and sequence
+walks use recursion over R3's byte positions; that is an implementation
+substitution, not a second parser design.
 
 The program also pins general compilation rules already implied by the
 language. A `try` call followed by another statement is the statement form of
@@ -10508,6 +10509,16 @@ stay ordinary parameters, and `caller = x`, `caller: loop do` and `inc caller`
 are untouched. `runtime/caller-is-an-ordinary-name` pins that from the other
 side, with a parameter named `caller` beside a real caller position in one
 signature.
+
+Changing the site's representation moved [1040]'s example off [1670]. That
+example called `panic_handler(assertion, where)` while a site was the tour's
+distinct integer, and a `utf8` site cannot reach a handler [1670] declares as
+`(kind: panic_kind, site: u32)` and describes as "Two scalars, no strings".
+The example now calls a reporting function of the program's own, because the
+two paragraphs are about different callees: a caller parameter serves the
+assertion a program writes, and [1670] is the fixed symbol the compiler's own
+failed check calls with a number it assigns. [1670] is unchanged, and this
+entry decides nothing about it.
 
 **The alternatives:** retaining the tour's unstructured integer would make a
 site target-sized and force every consumer to recover source data through an

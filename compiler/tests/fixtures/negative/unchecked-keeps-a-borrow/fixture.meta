@@ -1,0 +1,6 @@
+class: negative
+summary: D187 a region removes no static refusal, so [0830]'s borrow of a local still refuses an inout use of it
+constructs: 0430, 0800, 0830, 0900, 1120
+program: program.ldn
+codes: L0315
+targets: linux-x86-64, macos-arm64

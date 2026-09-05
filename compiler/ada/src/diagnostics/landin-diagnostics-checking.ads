@@ -168,8 +168,11 @@ package Landin.Diagnostics.Checking is
       --  D188: [0660]'s range subtype is its base type constrained, so
       --  `[]percent` and `[]u8` would be one type and a `[]u8` write of an
       --  excluded value would enter constrained storage unchecked.  A
-      --  composite or reference position, and an `extern (c)` signature,
-      --  therefore refuse one until R7.20 decides how the check composes.
+      --  composite or reference position, `addr` of a constrained place and
+      --  a generic type argument therefore refuse one until R7.20 decides
+      --  how the check composes.  An `extern (c)` signature is not this
+      --  refusal: [1580]'s hosted-scalar boundary already refuses it and
+      --  keeps that report, which R4.40 owns.
       Constrained_Composition,
       --  D189 enables [0480]'s one-atom pointer union as a plain pointer
       --  reserving zero.  Two or more atoms beside a pointer need the

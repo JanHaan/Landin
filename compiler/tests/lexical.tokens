@@ -29624,6 +29624,12 @@ file negative/operands-of-two-types/program.ldn tokens 23
   38 39 b
   40 43 end
   44 45 f
+file negative/packed-field-width-is-not-a-scalar-name/main.ldn tokens 5
+  0 6 narrow
+  6 7 :
+  8 11 u12
+  12 13 =
+  14 15 1
 file negative/parameterized-alias-arity/program.ldn tokens 26
   0 5 bytes
   5 6 :
@@ -36706,6 +36712,60 @@ file negative/type-name-is-not-a-type/program.ldn tokens 10
   14 15 v
   16 17 =
   18 19 2
+file negative/unchecked-keeps-a-borrow/program.ldn tokens 53
+  105 114 increment
+  114 115 :
+  116 117 (
+  117 122 inout
+  123 128 value
+  128 129 :
+  130 133 u32
+  133 134 )
+  135 137 ->
+  138 142 none
+  143 144 =
+  149 154 value
+  155 156 =
+  157 162 value
+  163 164 +
+  165 166 1
+  167 170 end
+  171 180 increment
+  182 185 bad
+  185 186 :
+  187 188 (
+  188 189 )
+  190 192 ->
+  193 197 none
+  198 199 =
+  204 207 mut
+  208 213 value
+  213 214 :
+  215 218 u32
+  219 220 =
+  221 222 1
+  227 236 unchecked
+  237 242 begin
+  251 255 view
+  255 256 :
+  257 260 ptr
+  261 264 u32
+  265 266 =
+  267 271 addr
+  272 277 value
+  286 295 increment
+  295 296 (
+  296 301 value
+  301 302 )
+  311 312 _
+  313 314 =
+  315 319 view
+  319 320 .
+  320 323 val
+  328 331 end
+  332 341 unchecked
+  342 345 end
+  346 349 bad
 file negative/unchecked-keeps-a-known-index/program.ldn tokens 30
   0 3 mut
   4 9 words
