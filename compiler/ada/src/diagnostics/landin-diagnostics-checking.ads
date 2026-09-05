@@ -132,13 +132,13 @@ package Landin.Diagnostics.Checking is
    --  The constructs the tour describes, the kernel omits, and only the
    --  checker can recognise, because recognising one means knowing what a
    --  name resolved to.
+   --
+   --  A type name the tour writes and [1790] omits was the parser's until
+   --  [1795] let a type position hold a declared name.  Once any identifier
+   --  may stand there, whether one names a type the kernel lacks is a
+   --  question about what it resolved to.
    type Refused_Use is
-     (Scalar_Conversion,
-      --  A type name the tour writes and [1790] omits.  These were the
-      --  parser's until [1795] let a type position hold a declared name:
-      --  once any identifier may stand there, whether one names a type
-      --  the kernel lacks is a question about what it resolved to.
-      Wide_Integer_Type,
+     (Wide_Integer_Type,
       Float_Type,
       --  [0670] declares one.  R2.20 admits contextual storage, copies,
       --  zero images and labelled literals but not a general aggregate
@@ -152,13 +152,6 @@ package Landin.Diagnostics.Checking is
       --  and so does an element the kernel cannot lay out end to end.
       Array_Value,
       Array_Element,
-      --  [1150]'s collection traversal is parsed alongside ranges so the
-      --  checker can distinguish the source's element shape.  D160 enables
-      --  slices and fixed arrays of scalar, pointer, atom, function and
-      --  struct elements; D180 adds exact iterable-evidence sources and
-      --  D184 adds the exact hosted text identities.  Other sources stay
-      --  here.
-      Collection_Traversal,
       --  D135's parameterized aliases are checked here, including an
       --  unapplied constructor and malformed positional application.
       Parameterized_Type_Alias,
@@ -170,14 +163,12 @@ package Landin.Diagnostics.Checking is
    function Construct (Item : Refused_Use)
      return Landin.Tokens.Construct_Reference
      is (case Item is
-            when Scalar_Conversion  => "[0700]",
             when Wide_Integer_Type  => "[0150]",
             when Float_Type         => "[0170]",
             when Struct_Value       => "[0670]",
             when Variant_Value      => "[0680]",
             when Array_Value        => "[0520]",
             when Array_Element      => "[0520]",
-            when Collection_Traversal => "[1150]",
             when Parameterized_Type_Alias => "[1350]",
             when Zeroed_Value       => "[0540]",
             when External_C_ABI     => "[1580]")
@@ -209,17 +200,15 @@ package Landin.Diagnostics.Checking is
       Note    : String := "";
       Related : Landin.Provenance.Origin := Landin.Provenance.No_Origin;
       Because : String := "";
-      Refused : Refused_Use := Scalar_Conversion;
+      Refused : Refused_Use := Struct_Value;
       Into    : in out Diagnostic_List);
 
 private
 
    --  Where the roadmap says each becomes available.  R2.20 owns the
-   --  remaining general aggregate-value contexts; R4.10 closes scalar
-   --  conversions with the hosted construct matrix.
+   --  remaining general aggregate-value contexts.
    function Enabled_By (Item : Refused_Use) return String
      is (case Item is
-            when Scalar_Conversion => "R4.10",
             --  R4.10 closes the hosted construct matrix, including the wide
             --  integers and f16.
             when Wide_Integer_Type
@@ -229,7 +218,6 @@ private
                | Array_Value
                | Array_Element
                | Zeroed_Value      => "R2.20",
-            when Collection_Traversal => "R4.10",
             when Parameterized_Type_Alias => "R2.40",
             when External_C_ABI     => "R4.40");
 

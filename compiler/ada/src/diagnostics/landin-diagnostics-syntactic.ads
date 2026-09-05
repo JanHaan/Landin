@@ -92,9 +92,7 @@ package Landin.Diagnostics.Syntactic is
    --  from ordinary names.
    type Refused_Construct is
      (Declared_Type,
-      Float_Type,
       Struct_Type,
-      Wide_Integer_Type,
       Distinct_Type,
       Type_Parameter,
       Parameterized_Atom_Union,
@@ -116,9 +114,7 @@ package Landin.Diagnostics.Syntactic is
      return Landin.Tokens.Construct_Reference
      is (case Item is
             when Declared_Type        => "[0120]",
-            when Float_Type           => "[0170]",
             when Struct_Type          => "[0670]",
-            when Wide_Integer_Type    => "[0150]",
             when Distinct_Type        => "[0650]",
             when Type_Parameter       => "[1290]",
             when Parameterized_Atom_Union => "[1350]",
@@ -169,9 +165,6 @@ private
                | Selected_Import       => "R4.30",
             --  R2.40 implements type and fixed parameters.
             when Type_Parameter
-               | Parameterized_Atom_Union => "R2.40",
-            --  R4.10 closes the hosted construct matrix.
-            when Wide_Integer_Type
-               | Float_Type            => "R4.10");
+               | Parameterized_Atom_Union => "R2.40");
 
 end Landin.Diagnostics.Syntactic;
