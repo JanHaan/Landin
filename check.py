@@ -2357,19 +2357,45 @@ def check_refused_constructs(full_run):
                 % (name, construct)))
 
     #  Every refused construct names the work that enables it, and the
-    #  roadmap has to have that item.
+    #  roadmap has to have that item.  Both refusal tables, because [1830]'s
+    #  note is a promise about where a reader should look and the checker's
+    #  half of it can go stale exactly as the parser's can: D190 moved a
+    #  refusal from one item to another by editing one string, and nothing
+    #  here held that string to naming an item that exists.
     roadmap = os.path.join(ROOT, "ROADMAP.md")
+    checking_relative = ("compiler/ada/src/diagnostics"
+                         "/landin-diagnostics-checking.ads")
+    checking_source = ""
+    checking_path = os.path.join(ROOT, checking_relative)
+    if os.path.exists(checking_path):
+        checking_source = io.open(checking_path, encoding="utf-8").read()
     if os.path.exists(roadmap):
         items = set(re.findall(r"^### (R\d+\.\d+)",
                                io.open(roadmap, encoding="utf-8").read(),
                                re.M))
-        for named in set(re.findall(r'=>\s*"(R\d+\.\d+)"', codes_text)):
-            if named not in items:
-                out.append((
-                    "compiler/ada/src/diagnostics"
-                    "/landin-diagnostics-syntactic.ads", 1,
-                    "%s is named as enabling work and ROADMAP.md has no "
-                    "such item" % named))
+        for relative, text in (
+                ("compiler/ada/src/diagnostics"
+                 "/landin-diagnostics-syntactic.ads", codes_text),
+                (checking_relative, checking_source)):
+            for named in sorted(set(re.findall(r'=>\s*"(R\d+\.\d+)"',
+                                               text))):
+                if named not in items:
+                    out.append((
+                        relative, 1,
+                        "%s is named as enabling work and ROADMAP.md has no "
+                        "such item" % named))
+
+    #  And every paragraph either table cites has to be one a document
+    #  defines.  The parser's half was already held to this; the checker's
+    #  cites [0150] and [0170] and was not.
+    for name, construct in re.findall(
+            r"when\s+([A-Za-z0-9_]+)\s*=>\s*\"\[(\d{4})\]\"",
+            checking_source):
+        if construct not in defined:
+            out.append((
+                checking_relative, 1,
+                "%s names [%s], which neither document defines"
+                % (name, construct)))
 
     #  The spellings, read out of the parser's own tables.
     def spellings(kind):

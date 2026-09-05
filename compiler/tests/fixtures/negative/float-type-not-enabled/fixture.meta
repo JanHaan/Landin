@@ -1,5 +1,5 @@
 class: negative
-summary: [0170] names f16 but D162 leaves that width as a named R4.10 refusal
+summary: [0170] names f16 but D162 leaves that width refused by name, and D190 owns the refusal to R7.20
 constructs: 0170, 1790, 1830
 program: program.ldn
 codes: L0304

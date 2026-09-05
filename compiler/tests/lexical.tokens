@@ -31954,6 +31954,22 @@ file negative/recursive-module-image-nominal-mismatch/program.ldn tokens 50
   188 189 :
   190 195 wrong
   195 196 )
+file negative/refused-widths-name-their-owner/main.ldn tokens 15
+  0 4 wide
+  4 5 :
+  6 10 u128
+  11 12 =
+  13 14 1
+  15 21 signed
+  21 22 :
+  23 27 i128
+  28 29 =
+  30 31 1
+  32 37 ratio
+  37 38 :
+  39 42 f16
+  43 44 =
+  45 48 1.0
 file negative/remainder-by-zero/program.ldn tokens 7
   0 9 left_over
   9 10 :

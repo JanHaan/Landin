@@ -1,0 +1,21 @@
+error[L0304]: `u128` is not enabled yet
+  --> ../tests/fixtures/negative/refused-widths-name-their-owner/main.ldn:1:7
+  |
+1 | wide: u128 = 1
+  |       ^^^^
+  = note: the tour describes it at [0150]
+  = note: ROADMAP.md R7.20 is where it is enabled
+error[L0304]: `i128` is not enabled yet
+  --> ../tests/fixtures/negative/refused-widths-name-their-owner/main.ldn:2:9
+  |
+2 | signed: i128 = 1
+  |         ^^^^
+  = note: the tour describes it at [0150]
+  = note: ROADMAP.md R7.20 is where it is enabled
+error[L0304]: `f16` is not enabled yet
+  --> ../tests/fixtures/negative/refused-widths-name-their-owner/main.ldn:3:8
+  |
+3 | ratio: f16 = 1.0
+  |        ^^^
+  = note: the tour describes it at [0170]
+  = note: ROADMAP.md R7.20 is where it is enabled

@@ -137,9 +137,15 @@ package Landin.Diagnostics.Checking is
    --  [1795] let a type position hold a declared name.  Once any identifier
    --  may stand there, whether one names a type the kernel lacks is a
    --  question about what it resolved to.
+   --
+   --  D190: [1790]'s scalar rule spells thirteen names and has never
+   --  spelled u128, i128 or f16, so their refusal is the specification's
+   --  and not a schedule's, and what R7.20 inherits is written there.
+   --  Narrow_Float_Type is narrow and not Float: f32 and f64 have been
+   --  implemented since D162 and this row is only f16.
    type Refused_Use is
      (Wide_Integer_Type,
-      Float_Type,
+      Narrow_Float_Type,
       --  [0670] declares one.  R2.20 admits contextual storage, copies,
       --  zero images and labelled literals but not a general aggregate
       --  value.
@@ -175,7 +181,7 @@ package Landin.Diagnostics.Checking is
      return Landin.Tokens.Construct_Reference
      is (case Item is
             when Wide_Integer_Type  => "[0150]",
-            when Float_Type         => "[0170]",
+            when Narrow_Float_Type  => "[0170]",
             when Struct_Value       => "[0670]",
             when Variant_Value      => "[0680]",
             when Array_Value        => "[0520]",
@@ -203,7 +209,7 @@ package Landin.Diagnostics.Checking is
      is (case Item is
             when Wide_Unsigned
                | Wide_Signed   => Wide_Integer_Type,
-            when Float_16      => Float_Type);
+            when Float_16      => Narrow_Float_Type);
 
    procedure Report
      (Item    : Failure;
@@ -222,10 +228,13 @@ private
    --  remaining general aggregate-value contexts.
    function Enabled_By (Item : Refused_Use) return String
      is (case Item is
-            --  R4.10 closes the hosted construct matrix, including the wide
-            --  integers and f16.
+            --  D190 re-owns these two.  R7.20 supplies the two-register
+            --  integer carrier u128 and i128 need and the third float
+            --  width f16 would add; R4.10 closes [0150] and [0170] as far
+            --  as the kernel enables them and deliberately does not
+            --  decide these.
             when Wide_Integer_Type
-               | Float_Type         => "R4.10",
+               | Narrow_Float_Type  => "R7.20",
             when Struct_Value
                | Variant_Value
                | Array_Value
