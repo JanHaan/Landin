@@ -820,6 +820,7 @@ runtime/binary-search | linux-x86-64
 runtime/bool-to-float-conversions | linux-x86-64
 runtime/bool-to-integer-conversions | linux-x86-64
 runtime/bools-cross-the-abi | linux-x86-64
+runtime/caller-is-an-ordinary-name | linux-x86-64
 runtime/caller-parameters | linux-x86-64
 runtime/calls-return-through-the-abi | linux-x86-64
 runtime/character-literal-codepoints | linux-x86-64

@@ -1,0 +1,18 @@
+note: (caller: i32, caller where: utf8) -> (echoed: i32) =
+    _ = where
+    echoed = caller
+end note
+
+twice: (in caller: i32) -> (doubled: i32) =
+    doubled = caller + caller
+end twice
+
+public main: () -> (code: i32) =
+    mut caller: i32 = 19
+    caller = caller + 1
+    caller: loop do
+        inc caller
+        break caller when caller > 20
+    end caller
+    code = twice(note(caller))
+end main

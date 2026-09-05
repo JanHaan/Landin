@@ -3488,7 +3488,9 @@ the call node's `source-name:line:column` static view, while a wrapper may
 preserve its incoming site only through a named argument from another caller
 parameter. Caller positions are skipped by positional matching, remain ordinary
 ABI positions after injection, and are part of structural function-signature
-identity.
+identity. `caller` is spelled with a contextual word decided on two tokens, so
+a parameter, binding or label of that name is untouched, and a wrapper that
+forwards its site registers no site datum of its own.
 
 The unchecked-region increment enables [1120] with D187's Linux semantics.
 `unchecked begin ... end unchecked` is a statement and a lexical block spelled
@@ -3607,7 +3609,7 @@ optimizer may assume, and [1580]'s unminted null remain with R5/R6, R4.50 and
 R4.40 respectively.
 
 The complete pinned Linux x86-64 debug and release gates pass 394 cases and
-10,307 checks each, and `python3 check.py` is clean over all seven documents.
+10,309 checks each, and `python3 check.py` is clean over all seven documents.
 
 Exit evidence: every hosted `[NNNN]` row has implementation and positive or
 negative evidence; no omission is hidden by prototype coverage.
