@@ -3473,6 +3473,19 @@ package body Landin.Syntax.Parser is
             --  separately from the implicit default.  D138's type and fixed
             --  formals remain distinct nodes, so neither runtime modifier can
             --  accidentally give a static formal an ABI position.
+            --
+            --  D186's `caller` stays a contextual word [1760] does not
+            --  reserve, and two tokens decide it, exactly as D187's
+            --  `unchecked` and D191's `arena` are decided: a parameter of
+            --  its own name writes `:` after it, so only `caller` followed
+            --  by a second name is the modifier.  `caller: utf8`,
+            --  `in caller: u8` and `escaping caller: ptr u8` all stay
+            --  ordinary parameters spelled with that name.
+            function Names_A_Caller_Site return Boolean
+              is (Peek = Tok.Identifier
+                  and then Named_Here = Caller_Id
+                  and then Ahead (1) = Tok.Identifier);
+
             function Parse_Parameter
               (Allow_Static : Boolean := False) return Node_Id
             is
@@ -3496,8 +3509,7 @@ package body Landin.Syntax.Parser is
                   end if;
                   Advance;
                else
-                  if Peek = Tok.Identifier and then Named_Here = Caller_Id
-                  then
+                  if Names_A_Caller_Site then
                      Caller := True;
                      Advance;
                   elsif Peek = Tok.Kw_Escaping then

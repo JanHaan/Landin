@@ -12753,11 +12753,18 @@ package body Landin.Stages.Lowering is
                           (Types.all,
                            Res.Bound_To (Meanings.all, Of_Tree, Callee))
                         else Landin.Checking.No_Signature);
-                  begin
-                     if Signature /= Landin.Checking.No_Signature
-                       and then Landin.Checking.Holds
-                         (Types.all, Signature)
-                     then
+
+                     --  D186 fills a caller position with this call's own
+                     --  site only when the source left it out.  A wrapper
+                     --  that forwards its incoming site by name fills the
+                     --  ABI position from that parameter and never reads
+                     --  pooled bytes, so registering a datum for it would
+                     --  emit read-only data no instruction addresses.
+                     function Fills_Its_Own_Site return Boolean;
+
+                     function Fills_Its_Own_Site return Boolean is
+                        Forwarded : Boolean;
+                     begin
                         for Position in
                           1 .. Landin.Checking.Signature_Parameter_Count
                             (Types.all, Signature)
@@ -12765,10 +12772,43 @@ package body Landin.Stages.Lowering is
                            if Landin.Checking.Nth_Signature_Parameter
                              (Types.all, Signature, Position).Caller
                            then
-                              Register_Caller_Site (Of_Tree, Node);
-                              exit;
+                              Forwarded := False;
+                              for Written in
+                                1 .. Syn.Argument_Count (Of_Tree, Node)
+                              loop
+                                 declare
+                                    Argument : constant Syn.Node_Id :=
+                                      Syn.Nth_Argument
+                                        (Of_Tree, Node, Written);
+                                 begin
+                                    if Syn.Kind (Of_Tree, Argument)
+                                         = Syn.Call_Argument
+                                      and then Res.Role_Of
+                                        (Meanings.all, Of_Tree, Argument)
+                                          not in Res.Type_Argument
+                                                 | Res.Fixed_Argument
+                                      and then Res.Position_Of
+                                        (Meanings.all, Of_Tree, Argument)
+                                          = Position
+                                    then
+                                       Forwarded := True;
+                                    end if;
+                                 end;
+                              end loop;
+                              if not Forwarded then
+                                 return True;
+                              end if;
                            end if;
                         end loop;
+                        return False;
+                     end Fills_Its_Own_Site;
+                  begin
+                     if Signature /= Landin.Checking.No_Signature
+                       and then Landin.Checking.Holds
+                         (Types.all, Signature)
+                       and then Fills_Its_Own_Site
+                     then
+                        Register_Caller_Site (Of_Tree, Node);
                      end if;
                   end;
                end if;

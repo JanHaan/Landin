@@ -40,7 +40,7 @@ and a quoted word or sign in one of them stands for the single token
 spelled that way. A quoted word is not thereby reserved: when [1760]'s
 keyword rule omits it, the token is an identifier whose spelling the
 enclosing production recognises. Thus 'of', 'lenof', 'variant', 'begin',
-'match', 'defer', 'undo' and 'unchecked' remain
+'match', 'defer', 'undo', 'unchecked' and 'caller' remain
 ordinary names everywhere their contextual productions do not meet them.
 A token is as long as it can be, comments excepted, whose
 opener decides [1780]: 'inc' followed by 'x' with nothing between them is
@@ -1043,7 +1043,11 @@ A `caller` position is part of the complete structural function signature. It
 has exactly the immutable `utf8` identity and no parameter convention or
 `escaping` modifier. It remains an ordinary runtime ABI position after the
 compiler has filled it; source calls omit it, except for D186's named forwarding
-from another `caller` parameter.
+from another `caller` parameter. `caller` is a contextual word [1760] does not
+reserve, exactly as `unchecked` and `range` are, and it is the modifier only
+where a second name follows it: a parameter of that name writes `:` next, so
+`caller: utf8`, `in caller: u8` and `escaping caller: ptr u8` all declare an
+ordinary parameter spelled `caller`.
 
 A module binding is not ordinary pre-use definite assignment. [1460] says its
 value is known when the compiler reads it; reference-containing module images
@@ -8655,7 +8659,7 @@ classified failure boundary before the repository gate can pass.
 | `origins.escape` | static | 0770, 0780, 0790, 0800, 0830, 0840 | L0314--L0316 | `negative/frame-origin-return`, `negative/borrowed-source-inout`, `negative/returned-reference-missing-from`, `negative/core-arena-frame-escape`, `negative/core-text-frame-slice-escape`, `negative/core-diag-frame-message-escape`, `runtime/diagnostic-loggers-dispatch` |
 | `origins.aliasing-limit` | outside | 0770, 0910 | non-guarantee: a pre-existing copy or indistinguishable arena is not tracked | `positive/reference-origins-and-consume`, `negative/use-after-sink` |
 | `functions.abi` | static | 0870, 0880, 0890, 0900, 0920, 0930, 0980, 1000, 1020, 1030, 1460, 1920, 1970 | L0301, L0302 or L0502 | `negative/call-with-too-few-arguments`, `runtime/r230-composition` |
-| `functions.caller` | static | 0600, 0790, 1000, 1040, 1800, 1920 | caller positions have exact immutable utf8 type and structural signature identity, are compiler-filled as source-name:line:column, and accept an explicit argument only as a named forwarding of another caller parameter; L0301 rejects every other type, position or source | `negative/caller-parameter-forward-needs-caller`, `negative/caller-parameter-needs-utf8`, `negative/caller-parameter-positional`, `negative/caller-parameter-signature-mismatch`, `runtime/caller-parameters` |
+| `functions.caller` | static | 0600, 0790, 1000, 1040, 1800, 1920 | caller positions have exact immutable utf8 type and structural signature identity, are compiler-filled as source-name:line:column, and accept an explicit argument only as a named forwarding of another caller parameter; L0301 rejects every other type, position or source, and `caller` decided on two tokens leaves the spelling an ordinary name | `negative/caller-parameter-forward-needs-caller`, `negative/caller-parameter-needs-utf8`, `negative/caller-parameter-positional`, `negative/caller-parameter-signature-mismatch`, `runtime/caller-parameters`, `runtime/caller-is-an-ordinary-name` |
 | `extern.c-boundary` | static | 0430, 1570, 1580, 1975 | L0301 for a signature outside R3.50's fixed integer/bool/pointer subset | `positive/external-scalar-c-boundary`, `negative/external-aggregate-boundary`, `negative/external-float-abi-not-enabled` |
 | `host.io` | outside | 0430, 1580, 1650, 1660, 1680, 1975 | non-guarantee: files, descriptors, arguments and streams reflect mutable host state | `runtime/hosted-io-reads-parser-input`, `runtime/derived-parser` |
 | `host.io-failure` | static | 0940, 0960, 1030, 1975 | `core/io` reports foreseeable host failure as declared atoms which callers handle or declare | `runtime/hosted-io-reads-parser-input`, `runtime/diagnostic-loggers-dispatch`, `runtime/derived-parser` |
@@ -10488,7 +10492,22 @@ expression is the name of one of that wrapper's own caller parameters:
 position, and a literal, local, result, selection or other `utf8` expression
 cannot fill one by name. Both are L0301. Omitting the named forwarding argument
 deliberately reports the wrapper's internal call instead. These rules apply to
-direct, generic and stored function calls alike.
+direct, generic and stored function calls alike. A wrapper that does forward
+its site reads no pooled bytes at that call, so no site datum is registered for
+it: the read-only pool holds exactly the sites some instruction addresses.
+
+`caller` is not added to [1760]'s keyword rule, and this decision is what says
+so. [1760] promises that a program avoiding a construct never trips over its
+keyword, and `caller` is a word an ordinary program writes: a parameter, a
+binding or a loop label naming whoever called is as plain a name as `arena` is
+in `core/mem`. So two tokens decide the modifier, exactly as D187's `unchecked`
+is decided on two and D191's `arena` on three — `caller` followed by a second
+name is the modifier, and nothing else is. A parameter of that name writes `:`
+next, so `caller: utf8`, `in caller: u8` and `escaping caller: ptr u32` all
+stay ordinary parameters, and `caller = x`, `caller: loop do` and `inc caller`
+are untouched. `runtime/caller-is-an-ordinary-name` pins that from the other
+side, with a parameter named `caller` beside a real caller position in one
+signature.
 
 **The alternatives:** retaining the tour's unstructured integer would make a
 site target-sized and force every consumer to recover source data through an
@@ -10497,15 +10516,25 @@ function-type behavior and let positional insertion silently retarget later
 arguments. Accepting any named `utf8` would make sites forgeable and would not
 enforce the wrapper rule [1040] states. A dedicated IR value or backend ABI
 would duplicate the exact slice representation already required at the source
-boundary. All were declined.
+boundary. Reserving `caller` in [1760] was declined because it would make
+thirty-seven words out of thirty-six, delete the spelling from every program
+that never writes a caller parameter, and break [1760]'s stated promise for a
+word no construct outside [1040] mentions. Deciding the modifier on its
+spelling alone was declined for the same reason and was what this entry
+originally said: it refused `(caller: u8)`, which the second alternative of
+[1800]'s own `parameter` production derives, and reported it as a keyword that
+[1760] does not reserve. Registering a site datum for every call whose callee
+has a caller position was declined once forwarding was distinguished from
+omission: it left one unreferenced read-only string in every forwarding
+wrapper.
 
 **Pinned by** `positive/caller-parameters`,
 `negative/caller-parameter-forward-needs-caller`,
 `negative/caller-parameter-needs-utf8`,
 `negative/caller-parameter-positional`,
 `negative/caller-parameter-signature-mismatch`,
-`runtime/caller-parameters`, the generated lexical and IR records, and the
-`functions.caller` guarantee row.
+`runtime/caller-parameters`, `runtime/caller-is-an-ordinary-name`, the
+generated lexical and IR records, and the `functions.caller` guarantee row.
 
 ### D187 — An unchecked region removes only the edges with one meaning everywhere
 
