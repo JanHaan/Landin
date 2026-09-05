@@ -2,5 +2,5 @@ class: runtime
 summary: undo and defer compose in lexical reverse order only while failure propagates
 program: main.ldn
 status: 42
-constructs: 0340, 0640, 0940, 0960, 0970, 1030, 1090, 1100, 1110, 1800, 1810, 1920
+constructs: 0340, 0640, 0940, 0960, 0970, 1030, 1090, 1100, 1110, 1200, 1800, 1810, 1920
 targets: linux-x86-64
