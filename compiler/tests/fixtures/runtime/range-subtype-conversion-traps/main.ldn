@@ -1,0 +1,13 @@
+percent: type = u8 range 0..100
+
+opaque: (n: i32) -> (r: i32) =
+    r = n
+end opaque
+
+public main: () -> (code: i32) =
+    wide: i32 = opaque(150)
+    --  150 is a u8, so D168's conversion accepts it; the bounds do not.
+    --  [0310] gives the program no way to tell the two traps apart.
+    p: percent = percent(wide)
+    code = i32(p)
+end main

@@ -1,0 +1,6 @@
+class: runtime
+summary: D188 a runtime value outside a range subtype's bounds traps where it is stored
+program: main.ldn
+traps: yes
+constructs: 0660, 1950, 1960
+targets: linux-x86-64

@@ -1,0 +1,6 @@
+class: runtime
+summary: D188 a conversion whose source fits the base but not the bounds traps at the constraint rather than at the conversion
+program: main.ldn
+traps: yes
+constructs: 0660, 0700, 0310
+targets: linux-x86-64

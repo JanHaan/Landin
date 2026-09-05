@@ -2515,6 +2515,36 @@ package body Landin.IR is
       return Append (Into, Item, Made);
    end Emit_Conversion;
 
+   function Emit_Range_Check
+     (Into   : in out Unit;
+      Item   : Item_Id;
+      Value  : Value_Id;
+      Result : Landin.Types.Integer_Name;
+      Lower  : Landin.Types.Folded;
+      Upper  : Landin.Types.Folded;
+      Site   : Landin.Provenance.Origin) return Value_Id
+   is
+      Made : Instruction :=
+        Instruction'(Op => Range_Check, Result => Result, Site => Site,
+                     Lower_Bound => Lower, Upper_Bound => Upper,
+                     others => <>);
+   begin
+      Made.First_Arg := Natural (Into.Operands.Length);
+      Made.Args := 1;
+      Into.Operands.Append (Value);
+      return Append (Into, Item, Made);
+   end Emit_Range_Check;
+
+   function Range_Lower
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
+      return Landin.Types.Folded
+     is (Held (Of_Unit, Item, Value).Lower_Bound);
+
+   function Range_Upper
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
+      return Landin.Types.Folded
+     is (Held (Of_Unit, Item, Value).Upper_Bound);
+
    function Emit_Slice_Address
      (Into    : in out Unit;
       Item    : Item_Id;

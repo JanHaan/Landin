@@ -1993,6 +1993,69 @@ package body Landin.Backend.X86_64 is
                      end if;
                   end;
 
+               when Landin.IR.Range_Check =>
+                  --  D188/[0660].  Source and result are one type, so this
+                  --  neither widens nor narrows: it widens to the
+                  --  accumulator in that type's own signedness, compares
+                  --  against the two folded bounds, and passes the value
+                  --  through.  [1120]'s region does not reach it: a value
+                  --  outside the bounds is not one the destination holds,
+                  --  so removing the edge would not leave one meaning.
+                  declare
+                     Source : constant Landin.IR.Value_Id := Operand (1);
+                     Kind : constant Landin.Types.Integer_Name :=
+                       Landin.Types.Integer_Name
+                         (Landin.IR.Result_Of (Of_Unit, Item, Value));
+                     Width : constant Held_Size := Size_Of (Kind, Facts);
+                     Lower : constant Landin.Types.Folded :=
+                       Landin.IR.Range_Lower (Of_Unit, Item, Value);
+                     Upper : constant Landin.Types.Folded :=
+                       Landin.IR.Range_Upper (Of_Unit, Item, Value);
+                     Signed : constant Boolean :=
+                       Landin.Types.Is_Signed (Kind);
+                     Safe_Lower : constant String :=
+                       Value_Label (Value) & "_lower";
+                     Safe_Upper : constant String :=
+                       Value_Label (Value) & "_upper";
+                  begin
+                     if Signed then
+                        Emit
+                          ((case Width is
+                              when Landin.Targets.Byte_1 => "movsbq ",
+                              when Landin.Targets.Byte_2 => "movswq ",
+                              when Landin.Targets.Byte_4 => "movslq ",
+                              when Landin.Targets.Byte_8 => "movq ")
+                           & Value_Cell (Source) & ", %rax");
+                     else
+                        Emit ("movq $0, %rax");
+                        Emit ("mov" & Suffix (Width) & " "
+                              & Value_Cell (Source) & ", "
+                              & Accumulator (Width));
+                     end if;
+
+                     Emit
+                       ("movabsq $"
+                        & Trimmed (Landin.Types.Folded'Image (Lower))
+                        & ", %rcx");
+                     Emit ("cmpq %rcx, %rax");
+                     Emit ((if Signed then "jge " else "jae ") & Safe_Lower);
+                     Emit ("ud2");
+                     Put (Safe_Lower & ":");
+
+                     Emit
+                       ("movabsq $"
+                        & Trimmed (Landin.Types.Folded'Image (Upper))
+                        & ", %rcx");
+                     Emit ("cmpq %rcx, %rax");
+                     Emit ((if Signed then "jle " else "jbe ") & Safe_Upper);
+                     Emit ("ud2");
+                     Put (Safe_Upper & ":");
+
+                     Emit ("mov" & Suffix (Width) & " "
+                           & Accumulator (Width) & ", "
+                           & Value_Cell (Value));
+                  end;
+
                when Landin.IR.Slice_Address =>
                   declare
                      Safe_Upper : constant String :=
@@ -3690,6 +3753,15 @@ package body Landin.Backend.X86_64 is
                         Slots (Natural
                                  (Landin.IR.Slot_Of (Of_Unit, Item, Value)))
                           := Of_Value (Operand_Of (Value, 1));
+
+                     when Landin.IR.Range_Check =>
+                        --  D188: a module datum whose declared type is a
+                        --  range subtype is refused at the checker unless
+                        --  its value folds, so no image reaches here owing
+                        --  a check.  Reaching this is a compiler defect.
+                        raise Compiler_Defect with
+                          "a module image reached the backend owing a"
+                          & " range check";
 
                      when Landin.IR.Conversion =>
                         declare

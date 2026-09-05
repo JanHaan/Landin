@@ -1,0 +1,6 @@
+class: negative
+summary: D188 an inout argument for a range-subtype parameter is a place of that same subtype, because the callee writes any value the subtype holds back through it
+constructs: 0660, 0900
+program: program.ldn
+codes: L0301
+targets: linux-x86-64, macos-arm64

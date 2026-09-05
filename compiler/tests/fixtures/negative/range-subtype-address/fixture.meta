@@ -1,0 +1,6 @@
+class: negative
+summary: D188 the address of a constrained place is refused, because a write through the pointer would not pass the range check
+constructs: 0430, 0660
+program: program.ldn
+codes: L0304
+targets: linux-x86-64, macos-arm64

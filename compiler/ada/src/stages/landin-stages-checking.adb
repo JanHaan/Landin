@@ -48,6 +48,7 @@ package body Landin.Stages.Checking is
    use type Landin.Checking.Concept_Id;
    use type Landin.Checking.Conformance_Id;
    use type Landin.Checking.Conformance_Origin;
+   use type Landin.Checking.Constraint_Id;
    use type Landin.Checking.Element_Count;
    use type Landin.Checking.Error_Set_Form;
    use type Landin.Checking.Field_Kind;
@@ -484,6 +485,10 @@ package body Landin.Stages.Checking is
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind;
       function Conversion_Target
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind;
+      --  D188: which range subtype [0700]'s conversion names, if any.
+      function Conversion_Constraint
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
+         return Landin.Checking.Constraint_Id;
       procedure Fold_Float
         (Of_Tree    : Syn.Tree;
          Node       : Syn.Node_Id;
@@ -736,6 +741,26 @@ package body Landin.Stages.Checking is
          Wanted  : Ty.Type_Kind;
          Site    : Landin.Provenance.Origin;
          Because : String);
+      --  D188: which range subtype, if any, a value at this node is already
+      --  known to be inside.  [1730]'s proof, made answerable.
+      function Value_Constraint
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
+         return Landin.Checking.Constraint_Id;
+      --  D188: [0660]'s check, at the one kind of place the tour puts it --
+      --  storing into a place whose declared type is a range subtype.  It
+      --  refuses a known value outside the bounds, elides a value whose own
+      --  subtype is inside them, and otherwise records the runtime check
+      --  that lowering emits.
+      procedure Apply_Constraint
+        (Of_Tree      : Syn.Tree;
+         Node         : Syn.Node_Id;
+         Wanted       : Landin.Checking.Constraint_Id;
+         Site         : Landin.Provenance.Origin;
+         Because      : String;
+         Static_Image : Boolean := False;
+         --  D10's omitted module scalar has an all-bits-zero image and no
+         --  value node to read it from.
+         Zero_Image   : Boolean := False);
       procedure Require_Atom
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
@@ -845,6 +870,13 @@ package body Landin.Stages.Checking is
       --  resolution can answer for and which this follows to the type it
       --  was declared from.  D15 makes that an alias, so following it is
       --  the whole of what a type declaration means.
+      --  D188: [0660]'s constraint is refused in every position from which
+      --  a value could enter constrained storage without passing the
+      --  check.  True when it reported.
+      function Composition_Refused
+        (Of_Tree : Syn.Tree; Written : Syn.Node_Id; What : String)
+         return Boolean;
+
       function Type_At
         (Of_Tree         : Syn.Tree;
          Written         : Syn.Node_Id;
@@ -3359,6 +3391,34 @@ package body Landin.Stages.Checking is
          end if;
       end Validate_Template;
 
+      function Composition_Refused
+        (Of_Tree : Syn.Tree; Written : Syn.Node_Id; What : String)
+         return Boolean is
+      begin
+         if Written = Syn.No_Node
+           or else Landin.Checking.Constraint_Of (Types.all, Of_Tree, Written)
+                     = Landin.Checking.No_Constraint
+         then
+            return False;
+         end if;
+
+         --  Three passes reach a written type; the first to refuse it
+         --  records that, so a reader sees one report.
+         if Landin.Checking.Type_Of (Types.all, Of_Tree, Written)
+              /= Ty.Ill_Typed
+         then
+            Landin.Checking.Note (Types.all, Of_Tree, Written, Ty.Ill_Typed);
+            Bad.Report
+              (Item    => Bad.Unsupported_Use,
+               Source  => Syn.Source_Of (Of_Tree),
+               Where   => Syn.Where (Of_Tree, Written),
+               Message => What & " of a range subtype is not enabled yet",
+               Refused => Bad.Constrained_Composition,
+               Into    => Found);
+         end if;
+         return True;
+      end Composition_Refused;
+
       function Type_At
         (Of_Tree         : Syn.Tree;
          Written         : Syn.Node_Id;
@@ -3581,6 +3641,127 @@ package body Landin.Stages.Checking is
             end;
          end if;
 
+         --  D188/[0660]: a range subtype is its base integer type
+         --  constrained, so the answer here is the base's kind and the
+         --  bounds are recorded beside it.  Interned on the written range:
+         --  three passes reach a type position and only the first folds.
+         if Syn.Kind (Of_Tree, Written) = Syn.Range_Subtype then
+            if Landin.Checking.Constraint_Of (Types.all, Of_Tree, Written)
+                 /= Landin.Checking.No_Constraint
+            then
+               return Landin.Checking.Bounds_Of
+                 (Types.all,
+                  Landin.Checking.Constraint_Of
+                    (Types.all, Of_Tree, Written)).Base;
+            elsif Landin.Checking.Type_Of (Types.all, Of_Tree, Written)
+                    = Ty.Ill_Typed
+            then
+               return Ty.Ill_Typed;
+            end if;
+
+            declare
+               Base : constant Syn.Node_Id :=
+                 Syn.Base_Type_Of (Of_Tree, Written);
+               Lower_Node : constant Syn.Node_Id :=
+                 Syn.Lower_Bound_Of (Of_Tree, Written);
+               Upper_Node : constant Syn.Node_Id :=
+                 Syn.Upper_Bound_Of (Of_Tree, Written);
+               Held : constant Ty.Type_Kind := Type_At (Of_Tree, Base);
+            begin
+               if Held not in Ty.Integer_Name then
+                  if Held /= Ty.Ill_Typed then
+                     Bad.Report
+                       (Item    => Bad.Type_Mismatch,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Where (Of_Tree, Base),
+                        Message => "a range subtype constrains an integer"
+                                   & " type, and this is not one",
+                        Note    => "[0660]: a range subtype is its base"
+                                   & " type restricted to a run of that"
+                                   & " type's own values",
+                        Related => Syn.Origin (Of_Tree, Written),
+                        Because => "the range written here",
+                        Into    => Found);
+                  end if;
+                  Landin.Checking.Note
+                    (Types.all, Of_Tree, Written, Ty.Ill_Typed);
+                  return Ty.Ill_Typed;
+               end if;
+
+               declare
+                  Base_Name : constant Ty.Integer_Name :=
+                    Ty.Integer_Name (Held);
+                  Lower_Valid, Lower_Known : Boolean;
+                  Upper_Valid, Upper_Known : Boolean;
+                  Lower : constant Ty.Folded := Fixed_Bound
+                    (Of_Tree, Lower_Node,
+                     Formal_Actual_Array'(1 .. 0 => (others => <>)),
+                     Landin.Provenance.No_Origin, Lower_Valid, Lower_Known);
+                  Upper : constant Ty.Folded := Fixed_Bound
+                    (Of_Tree, Upper_Node,
+                     Formal_Actual_Array'(1 .. 0 => (others => <>)),
+                     Landin.Provenance.No_Origin, Upper_Valid, Upper_Known);
+               begin
+                  if not Lower_Valid or else not Lower_Known
+                    or else not Upper_Valid or else not Upper_Known
+                  then
+                     Landin.Checking.Note
+                       (Types.all, Of_Tree, Written, Ty.Ill_Typed);
+                     return Ty.Ill_Typed;
+                  end if;
+
+                  for Each of Ty.Folded_Array'[Lower, Upper] loop
+                     if not Ty.Holds (Each, Base_Name, Facts) then
+                        Bad.Report
+                          (Item    => Bad.Literal_Out_Of_Range,
+                           Source  => Syn.Source_Of (Of_Tree),
+                           Where   => Syn.Where (Of_Tree, Written),
+                           Message => "`" & Ty.Spelling (Base_Name)
+                                      & "` does not hold this bound",
+                           Note    => "[0660]: both of a range subtype's"
+                                      & " bounds are values of its base"
+                                      & " type",
+                           Into    => Found);
+                        Landin.Checking.Note
+                          (Types.all, Of_Tree, Written, Ty.Ill_Typed);
+                        return Ty.Ill_Typed;
+                     end if;
+                  end loop;
+
+                  if Lower > Upper then
+                     --  [1950]: an empty range names no value, so there is
+                     --  no constraint to perform rather than a value the
+                     --  type does not hold.
+                     Bad.Report
+                       (Item    => Bad.Impossible_Operand,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Where (Of_Tree, Written),
+                        Message => "this range subtype's lower bound is"
+                                   & " above its upper bound",
+                        Note    => "[1950]: an operand the operation cannot"
+                                   & " take is refused where the compiler"
+                                   & " knows it",
+                        Into    => Found);
+                     Landin.Checking.Note
+                       (Types.all, Of_Tree, Written, Ty.Ill_Typed);
+                     return Ty.Ill_Typed;
+                  end if;
+
+                  Landin.Checking.Note
+                    (Types.all, Of_Tree, Written, Held);
+                  Landin.Checking.Note_Constraint
+                    (Types.all, Of_Tree, Written,
+                     Landin.Checking.Add_Constraint
+                       (Types.all,
+                        (Base  => Base_Name,
+                         Lower => Lower,
+                         Upper => Upper,
+                         Site  => Syn.Origin (Of_Tree, Written))));
+                  return Held;
+               end;
+            end;
+         end if;
+
          if Syn.Kind (Of_Tree, Written) = Syn.Any_Type then
             if Landin.Checking.Any_Concept_Of
                  (Types.all, Of_Tree, Written) /= Landin.Checking.No_Concept
@@ -3637,8 +3818,12 @@ package body Landin.Stages.Checking is
             declare
                Referred : constant Syn.Node_Id :=
                  Syn.Referenced_Type (Of_Tree, Written);
-               Held : constant Ty.Type_Kind := Type_At
+               Underlying : constant Ty.Type_Kind := Type_At
                  (Of_Tree, Referred, Requirement => Identity_Only);
+               Held : constant Ty.Type_Kind :=
+                 (if Composition_Refused
+                    (Of_Tree, Referred, "a reference target")
+                  then Ty.Ill_Typed else Underlying);
                Item : Landin.Checking.Reference_Descriptor :=
                  (Kind =>
                     (if Syn.Kind (Of_Tree, Written) = Syn.Pointer_Type
@@ -3807,6 +3992,12 @@ package body Landin.Stages.Checking is
                   Held := Type_At
                     (Of_Tree, Syn.Declared_Type (Of_Tree, Each),
                      For_Declaration);
+                  if Composition_Refused
+                    (Of_Tree, Syn.Declared_Type (Of_Tree, Each),
+                     "a struct field")
+                  then
+                     Held := Ty.Ill_Typed;
+                  end if;
                   Active_Struct_Field := Prior;
                   Into := (Kind    => Landin.Checking.Scalar_Field,
                            Element => Ty.U8,
@@ -4077,8 +4268,12 @@ package body Landin.Stages.Checking is
                  Syn.Bound_Of (Of_Tree, Written);
                Element : constant Syn.Node_Id :=
                  Syn.Element_Of (Of_Tree, Written);
-               Held : constant Ty.Type_Kind := Type_At
-                 (Of_Tree, Element, Requirement => Requirement);
+               Underlying : constant Ty.Type_Kind :=
+                 Type_At (Of_Tree, Element, Requirement => Requirement);
+               Held : constant Ty.Type_Kind :=
+                 (if Composition_Refused
+                    (Of_Tree, Element, "an array element")
+                  then Ty.Ill_Typed else Underlying);
                --  D121: [0520]'s element may be an ordinary struct.  Its
                --  extent is that struct's own already-computed layout, so
                --  the only thing an array adds is the repetition.  D127
@@ -4558,6 +4753,18 @@ package body Landin.Stages.Checking is
                      Landin.Checking.Array_Element (Types.all, Means));
                end if;
 
+               --  D188: [0660]'s constraint is part of what the named
+               --  type is, so every name of it -- including D15's alias,
+               --  which is the same type -- carries the same bounds.
+               if Held in Ty.Integer_Name
+                 and then Landin.Checking.Constraint_Of (Types.all, Means)
+                            /= Landin.Checking.No_Constraint
+               then
+                  Landin.Checking.Note_Constraint
+                    (Types.all, Of_Tree, Written,
+                     Landin.Checking.Constraint_Of (Types.all, Means));
+               end if;
+
                if Held = Ty.Function_Value then
                   Landin.Checking.Note_Signature
                     (Types.all, Of_Tree, Written,
@@ -4633,6 +4840,14 @@ package body Landin.Stages.Checking is
                   and then Syn.Is_Caller (Of_Tree, Declared)),
                others => <>);
          begin
+            --  D188: [0660]'s bounds are part of what this parameter or
+            --  result's type is, so they travel with the signature and an
+            --  indirect call cannot lose the check.
+            if Held in Ty.Integer_Name and then Written /= Syn.No_Node then
+               Part.Constraint :=
+                 Landin.Checking.Constraint_Of (Types.all, Of_Tree, Written);
+            end if;
+
             case Held is
                when Ty.Scalar_Name =>
                   null;
@@ -5659,6 +5874,22 @@ package body Landin.Stages.Checking is
                        (Types.all, Of_Tree.all, Written));
                end if;
 
+               --  D188: the same for [0660]'s bounds -- a declaration of
+               --  a range subtype, and every binding, parameter and named
+               --  return whose written type is one, carries the constraint
+               --  its type position was given.
+               if Held in Ty.Integer_Name
+                 and then Written /= Syn.No_Node
+                 and then Landin.Checking.Constraint_Of
+                   (Types.all, Of_Tree.all, Written)
+                     /= Landin.Checking.No_Constraint
+               then
+                  Landin.Checking.Note_Constraint
+                    (Types.all, Id,
+                     Landin.Checking.Constraint_Of
+                       (Types.all, Of_Tree.all, Written));
+               end if;
+
                --  D118: a type alias and explicitly typed local carry the
                --  descriptor written by their type position.  This is
                --  independent of whichever function value later fills it.
@@ -6073,7 +6304,27 @@ package body Landin.Stages.Checking is
                                    (Caller_Tree, Written_Type, Caller_Bound,
                                     Syn.Origin (Caller_Tree, Argument),
                                     Identity_Only);
-                                 if Actual.Kind not in Ty.Scalar_Name
+                                 if Value_Constraint
+                                   (Caller_Tree, Written_Type)
+                                     /= Landin.Checking.No_Constraint
+                                 then
+                                    --  D188: a range subtype's bounds do
+                                    --  not travel into an instance, so
+                                    --  admitting one here would quietly
+                                    --  make `f(percent)` mean `f(u8)`.
+                                    Bad.Report
+                                      (Item    => Bad.Unsupported_Use,
+                                       Source  =>
+                                         Syn.Source_Of (Caller_Tree),
+                                       Where   => Syn.Where
+                                         (Caller_Tree, Written_Type),
+                                       Message => "a generic type argument"
+                                                  & " of a range subtype is"
+                                                  & " not enabled yet",
+                                       Refused =>
+                                         Bad.Constrained_Composition,
+                                       Into    => Found);
+                                 elsif Actual.Kind not in Ty.Scalar_Name
                                       | Ty.Atom_Value | Ty.Fixed_Array
                                       | Ty.Aggregate | Ty.Function_Value
                                       | Ty.Pointer_Value | Ty.Slice_Value
@@ -8207,10 +8458,54 @@ package body Landin.Stages.Checking is
          then
             return Ty.Ill_Typed;
          end if;
-         return Landin.Checking.Named
-           (Types.all,
-            Syn.Name (Of_Tree, Syn.Callee_Of (Of_Tree, Node)));
+
+         if Landin.Checking.Named
+              (Types.all,
+               Syn.Name (Of_Tree, Syn.Callee_Of (Of_Tree, Node)))
+                in Ty.Scalar_Name
+         then
+            return Landin.Checking.Named
+              (Types.all,
+               Syn.Name (Of_Tree, Syn.Callee_Of (Of_Tree, Node)));
+         end if;
+
+         --  D15/D188: a `type` declaration naming a scalar is that scalar
+         --  everywhere, so `count(x)` over an alias and `percent(x)` over
+         --  [0660]'s range subtype are [0700] conversions written with the
+         --  name the program declared.  Only a type declaration is read
+         --  this way; a function of the same name is still a call.
+         declare
+            Callee : constant Syn.Node_Id := Syn.Callee_Of (Of_Tree, Node);
+         begin
+            if Res.Verdict_Of (Meanings.all, Of_Tree, Callee) = Res.Bound
+              and then Res.Sort_Of
+                (Meanings.all,
+                 Res.Bound_To (Meanings.all, Of_Tree, Callee))
+                  = Res.Module_Type
+            then
+               declare
+                  Held : constant Ty.Type_Kind := Settled_Type
+                    (Res.Bound_To (Meanings.all, Of_Tree, Callee));
+               begin
+                  if Held in Ty.Scalar_Name then
+                     return Held;
+                  end if;
+               end;
+            end if;
+         end;
+
+         return Ty.Ill_Typed;
       end Conversion_Target;
+
+      function Conversion_Constraint
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
+         return Landin.Checking.Constraint_Id is
+      begin
+         if Conversion_Target (Of_Tree, Node) not in Ty.Integer_Name then
+            return Landin.Checking.No_Constraint;
+         end if;
+         return Value_Constraint (Of_Tree, Syn.Callee_Of (Of_Tree, Node));
+      end Conversion_Constraint;
 
       function Character_Value
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Magnitude
@@ -9333,6 +9628,42 @@ package body Landin.Stages.Checking is
                     (Of_Tree, Argument, Wants,
                      Parameter.Site,
                      "this parameter");
+               end if;
+
+               --  D188: an argument filling a range-subtype parameter is a
+               --  store into a constrained place like any other.  An
+               --  `inout` or `sink` place must already BE that subtype:
+               --  the callee may write any value the subtype holds back
+               --  through it, so a wider place would end up holding one
+               --  its own type does not admit.
+               if Wants in Ty.Integer_Name then
+                  if Parameter.Convention
+                       in Syn.Inout_Convention | Syn.Sink_Convention
+                  then
+                     if Parameter.Constraint
+                          /= Value_Constraint (Of_Tree, Argument)
+                     then
+                        Bad.Report
+                          (Item    => Bad.Type_Mismatch,
+                           Source  => Syn.Source_Of (Of_Tree),
+                           Where   => Syn.Where (Of_Tree, Argument),
+                           Message => "this place does not have the range"
+                                      & " subtype this parameter is"
+                                      & " written back through",
+                           Note    => "[0660]: the callee may write any"
+                                      & " value the subtype holds, and"
+                                      & " [0900] replaces the place with it",
+                           Related => Parameter.Site,
+                           Because => "this parameter",
+                           Into    => Found);
+                        Landin.Checking.Refuse
+                          (Types.all, Of_Tree, Argument);
+                     end if;
+                  else
+                     Apply_Constraint
+                       (Of_Tree, Argument, Parameter.Constraint,
+                        Parameter.Site, "this parameter");
+                  end if;
                end if;
             end;
             <<Next_Runtime_Argument>>
@@ -15055,6 +15386,26 @@ package body Landin.Stages.Checking is
                         elsif Got = Ty.Ill_Typed then
                            return Kept (Ty.Ill_Typed);
                         end if;
+
+                        --  D188: [0660]'s other half.  The base conversion
+                        --  above is D168's, unchanged; the constraint is
+                        --  checked after it, so a source that does not fit
+                        --  the base traps there and one that fits but is
+                        --  outside the bounds traps here.  Note the
+                        --  constraint only after applying it, so the value
+                        --  does not carry a proof of its own check.
+                        if Conversion_Constraint (Of_Tree, Node)
+                             /= Landin.Checking.No_Constraint
+                        then
+                           Apply_Constraint
+                             (Of_Tree, Node,
+                              Conversion_Constraint (Of_Tree, Node),
+                              Syn.Origin (Of_Tree, Callee),
+                              "the range subtype applied here");
+                           Landin.Checking.Note_Constraint
+                             (Types.all, Of_Tree, Node,
+                              Conversion_Constraint (Of_Tree, Node));
+                        end if;
                         return Kept (Conversion);
                      end;
                   end if;
@@ -15355,6 +15706,25 @@ package body Landin.Stages.Checking is
                      return Kept (Ty.Ill_Typed);
                   end if;
                   Held := Selected_From (Of_Tree, Place);
+
+                  --  D188: a pointer to a constrained place is a `ptr u8`
+                  --  and a write through it would enter that place without
+                  --  the check, so it is refused with the other
+                  --  compositions rather than silently losing the bounds.
+                  if Value_Constraint (Of_Tree, Place)
+                       /= Landin.Checking.No_Constraint
+                  then
+                     Bad.Report
+                       (Item    => Bad.Unsupported_Use,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Where (Of_Tree, Place),
+                        Message => "the address of a range subtype place is"
+                                   & " not enabled yet",
+                        Refused => Bad.Constrained_Composition,
+                        Into    => Found);
+                     return Kept (Ty.Ill_Typed);
+                  end if;
+
                   Item.Mutable := Place_Is_Mutable (Of_Tree, Place);
                   Item.Referent := Held;
                   case Held is
@@ -18388,7 +18758,23 @@ package body Landin.Stages.Checking is
                      --  The declaration has already explained why this value
                      --  form is refused; checking the initializer as another
                      --  whole-array value would only repeat L0304.
-                     null;
+                     --  D188: D10 still gives an omitted module scalar its
+                     --  all-bits-zero image, and a range subtype that
+                     --  excludes zero excludes that image too.
+                     if Value = Syn.No_Node
+                       and then Wants in Ty.Integer_Name
+                       and then not Is_Local_Binding (Of_Tree, Node)
+                     then
+                        Apply_Constraint
+                          (Of_Tree, Node,
+                           Landin.Checking.Constraint_Of
+                             (Types.all, Of_Tree,
+                              Syn.Declared_Type (Of_Tree, Node)),
+                           Syn.Origin (Of_Tree, Node),
+                           "the type declared here",
+                           Static_Image => True,
+                           Zero_Image   => True);
+                     end if;
                   elsif Wants = Ty.Undecided then
                      --  [0050]: the inferred form takes the value's type,
                      --  and [0200] settles a literal that has none.  D21's
@@ -18796,10 +19182,31 @@ package body Landin.Stages.Checking is
                      --  reach the ordinary refusal.
                      Landin.Checking.Note
                        (Types.all, Of_Tree, Value, Wants);
+                     Apply_Constraint
+                       (Of_Tree, Value,
+                        Landin.Checking.Constraint_Of
+                          (Types.all, Of_Tree,
+                           Syn.Declared_Type (Of_Tree, Node)),
+                        Syn.Origin (Of_Tree, Node),
+                        "the type declared here",
+                        Static_Image => not Is_Local_Binding (Of_Tree, Node));
                   else
                      Require
                        (Of_Tree, Value, Wants, Syn.Origin (Of_Tree, Node),
                         "the type declared here");
+                     --  D188: and, when that type is [0660]'s range
+                     --  subtype, the bounds it also declared.
+                     if Wants in Ty.Integer_Name then
+                        Apply_Constraint
+                          (Of_Tree, Value,
+                           Landin.Checking.Constraint_Of
+                             (Types.all, Of_Tree,
+                              Syn.Declared_Type (Of_Tree, Node)),
+                           Syn.Origin (Of_Tree, Node),
+                           "the type declared here",
+                           Static_Image =>
+                             not Is_Local_Binding (Of_Tree, Node));
+                     end if;
                   end if;
                end;
 
@@ -19036,6 +19443,19 @@ package body Landin.Stages.Checking is
                         begin
                            pragma Unreferenced (Result);
                         end;
+
+                        --  D188: a compound assignment stores the
+                        --  operator's result, which is a value of the base
+                        --  type [0290] already decided.  The bounds are
+                        --  asked about that result, so the check hangs on
+                        --  the statement rather than on either operand.
+                        if Value_Constraint (Of_Tree, Place)
+                             /= Landin.Checking.No_Constraint
+                        then
+                           Landin.Checking.Note_Owed_Check
+                             (Types.all, Of_Tree, Node,
+                              Value_Constraint (Of_Tree, Place));
+                        end if;
                      end if;
                   end;
                   return;
@@ -19450,11 +19870,30 @@ package body Landin.Stages.Checking is
                        (Of_Tree, Value, Wants, Syn.Origin (Of_Tree, Place),
                         "the place written here");
                   end if;
+
+                  --  D188: [0660]'s other half.  A named return is assigned
+                  --  through this same statement, so one call covers both.
+                  if Wants in Ty.Integer_Name then
+                     Apply_Constraint
+                       (Of_Tree, Value, Value_Constraint (Of_Tree, Place),
+                        Syn.Origin (Of_Tree, Place),
+                        "the place written here");
+                  end if;
                end;
 
             when Syn.Increment | Syn.Decrement =>
                Check_Place
                  (Of_Tree, Syn.Target_Of (Of_Tree, Node), Stepping => True);
+               --  D188: [1900] says `inc` says what `x += 1` says, so it
+               --  owes the same constrained store.
+               if Value_Constraint (Of_Tree, Syn.Target_Of (Of_Tree, Node))
+                    /= Landin.Checking.No_Constraint
+               then
+                  Landin.Checking.Note_Owed_Check
+                    (Types.all, Of_Tree, Node,
+                     Value_Constraint
+                       (Of_Tree, Syn.Target_Of (Of_Tree, Node)));
+               end if;
 
             when Syn.Discard =>
                --  [1930]: anything with a type may be thrown away, and a
@@ -24242,7 +24681,63 @@ package body Landin.Stages.Checking is
                           & " to trap, so a fold no type holds is refused",
                Into    => Found);
             Landin.Checking.Refuse (Types.all, Of_Tree, Value);
+            return;
          end if;
+
+         --  D188: [1940]'s image has no moment in which to trap, so a
+         --  module binding of [0660]'s range subtype must have a value this
+         --  fold reaches.  That refusal is deliberate and narrow: the fold
+         --  declines the bitwise and shift levels because [0320] needs a
+         --  width and a width needs a target, and a value that passed
+         --  checking unchecked would reach the backend's datum evaluator
+         --  with nowhere left to report it.
+         declare
+            Wanted_Constraint : constant Landin.Checking.Constraint_Id :=
+              Landin.Checking.Constraint_Of
+                (Types.all, Declaration_At (Syn.Source_Of (Of_Tree), Node));
+         begin
+            if Wanted_Constraint = Landin.Checking.No_Constraint
+              or else Overflowed
+            then
+               return;
+            end if;
+
+            declare
+               Bounds : constant Landin.Checking.Constraint_Descriptor :=
+                 Landin.Checking.Bounds_Of (Types.all, Wanted_Constraint);
+            begin
+               if not Known then
+                  Bad.Report
+                    (Item    => Bad.Not_Known_At_Compile_Time,
+                     Source  => Syn.Source_Of (Of_Tree),
+                     Where   => Syn.Where (Of_Tree, Value),
+                     Message => "a module binding of a range subtype needs"
+                                & " a value this compiler folds",
+                     Note    => "[1940]/[0660]: a module image has no"
+                                & " moment in which to check a range, so"
+                                & " the value has to be known here",
+                     Related => Bounds.Site,
+                     Because => "the range written here",
+                     Into    => Found);
+                  Landin.Checking.Refuse (Types.all, Of_Tree, Value);
+               elsif Held < Bounds.Lower or else Held > Bounds.Upper then
+                  Bad.Report
+                    (Item    => Bad.Literal_Out_Of_Range,
+                     Source  => Syn.Source_Of (Of_Tree),
+                     Where   => Syn.Where (Of_Tree, Value),
+                     Message => "this works out to " & Written (Held)
+                                & ", and the declared range is "
+                                & Written (Bounds.Lower) & " .. "
+                                & Written (Bounds.Upper),
+                     Note    => "[0660]: a range subtype is checked at"
+                                & " every assignment and conversion into it",
+                     Related => Bounds.Site,
+                     Because => "the range written here",
+                     Into    => Found);
+                  Landin.Checking.Refuse (Types.all, Of_Tree, Value);
+               end if;
+            end;
+         end;
       end Check_Module_Fold;
 
       ------------------------------------------------------------
@@ -24318,6 +24813,135 @@ package body Landin.Stages.Checking is
                null;
          end case;
       end Known_Literal;
+
+      function Value_Constraint
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
+         return Landin.Checking.Constraint_Id is
+      begin
+         if Node = Syn.No_Node then
+            return Landin.Checking.No_Constraint;
+         end if;
+
+         if Landin.Checking.Constraint_Of (Types.all, Of_Tree, Node)
+              /= Landin.Checking.No_Constraint
+         then
+            return Landin.Checking.Constraint_Of (Types.all, Of_Tree, Node);
+         end if;
+
+         --  A name of constrained storage reads back with the constraint
+         --  its declaration carries, which is what makes [1730]'s habit
+         --  cost nothing after the first check.
+         if Syn.Kind (Of_Tree, Node)
+              in Syn.Name_Reference | Syn.Type_Reference
+           and then Res.Verdict_Of (Meanings.all, Of_Tree, Node) = Res.Bound
+         then
+            return Landin.Checking.Constraint_Of
+              (Types.all, Res.Bound_To (Meanings.all, Of_Tree, Node));
+         end if;
+
+         --  A call of a routine whose one named return is a range subtype
+         --  hands the proof back with the value.
+         if Syn.Kind (Of_Tree, Node) = Syn.Call then
+            declare
+               Signature : constant Landin.Checking.Signature_Id :=
+                 Effective_Call_Signature (Of_Tree, Node);
+            begin
+               if Signature /= Landin.Checking.No_Signature
+                 and then Landin.Checking.Signature_Result_Count
+                   (Types.all, Signature) = 1
+               then
+                  return Landin.Checking.Nth_Signature_Result
+                    (Types.all, Signature, 1).Constraint;
+               end if;
+            end;
+         end if;
+
+         return Landin.Checking.No_Constraint;
+      end Value_Constraint;
+
+      procedure Apply_Constraint
+        (Of_Tree      : Syn.Tree;
+         Node         : Syn.Node_Id;
+         Wanted       : Landin.Checking.Constraint_Id;
+         Site         : Landin.Provenance.Origin;
+         Because      : String;
+         Static_Image : Boolean := False;
+         Zero_Image   : Boolean := False)
+      is
+         Bounds : Landin.Checking.Constraint_Descriptor;
+         Held   : Ty.Folded;
+         Known  : Boolean;
+         Source : Landin.Checking.Constraint_Id;
+      begin
+         if Wanted = Landin.Checking.No_Constraint
+           or else Node = Syn.No_Node
+           or else Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
+                     = Ty.Ill_Typed
+         then
+            return;
+         end if;
+
+         Bounds := Landin.Checking.Bounds_Of (Types.all, Wanted);
+
+         --  [0540]: `zeroed` is the base type's all-bits-zero image, which
+         --  is the value zero, so a subtype that excludes zero excludes it.
+         if Zero_Image or else Syn.Kind (Of_Tree, Node) = Syn.Zeroed_Literal
+         then
+            Held := 0;
+            Known := True;
+         elsif Conversion_Target (Of_Tree, Node) = Ty.Type_Kind (Bounds.Base)
+         then
+            --  `percent(200)`: an integer conversion the base accepts hands
+            --  the value on unchanged, so the literal under it is what the
+            --  bounds are asked about.  A source the base does not hold
+            --  has already been refused by D168.
+            Known_Literal
+              (Of_Tree, Syn.Nth_Argument (Of_Tree, Node, 1), Held, Known);
+         else
+            Known_Literal (Of_Tree, Node, Held, Known);
+         end if;
+
+         if Known then
+            if Held < Bounds.Lower or else Held > Bounds.Upper then
+               Bad.Report
+                 (Item    => Bad.Literal_Out_Of_Range,
+                  Source  => Syn.Source_Of (Of_Tree),
+                  Where   => Syn.Where (Of_Tree, Node),
+                  Message => "this is " & Written (Held)
+                             & ", and the declared range is "
+                             & Written (Bounds.Lower) & " .. "
+                             & Written (Bounds.Upper),
+                  Note    => "[0660]: a range subtype is checked at every"
+                             & " assignment and conversion into it",
+                  Related => (if Landin.Provenance.Is_Known (Site)
+                              then Site else Bounds.Site),
+                  Because => (if Landin.Provenance.Is_Known (Site)
+                              then Because else "the range written here"),
+                  Into    => Found);
+               Landin.Checking.Refuse (Types.all, Of_Tree, Node);
+            end if;
+            return;
+         end if;
+
+         --  [1730]: a value whose own subtype lies inside this one carries
+         --  the proof already, so no second check is emitted.
+         Source := Value_Constraint (Of_Tree, Node);
+         if Source /= Landin.Checking.No_Constraint
+           and then Landin.Checking.Contains (Types.all, Wanted, Source)
+         then
+            return;
+         end if;
+
+         if Static_Image then
+            --  [1940]'s image has no moment in which to trap.  A module
+            --  value the checker's fold reaches is decided in
+            --  Check_Module_Fold; anything else is refused there rather
+            --  than reaching the backend unchecked.
+            return;
+         end if;
+
+         Landin.Checking.Note_Owed_Check (Types.all, Of_Tree, Node, Wanted);
+      end Apply_Constraint;
 
       --  Whether [1880] or anything before it has already refused any part
       --  of this operand.  Recursive rather than a look at the root: a
@@ -25382,6 +26006,32 @@ package body Landin.Stages.Checking is
 
          if Signature = Landin.Checking.No_Signature then
             Supported := False;
+         end if;
+
+         --  D188: a foreign routine's named return is never assigned in
+         --  Landin, so a range subtype in an external signature would be a
+         --  constraint nothing ever checks.
+         if Signature /= Landin.Checking.No_Signature then
+            for Index in 1 .. Landin.Checking.Signature_Parameter_Count
+              (Types.all, Signature)
+            loop
+               if Landin.Checking.Nth_Signature_Parameter
+                 (Types.all, Signature, Index).Constraint
+                   /= Landin.Checking.No_Constraint
+               then
+                  Supported := False;
+               end if;
+            end loop;
+            for Index in 1 .. Landin.Checking.Signature_Result_Count
+              (Types.all, Signature)
+            loop
+               if Landin.Checking.Nth_Signature_Result
+                 (Types.all, Signature, Index).Constraint
+                   /= Landin.Checking.No_Constraint
+               then
+                  Supported := False;
+               end if;
+            end loop;
          end if;
 
          if not Supported then

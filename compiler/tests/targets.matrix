@@ -392,6 +392,20 @@ negative/parameterized-struct-unused-unknown | linux-x86-64, macos-arm64
 negative/parameterized-struct-used-actual-overflow | linux-x86-64, macos-arm64
 negative/parameterized-struct-used-array-actual-overflow | linux-x86-64, macos-arm64
 negative/public-on-statement | linux-x86-64, macos-arm64
+negative/range-subtype-address | linux-x86-64, macos-arm64
+negative/range-subtype-base-is-not-an-integer | linux-x86-64, macos-arm64
+negative/range-subtype-bound-outside-base | linux-x86-64, macos-arm64
+negative/range-subtype-bounds-inverted | linux-x86-64, macos-arm64
+negative/range-subtype-exclusive-bound | linux-x86-64, macos-arm64
+negative/range-subtype-external-signature | linux-x86-64, macos-arm64
+negative/range-subtype-generic-argument | linux-x86-64, macos-arm64
+negative/range-subtype-in-a-slice | linux-x86-64, macos-arm64
+negative/range-subtype-inout-must-match | linux-x86-64, macos-arm64
+negative/range-subtype-known-value-out-of-range | linux-x86-64, macos-arm64
+negative/range-subtype-literal-out-of-range | linux-x86-64, macos-arm64
+negative/range-subtype-signature-mismatch | linux-x86-64, macos-arm64
+negative/range-subtype-struct-field | linux-x86-64, macos-arm64
+negative/range-subtype-zeroed-excluded | linux-x86-64, macos-arm64
 negative/raw-literal-inconsistent-indentation | linux-x86-64, macos-arm64
 negative/raw-literal-needs-read-only-slice | linux-x86-64, macos-arm64
 negative/raw-literal-write | linux-x86-64, macos-arm64
@@ -567,6 +581,7 @@ negative/variant-struct-payload-mismatch | linux-x86-64, synthetic-32
 negative/variant-whole-copy-source-unassigned | linux-x86-64, macos-arm64
 negative/wide-integer-not-enabled | linux-x86-64, macos-arm64
 negative/written-function-signature-mismatch | linux-x86-64, macos-arm64
+positive/alias-conversion | linux-x86-64, macos-arm64
 positive/any-slice-dispatch | linux-x86-64, macos-arm64, synthetic-32
 positive/arm-scopes-are-siblings | linux-x86-64, macos-arm64
 positive/array-literal-assignment | linux-x86-64, macos-arm64
@@ -708,6 +723,7 @@ positive/precedence-exclusion-over-alternation | linux-x86-64, macos-arm64
 positive/precedence-product-over-sum | linux-x86-64, macos-arm64
 positive/precedence-shift-over-conjunction | linux-x86-64, macos-arm64
 positive/precedence-sum-over-shift | linux-x86-64, macos-arm64
+positive/range-subtypes | linux-x86-64, macos-arm64
 positive/recursive-module-images | linux-x86-64, synthetic-32
 positive/reference-origins-and-consume | linux-x86-64, macos-arm64, synthetic-32
 positive/return-bare | linux-x86-64, macos-arm64
@@ -936,6 +952,10 @@ runtime/pointer-to-small-integer-traps | linux-x86-64
 runtime/r230-composition | linux-x86-64
 runtime/r230-composition-trap | linux-x86-64
 runtime/r250-references | linux-x86-64
+runtime/range-subtype-checks | linux-x86-64
+runtime/range-subtype-conversion-traps | linux-x86-64
+runtime/range-subtype-store-traps | linux-x86-64
+runtime/range-subtype-update-traps | linux-x86-64
 runtime/raw-literal-bytes | linux-x86-64
 runtime/recursive-fibonacci | linux-x86-64
 runtime/recursive-module-images-are-laid-out-and-distinct | linux-x86-64

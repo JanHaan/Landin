@@ -2812,7 +2812,7 @@ that has no implementation owner.
 | `[0630]` | hosted-now | R2.20 | matrix evidence |
 | `[0640]` | hosted-now | R2.20 | matrix evidence |
 | `[0650]` | hosted-now | R2.20 | named refusal |
-| `[0660]` | hosted-now | R4.10 | gap: range subtype checking is absent |
+| `[0660]` | hosted-now | R4.10 | matrix evidence and named refusal |
 | `[0670]` | hosted-now | R2.20 | matrix evidence and named refusal |
 | `[0680]` | hosted-now | R2.20 | matrix evidence and named refusal |
 | `[0690]` | hosted-now | R2.20 | matrix evidence |
@@ -3469,6 +3469,9 @@ the u128/i128 part of [0150], the f16 part of
 [0170], and the ownership disposition for
 [0500]'s pointer/slice operations, [0810]'s derivation primitives and [0820]'s
 lexical `arena` block. No language decision is made by this inventory.
+D188 later closed [0660]; the remaining gap list is [0480]'s atom-or-pointer
+union, the u128/i128 part of [0150], the f16 part of [0170], and that ownership
+disposition.
 
 The condition-declaration increment enables [1070]'s initialized inferred and
 typed bindings in `if`, every `elsif`, and `while`. D185 gives each binding the
@@ -3497,6 +3500,22 @@ one thing on every target Landin describes; every static refusal is untouched.
 The region is lexical rather than dynamic, carries one Boolean through the
 neutral IR to the backend, and grants an optimizer nothing, which leaves
 R4.50 owning what an optimizer may assume and R5/R6 owning C6's target parity.
+
+The range-subtype increment enables [0660] with D188. A range subtype is its
+base integer type constrained and not a new type: the representation, the
+operands and every operator result are the base's, so `p + 1` is a `u8` and
+[0650]'s distinct type remains its complement. The constraint is checked where
+[0660] says it is and nowhere else — storing into a place whose declared type
+is the subtype, and applying the subtype name to a value [0700] — reusing
+D168's exact-range path, so a known value outside the bounds is L0300 and a
+runtime one traps at [1950]'s edge. [1730]'s habit is mechanical: a value
+whose own subtype's bounds lie inside the destination's is not checked again.
+Composite and reference positions, `addr` of a constrained place and a
+generic type argument are refused by name and belong to R7.20, because
+`[]percent` and `[]u8` would otherwise be one type; an `extern (c)` signature
+refuses one through [1580]'s existing hosted-scalar boundary.
+The increment also extends [0700]'s conversion to a declared scalar name, so
+D15's alias converts as the name it aliases does.
 
 Exit evidence: every hosted `[NNNN]` row has implementation and positive or
 negative evidence; no omission is hidden by prototype coverage.
@@ -3858,7 +3877,12 @@ Depends on: R4.50, R7.10
 Use measured compiler evidence to implement or amend remaining normative work,
 including any specialization/reporting behavior not already closed. Deferred
 SoA `[0620]` is not normative implementation work unless its trigger caused a
-tour amendment.
+tour amendment. D188 leaves `[0660]`'s composition here: a range subtype in a
+struct field, array element, pointer or slice target or generic type argument,
+and the address of a constrained place, are refused by name until this item
+decides how the check composes.
+
+Sources: [0660]'s composite and reference positions, refused by name in R4.10.
 
 Exit evidence: `[1310]` and every other formerly delayed normative row have
 implementation and tests or an evidence-backed tour amendment.

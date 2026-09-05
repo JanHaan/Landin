@@ -1,0 +1,14 @@
+percent: type = u8 range 0..100
+
+opaque: (n: u8) -> (r: u8) =
+    r = n
+end opaque
+
+public main: () -> (code: i32) =
+    mut p: percent = 90
+    step: u8 = opaque(20)
+    --  [0290] gives 110, which is a u8 and not a percent.  The check is on
+    --  what the statement stores, not on either operand.
+    p += step
+    code = i32(p)
+end main

@@ -1,0 +1,32 @@
+--  Every constrained position [0660] names, taking a value the compiler
+--  cannot read: a binding, an assignment, an argument, a named return, a
+--  conversion and a compound update.
+percent: type = u8 range 0..100
+
+opaque: (n: u8) -> (r: u8) =
+    r = n
+end opaque
+
+scale: (p: percent) -> (r: percent) =
+    --  [1730]: r takes p's own proof, so this emits no check.
+    r = p
+end scale
+
+widen: (n: u8) -> (r: percent) =
+    r = n
+end widen
+
+public main: () -> (code: i32) =
+    raw: u8 = opaque(20)
+    mut a: percent = raw
+    a = raw
+    b: percent = scale(a)
+    c: percent = widen(raw)
+    --  [0700]'s conversion half: the base conversion first, the bounds after.
+    d: percent = percent(i32(raw))
+    a += 2
+    --  Arithmetic is the base type's, so this sum is a u8 and is not
+    --  checked against the bounds at all.
+    total: u8 = a + b + c + d - 40
+    code = i32(total)
+end main

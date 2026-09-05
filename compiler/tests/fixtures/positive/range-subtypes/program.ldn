@@ -1,0 +1,46 @@
+--  [0660]'s own example, the places its check applies, and the two ways
+--  [1730]'s proof is carried rather than checked again.
+percent: type = u8 range 0..100
+
+--  D15: an alias of a range subtype is the same type, bounds and all.
+small: type = percent
+
+--  A bound is D136's fold, not only a literal.
+half: type = u8 range 0..(200 / 2)
+
+--  A signed base takes a negative lower bound.
+offset: type = i16 range -100..100
+
+--  Every value of this one is a percent, so D188 elides the store below.
+tenth: type = u8 range 0..10
+
+scale: (p: percent) -> (r: percent) =
+    --  [1730]: p is already a percent, so this store is checked zero times.
+    r = p
+end scale
+
+--  And the other side of the same habit: n is a u8 and only the run can
+--  tell whether it is a percent, so this store is the one check.
+narrow: (n: u8) -> (r: percent) =
+    r = n
+end narrow
+
+reduce: (v: offset) -> (r: offset) =
+    r = v
+end reduce
+
+public main: () -> (code: i32) =
+    a: percent = 40
+    b: small = a
+    c: half = a
+    d: percent = scale(b)
+    g: percent = narrow(a)
+    h: tenth = 5
+    i: percent = h
+    e: offset = -7
+    f: offset = reduce(e)
+    --  [0660] is checked at assignment and conversion, so arithmetic is the
+    --  base type's: p + 1 is a u8 and nothing else.
+    total: u8 = a + b + c + d + g + i - 45
+    code = i32(total) + i32(f)
+end main

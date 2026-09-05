@@ -1,0 +1,6 @@
+class: runtime
+summary: D188 a compound assignment past a range subtype's upper bound traps on the value it stores
+program: main.ldn
+traps: yes
+constructs: 0660, 0290, 1900
+targets: linux-x86-64

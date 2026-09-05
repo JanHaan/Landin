@@ -729,6 +729,18 @@ package body Landin.IR.Dump is
                  & Path_Qualifier
                  & Operands (Item, Value);
 
+            when Range_Check =>
+               --  D188: a dump that did not render the bounds would show
+               --  two different checks as one line.
+               return Lead & Operands (Item, Value) & " range "
+                 & Trimmed
+                     (Landin.Types.Folded'Image
+                        (Range_Lower (Of_Unit, Item, Value)))
+                 & " .. "
+                 & Trimmed
+                     (Landin.Types.Folded'Image
+                        (Range_Upper (Of_Unit, Item, Value)));
+
             when others =>
                return Lead & Operands (Item, Value);
          end case;

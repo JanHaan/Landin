@@ -1,0 +1,11 @@
+percent: type = u8 range 0..100
+
+reset: (inout p: percent) -> none =
+    p = 0
+end reset
+
+public main: () -> (code: i32) =
+    mut raw: u8 = 200
+    reset(raw)
+    code = i32(raw)
+end main

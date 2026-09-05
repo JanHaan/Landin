@@ -1,0 +1,12 @@
+percent: type = u8 range 0..100
+
+opaque: (n: u8) -> (r: u8) =
+    r = n
+end opaque
+
+public main: () -> (code: i32) =
+    raw: u8 = opaque(200)
+    --  200 is a u8 and not a percent, and only the run can tell.
+    p: percent = raw
+    code = i32(p)
+end main

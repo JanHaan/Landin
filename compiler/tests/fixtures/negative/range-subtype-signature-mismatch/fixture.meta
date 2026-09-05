@@ -1,0 +1,6 @@
+class: negative
+summary: D188 a range subtype is part of structural function-signature identity, so an unconstrained function value does not fill a constrained slot
+constructs: 0660, 1000
+program: program.ldn
+codes: L0301
+targets: linux-x86-64, macos-arm64

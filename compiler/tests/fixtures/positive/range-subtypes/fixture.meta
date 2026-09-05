@@ -1,0 +1,5 @@
+class: positive
+summary: D188 a range subtype declares, aliases, types a binding, a parameter and a named return, and carries its own proof between them
+constructs: 0660, 0700, 1730, 1795
+program: program.ldn
+targets: linux-x86-64, macos-arm64

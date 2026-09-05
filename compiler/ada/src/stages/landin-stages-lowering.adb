@@ -42,6 +42,7 @@ package body Landin.Stages.Lowering is
    use type Landin.Checking.Array_Element_Form;
    use type Landin.Checking.Actual_Kind;
    use type Landin.Checking.Atom_Set_Id;
+   use type Landin.Checking.Constraint_Id;
    use type Landin.Checking.Concept_Id;
    use type Landin.Checking.Conformance_Id;
    use type Landin.Checking.Element_Count;
@@ -822,6 +823,9 @@ package body Landin.Stages.Lowering is
                 then Ty.Infinity else Ty.Quiet_NaN)))
         with Pre => Is_Float_Special (Of_Tree, Node);
 
+      function Conversion_Scalar
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind;
+
       function Scalar_At (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
         return Ty.Scalar_Name;
 
@@ -1181,6 +1185,22 @@ package body Landin.Stages.Lowering is
          Node    : Syn.Node_Id;
          Scope   : Res.Scope_Id) return IR.Value_Id;
 
+      --  D188: every scalar value passes through Lower_Expression, so
+      --  [0660]'s runtime check is emitted at that one exit and nowhere
+      --  else.  The checker decided which nodes owe one; this only obeys.
+      function Lower_Unconstrained
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Scope   : Res.Scope_Id) return IR.Value_Id;
+
+      --  D188: a compound assignment and [1900]'s `inc` store the
+      --  operator's result rather than any expression the source wrote, so
+      --  their check hangs on the statement and is applied here.
+      function Checked_Update
+        (Of_Tree : Syn.Tree;
+         Stmt    : Syn.Node_Id;
+         Value   : IR.Value_Id) return IR.Value_Id;
+
       function Lower_Condition
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
@@ -1309,6 +1329,48 @@ package body Landin.Stages.Lowering is
         (Of_Tree : Syn.Tree;
          Error   : IR.Value_Id;
          Site    : Landin.Provenance.Origin);
+
+      --  D15/D188: which scalar type a one-argument call applies, whether
+      --  it is written with [1790]'s own name, an alias of one, or [0660]'s
+      --  range subtype.  Ill_Typed means this is an ordinary call.  The
+      --  checker decided the same question the same way.
+      function Conversion_Scalar
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind
+      is
+      begin
+         if Syn.Kind (Of_Tree, Node) /= Syn.Call
+           or else Syn.Argument_Count (Of_Tree, Node) /= 1
+           or else Syn.Kind
+             (Of_Tree, Syn.Callee_Of (Of_Tree, Node)) /= Syn.Name_Reference
+         then
+            return Ty.Ill_Typed;
+         end if;
+
+         declare
+            Callee : constant Syn.Node_Id := Syn.Callee_Of (Of_Tree, Node);
+            Named  : constant Ty.Type_Kind :=
+              Landin.Checking.Named (Types.all, Syn.Name (Of_Tree, Callee));
+         begin
+            if Named in Ty.Scalar_Name then
+               return Named;
+            end if;
+
+            if Res.Verdict_Of (Meanings.all, Of_Tree, Callee) = Res.Bound
+              and then Res.Sort_Of
+                (Meanings.all, Res.Bound_To (Meanings.all, Of_Tree, Callee))
+                  = Res.Module_Type
+              and then Landin.Checking.Type_Of
+                (Types.all,
+                 Res.Bound_To (Meanings.all, Of_Tree, Callee))
+                  in Ty.Scalar_Name
+            then
+               return Landin.Checking.Type_Of
+                 (Types.all, Res.Bound_To (Meanings.all, Of_Tree, Callee));
+            end if;
+         end;
+
+         return Ty.Ill_Typed;
+      end Conversion_Scalar;
 
       function Scalar_At (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
         return Ty.Scalar_Name
@@ -5249,6 +5311,52 @@ package body Landin.Stages.Lowering is
          Node    : Syn.Node_Id;
          Scope   : Res.Scope_Id) return IR.Value_Id
       is
+         Made : constant IR.Value_Id :=
+           Lower_Unconstrained (Of_Tree, Node, Scope);
+         Owed : constant Landin.Checking.Constraint_Id :=
+           Landin.Checking.Owed_Check (Types.all, Of_Tree, Node);
+      begin
+         if Owed = Landin.Checking.No_Constraint then
+            return Made;
+         end if;
+
+         declare
+            Bounds : constant Landin.Checking.Constraint_Descriptor :=
+              Landin.Checking.Bounds_Of (Types.all, Owed);
+         begin
+            return IR.Emit_Range_Check
+              (Unit.all, Filling, Made, Bounds.Base,
+               Bounds.Lower, Bounds.Upper, Site_Of (Of_Tree, Node));
+         end;
+      end Lower_Expression;
+
+      function Checked_Update
+        (Of_Tree : Syn.Tree;
+         Stmt    : Syn.Node_Id;
+         Value   : IR.Value_Id) return IR.Value_Id
+      is
+         Owed : constant Landin.Checking.Constraint_Id :=
+           Landin.Checking.Owed_Check (Types.all, Of_Tree, Stmt);
+      begin
+         if Owed = Landin.Checking.No_Constraint then
+            return Value;
+         end if;
+
+         declare
+            Bounds : constant Landin.Checking.Constraint_Descriptor :=
+              Landin.Checking.Bounds_Of (Types.all, Owed);
+         begin
+            return IR.Emit_Range_Check
+              (Unit.all, Filling, Value, Bounds.Base,
+               Bounds.Lower, Bounds.Upper, Site_Of (Of_Tree, Stmt));
+         end;
+      end Checked_Update;
+
+      function Lower_Unconstrained
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Scope   : Res.Scope_Id) return IR.Value_Id
+      is
          Site : constant Landin.Provenance.Origin :=
            Site_Of (Of_Tree, Node);
 
@@ -6366,29 +6474,14 @@ package body Landin.Stages.Lowering is
                   Propagate => True);
 
             when Syn.Call | Syn.Labeled_Application =>
-               if Syn.Kind (Of_Tree, Node) = Syn.Call
-                 and then Syn.Argument_Count (Of_Tree, Node) = 1
-                 and then Syn.Kind
-                   (Of_Tree, Syn.Callee_Of (Of_Tree, Node))
-                     = Syn.Name_Reference
-                 and then Landin.Checking.Named
-                   (Types.all,
-                    Syn.Name
-                      (Of_Tree, Syn.Callee_Of (Of_Tree, Node)))
-                       in Ty.Scalar_Name
-               then
+               if Conversion_Scalar (Of_Tree, Node) in Ty.Scalar_Name then
                   declare
                      Value : constant IR.Value_Id := Lower_Expression
                        (Of_Tree, Syn.Nth_Argument (Of_Tree, Node, 1), Scope);
                   begin
                      return IR.Emit_Conversion
                        (Unit.all, Filling, Value,
-                        Ty.Scalar_Name
-                          (Landin.Checking.Named
-                             (Types.all,
-                              Syn.Name
-                                (Of_Tree,
-                                 Syn.Callee_Of (Of_Tree, Node)))),
+                        Ty.Scalar_Name (Conversion_Scalar (Of_Tree, Node)),
                         Site);
                   end;
                end if;
@@ -6452,7 +6545,7 @@ package body Landin.Stages.Lowering is
                   end;
                end;
          end case;
-      end Lower_Expression;
+      end Lower_Unconstrained;
 
       --  D185 represents a condition declaration as the ordinary Binding it
       --  introduces.  Evaluate the initializer in the surrounding scope,
@@ -10468,12 +10561,16 @@ package body Landin.Stages.Lowering is
                                                  (Unit.all, Filling, Saved,
                                                   Site);
                                              Result : constant IR.Value_Id :=
-                                               IR.Emit_Binary
-                                                 (Unit.all, Filling,
-                                                  Update_Opcode
-                                                    (Syn.Assignment_Operation
-                                                       (Of_Tree, Stmt)),
-                                                  Left, Right, Held, Site);
+                                               Checked_Update
+                                                 (Of_Tree, Stmt,
+                                                  IR.Emit_Binary
+                                                    (Unit.all, Filling,
+                                                     Update_Opcode
+                                                       (Syn
+                                                          .Assignment_Operation
+                                                            (Of_Tree, Stmt)),
+                                                     Left, Right, Held,
+                                                     Site));
                                           begin
                                              if Address_Slot = IR.No_Slot then
                                                 Write (Place, Result);
@@ -11178,9 +11275,11 @@ package body Landin.Stages.Lowering is
                            begin
                               Write
                                 (Place,
-                                 IR.Emit_Binary
-                                   (Unit.all, Filling, Op, Was, One, Held,
-                                    Site),
+                                 Checked_Update
+                                   (Of_Tree, Stmt,
+                                    IR.Emit_Binary
+                                      (Unit.all, Filling, Op, Was, One, Held,
+                                       Site)),
                                  Index);
                            end;
                         end if;
@@ -12952,10 +13051,7 @@ package body Landin.Stages.Lowering is
                   then
                      declare
                         Target : constant Ty.Type_Kind :=
-                          Landin.Checking.Named
-                            (Types.all,
-                             Syn.Name
-                               (Of_Tree, Syn.Callee_Of (Of_Tree, Node)));
+                          Conversion_Scalar (Of_Tree, Node);
                      begin
                         if Target = Ty.Bool then
                            declare

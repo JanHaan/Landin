@@ -247,6 +247,13 @@ package body Landin.Syntax.Parser is
             Caller_Id : constant Landin.Source.Names.Name_Id :=
               Landin.Source.Names.Intern (Names, "caller");
 
+            --  D188's [0660] range subtype.  It is recognized only after a
+            --  parsed base type at a type declaration's right-hand side, so
+            --  a binding, parameter or label named `range` keeps its
+            --  ordinary meaning and [1760] reserves nothing new.
+            Range_Id : constant Landin.Source.Names.Name_Id :=
+              Landin.Source.Names.Intern (Names, "range");
+
             --  D187's [1120] region.  Two tokens decide it, so a binding
             --  or label named `unchecked` keeps its ordinary meaning.
             Unchecked_Id : constant Landin.Source.Names.Name_Id :=
@@ -2380,6 +2387,94 @@ package body Landin.Syntax.Parser is
                      Aliased_Type := Parse_Struct_Body (Named, At_Name);
                   else
                      Aliased_Type := Parse_Type (False, At_Name);
+
+                     --  D188/[0660]: `range` after that base type makes this
+                     --  declaration a range subtype.  Only a type
+                     --  declaration reads the word this way, so an ordinary
+                     --  name spelled `range` is untouched, and only `..`
+                     --  is admitted -- the tour writes no exclusive bound
+                     --  in a type.
+                     if not Type_Refused
+                       and then Peek = Tok.Identifier
+                       and then Named_Here = Range_Id
+                     then
+                        declare
+                           Starts : constant Landin.Source.Span :=
+                             Where (Result, Aliased_Type);
+                           Lower  : Node_Id := No_Node;
+                           Upper  : Node_Id := No_Node;
+                        begin
+                           Advance;
+
+                           if Pre.Begins_Expression (Peek) then
+                              Lower := Parse_Expression;
+                           else
+                              Complain
+                                (Item    => Syn.Expression_Expected,
+                                 Where   => (if Peek = Tok.End_Of_Input
+                                             then After_Previous else Here),
+                                 Message => "a range subtype's lower bound"
+                                            & " belongs here",
+                                 Note    => "[0660]: a range subtype writes"
+                                            & " two bounds separated by"
+                                            & " `..`",
+                                 Related => At_Name,
+                                 Because => "the type declared here");
+                              Lower := Add (Error_Expression, Point);
+                           end if;
+
+                           if Peek = Tok.Dot_Dot_Less then
+                              Type_Refused := True;
+                              Complain
+                                (Item    => Syn.Type_Expected,
+                                 Where   => Here,
+                                 Message => "a range subtype's bounds are"
+                                            & " separated by `..`",
+                                 Note    => "[0660]: both of a range"
+                                            & " subtype's bounds are"
+                                            & " values of the type",
+                                 Related => At_Name,
+                                 Because => "the type declared here");
+                              Aliased_Type := Add (Error_Type, Point);
+                           elsif not Expect
+                                   (Wanted  => Tok.Dot_Dot,
+                                    Message => "a range subtype's bounds"
+                                               & " are separated by `..`",
+                                    Note    => "[0660]: a range subtype"
+                                               & " writes a base type and"
+                                               & " two bounds",
+                                    Related => At_Name,
+                                    Because => "the type declared here")
+                           then
+                              Type_Refused := True;
+                              Aliased_Type := Add (Error_Type, Point);
+                           else
+                              if Pre.Begins_Expression (Peek) then
+                                 Upper := Parse_Expression;
+                              else
+                                 Complain
+                                   (Item    => Syn.Expression_Expected,
+                                    Where   =>
+                                      (if Peek = Tok.End_Of_Input
+                                       then After_Previous else Here),
+                                    Message => "a range subtype's upper"
+                                               & " bound belongs here",
+                                    Note    => "[0660]: a range subtype"
+                                               & " writes two bounds"
+                                               & " separated by `..`",
+                                    Related => At_Name,
+                                    Because => "the type declared here");
+                                 Upper := Add (Error_Expression, Point);
+                              end if;
+
+                              Aliased_Type := Add
+                                (Of_Kind  => Range_Subtype,
+                                 At_Token => Starts,
+                                 Extent   => Join (Starts, After_Previous),
+                                 Children => [Aliased_Type, Lower, Upper]);
+                           end if;
+                        end;
+                     end if;
 
                      --  [0640]: a union is a nonempty run of atom type
                      --  names.  Parse_Type read the first name; only a type

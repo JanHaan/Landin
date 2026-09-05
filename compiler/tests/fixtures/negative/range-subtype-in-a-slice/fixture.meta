@@ -1,0 +1,6 @@
+class: negative
+summary: D188 a range subtype in a composite or reference position is refused, because the composite would be its base type's and enter constrained storage unchecked
+constructs: 0570, 0660
+program: program.ldn
+codes: L0304
+targets: linux-x86-64, macos-arm64
