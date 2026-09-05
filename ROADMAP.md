@@ -1850,8 +1850,9 @@ Depends on: R2.20, R1.70, R1.80
 Implement full function values, named returns, non-loop control-flow
 expressions, traps, declared atom-set errors, `fail`, `try`, call-site `else`,
 `defer` and `undo`, together with Linux x86-64 internal calling/lowering rules.
-R4.10 owns loops and their `break`/`continue` transfers; their syntactic
-refusals name that item rather than this one. The first
+Loops and their `break`/`continue` transfers were R4.10's, which has since
+enabled them; while they were deferred their syntactic refusals named that
+item rather than this one, and no refusal table names it now. The first
 completed increment retains the six-register scalar prefix and places every
 later scalar argument in an aligned run of eight-byte stack slots, copied into
 ordinary callee slots and reclaimed by the caller. Its runtime case crosses
@@ -2117,8 +2118,8 @@ stack arguments, function values, stored aggregate arguments and caller-owned
 aggregate results. The neutral exit selector already distinguishes normal,
 successful-return, failure and structured-transfer edges from a trap, which
 never unwinds. D129 reserves its failure-only cleanup policy for `undo`, while
-the forty-ninth increment supplies that spelling and R4.10 still owns every
-loop transfer.
+the forty-ninth increment supplies that spelling and every loop transfer was
+R4.10's.
 
 The forty-sixth increment enables payload-free atoms and declared errors.
 Atom declarations mint identity; aliases and unions flatten to structural sets,
@@ -2180,7 +2181,7 @@ cleanup calls and then emits the existing failure terminator. Direct and
 indirect calls, register and stack arguments, fixed arrays, aggregates and
 anonymous multiple results retain their ordinary target-neutral convention and
 caller-owned discard temporary, leaving the verifier and x86 backend no
-unwind-specific form. R4.10 remains the owner of loops and their transfers.
+unwind-specific form. Loops and their transfers were R4.10's.
 
 The fiftieth increment performs the completion audit rather than treating the
 preceding implementation diary as proof of closure. D134 gives every D127
@@ -2761,7 +2762,7 @@ that has no implementation owner.
 | `[0120]` | hosted-now | R2.20 | matrix evidence and named refusal |
 | `[0130]` | hosted-now | R1.50 | matrix evidence |
 | `[0140]` | hosted-now | R1.50 | matrix evidence |
-| `[0150]` | hosted-now | R4.10 | matrix evidence for the enabled widths; u128 and i128 are named refusals owned by R7.20, the packed widths by R6.40 and R6.80 |
+| `[0150]` | hosted-now | R4.10 | matrix evidence for the enabled widths; u128 and i128 are named refusals owned by R7.20; the arbitrary field widths this construct hands to [0730] are no spelling [1790] admits and are that freestanding row's work |
 | `[0160]` | hosted-now | R2.10 | matrix evidence |
 | `[0170]` | hosted-now | R4.10 | matrix evidence for f32 and f64; f16 is a named refusal owned by R7.20 |
 | `[0180]` | hosted-now | R1.60 | matrix evidence |
@@ -3236,9 +3237,9 @@ positioned token, and `examples/config_parser/parser` is a complete recursive
 descent parser over it. The parser builds a recursive arena-backed variant AST
 through `core/vec`, reports syntax mistakes through `any core/diag.log`,
 recovers at newline and brace boundaries, and exposes only allocation or
-diagnostic-delivery failure from its public operation. R4.10 still owns loops
-and full UTF-8 text, so the same scanner, recovery and sequence walks are
-spelled recursively over R3's byte-oriented positions.
+diagnostic-delivery failure from its public operation. R4.10 had not yet
+enabled loops or full UTF-8 text, so the same scanner, recovery and sequence
+walks are spelled recursively over R3's byte-oriented positions.
 
 `runtime/derived-parser` reads its input through the real hosted `core/io`
 provider and runs the same parser with bounded and streaming loggers. It keeps
@@ -3464,15 +3465,16 @@ closure test. It also removes the unreachable generic scalar-conversion and
 collection-traversal refusal kinds after D176 and D180/D184 respectively, and
 moves the still-live u128/i128 and f16 refusals wholly to the checker that
 recognises those resolved type names. The finite hosted gap list is [0480]'s
-atom-or-pointer union, [0660]'s range subtype,
-the u128/i128 part of [0150], the f16 part of
-[0170], and the ownership disposition for
+atom-or-pointer union, [0660]'s range subtype, [1040]'s caller parameter,
+[1070]'s condition declaration, [1120]'s `unchecked` region, the u128/i128
+part of [0150], the f16 part of [0170], and the ownership disposition for
 [0500]'s pointer/slice operations, [0810]'s derivation primitives and [0820]'s
 lexical `arena` block. No language decision is made by this inventory.
-D188 later closed [0660], D189 closed [0480], D190 re-owned the u128/i128
-part of [0150] and the f16 part of [0170] to R7.20, and D191 settled the
-ownership disposition by re-owning [0500], [0810] and [0820] to R4.20; the
-hosted gap list is empty.
+Each entry is marked closed below rather than struck from the finding: D185
+closed [1070], D186 closed [1040], D187 closed [1120], D188 closed [0660] and
+D189 closed [0480]; D190 re-owned the u128/i128 part of [0150] and the f16
+part of [0170] to R7.20, and D191 settled the ownership disposition by
+re-owning [0500], [0810] and [0820] to R4.20. The hosted gap list is empty.
 
 The condition-declaration increment enables [1070]'s initialized inferred and
 typed bindings in `if`, every `elsif`, and `while`. D185 gives each binding the
@@ -3596,21 +3598,24 @@ R4.10. The matrix reads 178 of 200 constructs with evidence.
 
 What the item deliberately left is named rather than open, and every one of
 the twenty-two remaining bare rows is `later-r4`, `freestanding`, `deferred`
-or `principle`. The accounting increment left a gap list of six,
-and half of it was settled by re-owning rather than implementing, which is the
-honest outcome where the work belongs elsewhere: u128, i128 and f16 have never
-been spelled by [1790]'s `scalar_name`, so their refusal was already the
-specification's and D190 moved only the enabling item to R7.20; and [0500]'s
-derivation conveniences and [0820]'s lexical `arena` block are allocator
+or `principle`. The accounting increment left a gap list of eight entries over
+ten constructs, and three of those entries were settled by re-owning rather
+than implementing, which is the honest outcome where the work belongs
+elsewhere: u128, i128 and f16 have never been spelled by [1790]'s
+`scalar_name`, so their refusal was already the specification's and D190 moved
+only the enabling item to R7.20; and [0500]'s derivation conveniences,
+[0810]'s primitives and [0820]'s lexical `arena` block are allocator
 semantics, so D191 moved them to R4.20 with the four questions neither
-document answers written down there. [0480], [0660] and [1120] were
-implemented. Both were paid for here with a refusal that names its
-inheritor rather than a parse cascade. Target parity for `unchecked`, what an
-optimizer may assume, and [1580]'s unminted null remain with R5/R6, R4.50 and
-R4.40 respectively.
+document answers written down there. Both re-ownings were paid for here with a
+refusal that names its inheritor rather than a parse cascade. The other five
+entries were implemented: [1070]'s condition declaration, [1040]'s caller
+parameter, [1120]'s `unchecked` region, [0660]'s range subtype and [0480]'s
+atom-or-pointer union, the last two of which also leave a named part to R7.20.
+Target parity for `unchecked`, what an optimizer may assume, and [1580]'s
+unminted null remain with R5/R6, R4.50 and R4.40 respectively.
 
 The complete pinned Linux x86-64 debug and release gates pass 394 cases and
-10,309 checks each, and `python3 check.py` is clean over all seven documents.
+10,342 checks each, and `python3 check.py` is clean over all seven documents.
 
 Exit evidence: every hosted `[NNNN]` row has implementation and positive or
 negative evidence; no omission is hidden by prototype coverage.

@@ -352,6 +352,7 @@ negative/non-ascii-outside-comment | linux-x86-64, macos-arm64
 negative/nonzeroable-constraint | linux-x86-64, macos-arm64, synthetic-32
 negative/nonzeroable-zero-length-constraint | linux-x86-64, macos-arm64, synthetic-32
 negative/operands-of-two-types | linux-x86-64, macos-arm64
+negative/packed-field-width-is-not-a-scalar-name | linux-x86-64, macos-arm64
 negative/parameterized-alias-arity | linux-x86-64, macos-arm64
 negative/parameterized-alias-cycle | linux-x86-64, macos-arm64
 negative/parameterized-alias-extent-overflow | linux-x86-64, macos-arm64
@@ -542,6 +543,7 @@ negative/text-view-identities-are-distinct | linux-x86-64, macos-arm64
 negative/try-infallible-call | linux-x86-64, synthetic-32
 negative/type-alias-cycle | linux-x86-64, macos-arm64, synthetic-32
 negative/type-name-is-not-a-type | linux-x86-64, macos-arm64
+negative/unchecked-keeps-a-borrow | linux-x86-64, macos-arm64
 negative/unchecked-keeps-a-known-index | linux-x86-64, macos-arm64
 negative/unchecked-keeps-definite-assignment | linux-x86-64, macos-arm64
 negative/unchecked-keeps-permissions | linux-x86-64, macos-arm64

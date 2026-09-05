@@ -1,0 +1,8 @@
+class: negative
+summary: [0150]'s arbitrary field widths are no spelling [1790] admits, so one outside a packed struct is an undeclared name and not a width refused by name
+expect: expected.txt
+targets: linux-x86-64, macos-arm64
+args: ../tests/fixtures/negative/packed-field-width-is-not-a-scalar-name/main.ldn
+codes: L0304
+status: 1
+constructs: 0150, 0670, 1790, 1860

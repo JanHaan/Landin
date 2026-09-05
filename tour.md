@@ -1437,8 +1437,9 @@ sink, which is what stops a container from moving under a
 slice into it. The check is local to one function body, so
 there is nothing to annotate and the fix is always nearby:
 take the view again afterwards. It only applies where the
-storage can actually move, and unchecked turns it off with
-everything else.
+storage can actually move, and an unchecked region [1120]
+does not turn it off: origins and escape are among the
+checks that stay.
 
 ```landin
 grow_and_use: (inout l: list, v: i32) -> none =
@@ -1848,12 +1849,16 @@ parameter, otherwise a wrapper would report itself.
 ```landin
 assert: (cond: bool, caller where: utf8) -> none =
     if not cond then
-        panic_handler(assertion, where)
+        report_failure(where)
     end if
 end assert
 ```
 
 used as: assert(count > 0)
+
+That is a program's own assertion and not the compiler's check: [1670]'s
+panic handler takes a compiler-assigned site number and no text, so a caller
+parameter is never what reaches it.
 
 A wrapper preserves the original site explicitly:
 

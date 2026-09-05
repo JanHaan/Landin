@@ -1,0 +1,14 @@
+--  [0830]'s borrow is one of [0770]--[0840]'s origin rules, and a
+--  region removes no static refusal.
+increment: (inout value: u32) -> none =
+    value = value + 1
+end increment
+
+bad: () -> none =
+    mut value: u32 = 1
+    unchecked begin
+        view: ptr u32 = addr value
+        increment(value)
+        _ = view.val
+    end unchecked
+end bad
