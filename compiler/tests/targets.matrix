@@ -72,6 +72,9 @@ negative/compound-assignment-immutable | linux-x86-64, macos-arm64
 negative/compound-assignment-unassigned | linux-x86-64, macos-arm64
 negative/compound-assignment-zero-divisor | linux-x86-64, macos-arm64
 negative/concept-composition-cycle | linux-x86-64, macos-arm64, synthetic-32
+negative/condition-declaration-body-shadowing | linux-x86-64, macos-arm64
+negative/condition-declaration-not-bool | linux-x86-64, macos-arm64
+negative/condition-declaration-out-of-scope | linux-x86-64, macos-arm64
 negative/condition-is-not-believed | linux-x86-64, macos-arm64
 negative/conformance-collision | linux-x86-64, macos-arm64, synthetic-32
 negative/conformance-entry-signature-mismatch | linux-x86-64, macos-arm64, synthetic-32
@@ -580,6 +583,7 @@ positive/comparison-gives-a-bool | linux-x86-64, macos-arm64
 positive/compiler-zeroable-conformances | linux-x86-64, macos-arm64, synthetic-32
 positive/computed-whole-array-elements | linux-x86-64, macos-arm64
 positive/concepts-and-conformances | linux-x86-64, macos-arm64, synthetic-32
+positive/condition-declarations | linux-x86-64, macos-arm64
 positive/control-expression-values | linux-x86-64, macos-arm64, synthetic-32
 positive/declaration-public | linux-x86-64, macos-arm64
 positive/deep-nested-struct-children | linux-x86-64, macos-arm64
@@ -783,6 +787,7 @@ runtime/compound-assignment-overflow-traps | linux-x86-64
 runtime/computed-aggregate-elements | linux-x86-64
 runtime/computed-array-index-reads-and-writes | linux-x86-64
 runtime/computed-array-index-traps | linux-x86-64
+runtime/condition-declarations | linux-x86-64
 runtime/constant-return-exits-with-its-code | linux-x86-64
 runtime/control-expression-aggregate-joins | linux-x86-64
 runtime/control-expression-edges-keep-source-order | linux-x86-64

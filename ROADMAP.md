@@ -2853,7 +2853,7 @@ that has no implementation owner.
 | `[1040]` | hosted-now | R4.10 | gap: caller parameters are absent |
 | `[1050]` | hosted-now | R2.30 | matrix evidence |
 | `[1060]` | hosted-now | R2.30 | matrix evidence |
-| `[1070]` | hosted-now | R4.10 | gap: declarations in conditions are absent |
+| `[1070]` | hosted-now | R4.10 | D185 and matrix evidence |
 | `[1080]` | hosted-now | R2.30 | matrix evidence |
 | `[1090]` | hosted-now | R2.30 | matrix evidence |
 | `[1100]` | hosted-now | R2.30 | matrix evidence |
@@ -3465,10 +3465,18 @@ collection-traversal refusal kinds after D176 and D180/D184 respectively, and
 moves the still-live u128/i128 and f16 refusals wholly to the checker that
 recognises those resolved type names. The finite hosted gap list is [0480]'s
 atom-or-pointer union, [0660]'s range subtype, [1040]'s caller parameter,
-[1070]'s condition declaration, [1120]'s `unchecked` region, the u128/i128
-part of [0150], the f16 part of [0170], and the ownership disposition for
+[1120]'s `unchecked` region, the u128/i128 part of [0150], the f16 part of
+[0170], and the ownership disposition for
 [0500]'s pointer/slice operations, [0810]'s derivation primitives and [0820]'s
 lexical `arena` block. No language decision is made by this inventory.
+
+The condition-declaration increment enables [1070]'s initialized inferred and
+typed bindings in `if`, every `elsif`, and `while`. D185 gives each binding the
+scope of exactly the body it guards, evaluates its initializer before that
+scope exists, requires its stored value to be `bool`, and reinitializes a
+`while` binding at every test. Sibling arms, `else`, `complete`, and following
+statements do not see the name; an outer declaration may be shadowed, while a
+second declaration in the guarded body is a same-scope duplicate.
 
 Exit evidence: every hosted `[NNNN]` row has implementation and positive or
 negative evidence; no omission is hidden by prototype coverage.

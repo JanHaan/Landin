@@ -1,0 +1,17 @@
+choose: (ready: bool) -> (answer: i32) =
+    if ready := not ready then
+        _ = ready
+        answer = 1
+    elsif ready: bool = ready then
+        answer = 2
+    else
+        answer = 3
+    end if
+end choose
+
+repeat: (keep: bool) -> none =
+    while mut keep: bool = keep do
+        keep = false
+        break
+    end while
+end repeat

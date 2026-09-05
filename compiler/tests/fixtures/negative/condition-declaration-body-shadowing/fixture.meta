@@ -1,0 +1,6 @@
+class: negative
+summary: D185 a guarded body cannot redeclare its condition binding in their shared scope
+constructs: 1070, 1850
+program: program.ldn
+targets: linux-x86-64, macos-arm64
+codes: L0200
