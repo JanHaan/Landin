@@ -2796,7 +2796,7 @@ that has no implementation owner.
 | `[0470]` | hosted-now | R2.50 | matrix evidence |
 | `[0480]` | hosted-now | R4.10 | matrix evidence and named refusal |
 | `[0490]` | principle | none | system-tool policy; no implementation claim |
-| `[0500]` | hosted-now | R4.10 | gap: pointer-to-slice primitive ownership is unsettled |
+| `[0500]` | later-r4 | R4.20 | `slice_from` rejected by D151; `offset` and `base_of` are scheduled `core` conveniences |
 | `[0510]` | hosted-now | R3.30 | matrix evidence |
 | `[0520]` | hosted-now | R2.20 | matrix evidence and named refusal |
 | `[0530]` | hosted-now | R2.20 | matrix evidence |
@@ -2827,8 +2827,8 @@ that has no implementation owner.
 | `[0780]` | hosted-now | R2.50 | matrix evidence |
 | `[0790]` | hosted-now | R2.50 | matrix evidence |
 | `[0800]` | hosted-now | R2.50 | matrix evidence |
-| `[0810]` | hosted-now | R4.10 | gap: pointer-derivation primitive ownership is unsettled |
-| `[0820]` | hosted-now | R4.10 | gap: lexical arena block ownership is unsettled |
+| `[0810]` | later-r4 | R4.20 | [0470]'s conversion is the derivation cut today; the named primitives are scheduled with [0500] |
+| `[0820]` | later-r4 | R4.20 | named refusal |
 | `[0830]` | hosted-now | R2.50 | matrix evidence |
 | `[0840]` | hosted-now | R2.50 | matrix evidence |
 | `[0850]` | freestanding | R6.80 | scheduled volatile-access work |
@@ -3070,7 +3070,7 @@ and a budgeted failing allocator. Allocation reports `out_of_memory`; the
 returned arena handle retains the supplied base's origin; and deterministic
 counters pin successful allocation and free calls. This is an ordinary
 library allocator over explicitly unsafe backing, not [0820]'s future lexical
-arena block.
+arena block, which D191 re-owned to R4.20.
 
 `core/vec` composes D151's opaque raw storage into an allocator-threaded
 `list(item)`. It reserves and grows through an empty replacement, transfers
@@ -3469,9 +3469,10 @@ the u128/i128 part of [0150], the f16 part of
 [0170], and the ownership disposition for
 [0500]'s pointer/slice operations, [0810]'s derivation primitives and [0820]'s
 lexical `arena` block. No language decision is made by this inventory.
-D188 later closed [0660], D189 closed [0480], and D190 re-owned the u128/i128
-part of [0150] and the f16 part of [0170] to R7.20; the remaining gap list is
-that ownership disposition.
+D188 later closed [0660], D189 closed [0480], D190 re-owned the u128/i128
+part of [0150] and the f16 part of [0170] to R7.20, and D191 settled the
+ownership disposition by re-owning [0500], [0810] and [0820] to R4.20; the
+hosted gap list is empty.
 
 The condition-declaration increment enables [1070]'s initialized inferred and
 typed bindings in `if`, every `elsif`, and `while`. D185 gives each binding the
@@ -3553,6 +3554,26 @@ enables them, and only the residual refusal moves — the shape D188 gave
 `negative/refused-widths-name-their-owner` pins the rendered report that
 names it.
 
+The region-ownership increment discharges the last three unsettled rows the
+way [1830] says an omission is discharged: by recognising the syntax and
+naming the work that enables it. D191 finds that [0500]'s three operations
+are ordinary `core` functions with no compiler privilege — D151 already
+rejected `slice_from` permanently, and the cut [0810] attributes to `offset`
+is the one `core/mem`'s `arena_alloc` makes today through [0470]'s
+integer-to-pointer conversion, which the `pointer.integer-origin` guarantee
+row already classifies with four fixtures behind it. [0820]'s lexical block
+is language syntax, but everything it means is allocator semantics: the type
+its name has and how it meets [1360]'s contract, where its bytes come from
+and how many on a host and on a 32 KB part, whether exhaustion fails or
+traps, and how its frame-origin rule survives [0790]'s rule that an
+allocator's result borrows nothing. All three rows move to `later-r4` under
+R4.20, the shape [1430] and [1440] already have, and what this item pays is a
+named diagnostic in place of a parse cascade: the parser refuses
+`arena name do` on the word and swallows the block's own closer, and the
+checker refuses the `arena` type name [0780] writes. `arena` stays unreserved
+by [1760], so `core/mem`'s own `arena` struct and every parameter spelled
+`arena` are untouched.
+
 Exit evidence: every hosted `[NNNN]` row has implementation and positive or
 negative evidence; no omission is hidden by prototype coverage.
 
@@ -3565,10 +3586,29 @@ Complete the Landin `core/vec`, `core/map`, `core/tree`, allocator and hosted
 library pieces required by prototypes 3 and 4. Document freestanding/hosted
 layering, raw syscall versus libc choices and deliberate omissions.
 
-Sources: legacy B5, which had no tracked citation.
+D191 gives this item three construct rows R4.10 could not settle. `[0500]`'s
+`mem.offset` and `mem.base_of` are library conveniences this slice adds or
+records as unneeded; `slice_from` is not among them, because D151 rejected it
+and `[0810]`'s sentence naming three primitives is amended accordingly.
+`[0820]`'s lexical `arena` block is refused by name until this item answers
+four questions, none of which either document answers today: which type the
+block name has and how it meets `[1360]`'s two-operation allocator contract
+without the frontend depending on `core/mem`; where the region's bytes come
+from and how many, on a host and on a 32 KB part, given that the extent is
+exact rather than guessed; whether exhaustion reports `out_of_memory` or
+traps; and how "everything from it has frame origin, and allocated once the
+arena is passed on" is expressed, when `[0790]` says an allocator's result
+carries no `from` clause and therefore borrows nothing. Lowering the block to
+`mem.arena_over` over a hidden frame buffer answers none of them and inverts
+the last, so it is recorded as declined rather than left as an option.
+
+Sources: legacy B5, which had no tracked citation; `[0500]`, `[0810]`,
+`[0820]` and `[1360]`, re-owned here by D191.
 
 Exit evidence: containers run with heap, arena, fixed and failing allocators;
-all omission and layering choices are recorded.
+all omission and layering choices are recorded; `[0820]`'s block is either
+enabled with the four answers above written down, or its refusal names the
+item that inherits it.
 
 ### R4.30 — Complete hosted modules and toolchain directives
 

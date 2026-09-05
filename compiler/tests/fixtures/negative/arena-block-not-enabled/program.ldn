@@ -1,0 +1,5 @@
+report: (size: usize) -> (used: usize) =
+    arena scratch do
+        used = size
+    end scratch
+end report

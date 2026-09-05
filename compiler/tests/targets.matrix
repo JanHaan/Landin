@@ -21,6 +21,8 @@ negative/any-readonly-source-for-mutable-entry | linux-x86-64, macos-arm64, synt
 negative/any-self-convention | linux-x86-64, macos-arm64, synthetic-32
 negative/any-self-not-exact | linux-x86-64, macos-arm64, synthetic-32
 negative/any-source-not-pointer | linux-x86-64, macos-arm64, synthetic-32
+negative/arena-block-not-enabled | linux-x86-64, macos-arm64
+negative/arena-type-not-enabled | linux-x86-64, macos-arm64
 negative/array-argument-unassigned | linux-x86-64, macos-arm64
 negative/array-copy-element-mismatch | linux-x86-64, macos-arm64
 negative/array-copy-length-mismatch | linux-x86-64, macos-arm64
@@ -803,6 +805,7 @@ runtime/any-inferred-construction | linux-x86-64
 runtime/any-parameterized-provider | linux-x86-64
 runtime/any-return-origin | linux-x86-64
 runtime/any-untracked-pointer-origin | linux-x86-64
+runtime/arena-is-an-ordinary-name | linux-x86-64
 runtime/array-arguments-cross-calls | linux-x86-64
 runtime/array-elements-hold-their-own | linux-x86-64
 runtime/array-literal-assignment-is-source-ordered | linux-x86-64

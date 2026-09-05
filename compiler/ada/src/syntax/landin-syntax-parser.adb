@@ -66,6 +66,14 @@ package body Landin.Syntax.Parser is
    --  deferred signs, and it is derived rather than guessed: check.py
    --  holds every spelling here to a keyword the tour actually writes and
    --  every construct to a paragraph that actually exists.
+   --
+   --  A word belongs here only when the spelling alone decides.  D191's
+   --  [0820] `arena` does not: `core/mem` declares a type of that name,
+   --  `examples/config_parser` passes a parameter spelled `arena`, and a
+   --  loop may be labelled one.  Its block is recognised by the shape
+   --  `arena name do` in the statement dispatch instead, so the table
+   --  keeps meaning what it says -- a spelling that is never anything
+   --  else.
    ------------------------------------------------------------------
 
    type Refused_Word is
@@ -229,6 +237,12 @@ package body Landin.Syntax.Parser is
 
             Complete_Id : constant Landin.Source.Names.Name_Id :=
               Landin.Source.Names.Intern (Names, "complete");
+
+            --  D191's [0820].  Deliberately not in Real_Word: `arena` is an
+            --  ordinary name everywhere else, and the block is recognised
+            --  by its shape rather than by its spelling.
+            Arena_Id : constant Landin.Source.Names.Name_Id :=
+              Landin.Source.Names.Intern (Names, "arena");
 
             With_Id : constant Landin.Source.Names.Name_Id :=
               Landin.Source.Names.Intern (Names, "with");
@@ -440,6 +454,7 @@ package body Landin.Syntax.Parser is
             function Parse_Bare_Block (Context : Frame) return Node_Id;
             function Parse_Unchecked_Block (Context : Frame) return Node_Id;
             function Opens_Unchecked return Boolean;
+            function Opens_Arena_Block return Boolean;
             function Parse_Expression
               (Min : Pre.Level := Pre.Level_Expression) return Node_Id;
             function Parse_Expression_From
@@ -3918,7 +3933,8 @@ package body Landin.Syntax.Parser is
                if Context.Returns then
                   if Peek = Tok.Identifier
                     and then (Named_Here in Defer_Id | Undo_Id
-                              or else Opens_Unchecked)
+                              or else Opens_Unchecked
+                              or else Opens_Arena_Block)
                   then
                      return Parse_Block (Context);
                   end if;
@@ -4366,6 +4382,7 @@ package body Landin.Syntax.Parser is
                   return Named_Here in Defer_Id | Undo_Id
                     | Break_Id | Continue_Id
                     or else Opens_Unchecked
+                    or else Opens_Arena_Block
                     or else Word_At_Hand /= Word_None
                     or else Ahead (1) in Tok.Colon | Tok.Colon_Equal
                     or else After_Selectors = Tok.Equal;
@@ -4646,6 +4663,34 @@ package body Landin.Syntax.Parser is
                      elsif Named_Here in Break_Id | Continue_Id
                      then
                         return Parse_Loop_Transfer;
+                     elsif Opens_Arena_Block then
+                        --  D191: [0820]'s lexical arena block, recognised
+                        --  by shape and refused by name.  `arena` is not a
+                        --  reserved word and this is the only statement
+                        --  shape it opens, so `arena = x`, `arena(x)`,
+                        --  `arena: loop do` and a parameter spelled
+                        --  `arena` are all untouched.
+                        declare
+                           At_Word : constant Landin.Source.Span := Here;
+                           --  [0820] closes the block with its own name,
+                           --  `end scratch`, so the closer is the label
+                           --  and not the word that opened it.
+                           Closer  : constant Landin.Source.Names.Name_Id :=
+                             Named_Ahead (1);
+                        begin
+                           Refuse
+                             (Item    => Syn.Arena_Block,
+                              Where   => At_Word,
+                              Message => "`arena` is not enabled yet");
+
+                           if not Skip_Past_Closer (Closer) then
+                              Resync_Statement;
+                           end if;
+
+                           return Add
+                             (Error_Statement, At_Word,
+                              Join (Start, After_Previous));
+                        end;
                      elsif Named_Here in Defer_Id | Undo_Id then
                         declare
                            Is_Undo : constant Boolean :=
@@ -5372,6 +5417,22 @@ package body Landin.Syntax.Parser is
                   and then Ahead (1) = Tok.Identifier
                   and then Named_Ahead (1) = Begin_Id);
 
+            --  D191's [0820] `arena name do ... end name`, recognised the
+            --  same way and for the same reason: `arena` is a word [1760]
+            --  does not reserve and `core/mem` already declares a type of
+            --  that name, so three tokens decide it.  `arena = x`,
+            --  `arena(x)`, `arena: loop do` and a parameter spelled
+            --  `arena` are all left alone.  The block is refused rather
+            --  than parsed, so there is no Parse_ procedure beside this
+            --  one; the statement dispatch reports it and swallows the
+            --  block's own closer.
+            function Opens_Arena_Block return Boolean
+              is (Peek = Tok.Identifier
+                  and then Named_Here = Arena_Id
+                  and then Ahead (1) = Tok.Identifier
+                  and then Ahead (2) = Tok.Identifier
+                  and then Named_Ahead (2) = Do_Id);
+
             function Parse_Unchecked_Block (Context : Frame) return Node_Id is
                At_Word : constant Landin.Source.Span := Here;
                Runs    : Node_Id;
@@ -5567,6 +5628,7 @@ package body Landin.Syntax.Parser is
                              and then
                                (Named_Here in Defer_Id | Undo_Id
                                 or else Opens_Unchecked
+                                or else Opens_Arena_Block
                                 or else
                                   (Named_Here not in Match_Id | Begin_Id
                                      | Loop_Id | While_Id | For_Id

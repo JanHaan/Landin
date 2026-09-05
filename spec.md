@@ -714,6 +714,12 @@ parse error. The roadmap owns that list; this grammar owns what is
 already true.
 R3.10 recognizes [1430]'s import alias and [1440]'s selected import shapes and
 refuses each by name; R4.30 owns enabling them.
+R4.10 recognizes [0820]'s lexical `arena` block at a statement position and
+refuses it by name, and the checker refuses the built-in `arena` type name
+[0780] writes a parameter with; R4.20 owns enabling both. `arena` is not a
+word the keyword rule spells and `core/mem` declares a type of that name, so
+the block is recognized by the shape `arena name do` and nothing else spelled
+`arena` is touched.
 
 ### [1840] The kernel's scopes, outermost first
 
@@ -8632,7 +8638,7 @@ classified failure boundary before the repository gate can pass.
 | `inout.exact-alias` | static | 0900 | L0301 when one provably identical binding-rooted place fills two inout parameters | `negative/inout-same-place-twice` |
 | `inout.possible-alias` | outside | 0430, 0770, 0900 | non-guarantee: distinct pointer or computed paths may still alias | `runtime/inout-pointer-alias-is-unchecked` |
 | `pointer.validity` | outside | 0430 | non-guarantee: a permitted pointer may still be invalid or stale | `runtime/r250-references` |
-| `pointer.integer-origin` | beyond-lifetime | 0470, 0860, 1690, 1720 | non-guarantee: integer-to-pointer conversion carries no origin through a direct or erased value | `runtime/r250-references`, `runtime/any-untracked-pointer-origin`, `runtime/diagnostic-loggers-dispatch`, `negative/frame-origin-return` |
+| `pointer.integer-origin` | beyond-lifetime | 0470, 0810, 0860, 1690, 1720 | non-guarantee: integer-to-pointer conversion carries no origin through a direct or erased value, and D191 records it as the derivation cut [0810] describes until `core` names one | `runtime/r250-references`, `runtime/any-untracked-pointer-origin`, `runtime/diagnostic-loggers-dispatch`, `negative/frame-origin-return` |
 | `pointer.integer-width` | trap | 0470, 1120, 1950, 1960 | trap, outside [1120]'s region | `runtime/pointer-to-small-integer-traps` |
 | `arrays.initialization` | static | 0520, 0530, 0540, 0550, 0560 | L0300--L0304 or L0313 | `negative/array-initializer-length-mismatch`, `runtime/whole-arrays-copy-between-storage` |
 | `raw.prefix` | static | 0420, 0510 | L0202 prevents representation access; `core/mem` reports `raw_full`, `uninitialized`, `raw_empty` or `raw_not_empty` before an invalid transition | `negative/core-mem-private-representation`, `runtime/core-mem-raw-storage` |
@@ -8873,7 +8879,8 @@ handles retain `from base`; returning one over frame storage is L0314. Freeing
 does not reclaim monotonic space. The pointer and extent remain unsafe
 caller-supplied backing under [0430], [0470] and [1720]. This ordinary library
 allocator is not [0820]'s built-in lexical `arena` block, whose exact region
-semantics remain R4.10.
+semantics D191 re-owned to R4.20 and whose two written forms R4.10 refuses by
+name.
 
 `core/vec.list(item)` contains one D151 `mem.storage(item)`. It threads an
 allocator through `reserve`, `push` and `release`, while `length`, `capacity`,
@@ -10906,3 +10913,92 @@ today: none that has been recorded.
 "ROADMAP.md R7.20 is where it is enabled" is executable text rather than a
 comment and which is the only fixture in the corpus that reaches `i128` at
 all, and the `types.values` guarantee row.
+
+### D191 — The region and the derivation cut are core's; the arena block is refused by name
+
+**The tour said** that `arena` is built in, both as a block and as the type a
+parameter is written with at [0780] [0820], and that derivation stops at the
+three primitives of [0500] — `offset`, `base_of` and `slice_from` — which
+"yield a reference independent of what went in, and core answers for that"
+[0810]. Neither paragraph says what the block's name is a value of, where its
+bytes come from, or what any of the three primitives costs the compiler.
+Between them they name one operation this repository has already refused to
+have and two that do not exist.
+
+**Chosen:** all three constructs belong to `core` and to the allocator surface,
+not to this kernel. [0500] and [0810] describe library functions with no
+compiler privilege, and R4.20 owns them with the library slice that would add
+them. [0820] is language syntax, and it is recognized and refused by name here
+rather than enabled: the parser reports L0010 on the `arena` of `arena name do`
+and swallows the block's own `end name`, and the checker reports L0304 on a
+written `arena` type. Both notes name [0820] and R4.20. The construct
+applicability register moves all three rows to `later-r4` under R4.20, the
+shape [1430] and [1440] already have.
+
+The pointer half is settled by evidence rather than by scheduling. [0810] says
+the three primitives are the cut that lets an allocator hand out storage
+pointing into itself without the storage borrowing it. `core/mem`'s
+`arena_alloc` does exactly that today and reaches none of them: it computes
+`usize(state.base) + offset` and converts the sum back with `ptr`, which is
+[0470]'s integer-to-pointer conversion. That conversion is already the cut,
+already classified — the `pointer.integer-origin` guarantee row calls it a
+non-guarantee with four fixtures behind it — and already in the open, written
+in the library where a reader can audit it. `slice_from` is not deferred at
+all: D151 rejected it for [0510]'s reason and the repository will not have it.
+`offset` and `base_of` are the library spellings of a cut the compiler already
+makes, so making either a compiler intrinsic would put a `core` name in the
+frontend against [0490] and buy nothing. [0810] is amended to say this; the
+example keeps its spelling, because changing it would assert an operation the
+language does not have.
+
+The block half is refused because four questions decide it and neither
+document answers one of them. Which type the block name has, and how it meets
+[1360]'s two-operation allocator contract without the frontend depending on
+`core/mem`. Where the region's bytes come from and how many, on a host and on
+a 32 KB part, given that [0820]'s own promise is that the extent is exact
+rather than guessed. Whether exhaustion is `out_of_memory` or a trap. And how
+"everything from it has frame origin, and allocated once the arena is passed
+on" is expressed at all, when [0790] says an allocator's result carries no
+`from` clause and therefore borrows nothing. That last one is why the obvious
+shortcut is unsound rather than merely incomplete: lowering the block to
+`mem.arena_over` over a hidden frame buffer would make every allocation out of
+it an independent origin free to be returned, which is the precise opposite of
+"nothing from it may leave the block". Shipping that would be worse than the
+refusal.
+
+The refusal is complete because [0820] has two faces. Refusing only the block
+would leave `(a: arena)` reported as a name declared nowhere, which is a true
+sentence about the wrong thing, and the second half of the paragraph would go
+unmentioned. So the parser owns one face and the checker owns the other, for
+the reason the two tables are separate: the parser refuses a shape it can read
+off the tokens, and the checker refuses a name it had to resolve first.
+
+`arena` is not added to [1760]'s keyword rule, and that is the price paid for
+the shape gate. `core/mem` declares `public arena: type = struct` and closes
+it with `end arena`, `examples/config_parser` threads a parameter spelled
+`arena` through six functions, and [1760] promises that a program avoiding a
+construct never trips over its keyword. So the parser recognizes three tokens
+— `arena`, a name, `do` — and nothing else. `arena = x`, `arena(x)`,
+`arena: loop do` and `mem.arena` are all untouched, and
+`runtime/arena-is-an-ordinary-name` pins that from the other side.
+
+**The alternatives:** lowering the block to `mem.arena_over` over a frame
+buffer the compiler supplies was declined above — it guesses the extent [0820] says
+is exact and inverts the frame/allocated rule the paragraph turns on.
+Reserving `arena` as a keyword was declined because it deletes the library
+arena's spelling, breaks `negative/core-arena-frame-escape` and
+`runtime/derived-parser`, and breaks [1760]'s stated promise. Making
+`mem.offset` and `mem.base_of` compiler intrinsics was declined because
+[0490] puts pointer policy in `core` and [0470] already supplies the cut.
+Reopening `slice_from` was declined: D151 closed it and no new evidence
+argues otherwise. Leaving the block to the ordinary parse error was declined
+against [1830] — a program written against the whole tour must meet a named
+diagnostic and not a four-report cascade, and before this decision it met the
+cascade. Keeping the three rows `hosted-now` with a refusal naming R4.10 was
+declined because R4.10 cannot close over a refusal that names R4.10, which is
+a rule `check.py` enforces.
+
+**Pinned by** `negative/arena-block-not-enabled`,
+`negative/arena-type-not-enabled`, `runtime/arena-is-an-ordinary-name`, and
+the `pointer.integer-origin` guarantee row, which now cites [0810] and says
+that this conversion is the derivation cut until `core` names one.

@@ -11,7 +11,7 @@
 #
 #  A construct with no evidence and no refusal is this
 #  item's to answer for; see ROADMAP.md R1.90.
-#  200 constructs, 177 with evidence, 23 with neither.
+#  200 constructs, 178 with evidence, 22 with neither.
 #
 #  id    defined in  evidence
 0010   tour        accepted emitted                   Line comment, to end of line
@@ -95,7 +95,7 @@
 0790   tour        accepted emitted executed refused  The other direction
 0800   tour        accepted emitted executed refused  The borrow of reaches across the call from there
 0810   tour        -                                  Derivation stops at the three primitives of
-0820   tour        -                                  arena is built in
+0820   tour        refused refused-by-name            arena is built in
 0830   tour        accepted emitted executed refused  A view derived from a local borrows it
 0840   tour        accepted emitted executed refused  Origins join to the shortest-lived part
 0850   tour        -                                  Volatile is exempt from the borrow rule and from every

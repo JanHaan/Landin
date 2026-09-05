@@ -175,7 +175,12 @@ package Landin.Diagnostics.Checking is
       --  reserving zero.  Two or more atoms beside a pointer need the
       --  tag-plus-pointer carrier [1870] describes, which is an IR pair,
       --  storage, an ABI position and a backend of its own.
-      Tagged_Pointer_Union);
+      Tagged_Pointer_Union,
+      --  D191: [0820] says `arena` is built in both as a block and as the
+      --  type a parameter is written with at [0780].  The parser refuses
+      --  the block; this refuses the type name, so the second half of the
+      --  paragraph is not reported as a name declared nowhere.
+      Arena_Region);
 
    function Construct (Item : Refused_Use)
      return Landin.Tokens.Construct_Reference
@@ -190,26 +195,34 @@ package Landin.Diagnostics.Checking is
             when Zeroed_Value       => "[0540]",
             when External_C_ABI     => "[1580]",
             when Constrained_Composition => "[0660]",
-            when Tagged_Pointer_Union => "[0480]")
+            when Tagged_Pointer_Union => "[0480]",
+            when Arena_Region       => "[0820]")
      with Post => Landin.Tokens.Is_Valid_Construct (Construct'Result);
 
    --  The type names above, spelled once.  A name that is not here is a
    --  name nothing in either document writes as a type, and resolution has
    --  already reported it as declared nowhere.
+   --
+   --  `arena` is here and not in the parser's word table for the reason
+   --  this stage exists: `core/mem` declares a type of that name, so
+   --  whether a written `arena` is [0820]'s built-in one is a question
+   --  about what it resolved to and not about the bytes.
    type Refused_Type_Name is
-     (Wide_Unsigned, Wide_Signed, Float_16);
+     (Wide_Unsigned, Wide_Signed, Float_16, Arena_Handle);
 
    function Spelling (Item : Refused_Type_Name) return String
      is (case Item is
             when Wide_Unsigned => "u128",
             when Wide_Signed   => "i128",
-            when Float_16      => "f16");
+            when Float_16      => "f16",
+            when Arena_Handle  => "arena");
 
    function Refusal (Item : Refused_Type_Name) return Refused_Use
      is (case Item is
             when Wide_Unsigned
                | Wide_Signed   => Wide_Integer_Type,
-            when Float_16      => Narrow_Float_Type);
+            when Float_16      => Narrow_Float_Type,
+            when Arena_Handle  => Arena_Region);
 
    procedure Report
      (Item    : Failure;
@@ -249,6 +262,11 @@ private
             --  R7.20 owns the tagged carrier a multi-atom pointer union
             --  needs; D189 closes [0480]'s one-atom form and deliberately
             --  does not decide that one.
-            when Tagged_Pointer_Union => "R7.20");
+            when Tagged_Pointer_Union => "R7.20",
+            --  D191 re-owns [0820] to R4.20, where the allocator surface
+            --  the block would have to meet already lives.  R4.10
+            --  recognises the construct and deliberately does not decide
+            --  its region semantics.
+            when Arena_Region       => "R4.20");
 
 end Landin.Diagnostics.Checking;
