@@ -1,0 +1,22 @@
+observe: (value: i32, caller where: utf8) -> none =
+    _ = value
+    _ = where
+end observe
+
+forward: (value: i32, caller where: utf8) -> none =
+    observe(value, where: where)
+end forward
+
+apply: (callback: (caller where: utf8) -> none) -> none =
+    callback()
+end apply
+
+only_site: (caller where: utf8) -> none =
+    _ = where
+end only_site
+
+exercise: () -> none =
+    observe(1)
+    forward(2)
+    apply(only_site)
+end exercise

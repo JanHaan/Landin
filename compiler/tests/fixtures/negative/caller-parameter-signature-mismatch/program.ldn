@@ -1,0 +1,11 @@
+ordinary: (where: utf8) -> none =
+    _ = where
+end ordinary
+
+accept: (callback: (caller where: utf8) -> none) -> none =
+    callback()
+end accept
+
+bad: () -> none =
+    accept(ordinary)
+end bad

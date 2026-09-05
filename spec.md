@@ -331,8 +331,9 @@ A function is a value with a body, and its returns are named.
 '=' opens the body and 'end' closes it [0870]; a body that is one
 expression still takes an end, and the expression fills the named
 return [0880]; every named return must be assigned before the
-function returns [0930]. The parameter conventions [0900], `escaping` [0780], `from` [0790]
-and generic parameters [1290] have their parser and resolution foundation on
+function returns [0930]. The parameter conventions [0900], `escaping` [0780],
+`from` [0790], `caller` [1040] and generic parameters [1290] have their parser
+and resolution foundation on
 a declared routine. Its complete signature scope collects type/fixed formals,
 runtime parameters and named returns before resolving any type; runtime
 formals alone make the runtime signature. `escaping` precedes an explicitly
@@ -380,7 +381,8 @@ routine_formal     ::= parameter | type_formal
 errors             ::= "!" (declaration_reference
                              ("|" declaration_reference)* | "...")
 parameters         ::= parameter ("," parameter)*
-parameter          ::= "escaping"? parameter_convention? identifier ":" type
+parameter          ::= "caller" identifier ":" type
+                     | "escaping"? parameter_convention? identifier ":" type
 parameter_convention ::= "in" | "inout" | "sink"
 returns     ::= "(" named_return ("," named_return)* ")" | "none"
 named_return ::= identifier ":" type
@@ -913,7 +915,7 @@ kernel has, two may be written and two may not.
 | a mutable binding [0060] | may be |
 | a named return | may be: [0930] says it must be, and [1840] declares it as a place for that reason |
 | an immutable binding | may not: [0040] makes it immutable and [0450] says it protects the value it holds |
-| an `in` or `sink` parameter | may not be replaced |
+| an `in`, `sink`, or `caller` parameter | may not be replaced |
 | an `inout` parameter | may be replaced, through the caller-owned place |
 
 An atom declaration and a recovery clause's error name are immutable values,
@@ -983,6 +985,12 @@ set. A live local view records the binding it derives from; an `inout` or `sink`
 use of that binding is refused when the view is read before being replaced.
 Volatile reference paths remain exempt [0850].
 
+A `caller` position is part of the complete structural function signature. It
+has exactly the immutable `utf8` identity and no parameter convention or
+`escaping` modifier. It remains an ordinary runtime ABI position after the
+compiler has filled it; source calls omit it, except for D186's named forwarding
+from another `caller` parameter.
+
 A module binding is not ordinary pre-use definite assignment. [1460] says its
 value is known when the compiler reads it; reference-containing module images
 must likewise supply a valid non-null static image.
@@ -990,9 +998,12 @@ must likewise supply a valid non-null static image.
 ### [1920] What a call means
 
 What a call means.
-[0980] gives no parameter a default value, so a call names every runtime
-parameter exactly once. A positional prefix fills runtime parameters in order;
-a named suffix may write the remaining parameters in any order, but may not
+[0980] gives no source-written parameter a default value, so a call names every
+non-`caller` runtime parameter exactly once. A `caller` position is instead
+filled by the compiler with D186's static site, unless a named argument forwards
+another `caller` parameter into that position. A positional prefix skips caller
+positions and fills the other runtime parameters in order; a named suffix may
+write the remaining parameters in any order, but may not
 repeat one or name one the callable signature does not have. Matching uses the
 labels of the static callable signature for a stored or selected function value.
 Those labels are retained call-shape facts but remain excluded from [1000]'s
@@ -8590,6 +8601,7 @@ classified failure boundary before the repository gate can pass.
 | `origins.escape` | static | 0770, 0780, 0790, 0800, 0830, 0840 | L0314--L0316 | `negative/frame-origin-return`, `negative/borrowed-source-inout`, `negative/returned-reference-missing-from`, `negative/core-arena-frame-escape`, `negative/core-text-frame-slice-escape`, `negative/core-diag-frame-message-escape`, `runtime/diagnostic-loggers-dispatch` |
 | `origins.aliasing-limit` | outside | 0770, 0910 | non-guarantee: a pre-existing copy or indistinguishable arena is not tracked | `positive/reference-origins-and-consume`, `negative/use-after-sink` |
 | `functions.abi` | static | 0870, 0880, 0890, 0900, 0920, 0930, 0980, 1000, 1020, 1030, 1460, 1920, 1970 | L0301, L0302 or L0502 | `negative/call-with-too-few-arguments`, `runtime/r230-composition` |
+| `functions.caller` | static | 0600, 0790, 1000, 1040, 1800, 1920 | caller positions have exact immutable utf8 type and structural signature identity, are compiler-filled as source-name:line:column, and accept an explicit argument only as a named forwarding of another caller parameter; L0301 rejects every other type, position or source | `negative/caller-parameter-forward-needs-caller`, `negative/caller-parameter-needs-utf8`, `negative/caller-parameter-positional`, `negative/caller-parameter-signature-mismatch`, `runtime/caller-parameters` |
 | `extern.c-boundary` | static | 0430, 1570, 1580, 1975 | L0301 for a signature outside R3.50's fixed integer/bool/pointer subset | `positive/external-scalar-c-boundary`, `negative/external-aggregate-boundary`, `negative/external-float-abi-not-enabled` |
 | `host.io` | outside | 0430, 1580, 1650, 1660, 1680, 1975 | non-guarantee: files, descriptors, arguments and streams reflect mutable host state | `runtime/hosted-io-reads-parser-input`, `runtime/derived-parser` |
 | `host.io-failure` | static | 0940, 0960, 1030, 1975 | `core/io` reports foreseeable host failure as declared atoms which callers handle or declare | `runtime/hosted-io-reads-parser-input`, `runtime/diagnostic-loggers-dispatch`, `runtime/derived-parser` |
@@ -10382,3 +10394,53 @@ visible in its initializer would reverse [0110]. All were declined.
 `negative/condition-declaration-out-of-scope`,
 `runtime/condition-declarations`, the generated lexical and IR records, and the
 `control.flow` guarantee row.
+
+### D186 — A caller parameter is an exact compiler-filled utf8 site
+
+**The tour said** that [1040]'s caller parameter is filled with the call site
+and may be passed on only from another caller parameter. It sketched a distinct
+integer `site`, but did not say what a site contains, how it crosses the ABI,
+whether omission changes positional matching, how forwarding is distinguished
+from forging, or whether caller behavior belongs to a function type.
+
+**Chosen:** a caller parameter is written `caller name: utf8`. Its type is
+exactly D181's immutable `utf8` identity; another text identity or its backing
+slice is L0301. `caller` is mutually exclusive with `escaping`, `in`, `inout`
+and `sink`. The parameter is an immutable value in the signature scope, and its
+caller behavior is part of structural function-signature identity even though
+the label, as for every parameter, is not.
+
+At an ordinary source call, positional arguments skip caller positions and
+every caller position not explicitly forwarded is filled by the compiler. The
+value is the UTF-8 spelling `source-name:line:column`, using the source name in
+the compilation snapshot and one-based coordinates at the call expression's
+first token. Its bytes and trailing zero share D181's width-and-content-keyed
+read-only static pool; the retained `utf8` length excludes that terminator. It
+is an ordinary slice carrier and ABI parameter after injection, so the neutral
+IR, verifier and backend need no caller-specific instruction or calling
+convention.
+
+A wrapper preserves an incoming site only with a named argument whose complete
+expression is the name of one of that wrapper's own caller parameters:
+`wrapped(value, where: where)`. A positional argument cannot target a caller
+position, and a literal, local, result, selection or other `utf8` expression
+cannot fill one by name. Both are L0301. Omitting the named forwarding argument
+deliberately reports the wrapper's internal call instead. These rules apply to
+direct, generic and stored function calls alike.
+
+**The alternatives:** retaining the tour's unstructured integer would make a
+site target-sized and force every consumer to recover source data through an
+unstated global table. Treating caller as a default value would omit its
+function-type behavior and let positional insertion silently retarget later
+arguments. Accepting any named `utf8` would make sites forgeable and would not
+enforce the wrapper rule [1040] states. A dedicated IR value or backend ABI
+would duplicate the exact slice representation already required at the source
+boundary. All were declined.
+
+**Pinned by** `positive/caller-parameters`,
+`negative/caller-parameter-forward-needs-caller`,
+`negative/caller-parameter-needs-utf8`,
+`negative/caller-parameter-positional`,
+`negative/caller-parameter-signature-mismatch`,
+`runtime/caller-parameters`, the generated lexical and IR records, and the
+`functions.caller` guarantee row.

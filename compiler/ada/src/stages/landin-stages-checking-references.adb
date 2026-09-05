@@ -230,7 +230,43 @@ package body Landin.Stages.Checking.References is
          Call : Syn.Node_Id;
          Formal : Positive) return Syn.Node_Id
       is
+         Called : constant Landin.Checking.Signature_Id :=
+           Call_Signature (Tree, Call);
+         Erased_Self : constant Boolean :=
+           Syn.Kind (Tree, Syn.Callee_Of (Tree, Call))
+             = Syn.Member_Selection
+           and then Landin.Checking.Type_Of
+             (Types.all, Tree,
+              Syn.Target_Of (Tree, Syn.Callee_Of (Tree, Call)))
+                = Ty.Any_Value;
+
+         function Plain_Position (Written : Positive) return Natural;
+
+         function Plain_Position (Written : Positive) return Natural is
+            Seen : Natural := 0;
+            First : constant Positive := (if Erased_Self then 2 else 1);
+         begin
+            if not Landin.Checking.Holds (Types.all, Called) then
+               return 0;
+            end if;
+            for Position in First .. Landin.Checking.Signature_Parameter_Count
+              (Types.all, Called)
+            loop
+               if not Landin.Checking.Nth_Signature_Parameter
+                 (Types.all, Called, Position).Caller
+               then
+                  Seen := Seen + 1;
+                  if Seen = Written then
+                     return Position;
+                  end if;
+               end if;
+            end loop;
+            return 0;
+         end Plain_Position;
       begin
+         if not Landin.Checking.Holds (Types.all, Called) then
+            return Syn.No_Node;
+         end if;
          if Formal = 1
            and then Syn.Kind (Tree, Syn.Callee_Of (Tree, Call))
              = Syn.Member_Selection
@@ -248,14 +284,8 @@ package body Landin.Stages.Checking.References is
                Position : constant Natural :=
                  (if Syn.Kind (Tree, Raw) = Syn.Call_Argument
                   then Res.Position_Of (Meanings.all, Tree, Raw)
-                  elsif Syn.Kind (Tree, Syn.Callee_Of (Tree, Call))
-                          = Syn.Member_Selection
-                    and then Landin.Checking.Type_Of
-                      (Types.all, Tree,
-                       Syn.Target_Of
-                         (Tree, Syn.Callee_Of (Tree, Call)))
-                        = Ty.Any_Value
-                  then Written + 1
+                  elsif Called /= Landin.Checking.No_Signature
+                  then Plain_Position (Written)
                   else Written);
             begin
                if Position = Formal then
@@ -318,7 +348,7 @@ package body Landin.Stages.Checking.References is
          Called : constant Landin.Checking.Signature_Id :=
            Call_Signature (Tree, Call);
       begin
-         if Called = Landin.Checking.No_Signature then
+         if not Landin.Checking.Holds (Types.all, Called) then
             return;
          end if;
          for Position in 1 .. Landin.Checking.Signature_Parameter_Count
@@ -425,7 +455,7 @@ package body Landin.Stages.Checking.References is
          Called : constant Landin.Checking.Signature_Id :=
            Call_Signature (Tree, Call);
       begin
-         if Called = Landin.Checking.No_Signature then
+         if not Landin.Checking.Holds (Types.all, Called) then
             return;
          end if;
          for Position in 1 .. Landin.Checking.Signature_Parameter_Count
@@ -614,7 +644,7 @@ package body Landin.Stages.Checking.References is
                      Called : constant Landin.Checking.Signature_Id :=
                        Call_Signature (Tree, Node);
                   begin
-                     if Called /= Landin.Checking.No_Signature
+                     if Landin.Checking.Holds (Types.all, Called)
                        and then Landin.Checking.Signature_Result_Count
                          (Types.all, Called) = 1
                      then

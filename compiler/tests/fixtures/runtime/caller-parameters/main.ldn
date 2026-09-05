@@ -1,0 +1,32 @@
+import core/io
+
+print_call_site: (provider: type is io.world, inout host: provider,
+                  caller where: utf8) -> none ! io.io_failed =
+    output := io.out(host)
+    for scalar in where do
+        byte: [1]u8 = [u8(scalar)]
+        try io.write(host, output, byte[0..<1])
+    end for
+    newline: [1]u8 = [10]
+    try io.write(host, output, newline[0..<1])
+end print_call_site
+
+forward_call_site: (provider: type is io.world, inout host: provider,
+                     caller where: utf8) -> none ! io.io_failed =
+    try print_call_site(host, where: where)
+end forward_call_site
+
+public main: () -> (code: i32) =
+    mut host := io.host()
+    print_call_site(host) else (direct_failure)
+        _ = direct_failure
+        code = 1
+        return
+    end
+    forward_call_site(host) else (forward_failure)
+        _ = forward_failure
+        code = 1
+        return
+    end
+    code = 42
+end main

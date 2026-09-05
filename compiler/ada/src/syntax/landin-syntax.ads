@@ -554,6 +554,14 @@ package Landin.Syntax is
      with Pre => Contains (Of_Tree, Id)
                  and then Kind (Of_Tree, Id) = Parameter;
 
+   --  D186's compiler-filled call-site parameter.  It remains an ordinary
+   --  runtime parameter in the callee and in the internal ABI; only source
+   --  call matching omits it or accepts a named forward from another caller
+   --  parameter.
+   function Is_Caller (Of_Tree : Tree; Id : Node_Id) return Boolean
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id) = Parameter;
+
    --  Shallow write permission belongs to a reference type [0430] [0570],
    --  independently of the mutability of a binding that holds it.
    function Is_Referent_Mutable (Of_Tree : Tree; Id : Node_Id) return Boolean
@@ -1380,6 +1388,7 @@ private
       External   : Boolean := False;
       Mutable    : Boolean := False;
       Escaping   : Boolean := False;
+      Caller     : Boolean := False;
       Convention : Parameter_Convention := Implicit_In;
       Fill       : Boolean := False;
       Recovery   : Node_Id := No_Node;

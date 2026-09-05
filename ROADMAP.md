@@ -2850,7 +2850,7 @@ that has no implementation owner.
 | `[1010]` | hosted-now | R2.30 | matrix evidence |
 | `[1020]` | hosted-now | R2.30 | matrix evidence |
 | `[1030]` | hosted-now | R2.30 | matrix evidence |
-| `[1040]` | hosted-now | R4.10 | gap: caller parameters are absent |
+| `[1040]` | hosted-now | R4.10 | D186 and matrix evidence |
 | `[1050]` | hosted-now | R2.30 | matrix evidence |
 | `[1060]` | hosted-now | R2.30 | matrix evidence |
 | `[1070]` | hosted-now | R4.10 | D185 and matrix evidence |
@@ -3464,8 +3464,8 @@ closure test. It also removes the unreachable generic scalar-conversion and
 collection-traversal refusal kinds after D176 and D180/D184 respectively, and
 moves the still-live u128/i128 and f16 refusals wholly to the checker that
 recognises those resolved type names. The finite hosted gap list is [0480]'s
-atom-or-pointer union, [0660]'s range subtype, [1040]'s caller parameter,
-[1120]'s `unchecked` region, the u128/i128 part of [0150], the f16 part of
+atom-or-pointer union, [0660]'s range subtype, [1120]'s `unchecked` region,
+the u128/i128 part of [0150], the f16 part of
 [0170], and the ownership disposition for
 [0500]'s pointer/slice operations, [0810]'s derivation primitives and [0820]'s
 lexical `arena` block. No language decision is made by this inventory.
@@ -3477,6 +3477,14 @@ scope exists, requires its stored value to be `bool`, and reinitializes a
 `while` binding at every test. Sibling arms, `else`, `complete`, and following
 statements do not see the name; an outer declaration may be shadowed, while a
 second declaration in the guarded body is a same-scope duplicate.
+
+The caller-parameter increment enables [1040] with D186's exact immutable
+`utf8` site representation. The compiler fills an omitted caller position with
+the call node's `source-name:line:column` static view, while a wrapper may
+preserve its incoming site only through a named argument from another caller
+parameter. Caller positions are skipped by positional matching, remain ordinary
+ABI positions after injection, and are part of structural function-signature
+identity.
 
 Exit evidence: every hosted `[NNNN]` row has implementation and positive or
 negative evidence; no omission is hidden by prototype coverage.

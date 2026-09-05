@@ -164,6 +164,9 @@ package body Landin.Syntax is
    function Is_Escaping (Of_Tree : Tree; Id : Node_Id) return Boolean
      is (Element (Of_Tree, Id).Escaping);
 
+   function Is_Caller (Of_Tree : Tree; Id : Node_Id) return Boolean
+     is (Element (Of_Tree, Id).Caller);
+
    function Is_Referent_Mutable (Of_Tree : Tree; Id : Node_Id) return Boolean
      is (Element (Of_Tree, Id).Mutable);
 

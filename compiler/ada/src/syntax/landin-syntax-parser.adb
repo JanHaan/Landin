@@ -244,6 +244,9 @@ package body Landin.Syntax.Parser is
             As_Id : constant Landin.Source.Names.Name_Id :=
               Landin.Source.Names.Intern (Names, "as");
 
+            Caller_Id : constant Landin.Source.Names.Name_Id :=
+              Landin.Source.Names.Intern (Names, "caller");
+
             --  [1480] takes this bare toolchain root.  D139 recognizes it
             --  only as the fixed-condition intrinsic, not as a declaration.
             Compiler_Id : constant Landin.Source.Names.Name_Id :=
@@ -299,6 +302,7 @@ package body Landin.Syntax.Parser is
                External  : Boolean := False;
                Mutable   : Boolean := False;
                Escapes   : Boolean := False;
+               Caller    : Boolean := False;
                Convention : Parameter_Convention := Implicit_In;
                Fills     : Boolean := False;
                Recovers  : Node_Id := No_Node) return Node_Id;
@@ -718,6 +722,7 @@ package body Landin.Syntax.Parser is
                External  : Boolean := False;
                Mutable   : Boolean := False;
                Escapes   : Boolean := False;
+               Caller    : Boolean := False;
                Convention : Parameter_Convention := Implicit_In;
                Fills     : Boolean := False;
                Recovers  : Node_Id := No_Node) return Node_Id
@@ -759,6 +764,7 @@ package body Landin.Syntax.Parser is
                    External   => External,
                    Mutable    => Mutable,
                    Escaping   => Escapes,
+                   Caller     => Caller,
                    Convention => Convention,
                    Fill       => Fills,
                    Recovery   => Recovers));
@@ -3325,8 +3331,9 @@ package body Landin.Syntax.Parser is
             --  Functions                                        [1800]
             ------------------------------------------------------------
 
-            --  parameter ::= "escaping"? parameter_convention?
-            --                identifier ":" type                  [1800]
+            --  parameter ::= "caller" identifier ":" type
+            --              | "escaping"? parameter_convention?
+            --                identifier ":" type             [1040/1800]
             --  D140 fixes that modifier order and retains explicit `in`
             --  separately from the implicit default.  D138's type and fixed
             --  formals remain distinct nodes, so neither runtime modifier can
@@ -3336,6 +3343,7 @@ package body Landin.Syntax.Parser is
             is
                Start       : constant Landin.Source.Span := Here;
                Fixed       : constant Boolean := Peek = Tok.Kw_Fixed;
+               Caller      : Boolean := False;
                Escaping    : Boolean := False;
                Convention  : Parameter_Convention := Implicit_In;
                Named       : Landin.Source.Names.Name_Id;
@@ -3353,24 +3361,30 @@ package body Landin.Syntax.Parser is
                   end if;
                   Advance;
                else
-                  if Peek = Tok.Kw_Escaping then
+                  if Peek = Tok.Identifier and then Named_Here = Caller_Id
+                  then
+                     Caller := True;
+                     Advance;
+                  elsif Peek = Tok.Kw_Escaping then
                      Escaping := True;
                      Advance;
                   end if;
 
-                  case Peek is
-                     when Tok.Kw_In =>
-                        Convention := Explicit_In;
-                        Advance;
-                     when Tok.Kw_Inout =>
-                        Convention := Inout_Convention;
-                        Advance;
-                     when Tok.Kw_Sink =>
-                        Convention := Sink_Convention;
-                        Advance;
-                     when others =>
-                        null;
-                  end case;
+                  if not Caller then
+                     case Peek is
+                        when Tok.Kw_In =>
+                           Convention := Explicit_In;
+                           Advance;
+                        when Tok.Kw_Inout =>
+                           Convention := Inout_Convention;
+                           Advance;
+                        when Tok.Kw_Sink =>
+                           Convention := Sink_Convention;
+                           Advance;
+                        when others =>
+                           null;
+                     end case;
+                  end if;
                end if;
 
                At_Name := Parse_Declared_Name (Named);
@@ -3433,6 +3447,7 @@ package body Landin.Syntax.Parser is
                   Children  => [Type_Node],
                   Named     => Named,
                   Escapes   => Escaping,
+                  Caller    => Caller,
                   Convention => Convention);
             end Parse_Parameter;
 

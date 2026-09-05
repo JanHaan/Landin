@@ -509,7 +509,16 @@ package body Landin.Stages.Lowering is
       function Text_Datum
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return IR.Item_Id;
 
+      function Caller_Site_Text
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return String;
+
+      function Caller_Site_Datum
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return IR.Item_Id;
+
       procedure Register_Text_Datum
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
+
+      procedure Register_Caller_Site
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
 
       function Text_Units
@@ -612,6 +621,38 @@ package body Landin.Stages.Lowering is
            "a checked text literal has no registered datum";
       end Text_Datum;
 
+      function Caller_Site_Text
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return String
+      is
+         Snap : constant Landin.Source.Snapshot :=
+           Source (Context, Syn.Source_Of (Of_Tree));
+         Position : constant Landin.Source.Position :=
+           Landin.Source.Position_Of
+             (Snap, Syn.Anchor (Of_Tree, Node).First);
+         Line : constant String :=
+           Landin.Source.Line_Number'Image (Position.Line);
+         Column : constant String :=
+           Landin.Source.Column_Number'Image (Position.Column);
+      begin
+         return Landin.Source.Name (Snap) & ":"
+           & Line (Line'First + 1 .. Line'Last) & ":"
+           & Column (Column'First + 1 .. Column'Last);
+      end Caller_Site_Text;
+
+      function Caller_Site_Datum
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return IR.Item_Id
+      is
+         Key : constant String :=
+           Character'Val (8) & Caller_Site_Text (Of_Tree, Node);
+         Found : constant Text_Datum_Maps.Cursor := Text_Data.Find (Key);
+      begin
+         if Text_Datum_Maps.Has_Element (Found) then
+            return Text_Datum_Maps.Element (Found);
+         end if;
+         raise Landin.Compiler_Defect with
+           "a checked caller site has no registered datum";
+      end Caller_Site_Datum;
+
       procedure Register_Text_Datum
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
       is
@@ -639,6 +680,33 @@ package body Landin.Stages.Lowering is
          IR.Mark_Read_Only (Unit.all, Made);
          Text_Data.Insert (Key, Made);
       end Register_Text_Datum;
+
+      procedure Register_Caller_Site
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
+      is
+         Site : constant Landin.Provenance.Origin :=
+           Syn.Origin (Of_Tree, Node);
+         Text : constant String := Caller_Site_Text (Of_Tree, Node);
+         Key : constant String := Character'Val (8) & Text;
+         Image : Ty.Folded_Array (1 .. Text'Length + 1);
+         Made : IR.Item_Id;
+      begin
+         if Text_Data.Contains (Key) then
+            return;
+         end if;
+         for Index in 1 .. Text'Length loop
+            Image (Index) := Ty.Folded
+              (Character'Pos (Text (Text'First + Index - 1)));
+         end loop;
+         Image (Image'Last) := 0;
+         Made := IR.Add_Item
+           (Unit.all, IR.Datum, Res.No_Declaration, Ty.Fixed_Array, Site);
+         IR.Set_Array
+           (Unit.all, Made, Ty.U8, IR.Element_Total (Image'Length));
+         IR.Set_Array_Image (Unit.all, Made, Image);
+         IR.Mark_Read_Only (Unit.all, Made);
+         Text_Data.Insert (Key, Made);
+      end Register_Caller_Site;
 
       --  The item being filled, and the block instructions go into.
       --  Current is No_Block when the flow has been terminated and
@@ -2944,6 +3012,8 @@ package body Landin.Stages.Lowering is
 
          function Has_Runtime_After (Written : Natural) return Boolean;
 
+         function Nth_Written_Parameter (Index : Positive) return Positive;
+
          function Has_Runtime_After (Written : Natural) return Boolean is
          begin
             for Later in Written + 1 .. Written_Count loop
@@ -2961,6 +3031,23 @@ package body Landin.Stages.Lowering is
             end loop;
             return False;
          end Has_Runtime_After;
+
+         function Nth_Written_Parameter (Index : Positive) return Positive is
+            Seen : Natural := 0;
+         begin
+            for Position in Parameter_Offset + 1 .. Count loop
+               if not Landin.Checking.Nth_Signature_Parameter
+                 (Types.all, Source_Signature, Position).Caller
+               then
+                  Seen := Seen + 1;
+                  if Seen = Index then
+                     return Position;
+                  end if;
+               end if;
+            end loop;
+            raise Landin.Compiler_Defect with
+              "a lowered written argument has no source parameter";
+         end Nth_Written_Parameter;
       begin
          if Source_Signature = Landin.Checking.No_Signature
            or else Signature = IR.No_Signature
@@ -3042,7 +3129,7 @@ package body Landin.Stages.Lowering is
                   then Positive
                     (Res.Position_Of
                        (Meanings.all, Of_Tree, Raw_Argument))
-                  else Written + Parameter_Offset);
+                  else Nth_Written_Parameter (Written));
                Argument : constant Syn.Node_Id :=
                  (if Syn.Kind (Of_Tree, Raw_Argument) = Syn.Call_Argument
                   then Syn.Expression_Projection (Of_Tree, Raw_Argument)
@@ -3927,6 +4014,42 @@ package body Landin.Stages.Lowering is
             end;
             <<Next_Runtime_Argument>>
             null;
+         end loop;
+
+         --  D186: an omitted caller position is an exact utf8 view of this
+         --  call's pooled source-name:line:column bytes.  A named forwarding
+         --  argument already filled its ordinary ABI position above.
+         for Which in Parameter_Offset + 1 .. Count loop
+            if Landin.Checking.Nth_Signature_Parameter
+              (Types.all, Source_Signature, Which).Caller
+              and then Given (Which) = IR.No_Value
+            then
+               declare
+                  Datum : constant IR.Item_Id :=
+                    Caller_Site_Datum (Of_Tree, Node);
+                  Temporary : constant IR.Slot_Id :=
+                    IR.Add_Array_Slot
+                      (Unit.all, Filling, Ty.Usize, 2,
+                       Res.No_Declaration, Site);
+                  Base : constant IR.Value_Id :=
+                    IR.Emit_Storage_Address
+                      (Unit.all, Filling,
+                       (Kind => IR.Module_Datum, Datum => Datum), Site);
+                  Length : constant IR.Value_Id :=
+                    IR.Emit_Number
+                      (Unit.all, Filling, Ty.Usize,
+                       Ty.Magnitude (IR.Array_Length (Unit.all, Datum) - 1),
+                       False, Site);
+               begin
+                  IR.Emit_Store_Slot_Field
+                    (Unit.all, Filling, Temporary, 1, Base, Site);
+                  IR.Emit_Store_Slot_Field
+                    (Unit.all, Filling, Temporary, 2, Length, Site);
+                  Given (Which) := IR.Emit_Storage_Address
+                    (Unit.all, Filling,
+                     (Kind => IR.Frame_Slot, Slot => Temporary), Site);
+               end;
+            end if;
          end loop;
 
          --  Every argument must precede the call, because Add_Argument
@@ -12266,7 +12389,8 @@ package body Landin.Stages.Lowering is
          end loop;
       end;
 
-      --  D161's anonymous data items must be registered before pass two
+      --  D161's anonymous literal data and D186's caller-site data must be
+      --  registered before pass two
       --  starts filling declaration items, then completed after those
       --  earlier items: every item's values occupy one contiguous IR run.
       --  The base view covers
@@ -12285,6 +12409,55 @@ package body Landin.Stages.Lowering is
                      in Ty.Pointer_Value | Ty.Slice_Value
                then
                   Register_Text_Datum (Of_Tree, Node);
+               elsif Syn.Kind (Of_Tree, Node)
+                       in Syn.Call | Syn.Labeled_Application
+                 and then
+                   (Syn.Kind (Of_Tree, Node) = Syn.Call
+                    or else Res.Class_Of (Meanings.all, Of_Tree, Node)
+                      = Res.Function_Call)
+               then
+                  declare
+                     Callee : constant Syn.Node_Id :=
+                       Syn.Callee_Of (Of_Tree, Node);
+                     Target : constant
+                       Landin.Checking.Routine_Instance_Id :=
+                         Landin.Checking.Routine_Target_Of
+                           (Types.all, Of_Tree, Node);
+                     Direct : constant Boolean :=
+                       Res.Verdict_Of (Meanings.all, Of_Tree, Callee)
+                         = Res.Bound;
+                     Signature : constant Landin.Checking.Signature_Id :=
+                       (if Target /= Landin.Checking.No_Routine_Instance
+                        then Landin.Checking.Routine_Signature_Of
+                          (Types.all, Target)
+                        elsif Landin.Checking.Signature_Of
+                          (Types.all, Of_Tree, Callee)
+                            /= Landin.Checking.No_Signature
+                        then Landin.Checking.Signature_Of
+                          (Types.all, Of_Tree, Callee)
+                        elsif Direct
+                        then Landin.Checking.Signature_Of
+                          (Types.all,
+                           Res.Bound_To (Meanings.all, Of_Tree, Callee))
+                        else Landin.Checking.No_Signature);
+                  begin
+                     if Signature /= Landin.Checking.No_Signature
+                       and then Landin.Checking.Holds
+                         (Types.all, Signature)
+                     then
+                        for Position in
+                          1 .. Landin.Checking.Signature_Parameter_Count
+                            (Types.all, Signature)
+                        loop
+                           if Landin.Checking.Nth_Signature_Parameter
+                             (Types.all, Signature, Position).Caller
+                           then
+                              Register_Caller_Site (Of_Tree, Node);
+                              exit;
+                           end if;
+                        end loop;
+                     end if;
+                  end;
                end if;
             end loop;
          end Register_Texts;

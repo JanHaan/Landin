@@ -972,6 +972,12 @@ package body Landin.Stages.Checking is
       procedure Report_Application
         (Of_Tree : Syn.Tree; At_Node : Syn.Node_Id; Message : String);
 
+      procedure Validate_Caller_Parameter
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Part    : Landin.Checking.Signature_Part;
+         Valid   : in out Boolean);
+
       function Fixed_Argument
         (Of_Tree : Syn.Tree;
          Written : Syn.Node_Id;
@@ -1014,6 +1020,37 @@ package body Landin.Stages.Checking is
             Refused => Bad.Parameterized_Type_Alias,
             Into    => Found);
       end Report_Application;
+
+      procedure Validate_Caller_Parameter
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Part    : Landin.Checking.Signature_Part;
+         Valid   : in out Boolean)
+      is
+         Exact_Utf8 : constant Boolean :=
+           Part.Kind = Ty.Slice_Value
+           and then Part.Reference /= Landin.Checking.No_Reference
+           and then Landin.Checking.Descriptor_Of
+             (Types.all, Part.Reference).View = Ty.Utf8_View;
+      begin
+         if Syn.Kind (Of_Tree, Node) = Syn.Parameter
+           and then Syn.Is_Caller (Of_Tree, Node)
+           and then not Exact_Utf8
+         then
+            Bad.Report
+              (Item    => Bad.Type_Mismatch,
+               Source  => Syn.Source_Of (Of_Tree),
+               Where   => Syn.Where (Of_Tree, Node),
+               Message => "a `caller` parameter has the exact type utf8",
+               Note    => "D186: the compiler fills it with the call's"
+                          & " source-name, line and byte column",
+               Related => Syn.Origin
+                 (Of_Tree, Syn.Declared_Type (Of_Tree, Node)),
+               Because => "this written type",
+               Into    => Found);
+            Valid := False;
+         end if;
+      end Validate_Caller_Parameter;
 
       function Fixed_Argument
         (Of_Tree : Syn.Tree;
@@ -2134,7 +2171,10 @@ package body Landin.Stages.Checking is
                         Part.Convention :=
                           Semantic_Convention (Of_Tree, Node);
                         Part.Escaping := Syn.Is_Escaping (Of_Tree, Node);
+                        Part.Caller := Syn.Is_Caller (Of_Tree, Node);
                      end if;
+                     Validate_Caller_Parameter
+                       (Of_Tree, Node, Part, Valid);
                      return Part;
                   end;
                end Part_At;
@@ -4588,6 +4628,9 @@ package body Landin.Stages.Checking is
                Escaping =>
                  (Syn.Kind (Of_Tree, Declared) = Syn.Parameter
                   and then Syn.Is_Escaping (Of_Tree, Declared)),
+               Caller =>
+                 (Syn.Kind (Of_Tree, Declared) = Syn.Parameter
+                  and then Syn.Is_Caller (Of_Tree, Declared)),
                others => <>);
          begin
             case Held is
@@ -4635,6 +4678,8 @@ package body Landin.Stages.Checking is
                when others =>
                   Valid := False;
             end case;
+            Validate_Caller_Parameter
+              (Of_Tree, Declared, Part, Valid);
             return Part;
          end Part_At;
       begin
@@ -5891,11 +5936,12 @@ package body Landin.Stages.Checking is
 
          function Match_Generic_Runtime_Arguments return Boolean
          is
-            Wanted : constant Natural :=
+            Total : constant Natural :=
               Syn.Parameter_Count (Template_Tree.all, Function_Node);
-            Seen : array (1 .. Positive'Max (1, Wanted)) of Boolean :=
+            Wanted : Natural := 0;
+            Seen : array (1 .. Positive'Max (1, Total)) of Boolean :=
               [others => False];
-            First : array (1 .. Positive'Max (1, Wanted)) of Syn.Node_Id :=
+            First : array (1 .. Positive'Max (1, Total)) of Syn.Node_Id :=
               [others => Syn.No_Node];
             Static_Seen : array
               (1 .. Positive'Max (1, Formal_Count)) of Boolean :=
@@ -5904,6 +5950,9 @@ package body Landin.Stages.Checking is
 
             procedure Report_Static
               (Argument : Syn.Node_Id; Position : Positive; Message : String);
+
+            function Is_Caller_Forward
+              (Argument : Syn.Node_Id) return Boolean;
 
             procedure Report_Static
               (Argument : Syn.Node_Id; Position : Positive; Message : String)
@@ -5923,7 +5972,45 @@ package body Landin.Stages.Checking is
                   Into    => Found);
                Valid := False;
             end Report_Static;
+
+            function Is_Caller_Forward
+              (Argument : Syn.Node_Id) return Boolean
+            is
+            begin
+               if Syn.Kind (Caller_Tree, Argument) /= Syn.Name_Reference
+                 or else Res.Verdict_Of
+                   (Meanings.all, Caller_Tree, Argument) /= Res.Bound
+               then
+                  return False;
+               end if;
+               declare
+                  Means : constant Res.Declaration_Id :=
+                    Res.Bound_To (Meanings.all, Caller_Tree, Argument);
+               begin
+                  if Res.Sort_Of (Meanings.all, Means) /= Res.Parameter then
+                     return False;
+                  end if;
+                  declare
+                     Their_Tree : constant
+                       not null access constant Syn.Tree :=
+                         Tree_For (Res.Source_Of (Meanings.all, Means));
+                  begin
+                     return Syn.Is_Caller
+                       (Their_Tree.all, Res.Node_Of (Meanings.all, Means));
+                  end;
+               end;
+            end Is_Caller_Forward;
          begin
+            for Position in 1 .. Total loop
+               if not Syn.Is_Caller
+                 (Template_Tree.all,
+                  Syn.Nth_Parameter
+                    (Template_Tree.all, Function_Node, Position))
+               then
+                  Wanted := Wanted + 1;
+               end if;
+            end loop;
+
             if Syn.Kind (Caller_Tree, Call) = Syn.Call then
                if Syn.Argument_Count (Caller_Tree, Call) /= Wanted then
                   Bad.Report
@@ -6038,7 +6125,7 @@ package body Landin.Stages.Checking is
                         end if;
                      end if;
                   elsif Role = Res.Runtime_Argument
-                    and then Position in 1 .. Wanted
+                    and then Position in 1 .. Total
                   then
                      if Seen (Position) then
                         Bad.Report
@@ -6066,6 +6153,36 @@ package body Landin.Stages.Checking is
                      if Syn.Expression_Projection (Caller_Tree, Argument)
                           = Syn.No_Node
                      then
+                        Valid := False;
+                     end if;
+                     if Syn.Is_Caller
+                       (Template_Tree.all,
+                        Syn.Nth_Parameter
+                          (Template_Tree.all, Function_Node, Position))
+                       and then
+                         (Syn.Argument_Label (Caller_Tree, Argument)
+                            = Landin.Source.Names.No_Name
+                          or else not Is_Caller_Forward
+                            (Syn.Expression_Projection
+                               (Caller_Tree, Argument)))
+                     then
+                        Bad.Report
+                          (Item    => Bad.Type_Mismatch,
+                           Source  => Syn.Source_Of (Caller_Tree),
+                           Where   => Syn.Where (Caller_Tree, Argument),
+                           Message => "a caller site can only be forwarded"
+                                      & " by name from another `caller`"
+                                      & " parameter",
+                           Note    => "D186: otherwise the compiler fills"
+                                      & " this parameter from the present"
+                                      & " call site",
+                           Related => Syn.Origin
+                             (Template_Tree.all,
+                              Syn.Nth_Parameter
+                                (Template_Tree.all, Function_Node,
+                                 Position)),
+                           Because => "this `caller` parameter",
+                           Into    => Found);
                         Valid := False;
                      end if;
                   else
@@ -6101,8 +6218,13 @@ package body Landin.Stages.Checking is
                end loop;
             end if;
 
-            for Position in 1 .. Wanted loop
-               if not Seen (Position) then
+            for Position in 1 .. Total loop
+               if not Seen (Position)
+                 and then not Syn.Is_Caller
+                   (Template_Tree.all,
+                    Syn.Nth_Parameter
+                      (Template_Tree.all, Function_Node, Position))
+               then
                   declare
                      Formal : constant Syn.Node_Id := Syn.Nth_Parameter
                        (Template_Tree.all, Function_Node, Position);
@@ -6134,8 +6256,51 @@ package body Landin.Stages.Checking is
            (Position : Positive) return Syn.Node_Id
          is
          begin
+            if Syn.Is_Caller
+              (Template_Tree.all,
+               Syn.Nth_Parameter
+                 (Template_Tree.all, Function_Node, Position))
+            then
+               if Syn.Kind (Caller_Tree, Call) = Syn.Labeled_Application then
+                  for Written in 1 .. Syn.Argument_Count
+                    (Caller_Tree, Call)
+                  loop
+                     declare
+                        Argument : constant Syn.Node_Id :=
+                          Syn.Nth_Argument (Caller_Tree, Call, Written);
+                     begin
+                        if Res.Role_Of
+                          (Meanings.all, Caller_Tree, Argument)
+                            = Res.Runtime_Argument
+                          and then Res.Position_Of
+                            (Meanings.all, Caller_Tree, Argument) = Position
+                        then
+                           return Syn.Expression_Projection
+                             (Caller_Tree, Argument);
+                        end if;
+                     end;
+                  end loop;
+               end if;
+               return Syn.No_Node;
+            end if;
             if Syn.Kind (Caller_Tree, Call) = Syn.Call then
-               return Syn.Nth_Argument (Caller_Tree, Call, Position);
+               declare
+                  Visible : Natural := 0;
+               begin
+                  for Formal in 1 .. Runtime_Count loop
+                     if not Syn.Is_Caller
+                       (Template_Tree.all,
+                        Syn.Nth_Parameter
+                          (Template_Tree.all, Function_Node, Formal))
+                     then
+                        Visible := Visible + 1;
+                        if Formal = Position then
+                           return Syn.Nth_Argument
+                             (Caller_Tree, Call, Positive (Visible));
+                        end if;
+                     end if;
+                  end loop;
+               end;
             end if;
             for Written in 1 .. Syn.Argument_Count (Caller_Tree, Call) loop
                declare
@@ -7219,12 +7384,17 @@ package body Landin.Stages.Checking is
                   Argument : constant Syn.Node_Id :=
                     Runtime_Argument_At (Index);
                   Got : Ty.Type_Kind :=
-                    (if Syn.Kind (Caller_Tree, Argument)
+                    (if Syn.Is_Caller (Template_Tree.all, Parameter)
+                     then Ty.Ill_Typed
+                     elsif Syn.Kind (Caller_Tree, Argument)
                          in Syn.Name_Reference | Syn.Member_Selection
                             | Syn.Element_Index
                      then Selected_From (Caller_Tree, Argument)
                      else Synthesise (Caller_Tree, Argument));
                begin
+                  if Syn.Is_Caller (Template_Tree.all, Parameter) then
+                     goto Next_Deduction_Argument;
+                  end if;
                   if Got = Ty.Untyped_Integer then
                      Commit_To (Caller_Tree, Argument, Ty.Default_Integer);
                      Got := Ty.Default_Integer;
@@ -7247,6 +7417,8 @@ package body Landin.Stages.Checking is
                      end;
                   end if;
                end;
+               <<Next_Deduction_Argument>>
+               null;
             end loop;
          end if;
 
@@ -7610,6 +7782,8 @@ package body Landin.Stages.Checking is
                            Part.Convention := Semantic_Convention
                              (Template_Tree.all, Node);
                            Part.Escaping := Syn.Is_Escaping
+                             (Template_Tree.all, Node);
+                           Part.Caller := Syn.Is_Caller
                              (Template_Tree.all, Node);
                         end if;
                         return Part;
@@ -8477,7 +8651,7 @@ package body Landin.Stages.Checking is
          Total_Parameters : constant Natural :=
            Landin.Checking.Signature_Parameter_Count
              (Types.all, Signature);
-         Wanted : constant Natural := Total_Parameters - Offset;
+         Wanted : Natural := 0;
          Written_Count : constant Natural :=
            Syn.Argument_Count (Of_Tree, Node);
          Result_Count : constant Natural :=
@@ -8493,6 +8667,11 @@ package body Landin.Stages.Checking is
 
          function Same_Provable_Place
            (Left, Right : Syn.Node_Id) return Boolean;
+
+         function Nth_Written_Parameter (Index : Positive) return Positive;
+
+         function Is_Caller_Forward
+           (Argument : Syn.Node_Id) return Boolean;
 
          function Same_Provable_Place
            (Left, Right : Syn.Node_Id) return Boolean is
@@ -8523,12 +8702,59 @@ package body Landin.Stages.Checking is
             end case;
          end Same_Provable_Place;
 
+         function Nth_Written_Parameter (Index : Positive) return Positive is
+            Seen : Natural := 0;
+         begin
+            for Position in Offset + 1 .. Total_Parameters loop
+               if not Landin.Checking.Nth_Signature_Parameter
+                 (Types.all, Signature, Position).Caller
+               then
+                  Seen := Seen + 1;
+                  if Seen = Index then
+                     return Position;
+                  end if;
+               end if;
+            end loop;
+            raise Landin.Compiler_Defect with
+              "a written call position has no source parameter";
+         end Nth_Written_Parameter;
+
+         function Is_Caller_Forward
+           (Argument : Syn.Node_Id) return Boolean
+         is
+         begin
+            if Syn.Kind (Of_Tree, Argument) /= Syn.Name_Reference
+              or else Res.Verdict_Of (Meanings.all, Of_Tree, Argument)
+                        /= Res.Bound
+            then
+               return False;
+            end if;
+            declare
+               Means : constant Res.Declaration_Id :=
+                 Res.Bound_To (Meanings.all, Of_Tree, Argument);
+            begin
+               if Res.Sort_Of (Meanings.all, Means) /= Res.Parameter then
+                  return False;
+               end if;
+               declare
+                  Their_Tree : constant not null access constant Syn.Tree :=
+                    Tree_For (Res.Source_Of (Meanings.all, Means));
+                  Parameter : constant Syn.Node_Id :=
+                    Res.Node_Of (Meanings.all, Means);
+               begin
+                  return Syn.Is_Caller (Their_Tree.all, Parameter);
+               end;
+            end;
+         end Is_Caller_Forward;
+
          function Match_Runtime_Arguments return Boolean;
 
          function Match_Runtime_Arguments return Boolean is
-            Seen : array (1 .. Positive'Max (1, Wanted)) of Boolean :=
+            Seen : array
+              (1 .. Positive'Max (1, Total_Parameters)) of Boolean :=
               [others => False];
-            First : array (1 .. Positive'Max (1, Wanted)) of Syn.Node_Id :=
+            First : array
+              (1 .. Positive'Max (1, Total_Parameters)) of Syn.Node_Id :=
               [others => Syn.No_Node];
             Next_Positional : Natural := 0;
             Valid : Boolean := True;
@@ -8590,8 +8816,10 @@ package body Landin.Stages.Checking is
                      Valid := False;
                   elsif Label = Landin.Source.Names.No_Name then
                      Next_Positional := Next_Positional + 1;
-                     Position := Next_Positional;
-                     if Position > Wanted then
+                     if Next_Positional <= Wanted then
+                        Position := Nth_Written_Parameter
+                          (Positive (Next_Positional));
+                     else
                         Bad.Report
                           (Item    => Bad.Type_Mismatch,
                            Source  => Syn.Source_Of (Of_Tree),
@@ -8607,9 +8835,9 @@ package body Landin.Stages.Checking is
                         Valid := False;
                      end if;
                   else
-                     for Formal in 1 .. Wanted loop
+                     for Formal in Offset + 1 .. Total_Parameters loop
                         if Landin.Checking.Nth_Signature_Parameter
-                          (Types.all, Signature, Formal + Offset).Name = Label
+                          (Types.all, Signature, Formal).Name = Label
                         then
                            Position := Formal;
                            exit;
@@ -8633,11 +8861,11 @@ package body Landin.Stages.Checking is
                      end if;
                   end if;
 
-                  if Position in 1 .. Wanted then
+                  if Position in Offset + 1 .. Total_Parameters then
                      declare
                         Parameter : constant Landin.Checking.Signature_Part :=
                           Landin.Checking.Nth_Signature_Parameter
-                            (Types.all, Signature, Position + Offset);
+                            (Types.all, Signature, Position);
                      begin
                         if Seen (Position) then
                            Bad.Report
@@ -8679,18 +8907,44 @@ package body Landin.Stages.Checking is
                         end if;
                         Res.Match_Runtime_Argument
                           (Meanings.all, Of_Tree, Argument,
-                           Positive (Position + Offset));
+                           Positive (Position));
+
+                        if Parameter.Caller
+                          and then
+                            (Label = Landin.Source.Names.No_Name
+                             or else not Is_Caller_Forward
+                               (Syn.Expression_Projection
+                                  (Of_Tree, Argument)))
+                        then
+                           Bad.Report
+                             (Item    => Bad.Type_Mismatch,
+                              Source  => Syn.Source_Of (Of_Tree),
+                              Where   => Syn.Where (Of_Tree, Argument),
+                              Message => "a caller site can only be"
+                                         & " forwarded by name from another"
+                                         & " `caller` parameter",
+                              Note    => "D186: otherwise the compiler fills"
+                                         & " this parameter from the present"
+                                         & " call site",
+                              Related => Parameter.Site,
+                              Because => "this `caller` parameter",
+                              Into    => Found);
+                           Valid := False;
+                        end if;
                      end;
                   end if;
                end;
             end loop;
 
-            for Position in 1 .. Wanted loop
-               if not Seen (Position) then
+            for Position in Offset + 1 .. Total_Parameters loop
+               if not Seen (Position)
+                 and then not Landin.Checking.Nth_Signature_Parameter
+                   (Types.all, Signature, Position).Caller
+               then
                   declare
                      Parameter : constant Landin.Checking.Signature_Part :=
                        Landin.Checking.Nth_Signature_Parameter
-                         (Types.all, Signature, Position + Offset);
+                         (Types.all, Signature, Position);
                   begin
                      Bad.Report
                        (Item    => Bad.Type_Mismatch,
@@ -8713,6 +8967,14 @@ package body Landin.Stages.Checking is
             return Valid;
          end Match_Runtime_Arguments;
       begin
+         for Position in Offset + 1 .. Total_Parameters loop
+            if not Landin.Checking.Nth_Signature_Parameter
+              (Types.all, Signature, Position).Caller
+            then
+               Wanted := Wanted + 1;
+            end if;
+         end loop;
+
          if not Match_Runtime_Arguments then
             return Ty.Ill_Typed;
          end if;
@@ -8739,7 +9001,7 @@ package body Landin.Stages.Checking is
                   then Positive
                     (Res.Position_Of
                        (Meanings.all, Of_Tree, Raw_Argument))
-                  else Written + Offset);
+                  else Nth_Written_Parameter (Written));
                Parameter : constant Landin.Checking.Signature_Part :=
                  Landin.Checking.Nth_Signature_Parameter
                    (Types.all, Signature, Position);
@@ -11720,6 +11982,10 @@ package body Landin.Stages.Checking is
                                                Syn.Is_Escaping
                                                  (Concept_Tree.all,
                                                   Parameter);
+                                             Parameters (Position).Caller :=
+                                               Syn.Is_Caller
+                                                 (Concept_Tree.all,
+                                                  Parameter);
                                              Valid := Valid and then
                                                Descriptor.Kind
                                                  /= Ty.Ill_Typed;
@@ -12600,6 +12866,9 @@ package body Landin.Stages.Checking is
                                         (Concept_Tree.all, Parameter);
                                     Parameters (Position).Escaping :=
                                       Syn.Is_Escaping
+                                        (Concept_Tree.all, Parameter);
+                                    Parameters (Position).Caller :=
+                                      Syn.Is_Caller
                                         (Concept_Tree.all, Parameter);
                                     Valid := Valid
                                       and then Descriptor.Kind

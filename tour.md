@@ -1797,17 +1797,17 @@ A call that can fail and whose result is discarded is an
 error. Write 'try f()' or discard through an else.
 else is for the error channel only, not for unions.
 
-### [1040] A caller parameter is filled in by the compiler with the
+### [1040] A caller parameter is filled in by the compiler with the call site
 
 A caller parameter is filled in by the compiler with the
 site of the call, so assertions and logging work without
-macros. It may only be passed on from another caller
+macros. Its type is exactly `utf8`, and its value spells the source name,
+one-based line and one-based column as `source-name:line:column`. It is omitted
+from an ordinary call. It may only be passed on by name from another caller
 parameter, otherwise a wrapper would report itself.
 
 ```landin
-site: type = distinct u32
-
-assert: (cond: bool, caller where: site) -> none =
+assert: (cond: bool, caller where: utf8) -> none =
     if not cond then
         panic_handler(assertion, where)
     end if
@@ -1815,6 +1815,14 @@ end assert
 ```
 
 used as: assert(count > 0)
+
+A wrapper preserves the original site explicitly:
+
+```landin
+checked: (cond: bool, caller where: utf8) -> none =
+    assert(cond, where: where)
+end checked
+```
 
 ## CONTROL FLOW
 

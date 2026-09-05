@@ -2209,6 +2209,7 @@ package body Landin.Checking is
       if A.Kind /= B.Kind
         or else A.Convention /= B.Convention
         or else A.Escaping /= B.Escaping
+        or else A.Caller /= B.Caller
       then
          return False;
       end if;

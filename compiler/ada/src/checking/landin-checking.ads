@@ -581,6 +581,7 @@ package Landin.Checking is
       Convention : Landin.Syntax.Parameter_Convention :=
         Landin.Syntax.Implicit_In;
       Escaping   : Boolean := False;
+      Caller     : Boolean := False;
       --  A result label is source-level shape for [0990].  Parameter labels
       --  may be retained too, but signature agreement deliberately ignores
       --  every label [1000].
