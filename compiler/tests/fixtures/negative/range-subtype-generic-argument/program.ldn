@@ -1,0 +1,11 @@
+percent: type = u8 range 0..100
+
+copy: (t: type, v: t) -> (r: t) =
+    r = v
+end copy
+
+public main: () -> (code: i32) =
+    p: percent = 40
+    q: u8 = copy(t: percent, v: p)
+    code = i32(q)
+end main

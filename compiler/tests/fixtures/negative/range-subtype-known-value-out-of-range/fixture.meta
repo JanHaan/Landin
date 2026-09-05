@@ -1,0 +1,6 @@
+class: negative
+summary: D188 a module value the fold reaches is checked against the range subtype it is stored into
+constructs: 0660, 1940
+program: program.ldn
+codes: L0300
+targets: linux-x86-64, macos-arm64

@@ -158,7 +158,13 @@ package Landin.Diagnostics.Checking is
       --  [0540]'s contextual all-bits-zero image.
       Zeroed_Value,
       --  [1580]'s aggregate, variadic and wider foreign ABI matrix.
-      External_C_ABI);
+      External_C_ABI,
+      --  D188: [0660]'s range subtype is its base type constrained, so
+      --  `[]percent` and `[]u8` would be one type and a `[]u8` write of an
+      --  excluded value would enter constrained storage unchecked.  A
+      --  composite or reference position, and an `extern (c)` signature,
+      --  therefore refuse one until R7.20 decides how the check composes.
+      Constrained_Composition);
 
    function Construct (Item : Refused_Use)
      return Landin.Tokens.Construct_Reference
@@ -171,7 +177,8 @@ package Landin.Diagnostics.Checking is
             when Array_Element      => "[0520]",
             when Parameterized_Type_Alias => "[1350]",
             when Zeroed_Value       => "[0540]",
-            when External_C_ABI     => "[1580]")
+            when External_C_ABI     => "[1580]",
+            when Constrained_Composition => "[0660]")
      with Post => Landin.Tokens.Is_Valid_Construct (Construct'Result);
 
    --  The type names above, spelled once.  A name that is not here is a
@@ -219,6 +226,10 @@ private
                | Array_Element
                | Zeroed_Value      => "R2.20",
             when Parameterized_Type_Alias => "R2.40",
-            when External_C_ABI     => "R4.40");
+            when External_C_ABI     => "R4.40",
+            --  R7.20 owns how a constraint composes with a reference,
+            --  element, field or foreign position; R4.10 closes [0660]
+            --  itself and deliberately does not decide that.
+            when Constrained_Composition => "R7.20");
 
 end Landin.Diagnostics.Checking;

@@ -2,8 +2,6 @@ with Landin.Types;
 
 package body Landin.IR.Verifier is
 
-   use type Landin.Types.Folded;
-
    function Describe (Of_Kind : Fault_Kind) return String
      is (case Of_Kind is
             when Nothing_Wrong        => "nothing wrong",
@@ -199,6 +197,7 @@ package body Landin.IR.Verifier is
             when Slice_Address => 4,
             when Empty_Slice_Base => 0,
             when Conversion | Pointer_Address => 1,
+            when Range_Check   => 1,
             when Load_Indirect => 1,
             when Store_Indirect => 2,
             when Load_Datum    => 0,
@@ -3525,6 +3524,7 @@ package body Landin.IR.Verifier is
                               end;
 
                            when Slice_Address | Empty_Slice_Base | Conversion
+                              | Range_Check
                               | Pointer_Address | Load_Indirect
                               | Store_Indirect =>
                               null;
@@ -4581,6 +4581,43 @@ package body Landin.IR.Verifier is
                                       (Result_Kind = Landin.Types.Bool
                                        and then Operand_Kind
                                          in Landin.Types.Numeric_Name))
+                                 then
+                                    return (Kind => Result_Disagrees,
+                                            Item => Id, Block => Block,
+                                            Value => V);
+                                 end if;
+                              end;
+
+                           when Range_Check =>
+                              --  D188: this neither widens nor narrows, so
+                              --  its result type is its operand's, both are
+                              --  integers, and both bounds are values that
+                              --  type holds.  A bound the type does not
+                              --  hold would make the emitted comparison
+                              --  meaningless rather than merely redundant.
+                              declare
+                                 Result_Kind : constant
+                                   Landin.Types.Type_Kind :=
+                                     Result_Of (Of_Unit, Id, V);
+                                 Operand_Kind : constant
+                                   Landin.Types.Type_Kind :=
+                                     Result_Of
+                                       (Of_Unit, Id,
+                                        Nth_Operand (Of_Unit, Id, V, 1));
+                              begin
+                                 if Result_Kind not in
+                                      Landin.Types.Integer_Name
+                                   or else Operand_Kind /= Result_Kind
+                                   or else Range_Lower (Of_Unit, Id, V)
+                                             > Range_Upper (Of_Unit, Id, V)
+                                   or else not Landin.Types.Holds
+                                     (Range_Lower (Of_Unit, Id, V),
+                                      Landin.Types.Integer_Name (Result_Kind),
+                                      Facts)
+                                   or else not Landin.Types.Holds
+                                     (Range_Upper (Of_Unit, Id, V),
+                                      Landin.Types.Integer_Name (Result_Kind),
+                                      Facts)
                                  then
                                     return (Kind => Result_Disagrees,
                                             Item => Id, Block => Block,

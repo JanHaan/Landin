@@ -1,0 +1,7 @@
+percent: type = u8 range 0..100
+
+public main: () -> (code: i32) =
+    mut p: percent = 40
+    at: ptr mut u8 = addr p
+    code = i32(p)
+end main

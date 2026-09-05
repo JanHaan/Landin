@@ -1,0 +1,6 @@
+class: negative
+summary: D188 a range subtype writes two inclusive bounds, so an exclusive upper bound in a type is a parse refusal
+constructs: 0660, 1330, 1795
+program: program.ldn
+codes: L0101
+targets: linux-x86-64, macos-arm64

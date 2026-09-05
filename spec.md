@@ -288,11 +288,22 @@ reaches no type and is refused at that declaration.
 A type name is an ordinary declared name [1760], so one
 declaration per name per scope [1850] and a name that names
 nothing is refused [1860] both hold for it unchanged.
+D188 admits [0660]'s range subtype at this one position and nowhere else,
+which is why its base is narrower than `type`: the base must be a name whose
+alias chain reaches an enabled integer scalar, both bounds are D136-folded
+values of that base, and the lower must not be above the upper. `range` is a
+contextual word [1760] does not reserve, exactly as `loop`, `match` and
+`unchecked` are, and only `..` is admitted because the tour writes no
+exclusive bound in a type. The representation, the operands and every
+operator result are the base type's, so this is [0650]'s complement and not a
+spelling of it.
 
 ```landin-grammar
 type_declaration ::= identifier ":" "type"
-                     ("=" (atom_union | type | struct_body)
+                     ("=" (atom_union | range_subtype | type | struct_body)
                      | type_formals "=" (type | struct_body))
+range_subtype   ::= (scalar_name | declaration_reference) "range"
+                    expression ".." expression
 concept_declaration ::= identifier ":" "type" "=" concept_body
 concept_body    ::= "concept" type_formals
                     ("is" concept_reference
@@ -8636,11 +8647,14 @@ classified failure boundary before the repository gate can pass.
 | `entry.point` | static | 1650, 1970 | L0502 before executable emission | `runtime/constant-return-exits-with-its-code` |
 | `module.images` | static | 0180, 0340, 0350, 0410, 1460, 1890, 1930, 1940 | L0300, L0304 or L0305; module-known bool `not`, `and` and `or` fold left to right into scalar and aggregate images, short-circuit `and`/`or`, and execute no initializer CFG | `negative/module-value-from-a-call`, `runtime/module-known-short-circuit-bools`, `runtime/recursive-module-images-are-laid-out-and-distinct` |
 | `unchecked.region` | outside | 0290, 0300, 0310, 0320, 0430, 0470, 0570, 0580, 0700, 1120, 1950, 1960 | non-guarantee: inside [1120]'s region the compiler emits no integer overflow edge for `+`, `-`, `*` and unary `-`, no element-index or slice-range edge, and no destination-range edge for an integer-to-integer or pointer-to-integer conversion; the results are [0320]'s wrapping value, [0430]'s pointer non-guarantee at the computed address, and the low-order bits of the source; every static refusal, every division, shift, bool and float conversion edge and every text boundary edge stays | `positive/unchecked-regions`, `runtime/unchecked-arithmetic-wraps`, `runtime/unchecked-integer-conversion-truncates`, `runtime/unchecked-slice-index-passes-the-length`, `runtime/checks-return-after-the-region`, `runtime/unchecked-does-not-cross-a-call`, `runtime/unchecked-does-not-reach-an-anonymous-body`, `runtime/unchecked-keeps-the-divisor-check`, `runtime/unchecked-keeps-the-shift-check`, `runtime/unchecked-keeps-text-boundary-traps`, `negative/unchecked-keeps-a-known-index`, `negative/unchecked-keeps-permissions`, `negative/unchecked-keeps-definite-assignment`, `negative/unchecked-region-end-name-mismatch` |
+| `subtype.range` | trap | 0540, 0660, 0700, 1730, 1795, 1880, 1940, 1950, 1960 | storing into a place whose declared type is [0660]'s range subtype, and applying the subtype name to a value, check the value against both folded bounds; L0300 rejects a known value outside them, a runtime value outside them traps, and a value whose own subtype's bounds lie inside them is not checked again; [1120]'s region does not remove this edge | `positive/range-subtypes`, `runtime/range-subtype-checks`, `runtime/range-subtype-store-traps`, `runtime/range-subtype-conversion-traps`, `runtime/range-subtype-update-traps`, `negative/range-subtype-literal-out-of-range`, `negative/range-subtype-known-value-out-of-range`, `negative/range-subtype-zeroed-excluded`, `negative/range-subtype-bounds-inverted`, `negative/range-subtype-in-a-slice` |
 | `configuration.fixed` | static | 1980 | L0300, L0301, L0305 or L0306 in the selected declaration view | `negative/fixed-conditional-evaluator`, `runtime/fixed-conditional-generic-runtime` |
 
 This is a coverage register, not an optimizer contract. D187 adds
 `unchecked.region` for [1120], which weakens the four trapping rows it names
-and no others. C calls and raw allocation are absent because the current
+and no others; `subtype.range` is deliberately not among them, because a
+value outside a range subtype's bounds is not a value the destination type
+holds and removing that edge would leave no stated behaviour. C calls and raw allocation are absent because the current
 compiler does not implement those operations; their enabling work must add
 rows. Driver and
 backend inability have diagnostic owners in `diagnostics.matrix`, but are host
@@ -10544,3 +10558,119 @@ open question and not this one. All were declined.
 `negative/unchecked-keeps-definite-assignment`,
 `negative/unchecked-region-end-name-mismatch`, the generated lexical and IR
 records, and the `unchecked.region` guarantee row.
+
+### D188 — A range subtype is its base type constrained, checked where it is stored
+
+**The tour said** that [0660] declares `percent: type = u8 range 0..100` and
+that it is checked at assignment and conversion. It did not say what type an
+operator over one gives, whether an alias of one keeps the bounds, whether the
+constraint is part of a signature, what a bound may be written as, what an
+empty range means, what `zeroed` gives a subtype that excludes zero, or what a
+range subtype means inside a struct, an array, a slice or a generic.
+
+**Chosen:** a range subtype is its base integer type restricted to a run of
+that type's own values, and not a new type. `percent` and `u8` have the same
+representation, the same width, the same operand rules and the same operator
+results, so `p + 1`, `p & mask`, `-p` and `p >> 2` are `u8` values, `p < q` is
+a `bool`, `sizeof percent` measures `u8`, and there is no constrained
+arithmetic and no constraint join rule. That is why [1730]
+names distinct types and range subtypes as two habits and not one: [0650]'s
+`distinct` is this rule's complement, and composing the two remains R2.20's
+question.
+
+The base is written as a scalar name or a declared name whose alias chain
+reaches an enabled integer scalar; a float, a bool, a struct, an array or a
+pointer base is L0301. Both bounds are D136's fold — integer literals, unary
+minus and target-independent `+ - * / %` — so `u8 range 0..(200 / 2)` is
+written and `u8 range 0..300` is L0300 because `u8` holds neither bound. A
+lower bound above the upper is L0306 rather than L0300: an empty range names
+no value, so there is no constraint to perform at all. Only `..` is admitted;
+an exclusive upper bound in a type is a parse refusal, because the tour writes
+none. `range` is a contextual word [1760] does not reserve, recognized only
+after a parsed base type at a type declaration's right-hand side, so a
+binding, a parameter or a label spelled `range` keeps its ordinary meaning and
+[1760] still reserves thirty-six words.
+
+The check happens where [0660] says and nowhere else: storing a value into a
+place whose declared type is the subtype — a local or module binding
+initializer, an assignment, a compound assignment, [1900]'s `inc` and `dec`, a
+call argument and a named return — and applying the subtype name to a value
+[0700]. All of them reuse D168's exact-range path. A value the compiler knows
+and the bounds exclude is L0300, which includes [0540]'s `zeroed`, because
+`zeroed` is the base type's all-bits-zero image and that image is the value
+zero. Every other value reaches one runtime check that traps at [1950]'s
+existing edge. A compound assignment's check sits on the statement and not on
+either operand, because what it stores is [0290]'s result in the base type.
+`percent(x)` is D168's conversion to `u8` followed by that check, so a source
+`u8` cannot hold traps at the conversion and one it holds but the bounds
+exclude traps at the constraint; [0310] gives the program no way to tell them
+apart. Extending [0700] to a declared name is part of this decision and fixes
+D15's alias as a side effect: `count: type = u32` makes `count(x)` the
+conversion `u32(x)` is.
+
+The check is elided, not merely optimised away, when the source already
+carries the proof: its known folded value is inside the bounds, or its own
+declared subtype's bounds lie inside the destination's. That is [1730] made
+mechanical, and without it the habit would cost a check per hop. An alias
+declaration carries the constraint unchanged under D15, because an alias is
+the same type and the constraint is part of what that type is. The constraint
+is part of structural function-signature identity, so a `(v: u8) -> none`
+value does not fill a `(v: percent) -> none` slot and an indirect call cannot
+lose the check, and an `inout` or `sink` argument must be a place of that same
+subtype, because the callee may write any value the subtype holds back through
+it.
+
+Six positions are refused by name, and together they are what makes the
+guarantee true rather than decorative, because each is a path by which an
+unchecked value could enter constrained storage: a struct field, a fixed-array
+element, a `ptr`/`[]` target, `addr` of a constrained place, an `extern (c)`
+signature whose named return Landin never assigns, and a generic type
+argument. The first four and the last report L0304 against R7.20; the
+external signature is refused by [1580]'s existing hosted-scalar boundary and
+keeps that report. `[]percent` and `[]u8` would be one slice type, so a
+`[]u8` write of 200 would enter constrained storage with no check; a generic
+instance would quietly make `f(percent)` mean `f(u8)`. A
+module binding of a range subtype must have a value the checker's fold reaches
+[1940], because an image has no moment in which to trap.
+
+The neutral IR carries this as one instruction with one operand, two folded
+bounds and a result type equal to its operand's. It is not the existing
+`Conversion` generalized: this one neither widens nor narrows, so it is one
+extension, two compares and one `ud2` in the base type's own signedness, and
+it composes with a conversion rather than absorbing it. [1120]'s region does
+not remove this edge, because D187 removes only edges whose absence leaves a
+value the destination type holds, and a value outside the bounds is not one.
+
+**The alternatives:** making an operator over a range subtype give the
+subtype would make every operator a checked one, which [0660]'s own
+"at assignment and conversion" excludes. Giving a range subtype its own
+`Type_Kind` would make it a second nominal identity beside [0650]'s and
+duplicate every scalar rule. Reserving `range` in [1760] would retire an
+ordinary name for a word the tour writes contextually. Admitting `..<` would
+invent a spelling the tour does not write. Generalizing `Conversion` to carry
+arbitrary bounds would rewrite the backend's most delicate sixty lines and
+every recorded `Conversion` line for no new behaviour. Admitting a range
+subtype in a composite position without deciding how the check composes would
+make the guarantee decorative. Refusing an `inout` convention outright on a
+constrained parameter, rather than requiring the same subtype, would be less
+useful for no less work. All were declined.
+
+**Pinned by** `positive/range-subtypes`, `positive/alias-conversion`,
+`runtime/range-subtype-checks`, `runtime/range-subtype-store-traps`,
+`runtime/range-subtype-conversion-traps`,
+`runtime/range-subtype-update-traps`,
+`negative/range-subtype-literal-out-of-range`,
+`negative/range-subtype-known-value-out-of-range`,
+`negative/range-subtype-zeroed-excluded`,
+`negative/range-subtype-base-is-not-an-integer`,
+`negative/range-subtype-bounds-inverted`,
+`negative/range-subtype-bound-outside-base`,
+`negative/range-subtype-exclusive-bound`,
+`negative/range-subtype-in-a-slice`,
+`negative/range-subtype-struct-field`,
+`negative/range-subtype-address`,
+`negative/range-subtype-inout-must-match`,
+`negative/range-subtype-signature-mismatch`,
+`negative/range-subtype-external-signature`,
+`negative/range-subtype-generic-argument`, the generated lexical and IR
+records, and the `subtype.range` guarantee row.

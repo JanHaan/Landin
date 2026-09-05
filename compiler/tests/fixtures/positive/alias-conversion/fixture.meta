@@ -1,0 +1,5 @@
+class: positive
+summary: D188 a type declaration naming a scalar converts under the name it declared, which D15 says is the same type
+constructs: 0700, 1795
+program: program.ldn
+targets: linux-x86-64, macos-arm64

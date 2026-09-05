@@ -1,0 +1,7 @@
+percent: type = u8 range 0..100
+
+--  []percent and []u8 would be one slice type, so a []u8 write of 200 would
+--  enter constrained storage with no check.  R7.20 owns the composition.
+public main: (values: []percent) -> (code: i32) =
+    code = 0
+end main

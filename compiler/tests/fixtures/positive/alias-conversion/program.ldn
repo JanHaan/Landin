@@ -1,0 +1,9 @@
+--  D15 makes this another name for u32, so [0700]'s conversion is written
+--  with it exactly as it is written with u32.
+count: type = u32
+
+public main: () -> (code: i32) =
+    wide: i64 = 7
+    n: count = count(wide)
+    code = i32(n)
+end main

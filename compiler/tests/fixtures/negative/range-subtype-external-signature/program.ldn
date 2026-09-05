@@ -1,0 +1,7 @@
+percent: type = u8 range 0..100
+
+extern (c) clamp: (v: percent) -> (r: percent)
+
+public main: () -> (code: i32) =
+    code = 0
+end main

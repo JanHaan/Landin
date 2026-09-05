@@ -1,0 +1,8 @@
+percent: type = u8 range 0..100
+
+source: u8 = 200
+too_wide: percent = source
+
+public main: () -> (code: i32) =
+    code = i32(too_wide)
+end main

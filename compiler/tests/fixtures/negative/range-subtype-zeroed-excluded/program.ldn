@@ -1,0 +1,6 @@
+positive_byte: type = u8 range 1..255
+
+public main: () -> (code: i32) =
+    n: positive_byte = zeroed
+    code = i32(n)
+end main

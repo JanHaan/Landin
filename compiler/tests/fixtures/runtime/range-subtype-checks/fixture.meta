@@ -1,0 +1,6 @@
+class: runtime
+summary: D188 an in-range runtime value passes every constrained store, and arithmetic over it is the base type's
+constructs: 0660, 0700, 1730
+program: main.ldn
+status: 42
+targets: linux-x86-64

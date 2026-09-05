@@ -730,6 +730,7 @@ package body Landin.Tests.Verifier_Suite is
       Array_Fill_Field_First_Is_Outside_Array,
       Array_Fill_Inside_A_Datum,
       Unchecked_Inside_A_Datum,
+      Range_Check_Bound_Is_Not_A_Value_Of_The_Type,
       Condition_Is_A_Number,
       Function_Signature_Part_Is_Malformed,
       Function_Parameter_Uses_A_Different_Signature,
@@ -1633,6 +1634,20 @@ package body Landin.Tests.Verifier_Suite is
             IR.Emit_Leave (Unit, E, IR.No_Value, Site);
             IR.Leave_Block (Unit, E);
 
+         --  D188: a bound the checked type does not hold would make the
+         --  emitted comparison meaningless rather than merely redundant,
+         --  so the verifier refuses it.  The other half -- a result type
+         --  that is not its operand's -- cannot be built here, because
+         --  Emit_Range_Check takes one type for both.
+         when Range_Check_Bound_Is_Not_A_Value_Of_The_Type =>
+            N := IR.Emit_Number
+                   (Unit, A, Landin.Types.U8, 1, False, Site);
+            N := IR.Emit_Range_Check
+                   (Unit, A, N, Landin.Types.U8, 0, 300, Site);
+            N := IR.Emit_Load (Unit, A, S, Site);
+            IR.Emit_Leave (Unit, A, N, Site);
+            IR.Leave_Block (Unit, A);
+
          when Condition_Is_A_Number =>
             C := IR.Add_Block
                    (Unit, A, Landin.Resolution.Program_Scope, Site);
@@ -1839,6 +1854,8 @@ package body Landin.Tests.Verifier_Suite is
           V.Array_Fill_First_Out_Of_Range),
          (Array_Fill_Inside_A_Datum, V.Array_Fill_Inside_A_Datum),
          (Unchecked_Inside_A_Datum,  V.Unchecked_Not_Removable),
+         (Range_Check_Bound_Is_Not_A_Value_Of_The_Type,
+          V.Result_Disagrees),
          (Condition_Is_A_Number,      V.Condition_Is_Not_A_Bool),
          (Function_Signature_Part_Is_Malformed,
           V.Signature_Part_Malformed),

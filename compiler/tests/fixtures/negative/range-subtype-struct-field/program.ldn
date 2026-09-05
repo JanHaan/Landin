@@ -1,0 +1,9 @@
+percent: type = u8 range 0..100
+
+reading: type = struct
+    level: percent
+end reading
+
+public main: () -> (code: i32) =
+    code = 0
+end main

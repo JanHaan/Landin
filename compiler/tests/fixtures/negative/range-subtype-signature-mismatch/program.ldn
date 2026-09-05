@@ -1,0 +1,11 @@
+percent: type = u8 range 0..100
+
+take_any: (v: u8) -> none =
+end take_any
+
+public main: () -> (code: i32) =
+    --  Assigning this would let an indirect call store any u8 into a
+    --  percent parameter with no check.
+    slot: (v: percent) -> none = take_any
+    code = 0
+end main

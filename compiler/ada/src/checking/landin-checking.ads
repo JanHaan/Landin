@@ -457,6 +457,118 @@ package Landin.Checking is
           Post => Atom_Set_Of (Into, Id) = Set_Id;
 
    ------------------------------------------------------------------
+   ------------------------------------------------------------------
+   --  Range subtypes
+   ------------------------------------------------------------------
+
+   --  D188: [0660]'s range subtype is its base integer type constrained,
+   --  not a type of its own.  The kind a constrained node or declaration
+   --  carries is still the base Integer_Name -- representation, operands
+   --  and every operator result are the base's -- so the constraint is a
+   --  fact beside the kind rather than a Landin.Types.Type_Kind, exactly
+   --  as nominal, atom-set, reference and signature identity already are.
+   --
+   --  Identity is the written range itself, so D15's alias of a range
+   --  subtype is the same constrained type -- the alias carries the
+   --  identity its type position was given -- while two separately written
+   --  ranges over the same bounds are two subtypes.  Containment below is
+   --  structural, because [1730]'s habit is about values and not names.
+   type Constraint_Id is range 0 .. Integer'Last;
+   No_Constraint : constant Constraint_Id := 0;
+
+   type Constraint_Descriptor is record
+      Base  : Landin.Types.Integer_Name := Landin.Types.U8;
+      Lower : Landin.Types.Folded := 0;
+      Upper : Landin.Types.Folded := 0;
+      --  Where the range was written, which is the second place every
+      --  report about a constrained store has to point at.
+      Site  : Landin.Provenance.Origin := Landin.Provenance.No_Origin;
+   end record;
+
+   function Constraint_Count (Of_Table : Table) return Natural
+     with Pre => Is_Prepared (Of_Table);
+
+   function Holds (Of_Table : Table; Id : Constraint_Id) return Boolean
+     is (Is_Prepared (Of_Table)
+         and then Id /= No_Constraint
+         and then Natural (Id) <= Constraint_Count (Of_Table));
+
+   function Add_Constraint
+     (Into : in out Table; Item : Constraint_Descriptor) return Constraint_Id
+     with Pre  => Is_Prepared (Into)
+                  and then Landin.Provenance.Is_Known (Item.Site),
+          Post => Constraint_Count (Into) = Constraint_Count (Into)'Old + 1
+                  and then Holds (Into, Add_Constraint'Result);
+
+   function Bounds_Of
+     (Of_Table : Table; Id : Constraint_Id) return Constraint_Descriptor
+     with Pre => Holds (Of_Table, Id);
+
+   --  [1730] made mechanical: a value already known to be Inner's needs no
+   --  check to become Outer's when Inner's bounds lie inside Outer's.
+   function Contains
+     (Of_Table : Table; Outer, Inner : Constraint_Id) return Boolean
+     with Pre => Holds (Of_Table, Outer) and then Holds (Of_Table, Inner);
+
+   function Constraint_Of
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id) return Constraint_Id
+     with Pre => Is_Prepared (Of_Table)
+                 and then Covers (Of_Table, Of_Tree)
+                 and then Landin.Syntax.Contains (Of_Tree, Node);
+
+   function Constraint_Of
+     (Of_Table : Table; Id : Declaration_Id) return Constraint_Id
+     with Pre => Is_Prepared (Of_Table)
+                 and then Natural (Id) <= Declaration_Limit (Of_Table);
+
+   procedure Note_Constraint
+     (Into       : in out Table;
+      Of_Tree    : Landin.Syntax.Tree;
+      Node       : Landin.Syntax.Node_Id;
+      Constraint : Constraint_Id)
+     with Pre  => Is_Prepared (Into)
+                  and then Covers (Into, Of_Tree)
+                  and then Landin.Syntax.Contains (Of_Tree, Node)
+                  and then Holds (Into, Constraint),
+          Post => Constraint_Of (Into, Of_Tree, Node) = Constraint;
+
+   procedure Note_Constraint
+     (Into       : in out Table;
+      Id         : Declaration_Id;
+      Constraint : Constraint_Id)
+     with Pre  => Is_Prepared (Into)
+                  and then Id /= No_Declaration
+                  and then Natural (Id) <= Declaration_Limit (Into)
+                  and then Holds (Into, Constraint),
+          Post => Constraint_Of (Into, Id) = Constraint;
+
+   --  The range check a value at this node still owes its destination, or
+   --  No_Constraint when it owes none -- because the destination is
+   --  unconstrained, because the value is already known to be inside, or
+   --  because [1730]'s proof was carried in.  Lowering reads it and emits
+   --  Landin.IR's Range_Check; nothing else decides where a check goes.
+   function Owed_Check
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id) return Constraint_Id
+     with Pre => Is_Prepared (Of_Table)
+                 and then Covers (Of_Table, Of_Tree)
+                 and then Landin.Syntax.Contains (Of_Tree, Node);
+
+   procedure Note_Owed_Check
+     (Into       : in out Table;
+      Of_Tree    : Landin.Syntax.Tree;
+      Node       : Landin.Syntax.Node_Id;
+      Constraint : Constraint_Id)
+     with Pre  => Is_Prepared (Into)
+                  and then Covers (Into, Of_Tree)
+                  and then Landin.Syntax.Contains (Of_Tree, Node)
+                  and then Holds (Into, Constraint),
+          Post => Owed_Check (Into, Of_Tree, Node) = Constraint;
+
+   ------------------------------------------------------------------
    --  Reference and function descriptors
    ------------------------------------------------------------------
 
@@ -582,6 +694,10 @@ package Landin.Checking is
         Landin.Syntax.Implicit_In;
       Escaping   : Boolean := False;
       Caller     : Boolean := False;
+      --  D188: [0660]'s constraint is part of what this parameter or
+      --  result's type is, so it is part of structural signature identity
+      --  and an indirect call cannot lose the check.
+      Constraint : Constraint_Id := No_Constraint;
       --  A result label is source-level shape for [0990].  Parameter labels
       --  may be retained too, but signature agreement deliberately ignores
       --  every label [1000].
@@ -2061,6 +2177,12 @@ private
    package Signature_Id_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Signature_Id);
 
+   package Constraint_Id_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Constraint_Id);
+
+   package Constraint_Descriptor_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Constraint_Descriptor);
+
    package Reference_Id_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Reference_Id);
 
@@ -2200,6 +2322,8 @@ private
       Node_Atom_Sets : Atom_Set_Id_Vectors.Vector;
       Node_Signatures : Signature_Id_Vectors.Vector;
       Node_References : Reference_Id_Vectors.Vector;
+      Node_Constraints : Constraint_Id_Vectors.Vector;
+      Node_Owed_Checks : Constraint_Id_Vectors.Vector;
       Node_Concepts : Concept_Id_Vectors.Vector;
       Node_Result_Shapes : Signature_Id_Vectors.Vector;
       Node_Routine_Targets : Routine_Id_Vectors.Vector;
@@ -2231,9 +2355,11 @@ private
       Atoms        : Atom_Vectors.Vector;
       Declaration_Signatures : Signature_Id_Vectors.Vector;
       Declaration_References : Reference_Id_Vectors.Vector;
+      Declaration_Constraints : Constraint_Id_Vectors.Vector;
       Declaration_Concepts : Concept_Id_Vectors.Vector;
       Declaration_Result_Shapes : Signature_Id_Vectors.Vector;
       References   : Reference_Descriptor_Vectors.Vector;
+      Constraints  : Constraint_Descriptor_Vectors.Vector;
       Signatures   : Signature_Vectors.Vector;
       Signature_Parts : Signature_Part_Vectors.Vector;
       Return_Sources : Return_Source_Vectors.Vector;

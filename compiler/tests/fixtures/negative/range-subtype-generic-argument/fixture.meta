@@ -1,0 +1,6 @@
+class: negative
+summary: D188 a range subtype is refused as a generic type argument, because its bounds do not travel into the instance
+constructs: 0660, 1290
+program: program.ldn
+codes: L0304
+targets: linux-x86-64, macos-arm64

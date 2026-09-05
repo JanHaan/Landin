@@ -63,6 +63,8 @@ package body Landin.Syntax is
             --  The applied alias, then its positional argument run.
             when Type_Application         => 1,
             when Atom_Union_Type          => 0,
+            --  The base type and the two bound expressions.
+            when Range_Subtype            => 3,
             when Inferred_Error_Set        => 0,
             --  The bound and the element type.
             when Array_Type               => 2,
@@ -367,6 +369,15 @@ package body Landin.Syntax is
      is (Slot (Of_Tree, Id, 2));
 
    function Slice_Upper (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     is (Slot (Of_Tree, Id, 3));
+
+   function Base_Type_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     is (Slot (Of_Tree, Id, 1));
+
+   function Lower_Bound_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     is (Slot (Of_Tree, Id, 2));
+
+   function Upper_Bound_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
      is (Slot (Of_Tree, Id, 3));
 
    function Referenced_Type (Of_Tree : Tree; Id : Node_Id) return Node_Id

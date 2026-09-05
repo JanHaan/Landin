@@ -101,9 +101,12 @@
 --  is no textual reader: a dump is a recorded artefact the way
 --  `compiler/tests/lexical.tokens` is, and a reader would be both a
 --  second constructor of an IR and the first half of the serialised
---  stage protocol R0.60 refused to freeze.  Conversion is the one checked
---  integer operation D168 and [0470] need, not a generic coercion protocol;
---  the checker still refuses every other [0700] conversion by name [1830].
+--  stage protocol R0.60 refused to freeze.  Conversion and Range_Check are
+--  the two checked integer operations D168, [0470] and D188 need, not a
+--  generic coercion protocol; the checker still refuses every other [0700]
+--  conversion by name [1830].  They are separate because Range_Check's
+--  source and result types are identical, so it neither widens nor narrows
+--  and composes with Conversion rather than generalising it.
 --  There is no Discard: [1930] throws a result away and an unused value is how
 --  that is spelt, so no rule here says every value is used.  And there is
 --  no Increment: [1900] says `inc` says what `x += 1` says, which is a
@@ -136,6 +139,7 @@ package Landin.IR is
 
    use type Landin.Provenance.Declaration_Id;
    use type Landin.Resolution.Scope_Id;
+   use type Landin.Types.Folded;
    use type Landin.Types.Type_Kind;
 
    subtype Declaration_Id is Landin.Provenance.Declaration_Id;
@@ -205,6 +209,11 @@ package Landin.IR is
       --  form. The source and result integer kinds retain both widths; a
       --  backend emits the required runtime fit check before narrowing.
       Conversion,
+      --  D188's [0660] constraint check.  Its source and result types are
+      --  identical, so this is not a conversion and cannot narrow: it
+      --  passes the value through when the two folded bounds hold it and
+      --  traps at [1950]'s existing edge when they do not.
+      Range_Check,
       Pointer_Address,
       --  [0430]'s source pointer access.  The address is an ordinary usize
       --  value; the referred scalar type is retained on the load result and
@@ -2057,6 +2066,9 @@ package Landin.IR is
      is (Op in Add | Subtract | Multiply | Negation
                | Load_Element | Store_Element | Storage_Address
                | Slice_Address | Conversion);
+   --  D188's edge is deliberately absent from that set: [1120]'s region
+   --  removes an edge whose absence leaves a value the destination type
+   --  holds, and a value outside a range subtype's bounds is not one.
 
    --  The scope [1840] this block's instructions are inside, which is
    --  what R4.60 turns into a lexical block with a range of addresses.
@@ -2713,6 +2725,37 @@ package Landin.IR is
           Post => Emitted
                     (Into, Item, Emit_Conversion'Result, Conversion);
 
+   --  D188: the value passes through unchanged when the bounds hold it.
+   --  The bounds are Folded values because that is what the checker folded
+   --  them to and what the backend compares against; neither side learns a
+   --  target width from them.
+   function Emit_Range_Check
+     (Into   : in out Unit;
+      Item   : Item_Id;
+      Value  : Value_Id;
+      Result : Landin.Types.Integer_Name;
+      Lower  : Landin.Types.Folded;
+      Upper  : Landin.Types.Folded;
+      Site   : Landin.Provenance.Origin) return Value_Id
+     with Pre  => Is_Emitting (Into, Item)
+                  and then Holds (Into, Item, Value)
+                  and then Lower <= Upper
+                  and then Landin.Provenance.Is_Known (Site),
+          Post => Emitted
+                    (Into, Item, Emit_Range_Check'Result, Range_Check);
+
+   function Range_Lower
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
+      return Landin.Types.Folded
+     with Pre => Holds (Of_Unit, Item, Value)
+                 and then Op_Of (Of_Unit, Item, Value) = Range_Check;
+
+   function Range_Upper
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
+      return Landin.Types.Folded
+     with Pre => Holds (Of_Unit, Item, Value)
+                 and then Op_Of (Of_Unit, Item, Value) = Range_Check;
+
    function Emit_Slice_Address
      (Into    : in out Unit;
       Item    : Item_Id;
@@ -3324,6 +3367,9 @@ private
       Indexed_Address : Boolean                := False;
       Negated     : Boolean                   := False;
       Truth       : Boolean                   := False;
+      --  D188's two folded bounds, on a Range_Check and nowhere else.
+      Lower_Bound : Landin.Types.Folded       := 0;
+      Upper_Bound : Landin.Types.Folded       := 0;
       --  D187: this instruction sits lexically inside [1120]'s region
       --  and the check edge its opcode would have carried is not emitted.
       Unchecked   : Boolean                   := False;

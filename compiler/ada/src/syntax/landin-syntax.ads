@@ -295,6 +295,11 @@ package Landin.Syntax is
       --  referenced atom or atom-union names in written order; checking
       --  turns that run into a set, so order is not type identity.
       Atom_Union_Type,
+      --  D188's [0660] range subtype, which only a type declaration's
+      --  right-hand side may write.  Three slots: the base type, the lower
+      --  bound expression and the upper bound expression.  The syntax
+      --  retains both bounds as written; checking folds them.
+      Range_Subtype,
       --  `! ...` on a private function before inference has finalized it.
       Inferred_Error_Set,
       --  [0520]'s array, whose length is part of it.  Two slots: D136's
@@ -1228,6 +1233,24 @@ package Landin.Syntax is
           Post => Contains (Of_Tree, Nth_Atom_Member'Result)
                   and then Kind (Of_Tree, Nth_Atom_Member'Result)
                              in Type_Reference | Member_Selection;
+
+   --  D188's [0660] base type and its two written bounds.  The bounds are
+   --  nodes and not numbers for Bound_Of's reason: what a literal means is
+   --  [1880]'s and a report about one points at the span it was written at.
+   function Base_Type_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     with Pre  => Contains (Of_Tree, Id)
+                  and then Kind (Of_Tree, Id) = Range_Subtype,
+          Post => Contains (Of_Tree, Base_Type_Of'Result);
+
+   function Lower_Bound_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     with Pre  => Contains (Of_Tree, Id)
+                  and then Kind (Of_Tree, Id) = Range_Subtype,
+          Post => Contains (Of_Tree, Lower_Bound_Of'Result);
+
+   function Upper_Bound_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     with Pre  => Contains (Of_Tree, Id)
+                  and then Kind (Of_Tree, Id) = Range_Subtype,
+          Post => Contains (Of_Tree, Upper_Bound_Of'Result);
 
    function Element_Count (Of_Tree : Tree; Id : Node_Id) return Natural
      with Pre => Contains (Of_Tree, Id)
