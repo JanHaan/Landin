@@ -12,7 +12,7 @@ package body Landin.Diagnostics.Checking is
       Note    : String := "";
       Related : Landin.Provenance.Origin := Landin.Provenance.No_Origin;
       Because : String := "";
-      Refused : Refused_Use := Scalar_Conversion;
+      Refused : Refused_Use := Struct_Value;
       Into    : in out Diagnostic_List)
    is
       Named : constant Rows.Code_Name := Code_For (Item);

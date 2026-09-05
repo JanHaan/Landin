@@ -2,5 +2,5 @@ class: runtime
 summary: integer range traversal evaluates bounds once and advances through continue, labels, completion, and produced values
 program: main.ldn
 status: 42
-constructs: 0410, 1150, 1170, 1180, 1190, 1810
+constructs: 0410, 1150, 1170, 1180, 1190, 1330, 1810
 targets: linux-x86-64

@@ -14992,18 +14992,6 @@ package body Landin.Stages.Checking is
                      end;
                   end if;
 
-                  if Is_Scalar_Conversion then
-                     Bad.Report
-                       (Item    => Bad.Unsupported_Use,
-                        Source  => Syn.Source_Of (Of_Tree),
-                        Where   => Syn.Where (Of_Tree, Node),
-                        Message => "this scalar conversion is not enabled"
-                                   & " yet",
-                        Refused => Bad.Scalar_Conversion,
-                        Into    => Found);
-                     return Kept (Ty.Ill_Typed);
-                  end if;
-
                   if Syn.Kind (Of_Tree, Node) = Syn.Labeled_Application
                     and then Res.Class_Of (Meanings.all, Of_Tree, Node)
                                /= Res.Function_Call

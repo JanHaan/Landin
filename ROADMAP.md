@@ -1557,9 +1557,9 @@ dump already are: a hand-kept index of 197 rows is an index that will be
 wrong. `check.py --matrix` writes `compiler/tests/constructs.matrix` and a
 full run refuses it when stale. Every construct either document defines gets
 a row, against the three claims the corpus can make about it — accepted,
-emitted, executed — plus whether the parser refuses it by name and cites the
-paragraph, which is what explains a row for a construct the kernel does not
-enable.
+emitted, executed — plus whether the parser or checker refuses it by name and
+cites the paragraph, which is what explains a row for a construct the kernel
+does not enable.
 
 It reads at 197 constructs, 61 with evidence and 136 with neither, and all
 twenty-four of [1740]-[1970] are covered. The 136 are mostly the language the
@@ -2676,12 +2676,13 @@ diagnostic behavior and test owner.
 
 Delivered: D148 classifies every accepted semantic boundary as `static`,
 `trap`, `beyond-lifetime` or `outside`, and D149 makes the locally provable
-part of `inout` exclusivity exact without claiming alias analysis. The source
-registers cover guarantee boundaries, conformance/evidence mechanisms,
-prototype derivations and target applicability; `check.py --coverage`
-generates their four reading matrices and fails on stale rows, unknown
+part of `inout` exclusivity exact without claiming alias analysis. The four
+D148 source registers cover guarantee boundaries, conformance/evidence
+mechanisms, prototype derivations and target applicability;
+`check.py --coverage` generates their reading matrices and fails on stale rows, unknown
 constructs, decisions, findings, fixtures or targets. Every fixture now names
-its applicable targets.
+its applicable targets. R4.10's later construct applicability register is
+checked directly against the generated construct matrix and roadmap owners.
 
 The diagnostic matrix crosses every live catalogue contract with its emitter
 and executable owner. Missing lexical/parser owners gained direct fixtures,
@@ -2734,6 +2735,218 @@ model used before the Cortex-M backend exists.
 | `prototype-2` | linux-x86-64, macos-arm64 |
 | `prototype-3` | linux-x86-64, macos-arm64, cortex-m, synthetic-32 |
 | `prototype-4` | linux-x86-64, macos-arm64 |
+
+#### Construct applicability coverage
+
+This register assigns every normative construct to the first target slice that
+must account for it. `hosted-now` is the R4.10 closure set: each such row must
+have corpus evidence or a named refusal, and R4.10 cannot close while one of
+its own named refusals remains. The other classes are scheduled later in R4,
+belong to the freestanding path, are explicitly deferred, or state a principle
+that has no implementation owner.
+
+| Construct | Applicability | Owner | Disposition |
+| --- | --- | --- | --- |
+| `[0010]` | hosted-now | R1.20 | matrix evidence |
+| `[0020]` | hosted-now | R1.20 | matrix evidence |
+| `[0030]` | hosted-now | R1.20 | matrix evidence |
+| `[0040]` | hosted-now | R1.50 | matrix evidence |
+| `[0050]` | hosted-now | R1.50 | matrix evidence |
+| `[0060]` | hosted-now | R1.50 | matrix evidence |
+| `[0070]` | hosted-now | R2.50 | matrix evidence |
+| `[0080]` | hosted-now | R1.50 | matrix evidence |
+| `[0090]` | hosted-now | R3.10 | matrix evidence |
+| `[0100]` | hosted-now | R1.50 | matrix evidence |
+| `[0110]` | hosted-now | R1.50 | matrix evidence |
+| `[0120]` | hosted-now | R2.20 | matrix evidence and named refusal |
+| `[0130]` | hosted-now | R1.50 | matrix evidence |
+| `[0140]` | hosted-now | R1.50 | matrix evidence |
+| `[0150]` | hosted-now | R4.10 | enabled widths have matrix evidence; u128 and i128 remain named refusals |
+| `[0160]` | hosted-now | R2.10 | matrix evidence |
+| `[0170]` | hosted-now | R4.10 | f32 and f64 have matrix evidence; f16 remains a named refusal |
+| `[0180]` | hosted-now | R1.60 | matrix evidence |
+| `[0190]` | hosted-now | R1.60 | matrix evidence |
+| `[0200]` | hosted-now | R1.60 | matrix evidence |
+| `[0210]` | hosted-now | R4.10 | matrix evidence |
+| `[0220]` | hosted-now | R4.10 | matrix evidence |
+| `[0230]` | hosted-now | R4.10 | matrix evidence |
+| `[0240]` | hosted-now | R4.10 | matrix evidence |
+| `[0250]` | hosted-now | R4.10 | matrix evidence |
+| `[0260]` | hosted-now | R4.10 | matrix evidence |
+| `[0270]` | hosted-now | R4.10 | matrix evidence |
+| `[0280]` | hosted-now | R4.10 | matrix evidence |
+| `[0290]` | hosted-now | R1.60 | matrix evidence |
+| `[0300]` | hosted-now | R1.60 | matrix evidence |
+| `[0310]` | hosted-now | R1.60 | matrix evidence |
+| `[0320]` | hosted-now | R1.60 | matrix evidence |
+| `[0330]` | hosted-now | R1.60 | matrix evidence |
+| `[0340]` | hosted-now | R1.60 | matrix evidence |
+| `[0350]` | hosted-now | R1.60 | matrix evidence |
+| `[0360]` | hosted-now | R1.60 | matrix evidence |
+| `[0370]` | hosted-now | R2.10 | matrix evidence |
+| `[0380]` | hosted-now | R2.50 | implemented; fixture attribution in this increment |
+| `[0390]` | hosted-now | R1.60 | matrix evidence |
+| `[0400]` | hosted-now | R1.60 | matrix evidence |
+| `[0410]` | hosted-now | R1.60 | matrix evidence |
+| `[0420]` | hosted-now | R1.60 | matrix evidence |
+| `[0430]` | hosted-now | R2.50 | matrix evidence |
+| `[0440]` | hosted-now | R2.50 | matrix evidence |
+| `[0450]` | hosted-now | R2.50 | matrix evidence |
+| `[0460]` | hosted-now | R2.50 | matrix evidence |
+| `[0470]` | hosted-now | R2.50 | matrix evidence |
+| `[0480]` | hosted-now | R4.10 | gap: atom-or-pointer unions are still rejected as non-atom unions |
+| `[0490]` | principle | none | system-tool policy; no implementation claim |
+| `[0500]` | hosted-now | R4.10 | gap: pointer-to-slice primitive ownership is unsettled |
+| `[0510]` | hosted-now | R3.30 | matrix evidence |
+| `[0520]` | hosted-now | R2.20 | matrix evidence and named refusal |
+| `[0530]` | hosted-now | R2.20 | matrix evidence |
+| `[0540]` | hosted-now | R2.20 | matrix evidence and named refusal |
+| `[0550]` | hosted-now | R2.60 | matrix evidence |
+| `[0560]` | hosted-now | R2.20 | matrix evidence and named refusal |
+| `[0570]` | hosted-now | R2.20 | matrix evidence and named refusal |
+| `[0580]` | hosted-now | R2.20 | matrix evidence |
+| `[0590]` | later-r4 | R4.50 | scheduled vector-performance work |
+| `[0600]` | hosted-now | R4.10 | matrix evidence |
+| `[0610]` | hosted-now | R4.10 | matrix evidence |
+| `[0620]` | deferred | R7.20 | explicitly deferred structure-of-arrays design |
+| `[0630]` | hosted-now | R2.20 | matrix evidence |
+| `[0640]` | hosted-now | R2.20 | matrix evidence |
+| `[0650]` | hosted-now | R2.20 | named refusal |
+| `[0660]` | hosted-now | R4.10 | gap: range subtype checking is absent |
+| `[0670]` | hosted-now | R2.20 | matrix evidence and named refusal |
+| `[0680]` | hosted-now | R2.20 | matrix evidence and named refusal |
+| `[0690]` | hosted-now | R2.20 | matrix evidence |
+| `[0700]` | hosted-now | R2.20 | matrix evidence |
+| `[0710]` | hosted-now | R2.20 | matrix evidence |
+| `[0720]` | hosted-now | R2.20 | matrix evidence and named refusal |
+| `[0730]` | freestanding | R6.80 | scheduled device-register work |
+| `[0740]` | freestanding | R6.80 | scheduled device-register work |
+| `[0750]` | hosted-now | R2.20 | matrix evidence |
+| `[0760]` | freestanding | R6.80 | scheduled generated-device attribute work |
+| `[0770]` | hosted-now | R2.50 | matrix evidence |
+| `[0780]` | hosted-now | R2.50 | matrix evidence |
+| `[0790]` | hosted-now | R2.50 | matrix evidence |
+| `[0800]` | hosted-now | R2.50 | matrix evidence |
+| `[0810]` | hosted-now | R4.10 | gap: pointer-derivation primitive ownership is unsettled |
+| `[0820]` | hosted-now | R4.10 | gap: lexical arena block ownership is unsettled |
+| `[0830]` | hosted-now | R2.50 | matrix evidence |
+| `[0840]` | hosted-now | R2.50 | matrix evidence |
+| `[0850]` | freestanding | R6.80 | scheduled volatile-access work |
+| `[0860]` | hosted-now | R2.50 | matrix evidence |
+| `[0870]` | hosted-now | R2.30 | matrix evidence |
+| `[0880]` | hosted-now | R2.30 | matrix evidence |
+| `[0890]` | hosted-now | R2.30 | matrix evidence |
+| `[0900]` | hosted-now | R2.50 | matrix evidence |
+| `[0910]` | hosted-now | R2.50 | matrix evidence |
+| `[0920]` | hosted-now | R2.30 | matrix evidence |
+| `[0930]` | hosted-now | R2.30 | matrix evidence |
+| `[0940]` | hosted-now | R2.30 | matrix evidence |
+| `[0950]` | hosted-now | R2.30 | matrix evidence |
+| `[0960]` | hosted-now | R2.30 | matrix evidence |
+| `[0970]` | hosted-now | R2.30 | matrix evidence |
+| `[0980]` | hosted-now | R2.30 | matrix evidence |
+| `[0990]` | hosted-now | R2.30 | matrix evidence |
+| `[1000]` | hosted-now | R2.30 | matrix evidence |
+| `[1010]` | hosted-now | R2.30 | matrix evidence |
+| `[1020]` | hosted-now | R2.30 | matrix evidence |
+| `[1030]` | hosted-now | R2.30 | matrix evidence |
+| `[1040]` | hosted-now | R4.10 | gap: caller parameters are absent |
+| `[1050]` | hosted-now | R2.30 | matrix evidence |
+| `[1060]` | hosted-now | R2.30 | matrix evidence |
+| `[1070]` | hosted-now | R4.10 | gap: declarations in conditions are absent |
+| `[1080]` | hosted-now | R2.30 | matrix evidence |
+| `[1090]` | hosted-now | R2.30 | matrix evidence |
+| `[1100]` | hosted-now | R2.30 | matrix evidence |
+| `[1110]` | hosted-now | R2.30 | matrix evidence |
+| `[1120]` | hosted-now | R4.10 | gap: unchecked regions are absent |
+| `[1130]` | hosted-now | R4.10 | matrix evidence |
+| `[1140]` | hosted-now | R4.10 | matrix evidence |
+| `[1150]` | hosted-now | R4.10 | matrix evidence |
+| `[1160]` | hosted-now | R4.10 | matrix evidence |
+| `[1170]` | hosted-now | R4.10 | matrix evidence |
+| `[1180]` | hosted-now | R4.10 | matrix evidence |
+| `[1190]` | hosted-now | R4.10 | matrix evidence |
+| `[1200]` | hosted-now | R2.30 | implemented; fixture attribution in this increment |
+| `[1210]` | hosted-now | R2.20 | matrix evidence |
+| `[1220]` | hosted-now | R2.30 | matrix evidence |
+| `[1230]` | hosted-now | R2.60 | matrix evidence |
+| `[1240]` | hosted-now | R2.60 | matrix evidence |
+| `[1250]` | hosted-now | R2.60 | matrix evidence |
+| `[1260]` | hosted-now | R2.60 | matrix evidence |
+| `[1270]` | hosted-now | R2.60 | matrix evidence |
+| `[1280]` | hosted-now | R2.60 | matrix evidence |
+| `[1290]` | hosted-now | R2.40 | matrix evidence and named refusal |
+| `[1300]` | hosted-now | R2.40 | matrix evidence |
+| `[1310]` | hosted-now | R2.70 | matrix evidence |
+| `[1320]` | hosted-now | R2.60 | matrix evidence |
+| `[1330]` | hosted-now | R4.10 | implemented; fixture attribution in this increment |
+| `[1340]` | hosted-now | R2.60 | matrix evidence |
+| `[1350]` | hosted-now | R2.40 | matrix evidence and named refusal |
+| `[1360]` | hosted-now | R3.20 | matrix evidence |
+| `[1370]` | hosted-now | R2.80 | matrix evidence |
+| `[1380]` | hosted-now | R2.80 | matrix evidence |
+| `[1390]` | hosted-now | R2.80 | matrix evidence |
+| `[1400]` | hosted-now | R2.80 | enforced absence; fixture attribution in this increment |
+| `[1410]` | hosted-now | R3.10 | matrix evidence |
+| `[1420]` | hosted-now | R3.10 | matrix evidence |
+| `[1430]` | later-r4 | R4.30 | named refusal |
+| `[1440]` | later-r4 | R4.30 | named refusal |
+| `[1450]` | hosted-now | R3.10 | implemented; fixture attribution in this increment |
+| `[1460]` | hosted-now | R1.60 | matrix evidence |
+| `[1470]` | deferred | R7.20 | companion-tool package policy remains deferred |
+| `[1480]` | later-r4 | R4.30 | ordered roots exist; project root policy remains scheduled |
+| `[1490]` | hosted-now | R2.40 | implemented; fixture attribution in this increment |
+| `[1500]` | hosted-now | R2.40 | matrix evidence |
+| `[1510]` | later-r4 | R4.30 | scheduled compiler assertion builtin |
+| `[1520]` | hosted-now | R2.40 | implemented; fixture attribution in this increment |
+| `[1530]` | later-r4 | R4.30 | scheduled build-option work |
+| `[1540]` | hosted-now | R2.40 | matrix evidence |
+| `[1550]` | principle | none | native-backend policy; implementations have target owners |
+| `[1560]` | later-r4 | R4.30 | scheduled builtin tool modules |
+| `[1570]` | hosted-now | R3.50 | matrix evidence |
+| `[1580]` | hosted-now | R4.40 | narrow matrix has evidence; remaining C ABI has a named refusal |
+| `[1590]` | later-r4 | R4.30 | scheduled static-library directive |
+| `[1600]` | later-r4 | R4.40 | scheduled C export work |
+| `[1610]` | later-r4 | R4.40 | scheduled foreign symbol-name work |
+| `[1620]` | freestanding | R6.30 | scheduled atomics work |
+| `[1630]` | freestanding | R6.60 | scheduled inline-assembly work |
+| `[1640]` | freestanding | R6.60 | scheduled keep and placement work |
+| `[1650]` | hosted-now | R1.80 | matrix evidence |
+| `[1660]` | hosted-now | R3.50 | matrix evidence |
+| `[1670]` | hosted-now | R1.80 | matrix evidence |
+| `[1680]` | hosted-now | R3.60 | matrix evidence |
+| `[1690]` | hosted-now | R2.50 | matrix evidence |
+| `[1700]` | hosted-now | R2.30 | matrix evidence |
+| `[1710]` | principle | none | admission criterion; no implementation claim |
+| `[1720]` | hosted-now | R2.90 | matrix and guarantee evidence |
+| `[1730]` | principle | none | proof-carrying principle; no implementation claim |
+| `[1740]` | hosted-now | R3.10 | matrix evidence |
+| `[1750]` | hosted-now | R1.20 | matrix evidence |
+| `[1760]` | hosted-now | R1.20 | matrix evidence |
+| `[1770]` | hosted-now | R4.10 | matrix evidence |
+| `[1780]` | hosted-now | R1.20 | matrix evidence |
+| `[1790]` | hosted-now | R1.60 | matrix evidence |
+| `[1795]` | hosted-now | R2.20 | matrix evidence |
+| `[1800]` | hosted-now | R2.30 | matrix evidence |
+| `[1810]` | hosted-now | R2.30 | matrix evidence |
+| `[1820]` | hosted-now | R1.40 | matrix evidence |
+| `[1830]` | hosted-now | R1.30 | matrix evidence |
+| `[1840]` | hosted-now | R1.50 | matrix evidence |
+| `[1850]` | hosted-now | R1.50 | matrix evidence |
+| `[1860]` | hosted-now | R1.50 | matrix evidence |
+| `[1870]` | hosted-now | R1.60 | matrix evidence |
+| `[1880]` | hosted-now | R1.60 | matrix evidence |
+| `[1890]` | hosted-now | R1.60 | matrix evidence |
+| `[1900]` | hosted-now | R1.60 | matrix evidence |
+| `[1910]` | hosted-now | R1.60 | matrix evidence |
+| `[1920]` | hosted-now | R2.30 | matrix evidence |
+| `[1930]` | hosted-now | R2.30 | matrix evidence |
+| `[1940]` | hosted-now | R1.60 | matrix evidence |
+| `[1950]` | hosted-now | R1.60 | matrix evidence |
+| `[1960]` | hosted-now | R1.80 | matrix evidence |
+| `[1970]` | hosted-now | R1.80 | matrix evidence |
+| `[1975]` | hosted-now | R3.50 | matrix evidence |
+| `[1980]` | hosted-now | R2.30 | matrix evidence |
 
 ### R2 gate
 
@@ -3244,6 +3457,18 @@ over literal, named, forward, chained and comparison operands into scalar and
 aggregate static images, preserving left-to-right short-circuiting without
 executing an initializer. Scalar bool datums now carry their zero-or-one image
 directly, so routine CFG `Branch` instructions cannot reach datum emission.
+
+The accounting increment classifies every normative construct in the
+construct-applicability register and makes that register the mechanical R4.10
+closure test. It also removes the unreachable generic scalar-conversion and
+collection-traversal refusal kinds after D176 and D180/D184 respectively, and
+moves the still-live u128/i128 and f16 refusals wholly to the checker that
+recognises those resolved type names. The finite hosted gap list is [0480]'s
+atom-or-pointer union, [0660]'s range subtype, [1040]'s caller parameter,
+[1070]'s condition declaration, [1120]'s `unchecked` region, the u128/i128
+part of [0150], the f16 part of [0170], and the ownership disposition for
+[0500]'s pointer/slice operations, [0810]'s derivation primitives and [0820]'s
+lexical `arena` block. No language decision is made by this inventory.
 
 Exit evidence: every hosted `[NNNN]` row has implementation and positive or
 negative evidence; no omission is hidden by prototype coverage.
