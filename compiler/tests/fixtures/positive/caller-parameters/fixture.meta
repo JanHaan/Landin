@@ -1,0 +1,5 @@
+class: positive
+summary: D186 caller parameters are omitted at calls, forwarded by name and retained in function signatures
+constructs: 0600, 0790, 1000, 1040, 1800, 1920
+program: program.ldn
+targets: linux-x86-64, macos-arm64

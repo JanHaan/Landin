@@ -407,14 +407,32 @@ package body Landin.Stages.Resolution is
                         Role := Landin.Resolution.Fill_Argument;
                      elsif Label = Landin.Source.Names.No_Name then
                         Runtime_Position := Runtime_Position + 1;
-                        if Runtime_Position <=
-                          Syn.Parameter_Count (Callee_Tree.all, Declaration)
-                        then
-                           Role := Landin.Resolution.Runtime_Argument;
-                           Position := Runtime_Position;
-                           Formal_Node := Syn.Nth_Parameter
-                             (Callee_Tree.all, Declaration, Position);
-                        end if;
+                        declare
+                           Visible : Natural := 0;
+                        begin
+                           for Runtime in 1 .. Syn.Parameter_Count
+                             (Callee_Tree.all, Declaration)
+                           loop
+                              declare
+                                 Candidate : constant Syn.Node_Id :=
+                                   Syn.Nth_Parameter
+                                     (Callee_Tree.all, Declaration, Runtime);
+                              begin
+                                 if not Syn.Is_Caller
+                                   (Callee_Tree.all, Candidate)
+                                 then
+                                    Visible := Visible + 1;
+                                    if Visible = Runtime_Position then
+                                       Role :=
+                                         Landin.Resolution.Runtime_Argument;
+                                       Position := Runtime;
+                                       Formal_Node := Candidate;
+                                       exit;
+                                    end if;
+                                 end if;
+                              end;
+                           end loop;
+                        end;
                      else
                         for Static in 1 .. Syn.Generic_Formal_Count
                           (Callee_Tree.all, Declaration)

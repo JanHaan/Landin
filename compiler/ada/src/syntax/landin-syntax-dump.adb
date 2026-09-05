@@ -54,6 +54,10 @@ package body Landin.Syntax.Dump is
                Strings.Append (Line, " extern(c)");
             end if;
 
+            if Of_Kind = Parameter and then Is_Caller (Of_Tree, Id) then
+               Strings.Append (Line, " caller");
+            end if;
+
             for Position in 1 .. Slot_Count (Of_Tree, Id) loop
                declare
                   Child : constant Node_Id :=

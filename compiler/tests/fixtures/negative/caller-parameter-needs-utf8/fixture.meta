@@ -1,0 +1,6 @@
+class: negative
+summary: D186 gives a caller parameter the exact immutable utf8 representation
+constructs: 0600, 1040, 1800
+program: program.ldn
+targets: linux-x86-64, macos-arm64
+codes: L0301

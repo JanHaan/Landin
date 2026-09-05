@@ -2096,15 +2096,61 @@ package body Landin.Stages.Checking.Flow is
                                       Res.Bound_To
                                         (Meanings.all, Of_Tree, Callee))
                                    else Landin.Checking.No_Signature);
-                              Formal : constant Positive :=
+                              Erased_Self : constant Boolean :=
+                                Syn.Kind (Of_Tree, Callee)
+                                  = Syn.Member_Selection
+                                and then Res.Verdict_Of
+                                  (Meanings.all, Of_Tree, Callee)
+                                    /= Res.Bound
+                                and then Landin.Checking.Type_Of
+                                  (Types.all, Of_Tree,
+                                   Syn.Target_Of (Of_Tree, Callee))
+                                    = Ty.Any_Value;
+
+                              function Plain_Position
+                                (Written : Positive) return Natural;
+
+                              function Plain_Position
+                                (Written : Positive) return Natural
+                              is
+                                 Seen : Natural := 0;
+                                 First : constant Positive :=
+                                   (if Erased_Self then 2 else 1);
+                              begin
+                                 if not Landin.Checking.Holds
+                                   (Types.all, Signature)
+                                 then
+                                    return 0;
+                                 end if;
+                                 for Position in First ..
+                                   Landin.Checking.Signature_Parameter_Count
+                                     (Types.all, Signature)
+                                 loop
+                                    if not Landin.Checking
+                                      .Nth_Signature_Parameter
+                                        (Types.all, Signature,
+                                         Position).Caller
+                                    then
+                                       Seen := Seen + 1;
+                                       if Seen = Written then
+                                          return Position;
+                                       end if;
+                                    end if;
+                                 end loop;
+                                 return 0;
+                              end Plain_Position;
+
+                              Formal : constant Natural :=
                                 (if Syn.Kind (Of_Tree, Raw)
                                       = Syn.Call_Argument
                                  then Positive
                                    (Res.Position_Of
                                       (Meanings.all, Of_Tree, Raw))
-                                 else Index);
+                                 else Plain_Position (Index));
                            begin
-                              if Signature /= Landin.Checking.No_Signature
+                              if Landin.Checking.Holds
+                                (Types.all, Signature)
+                                and then Formal > 0
                                 and then Formal <=
                                   Landin.Checking.Signature_Parameter_Count
                                     (Types.all, Signature)

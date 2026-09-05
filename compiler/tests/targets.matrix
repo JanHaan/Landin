@@ -57,6 +57,10 @@ negative/bare-block-unclosed | linux-x86-64, macos-arm64, synthetic-32
 negative/borrowed-source-inout | linux-x86-64, macos-arm64, synthetic-32
 negative/call-of-a-non-function | linux-x86-64, macos-arm64, synthetic-32
 negative/call-with-too-few-arguments | linux-x86-64, macos-arm64
+negative/caller-parameter-forward-needs-caller | linux-x86-64, macos-arm64
+negative/caller-parameter-needs-utf8 | linux-x86-64, macos-arm64
+negative/caller-parameter-positional | linux-x86-64, macos-arm64
+negative/caller-parameter-signature-mismatch | linux-x86-64, macos-arm64
 negative/chained-comparison | linux-x86-64, macos-arm64
 negative/character-literal-byte-escape | linux-x86-64, macos-arm64
 negative/character-literal-empty | linux-x86-64, macos-arm64
@@ -578,6 +582,7 @@ positive/binding-inferred | linux-x86-64, macos-arm64
 positive/binding-mutable | linux-x86-64, macos-arm64
 positive/binding-typed | linux-x86-64, macos-arm64
 positive/call-fills-every-parameter | linux-x86-64, macos-arm64
+positive/caller-parameters | linux-x86-64, macos-arm64
 positive/comment-forms | linux-x86-64, macos-arm64
 positive/comparison-gives-a-bool | linux-x86-64, macos-arm64
 positive/compiler-zeroable-conformances | linux-x86-64, macos-arm64, synthetic-32
@@ -775,6 +780,7 @@ runtime/binary-search | linux-x86-64
 runtime/bool-to-float-conversions | linux-x86-64
 runtime/bool-to-integer-conversions | linux-x86-64
 runtime/bools-cross-the-abi | linux-x86-64
+runtime/caller-parameters | linux-x86-64
 runtime/calls-return-through-the-abi | linux-x86-64
 runtime/character-literal-codepoints | linux-x86-64
 runtime/checked-multiplication-traps | linux-x86-64

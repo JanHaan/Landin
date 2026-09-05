@@ -1,0 +1,7 @@
+observe: (caller where: utf8) -> none =
+    _ = where
+end observe
+
+bad: () -> none =
+    observe(where: "forged")
+end bad
