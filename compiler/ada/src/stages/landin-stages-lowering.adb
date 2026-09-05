@@ -4480,7 +4480,7 @@ package body Landin.Stages.Lowering is
                Address : constant IR.Value_Id := IR.Emit_Slice_Address
                  (Unit.all, Filling, Saved_Base, Saved_Total,
                   Saved_Offset, Saved_Offset, Slice_Shape (Of_Tree, Node),
-                  True, Site);
+                  True, Site, Required => True);
                Code_Unit : constant IR.Value_Id := IR.Emit_Load_Indirect
                  (Unit.all, Filling, Address,
                   (if View = Ty.Utf8_View then Ty.U8 else Ty.U16), Site);
@@ -4647,7 +4647,7 @@ package body Landin.Stages.Lowering is
                Traps : constant IR.Value_Id := IR.Emit_Slice_Address
                  (Unit.all, Filling, Saved_Base, Saved_Total,
                   Saved_Total, Saved_Total, Slice_Shape (Of_Tree, Node),
-                  True, Site);
+                  True, Site, Required => True);
             begin
                pragma Unreferenced (Traps);
                Store_Width (0);
@@ -4680,7 +4680,8 @@ package body Landin.Stages.Lowering is
                  (Unit.all, Filling, Length_Slot, Site);
                Address : constant IR.Value_Id := IR.Emit_Slice_Address
                  (Unit.all, Filling, Base, Length, Offset, Offset,
-                  Slice_Shape (Of_Tree, Node), True, Site);
+                  Slice_Shape (Of_Tree, Node), True, Site,
+                  Required => True);
             begin
                return IR.Emit_Load_Indirect
                  (Unit.all, Filling, Address, Ty.U8, Site);
@@ -4797,7 +4798,8 @@ package body Landin.Stages.Lowering is
                     (Unit.all, Filling, Length_Slot, Site);
                   Traps : constant IR.Value_Id := IR.Emit_Slice_Address
                     (Unit.all, Filling, Base, Length, Length, Length,
-                     Slice_Shape (Of_Tree, Node), True, Site);
+                     Slice_Shape (Of_Tree, Node), True, Site,
+                     Required => True);
                begin
                   pragma Unreferenced (Traps);
                   Store_Width (1);
@@ -4865,7 +4867,8 @@ package body Landin.Stages.Lowering is
                  (Unit.all, Filling, Length_Slot, Site);
                Address : constant IR.Value_Id := IR.Emit_Slice_Address
                  (Unit.all, Filling, Base, Length, Offset, Upper,
-                  Slice_Shape (Of_Tree, Node), False, Site);
+                  Slice_Shape (Of_Tree, Node), False, Site,
+                  Required => True);
             begin
                IR.Emit_Store_Slot_Field
                  (Unit.all, Filling, Destination, 1, Address, Site);
@@ -5130,13 +5133,17 @@ package body Landin.Stages.Lowering is
                           (Unit.all, Filling, Base_Slot, Site);
                         Kept_Total : constant IR.Value_Id := IR.Emit_Load
                           (Unit.all, Filling, Total_Slot, Site);
+                        --  D187 never removes a text boundary edge:
+                        --  D181's validated view is what makes D184's
+                        --  decoder infallible, and a non-boundary `utf8`
+                        --  is not a value the type holds.
                         Address : constant IR.Value_Id :=
                           IR.Emit_Slice_Address
                             (Unit.all, Filling, Kept_Base, Kept_Total,
                              Lower, Kept_Upper, Slice_Shape (Of_Tree, Node),
                              Syn.Kind (Of_Tree, Node)
                                = Syn.Inclusive_Slice,
-                             Site);
+                             Site, Required => Is_Text);
                         End_Offset : IR.Value_Id := IR.No_Value;
                      begin
                         IR.Emit_Store
@@ -6942,12 +6949,23 @@ package body Landin.Stages.Lowering is
          Inside : constant Res.Scope_Id :=
            Res.Scope_At (Meanings.all, Of_Tree, Runs);
          Start : constant IR.Block_Id := Fresh (Of_Tree, Runs, Inside);
+         --  D187: [1120]'s region is this same block, carrying a flag.
+         --  The mode is entered around the body only, so an edge emitted
+         --  outside it -- a later statement, or a separately filled item
+         --  such as [1010]'s anonymous function body -- stays checked.
+         Region : constant Boolean := Syn.Is_Unchecked (Of_Tree, Node);
       begin
          Close_With_Jump (Start, Site);
          Open (Start);
+         if Region then
+            IR.Begin_Unchecked (Unit.all, Filling);
+         end if;
          Lower_Statements
            (Of_Tree, Runs, Inside, Result, Destination,
             Destination_Field, Destination_Path);
+         if Region then
+            IR.End_Unchecked (Unit.all, Filling);
+         end if;
          if Current /= IR.No_Block then
             declare
                Merge : constant IR.Block_Id :=
@@ -7377,7 +7395,8 @@ package body Landin.Stages.Lowering is
                  (Unit.all, Filling,
                   IR.Emit_Load (Unit.all, Filling, Base_Slot, Site),
                   IR.Emit_Load (Unit.all, Filling, Length_Slot, Site),
-                  Position, Position, Element_Shape, True, Site);
+                  Position, Position, Element_Shape, True, Site,
+                  Required => True);
             end if;
             return IR.Emit_Load_Indirect
               (Unit.all, Filling, Address, Element, Site);

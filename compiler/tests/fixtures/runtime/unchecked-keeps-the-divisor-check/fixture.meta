@@ -1,0 +1,6 @@
+class: runtime
+summary: D187 never removes the zero-divisor edge, so a runtime zero divisor inside [1120]'s region still traps
+constructs: 0290, 1120, 1960
+program: main.ldn
+traps: yes
+targets: linux-x86-64

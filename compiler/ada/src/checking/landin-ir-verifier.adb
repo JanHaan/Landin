@@ -74,6 +74,9 @@ package body Landin.IR.Verifier is
                "an aggregate's scalar field has a length other than one",
             when Condition_Is_Not_A_Bool =>
                "a branch's condition is not a bool",
+            when Unchecked_Not_Removable =>
+               "an instruction is marked unchecked and carries no check"
+               & " D187 removes, or sits in a module value",
             when Slot_Out_Of_Range    =>
                "a load or a store names a slot the item does not have",
             when Store_Disagrees_With_Slot =>
@@ -3387,6 +3390,19 @@ package body Landin.IR.Verifier is
 
                         if Position = Last and then not Ends then
                            return (Kind => Block_Without_A_Terminator,
+                                   Item => Id, Block => Block, Value => V);
+                        end if;
+
+                        --  D187: the flag says a check edge this
+                        --  instruction would have carried is not emitted,
+                        --  so it belongs only to an opcode that carries
+                        --  one, and never inside [1940]'s module value,
+                        --  which executes nothing at all.
+                        if Is_Unchecked (Of_Unit, Id, V)
+                          and then (Is_Datum
+                                    or else not Check_Is_Removable (Op))
+                        then
+                           return (Kind => Unchecked_Not_Removable,
                                    Item => Id, Block => Block, Value => V);
                         end if;
 

@@ -1,0 +1,6 @@
+class: runtime
+summary: D187 a computed index past a slice length inside [1120]'s region reads the storage the view was taken from
+constructs: 0570, 0580, 1120
+program: main.ldn
+status: 42
+targets: linux-x86-64

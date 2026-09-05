@@ -1,0 +1,8 @@
+--  [1120]'s closer names the region, as `end while` and `end loop` name
+--  theirs.  A bare `end` is a parse refusal, so this program is not one
+--  the grammar derives.
+f: () -> (r: u8) =
+    unchecked begin
+        r = 1
+    end
+end f

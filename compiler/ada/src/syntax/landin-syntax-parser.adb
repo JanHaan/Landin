@@ -247,6 +247,11 @@ package body Landin.Syntax.Parser is
             Caller_Id : constant Landin.Source.Names.Name_Id :=
               Landin.Source.Names.Intern (Names, "caller");
 
+            --  D187's [1120] region.  Two tokens decide it, so a binding
+            --  or label named `unchecked` keeps its ordinary meaning.
+            Unchecked_Id : constant Landin.Source.Names.Name_Id :=
+              Landin.Source.Names.Intern (Names, "unchecked");
+
             --  [1480] takes this bare toolchain root.  D139 recognizes it
             --  only as the fixed-condition intrinsic, not as a declaration.
             Compiler_Id : constant Landin.Source.Names.Name_Id :=
@@ -303,6 +308,7 @@ package body Landin.Syntax.Parser is
                Mutable   : Boolean := False;
                Escapes   : Boolean := False;
                Caller    : Boolean := False;
+               Unchecked : Boolean := False;
                Convention : Parameter_Convention := Implicit_In;
                Fills     : Boolean := False;
                Recovers  : Node_Id := No_Node) return Node_Id;
@@ -425,6 +431,8 @@ package body Landin.Syntax.Parser is
             function Parse_If (Context : Frame) return Node_Id;
             function Parse_Match (Context : Frame) return Node_Id;
             function Parse_Bare_Block (Context : Frame) return Node_Id;
+            function Parse_Unchecked_Block (Context : Frame) return Node_Id;
+            function Opens_Unchecked return Boolean;
             function Parse_Expression
               (Min : Pre.Level := Pre.Level_Expression) return Node_Id;
             function Parse_Expression_From
@@ -723,6 +731,7 @@ package body Landin.Syntax.Parser is
                Mutable   : Boolean := False;
                Escapes   : Boolean := False;
                Caller    : Boolean := False;
+               Unchecked : Boolean := False;
                Convention : Parameter_Convention := Implicit_In;
                Fills     : Boolean := False;
                Recovers  : Node_Id := No_Node) return Node_Id
@@ -765,6 +774,7 @@ package body Landin.Syntax.Parser is
                    Mutable    => Mutable,
                    Escaping   => Escapes,
                    Caller     => Caller,
+                   Unchecked  => Unchecked,
                    Convention => Convention,
                    Fill       => Fills,
                    Recovery   => Recovers));
@@ -3797,7 +3807,8 @@ package body Landin.Syntax.Parser is
             begin
                if Context.Returns then
                   if Peek = Tok.Identifier
-                    and then Named_Here in Defer_Id | Undo_Id
+                    and then (Named_Here in Defer_Id | Undo_Id
+                              or else Opens_Unchecked)
                   then
                      return Parse_Block (Context);
                   end if;
@@ -4244,6 +4255,7 @@ package body Landin.Syntax.Parser is
 
                   return Named_Here in Defer_Id | Undo_Id
                     | Break_Id | Continue_Id
+                    or else Opens_Unchecked
                     or else Word_At_Hand /= Word_None
                     or else Ahead (1) in Tok.Colon | Tok.Colon_Equal
                     or else After_Selectors = Tok.Equal;
@@ -4604,6 +4616,8 @@ package body Landin.Syntax.Parser is
                         return Parse_Match (Context);
                      elsif Named_Here = Begin_Id then
                         return Parse_Bare_Block (Context);
+                     elsif Opens_Unchecked then
+                        return Parse_Unchecked_Block (Context);
                      end if;
 
                      declare
@@ -5206,12 +5220,13 @@ package body Landin.Syntax.Parser is
                Depth := Depth - 1;
 
                --  Do not steal the two-word closer of an enclosing control
-               --  construct when this block's own `end` is missing.
+               --  construct when this block's own `end` is missing.  D187
+               --  adds `end unchecked` to that set.
                if Peek = Tok.Kw_End
                  and then Ahead (1) /= Tok.Kw_If
                  and then not
                    (Ahead (1) = Tok.Identifier
-                    and then Named_Ahead (1) = Match_Id)
+                    and then Named_Ahead (1) in Match_Id | Unchecked_Id)
                then
                   Advance;
                else
@@ -5231,6 +5246,73 @@ package body Landin.Syntax.Parser is
                   Extent   => Join (At_Begin, After_Previous),
                   Children => [Runs]);
             end Parse_Bare_Block;
+
+            --  unchecked ::= "unchecked" "begin" block
+            --                "end" "unchecked"                    [1120]
+            --
+            --  D187's region is a statement and an ordinary lexical block
+            --  with its own scope; only the check edges named there are
+            --  dropped from what the body lowers.  `unchecked` stays a
+            --  contextual word [1760] does not reserve, and two tokens
+            --  decide it, so `unchecked: loop` is still a label and
+            --  `unchecked = 1` is still an assignment.
+            function Opens_Unchecked return Boolean
+              is (Peek = Tok.Identifier
+                  and then Named_Here = Unchecked_Id
+                  and then Ahead (1) = Tok.Identifier
+                  and then Named_Ahead (1) = Begin_Id);
+
+            function Parse_Unchecked_Block (Context : Frame) return Node_Id is
+               At_Word : constant Landin.Source.Span := Here;
+               Runs    : Node_Id;
+               Kept    : Boolean;
+            begin
+               if Too_Deep (At_Word) then
+                  Advance;
+                  Resync_Statement;
+                  return Add
+                    (Error_Statement, At_Word,
+                     Join (At_Word, After_Previous));
+               end if;
+
+               Depth := Depth + 1;
+               Advance;
+               Advance;
+               Runs := Parse_Block (Context, Allow_Value => False);
+
+               Kept := Expect
+                 (Wanted  => Tok.Kw_End,
+                  Message => "this unchecked region is never closed",
+                  Note    => "[1120]: an unchecked region closes with"
+                             & " `end unchecked`",
+                  Related => At_Word,
+                  Because => "opened here");
+               if Kept then
+                  if Peek = Tok.Identifier
+                    and then Named_Here = Unchecked_Id
+                  then
+                     Advance;
+                  else
+                     Complain
+                       (Item    => Syn.Token_Expected,
+                        Where   => (if Peek = Tok.End_Of_Input
+                                    then After_Previous else Here),
+                        Message => "an unchecked region closes with"
+                                   & " `end unchecked`",
+                        Note    => "[1120]",
+                        Related => At_Word,
+                        Because => "this region");
+                  end if;
+               end if;
+               Depth := Depth - 1;
+
+               return Add
+                 (Of_Kind   => Bare_Block,
+                  At_Token  => At_Word,
+                  Extent    => Join (At_Word, After_Previous),
+                  Children  => [Runs],
+                  Unchecked => True);
+            end Parse_Unchecked_Block;
 
             --  match ::= "match" expression match_arm+ "end" "match"
             --  match_arm ::= identifier ("(" match_binding
@@ -5363,6 +5445,7 @@ package body Landin.Syntax.Parser is
                             (Peek = Tok.Identifier
                              and then
                                (Named_Here in Defer_Id | Undo_Id
+                                or else Opens_Unchecked
                                 or else
                                   (Named_Here not in Match_Id | Begin_Id
                                      | Loop_Id | While_Id | For_Id

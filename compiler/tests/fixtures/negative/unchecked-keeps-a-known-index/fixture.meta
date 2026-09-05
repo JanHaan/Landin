@@ -1,0 +1,6 @@
+class: negative
+summary: D187 a region removes no static refusal, so [1950]'s known index outside the length is still refused inside one
+constructs: 0520, 0570, 1120, 1950
+program: program.ldn
+codes: L0306
+targets: linux-x86-64, macos-arm64

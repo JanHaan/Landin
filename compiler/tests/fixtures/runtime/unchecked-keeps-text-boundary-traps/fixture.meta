@@ -1,0 +1,6 @@
+class: runtime
+summary: D187 never removes a text boundary edge, so a non-boundary utf8 range inside [1120]'s region still traps
+constructs: 0600, 1120, 1960
+program: main.ldn
+traps: yes
+targets: linux-x86-64

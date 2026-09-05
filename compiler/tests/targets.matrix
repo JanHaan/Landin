@@ -508,6 +508,10 @@ negative/text-view-identities-are-distinct | linux-x86-64, macos-arm64
 negative/try-infallible-call | linux-x86-64, synthetic-32
 negative/type-alias-cycle | linux-x86-64, macos-arm64, synthetic-32
 negative/type-name-is-not-a-type | linux-x86-64, macos-arm64
+negative/unchecked-keeps-a-known-index | linux-x86-64, macos-arm64
+negative/unchecked-keeps-definite-assignment | linux-x86-64, macos-arm64
+negative/unchecked-keeps-permissions | linux-x86-64, macos-arm64
+negative/unchecked-region-end-name-mismatch | linux-x86-64, macos-arm64
 negative/unclosed-block-comment | linux-x86-64, macos-arm64
 negative/underscore-as-name | linux-x86-64, macos-arm64
 negative/undo-cannot-see-later-local | linux-x86-64, macos-arm64, synthetic-32
@@ -734,6 +738,7 @@ positive/token-separation | linux-x86-64, macos-arm64
 positive/try-statement-before-return | linux-x86-64, macos-arm64
 positive/type-declaration-aliases-a-scalar | linux-x86-64, macos-arm64
 positive/unary-binds-tightest | linux-x86-64, macos-arm64
+positive/unchecked-regions | linux-x86-64, macos-arm64
 positive/undo-evaluates-on-failure | linux-x86-64, macos-arm64, synthetic-32
 positive/variant-case-construction | linux-x86-64, macos-arm64
 positive/variant-inside-an-element | linux-x86-64, macos-arm64
@@ -787,6 +792,7 @@ runtime/checked-multiplication-traps | linux-x86-64
 runtime/checked-negation-traps | linux-x86-64
 runtime/checked-overflow-traps | linux-x86-64
 runtime/checked-subtraction-traps | linux-x86-64
+runtime/checks-return-after-the-region | linux-x86-64
 runtime/comparisons-exit-with-their-verdict | linux-x86-64
 runtime/compound-assignment | linux-x86-64
 runtime/compound-assignment-overflow-traps | linux-x86-64
@@ -970,6 +976,14 @@ runtime/structs-copy-whole | linux-x86-64
 runtime/text-literal-bytes | linux-x86-64
 runtime/text-range-slicing | linux-x86-64
 runtime/unary-and-bitwise-exit-with-their-results | linux-x86-64
+runtime/unchecked-arithmetic-wraps | linux-x86-64
+runtime/unchecked-does-not-cross-a-call | linux-x86-64
+runtime/unchecked-does-not-reach-an-anonymous-body | linux-x86-64
+runtime/unchecked-integer-conversion-truncates | linux-x86-64
+runtime/unchecked-keeps-text-boundary-traps | linux-x86-64
+runtime/unchecked-keeps-the-divisor-check | linux-x86-64
+runtime/unchecked-keeps-the-shift-check | linux-x86-64
+runtime/unchecked-slice-index-passes-the-length | linux-x86-64
 runtime/undo-call-shapes | linux-x86-64
 runtime/undo-cleanups-follow-failure-edges | linux-x86-64
 runtime/undo-does-not-unwind-traps | linux-x86-64

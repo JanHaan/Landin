@@ -1,0 +1,6 @@
+class: runtime
+summary: D187 the same expression after `end unchecked` still traps, so the region ends where it is written
+constructs: 0300, 1120, 1960
+program: main.ldn
+traps: yes
+targets: linux-x86-64

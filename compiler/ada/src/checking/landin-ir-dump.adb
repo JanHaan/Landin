@@ -296,8 +296,16 @@ package body Landin.IR.Dump is
       end Endpoint;
 
       function Rendered (Item : Item_Id; Value : Value_Id) return String;
+      function Rendered_Op (Item : Item_Id; Value : Value_Id) return String;
 
+      --  D187's region is visible in a recorded run, because an edge that
+      --  is not emitted is otherwise invisible in one.
       function Rendered (Item : Item_Id; Value : Value_Id) return String
+        is (Rendered_Op (Item, Value)
+            & (if Is_Unchecked (Of_Unit, Item, Value)
+               then " unchecked" else ""));
+
+      function Rendered_Op (Item : Item_Id; Value : Value_Id) return String
       is
          function Variant_Qualifier return String;
 
@@ -724,7 +732,7 @@ package body Landin.IR.Dump is
             when others =>
                return Lead & Operands (Item, Value);
          end case;
-      end Rendered;
+      end Rendered_Op;
 
    begin
       Put

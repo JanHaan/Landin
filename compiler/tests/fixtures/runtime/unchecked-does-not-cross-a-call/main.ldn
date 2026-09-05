@@ -1,0 +1,17 @@
+--  `grow` is checked as it is written.  Calling it from inside a region
+--  does not change how its own body was lowered, which is what makes the
+--  region's claim readable where it is written.
+grow: (n: u8) -> (r: u8) =
+    r = n + 1
+end grow
+
+caller_side: (n: u8) -> (r: u8) =
+    unchecked begin
+        r = grow(n)
+    end unchecked
+end caller_side
+
+public main: () -> (code: i32) =
+    _ = caller_side(255)
+    code = 42
+end main

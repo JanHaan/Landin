@@ -1,0 +1,6 @@
+class: negative
+summary: D187 a region removes no static refusal, so [1910]'s definite assignment still refuses a read before a write inside one
+constructs: 1120, 1910
+program: program.ldn
+codes: L0302
+targets: linux-x86-64, macos-arm64

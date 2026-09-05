@@ -1,0 +1,34 @@
+--  [1120]: the region is a statement and an ordinary lexical block, so a
+--  declaration inside it is not visible after it and [1100]'s `defer`
+--  still runs on the way out.
+release: (handle: u32) -> none =
+    _ = handle
+end release
+
+sum_at: (items: []u32, index: usize, bias: u32) -> (r: u32) =
+    unchecked begin
+        defer release(1)
+        picked: u32 = items[index]
+        unchecked begin
+            r = picked + bias
+        end unchecked
+    end unchecked
+end sum_at
+
+narrowed: (wide: u32) -> (r: u8) =
+    unchecked begin
+        r = u8(wide)
+    end unchecked
+end narrowed
+
+public main: () -> (code: i32) =
+    words: [3]u32 = [1, 2, 3]
+    view: []u32 = words[0..<3]
+    total: u32 = sum_at(view, 2, 4)
+    small: u8 = narrowed(total)
+    if small == 7 then
+        code = 42
+    else
+        code = 1
+    end if
+end main

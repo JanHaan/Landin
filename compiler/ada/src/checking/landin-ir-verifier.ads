@@ -88,6 +88,7 @@ package Landin.IR.Verifier is
       Atom_Identity_Not_In_Set,
       Field_Shape_Malformed,
       Condition_Is_Not_A_Bool,
+      Unchecked_Not_Removable,
       --  Places [1900] and module values [1940].
       Slot_Out_Of_Range,
       Store_Disagrees_With_Slot,

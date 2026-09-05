@@ -1,0 +1,6 @@
+class: negative
+summary: D187 an unchecked region closes with `end unchecked`, and the parser refuses a bare `end`
+constructs: 1120, 1810
+program: program.ldn
+codes: L0103
+targets: linux-x86-64, macos-arm64

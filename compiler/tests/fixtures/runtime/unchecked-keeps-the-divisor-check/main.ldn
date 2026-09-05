@@ -1,0 +1,15 @@
+--  x86-64 faults on this and Cortex-M does not, so the edge without one
+--  has no single stated behaviour and D187 keeps it in every region.  On
+--  this target the hardware would fault anyway, so this fixture states
+--  the rule rather than discriminating the two lowerings;
+--  runtime/unchecked-keeps-the-shift-check is the half that does.
+share: (total: u32, parts: u32) -> (r: u32) =
+    unchecked begin
+        r = total / parts
+    end unchecked
+end share
+
+public main: () -> (code: i32) =
+    _ = share(10, 0)
+    code = 42
+end main

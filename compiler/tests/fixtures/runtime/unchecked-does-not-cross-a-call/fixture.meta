@@ -1,0 +1,6 @@
+class: runtime
+summary: D187 the region is lexical, so a callee written outside it traps when it is called from inside one
+constructs: 0300, 1120, 1920, 1960
+program: main.ldn
+traps: yes
+targets: linux-x86-64

@@ -167,6 +167,9 @@ package body Landin.Syntax is
    function Is_Caller (Of_Tree : Tree; Id : Node_Id) return Boolean
      is (Element (Of_Tree, Id).Caller);
 
+   function Is_Unchecked (Of_Tree : Tree; Id : Node_Id) return Boolean
+     is (Element (Of_Tree, Id).Unchecked);
+
    function Is_Referent_Mutable (Of_Tree : Tree; Id : Node_Id) return Boolean
      is (Element (Of_Tree, Id).Mutable);
 

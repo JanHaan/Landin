@@ -1,0 +1,7 @@
+--  [0430]'s reference permission is static, and a region removes no
+--  static rule.
+f: (items: []u32) -> none =
+    unchecked begin
+        items[0] = 1
+    end unchecked
+end f

@@ -1,0 +1,6 @@
+class: runtime
+summary: D187 an anonymous function body written inside [1120]'s region is a separate item whose region depth starts at zero, so it still traps
+constructs: 0300, 1010, 1120, 1960
+program: main.ldn
+traps: yes
+targets: linux-x86-64

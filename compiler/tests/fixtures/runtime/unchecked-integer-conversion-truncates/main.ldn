@@ -1,0 +1,16 @@
+--  300 does not fit in a u8 and the compiler cannot read this operand, so
+--  outside a region this traps.  Inside one it keeps 300 mod 256.
+narrow: (wide: u32) -> (r: u8) =
+    unchecked begin
+        r = u8(wide)
+    end unchecked
+end narrow
+
+public main: () -> (code: i32) =
+    kept: u8 = narrow(300)
+    if kept == 44 then
+        code = 42
+    else
+        code = 1
+    end if
+end main

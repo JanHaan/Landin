@@ -1,0 +1,8 @@
+--  [1910] is static and D187 removes only emitted edges, so an unassigned
+--  read inside a region is refused exactly as it is outside one.
+f: (n: u8) -> (r: u8) =
+    mut seen: u8
+    unchecked begin
+        r = seen + n
+    end unchecked
+end f

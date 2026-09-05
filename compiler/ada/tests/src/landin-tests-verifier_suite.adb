@@ -729,6 +729,7 @@ package body Landin.Tests.Verifier_Suite is
       Array_Fill_First_Is_Outside_Array,
       Array_Fill_Field_First_Is_Outside_Array,
       Array_Fill_Inside_A_Datum,
+      Unchecked_Inside_A_Datum,
       Condition_Is_A_Number,
       Function_Signature_Part_Is_Malformed,
       Function_Parameter_Uses_A_Different_Signature,
@@ -1610,6 +1611,28 @@ package body Landin.Tests.Verifier_Suite is
             IR.Emit_Leave (Unit, E, IR.No_Value, Site);
             IR.Leave_Block (Unit, E);
 
+         --  D187: [1940]'s module value executes nothing, so no edge of
+         --  its can be the one a region removes.  The opposite half of
+         --  that rule -- the flag on an opcode carrying no removable
+         --  edge -- cannot be built at all, because Append is the only
+         --  writer and holds it to Check_Is_Removable itself.
+         when Unchecked_Inside_A_Datum =>
+            N := IR.Emit_Load (Unit, A, S, Site);
+            IR.Emit_Leave (Unit, A, N, Site);
+            IR.Leave_Block (Unit, A);
+            B := IR.Add_Block
+              (Unit, E, Landin.Resolution.Program_Scope, Site);
+            IR.Enter (Unit, E, B);
+            IR.Begin_Unchecked (Unit, E);
+            N := IR.Emit_Number
+              (Unit, E, Landin.Types.U32, 1, False, Site);
+            N := IR.Emit_Binary
+              (Unit, E, IR.Add, N, N, Landin.Types.U32, Site);
+            IR.End_Unchecked (Unit, E);
+            pragma Assert (IR.Is_Unchecked (Unit, E, N));
+            IR.Emit_Leave (Unit, E, IR.No_Value, Site);
+            IR.Leave_Block (Unit, E);
+
          when Condition_Is_A_Number =>
             C := IR.Add_Block
                    (Unit, A, Landin.Resolution.Program_Scope, Site);
@@ -1815,6 +1838,7 @@ package body Landin.Tests.Verifier_Suite is
          (Array_Fill_Field_First_Is_Outside_Array,
           V.Array_Fill_First_Out_Of_Range),
          (Array_Fill_Inside_A_Datum, V.Array_Fill_Inside_A_Datum),
+         (Unchecked_Inside_A_Datum,  V.Unchecked_Not_Removable),
          (Condition_Is_A_Number,      V.Condition_Is_Not_A_Bool),
          (Function_Signature_Part_Is_Malformed,
           V.Signature_Part_Malformed),

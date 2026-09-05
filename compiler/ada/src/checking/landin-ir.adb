@@ -1647,6 +1647,23 @@ package body Landin.IR is
    function Open_Block (Of_Unit : Unit; Item : Item_Id) return Block_Id
      is (Element (Of_Unit, Item).Open);
 
+   procedure Begin_Unchecked (Into : in out Unit; Item : Item_Id) is
+      Held : Item_Record := Element (Into, Item);
+   begin
+      Held.Unchecked_Depth := Held.Unchecked_Depth + 1;
+      Into.Items (Positive (Item)) := Held;
+   end Begin_Unchecked;
+
+   procedure End_Unchecked (Into : in out Unit; Item : Item_Id) is
+      Held : Item_Record := Element (Into, Item);
+   begin
+      Held.Unchecked_Depth := Held.Unchecked_Depth - 1;
+      Into.Items (Positive (Item)) := Held;
+   end End_Unchecked;
+
+   function In_Unchecked (Of_Unit : Unit; Item : Item_Id) return Boolean
+     is (Element (Of_Unit, Item).Unchecked_Depth > 0);
+
    function Scope_Of
      (Of_Unit : Unit; Item : Item_Id; Block : Block_Id) return Scope_Id
      is (Of_Unit.Blocks (Block_At (Of_Unit, Item, Block)).Scope);
@@ -2170,6 +2187,10 @@ package body Landin.IR is
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Boolean
      is (Held (Of_Unit, Item, Value).Negated);
 
+   function Is_Unchecked
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Boolean
+     is (Held (Of_Unit, Item, Value).Unchecked);
+
    function Truth_Of
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Boolean
      is (Held (Of_Unit, Item, Value).Truth);
@@ -2192,11 +2213,13 @@ package body Landin.IR is
    ------------------------------------------------------------------
 
    function Append
-     (Into : in out Unit; Item : Item_Id; What : Instruction)
+     (Into : in out Unit; Item : Item_Id; What : Instruction;
+      Required : Boolean := False)
      return Value_Id;
 
    function Append
-     (Into : in out Unit; Item : Item_Id; What : Instruction)
+     (Into : in out Unit; Item : Item_Id; What : Instruction;
+      Required : Boolean := False)
      return Value_Id
    is
       Held  : Item_Record := Element (Into, Item);
@@ -2206,6 +2229,17 @@ package body Landin.IR is
       Made  : Instruction := What;
    begin
       Made.In_Block := Held.Open;
+
+      --  D187: the region is recorded where an instruction is emitted, so
+      --  an edge the compiler emits outside the body -- cleanup at an exit,
+      --  or a separately filled item -- is checked as it is written.  An
+      --  address whose index is static carries no edge to remove, and a
+      --  Required operation is one the language emits for itself.
+      Made.Unchecked :=
+        Held.Unchecked_Depth > 0
+        and then not Required
+        and then Check_Is_Removable (Made.Op)
+        and then (Made.Op /= Storage_Address or else Made.Indexed_Address);
       Open_Run (Held.Values, Natural (Into.Code.Length));
       Into.Code.Append (Made);
 
@@ -2490,7 +2524,8 @@ package body Landin.IR is
       Upper   : Value_Id;
       Element : Field_Shape;
       Inclusive : Boolean;
-      Site    : Landin.Provenance.Origin) return Value_Id
+      Site    : Landin.Provenance.Origin;
+      Required : Boolean := False) return Value_Id
    is
       Made : Instruction :=
         Instruction'(Op => Slice_Address,
@@ -2506,7 +2541,7 @@ package body Landin.IR is
       Into.Operands.Append (Length);
       Into.Operands.Append (Lower);
       Into.Operands.Append (Upper);
-      return Append (Into, Item, Made);
+      return Append (Into, Item, Made, Required);
    end Emit_Slice_Address;
 
    function Emit_Empty_Slice_Base

@@ -1,0 +1,9 @@
+mut words: [4]u32
+
+--  Modelled on negative/index-outside-the-length: inside a region the
+--  compiler still reads the index and still refuses it.
+f: () -> (r: u32) =
+    unchecked begin
+        r = words[4]
+    end unchecked
+end f
