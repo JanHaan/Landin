@@ -1,0 +1,9 @@
+class: runtime
+summary: D186 supplies and forwards the exact pooled source-name line and column utf8 view
+program: main.ldn
+root: ../../../../..
+run_expect: output.txt
+status: 42
+stream: merged
+constructs: 0310, 0410, 0570, 0600, 1040, 1150, 1290, 1320, 1410, 1420, 1580, 1800, 1810, 1920, 1970
+targets: linux-x86-64

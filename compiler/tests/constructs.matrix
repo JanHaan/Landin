@@ -11,7 +11,7 @@
 #
 #  A construct with no evidence and no refusal is this
 #  item's to answer for; see ROADMAP.md R1.90.
-#  200 constructs, 172 with evidence, 28 with neither.
+#  200 constructs, 173 with evidence, 27 with neither.
 #
 #  id    defined in  evidence
 0010   tour        accepted emitted                   Line comment, to end of line
@@ -117,7 +117,7 @@
 1010   tour        accepted emitted executed refused  Anonymous functions
 1020   tour        accepted emitted executed refused  Discarding a result must be explicit
 1030   tour        accepted emitted executed refused  Handling
-1040   tour        -                                  A caller parameter is filled in by the compiler with the
+1040   tour        accepted emitted executed refused  A caller parameter is filled in by the compiler with the call site
 1050   tour        accepted emitted executed refused  Branch
 1060   tour        accepted emitted executed          Every construct has a one-line form
 1070   tour        accepted emitted executed refused  A declaration is allowed in a condition

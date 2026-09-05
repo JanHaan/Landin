@@ -3329,6 +3329,7 @@ def check_coverage_registers(full_run):
             "slices.bounds-known",
             "slices.bounds-runtime", "atoms.sets", "aggregates.variants",
             "origins.escape", "origins.aliasing-limit", "functions.abi",
+            "functions.caller",
             "extern.c-boundary", "host.io", "host.io-failure",
             "diagnostics.retention", "diagnostics.delivery-failure",
             "execution.resource-exhaustion", "consume.local",
