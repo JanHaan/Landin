@@ -1,0 +1,5 @@
+class: positive
+summary: D189 a union of one atom and a pointer type declares in either order, is built from an atom and from `addr`, widens a plain pointer into itself, and matches its two cases with and without a binding
+constructs: 0430, 0440, 0470, 0480, 0630, 0640, 1210, 1795, 1870
+program: program.ldn
+targets: linux-x86-64, macos-arm64

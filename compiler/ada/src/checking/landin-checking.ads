@@ -595,6 +595,13 @@ package Landin.Checking is
       Signature : Signature_Id := No_Signature;
       Concept   : Concept_Id := No_Concept;
       Atoms     : Atom_Set_Id := No_Atom_Set;
+      --  D189/[0480]: the atom a one-atom pointer union reserves zero for.
+      --  No_Declaration is an ordinary pointer; anything else is a union
+      --  whose carrier is a pointer and whose empty case is this atom.  It
+      --  is a field of the pointer descriptor rather than a Type_Kind of
+      --  its own because the representation is a pointer; every use that
+      --  would read the empty case as an address is named and refused.
+      Empty_Atom : Declaration_Id := No_Declaration;
    end record;
 
    function Reference_Count (Of_Table : Table) return Natural
@@ -627,9 +634,27 @@ package Landin.Checking is
      (Of_Table : Table; Left, Right : Reference_Id) return Boolean
      with Pre => Holds (Of_Table, Left) and then Holds (Of_Table, Right);
 
+   --  D189/[0480]: True when this reference is a pointer union rather than
+   --  a plain pointer, so a caller that would read its bits as an address
+   --  can refuse it by name.
+   function Is_Optional_Pointer
+     (Of_Table : Table; Id : Reference_Id) return Boolean
+     with Pre => Holds (Of_Table, Id);
+
+   --  The plain pointer the present case of a union carries: the same
+   --  descriptor with its empty case removed.  Interning it is what makes
+   --  a `ptr` arm binding an ordinary pointer.
+   function Present_Pointer_Of
+     (Into : in out Table; Id : Reference_Id) return Reference_Id
+     with Pre  => Holds (Into, Id) and then Is_Optional_Pointer (Into, Id),
+          Post => Holds (Into, Present_Pointer_Of'Result);
+
    --  [0440]'s sole relaxation: a mutable reference satisfies the otherwise
    --  identical read-only reference.  It is directional and does not change
-   --  the value's bits.
+   --  the value's bits.  D189 adds the second: [1870]'s widening lets a
+   --  plain pointer satisfy the union that reserves an atom beside it, in
+   --  the direction an atom singleton already widens into a set.  Both are
+   --  assignment-shaped; identity still goes through References_Agree.
    function Reference_Satisfies
      (Of_Table : Table; Actual, Expected : Reference_Id) return Boolean
      with Pre => Holds (Of_Table, Actual) and then Holds (Of_Table, Expected);

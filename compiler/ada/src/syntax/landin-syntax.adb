@@ -78,7 +78,7 @@ package body Landin.Syntax is
             when Struct_Body              => 0,
             when Field                    => 1,
             when Variant_Part
-               | Variant_Case | Match_Binding
+               | Variant_Case | Match_Binding | Pointer_Case
                | Destructured_Name | Result_Wildcard => 0,
             when Fixed_Formal | Parameter | Named_Return
                | Destructured_Field => 1,

@@ -1,0 +1,6 @@
+none_found: atom
+maybe_ptr: type = none_found | ptr mut u32
+
+bad: () -> (m: maybe_ptr) =
+    m = ptr(0)
+end bad

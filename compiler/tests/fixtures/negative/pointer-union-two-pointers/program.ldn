@@ -1,0 +1,2 @@
+none_found: atom
+maybe_ptr: type = none_found | ptr mut u32 | ptr u8

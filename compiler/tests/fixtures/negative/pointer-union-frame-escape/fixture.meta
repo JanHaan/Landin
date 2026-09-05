@@ -1,0 +1,6 @@
+class: negative
+summary: D189 the empty case contributes no origin, so a union built from a frame address still refuses an escaping use of the bound pointer
+constructs: 0480, 0770, 0780, 1210
+program: program.ldn
+codes: L0314
+targets: linux-x86-64, macos-arm64, synthetic-32

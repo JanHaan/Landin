@@ -2518,17 +2518,32 @@ package body Landin.Syntax.Parser is
                                       (Add (Type_Reference, At_Member,
                                             Named => Named_Member));
                                  end;
+                              elsif Peek = Tok.Kw_Ptr then
+                                 --  D189/[0480]: `union_member` admits one
+                                 --  pointer type beside the atom names, so
+                                 --  the member is parsed as a type rather
+                                 --  than as a bare name.  How many pointers
+                                 --  a union may hold is the checker's, not
+                                 --  the grammar's.
+                                 declare
+                                    Member : constant Node_Id :=
+                                      Parse_Type (False, At_Name);
+                                 begin
+                                    Members.Append (Member);
+                                 end;
                               else
                                  Complain
                                    (Item    => Syn.Type_Expected,
                                     Where   =>
                                       (if Peek = Tok.End_Of_Input
                                        then After_Previous else Here),
-                                    Message => "an atom type name belongs"
-                                               & " after `|`",
+                                    Message => "an atom type name or `ptr`"
+                                               & " belongs after `|`",
                                     Note    => "[0640]: an atom union is a"
                                                & " nonempty run of atom"
-                                               & " type names",
+                                               & " type names, and D189"
+                                               & " admits one pointer type"
+                                               & " beside them",
                                     Related => At_Name,
                                     Because => "the type declared here");
                                  exit;
@@ -5441,7 +5456,9 @@ package body Landin.Syntax.Parser is
                            and then Named_Ahead (1) = Match_Id)
                  and then Peek /= Tok.End_Of_Input
                loop
-                  if Peek not in Tok.Identifier | Tok.Underscore then
+                  if Peek not in Tok.Identifier | Tok.Underscore
+                                 | Tok.Kw_Ptr
+                  then
                      Complain
                        (Item    => Syn.Name_Expected,
                         Where   => Here,
@@ -5455,13 +5472,22 @@ package body Landin.Syntax.Parser is
                   declare
                      At_Case : constant Landin.Source.Span := Here;
                      Named   : constant Landin.Source.Names.Name_Id :=
-                       (if Peek = Tok.Underscore
+                       (if Peek in Tok.Underscore | Tok.Kw_Ptr
                         then Landin.Source.Names.No_Name else Named_Here);
                      Pattern, Runs : Node_Id;
                      Bindings : Slot_Vectors.Vector;
                      Kept : Boolean;
                   begin
-                     if Peek = Tok.Underscore then
+                     if Peek = Tok.Kw_Ptr then
+                        --  D189/[0480]: the present case of a pointer union
+                        --  is spelled with the reserved word, so it is its
+                        --  own node kind rather than a name resolution
+                        --  would look up and fail to find.
+                        Advance;
+                        Pattern := Add
+                          (Of_Kind  => Pointer_Case,
+                           At_Token => At_Case);
+                     elsif Peek = Tok.Underscore then
                         Advance;
                         Pattern := Add
                           (Of_Kind  => Name_Reference,

@@ -1,0 +1,49 @@
+none_found: atom
+maybe_ptr: type = none_found | ptr mut u32
+
+nothing_here: atom
+maybe_read: type = ptr u32 | nothing_here
+
+widen: (p: ptr mut u32) -> (m: maybe_ptr from p) =
+    m = p
+end widen
+
+empty: () -> (m: maybe_ptr) =
+    m = none_found
+end empty
+
+read_or: (m: maybe_read, fallback: u32) -> (value: u32) =
+    match m
+        nothing_here: value = fallback
+        ptr (p): value = p.val
+    end match
+end read_or
+
+discard: (m: maybe_ptr) -> (found: bool) =
+    match m
+        ptr: found = true
+        none_found: found = false
+    end match
+end discard
+
+covered: (m: maybe_ptr) -> (found: bool) =
+    match m
+        ptr: found = true
+        _: found = false
+    end match
+end covered
+
+use: () -> (total: u32) =
+    mut cell: u32 = 41
+    held: maybe_ptr = addr cell
+    widened: maybe_ptr = widen(addr cell)
+    gone: maybe_ptr = empty()
+    read: maybe_read = addr cell
+    total = read_or(read, 0)
+    if discard(held) and discard(widened) and not discard(gone) then
+        total = total + 1
+    end if
+    if covered(gone) then
+        total = 0
+    end if
+end use

@@ -1,0 +1,6 @@
+class: negative
+summary: D189 the empty case is written as the atom the union reserves zero for, not minted with `ptr`
+constructs: 0470, 0480
+program: program.ldn
+codes: L0301
+targets: linux-x86-64, macos-arm64, synthetic-32

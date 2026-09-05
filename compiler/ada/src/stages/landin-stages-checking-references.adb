@@ -50,6 +50,13 @@ package body Landin.Stages.Checking.References is
       type Declaration_Bits is
         array (Positive range 1 .. Declarations) of Boolean;
 
+      --  Untracked *suppresses* the frame-escape refusal below, so it is
+      --  set only by [0470]'s integer-to-pointer conversion, where there is
+      --  genuinely nothing to know.  D189's empty case contributes
+      --  No_Origin instead: an atom name reaches Fact_Of through no arm and
+      --  gets all four fields false, which is the answer this increment
+      --  wants.  Setting Untracked there would launder every frame pointer
+      --  joined with it.
       type Origin_Fact is record
          Frame      : Boolean := False;
          Untracked  : Boolean := False;
@@ -889,13 +896,42 @@ package body Landin.Stages.Checking.References is
 
             when Syn.Match_Statement =>
                declare
+                  Subject : constant Origin_Fact :=
+                    Fact_Of (Tree, Syn.Match_Subject (Tree, Node));
                   Before : constant Origin_Table := Origins;
                   Merged : Origin_Table (Origins'Range) :=
                     [others => No_Origin];
                   First  : Boolean := True;
                begin
                   for Arm in 1 .. Syn.Match_Arm_Count (Tree, Node) loop
-                     Origins := Before;
+                     declare
+                        This : constant Syn.Node_Id :=
+                          Syn.Nth_Match_Arm (Tree, Node, Arm);
+                     begin
+                        Origins := Before;
+                        --  D189/[0480]: the present case of a pointer union
+                        --  is the union's own carrier, so the bound name
+                        --  derives from wherever the subject came from.  A
+                        --  union built from `addr local` therefore still
+                        --  refuses an escaping use of the binding.
+                        if Syn.Kind (Tree, Syn.Match_Pattern (Tree, This))
+                             = Syn.Pointer_Case
+                          and then Syn.Match_Binding_Count (Tree, This) = 1
+                        then
+                           declare
+                              Id : constant Res.Declaration_Id :=
+                                Declaration_At
+                                  (Tree, Syn.Nth_Match_Binding
+                                           (Tree, This, 1));
+                           begin
+                              if Id /= Res.No_Declaration
+                                and then Id in Origins'Range
+                              then
+                                 Origins (Id) := Subject;
+                              end if;
+                           end;
+                        end if;
+                     end;
                      Process_Block
                        (Tree, Syn.Body_Of
                           (Tree, Syn.Nth_Match_Arm (Tree, Node, Arm)));

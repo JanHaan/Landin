@@ -95,6 +95,18 @@ D187 follows them too, and adds no stage: the parser recognises the region,
 the only place that decides an edge is not written. Nothing in checking,
 resolution or flow reads the flag, because a region removes no static rule.
 
+D189 adds one node kind and one descriptor field and no stage. The parser
+owns the pointer member of an atom union and the `ptr` arm head, which is
+`Landin.Syntax.Pointer_Case` rather than a name because the reserved word is
+not a case name and resolution has nothing to bind it to. `Landin.Checking`
+owns `Reference_Descriptor.Empty_Atom`: the union's representation is a
+pointer, so it is a field of the pointer descriptor and not a
+`Landin.Types.Type_Kind`, and the price of that choice is that the positions
+which would read the carrier as an address are guarded by name in
+`Landin.Stages.Checking` rather than by an exhaustive case. Reference
+checking gives the bound pointer the subject's own origin and gives the empty
+case none; lowering emits the reserved zero and one comparison against it.
+
 D186 follows those same seams: checking owns exact-`utf8` caller signature
 identity and the named-forward-only rule; lowering owns pooled
 `source-name:line:column` views and injects their ordinary slice carriers before

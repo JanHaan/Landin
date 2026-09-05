@@ -325,8 +325,8 @@ type_formals    ::= "(" type_formal ("," type_formal)* ")"
 type_formal     ::= identifier ":" "type" constraint?
                   | "fixed" identifier ":" type
 constraint      ::= "is" concept_reference
-atom_union      ::= declaration_reference "|" declaration_reference
-                    ("|" declaration_reference)*
+atom_union      ::= union_member "|" union_member ("|" union_member)*
+union_member    ::= declaration_reference | pointer_type
 struct_body      ::= "struct" member+ "end" identifier?
 member           ::= field | variant_part
 field            ::= identifier ":" type
@@ -582,7 +582,7 @@ if          ::= "if" condition "then" block
                 ("else" block)?
                 "end" "if"
 match       ::= "match" expression match_arm+ "end" "match"
-match_arm   ::= (declaration_reference | "_")
+match_arm   ::= (declaration_reference | "ptr" | "_")
                 ("(" match_binding ("," match_binding)* ")")?
                 ":" (statement | expression)
 match_binding ::= "inout"? identifier
@@ -813,9 +813,29 @@ identity, and assignment or argument passing may widen a singleton or smaller
 set into a set that contains it. No integer is an atom and no zero or default
 atom exists.
 With one atom, `atom | ptr T` uses zero for the atom and every nonzero pattern
-for the pointer, occupying one target pointer carrier [0480]. With two or more
-atoms it uses the ordinary target-parametric tag-plus-pointer payload placement;
-the source spelling never assumes the one-word optimization.
+for the pointer, occupying one target pointer carrier [0480]. D189 enables
+that form and nothing else: [1795]'s `union_member` admits one written
+pointer type beside the atom names, a second pointer member is L0301, and two
+or more atoms beside a pointer would use the ordinary target-parametric
+tag-plus-pointer payload placement described here but is not enabled in the
+kernel and is L0304 against R7.20. The source spelling never assumes the
+one-word optimization.
+
+The union is not a pointer. `.val`, `addr` of a `.val` reached through one,
+an integer conversion of one, `any` construction from one, a comparison of
+one, and an argument or result position wanting `ptr T` are each L0301,
+because each would read the empty case as an address; `ptr(n)` cannot produce
+one for the same reason, and `zeroed` does not name its empty case because no
+zero or default atom exists. A plain `ptr T` widens into `atom | ptr T` and
+the atom's singleton widens into it, in the direction this paragraph already
+gives atom sets; neither direction reverses. `match` [1210] is the only way
+through, its two cases are the atom name and the reserved word `ptr` with an
+optional read-only binding of the plain pointer type, an `inout` binding on
+that arm is L0301 [1220], a case named twice is L0311, and a case named by
+neither an arm nor `_` is L0312 exactly as for an atom set. The bound pointer
+carries the subject's own origin [0770] [0780], and the empty case carries
+none, so a union built from a frame address still refuses an escaping use of
+the bound pointer.
 Fixed arrays hold their declaration-order elements [0520], and ordinary or
 variant-bearing structs hold the fields their nominal declaration gives them
 [0710] [0750]. A function type holds a target code address with the complete
@@ -8648,6 +8668,7 @@ classified failure boundary before the repository gate can pass.
 | `module.images` | static | 0180, 0340, 0350, 0410, 1460, 1890, 1930, 1940 | L0300, L0304 or L0305; module-known bool `not`, `and` and `or` fold left to right into scalar and aggregate images, short-circuit `and`/`or`, and execute no initializer CFG | `negative/module-value-from-a-call`, `runtime/module-known-short-circuit-bools`, `runtime/recursive-module-images-are-laid-out-and-distinct` |
 | `unchecked.region` | outside | 0290, 0300, 0310, 0320, 0430, 0470, 0570, 0580, 0700, 1120, 1950, 1960 | non-guarantee: inside [1120]'s region the compiler emits no integer overflow edge for `+`, `-`, `*` and unary `-`, no element-index or slice-range edge, and no destination-range edge for an integer-to-integer or pointer-to-integer conversion; the results are [0320]'s wrapping value, [0430]'s pointer non-guarantee at the computed address, and the low-order bits of the source; every static refusal, every division, shift, bool and float conversion edge and every text boundary edge stays | `positive/unchecked-regions`, `runtime/unchecked-arithmetic-wraps`, `runtime/unchecked-integer-conversion-truncates`, `runtime/unchecked-slice-index-passes-the-length`, `runtime/checks-return-after-the-region`, `runtime/unchecked-does-not-cross-a-call`, `runtime/unchecked-does-not-reach-an-anonymous-body`, `runtime/unchecked-keeps-the-divisor-check`, `runtime/unchecked-keeps-the-shift-check`, `runtime/unchecked-keeps-text-boundary-traps`, `negative/unchecked-keeps-a-known-index`, `negative/unchecked-keeps-permissions`, `negative/unchecked-keeps-definite-assignment`, `negative/unchecked-region-end-name-mismatch` |
 | `subtype.range` | trap | 0540, 0660, 0700, 1730, 1795, 1880, 1940, 1950, 1960 | storing into a place whose declared type is [0660]'s range subtype, and applying the subtype name to a value, check the value against both folded bounds; L0300 rejects a known value outside them, a runtime value outside them traps, and a value whose own subtype's bounds lie inside them is not checked again; [1120]'s region does not remove this edge | `positive/range-subtypes`, `runtime/range-subtype-checks`, `runtime/range-subtype-store-traps`, `runtime/range-subtype-conversion-traps`, `runtime/range-subtype-update-traps`, `negative/range-subtype-literal-out-of-range`, `negative/range-subtype-known-value-out-of-range`, `negative/range-subtype-zeroed-excluded`, `negative/range-subtype-bounds-inverted`, `negative/range-subtype-in-a-slice` |
+| `pointer.optional` | static | 0430, 0440, 0470, 0480, 0630, 0640, 1210, 1870 | L0301 for every use that would read the empty case as an address — `.val`, an integer conversion, `any` construction, a comparison, a `ptr T` position, `ptr(n)` into one, and an `inout` arm binding; L0304 for `zeroed` and for a union of several atoms and a pointer; L0311 for a case named twice and L0312 for a case no arm and no `_` names; the bound pointer carries the subject's origin and the empty case carries none | `positive/pointer-unions`, `runtime/pointer-unions`, `negative/pointer-union-dereference`, `negative/pointer-union-is-not-a-pointer`, `negative/pointer-union-match-not-exhaustive`, `negative/pointer-union-frame-escape`, `negative/pointer-union-comparison`, `negative/pointer-union-integer-conversion`, `negative/pointer-union-from-an-integer`, `negative/pointer-union-inout-binding`, `negative/pointer-union-zeroed`, `negative/pointer-union-several-atoms`, `negative/pointer-union-two-pointers`, `negative/pointer-case-arm-is-not-an-atom` |
 | `configuration.fixed` | static | 1980 | L0300, L0301, L0305 or L0306 in the selected declaration view | `negative/fixed-conditional-evaluator`, `runtime/fixed-conditional-generic-runtime` |
 
 This is a coverage register, not an optimizer contract. D187 adds
@@ -10674,3 +10695,101 @@ useful for no less work. All were declined.
 `negative/range-subtype-external-signature`,
 `negative/range-subtype-generic-argument`, the generated lexical and IR
 records, and the `subtype.range` guarantee row.
+
+### D189 — A one-atom pointer union is a pointer whose empty case is zero
+
+**The tour said** that there is no null, that "maybe a pointer" is an ordinary
+union of an atom and a pointer type, that with one atom the compiler
+represents it as a plain pointer with 0 for the empty case, and that the
+spelling does not decide how a union of several atoms and a pointer is laid
+out [0480]. It did not say how such a union is written past the one shown
+example, how the empty case is constructed, how the present case is named in
+a match, what the union may not do that a pointer may, or which origin the
+empty case carries.
+
+**Chosen:** [1795]'s `atom_union` admits one `pointer_type` member beside its
+atom names, and a union that flattens to exactly one atom identity and
+exactly one pointer type is the type `ptr [mut] T` carrying that atom as its
+empty case. It occupies one target pointer carrier with zero reserved for the
+atom, which is what `Landin.Checking.Reference_Union_Extent`'s one-atom arm
+has measured since R2.50 and now has a caller for. Order does not matter:
+`ptr mut u32 | none_found` and `none_found | ptr mut u32` are the same type,
+because [1870] already says a union is structural. The atom's singleton
+widens into the union and so does the bare pointer, in the direction [1870]
+gives atom sets; neither direction reverses, so a plain pointer fills a union
+parameter and a union does not fill a `ptr T` one.
+
+The union is not a pointer, and the six positions that would read its carrier
+as an address are refused by name because each is a path to a dereference of
+the reserved zero: `.val` in a read or an assignment target, `addr` of a
+`.val` reached through one, an integer conversion, `any` construction, a
+comparison, and an argument or result position wanting `ptr T`. The first
+five are L0301 here; the last is [0440]'s existing reference-agreement
+refusal. `ptr(n)` into a union position is L0301 for the same reason, and
+`zeroed` stays R2.20's L0304 because [1870] states that no zero or default
+atom exists — an all-zero image is not the atom even though the atom's
+representation is zero.
+
+`match` [1210] is the only way through. Its two cases are the atom name and
+the reserved word `ptr`, which needs no new keyword because [1760] already
+reserves it, and which is a syntax node of its own rather than a name, so
+resolution has nothing to look up. A `ptr` arm may carry one binding of the
+plain pointer type; it is optional, definitely assigned on entry to the arm,
+and read-only, and `inout` on it is L0301 citing [1220] because writing
+through it would write the union's own carrier and not a payload. A case
+named twice is L0311, a case named by neither an arm nor `_` is L0312, and
+`_` must be last, which are the same three rules an atom set already has. A
+`ptr` arm on an atom-set or variant subject is L0301.
+
+The empty case contributes no origin at all, and in particular never the
+`Untracked` fact [0470]'s integer-to-pointer conversion sets, because that
+fact *suppresses* the frame-escape refusal. The bound pointer takes the
+subject's own origin, so a union built from `addr local` still refuses an
+escaping use of the binding with L0314. Lowering is one comparison against
+zero and the CFG branch a match already emits; the empty case lowers to a
+`usize` zero rather than the atom's dense nonzero code, which is the one
+place a wrong carrier could be produced.
+
+Two or more atoms beside a pointer is refused by name with L0304 citing
+[0480] and owned by R7.20. The tagged carrier [1870] describes needs an IR
+pair, storage, an ABI position and a backend of its own, which is a
+representation increment and not this one; [1870]'s sentence about that
+placement is kept and qualified rather than deleted, and
+`Reference_Union_Extent`'s two-atom arm stays as the recorded measurement. A
+union of two pointer types is L0301: there is one carrier and nothing to tell
+two pointers apart with.
+
+**The alternatives:** giving the union its own `Landin.Types.Type_Kind` would
+have named every site the checker must guard, at the cost of a much larger
+diff and a disturbed `Settled` band; the flag on the pointer descriptor was
+chosen instead because the representation genuinely is a pointer, and the
+six positions above are the audit that flag owes. Making the `ptr` arm's
+binding required rather than optional would be easier to explain and less
+useful for a discard-shaped arm. Spelling the present case `_` with
+narrowing would need flow-sensitive typing, which the kernel has none of, and
+a type-named arm is not in the grammar. Admitting the union inline in a
+`type` position rather than only through [1795]'s named declaration would be
+a change no atom union has today. Laying the multi-atom case out now would
+have made this increment a representation increment. All were declined.
+
+`ptr(0)` remains accepted [0470] and `runtime/core-mem-allocators` uses it as
+a failure sentinel five times, so null is still mintable on the pointer side
+even though [1580] states that it is refused. That contradiction is real, it
+is not resolved here, and it belongs to [1580] and R4.40 with the rest of the
+foreign-boundary work; ROADMAP.md records it against that item rather than
+leaving [0480] looking closed while its headline sentence is evadable.
+
+**Pinned by** `positive/pointer-unions`, `runtime/pointer-unions`,
+`negative/pointer-union-several-atoms`,
+`negative/pointer-union-two-pointers`,
+`negative/pointer-union-dereference`,
+`negative/pointer-union-is-not-a-pointer`,
+`negative/pointer-union-match-not-exhaustive`,
+`negative/pointer-union-frame-escape`,
+`negative/pointer-union-comparison`,
+`negative/pointer-union-integer-conversion`,
+`negative/pointer-union-from-an-integer`,
+`negative/pointer-union-inout-binding`,
+`negative/pointer-union-zeroed`,
+`negative/pointer-case-arm-is-not-an-atom`, the generated lexical and IR
+records, and the `pointer.optional` guarantee row.

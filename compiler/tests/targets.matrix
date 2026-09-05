@@ -391,6 +391,18 @@ negative/parameterized-struct-unused-shape | linux-x86-64, macos-arm64
 negative/parameterized-struct-unused-unknown | linux-x86-64, macos-arm64
 negative/parameterized-struct-used-actual-overflow | linux-x86-64, macos-arm64
 negative/parameterized-struct-used-array-actual-overflow | linux-x86-64, macos-arm64
+negative/pointer-case-arm-is-not-an-atom | linux-x86-64, macos-arm64, synthetic-32
+negative/pointer-union-comparison | linux-x86-64, macos-arm64, synthetic-32
+negative/pointer-union-dereference | linux-x86-64, macos-arm64, synthetic-32
+negative/pointer-union-frame-escape | linux-x86-64, macos-arm64, synthetic-32
+negative/pointer-union-from-an-integer | linux-x86-64, macos-arm64, synthetic-32
+negative/pointer-union-inout-binding | linux-x86-64, macos-arm64, synthetic-32
+negative/pointer-union-integer-conversion | linux-x86-64, macos-arm64, synthetic-32
+negative/pointer-union-is-not-a-pointer | linux-x86-64, macos-arm64, synthetic-32
+negative/pointer-union-match-not-exhaustive | linux-x86-64, macos-arm64, synthetic-32
+negative/pointer-union-several-atoms | linux-x86-64, macos-arm64, synthetic-32
+negative/pointer-union-two-pointers | linux-x86-64, macos-arm64, synthetic-32
+negative/pointer-union-zeroed | linux-x86-64, macos-arm64, synthetic-32
 negative/public-on-statement | linux-x86-64, macos-arm64
 negative/range-subtype-address | linux-x86-64, macos-arm64
 negative/range-subtype-base-is-not-an-integer | linux-x86-64, macos-arm64
@@ -715,6 +727,7 @@ positive/parameterized-struct-signature-value-layout | linux-x86-64, macos-arm64
 positive/parameterized-type-alias-fixed-array | linux-x86-64, macos-arm64
 positive/parameterized-type-alias-scalar | linux-x86-64, macos-arm64
 positive/parentheses-override | linux-x86-64, macos-arm64
+positive/pointer-unions | linux-x86-64, macos-arm64
 positive/precedence-alternation-over-comparison | linux-x86-64, macos-arm64
 positive/precedence-and-over-or | linux-x86-64, macos-arm64
 positive/precedence-comparison-over-and | linux-x86-64, macos-arm64
@@ -949,6 +962,7 @@ runtime/parameterized-struct-lazy-value-layout | linux-x86-64
 runtime/parameterized-struct-values | linux-x86-64
 runtime/parameterized-type-alias-fixed-array | linux-x86-64
 runtime/pointer-to-small-integer-traps | linux-x86-64
+runtime/pointer-unions | linux-x86-64
 runtime/r230-composition | linux-x86-64
 runtime/r230-composition-trap | linux-x86-64
 runtime/r250-references | linux-x86-64

@@ -1680,8 +1680,27 @@ package body Landin.Checking is
       return A.Kind = B.Kind
         and then A.View = B.View
         and then A.Mutable = B.Mutable
+        and then A.Empty_Atom = B.Empty_Atom
         and then Referents_Agree (Of_Table, A, B);
    end References_Agree;
+
+   function Is_Optional_Pointer
+     (Of_Table : Table; Id : Reference_Id) return Boolean
+     is (Descriptor_Of (Of_Table, Id).Empty_Atom /= No_Declaration);
+
+   function Present_Pointer_Of
+     (Into : in out Table; Id : Reference_Id) return Reference_Id
+   is
+      Plain : Reference_Descriptor := Descriptor_Of (Into, Id);
+   begin
+      Plain.Empty_Atom := No_Declaration;
+      for Position in 1 .. Reference_Count (Into) loop
+         if Into.References (Position) = Plain then
+            return Reference_Id (Position);
+         end if;
+      end loop;
+      return Add_Reference (Into, Plain);
+   end Present_Pointer_Of;
 
    function Reference_Satisfies
      (Of_Table : Table; Actual, Expected : Reference_Id) return Boolean
@@ -1689,9 +1708,15 @@ package body Landin.Checking is
       A : constant Reference_Descriptor := Descriptor_Of (Of_Table, Actual);
       E : constant Reference_Descriptor := Descriptor_Of (Of_Table, Expected);
    begin
+      --  D189/[1870]: a plain pointer widens into the union that reserves
+      --  an atom beside it, and the union never narrows back.  This is an
+      --  assignment-shaped predicate; References_Agree is what signature
+      --  and generic-actual identity still use.
       return A.Kind = E.Kind
         and then A.View = E.View
         and then (A.Mutable = E.Mutable or else not E.Mutable)
+        and then (A.Empty_Atom = E.Empty_Atom
+                  or else A.Empty_Atom = No_Declaration)
         and then Referents_Agree (Of_Table, A, E);
    end Reference_Satisfies;
 
