@@ -1,0 +1,10 @@
+--  D181's validated view is what makes D184's decoder infallible, so a
+--  non-boundary `utf8` is not a value the type holds and the region cannot
+--  produce one.  The mirror of runtime/utf8-slice-lower-not-boundary-traps.
+public main: () -> (code: i32) =
+    source: utf8 = "\u{2603}"
+    unchecked begin
+        bad: utf8 = source[1..<3]
+        code = i32(lenof bad)
+    end unchecked
+end main

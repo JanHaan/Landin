@@ -1,0 +1,15 @@
+--  x86-64 masks a shift count and ARM saturates one, so the shift without
+--  its edge is not one behaviour on every target Landin describes and
+--  D187 keeps it in every region.  Without the edge this program returns
+--  42 instead of trapping, which is what makes this the discriminating
+--  half of the retained set.
+shift: (value: i32, amount: i32) -> (r: i32) =
+    unchecked begin
+        r = value << amount
+    end unchecked
+end shift
+
+public main: () -> (code: i32) =
+    _ = shift(1, -1)
+    code = 42
+end main

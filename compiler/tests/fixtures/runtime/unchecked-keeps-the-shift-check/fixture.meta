@@ -1,0 +1,6 @@
+class: runtime
+summary: D187 never removes the negative-shift edge, so a runtime negative shift amount inside [1120]'s region still traps
+constructs: 0320, 1120, 1950, 1960
+program: main.ldn
+traps: yes
+targets: linux-x86-64

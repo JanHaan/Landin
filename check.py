@@ -3339,7 +3339,8 @@ def check_coverage_registers(full_run):
             "cleanup.undo", "generics.substitution",
             "concepts.conformance", "any.construction", "any.dispatch",
             "modules.visibility",
-            "entry.point", "module.images", "configuration.fixed"}
+            "entry.point", "module.images", "configuration.fixed",
+            "unchecked.region"}
         classes = {"static", "trap", "beyond-lifetime", "outside"}
         for line, row in guarantees:
             key = row["Operation"].strip("`")

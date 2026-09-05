@@ -1282,6 +1282,16 @@ package body Landin.Backend.X86_64 is
             Op : constant Landin.IR.Opcode :=
               Landin.IR.Op_Of (Of_Unit, Item, Value);
 
+            --  D187: this instruction is lexically inside [1120]'s region,
+            --  so the edges that decision names are not emitted for it.
+            --  Every other edge below is emitted whatever this says --
+            --  a divisor, a shift count, a float or bool conversion and a
+            --  text boundary keep their trap because their behaviour
+            --  without one is not one thing on every target Landin
+            --  describes.
+            Unchecked : constant Boolean :=
+              Landin.IR.Is_Unchecked (Of_Unit, Item, Value);
+
             function Operand (Index : Positive) return Landin.IR.Value_Id
               is (Landin.IR.Nth_Operand (Of_Unit, Item, Value, Index));
          begin
@@ -1418,15 +1428,21 @@ package body Landin.Backend.X86_64 is
                              Value_Label (Value) & "_index";
                         begin
                            Emit ("movq " & Value_Cell (Index) & ", %rax");
-                           Emit
-                             ("movabsq $"
-                              & Trimmed
-                                  (Landin.IR.Element_Total'Image (Length))
-                              & ", %rdx");
-                           Emit ("cmpq %rdx, %rax");
-                           Emit ("jb " & Safe);
-                           Emit ("ud2");
-                           Put (Safe & ":");
+                           --  D187 leaves the access at the computed
+                           --  address, which is [0430]'s existing pointer
+                           --  non-guarantee and nothing worse.
+                           if not Unchecked then
+                              Emit
+                                ("movabsq $"
+                                 & Trimmed
+                                     (Landin.IR.Element_Total'Image
+                                        (Length))
+                                 & ", %rdx");
+                              Emit ("cmpq %rdx, %rax");
+                              Emit ("jb " & Safe);
+                              Emit ("ud2");
+                              Put (Safe & ":");
+                           end if;
                            if Stride <= 2 ** 31 - 1 then
                               Emit
                                 ("imulq $"
@@ -1905,7 +1921,14 @@ package body Landin.Backend.X86_64 is
                                     & Accumulator (From_Size));
                            end if;
 
-                           if Landin.Types.Is_Signed (Into_Type) then
+                           --  D187 removes the destination-range edge of
+                           --  an integer-to-integer conversion only.  The
+                           --  narrowing store below already keeps the
+                           --  low-order bits of the source, which is the
+                           --  one result every target gives.
+                           if Unchecked then
+                              null;
+                           elsif Landin.Types.Is_Signed (Into_Type) then
                               declare
                                  Maximum : constant Landin.Types.Magnitude :=
                                    2 ** (Natural (Into_Bits) - 1) - 1;
@@ -1943,7 +1966,8 @@ package body Landin.Backend.X86_64 is
                               Put (Safe_Lower & ":");
                            end if;
 
-                           if not Landin.Types.Is_Signed (Into_Type)
+                           if not Unchecked
+                             and then not Landin.Types.Is_Signed (Into_Type)
                              and then Into_Bits < 64
                            then
                               declare
@@ -1984,19 +2008,31 @@ package body Landin.Backend.X86_64 is
                      Landin.Backend.Field_Extent
                        (Of_Unit, Element, Facts, Stride, Alignment);
                      pragma Unreferenced (Alignment);
-                     Emit ("movq " & Value_Cell (Operand (4)) & ", %rax");
-                     Emit ("cmpq " & Value_Cell (Operand (2)) & ", %rax");
-                     Emit
-                       ((if Landin.IR.Slice_Is_Inclusive
-                              (Of_Unit, Item, Value)
-                         then "jb " else "jbe ") & Safe_Upper);
-                     Emit ("ud2");
-                     Put (Safe_Upper & ":");
+                     --  D187 removes both range edges together.  The
+                     --  text boundary traps of D182--D184 are emitted
+                     --  through this same operation and are marked
+                     --  required where they are lowered, so they arrive
+                     --  here checked whatever region they sit in.
+                     if not Unchecked then
+                        Emit
+                          ("movq " & Value_Cell (Operand (4)) & ", %rax");
+                        Emit
+                          ("cmpq " & Value_Cell (Operand (2)) & ", %rax");
+                        Emit
+                          ((if Landin.IR.Slice_Is_Inclusive
+                                 (Of_Unit, Item, Value)
+                            then "jb " else "jbe ") & Safe_Upper);
+                        Emit ("ud2");
+                        Put (Safe_Upper & ":");
+                     end if;
                      Emit ("movq " & Value_Cell (Operand (3)) & ", %rcx");
-                     Emit ("cmpq " & Value_Cell (Operand (4)) & ", %rcx");
-                     Emit ("jbe " & Safe_Lower);
-                     Emit ("ud2");
-                     Put (Safe_Lower & ":");
+                     if not Unchecked then
+                        Emit
+                          ("cmpq " & Value_Cell (Operand (4)) & ", %rcx");
+                        Emit ("jbe " & Safe_Lower);
+                        Emit ("ud2");
+                        Put (Safe_Lower & ":");
+                     end if;
                      if Stride > 1 then
                         Emit
                           ("imulq $"
@@ -2198,11 +2234,13 @@ package body Landin.Backend.X86_64 is
                            & Value_Cell (Operand (1)) & ", "
                            & Accumulator (Held));
                      Emit ("neg" & Suffix (Held) & " " & Accumulator (Held));
-                     Emit ((if Landin.Types.Is_Signed
-                                   (Landin.Types.Integer_Name (Kind))
-                            then "jno " else "jnc ") & Next);
-                     Emit ("ud2");
-                     Put (Next & ":");
+                     if not Unchecked then
+                        Emit ((if Landin.Types.Is_Signed
+                                      (Landin.Types.Integer_Name (Kind))
+                               then "jno " else "jnc ") & Next);
+                        Emit ("ud2");
+                        Put (Next & ":");
+                     end if;
                      Emit ("mov" & Suffix (Held) & " "
                            & Accumulator (Held) & ", "
                            & Value_Cell (Value));
@@ -2608,14 +2646,17 @@ package body Landin.Backend.X86_64 is
                      Safe : constant String := Value_Label (Value) & "_index";
                   begin
                      Emit ("movq " & Value_Cell (Index) & ", %rax");
-                     Emit
-                       ("movabsq $"
-                        & Trimmed (Landin.IR.Element_Total'Image (Length))
-                        & ", %rdx");
-                     Emit ("cmpq %rdx, %rax");
-                     Emit ("jb " & Safe);
-                     Emit ("ud2");
-                     Put (Safe & ":");
+                     if not Unchecked then
+                        Emit
+                          ("movabsq $"
+                           & Trimmed
+                               (Landin.IR.Element_Total'Image (Length))
+                           & ", %rdx");
+                        Emit ("cmpq %rdx, %rax");
+                        Emit ("jb " & Safe);
+                        Emit ("ud2");
+                        Put (Safe & ":");
+                     end if;
                      --  An `imul` immediate is a signed 32-bit field, and
                      --  D121's element may be wider than one, so a stride
                      --  that does not fit is formed in a register first.
@@ -2845,11 +2886,16 @@ package body Landin.Backend.X86_64 is
                            & Suffix (Held) & " "
                            & Value_Cell (Operand (2)) & ", "
                            & Accumulator (Held));
-                     Emit ((if Landin.Types.Is_Signed
-                                   (Landin.Types.Integer_Name (Kind))
-                            then "jno " else "jnc ") & Next);
-                     Emit ("ud2");
-                     Put (Next & ":");
+                     --  D187 leaves [0320]'s two's-complement result in
+                     --  the accumulator, which is what the wrapping
+                     --  operators already mean on every target.
+                     if not Unchecked then
+                        Emit ((if Landin.Types.Is_Signed
+                                      (Landin.Types.Integer_Name (Kind))
+                               then "jno " else "jnc ") & Next);
+                        Emit ("ud2");
+                        Put (Next & ":");
+                     end if;
                      Emit ("mov" & Suffix (Held) & " "
                            & Accumulator (Held) & ", "
                            & Value_Cell (Value));
@@ -3011,9 +3057,12 @@ package body Landin.Backend.X86_64 is
                         Emit ((if Signed then "imul" else "mul")
                               & Suffix (Held) & " "
                               & Value_Cell (Operand (2)));
-                        Emit ((if Signed then "jno " else "jnc ") & Next);
-                        Emit ("ud2");
-                        Put (Next & ":");
+                        if not Unchecked then
+                           Emit
+                             ((if Signed then "jno " else "jnc ") & Next);
+                           Emit ("ud2");
+                           Put (Next & ":");
+                        end if;
                         Emit ("mov" & Suffix (Held) & " "
                               & Accumulator (Held) & ", "
                               & Value_Cell (Value));

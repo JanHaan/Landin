@@ -1,0 +1,15 @@
+--  Nothing inside the region overflows, so the only edge that can end this
+--  program is the one after `end unchecked`.  If the region leaked past
+--  its closer this returns 42 instead of trapping.
+grow: (n: u8) -> (r: u8) =
+    mut lowered: u8 = 0
+    unchecked begin
+        lowered = n - 1
+    end unchecked
+    r = lowered + n
+end grow
+
+public main: () -> (code: i32) =
+    _ = grow(200)
+    code = 42
+end main

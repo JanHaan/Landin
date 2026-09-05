@@ -1,0 +1,16 @@
+--  [1010]'s function value runs where it is called, so a region enclosing
+--  the text of its body would make a claim that is false at the call site.
+--  Without the edge this program returns 42 instead of trapping.
+unary: type = (value: u8) -> (result: u8)
+
+apply: (f: unary, n: u8) -> (r: u8) =
+    r = f(n)
+end apply
+
+public main: () -> (code: i32) =
+    unchecked begin
+        bump: unary = (value: u8) -> (result: u8) = value + 1 end
+        _ = apply(bump, 255)
+    end unchecked
+    code = 42
+end main

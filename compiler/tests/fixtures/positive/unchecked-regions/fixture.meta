@@ -1,0 +1,5 @@
+class: positive
+summary: D187 unchecked regions parse as statements, nest, hold their own scope and lower their body
+constructs: 1120, 1810, 1840
+program: program.ldn
+targets: linux-x86-64, macos-arm64

@@ -1972,6 +1972,19 @@ Checks may be switched off for a region, visibly.
 
 ```
 
+The region is a statement and an ordinary block: it has its own scope,
+`defer` still runs on the way out, and nesting one inside another says
+nothing new. What goes is the edges the compiler emits and nothing else —
+integer overflow, an element index or a slice range, and the destination
+range of an integer conversion. What stays is everything the compiler
+decides rather than emits — types, definite assignment, permissions,
+origins — and the edges whose absence is not one thing on every machine:
+a zero divisor, a negative shift count, a conversion to bool or from a
+float, and a text boundary. It reaches only the code written inside it,
+so a function called from a region is checked as that function is
+written, and that is what keeps the word honest where you read it. D187
+is where each of those is decided.
+
 ### [1130] Unconditional loop
 
 Unconditional loop.
@@ -3217,10 +3230,12 @@ to executable evidence. New operations have to enter that
 register as they are implemented, and R7.40 closes the final
 feature-complete matrix. Read the claim as: deliberately unsafe,
 with static help that is worth having.
-Checks stay on by default. unchecked exists in the design
-[1120] and is not implemented first, because defining what
-an optimiser may then assume is a decision that should wait
-for a compiler that can be measured.
+Checks stay on by default. unchecked [1120] removes the
+edges D187 names, in the region where it is written, and
+grants an optimiser nothing at all: it emits fewer checks
+and makes no fact available to a later pass. What an
+optimiser may assume is still a decision that should wait
+for a compiler that can be measured, and R4.50 owns it.
 
 ### [1730] Check once, then carry the proof
 

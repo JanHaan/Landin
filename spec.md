@@ -40,7 +40,7 @@ and a quoted word or sign in one of them stands for the single token
 spelled that way. A quoted word is not thereby reserved: when [1760]'s
 keyword rule omits it, the token is an identifier whose spelling the
 enclosing production recognises. Thus 'of', 'lenof', 'variant', 'begin',
-'match', 'defer' and 'undo' remain
+'match', 'defer', 'undo' and 'unchecked' remain
 ordinary names everywhere their contextual productions do not meet them.
 A token is as long as it can be, comments excepted, whose
 opener decides [1780]: 'inc' followed by 'x' with nothing between them is
@@ -513,6 +513,16 @@ For `utf8` and `utf16`, `at_end` is Cur equal to the retained code-unit length.
 For `cstring`, it is the first zero byte; that terminator is not an Item, so an
 embedded U+0000 ends the C string in the same way as its trailing terminator.
 
+D187 enables [1120]'s statement form. `unchecked begin` opens a region and
+`end unchecked` closes it; `unchecked` stays a contextual word [1760] does not
+reserve, and only that word directly before `begin` opens one, so a label, a
+binding and an assignment written with the same name are unchanged. The region
+is a lexical block with its own scope and it is not an expression: the block
+forms that also occupy expression positions are the `if`, the `match` and the
+bare `begin` named above, and this is not one of them. Nesting is idempotent
+and there is no counter-word. Which check edges the region removes, which it
+never removes, and what a removed one leaves behind are D187's.
+
 D181 admits only validated hosted views and D183 preserves that validity
 across text slices, so these intrinsic providers are infallible and
 declare no atom error. A well-formed view neither traps nor reports a decoding
@@ -526,7 +536,7 @@ D178--D180 range, array, slice and declared-evidence traversal.
 statement   ::= binding | destructuring_binding | assignment | increment
               | discard | call | defer | undo | try | return | fail
               | break | continue | loop | while | for | if | match
-              | bare_block
+              | unchecked | bare_block
 assignment  ::= place assignment_operator expression
 assignment_operator ::= "=" | "+=" | "-=" | "*=" | "/=" | "%="
                       | "&=" | "|=" | "^=" | "<<=" | ">>="
@@ -565,6 +575,7 @@ match_arm   ::= (declaration_reference | "_")
                 ("(" match_binding ("," match_binding)* ")")?
                 ":" (statement | expression)
 match_binding ::= "inout"? identifier
+unchecked   ::= "unchecked" "begin" block "end" "unchecked"
 bare_block  ::= "begin" block "end"
 place       ::= indexed
 
@@ -8566,7 +8577,7 @@ classified failure boundary before the repository gate can pass.
 | `declarations.names` | static | 0040, 0050, 0060, 0080, 0090, 0100, 0110, 0120, 0130, 0140, 1790, 1795, 1850 | L0200 or L0201 | `negative/duplicate-in-a-module`, `negative/local-used-above-its-declaration` |
 | `types.values` | static | 0070, 0160, 0170, 0180, 0190, 0200, 0210, 0250, 1870, 1880, 1890 | L0300, L0301 or L0304 | `negative/character-literal-needs-u32`, `negative/float-literal-not-enabled`, `negative/float-type-not-enabled`, `negative/integer-literal-not-a-float`, `negative/literal-above-its-type`, `negative/type-name-is-not-a-type` |
 | `float.ieee` | static | 0170, 0210, 0220, 0230, 0240, 0290, 0350, 1940 | f32/f64 decimal and hexadecimal literals plus inherently typed infinity and canonical quiet NaN names follow IEEE binary32/binary64 through runtime and module arithmetic and comparison, preserving exact hexadecimal values, nearest-even rounding, gradual underflow, signed zero and unordered NaN behavior; arithmetic NaNs use the canonical quiet pattern, L0300 rejects a finite literal that becomes infinity, and L0301 rejects an invalid named special, a width mismatch, mixed classes and integer-only operators | `negative/float-remainder-is-integer-only`, `negative/float-special-name-unknown`, `negative/float-special-on-integer-type`, `negative/float-special-width-mismatch`, `negative/hex-float-overflows-context`, `runtime/float-decimal-runtime`, `runtime/float-hexadecimal-runtime`, `runtime/float-named-specials`, `runtime/module-float-arithmetic` |
-| `conversion.integer` | trap | 0150, 0190, 0310, 0470, 0700, 1460, 1670, 1880, 1940, 1950, 1960 | explicit conversion among enabled integer types preserves the mathematical value; L0300 rejects a known value outside the destination range and a runtime value outside it traps, without truncation, wrapping or signedness reinterpretation | `negative/integer-conversion-known-binding-out-of-range`, `negative/integer-conversion-known-out-of-range`, `runtime/integer-conversion-out-of-range-traps`, `runtime/integer-conversion-signed-overflow-traps`, `runtime/integer-conversion-unsigned-overflow-traps`, `runtime/integer-conversions` |
+| `conversion.integer` | trap | 0150, 0190, 0310, 0470, 0700, 1120, 1460, 1670, 1880, 1940, 1950, 1960 | explicit conversion among enabled integer types preserves the mathematical value; L0300 rejects a known value outside the destination range and a runtime value outside it traps, without truncation, wrapping or signedness reinterpretation, outside [1120]'s region | `negative/integer-conversion-known-binding-out-of-range`, `negative/integer-conversion-known-out-of-range`, `runtime/integer-conversion-out-of-range-traps`, `runtime/integer-conversion-signed-overflow-traps`, `runtime/integer-conversion-unsigned-overflow-traps`, `runtime/integer-conversions` |
 | `conversion.float-width` | trap | 0170, 0210, 0230, 0240, 0310, 0700, 1880, 1940, 1950, 1960 | explicit f32/f64 conversion widens exactly or narrows to nearest with ties to even, preserving signed zero and the infinity/NaN class; L0300 rejects a known finite narrowing overflow and an equivalent runtime conversion traps | `negative/float-width-conversion-known-out-of-range`, `runtime/float-width-conversion-overflow-traps`, `runtime/float-width-conversions` |
 | `conversion.integer-to-float` | static | 0150, 0170, 0190, 0210, 0310, 0700, 1880, 1940, 1960 | explicit conversion from every enabled integer to f32 or f64 preserves the mathematical value when exact and otherwise rounds to nearest with ties to even; the enabled integer range cannot overflow either float width | `runtime/integer-to-float-conversions` |
 | `conversion.float-to-integer` | trap | 0150, 0170, 0190, 0210, 0230, 0240, 0310, 0700, 1880, 1940, 1950, 1960 | explicit conversion from f32 or f64 to every enabled integer truncates toward zero and then requires the result to fit; L0300 rejects a known out-of-range, infinity or NaN source and an equivalent runtime conversion traps | `negative/float-to-integer-known-nan`, `negative/float-to-integer-known-out-of-range`, `runtime/float-to-integer-conversions`, `runtime/float-to-integer-nan-traps`, `runtime/float-to-integer-out-of-range-traps` |
@@ -8579,7 +8590,7 @@ classified failure boundary before the repository gate can pass.
 | `text.slicing` | trap | 0310, 0410, 0430, 0570, 0600, 0790, 1050, 1820, 1950, 1960 | utf8 and utf16 ranges take exact usize code-unit bounds, require scalar-boundary endpoints, preserve the immutable source-derived text identity, include the complete upper scalar for `..`, and evaluate source then bounds once; cstring and other bound types are L0301, mutation is L0303, L0316 enforces the return origin, and an invalid bound or split scalar traps | `negative/cstring-range-slicing-has-no-length`, `negative/text-slice-needs-usize-bounds`, `negative/text-slice-result-is-read-only`, `negative/text-slice-result-keeps-identity`, `negative/text-slice-result-keeps-origin`, `runtime/text-range-slicing`, `runtime/utf16-slice-not-boundary-traps`, `runtime/utf8-slice-lower-not-boundary-traps`, `runtime/utf8-slice-upper-not-boundary-traps` |
 | `text.traversal` | static | 0250, 0410, 0430, 0600, 1130, 1150, 1160, 1320 | the exact utf8, utf16 and cstring identities retain one source, use private usize code-unit cursors, and yield immutable copied u32 Unicode scalars in first/at_end/item/next order; cstring stops before its first NUL, ordinary carriers are L0301, mutation is L0303, and validated hosted views add no traversal trap or declared error | `negative/text-traversal-item-is-read-only`, `negative/text-traversal-ordinary-pointer-is-not-cstring`, `runtime/hosted-text-traversal` |
 | `arithmetic.known` | static | 0290, 0300, 0390, 1950 | L0300 or L0306 | `negative/compound-assignment-zero-divisor`, `negative/divisor-is-zero`, `negative/literal-above-its-type` |
-| `arithmetic.runtime` | trap | 0290, 0300, 0320, 0390, 1950, 1960 | trap | `runtime/compound-assignment-overflow-traps`, `runtime/checked-overflow-traps`, `runtime/checked-subtraction-traps`, `runtime/checked-multiplication-traps`, `runtime/checked-negation-traps`, `runtime/signed-division-overflow-traps`, `runtime/a-zero-divisor-traps`, `runtime/a-zero-remainder-divisor-traps`, `runtime/negative-left-shift-traps`, `runtime/negative-right-shift-traps` |
+| `arithmetic.runtime` | trap | 0290, 0300, 0320, 0390, 1120, 1950, 1960 | trap, outside [1120]'s region for `+`, `-`, `*` and unary `-` | `runtime/compound-assignment-overflow-traps`, `runtime/checked-overflow-traps`, `runtime/checked-subtraction-traps`, `runtime/checked-multiplication-traps`, `runtime/checked-negation-traps`, `runtime/signed-division-overflow-traps`, `runtime/a-zero-divisor-traps`, `runtime/a-zero-remainder-divisor-traps`, `runtime/negative-left-shift-traps`, `runtime/negative-right-shift-traps` |
 | `arithmetic.total` | static | 0320, 0330, 0340, 0350, 0390 | L0301 for an inapplicable operand; admitted nonnegative shifts and wrapping operations are total | `negative/compound-assignment-float-remainder`, `negative/condition-is-not-believed`, `runtime/compound-assignment`, `runtime/shifts-fill-with-zeros-beyond-the-width` |
 | `ranges.measurements` | static | 0360, 0370 | L0300, L0301 or L0306 | `negative/lenof-scalar`, `runtime/measurements-answer-for-the-target` |
 | `assignment.flow` | static | 0390, 0400, 0410, 0420, 1900, 1910 | L0302 or L0303 | `negative/assigned-on-one-path-only`, `negative/assignment-to-an-immutable-binding`, `negative/compound-assignment-immutable`, `negative/compound-assignment-unassigned`, `runtime/compound-assignment` |
@@ -8588,14 +8599,14 @@ classified failure boundary before the repository gate can pass.
 | `inout.possible-alias` | outside | 0430, 0770, 0900 | non-guarantee: distinct pointer or computed paths may still alias | `runtime/inout-pointer-alias-is-unchecked` |
 | `pointer.validity` | outside | 0430 | non-guarantee: a permitted pointer may still be invalid or stale | `runtime/r250-references` |
 | `pointer.integer-origin` | beyond-lifetime | 0470, 0860, 1690, 1720 | non-guarantee: integer-to-pointer conversion carries no origin through a direct or erased value | `runtime/r250-references`, `runtime/any-untracked-pointer-origin`, `runtime/diagnostic-loggers-dispatch`, `negative/frame-origin-return` |
-| `pointer.integer-width` | trap | 0470, 1950, 1960 | trap | `runtime/pointer-to-small-integer-traps` |
+| `pointer.integer-width` | trap | 0470, 1120, 1950, 1960 | trap, outside [1120]'s region | `runtime/pointer-to-small-integer-traps` |
 | `arrays.initialization` | static | 0520, 0530, 0540, 0550, 0560 | L0300--L0304 or L0313 | `negative/array-initializer-length-mismatch`, `runtime/whole-arrays-copy-between-storage` |
 | `raw.prefix` | static | 0420, 0510 | L0202 prevents representation access; `core/mem` reports `raw_full`, `uninitialized`, `raw_empty` or `raw_not_empty` before an invalid transition | `negative/core-mem-private-representation`, `runtime/core-mem-raw-storage` |
 | `raw.backing` | outside | 0430, 0470, 0510, 1720 | non-guarantee: the supplied byte pointer may be invalid, misaligned or smaller than the declared capacity | `runtime/core-mem-raw-storage` |
 | `allocation.failure` | static | 0940, 1230, 1280, 1290, 1310, 1360 | `core/mem` reports `out_of_memory`, which a caller must handle or declare; its failing allocator makes the runtime boundary deterministic | `runtime/core-mem-allocators`, `runtime/core-vec-pointer-storage`, `runtime/derived-parser` |
 | `allocation.backing` | outside | 0430, 0470, 0770, 1360, 1720 | non-guarantee: caller-supplied arena storage may be invalid or cease to live after an origin-erasing pointer conversion | `runtime/core-mem-allocators`, `negative/core-arena-frame-escape` |
 | `slices.bounds-known` | static | 0570, 0580, 1950 | L0300 or L0306 | `negative/index-outside-the-length`, `negative/readonly-slice-write` |
-| `slices.bounds-runtime` | trap | 0570, 0580, 1950, 1960 | trap | `runtime/computed-array-index-traps`, `runtime/local-array-computed-store-traps`, `runtime/slice-index-read-traps`, `runtime/slice-index-write-traps`, `runtime/slice-half-open-upper-traps`, `runtime/slice-inclusive-upper-traps`, `runtime/slice-lower-after-upper-traps` |
+| `slices.bounds-runtime` | trap | 0570, 0580, 1120, 1950, 1960 | trap, outside [1120]'s region | `runtime/computed-array-index-traps`, `runtime/local-array-computed-store-traps`, `runtime/slice-index-read-traps`, `runtime/slice-index-write-traps`, `runtime/slice-half-open-upper-traps`, `runtime/slice-inclusive-upper-traps`, `runtime/slice-lower-after-upper-traps` |
 | `atoms.sets` | static | 0630, 0640 | L0301 or L0312 | `negative/atom-match-not-exhaustive`, `runtime/atom-values-cross-the-abi` |
 | `aggregates.variants` | static | 0670, 0680, 0690, 0700, 0710, 0720, 0750, 1210 | L0301, L0308--L0312 or L0313 | `negative/struct-literal-field-not-given`, `negative/variant-match-not-exhaustive` |
 | `origins.escape` | static | 0770, 0780, 0790, 0800, 0830, 0840 | L0314--L0316 | `negative/frame-origin-return`, `negative/borrowed-source-inout`, `negative/returned-reference-missing-from`, `negative/core-arena-frame-escape`, `negative/core-text-frame-slice-escape`, `negative/core-diag-frame-message-escape`, `runtime/diagnostic-loggers-dispatch` |
@@ -8624,11 +8635,14 @@ classified failure boundary before the repository gate can pass.
 | `modules.visibility` | static | 1410, 1420, 1450, 1480 | L0006 or L0007 for an unresolved root; L0202 for a private member or representation | `negative/module-not-found`, `negative/imported-private-name`, `negative/core-mem-private-representation`, `negative/core-text-private-position`, `runtime/core-mem-raw-storage` |
 | `entry.point` | static | 1650, 1970 | L0502 before executable emission | `runtime/constant-return-exits-with-its-code` |
 | `module.images` | static | 0180, 0340, 0350, 0410, 1460, 1890, 1930, 1940 | L0300, L0304 or L0305; module-known bool `not`, `and` and `or` fold left to right into scalar and aggregate images, short-circuit `and`/`or`, and execute no initializer CFG | `negative/module-value-from-a-call`, `runtime/module-known-short-circuit-bools`, `runtime/recursive-module-images-are-laid-out-and-distinct` |
+| `unchecked.region` | outside | 0290, 0300, 0310, 0320, 0430, 0470, 0570, 0580, 0700, 1120, 1950, 1960 | non-guarantee: inside [1120]'s region the compiler emits no integer overflow edge for `+`, `-`, `*` and unary `-`, no element-index or slice-range edge, and no destination-range edge for an integer-to-integer or pointer-to-integer conversion; the results are [0320]'s wrapping value, [0430]'s pointer non-guarantee at the computed address, and the low-order bits of the source; every static refusal, every division, shift, bool and float conversion edge and every text boundary edge stays | `positive/unchecked-regions`, `runtime/unchecked-arithmetic-wraps`, `runtime/unchecked-integer-conversion-truncates`, `runtime/unchecked-slice-index-passes-the-length`, `runtime/checks-return-after-the-region`, `runtime/unchecked-does-not-cross-a-call`, `runtime/unchecked-does-not-reach-an-anonymous-body`, `runtime/unchecked-keeps-the-divisor-check`, `runtime/unchecked-keeps-the-shift-check`, `runtime/unchecked-keeps-text-boundary-traps`, `negative/unchecked-keeps-a-known-index`, `negative/unchecked-keeps-permissions`, `negative/unchecked-keeps-definite-assignment`, `negative/unchecked-region-end-name-mismatch` |
 | `configuration.fixed` | static | 1980 | L0300, L0301, L0305 or L0306 in the selected declaration view | `negative/fixed-conditional-evaluator`, `runtime/fixed-conditional-generic-runtime` |
 
-This is a coverage register, not an optimizer contract. `unchecked` [1120], C
-calls and raw allocation are absent because the current compiler does not
-implement those operations; their enabling work must add rows. Driver and
+This is a coverage register, not an optimizer contract. D187 adds
+`unchecked.region` for [1120], which weakens the four trapping rows it names
+and no others. C calls and raw allocation are absent because the current
+compiler does not implement those operations; their enabling work must add
+rows. Driver and
 backend inability have diagnostic owners in `diagnostics.matrix`, but are host
 failures rather than source semantic operations and therefore are not invented
 as language guarantees here.
@@ -10444,3 +10458,89 @@ boundary. All were declined.
 `negative/caller-parameter-signature-mismatch`,
 `runtime/caller-parameters`, the generated lexical and IR records, and the
 `functions.caller` guarantee row.
+
+### D187 — An unchecked region removes only the edges with one meaning everywhere
+
+**The tour said** that [1120]'s checks may be switched off for a region,
+visibly, and [1720] said the region was not implemented first because what an
+optimiser may then assume should wait for a compiler that can be measured. It
+did not say which checks go, which stay, how the region is spelled or closed,
+whether it is an expression, whether it reaches through a call, or what a
+removed check leaves in place of the value it was guarding.
+
+**Chosen:** `unchecked begin ... end unchecked` is a statement and a lexical
+block with its own scope, spelled with a contextual word [1760] does not
+reserve, exactly as `begin`, `match`, `defer` and `undo` already are. Two
+tokens open it, so `unchecked: loop`, `unchecked: u8 = 3` and `unchecked = 1`
+keep their ordinary meanings. It is not an expression, it has no counter-word,
+and nesting one inside another says nothing new.
+
+Inside it, and only for instructions lowered from what is lexically inside it,
+the compiler emits no overflow edge for integer `+`, `-`, `*` and unary `-`,
+no element-index or slice-range edge for arrays and slices, and no
+destination-range edge for an integer-to-integer or pointer-to-integer
+conversion. A removed overflow edge leaves exactly [0320]'s two's-complement
+wrapping result; a removed conversion edge leaves the low-order bits of the
+source's representation; a removed bound edge leaves the access at the
+computed address, which is [0430]'s existing pointer non-guarantee and nothing
+worse. `arithmetic.total` is unchanged: the wrapping operators already mean
+this, and the region only makes the checked ones agree with them.
+
+Membership follows one rule: a check is removable when, on every target
+Landin describes, the operation without it has one stated behaviour and that
+behaviour produces only values the destination type holds. That excludes
+division and remainder by zero and signed-division overflow, because x86-64
+faults and Cortex-M does not; a negative shift count, because x86-64 masks and
+ARM saturates; every conversion to `bool`, because [1870] fixes bool's
+zero-or-one image; every float conversion, because an out-of-range
+IEEE-to-integer result is a target instruction artefact; and [0600]/[0610]'s
+text boundary edges, because D181's validated view is what makes D184's
+decoder infallible and a non-boundary `utf8` is not a value the type holds.
+Those text edges are emitted through the same slice-address operation as an
+ordinary bound, so lowering marks them required where it emits them.
+
+Everything in D148's `static` class stays, without exception: types, definite
+assignment [1900] [1910], reference permission [0430], origins and escape
+[0770]--[0840], consumption [0910], exhaustiveness, declared errors [0940] and
+[1950]'s known-value refusals. The region is lexical and never dynamic — a
+call made from inside it enters a callee checked as that callee is written,
+and an anonymous function body [1010] written inside it is a separate item
+whose region depth starts at zero, because a function value runs where it is
+called and the region's visibility claim would otherwise be false at that call
+site. The region grants an optimiser nothing: it emits fewer checks and makes
+no fact available to a later pass. R4.50 still owns what an optimiser may
+assume, and C6's applicable target parity remains R5 and R6.
+
+The neutral IR carries this as one Boolean on an instruction, set only for the
+opcodes that carry a removable edge, and the verifier refuses it anywhere else
+and inside [1940]'s module value. The recorded IR renders it, because an edge
+that is not emitted is otherwise invisible in a dump.
+
+**The alternatives:** reserving `unchecked` in [1760]'s keyword production
+would retire an ordinary name for a word the tour writes contextually
+everywhere else. Making the region an expression would add a fourth block
+form to [1810]'s list, which names only `if`, `match` and bare `begin`. A
+dynamic region reaching through calls would make the word's claim unreadable
+at the place it is written and would need a second lowering of every callee.
+A counter-word re-enabling checks inside a region would make the outer word
+mean less than it says, and [1120] spells none. Removing the divisor, shift,
+bool, float and text edges would make the same source mean different things on
+the targets R5 and R6 add, which is exactly what C6 asked to be proved rather
+than assumed. Letting the region license an optimiser assumption is [1720]'s
+open question and not this one. All were declined.
+
+**Pinned by** `positive/unchecked-regions`,
+`runtime/unchecked-arithmetic-wraps`,
+`runtime/unchecked-integer-conversion-truncates`,
+`runtime/unchecked-slice-index-passes-the-length`,
+`runtime/checks-return-after-the-region`,
+`runtime/unchecked-does-not-cross-a-call`,
+`runtime/unchecked-does-not-reach-an-anonymous-body`,
+`runtime/unchecked-keeps-the-divisor-check`,
+`runtime/unchecked-keeps-the-shift-check`,
+`runtime/unchecked-keeps-text-boundary-traps`,
+`negative/unchecked-keeps-a-known-index`,
+`negative/unchecked-keeps-permissions`,
+`negative/unchecked-keeps-definite-assignment`,
+`negative/unchecked-region-end-name-mismatch`, the generated lexical and IR
+records, and the `unchecked.region` guarantee row.

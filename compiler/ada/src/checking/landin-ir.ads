@@ -2028,6 +2028,36 @@ package Landin.IR is
    function Open_Block (Of_Unit : Unit; Item : Item_Id) return Block_Id
      with Pre => Holds (Of_Unit, Item);
 
+   --  D187's [1120] region.  The mode is a depth on the item being
+   --  filled, so a nested region is idempotent and a region cannot
+   --  reach an item lowered beside it -- an anonymous function body
+   --  [1010] starts its own item with the mode off.  An operation the
+   --  language emits for itself rather than for the source inside the
+   --  region says so at its emitter: Emit_Slice_Address's Required flag
+   --  is how D182--D184's text boundary traps stay.
+   procedure Begin_Unchecked (Into : in out Unit; Item : Item_Id)
+     with Pre => Holds (Into, Item);
+
+   procedure End_Unchecked (Into : in out Unit; Item : Item_Id)
+     with Pre => Holds (Into, Item) and then In_Unchecked (Into, Item);
+
+   function In_Unchecked (Of_Unit : Unit; Item : Item_Id) return Boolean
+     with Pre => Holds (Of_Unit, Item);
+
+   --  True when the check this instruction would otherwise have emitted
+   --  is not emitted.  The backend reads it at exactly the edges D187
+   --  names and nowhere else.
+   function Is_Unchecked
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Boolean
+     with Pre => Holds (Of_Unit, Item, Value);
+
+   --  The opcodes whose check edge D187 makes removable.  Every other
+   --  opcode keeps its edge, and the verifier holds the flag to this set.
+   function Check_Is_Removable (Op : Opcode) return Boolean
+     is (Op in Add | Subtract | Multiply | Negation
+               | Load_Element | Store_Element | Storage_Address
+               | Slice_Address | Conversion);
+
    --  The scope [1840] this block's instructions are inside, which is
    --  what R4.60 turns into a lexical block with a range of addresses.
    function Scope_Of
@@ -2692,7 +2722,8 @@ package Landin.IR is
       Upper   : Value_Id;
       Element : Field_Shape;
       Inclusive : Boolean;
-      Site    : Landin.Provenance.Origin) return Value_Id
+      Site    : Landin.Provenance.Origin;
+      Required : Boolean := False) return Value_Id
      with Pre  => Is_Emitting (Into, Item)
                   and then Holds (Into, Item, Base)
                   and then Holds (Into, Item, Length)
@@ -3293,6 +3324,9 @@ private
       Indexed_Address : Boolean                := False;
       Negated     : Boolean                   := False;
       Truth       : Boolean                   := False;
+      --  D187: this instruction sits lexically inside [1120]'s region
+      --  and the check edge its opcode would have carried is not emitted.
+      Unchecked   : Boolean                   := False;
    end record;
 
    type Slot_Record is record
@@ -3370,6 +3404,9 @@ private
       Slice_Length : Element_Total            := 0;
       Slice_Element : Field_Shape;
       Open        : Block_Id                  := No_Block;
+      --  D187's region depth while this item is being filled.  Nesting
+      --  is idempotent, so only zero-or-more matters.
+      Unchecked_Depth : Natural                := 0;
    end record;
 
    package Item_Vectors is new Ada.Containers.Vectors

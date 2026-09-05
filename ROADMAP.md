@@ -2858,7 +2858,7 @@ that has no implementation owner.
 | `[1090]` | hosted-now | R2.30 | matrix evidence |
 | `[1100]` | hosted-now | R2.30 | matrix evidence |
 | `[1110]` | hosted-now | R2.30 | matrix evidence |
-| `[1120]` | hosted-now | R4.10 | gap: unchecked regions are absent |
+| `[1120]` | hosted-now | R4.10 | D187 and matrix evidence; the division, shift, bool, float and text edges it never removes are named there rather than refused |
 | `[1130]` | hosted-now | R4.10 | matrix evidence |
 | `[1140]` | hosted-now | R4.10 | matrix evidence |
 | `[1150]` | hosted-now | R4.10 | matrix evidence |
@@ -3464,7 +3464,7 @@ closure test. It also removes the unreachable generic scalar-conversion and
 collection-traversal refusal kinds after D176 and D180/D184 respectively, and
 moves the still-live u128/i128 and f16 refusals wholly to the checker that
 recognises those resolved type names. The finite hosted gap list is [0480]'s
-atom-or-pointer union, [0660]'s range subtype, [1120]'s `unchecked` region,
+atom-or-pointer union, [0660]'s range subtype,
 the u128/i128 part of [0150], the f16 part of
 [0170], and the ownership disposition for
 [0500]'s pointer/slice operations, [0810]'s derivation primitives and [0820]'s
@@ -3485,6 +3485,18 @@ preserve its incoming site only through a named argument from another caller
 parameter. Caller positions are skipped by positional matching, remain ordinary
 ABI positions after injection, and are part of structural function-signature
 identity.
+
+The unchecked-region increment enables [1120] with D187's Linux semantics.
+`unchecked begin ... end unchecked` is a statement and a lexical block spelled
+with a contextual word, and inside it the compiler emits no integer overflow
+edge for `+`, `-`, `*` and unary `-`, no element-index or slice-range edge, and
+no destination-range edge for an integer-to-integer or pointer-to-integer
+conversion. Division, shift, bool-conversion, float-conversion and text
+boundary edges are never removed, because their behaviour without one is not
+one thing on every target Landin describes; every static refusal is untouched.
+The region is lexical rather than dynamic, carries one Boolean through the
+neutral IR to the backend, and grants an optimizer nothing, which leaves
+R4.50 owning what an optimizer may assume and R5/R6 owning C6's target parity.
 
 Exit evidence: every hosted `[NNNN]` row has implementation and positive or
 negative evidence; no omission is hidden by prototype coverage.
@@ -3990,7 +4002,7 @@ and record the reopening explicitly.
 | C3 — Restrict root capability minting | Would make hosted subtrees checkable but cannot close freestanding address literals. Trigger: wanting to run untrusted code. Source: `[1680]`. | Parked; transfer to Language evolution if untriggered. |
 | C4 — Generational observers for graphs and inferred uniqueness | Preserve both parked ideas together. The legacy item gave no trigger or citation; do not invent one. | Parked; transfer to Language evolution unless later evidence supplies a trigger. |
 | C5 — SoA collections | Deferred design record. Trigger: a simulation prototype needing one field contiguous. Source: `[0620]`. | Parked; transfer to Language evolution if untriggered. |
-| C6 — `unchecked` | Already normative but not first; optimizer assumptions wait for a measurable compiler. Sources: `[1120]`, `[1720]`, `H§5`. | Implement Linux semantics in R4.10; prove applicable target parity in R5 and R6. |
+| C6 — `unchecked` | Already normative but not first; optimizer assumptions wait for a measurable compiler. Sources: `[1120]`, `[1720]`, `H§5`. | Linux semantics implemented in R4.10 by D187; applicable target parity remains R5 and R6, which R5.50 already covers by running the shared hosted cases. What an optimizer may assume stays with R4.50. |
 | D1 — Integer indexing of UTF-8 | Keep linear codepoint-ordinal indexing for ergonomics despite three independent objections. Source: `[0610]`. | Implemented in R4.10 by D182; reopen only with new program/measurement evidence. |
 | D2 — No weak conformances or orphan rule yet | Weak conformances let applications silently change generic library behavior. Collisions remain errors; use `distinct` or explicit functions. Ecosystem-scale composition remains the trigger. Sources: `[1280]`, `R§11`. | Implemented in R2.60; reopen only on concrete ecosystem evidence. |
 | D3 — No comptime or macros | Generated tables, SoA and SVD bindings move to programs, making build/generator design load-bearing. Two cases exist; a third is the review trigger. Source: `[1540]`. | Held throughout; generator work follows B4 or Companion tool and ecosystem. |

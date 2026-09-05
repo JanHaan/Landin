@@ -58,6 +58,10 @@ package body Landin.Syntax.Dump is
                Strings.Append (Line, " caller");
             end if;
 
+            if Of_Kind = Bare_Block and then Is_Unchecked (Of_Tree, Id) then
+               Strings.Append (Line, " unchecked");
+            end if;
+
             for Position in 1 .. Slot_Count (Of_Tree, Id) loop
                declare
                   Child : constant Node_Id :=

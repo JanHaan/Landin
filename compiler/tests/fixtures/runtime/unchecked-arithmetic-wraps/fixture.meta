@@ -1,0 +1,6 @@
+class: runtime
+summary: D187 [0300]'s overflow edge is gone inside [1120]'s region, leaving [0320]'s wrapping result
+constructs: 0300, 0320, 1120
+program: main.ldn
+status: 42
+targets: linux-x86-64

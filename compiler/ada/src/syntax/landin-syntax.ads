@@ -562,6 +562,13 @@ package Landin.Syntax is
      with Pre => Contains (Of_Tree, Id)
                  and then Kind (Of_Tree, Id) = Parameter;
 
+   --  D187's [1120] region.  A Bare_Block that carries it is the same
+   --  lexical block with the same scope; only the instructions lowered
+   --  inside it lose the check edges D187 names.
+   function Is_Unchecked (Of_Tree : Tree; Id : Node_Id) return Boolean
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id) = Bare_Block;
+
    --  Shallow write permission belongs to a reference type [0430] [0570],
    --  independently of the mutability of a binding that holds it.
    function Is_Referent_Mutable (Of_Tree : Tree; Id : Node_Id) return Boolean
@@ -1389,6 +1396,7 @@ private
       Mutable    : Boolean := False;
       Escaping   : Boolean := False;
       Caller     : Boolean := False;
+      Unchecked  : Boolean := False;
       Convention : Parameter_Convention := Implicit_In;
       Fill       : Boolean := False;
       Recovery   : Node_Id := No_Node;
