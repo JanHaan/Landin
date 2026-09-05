@@ -1,0 +1,6 @@
+f: (condition: bool) -> none =
+    if ready := condition then
+        _ = ready
+    end if
+    _ = ready
+end f

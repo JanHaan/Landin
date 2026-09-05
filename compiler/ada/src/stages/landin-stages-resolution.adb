@@ -643,11 +643,37 @@ package body Landin.Stages.Resolution is
                   declare
                      This : constant Syn.Node_Id :=
                        Syn.Nth_Arm (Of_Tree, Node, Arm);
+                     Test : constant Syn.Node_Id :=
+                       Syn.Condition_Of (Of_Tree, This);
+                     Runs : constant Syn.Node_Id :=
+                       Syn.Body_Of (Of_Tree, This);
                   begin
-                     Resolve
-                       (Of_Tree, Syn.Condition_Of (Of_Tree, This), Inside);
-                     Walk_Scoped_Block
-                       (Of_Tree, Syn.Body_Of (Of_Tree, This), Inside);
+                     if Syn.Kind (Of_Tree, Test) = Syn.Binding then
+                        --  D185: the initializer precedes its declaration,
+                        --  then the binding and guarded body share one new
+                        --  scope.  A later arm is a sibling and cannot see it.
+                        declare
+                           Arm_Scope : constant Landin.Resolution.Scope_Id :=
+                             Landin.Resolution.Open_Scope
+                               (Meanings.all, Landin.Resolution.Block,
+                                Inside);
+                        begin
+                           Resolve
+                             (Of_Tree, Syn.Value_Of (Of_Tree, Test), Inside);
+                           Landin.Resolution.Record_Scope
+                             (Meanings.all, Of_Tree, Runs, Arm_Scope);
+                           Declare_One
+                             (Of_Tree, Test, Arm_Scope,
+                              Resolve_Declared => False);
+                           Resolve
+                             (Of_Tree, Syn.Declared_Type (Of_Tree, Test),
+                              Inside);
+                           Walk_Block (Of_Tree, Runs, Arm_Scope);
+                        end;
+                     else
+                        Resolve (Of_Tree, Test, Inside);
+                        Walk_Scoped_Block (Of_Tree, Runs, Inside);
+                     end if;
                   end;
                end loop;
 
@@ -698,11 +724,41 @@ package body Landin.Stages.Resolution is
 
             when Syn.Loop_Statement | Syn.While_Statement =>
                if Syn.Kind (Of_Tree, Node) = Syn.While_Statement then
-                  Resolve
-                    (Of_Tree, Syn.Condition_Of (Of_Tree, Node), Inside);
+                  declare
+                     Test : constant Syn.Node_Id :=
+                       Syn.Condition_Of (Of_Tree, Node);
+                     Runs : constant Syn.Node_Id :=
+                       Syn.Loop_Body (Of_Tree, Node);
+                  begin
+                     if Syn.Kind (Of_Tree, Test) = Syn.Binding then
+                        declare
+                           Body_Scope : constant
+                             Landin.Resolution.Scope_Id :=
+                               Landin.Resolution.Open_Scope
+                                 (Meanings.all, Landin.Resolution.Block,
+                                  Inside);
+                        begin
+                           Resolve
+                             (Of_Tree, Syn.Value_Of (Of_Tree, Test), Inside);
+                           Landin.Resolution.Record_Scope
+                             (Meanings.all, Of_Tree, Runs, Body_Scope);
+                           Declare_One
+                             (Of_Tree, Test, Body_Scope,
+                              Resolve_Declared => False);
+                           Resolve
+                             (Of_Tree, Syn.Declared_Type (Of_Tree, Test),
+                              Inside);
+                           Walk_Block (Of_Tree, Runs, Body_Scope);
+                        end;
+                     else
+                        Resolve (Of_Tree, Test, Inside);
+                        Walk_Scoped_Block (Of_Tree, Runs, Inside);
+                     end if;
+                  end;
+               else
+                  Walk_Scoped_Block
+                    (Of_Tree, Syn.Loop_Body (Of_Tree, Node), Inside);
                end if;
-               Walk_Scoped_Block
-                 (Of_Tree, Syn.Loop_Body (Of_Tree, Node), Inside);
                if Syn.Complete_Body (Of_Tree, Node) /= Syn.No_Node then
                   Walk_Scoped_Block
                     (Of_Tree, Syn.Complete_Body (Of_Tree, Node), Inside);

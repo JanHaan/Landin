@@ -540,9 +540,12 @@ break       ::= "break" identifier? ("with" expression)?
 continue    ::= "continue" identifier? ("when" expression)?
 loop        ::= "loop" "do" block "end" "loop"
               | identifier ":" "loop" "do" block "end" identifier
-while       ::= "while" expression "do" block
+condition   ::= expression | condition_declaration
+condition_declaration ::= "mut"? identifier ":=" expression
+                        | "mut"? identifier ":" type "=" expression
+while       ::= "while" condition "do" block
                 ("complete" block)? "end" "while"
-              | identifier ":" "while" expression "do" block
+              | identifier ":" "while" condition "do" block
                 ("complete" block)? "end" identifier
 for         ::= "for" identifier ("," identifier)? "in" expression
                 ((".." | "..<") expression)? "do" block
@@ -551,8 +554,8 @@ for         ::= "for" identifier ("," identifier)? "in" expression
                 "in" expression ((".." | "..<") expression)? "do" block
                 ("complete" block)? "end" identifier
 try         ::= "try" (call | labeled_application)
-if          ::= "if" expression "then" block
-                ("elsif" expression "then" block)*
+if          ::= "if" condition "then" block
+                ("elsif" condition "then" block)*
                 ("else" block)?
                 "end" "if"
 match       ::= "match" expression match_arm+ "end" "match"
@@ -704,7 +707,7 @@ an inner scope means nothing until the inner ones are named.
 | concept declaration | D142's complete ordered type-formal list. It encloses the declaring file's imports and is visible in every direct constraint, parent name and entry signature. Entry parameter and result labels describe signature positions and declare nothing in this scope. |
 | conformance declaration | D142's optional complete type/fixed binder. It encloses the declaring file's imports and is visible in every binder constraint, the target type and every labelled input or function RHS. The conformance itself declares no module name. |
 | signature | a declared routine's type/fixed formals, runtime parameters and named returns [1800]. Every binder is collected before any signature type or direct concept constraint is resolved, so its source order has no visibility meaning. Named returns are places the body assigns [0930]; all three binder kinds share one namespace, but type/fixed formals are compile-time-only and have no storage. A declared function's signature encloses its file-import scope; a no-capture anonymous signature does the same rather than enclosing the expression's local scope. A written function type opens no scope and its labels declare nothing. |
-| body | what a function runs; one for each arm of an `if` and its `else`; one for each `match` arm; one for every bare `begin` block; and one for a call-site recovery [1810] [1030]. A statement run plus its optional final expression is a block and a block is what scopes [1090], so a name declared in one is not visible in a sibling or after the block closes. Match payload bindings and a recovery error name live only in their block. |
+| body | what a function runs; one for each arm of an `if` and its `else`; one for each loop body and `complete`; one for each `match` arm; one for every bare `begin` block; and one for a call-site recovery [1810] [1030]. A statement run plus its optional final expression is a block and a block is what scopes [1090], so a name declared in one is not visible in a sibling or after the block closes. D185's initialized condition binding shares the scope of the one `if`, `elsif`, or `while` body it guards; its initializer is resolved in the enclosing scope, and it is absent from later conditions, sibling arms, `else`, `complete`, and following statements. Match payload bindings and a recovery error name live only in their block. |
 
 [1800]'s direct final expression opens no additional scope inside its function
 body, because an expression declares nothing.
@@ -818,8 +821,8 @@ kernel these positions give a literal a type:
   `[]`; the address integer itself takes `usize`
 - the other operand's type, for a binary operator
 - a unary operator's own context, handed on [1820]
-- a branch's condition and an exit's 'when', both of which
-  want a bool [1050] [0970] and so give an integer literal
+- a branch's or while loop's condition and an exit's 'when', all of which
+  want a bool [1050] [1070] [1140] [0970] and so give an integer literal
   a context it cannot take
 
 A call with two or more results has [0990]'s anonymous structural aggregate:
@@ -894,10 +897,10 @@ bool and '&' is what [0330] gave an integer, and neither
 reaches across. [1820] already read the comparison rule this
 way when it said a chain would compare a bool with a number
 and that [0310] refuses it.
-Two positions want a bool and are not operators: a branch's
-condition, which [1050] already says must be one, and an
-exit's 'when' [0970], which is the same question asked where
-the exit is.
+The positions that want a bool and are not operators are a branch's or while
+loop's condition [1050] [1070] [1140], and an exit's `when` [0970]. For D185's
+condition declaration the required initializer first establishes the binding's
+declared or inferred type, and that stored value is the bool being tested.
 
 ### [1900] What may be written, and what may not
 
@@ -8598,7 +8601,7 @@ classified failure boundary before the repository gate can pass.
 | `errors.control` | static | 0940, 0960, 0970 | L0301 for an undeclared or unhandled outcome | `negative/unhandled-declared-error`, `runtime/declared-errors-direct-and-inferred` |
 | `results.destructure` | static | 0990 | L0200, L0301, L0302 or L0308 | `negative/result-destructure-needs-multiple`, `runtime/r230-composition` |
 | `functions.anonymous` | static | 1010 | L0201 for capture; complete signature checks otherwise apply | `negative/anonymous-function-captures-local`, `runtime/inferred-function-values` |
-| `control.flow` | static | 1050, 1060, 1080, 1090 | L0301 or L0302 at every reachable join and exit | `negative/if-expression-missing-else`, `runtime/control-expression-edges-keep-source-order` |
+| `control.flow` | static | 1050, 1060, 1070, 1080, 1090 | L0200 or L0201 at a condition-binding scope boundary; L0301 or L0302 at every condition, reachable join and exit | `negative/condition-declaration-body-shadowing`, `negative/condition-declaration-not-bool`, `negative/condition-declaration-out-of-scope`, `negative/if-expression-missing-else`, `runtime/condition-declarations`, `runtime/control-expression-edges-keep-source-order` |
 | `control.loops` | static | 1130, 1140, 1150, 1160, 1170, 1180, 1190, 1320, 1330 | L0301 for a non-bool condition, mismatched range, non-traversable source, missing/ambiguous/non-exact iterable evidence, or incomplete/inconsistent value exit; L0303 for a write to a read-only storage element or copied iterable item; a taken transfer runs active defers and targets its named or nearest loop edge, while natural completion alone enters `complete` | `negative/loop-condition-not-bool`, `negative/loop-value-missing-break-value`, `negative/loop-value-missing-completion`, `negative/loop-value-type-mismatch`, `negative/for-range-needs-integer`, `negative/for-range-endpoints-disagree`, `negative/for-source-not-traversable`, `negative/for-collection-element-read-only`, `negative/for-array-element-read-only`, `negative/for-any-element-read-only`, `negative/for-iterable-ambiguous-evidence`, `negative/for-iterable-item-read-only`, `negative/for-iterable-missing-conformance`, `negative/text-traversal-item-is-read-only`, `runtime/loop-control-flow`, `runtime/loop-values`, `runtime/for-range-traversal`, `runtime/for-collection-traversal`, `runtime/for-aggregate-element-traversal`, `runtime/for-any-element-traversal`, `runtime/for-iterable-evidence-traversal`, `runtime/hosted-text-traversal` |
 | `cleanup.defer` | static | 1100 | the registered call is checked at every ordinary and successful-return edge | `negative/defer-read-not-assigned-on-return`, `runtime/defer-cleanups-follow-control-edges` |
 | `cleanup.undo` | static | 1110, 1200 | the registered call is checked at every propagated-failure edge | `negative/undo-read-not-assigned-on-failure`, `runtime/undo-cleanups-follow-failure-edges` |
@@ -10331,3 +10334,51 @@ it impossible. All were declined.
 `negative/text-traversal-ordinary-pointer-is-not-cstring`, retained D181--D183
 and range/array/slice/evidence fixtures, the generated IR record, and the
 `text.traversal` guarantee row.
+
+### D185 — A condition binding belongs only to the body it guards
+
+**The tour said** that a declaration is allowed in a condition and is a plain
+type error unless it is `bool` [1070]. It showed only the inferred `if` form.
+It did not say whether a typed or mutable binding is admitted, whether `elsif`
+and `while` use the same form, which scopes see the name, whether the name is
+visible in its own initializer, or when a loop initializes it again.
+
+**Chosen:** `if`, every `elsif`, and `while` accept either initialized binding
+form: `mut? name := expression` or `mut? name : type = expression`. A binding
+with no initializer is not a condition. The initializer is evaluated in the
+enclosing scope before the new name exists. Its result initializes the ordinary
+local binding, and that stored value is the condition; after ordinary binding
+checking it must have the exact type `bool`, with L0301 otherwise. The binding
+is definitely assigned on entry to the guarded body.
+
+The binding shares that one body's lexical scope. It is visible throughout the
+body but not in a later `elsif` condition or body, an `else`, a loop's
+`complete`, or any following statement. It may shadow an enclosing name under
+[1850], while another declaration of that name in the guarded body is a
+same-scope L0200 duplicate. Each condition arm has its own such scope, so the
+same spelling may independently be declared by sibling conditions. A `while`
+evaluates the initializer, stores the binding, and tests it at every visit to
+the loop head, including after `continue`; its false edge reaches `complete`
+without exporting the binding. Plain expression conditions and exit `when`
+guards are unchanged. An unconditional `loop` has no condition to declare in.
+
+Lowering needs no declaration-expression or loop opcode. The existing Binding
+node occupies the condition slot, resolution installs it in the guarded Block's
+scope after resolving its initializer, checking applies the ordinary binding
+rules before the bool requirement, and lowering stores the initializer in its
+ordinary local slot before emitting the existing CFG branch.
+
+**The alternatives:** limiting the form to the one inferred `if` example would
+make equivalent condition positions and binding spellings disagree. Extending
+one binding across later arms, `else`, or `complete` would make sibling control
+paths share a name whose initializer may never have run. Giving the binding a
+scope nested inside its guarded body would permit an immediate redeclaration
+to hide it and would require a scope with no source block. Treating the name as
+visible in its initializer would reverse [0110]. All were declined.
+
+**Pinned by** `positive/condition-declarations`,
+`negative/condition-declaration-body-shadowing`,
+`negative/condition-declaration-not-bool`,
+`negative/condition-declaration-out-of-scope`,
+`runtime/condition-declarations`, the generated lexical and IR records, and the
+`control.flow` guarantee row.

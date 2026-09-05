@@ -836,9 +836,17 @@ package body Landin.Stages.Checking.References is
                begin
                   for Arm in 1 .. Syn.Arm_Count (Tree, Node) loop
                      Origins := Before;
-                     Process_Block
-                       (Tree, Syn.Body_Of
-                          (Tree, Syn.Nth_Arm (Tree, Node, Arm)));
+                     declare
+                        This : constant Syn.Node_Id :=
+                          Syn.Nth_Arm (Tree, Node, Arm);
+                        Test : constant Syn.Node_Id :=
+                          Syn.Condition_Of (Tree, This);
+                     begin
+                        if Syn.Kind (Tree, Test) = Syn.Binding then
+                           Process_Statement (Tree, Test);
+                        end if;
+                        Process_Block (Tree, Syn.Body_Of (Tree, This));
+                     end;
                      Merge_Branch;
                   end loop;
                   Origins := Before;
@@ -885,6 +893,13 @@ package body Landin.Stages.Checking.References is
                declare
                   Before : constant Origin_Table := Origins;
                begin
+                  if Syn.Kind (Tree, Node) = Syn.While_Statement
+                    and then Syn.Kind
+                      (Tree, Syn.Condition_Of (Tree, Node)) = Syn.Binding
+                  then
+                     Process_Statement
+                       (Tree, Syn.Condition_Of (Tree, Node));
+                  end if;
                   if Syn.Kind (Tree, Node) = Syn.For_Statement then
                      declare
                         Source_Fact : Origin_Fact :=

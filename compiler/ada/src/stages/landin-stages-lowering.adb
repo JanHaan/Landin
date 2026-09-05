@@ -1113,6 +1113,11 @@ package body Landin.Stages.Lowering is
          Node    : Syn.Node_Id;
          Scope   : Res.Scope_Id) return IR.Value_Id;
 
+      function Lower_Condition
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Scope   : Res.Scope_Id) return IR.Value_Id;
+
       function Storage_For
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return IR.Storage;
 
@@ -6319,6 +6324,38 @@ package body Landin.Stages.Lowering is
          end case;
       end Lower_Expression;
 
+      --  D185 represents a condition declaration as the ordinary Binding it
+      --  introduces.  Evaluate the initializer in the surrounding scope,
+      --  store it for references in the guarded body, and test that same
+      --  value.  A while calls this at its head, so the declaration is
+      --  initialized afresh on every condition test.
+      function Lower_Condition
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Scope   : Res.Scope_Id) return IR.Value_Id
+      is
+      begin
+         if Syn.Kind (Of_Tree, Node) /= Syn.Binding then
+            return Lower_Expression (Of_Tree, Node, Scope);
+         end if;
+
+         declare
+            Id : constant Res.Declaration_Id :=
+              Declaration_At (Syn.Source_Of (Of_Tree), Node);
+            Where : constant IR.Slot_Id := Slot_For (Of_Tree, Node, Id);
+            Value : constant IR.Value_Id :=
+              Lower_Expression
+                (Of_Tree, Syn.Value_Of (Of_Tree, Node), Scope);
+         begin
+            if Current = IR.No_Block then
+               return IR.No_Value;
+            end if;
+            IR.Emit_Store
+              (Unit.all, Filling, Where, Value, Site_Of (Of_Tree, Node));
+            return Value;
+         end;
+      end Lower_Condition;
+
       ------------------------------------------------------------
       --  [1810]: a branch
       ------------------------------------------------------------
@@ -6355,7 +6392,7 @@ package body Landin.Stages.Lowering is
                Inside : constant Res.Scope_Id :=
                  Res.Scope_At (Meanings.all, Of_Tree, Runs);
                Test : constant IR.Value_Id :=
-                 Lower_Expression
+                 Lower_Condition
                    (Of_Tree, Syn.Condition_Of (Of_Tree, This), Scope);
             begin
                if Current = IR.No_Block then
@@ -7717,7 +7754,7 @@ package body Landin.Stages.Lowering is
          if Is_While then
             declare
                Test : constant IR.Value_Id :=
-                 Lower_Expression
+                 Lower_Condition
                    (Of_Tree, Syn.Condition_Of (Of_Tree, Node), Scope);
             begin
                if Current /= IR.No_Block then

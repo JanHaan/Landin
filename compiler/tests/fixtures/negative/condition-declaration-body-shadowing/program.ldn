@@ -1,0 +1,5 @@
+f: (ready: bool) -> none =
+    if ready := not ready then
+        ready := false
+    end if
+end f
