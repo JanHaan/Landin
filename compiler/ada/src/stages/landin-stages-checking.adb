@@ -796,6 +796,12 @@ package body Landin.Stages.Checking is
            Landin.Provenance.No_Origin);
       procedure Check_Statement
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id; Returns : Ty.Type_Kind);
+      procedure Check_Condition
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Returns : Ty.Type_Kind;
+         Site    : Landin.Provenance.Origin;
+         Because : String);
       procedure Check_Loop
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
@@ -17727,6 +17733,26 @@ package body Landin.Stages.Checking is
          end;
       end Check_Match;
 
+      --  D185 keeps the condition declaration an ordinary Binding node.  It
+      --  is checked first so its declared or inferred type is settled, then
+      --  its initializer is required to be the bool value the control tests.
+      procedure Check_Condition
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Returns : Ty.Type_Kind;
+         Site    : Landin.Provenance.Origin;
+         Because : String) is
+      begin
+         if Syn.Kind (Of_Tree, Node) = Syn.Binding then
+            Check_Statement (Of_Tree, Node, Returns);
+            Require
+              (Of_Tree, Syn.Value_Of (Of_Tree, Node), Ty.Bool,
+               Site, Because);
+         else
+            Require (Of_Tree, Node, Ty.Bool, Site, Because);
+         end if;
+      end Check_Condition;
+
       procedure Check_Loop
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
@@ -18003,8 +18029,8 @@ package body Landin.Stages.Checking is
          end Check_Collection_Traversal;
       begin
          if Syn.Kind (Of_Tree, Node) = Syn.While_Statement then
-            Require
-              (Of_Tree, Syn.Condition_Of (Of_Tree, Node), Ty.Bool,
+            Check_Condition
+              (Of_Tree, Syn.Condition_Of (Of_Tree, Node), Returns,
                Syn.Origin (Of_Tree, Node), "the condition of this loop");
          elsif Syn.Kind (Of_Tree, Node) = Syn.For_Statement then
             declare
@@ -19291,8 +19317,8 @@ package body Landin.Stages.Checking is
                      This : constant Syn.Node_Id :=
                        Syn.Nth_Arm (Of_Tree, Node, Arm);
                   begin
-                     Require
-                       (Of_Tree, Syn.Condition_Of (Of_Tree, This), Ty.Bool,
+                     Check_Condition
+                       (Of_Tree, Syn.Condition_Of (Of_Tree, This), Returns,
                         Syn.Origin (Of_Tree, This),
                         "the condition of this branch");
                      Check_Block

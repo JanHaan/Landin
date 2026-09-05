@@ -369,6 +369,7 @@ package body Landin.Syntax.Parser is
             function Parse_Binding
               (Exported  : Boolean;
                Public_At : Landin.Source.Span) return Node_Id;
+            function Parse_Condition return Node_Id;
             function Parse_Destructuring return Node_Id;
             function Parse_Function
               (Exported  : Boolean;
@@ -3162,6 +3163,50 @@ package body Landin.Syntax.Parser is
                   Mutable  => Mutable);
             end Parse_Binding;
 
+            --  condition ::= expression | condition_declaration       [1070]
+            --  condition_declaration ::= "mut"? identifier ":=" expression
+            --    | "mut"? identifier ":" type "=" expression
+            --
+            --  Reuse Binding so every later stage sees the same declaration
+            --  facts as it does in a block.  Unlike the general production,
+            --  this form is necessarily initialized: the stored value is the
+            --  bool the surrounding branch or while loop tests.
+            function Parse_Condition return Node_Id is
+               Is_Label : constant Boolean :=
+                 Peek = Tok.Identifier
+                 and then Ahead (1) = Tok.Colon
+                 and then Ahead (2) = Tok.Identifier
+                 and then Named_Ahead (2) in Loop_Id | While_Id | For_Id;
+               Declares : constant Boolean :=
+                 Peek = Tok.Kw_Mut
+                 or else
+                   (Peek = Tok.Identifier
+                    and then Ahead (1) in Tok.Colon | Tok.Colon_Equal
+                    and then not Is_Label);
+            begin
+               if not Declares then
+                  return Parse_Expression;
+               end if;
+
+               declare
+                  Declared : constant Node_Id :=
+                    Parse_Binding (False, Landin.Source.Empty_Span);
+               begin
+                  if Value_Of (Result, Declared) = No_Node then
+                     Complain
+                       (Item    => Syn.Token_Expected,
+                        Where   => After_Previous,
+                        Message => "a condition declaration needs an"
+                                   & " initializer after `=`",
+                        Note    => "D185: the initialized binding's value"
+                                   & " is the condition",
+                        Related => Anchor (Result, Declared),
+                        Because => "declared here");
+                  end if;
+                  return Declared;
+               end;
+            end Parse_Condition;
+
             --  destructuring_binding ::= "(" destructured_field
             --    ("," destructured_field)* ")" ":=" expression [0990]
             --  destructured_field ::= identifier (":" (identifier | "_"))?
@@ -4688,7 +4733,7 @@ package body Landin.Syntax.Parser is
             end Parse_Statement;
 
             --  loop_statement ::= "loop" "do" block "end" "loop"
-            --  while_statement ::= "while" expression "do" block
+            --  while_statement ::= "while" condition "do" block
             --                       "end" "while"                [1130/1140]
             function Parse_Loop
               (Context : Frame;
@@ -4716,7 +4761,7 @@ package body Landin.Syntax.Parser is
                Depth := Depth + 1;
                Advance;
                if Is_While then
-                  Test := Parse_Expression;
+                  Test := Parse_Condition;
                end if;
 
                if Peek = Tok.Identifier and then Named_Here = Do_Id then
@@ -5034,8 +5079,8 @@ package body Landin.Syntax.Parser is
                   Named    => Target);
             end Parse_Loop_Transfer;
 
-            --  if ::= "if" expression "then" block
-            --         ("elsif" expression "then" block)*
+            --  if ::= "if" condition "then" block
+            --         ("elsif" condition "then" block)*
             --         ("else" block)? "end" "if"                  [1810]
             function Parse_If (Context : Frame) return Node_Id is
                At_If     : constant Landin.Source.Span := Here;
@@ -5059,12 +5104,12 @@ package body Landin.Syntax.Parser is
                      Kept      : Boolean;
                   begin
                      Advance;
-                     Condition := Parse_Expression;
+                     Condition := Parse_Condition;
                      Kept := Expect
                        (Wanted  => Tok.Kw_Then,
                         Message => "a branch's condition is followed by"
                                    & " `then`",
-                        Note    => "[1810]: if expression `then` block",
+                        Note    => "[1810]: if condition `then` block",
                         Related => At_If,
                         Because => "this branch");
                      pragma Unreferenced (Kept);

@@ -1764,10 +1764,15 @@ package body Landin.Stages.Checking.Flow is
                begin
                   if Is_While then
                      declare
+                        Condition : constant Syn.Node_Id :=
+                          Syn.Condition_Of (Of_Tree, Node);
                         Test_Edges : Edge_Facts;
                      begin
                         Flow_Expression
-                          (Of_Tree, Syn.Condition_Of (Of_Tree, Node),
+                          (Of_Tree,
+                           (if Syn.Kind (Of_Tree, Condition) = Syn.Binding
+                            then Syn.Value_Of (Of_Tree, Condition)
+                            else Condition),
                            Result, State, Test_Edges);
                         Returned := Test_Edges.Returns;
                         if not Test_Edges.Falls_Through then
@@ -1887,10 +1892,15 @@ package body Landin.Stages.Checking.Flow is
                      declare
                         This : constant Syn.Node_Id :=
                           Syn.Nth_Arm (Of_Tree, Node, Arm);
+                        Condition : constant Syn.Node_Id :=
+                          Syn.Condition_Of (Of_Tree, This);
                         Test_Edges : Edge_Facts;
                      begin
                         Flow_Expression
-                          (Of_Tree, Syn.Condition_Of (Of_Tree, This),
+                          (Of_Tree,
+                           (if Syn.Kind (Of_Tree, Condition) = Syn.Binding
+                            then Syn.Value_Of (Of_Tree, Condition)
+                            else Condition),
                            Result, Remaining, Test_Edges);
                         Returned := Returned or Test_Edges.Returns;
                         Can_Test := Test_Edges.Falls_Through;

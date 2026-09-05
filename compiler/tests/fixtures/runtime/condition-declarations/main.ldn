@@ -1,0 +1,35 @@
+mut calls: i32 = 0
+
+next: (through: i32) -> (ready: bool) =
+    inc calls
+    ready = calls <= through
+end next
+
+public main: () -> (code: i32) =
+    mut score: i32 = 0
+
+    if first := next(0) then
+        score = 100
+    elsif second: bool = next(2) then
+        if second then
+            score = score + 10
+        end if
+    else
+        score = 200
+    end if
+
+    mut iterations: i32 = 0
+    while mut keep: bool = next(5) do
+        if keep then
+            inc score
+        end if
+        keep = false
+        inc iterations
+    end while
+
+    if calls == 6 and iterations == 3 and score == 13 then
+        code = 42
+    else
+        code = 1
+    end if
+end main

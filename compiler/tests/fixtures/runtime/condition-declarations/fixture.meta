@@ -1,0 +1,6 @@
+class: runtime
+summary: D185 if, elsif and while condition bindings store and test each evaluated bool
+program: main.ldn
+status: 42
+constructs: 0410, 1070, 1140, 1810, 1910
+targets: linux-x86-64

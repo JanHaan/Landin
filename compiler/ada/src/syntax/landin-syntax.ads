@@ -781,8 +781,10 @@ package Landin.Syntax is
                     in Inclusive_Slice | Half_Open_Slice,
           Post => Contains (Of_Tree, Slice_Upper'Result);
 
-   --  The condition of a branch [1810], or an exit's `when` guard.
-   --  No_Node for a bare `return`.
+   --  The condition of a branch [1810], or an exit's `when` guard.  D185's
+   --  branch and while condition may be an initialized Binding; its Value_Of
+   --  is the bool tested after the binding has been stored.  No_Node for a
+   --  bare `return`.
    function Condition_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
      with Pre => Contains (Of_Tree, Id)
                  and then Kind (Of_Tree, Id)

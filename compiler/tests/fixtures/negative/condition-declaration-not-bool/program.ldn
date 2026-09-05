@@ -1,0 +1,5 @@
+f: () -> none =
+    if value := 1 then
+        _ = value
+    end if
+end f

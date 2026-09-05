@@ -1852,12 +1852,21 @@ required; 'end' closes.
 ### [1070] A declaration is allowed in a condition
 
 A declaration is allowed in a condition. It is a plain
-type error unless it is bool.
+type error unless it is bool. The initialized forms of an inferred or typed
+binding may be used by `if`, `elsif`, and `while`; the binding is visible in
+the one body that condition guards and nowhere after it. Its initializer is
+evaluated before the name exists, and a `while` evaluates and initializes the
+binding again before every iteration.
 
 ```landin
     if ok := is_ready() then
         out = 1
     end if
+
+    while mut more: bool = has_more() do
+        consume_next()
+        more = false
+    end while
 
 ```
 
