@@ -5327,7 +5327,14 @@ package body Landin.Stages.Lowering is
          Owed : constant Landin.Checking.Constraint_Id :=
            Landin.Checking.Owed_Check (Types.all, Of_Tree, Node);
       begin
-         if Owed = Landin.Checking.No_Constraint then
+         --  Lower_Unconstrained answers No_Value exactly when it
+         --  terminated the flow, and every emission in this file stops
+         --  there.  D188's check is no exception: an expression whose every
+         --  edge returns leaves no value to hold to the bounds and no
+         --  reachable block to hold it in.
+         if Owed = Landin.Checking.No_Constraint
+           or else Current = IR.No_Block
+         then
             return Made;
          end if;
 

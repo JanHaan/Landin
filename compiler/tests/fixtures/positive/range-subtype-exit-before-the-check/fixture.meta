@@ -1,0 +1,5 @@
+class: positive
+summary: D188 a range-subtype destination whose value never arrives owes no check, because every edge of the expression returned before one could be emitted
+constructs: 0060, 0660, 1080, 1730, 1810, 1900
+program: program.ldn
+targets: linux-x86-64, macos-arm64

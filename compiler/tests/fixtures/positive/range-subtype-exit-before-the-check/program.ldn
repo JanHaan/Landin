@@ -1,0 +1,91 @@
+--  D188 names the destinations that carry [0660]'s check.  Each one below
+--  is given a value that never arrives: every edge of the expression
+--  returns, so by the time the check would be emitted the flow has already
+--  been terminated and there is no value to hold to the bounds.  The check
+--  is not owed there, and asking for one was a defect.
+percent: type = u8 range 0..100
+
+take: (value: percent) -> (result: i32) =
+    result = i32(value)
+end take
+
+binding_exit: () -> (result: i32) =
+    result = 42
+    narrow: percent = begin
+        return
+    end
+    result = i32(narrow)
+end binding_exit
+
+assignment_exit: () -> (result: i32) =
+    result = 42
+    mut narrow: percent = 1
+    narrow = begin
+        return
+    end
+    result = i32(narrow)
+end assignment_exit
+
+--  D188 hangs a compound assignment's check on the statement, so this is
+--  the other of the two places a check is emitted.
+update_exit: () -> (result: i32) =
+    result = 42
+    mut narrow: percent = 1
+    narrow += begin
+        return
+    end
+    result = i32(narrow)
+end update_exit
+
+named_return_exit: () -> (result: percent) =
+    result = 1
+    result = begin
+        return
+    end
+end named_return_exit
+
+argument_exit: () -> (result: i32) =
+    result = 42
+    result = take(begin
+        return
+    end)
+end argument_exit
+
+--  The operand of an ordinary [0290] is a u8, and only the binding it
+--  reaches is constrained.
+operand_exit: () -> (result: i32) =
+    result = 42
+    one: u8 = 1
+    narrow: percent = one + begin
+        return
+    end
+    result = i32(narrow)
+end operand_exit
+
+--  An `if` whose every arm returns closes the block the same way a bare
+--  block does, and is how the defect was first written.
+branch_exit: (leave: bool) -> (result: i32) =
+    narrow: percent = if leave then
+        result = 42
+        return
+    else
+        result = 42
+        return
+    end if
+    result = i32(narrow)
+end branch_exit
+
+public main: () -> (code: i32) =
+    if binding_exit() == 42
+      and assignment_exit() == 42
+      and update_exit() == 42
+      and i32(named_return_exit()) == 1
+      and argument_exit() == 42
+      and operand_exit() == 42
+      and branch_exit(true) == 42
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main
