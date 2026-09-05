@@ -739,6 +739,7 @@ positive/precedence-exclusion-over-alternation | linux-x86-64, macos-arm64
 positive/precedence-product-over-sum | linux-x86-64, macos-arm64
 positive/precedence-shift-over-conjunction | linux-x86-64, macos-arm64
 positive/precedence-sum-over-shift | linux-x86-64, macos-arm64
+positive/range-subtype-exit-before-the-check | linux-x86-64, macos-arm64
 positive/range-subtypes | linux-x86-64, macos-arm64
 positive/recursive-module-images | linux-x86-64, synthetic-32
 positive/reference-origins-and-consume | linux-x86-64, macos-arm64, synthetic-32

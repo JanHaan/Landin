@@ -10641,7 +10641,10 @@ conversion `u32(x)` is.
 
 The check is elided, not merely optimised away, when the source already
 carries the proof: its known folded value is inside the bounds, or its own
-declared subtype's bounds lie inside the destination's. That is [1730] made
+declared subtype's bounds lie inside the destination's. It is likewise not
+emitted when the value never arrives: an expression whose every edge returns
+terminates the flow, so a destination waiting on one has nothing to hold to
+the bounds and no reachable place to hold it in. That is [1730] made
 mechanical, and without it the habit would cost a check per hop. An alias
 declaration carries the constraint unchanged under D15, because an alias is
 the same type and the constraint is part of what that type is. The constraint
@@ -10703,8 +10706,10 @@ useful for no less work. All were declined.
 `negative/range-subtype-inout-must-match`,
 `negative/range-subtype-signature-mismatch`,
 `negative/range-subtype-external-signature`,
-`negative/range-subtype-generic-argument`, the generated lexical and IR
-records, and the `subtype.range` guarantee row.
+`negative/range-subtype-generic-argument`,
+`positive/range-subtype-exit-before-the-check`,
+`runtime/control-expression-edges-keep-source-order`, the generated lexical
+and IR records, and the `subtype.range` guarantee row.
 
 ### D189 — A one-atom pointer union is a pointer whose empty case is zero
 

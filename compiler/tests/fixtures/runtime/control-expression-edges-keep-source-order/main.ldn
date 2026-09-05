@@ -5,6 +5,8 @@ pair: type = struct
     right: i32
 end pair
 
+percent: type = u8 range 0..100
+
 bump: () -> (value: i32) =
     calls = calls + 1
     value = 7
@@ -110,6 +112,16 @@ struct_exit: () -> (result: i32) =
     result = value.right
 end struct_exit
 
+--  D188 emits [0660]'s check where a constrained destination is stored
+--  into, which is one more consumer this rule has to stop.
+range_subtype_exit: () -> (result: i32) =
+    result = 42
+    narrow: percent = begin
+        return
+    end
+    result = i32(narrow)
+end range_subtype_exit
+
 struct_argument_exit: () -> (result: i32) =
     result = 42
     result = take_pair(pair(left: begin
@@ -134,6 +146,7 @@ public main: () -> (code: i32) =
       and array_assignment_exit() == 42
       and struct_exit() == 42
       and struct_argument_exit() == 42
+      and range_subtype_exit() == 42
     then
         code = 42
     else
