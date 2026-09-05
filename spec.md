@@ -40,7 +40,7 @@ and a quoted word or sign in one of them stands for the single token
 spelled that way. A quoted word is not thereby reserved: when [1760]'s
 keyword rule omits it, the token is an identifier whose spelling the
 enclosing production recognises. Thus 'of', 'lenof', 'variant', 'begin',
-'match', 'defer', 'undo', 'unchecked' and 'caller' remain
+'match', 'defer', 'undo', 'unchecked', 'caller', 'range' and 'arena' remain
 ordinary names everywhere their contextual productions do not meet them.
 A token is as long as it can be, comments excepted, whose
 opener decides [1780]: 'inc' followed by 'x' with nothing between them is
