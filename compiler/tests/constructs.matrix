@@ -51,7 +51,7 @@
 0350   tour        accepted emitted executed refused  Comparison
 0360   tour        accepted emitted executed          Ranges
 0370   tour        accepted emitted executed refused  sizeof, alignof and lenof
-0380   tour        accepted emitted executed          addr takes an address
+0380   tour        accepted emitted executed refused  addr takes an address
 0390   tour        accepted emitted executed refused  Assignment is a statement
 0400   tour        accepted emitted refused           No `++` and no `--`
 0410   tour        accepted emitted executed refused  Evaluation order is fixed

@@ -1,0 +1,10 @@
+none_found: atom
+maybe_ptr: type = none_found | ptr mut u32
+
+bad: (m: maybe_ptr) -> (value: u32) =
+    match m
+        none_found: value = 0
+        none_found: value = 1
+        ptr: value = 2
+    end match
+end bad

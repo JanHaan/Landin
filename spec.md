@@ -8684,7 +8684,7 @@ classified failure boundary before the repository gate can pass.
 | `module.images` | static | 0180, 0340, 0350, 0410, 1460, 1890, 1930, 1940 | L0300, L0304 or L0305; module-known bool `not`, `and` and `or` fold left to right into scalar and aggregate images, short-circuit `and`/`or`, and execute no initializer CFG | `negative/module-value-from-a-call`, `runtime/module-known-short-circuit-bools`, `runtime/recursive-module-images-are-laid-out-and-distinct` |
 | `unchecked.region` | outside | 0290, 0300, 0310, 0320, 0430, 0470, 0570, 0580, 0700, 1100, 1110, 1120, 1950, 1960 | non-guarantee: inside [1120]'s region the compiler emits no integer overflow edge for `+`, `-`, `*` and unary `-`, no element-index or slice-range edge, and no destination-range edge for an integer-to-integer or pointer-to-integer conversion; the results are [0320]'s wrapping value, [0430]'s pointer non-guarantee at the computed address, and the low-order bits of the source; every static refusal, every division, shift, bool and float conversion edge and every text boundary edge stays, and a [1100] `defer` or [1110] `undo` call keeps the edges of the place its registration is written rather than those of the exit that runs it | `positive/unchecked-regions`, `positive/unchecked-marks-only-the-edges-it-removes`, `runtime/unchecked-arithmetic-wraps`, `runtime/unchecked-integer-conversion-truncates`, `runtime/unchecked-slice-index-passes-the-length`, `runtime/checks-return-after-the-region`, `runtime/unchecked-does-not-cross-a-call`, `runtime/unchecked-does-not-reach-an-anonymous-body`, `runtime/unchecked-keeps-the-divisor-check`, `runtime/unchecked-keeps-the-shift-check`, `runtime/unchecked-keeps-text-boundary-traps`, `runtime/unchecked-keeps-bool-conversion-traps`, `runtime/unchecked-keeps-float-conversion-traps`, `runtime/unchecked-pointer-conversion-truncates`, `runtime/unchecked-does-not-reach-an-outer-cleanup`, `runtime/unchecked-reaches-a-cleanup-written-inside`, `negative/unchecked-keeps-a-known-index`, `negative/unchecked-keeps-permissions`, `negative/unchecked-keeps-definite-assignment`, `negative/unchecked-region-end-name-mismatch` |
 | `subtype.range` | trap | 0540, 0660, 0700, 1730, 1795, 1880, 1940, 1950, 1960 | storing into a place whose declared type is [0660]'s range subtype, and applying the subtype name to a value, check the value against both folded bounds; L0300 rejects a known value outside them, a runtime value outside them traps, and a value whose own subtype's bounds lie inside them is not checked again; [1120]'s region does not remove this edge | `positive/range-subtypes`, `runtime/range-subtype-checks`, `runtime/range-subtype-store-traps`, `runtime/range-subtype-conversion-traps`, `runtime/range-subtype-update-traps`, `negative/range-subtype-literal-out-of-range`, `negative/range-subtype-known-value-out-of-range`, `negative/range-subtype-zeroed-excluded`, `negative/range-subtype-bounds-inverted`, `negative/range-subtype-in-a-slice` |
-| `pointer.optional` | static | 0430, 0440, 0470, 0480, 0630, 0640, 1210, 1870 | L0301 for every use that would read the empty case as an address — `.val`, an integer conversion, `any` construction, a comparison, a `ptr T` position, `ptr(n)` into one, and an `inout` arm binding; L0304 for `zeroed` and for a union of several atoms and a pointer; L0311 for a case named twice and L0312 for a case no arm and no `_` names; the bound pointer carries the subject's origin and the empty case carries none | `positive/pointer-unions`, `runtime/pointer-unions`, `negative/pointer-union-dereference`, `negative/pointer-union-is-not-a-pointer`, `negative/pointer-union-match-not-exhaustive`, `negative/pointer-union-frame-escape`, `negative/pointer-union-comparison`, `negative/pointer-union-integer-conversion`, `negative/pointer-union-from-an-integer`, `negative/pointer-union-inout-binding`, `negative/pointer-union-zeroed`, `negative/pointer-union-several-atoms`, `negative/pointer-union-two-pointers`, `negative/pointer-case-arm-is-not-an-atom` |
+| `pointer.optional` | static | 0430, 0440, 0470, 0480, 0630, 0640, 1210, 1870 | L0301 for every use that would read the empty case as an address — `.val` in a read, in an assignment target and under `addr`, an integer conversion, `any` construction, a comparison, a `ptr T` position, `ptr(n)` into one, and an `inout` arm binding — and for a union of two pointer types; L0304 for `zeroed` and for a union of several atoms and a pointer; L0311 for either case named twice and L0312 for a case no arm and no `_` names; the bound pointer carries the subject's origin and the empty case carries none | `positive/pointer-unions`, `runtime/pointer-unions`, `negative/pointer-union-dereference`, `negative/pointer-union-assignment-target`, `negative/pointer-union-address-of-referent`, `negative/pointer-union-any-construction`, `negative/pointer-union-case-named-twice`, `negative/pointer-union-present-arm-named-twice`, `negative/pointer-union-is-not-a-pointer`, `negative/pointer-union-match-not-exhaustive`, `negative/pointer-union-frame-escape`, `negative/pointer-union-comparison`, `negative/pointer-union-integer-conversion`, `negative/pointer-union-from-an-integer`, `negative/pointer-union-inout-binding`, `negative/pointer-union-zeroed`, `negative/pointer-union-several-atoms`, `negative/pointer-union-two-pointers`, `negative/pointer-case-arm-is-not-an-atom` |
 | `configuration.fixed` | static | 1980 | L0300, L0301, L0305 or L0306 in the selected declaration view | `negative/fixed-conditional-evaluator`, `runtime/fixed-conditional-generic-runtime` |
 
 This is a coverage register, not an optimizer contract. D187 adds
@@ -10833,14 +10833,16 @@ two pointers apart with.
 have named every site the checker must guard, at the cost of a much larger
 diff and a disturbed `Settled` band; the flag on the pointer descriptor was
 chosen instead because the representation genuinely is a pointer, and the
-six positions above are the audit that flag owes. Making the `ptr` arm's
-binding required rather than optional would be easier to explain and less
-useful for a discard-shaped arm. Spelling the present case `_` with
-narrowing would need flow-sensitive typing, which the kernel has none of, and
-a type-named arm is not in the grammar. Admitting the union inline in a
-`type` position rather than only through [1795]'s named declaration would be
-a change no atom union has today. Laying the multi-atom case out now would
-have made this increment a representation increment. All were declined.
+six positions above are the audit that flag owes, which is why each is
+pinned by a negative fixture of its own rather than by the guard alone.
+Making the `ptr` arm's binding required rather than optional would be easier
+to explain and less useful for a discard-shaped arm. Spelling the present
+case `_` with narrowing would need flow-sensitive typing, which the kernel
+has none of, and a type-named arm is not in the grammar. Admitting the union
+inline in a `type` position rather than only through [1795]'s named
+declaration would be a change no atom union has today. Laying the multi-atom
+case out now would have made this increment a representation increment. All
+were declined.
 
 `ptr(0)` remains accepted [0470] and `runtime/core-mem-allocators` uses it as
 a failure sentinel five times, so null is still mintable on the pointer side
@@ -10853,6 +10855,11 @@ leaving [0480] looking closed while its headline sentence is evadable.
 `negative/pointer-union-several-atoms`,
 `negative/pointer-union-two-pointers`,
 `negative/pointer-union-dereference`,
+`negative/pointer-union-assignment-target`,
+`negative/pointer-union-address-of-referent`,
+`negative/pointer-union-any-construction`,
+`negative/pointer-union-case-named-twice`,
+`negative/pointer-union-present-arm-named-twice`,
 `negative/pointer-union-is-not-a-pointer`,
 `negative/pointer-union-match-not-exhaustive`,
 `negative/pointer-union-frame-escape`,

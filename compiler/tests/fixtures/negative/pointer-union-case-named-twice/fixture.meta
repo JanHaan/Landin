@@ -1,0 +1,6 @@
+class: negative
+summary: D189 a pointer union's two cases are named at most once each, the same rule an atom set already has
+constructs: 0480, 1210
+program: program.ldn
+codes: L0311
+targets: linux-x86-64, macos-arm64, synthetic-32
