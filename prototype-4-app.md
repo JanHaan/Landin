@@ -481,12 +481,14 @@ run: (inout h: any io.world, inout a: arena, inout d: any diag.log,
         end
 
 ```
-The chain, and what the whole prototype exists for. The
-elements are writable because the list's storage is, and
-the entries say 'ptr mut T' so a counting filter works.
-Indexed rather than 'for f in cfg.chain', because
-iterable hands out a copy of the element and there is
-nothing to write back through [1160].
+The chain is the prototype's heterogeneous dispatch boundary. Each
+`any filter` retains the mutable data pointer authorized when it was
+constructed, so its `ptr mut T` entry can update the original counting
+filter. Copying the pair preserves that authority (D146); calling `keep`
+does not require replacing the stored pair or writing a copy back.
+This indexed initialized view also permits replacing elements. Whether the
+container meets [1320]'s source-free copied `Item` contract is a separate
+origin question from the mutable dispatch itself [1160].
 ```landin
         mut pass := true
         xs := vec.used(cfg.chain)
@@ -723,6 +725,13 @@ second concept for mutable traversal whose item hands back a ptr,
 which is more honest about what is happening and costs a concept.
 The first is smaller and fits what is already decided, and needs a
 careful look at what Item then is.
+
+Current D146 qualification: construction checks the pointer against every
+exposed receiver's permission. Copying or reading the pair through immutable
+storage preserves that authority; only replacing the pair needs writable
+storage. The older resolution below attributes permission to how the pair
+was reached, which D146 supersedes. Its origin remains reference-bearing
+under the existing local checks.
 
 W6  RESOLVED at 0.0.13: the pair carries both. Whether the pointee may
 be written through, which comes from how the pair was reached, so
