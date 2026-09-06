@@ -2797,7 +2797,7 @@ that has no implementation owner.
 | `[0470]` | hosted-now | R2.50 | matrix evidence |
 | `[0480]` | hosted-now | R4.10 | matrix evidence and named refusal |
 | `[0490]` | principle | none | system-tool policy; no implementation claim |
-| `[0500]` | later-r4 | R4.20 | `slice_from` rejected by D151; `offset` and `base_of` are scheduled `core` conveniences |
+| `[0500]` | hosted-now | R4.20 | D196 records `offset` and `base_of` as unneeded; D151 rejects `slice_from`; ordinary address conversion remains the implementation |
 | `[0510]` | hosted-now | R3.30 | matrix evidence |
 | `[0520]` | hosted-now | R2.20 | matrix evidence and named refusal |
 | `[0530]` | hosted-now | R2.20 | matrix evidence |
@@ -2828,8 +2828,8 @@ that has no implementation owner.
 | `[0780]` | hosted-now | R2.50 | matrix evidence |
 | `[0790]` | hosted-now | R2.50 | matrix evidence |
 | `[0800]` | hosted-now | R2.50 | matrix evidence |
-| `[0810]` | later-r4 | R4.20 | [0470]'s conversion is the derivation cut today; the named primitives are scheduled with [0500] |
-| `[0820]` | later-r4 | R4.20 | named refusal |
+| `[0810]` | hosted-now | R4.20 | D196 states [0470]'s actual derivation cut; the `pointer.integer-origin` evidence pins its non-guarantee |
+| `[0820]` | later-r4 | R4.80 | D196 transfers both named refusals and all four D191 questions, including helper-side-effect escapes |
 | `[0830]` | hosted-now | R2.50 | matrix evidence |
 | `[0840]` | hosted-now | R2.50 | matrix evidence |
 | `[0850]` | freestanding | R6.80 | scheduled volatile-access work |
@@ -3071,7 +3071,7 @@ and a budgeted failing allocator. Allocation reports `out_of_memory`; the
 returned arena handle retains the supplied base's origin; and deterministic
 counters pin successful allocation and free calls. This is an ordinary
 library allocator over explicitly unsafe backing, not [0820]'s future lexical
-arena block, which D191 re-owned to R4.20.
+arena block, which D191 re-owned to R4.20 and D196 transfers to R4.80.
 
 `core/vec` composes D151's opaque raw storage into an allocator-threaded
 `list(item)`. It reserves and grows through an empty replacement, transfers
@@ -3741,21 +3741,21 @@ local-descriptor refusals, exact `from`, permission, escaping and live-view
 checks. This repairs the monomorphic prerequisite for initialized views without
 changing [0860]'s shallow alias limit or using an untracked pointer conversion.
 
-D191 gives this item three construct rows R4.10 could not settle. `[0500]`'s
-`mem.offset` and `mem.base_of` are library conveniences this slice adds or
-records as unneeded; `slice_from` is not among them, because D151 rejected it
-and `[0810]`'s sentence naming three primitives is amended accordingly.
-`[0820]`'s lexical `arena` block is refused by name until this item answers
-four questions, none of which either document answers today: which type the
-block name has and how it meets `[1360]`'s two-operation allocator contract
-without the frontend depending on `core/mem`; where the region's bytes come
-from and how many, on a host and on a 32 KB part, given that the extent is
-exact rather than guessed; whether exhaustion reports `out_of_memory` or
-traps; and how "everything from it has frame origin, and allocated once the
-arena is passed on" is expressed, when `[0790]` says an allocator's result
-carries no `from` clause and therefore borrows nothing. Lowering the block to
-`mem.arena_over` over a hidden frame buffer answers none of them and inverts
-the last, so it is recorded as declined rather than left as an option.
+D196 settles D191's inherited construct rows. [0500]'s `mem.offset` and
+`mem.base_of` are unneeded conveniences for this slice: existing [0470]
+address conversion and checked element addressing serve their actual callers.
+D151's `slice_from` remains rejected. [0810] now describes the conversion
+that actually ends tracked derivation, with no privileged `core` name.
+
+Both [0820] forms, the lexical block and builtin parameter type, remain
+refused by name against R4.80. That item inherits all four D191 questions:
+type and allocator conformance without frontend dependence on `core/mem`;
+backing authority and capacity on hosted and constrained targets; exhaustion;
+and the direct-frame/helper-independent origin relationship. It also owns the
+counterexample W7's historical proof misses: a helper can retain an allocated
+pointer in module state without returning it through the lexical boundary.
+R4.80 must settle that behavior before the complete application and hosted
+gate. This handoff creates no reverse dependency and enables no region syntax.
 
 Sources: legacy B5, which had no tracked citation; `[0500]`, `[0810]`,
 `[0820]` and `[1360]`, re-owned here by D191.
@@ -3887,6 +3887,29 @@ Depends on: R4.20, R4.30, R4.40, R4.70
 
 Turn prototype 4 into a complete hosted `.ldn` program with heterogeneous
 runtime dispatch and I/O, retaining traceability to prototype 2 and 3 support.
+
+D196 transfers both [0820] refusals here from R4.20. Before claiming the
+complete prototype, decide or explicitly amend all four D191 questions:
+
+- Specify the block value's type and how it meets the ordinary two-operation
+  allocator contract without frontend recognition of `core/mem`.
+- Specify backing authority, extent and capacity for hosted and constrained
+  targets, and cleanup on normal, failure and control-transfer exits. A
+  hidden guessed frame buffer is not an answer.
+- Specify and exercise exhaustion behavior, including deterministic failure
+  and nested blocks.
+- Reconcile the block-frame promise with independent no-`from` allocator
+  results. Exercise direct and helper-returned references, aggregates, slices,
+  `any`, callback state and helper-side-effect escapes into module storage.
+  Permit simultaneous allocations and helper results used within the block;
+  preserve explicit unsafe conversion as a non-guarantee. Adding a borrow of
+  the allocator would prohibit the ordinary simultaneous-allocation idiom.
+
+The last requirement pays for W7's missing path: a helper-retained pointer
+need never return through the block's boundary. Preserve ordinary identifiers
+named `arena`, generic and erased allocator calls, and explicit caller-backed
+`mem.arena`. Enable the promised construct with evidence or amend its
+normative promise on evidence before the hosted parity gate.
 
 Exit evidence: the application selects heterogeneous implementations at
 runtime, processes hosted I/O and executes on Linux x86-64.

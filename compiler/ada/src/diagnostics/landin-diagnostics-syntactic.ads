@@ -168,10 +168,9 @@ private
                | Struct_All_Of         => "R2.20",
             when Import_Alias
                | Selected_Import       => "R4.30",
-            --  D191: the block is a region and an allocator before it is
-            --  syntax, and R4.20 owns the allocator surface it would have
-            --  to meet.
-            when Arena_Block           => "R4.20",
+            --  D196 transfers D191's complete region questions to the
+            --  derived hosted application, before the hosted parity gate.
+            when Arena_Block           => "R4.80",
             --  R2.40 implements type and fixed parameters.
             when Type_Parameter
                | Parameterized_Atom_Union => "R2.40");

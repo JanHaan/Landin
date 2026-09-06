@@ -585,9 +585,11 @@ an arbitrary allocation into a slice that claims every slot already contains
 `T`. The repository `core/mem` instead keeps pointer arithmetic inside its
 private raw-storage operations. It can copy one initialized slot directly into
 the next slot of a private replacement, but it exposes neither spare capacity
-nor a general pointer-to-slice conversion. `offset` and `base_of` remain
-system-layer conveniences for later library slices, not a way around that
-rule.
+nor a general pointer-to-slice conversion. R4.20 records `offset` and `base_of`
+as unneeded conveniences: allocator internals use [0470]'s explicit address
+conversion, and consumers obtain an element address only after checking that
+a slice is nonempty. Neither name is a compiler primitive or an enabled
+library API. D196 records the disposition without reopening `slice_from`.
 
 ### [0510] slice_from is where uninitialised storage is smuggled in
 
@@ -790,9 +792,9 @@ edit:  []mut f32 = grid[0..<2]      -- writable, since grid is mut
 
 An empty slice still has a base. It is the lowest positive address aligned for
 the element type — the numerical element alignment — and may not be
-dereferenced, so `base_of` on an empty slice yields that canonical non-null
-address and nothing pretends otherwise (D141). Indexing checks the length before
-it computes an address, so an empty slice cannot produce one.
+dereferenced (D141). The proposed `base_of` convenience is omitted [0500];
+the representation rule does not depend on that API. Indexing checks the
+length before it computes an address, so an empty slice cannot produce one.
 
 ### [0590] Fixed arrays are the vector type
 
@@ -1356,37 +1358,26 @@ safety. That is an editor's job, the same way the resolved
 error set is. escaping already works this way — it puts an
 obligation on the caller and lives only in the signature.
 
-### [0810] Derivation stops at the three primitives of
+### [0810] Integer-to-pointer conversion ends tracked derivation
 
-Derivation stops at the three primitives of [0500]. offset,
-base_of and slice_from yield a reference independent of
-what went in, and core answers for that. It is the same
-privilege and the same place as the promise about
-uninitialised storage — one place to audit, two promises —
-and it is what lets an allocator hand out storage that
-points into itself without the storage borrowing it.
+Integer-to-pointer conversion [0470] ends tracked derivation. An integer that
+used to be a pointer carries no origin, so a pointer formed from it borrows
+nothing. Allocator internals use that conversion explicitly to return blocks
+without borrowing their allocator. The conversion does not establish that the
+storage is live or large enough; those remain the library's unsafe backing
+obligations [1720]. No special compiler privilege belongs to `core`.
 
 ```landin
-bump_alloc: (inout a: bump, size: usize, alignment: usize)
-            -> (p: ptr mut u8) ! out_of_memory =
-    p = mem.offset(a.base, off)     -- no from: offset cut the chain
-end bump_alloc
+address: usize = usize(state.base) + offset
+block: ptr mut u8 = ptr(address)  -- no tracked derivation survives
 
 ```
 
-Two of those three primitives are still scheduled and the third was rejected:
-[0500] records that `slice_from` may not exist, so the sentence above names a
-cut no operation makes. The cut an allocator actually needs is one the
-language already has. `core/mem`'s `arena_alloc` reaches its block by adding an
-offset to `usize(state.base)` and converting the sum back with `ptr`, and
-[0470] says exactly what that costs: an integer that used to be a pointer has
-no origin, so what comes back borrows nothing. That is what lets an allocator
-hand out storage that points into itself without the storage borrowing it, and
-it is the same one place to audit — the conversion is written in the library,
-in the open, and the compiler says nothing about the result afterwards.
-`offset` and `base_of` join it as named `core` functions when the library slice
-adds them; neither is a compiler operation, so neither needs a privilege of its
-own.
+This is the address conversion used by `core/mem.arena_alloc` after checking
+its arithmetic. [0500] records the omitted `offset` and `base_of` conveniences
+and the rejected `slice_from`; none supplies another derivation rule. The
+initialized-prefix state machine remains responsible for exposing only values
+that have actually been stored [0510].
 
 ### [0820] arena is built in
 
@@ -1430,9 +1421,17 @@ The block above is a region before it is syntax: the type its name has, where
 its bytes come from, whether exhaustion fails or traps, and how "everything
 from it has frame origin, and allocated once the arena is passed on" survives
 [0790]'s rule that an allocator's result borrows nothing, are four questions
-the allocator surface answers and not this paragraph. Until R4.20 answers
-them, `arena name do` and a parameter written `a: arena` are each refused by
-name where they are written.
+the allocator surface answers and not this paragraph. D196 transfers both
+written forms and all four questions to R4.80, the complete prototype-4
+application. Until it resolves them, `arena name do` and a parameter written
+`a: arena` are each refused by name against R4.80.
+
+The claim above that every escape passes the block is not yet a checked rule.
+A helper can allocate through an ordinary allocator and retain the independent
+result in module storage without returning it through the block. R4.80 must
+account for that path as well as returned references before enabling this
+promise. Explicit caller-backed `mem.arena` remains an ordinary unsafe
+allocator with the weaker contract described above.
 
 ### [0830] A view derived from a local borrows it
 

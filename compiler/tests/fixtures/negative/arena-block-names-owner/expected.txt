@@ -1,0 +1,7 @@
+error[L0010]: `arena` is not enabled yet
+  --> ../tests/fixtures/negative/arena-block-not-enabled/program.ldn:2:5
+  |
+2 |     arena scratch do
+  |     ^^^^^
+  = note: the tour describes it at [0820]
+  = note: ROADMAP.md R4.80 is where it is enabled

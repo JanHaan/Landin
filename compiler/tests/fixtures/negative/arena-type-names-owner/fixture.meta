@@ -1,0 +1,8 @@
+class: negative
+summary: D196 makes the refused arena type name R4.80 in its rendered diagnostic
+expect: expected.txt
+targets: linux-x86-64, macos-arm64
+args: ../tests/fixtures/negative/arena-type-not-enabled/program.ldn
+codes: L0304
+status: 1
+constructs: 0820, 1830

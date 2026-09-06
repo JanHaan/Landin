@@ -266,10 +266,8 @@ private
             --  needs; D189 closes [0480]'s one-atom form and deliberately
             --  does not decide that one.
             when Tagged_Pointer_Union => "R7.20",
-            --  D191 re-owns [0820] to R4.20, where the allocator surface
-            --  the block would have to meet already lives.  R4.10
-            --  recognises the construct and deliberately does not decide
-            --  its region semantics.
-            when Arena_Region       => "R4.20");
+            --  D196 transfers both written forms and D191's complete
+            --  region questions to the derived hosted application.
+            when Arena_Region       => "R4.80");
 
 end Landin.Diagnostics.Checking;
