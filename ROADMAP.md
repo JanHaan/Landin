@@ -3641,6 +3641,18 @@ Complete the Landin `core/vec`, `core/map`, `core/tree`, allocator and hosted
 library pieces required by prototypes 3 and 4. Document freestanding/hosted
 layering, raw syscall versus libc choices and deliberate omissions.
 
+The first bounded increment corrects the two existing `core/mem` arena
+providers without widening the library surface. D193 makes their zero and
+arithmetic boundaries explicit: alignment is applied to the absolute backing
+address; zero alignment means byte alignment; zero-size requests are valid;
+and an extent, address-rounding or allocation-end calculation that cannot fit
+`usize` reports `out_of_memory` before the arena offset or failing-provider
+budget and counters change. `runtime/core-mem-arena-boundaries` exercises a
+deliberately misaligned base, exact exhaustion, zero requests, maximum-`usize`
+size/alignment and base-plus-used boundaries, including successful arithmetic
+at the last representable address. Heap and fixed providers and all `vec`,
+`map` and `tree` expansion remain later increments of this active item.
+
 D191 gives this item three construct rows R4.10 could not settle. `[0500]`'s
 `mem.offset` and `mem.base_of` are library conveniences this slice adds or
 records as unneeded; `slice_from` is not among them, because D151 rejected it
@@ -3659,6 +3671,11 @@ the last, so it is recorded as declined rather than left as an option.
 
 Sources: legacy B5, which had no tracked citation; `[0500]`, `[0810]`,
 `[0820]` and `[1360]`, re-owned here by D191.
+
+Increment evidence: `runtime/core-mem-allocators` retains the original arena
+and failing-provider behavior, while `runtime/core-mem-arena-boundaries` pins
+absolute alignment, failure atomicity, exact exhaustion and checked arithmetic
+at the target `usize` boundary.
 
 Exit evidence: containers run with heap, arena, fixed and failing allocators;
 all omission and layering choices are recorded; `[0820]`'s block is either

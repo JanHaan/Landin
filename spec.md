@@ -8654,8 +8654,8 @@ classified failure boundary before the repository gate can pass.
 | `arrays.initialization` | static | 0520, 0530, 0540, 0550, 0560 | L0300--L0304 or L0313 | `negative/array-initializer-length-mismatch`, `runtime/whole-arrays-copy-between-storage` |
 | `raw.prefix` | static | 0420, 0510 | L0202 prevents representation access; `core/mem` reports `raw_full`, `uninitialized`, `raw_empty` or `raw_not_empty` before an invalid transition | `negative/core-mem-private-representation`, `runtime/core-mem-raw-storage` |
 | `raw.backing` | outside | 0430, 0470, 0510, 1720 | non-guarantee: the supplied byte pointer may be invalid, misaligned or smaller than the declared capacity | `runtime/core-mem-raw-storage` |
-| `allocation.failure` | static | 0940, 1230, 1280, 1290, 1310, 1360 | `core/mem` reports `out_of_memory`, which a caller must handle or declare; its failing allocator makes the runtime boundary deterministic | `runtime/core-mem-allocators`, `runtime/core-vec-pointer-storage`, `runtime/derived-parser` |
-| `allocation.backing` | outside | 0430, 0470, 0770, 1360, 1720 | non-guarantee: caller-supplied arena storage may be invalid or cease to live after an origin-erasing pointer conversion | `runtime/core-mem-allocators`, `negative/core-arena-frame-escape` |
+| `allocation.failure` | static | 0300, 0940, 1230, 1280, 1290, 1310, 1360 | `core/mem` reports `out_of_memory`, which a caller must handle or declare; its arenas reject exhaustion and unrepresentable request arithmetic before state mutation, and its failing allocator makes the boundary deterministic | `runtime/core-mem-allocators`, `runtime/core-mem-arena-boundaries`, `runtime/core-vec-pointer-storage`, `runtime/derived-parser` |
+| `allocation.backing` | outside | 0430, 0470, 0770, 1360, 1720 | non-guarantee: caller-supplied arena storage may be invalid or cease to live after an origin-erasing pointer conversion; provider alignment does not validate the backing extent | `runtime/core-mem-allocators`, `runtime/core-mem-arena-boundaries`, `negative/core-arena-frame-escape` |
 | `slices.bounds-known` | static | 0570, 0580, 1950 | L0300 or L0306 | `negative/index-outside-the-length`, `negative/readonly-slice-write` |
 | `slices.bounds-runtime` | trap | 0570, 0580, 1120, 1950, 1960 | trap, outside [1120]'s region | `runtime/computed-array-index-traps`, `runtime/local-array-computed-store-traps`, `runtime/slice-index-read-traps`, `runtime/slice-index-write-traps`, `runtime/slice-half-open-upper-traps`, `runtime/slice-inclusive-upper-traps`, `runtime/slice-lower-after-upper-traps` |
 | `atoms.sets` | static | 0630, 0640 | L0301 or L0312 | `negative/atom-match-not-exhaustive`, `runtime/atom-values-cross-the-abi` |
@@ -11169,3 +11169,57 @@ caller parameter is complete in R4.10.
 `driver/caller files are separate`, and the `functions.caller` guarantee row.
 The runtime case retains coordinates after returns, verifies 12-byte size,
 and covers direct, forwarded, omitted, indirect, generic and multi-file calls.
+
+### D193 — Arena requests align absolute addresses and fail atomically at arithmetic boundaries
+
+**The tour and prototypes said** that an allocator receives a byte size and
+alignment and reports only `out_of_memory` [1360], that a caller-backed arena
+advances a monotonic offset, and that its backing pointer and extent remain an
+unsafe caller assertion [0430] [1720]. The first `core/mem` implementation
+aligned only that offset. A base at address `n + 1` could therefore return the
+same misaligned address for an alignment of eight. Its rounding addition and
+later base, padding, and size additions could also trap for `usize` overflow
+instead of taking the allocator's declared failure channel.
+
+**Chosen:** `core/mem.arena` and `core/mem.failing` align the numerical
+absolute address `usize(base) + used`. Every positive alignment is its ordinary
+numeric address multiple; zero has the same byte-aligned meaning as one. The
+contract does not require power-of-two alignment, although every alignment
+produced by `alignof` for an enabled type is one. A size of zero is a valid
+request. It returns the aligned point and consumes any padding required to
+reach it, but no payload bytes. In `failing`, it is still one successful
+allocation and consumes one unit of allocation budget, just as the provider's
+existing counter contract says.
+
+Before forming each sum, the providers prove that `base + used`, its aligned
+address, the aligned offset, and the exclusive allocation end fit `usize`, and
+that the aligned request fits the stated extent. An impossible operation
+reports `out_of_memory`; it does not reach [0300]'s overflow trap. Extent or
+budget exhaustion has the same failure atomicity. No failed allocation changes
+`used`, `remaining`, `allocations`, or any other provider field. Exact positive
+exhaustion succeeds, a further positive byte fails, and a zero-byte request at
+that same end succeeds exactly when its aligned point still fits. The last
+representable address is consequently a valid aligned point for a zero-byte
+request, but not the beginning of a one-byte request whose exclusive end would
+be unrepresentable.
+
+These checks validate the provider's arithmetic, not the caller's assertion
+that the backing storage is live and covers the stated extent. The latter
+remains the `allocation.backing` non-guarantee. Frees continue to reclaim no
+storage, the failing provider continues to count each free call, and the arena
+and failing-provider construction, origin, counters and ordinary allocation
+semantics are otherwise unchanged.
+
+**The alternatives:** aligning only `used` relies on an unstated prealignment
+of caller storage and was the defect repaired here. Requiring a power of two or
+rejecting zero alignment would add an `invalid_alignment` policy [1360] does
+not expose and would change the provider's existing `alignment <= 1` behavior.
+Rejecting zero size would likewise add a new error condition and make empty
+generic extents special. Letting checked arithmetic trap would bypass the one
+foreseeable allocation-failure channel the concept deliberately fixes. All
+were declined.
+
+**Pinned by** `runtime/core-mem-allocators`, which retains the original
+monotonic and budget behavior, and `runtime/core-mem-arena-boundaries`, which
+uses misaligned caller storage, zero requests, exact exhaustion and
+maximum-`usize` size, alignment, address and end calculations.

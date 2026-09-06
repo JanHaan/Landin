@@ -87,12 +87,22 @@ containers carry the invariant themselves — vec by its len, map by
 its state array. slice_from is where the promise is made rather
 than checked, which is [1730] with the check missing. [Z8]
 
+The original relative `align_up(used, alignment)` sketch was insufficient for
+caller storage whose base address is not already aligned, and its addition
+could overflow. R4.20 replaces it with a checked internal operation over the
+absolute base address and the complete request:
+
 ```landin
-public align_up: (v: usize, a: usize) -> (r: usize) =
-    r = (v + a - 1) / a * a
-end align_up
+allocation_offset: (base: ptr mut u8, used: usize, extent: usize,
+                    size: usize, alignment: usize)
+                   -> (offset: usize) ! out_of_memory = ... end
 
 ```
+
+Zero alignment means byte alignment. Zero size is a valid allocation and may
+advance across alignment padding. Any request whose current address, aligned
+address, or end cannot be represented, or whose aligned extent does not fit,
+reports `out_of_memory` before allocator state changes.
 
 ## core/mem  —  a bump allocator over borrowed storage
 
@@ -117,9 +127,7 @@ end bump_over
 
 bump_alloc: (inout a: bump, size: usize, alignment: usize)
             -> (p: ptr mut u8) ! out_of_memory =
-    off := align_up(a.used, alignment)
-    fail out_of_memory when off > a.size
-    fail out_of_memory when size > a.size - off
+    off := try allocation_offset(a.base, a.used, a.size, size, alignment)
     p      = offset(a.base, off)
     a.used = off + size
 end bump_alloc

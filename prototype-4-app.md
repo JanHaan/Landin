@@ -34,6 +34,10 @@ public new: (T: type, A: type is allocator, inout a: A)
 
 ```
 
+This inherits [1360]'s byte-count contract. In particular, `core/mem`'s arena
+providers align the absolute returned address and turn impossible extent or
+address arithmetic into `out_of_memory` without consuming allocator state.
+
 ## core/io  —  the host capability
 
 ```landin

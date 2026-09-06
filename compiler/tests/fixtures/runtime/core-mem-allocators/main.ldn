@@ -11,7 +11,7 @@ public main: () -> (code: i32) =
     eight: usize = 8
     first: ptr mut u8 = mem.allocate(bump, three, one) else ptr(0)
     second: ptr mut u8 = mem.allocate(bump, eight, eight) else ptr(0)
-    too_large: usize = 49
+    too_large: usize = 64
     refused: ptr mut u8 = mem.allocate(bump, too_large, one) else ptr(0)
 
     mut limited_bytes: [32]u8 = zeroed
@@ -25,9 +25,11 @@ public main: () -> (code: i32) =
     mem.free(limited, accepted, eight)
 
     if usize(first) == usize(base)
-      and usize(second) - usize(base) == eight
-      and bump.used == 16 and usize(refused) == 0
-      and usize(accepted) == usize(limited_base)
+      and usize(second) % eight == 0
+      and bump.used == usize(second) - usize(base) + eight
+      and usize(refused) == 0
+      and usize(accepted) % eight == 0
+      and limited.used == usize(accepted) - usize(limited_base) + eight
       and usize(budget_refused) == 0
       and limited.allocations == 1 and limited.remaining == 0
       and limited.frees == 1
@@ -37,4 +39,3 @@ public main: () -> (code: i32) =
         code = 1
     end if
 end main
-

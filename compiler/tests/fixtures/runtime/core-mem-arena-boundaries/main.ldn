@@ -1,0 +1,84 @@
+import core/mem
+
+public main: () -> (code: i32) =
+    zero: usize = 0
+    one: usize = 1
+    two: usize = 2
+    three: usize = 3
+    eight: usize = 8
+    sixteen: usize = 16
+    sixty_three: usize = 63
+    maximum: usize = 0 -% 1
+
+    mut bytes: [80]u8 = zeroed
+    raw_base: ptr mut u8 = addr bytes[0]
+    misaligned_base: ptr mut u8 =
+        ptr((usize(raw_base) + 7) / 8 * 8 + 1)
+    mut arena := mem.arena_over(misaligned_base, sixty_three)
+
+    zero_unaligned: ptr mut u8 =
+        mem.allocate(arena, zero, zero) else ptr(0)
+    aligned: ptr mut u8 = mem.allocate(arena, three, eight) else ptr(0)
+    impossible_alignment: ptr mut u8 =
+        mem.allocate(arena, zero, maximum) else ptr(0)
+
+    mut exact_bytes: [16]u8 = zeroed
+    exact_base: ptr mut u8 = addr exact_bytes[0]
+    mut exact := mem.arena_over(exact_base, sixteen)
+    whole: ptr mut u8 = mem.allocate(exact, sixteen, one) else ptr(0)
+    beyond: ptr mut u8 = mem.allocate(exact, one, one) else ptr(0)
+    empty_at_end: ptr mut u8 = mem.allocate(exact, zero, one) else ptr(0)
+
+    mut limited := mem.fail_over(misaligned_base, sixty_three, two)
+    first: ptr mut u8 = mem.allocate(limited, one, eight) else ptr(0)
+    size_boundary: ptr mut u8 =
+        mem.allocate(limited, maximum, one) else ptr(0)
+    second: ptr mut u8 = mem.allocate(limited, zero, zero) else ptr(0)
+
+    mut top := mem.arena_over(raw_base, maximum)
+    at_top: ptr mut u8 =
+        mem.allocate(top, zero, maximum) else ptr(0)
+    rounding_past_top: ptr mut u8 =
+        mem.allocate(top, zero, two) else ptr(0)
+    past_top: ptr mut u8 = mem.allocate(top, one, maximum) else ptr(0)
+
+    mut limited_top := mem.fail_over(raw_base, maximum, two)
+    limited_at_top: ptr mut u8 =
+        mem.allocate(limited_top, zero, maximum) else ptr(0)
+    limited_rounding_past_top: ptr mut u8 =
+        mem.allocate(limited_top, zero, two) else ptr(0)
+
+    mut wrapped := mem.arena_over(raw_base, maximum)
+    wrapped.used = maximum
+    wrapped_request: ptr mut u8 =
+        mem.allocate(wrapped, zero, one) else ptr(0)
+
+    if usize(zero_unaligned) == usize(misaligned_base)
+      and usize(aligned) % 8 == 0
+      and arena.used == usize(aligned) - usize(misaligned_base) + 3
+      and usize(impossible_alignment) == 0
+      and usize(whole) == usize(exact_base)
+      and exact.used == 16
+      and usize(beyond) == 0
+      and usize(empty_at_end) == usize(exact_base) + 16
+      and usize(first) % 8 == 0
+      and limited.used == usize(first) - usize(misaligned_base) + 1
+      and usize(size_boundary) == 0
+      and usize(second) == usize(misaligned_base) + limited.used
+      and limited.remaining == 0 and limited.allocations == 2
+      and usize(at_top) == maximum
+      and top.used == maximum - usize(raw_base)
+      and usize(rounding_past_top) == 0
+      and usize(past_top) == 0
+      and usize(limited_at_top) == maximum
+      and usize(limited_rounding_past_top) == 0
+      and limited_top.used == maximum - usize(raw_base)
+      and limited_top.remaining == 1
+      and limited_top.allocations == 1 and limited_top.frees == 0
+      and usize(wrapped_request) == 0 and wrapped.used == maximum
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main
