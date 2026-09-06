@@ -510,16 +510,7 @@ package body Landin.Stages.Lowering is
       function Text_Datum
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return IR.Item_Id;
 
-      function Caller_Site_Text
-        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return String;
-
-      function Caller_Site_Datum
-        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return IR.Item_Id;
-
       procedure Register_Text_Datum
-        (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
-
-      procedure Register_Caller_Site
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
 
       function Text_Units
@@ -622,38 +613,6 @@ package body Landin.Stages.Lowering is
            "a checked text literal has no registered datum";
       end Text_Datum;
 
-      function Caller_Site_Text
-        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return String
-      is
-         Snap : constant Landin.Source.Snapshot :=
-           Source (Context, Syn.Source_Of (Of_Tree));
-         Position : constant Landin.Source.Position :=
-           Landin.Source.Position_Of
-             (Snap, Syn.Anchor (Of_Tree, Node).First);
-         Line : constant String :=
-           Landin.Source.Line_Number'Image (Position.Line);
-         Column : constant String :=
-           Landin.Source.Column_Number'Image (Position.Column);
-      begin
-         return Landin.Source.Name (Snap) & ":"
-           & Line (Line'First + 1 .. Line'Last) & ":"
-           & Column (Column'First + 1 .. Column'Last);
-      end Caller_Site_Text;
-
-      function Caller_Site_Datum
-        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return IR.Item_Id
-      is
-         Key : constant String :=
-           Character'Val (8) & Caller_Site_Text (Of_Tree, Node);
-         Found : constant Text_Datum_Maps.Cursor := Text_Data.Find (Key);
-      begin
-         if Text_Datum_Maps.Has_Element (Found) then
-            return Text_Datum_Maps.Element (Found);
-         end if;
-         raise Landin.Compiler_Defect with
-           "a checked caller site has no registered datum";
-      end Caller_Site_Datum;
-
       procedure Register_Text_Datum
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
       is
@@ -681,33 +640,6 @@ package body Landin.Stages.Lowering is
          IR.Mark_Read_Only (Unit.all, Made);
          Text_Data.Insert (Key, Made);
       end Register_Text_Datum;
-
-      procedure Register_Caller_Site
-        (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
-      is
-         Site : constant Landin.Provenance.Origin :=
-           Syn.Origin (Of_Tree, Node);
-         Text : constant String := Caller_Site_Text (Of_Tree, Node);
-         Key : constant String := Character'Val (8) & Text;
-         Image : Ty.Folded_Array (1 .. Text'Length + 1);
-         Made : IR.Item_Id;
-      begin
-         if Text_Data.Contains (Key) then
-            return;
-         end if;
-         for Index in 1 .. Text'Length loop
-            Image (Index) := Ty.Folded
-              (Character'Pos (Text (Text'First + Index - 1)));
-         end loop;
-         Image (Image'Last) := 0;
-         Made := IR.Add_Item
-           (Unit.all, IR.Datum, Res.No_Declaration, Ty.Fixed_Array, Site);
-         IR.Set_Array
-           (Unit.all, Made, Ty.U8, IR.Element_Total (Image'Length));
-         IR.Set_Array_Image (Unit.all, Made, Image);
-         IR.Mark_Read_Only (Unit.all, Made);
-         Text_Data.Insert (Key, Made);
-      end Register_Caller_Site;
 
       --  The item being filled, and the block instructions go into.
       --  Current is No_Block when the flow has been terminated and
@@ -4107,35 +4039,44 @@ package body Landin.Stages.Lowering is
             null;
          end loop;
 
-         --  D186: an omitted caller position is an exact utf8 view of this
-         --  call's pooled source-name:line:column bytes.  A named forwarding
-         --  argument already filled its ordinary ABI position above.
+         --  D192: omission constructs three ordinary u32 fields. No text
+         --  or per-site module datum exists. Forwarding is filled above.
          for Which in Parameter_Offset + 1 .. Count loop
             if Landin.Checking.Nth_Signature_Parameter
               (Types.all, Source_Signature, Which).Caller
               and then Given (Which) = IR.No_Value
             then
                declare
-                  Datum : constant IR.Item_Id :=
-                    Caller_Site_Datum (Of_Tree, Node);
-                  Temporary : constant IR.Slot_Id :=
-                    IR.Add_Array_Slot
-                      (Unit.all, Filling, Ty.Usize, 2,
-                       Res.No_Declaration, Site);
-                  Base : constant IR.Value_Id :=
-                    IR.Emit_Storage_Address
-                      (Unit.all, Filling,
-                       (Kind => IR.Module_Datum, Datum => Datum), Site);
-                  Length : constant IR.Value_Id :=
-                    IR.Emit_Number
-                      (Unit.all, Filling, Ty.Usize,
-                       Ty.Magnitude (IR.Array_Length (Unit.all, Datum) - 1),
-                       False, Site);
+                  Id : constant Landin.Checking.Nominal_Type_Id :=
+                    Landin.Checking.Nth_Signature_Parameter
+                      (Types.all, Source_Signature, Which).Nominal;
+                  Temporary : constant IR.Slot_Id := IR.Add_Aggregate_Slot
+                    (Unit.all, Filling, Res.No_Declaration, Site,
+                     Nominal_For (Id));
+                  Source_Id : constant Landin.Source.Source_Id :=
+                    Syn.Source_Of (Of_Tree);
+                  Position : constant Landin.Source.Position :=
+                    Landin.Source.Position_Of
+                      (Source (Context, Source_Id),
+                       Syn.Anchor (Of_Tree, Node).First);
+                  Fields : constant array (1 .. 3) of Ty.Magnitude :=
+                    [Ty.Magnitude (Source_Id),
+                     Ty.Magnitude (Position.Line),
+                     Ty.Magnitude (Position.Column)];
                begin
-                  IR.Emit_Store_Slot_Field
-                    (Unit.all, Filling, Temporary, 1, Base, Site);
-                  IR.Emit_Store_Slot_Field
-                    (Unit.all, Filling, Temporary, 2, Length, Site);
+                  IR.Note_Caller_Source (Unit.all, Source_Id);
+                  for Field in Fields'Range loop
+                     Add_Stored_Field (Id, Field, Slot => Temporary);
+                     declare
+                        Value : constant IR.Value_Id := IR.Emit_Number
+                          (Unit.all, Filling, Ty.U32,
+                           Fields (Field), False, Site);
+                     begin
+                        IR.Emit_Store_Slot_Field
+                          (Unit.all, Filling, Temporary,
+                           IR.Part_Position (Field), Value, Site);
+                     end;
+                  end loop;
                   Given (Which) := IR.Emit_Storage_Address
                     (Unit.all, Filling,
                      (Kind => IR.Frame_Slot, Slot => Temporary), Site);
@@ -7275,16 +7216,25 @@ package body Landin.Stages.Lowering is
          Target  : Landin.Source.Names.Name_Id;
          Nested  : Boolean := False) return Boolean
       is
-         function Statement_Has_Break (Node : Syn.Node_Id) return Boolean;
+         function Walk (Node : Syn.Node_Id; Inside_Loop : Boolean)
+           return Boolean;
 
-         function Statement_Has_Break (Node : Syn.Node_Id) return Boolean is
+         function Walk (Node : Syn.Node_Id; Inside_Loop : Boolean)
+           return Boolean
+         is
+            Deeper : Boolean := Inside_Loop;
          begin
+            if Node = Syn.No_Node then
+               return False;
+            end if;
             case Syn.Kind (Of_Tree, Node) is
+               when Syn.Anonymous_Function | Syn.Function_Declaration =>
+                  return False;
                when Syn.Break_Statement =>
                   return
                     (if Syn.Name (Of_Tree, Node)
                           = Landin.Source.Names.No_Name
-                     then not Nested
+                     then not Inside_Loop
                      else Syn.Name (Of_Tree, Node) = Target);
                when Syn.Loop_Statement | Syn.While_Statement
                   | Syn.For_Statement =>
@@ -7293,55 +7243,21 @@ package body Landin.Stages.Lowering is
                   then
                      return False;
                   end if;
-                  return Block_Has_Break
-                    (Of_Tree, Syn.Loop_Body (Of_Tree, Node), Target, True)
-                    or else
-                      (Syn.Complete_Body (Of_Tree, Node) /= Syn.No_Node
-                       and then Block_Has_Break
-                         (Of_Tree, Syn.Complete_Body (Of_Tree, Node),
-                          Target, True));
-               when Syn.If_Statement =>
-                  for Arm in 1 .. Syn.Arm_Count (Of_Tree, Node) loop
-                     if Block_Has_Break
-                       (Of_Tree, Syn.Body_Of
-                          (Of_Tree, Syn.Nth_Arm (Of_Tree, Node, Arm)),
-                        Target, Nested)
-                     then
-                        return True;
-                     end if;
-                  end loop;
-                  return Syn.Else_Body (Of_Tree, Node) /= Syn.No_Node
-                    and then Block_Has_Break
-                      (Of_Tree, Syn.Else_Body (Of_Tree, Node),
-                       Target, Nested);
-               when Syn.Match_Statement =>
-                  for Arm in 1 .. Syn.Match_Arm_Count (Of_Tree, Node) loop
-                     if Block_Has_Break
-                       (Of_Tree, Syn.Body_Of
-                          (Of_Tree,
-                           Syn.Nth_Match_Arm (Of_Tree, Node, Arm)),
-                        Target, Nested)
-                     then
-                        return True;
-                     end if;
-                  end loop;
-                  return False;
-               when Syn.Bare_Block =>
-                  return Block_Has_Break
-                    (Of_Tree, Syn.Body_Of (Of_Tree, Node), Target, Nested);
+                  Deeper := True;
                when others =>
-                  return False;
+                  null;
             end case;
-         end Statement_Has_Break;
+            --  A transfer can be inside a value-position begin, condition
+            --  or argument. Walk expression children as well as statements.
+            for Index in 1 .. Syn.Slot_Count (Of_Tree, Node) loop
+               if Walk (Syn.Slot (Of_Tree, Node, Index), Deeper) then
+                  return True;
+               end if;
+            end loop;
+            return False;
+         end Walk;
       begin
-         for Index in 1 .. Syn.Statement_Count (Of_Tree, Block) loop
-            if Statement_Has_Break
-              (Syn.Nth_Statement (Of_Tree, Block, Index))
-            then
-               return True;
-            end if;
-         end loop;
-         return False;
+         return Walk (Block, Nested);
       end Block_Has_Break;
 
       procedure Lower_Loop
@@ -11118,8 +11034,9 @@ package body Landin.Stages.Lowering is
                                                         (From, Wrote,
                                                          Temporary_Storage);
                                                    else
-                                                      raise
-                                                        Landin.Compiler_Defect;
+                                                      Lower_Stored_Expression
+                                                        (Of_Tree, From, Scope,
+                                                         Temporary);
                                                    end if;
                                                 when Syn.Zeroed_Literal =>
                                                    IR.Emit_Array_Clear
@@ -11221,10 +11138,15 @@ package body Landin.Stages.Lowering is
                                  end if;
                               end;
                            elsif Syn.Kind (Of_Tree, From)
-                                   in Syn.Call | Syn.Try_Expression
+                                   in Syn.Call | Syn.Labeled_Application
+                                      | Syn.Try_Expression
+                             and then not Is_Struct_Construction
+                               (Of_Tree, From)
                            then
                               if Destination.Kind = IR.Frame_Slot then
-                                 if Syn.Kind (Of_Tree, From) = Syn.Call then
+                                 if Syn.Kind (Of_Tree, From)
+                                      /= Syn.Try_Expression
+                                 then
                                     declare
                                        Ignored : constant IR.Value_Id :=
                                          Lower_Call
@@ -12702,8 +12624,7 @@ package body Landin.Stages.Lowering is
          end loop;
       end;
 
-      --  D161's anonymous literal data and D186's caller-site data must be
-      --  registered before pass two
+      --  D161's anonymous literal data must be registered before pass two
       --  starts filling declaration items, then completed after those
       --  earlier items: every item's values occupy one contiguous IR run.
       --  The base view covers
@@ -12722,95 +12643,6 @@ package body Landin.Stages.Lowering is
                      in Ty.Pointer_Value | Ty.Slice_Value
                then
                   Register_Text_Datum (Of_Tree, Node);
-               elsif Syn.Kind (Of_Tree, Node)
-                       in Syn.Call | Syn.Labeled_Application
-                 and then
-                   (Syn.Kind (Of_Tree, Node) = Syn.Call
-                    or else Res.Class_Of (Meanings.all, Of_Tree, Node)
-                      = Res.Function_Call)
-               then
-                  declare
-                     Callee : constant Syn.Node_Id :=
-                       Syn.Callee_Of (Of_Tree, Node);
-                     Target : constant
-                       Landin.Checking.Routine_Instance_Id :=
-                         Landin.Checking.Routine_Target_Of
-                           (Types.all, Of_Tree, Node);
-                     Direct : constant Boolean :=
-                       Res.Verdict_Of (Meanings.all, Of_Tree, Callee)
-                         = Res.Bound;
-                     Signature : constant Landin.Checking.Signature_Id :=
-                       (if Target /= Landin.Checking.No_Routine_Instance
-                        then Landin.Checking.Routine_Signature_Of
-                          (Types.all, Target)
-                        elsif Landin.Checking.Signature_Of
-                          (Types.all, Of_Tree, Callee)
-                            /= Landin.Checking.No_Signature
-                        then Landin.Checking.Signature_Of
-                          (Types.all, Of_Tree, Callee)
-                        elsif Direct
-                        then Landin.Checking.Signature_Of
-                          (Types.all,
-                           Res.Bound_To (Meanings.all, Of_Tree, Callee))
-                        else Landin.Checking.No_Signature);
-
-                     --  D186 fills a caller position with this call's own
-                     --  site only when the source left it out.  A wrapper
-                     --  that forwards its incoming site by name fills the
-                     --  ABI position from that parameter and never reads
-                     --  pooled bytes, so registering a datum for it would
-                     --  emit read-only data no instruction addresses.
-                     function Fills_Its_Own_Site return Boolean;
-
-                     function Fills_Its_Own_Site return Boolean is
-                        Forwarded : Boolean;
-                     begin
-                        for Position in
-                          1 .. Landin.Checking.Signature_Parameter_Count
-                            (Types.all, Signature)
-                        loop
-                           if Landin.Checking.Nth_Signature_Parameter
-                             (Types.all, Signature, Position).Caller
-                           then
-                              Forwarded := False;
-                              for Written in
-                                1 .. Syn.Argument_Count (Of_Tree, Node)
-                              loop
-                                 declare
-                                    Argument : constant Syn.Node_Id :=
-                                      Syn.Nth_Argument
-                                        (Of_Tree, Node, Written);
-                                 begin
-                                    if Syn.Kind (Of_Tree, Argument)
-                                         = Syn.Call_Argument
-                                      and then Res.Role_Of
-                                        (Meanings.all, Of_Tree, Argument)
-                                          not in Res.Type_Argument
-                                                 | Res.Fixed_Argument
-                                      and then Res.Position_Of
-                                        (Meanings.all, Of_Tree, Argument)
-                                          = Position
-                                    then
-                                       Forwarded := True;
-                                    end if;
-                                 end;
-                              end loop;
-                              if not Forwarded then
-                                 return True;
-                              end if;
-                           end if;
-                        end loop;
-                        return False;
-                     end Fills_Its_Own_Site;
-                  begin
-                     if Signature /= Landin.Checking.No_Signature
-                       and then Landin.Checking.Holds
-                         (Types.all, Signature)
-                       and then Fills_Its_Own_Site
-                     then
-                        Register_Caller_Site (Of_Tree, Node);
-                     end if;
-                  end;
                end if;
             end loop;
          end Register_Texts;

@@ -1068,23 +1068,72 @@ package body Landin.Stages.Checking is
          Part    : Landin.Checking.Signature_Part;
          Valid   : in out Boolean)
       is
-         Exact_Utf8 : constant Boolean :=
-           Part.Kind = Ty.Slice_Value
-           and then Part.Reference /= Landin.Checking.No_Reference
-           and then Landin.Checking.Descriptor_Of
-             (Types.all, Part.Reference).View = Ty.Utf8_View;
+         function Has_Site_Shape return Boolean;
+
+         function Has_Site_Shape return Boolean is
+            Held : Type_Descriptor;
+         begin
+            if Part.Kind /= Ty.Aggregate
+              or else Part.Nominal = Landin.Checking.No_Nominal_Type
+            then
+               return False;
+            end if;
+            Held := Require_Value_Layout
+              ((Kind => Ty.Aggregate, Nominal => Part.Nominal, others => <>),
+               Of_Tree, Node, Syn.Origin (Of_Tree, Node));
+            if Held.Kind /= Ty.Aggregate
+              or else not Landin.Checking.Has_Layout
+                (Types.all, Part.Nominal)
+              or else Landin.Checking.Layout_Field_Count
+                (Types.all, Part.Nominal) /= 3
+            then
+               return False;
+            end if;
+            declare
+               Template : constant Res.Declaration_Id :=
+                 Template_Declaration (Part.Nominal);
+               Their_Tree : constant not null access constant Syn.Tree :=
+                 Tree_For (Res.Source_Of (Meanings.all, Template));
+               Written : constant Syn.Node_Id := Syn.Declared_Type
+                 (Their_Tree.all, Res.Node_Of (Meanings.all, Template));
+            begin
+               for Index in 1 .. 3 loop
+                  declare
+                     Shape : constant Landin.Checking.Field_Shape :=
+                       Landin.Checking.Field_Shape_Of
+                         (Types.all, Part.Nominal, Index);
+                     Field : constant Syn.Node_Id :=
+                       Syn.Nth_Field (Their_Tree.all, Written, Index);
+                     Expected : constant String :=
+                       (case Index is
+                          when 1 => "file_id",
+                          when 2 => "line",
+                          when others => "column");
+                  begin
+                     if Shape.Kind /= Landin.Checking.Scalar_Field
+                       or else Shape.Element /= Ty.U32
+                       or else Spelled (Syn.Name (Their_Tree.all, Field))
+                         /= Expected
+                     then
+                        return False;
+                     end if;
+                  end;
+               end loop;
+            end;
+            return True;
+         end Has_Site_Shape;
       begin
          if Syn.Kind (Of_Tree, Node) = Syn.Parameter
            and then Syn.Is_Caller (Of_Tree, Node)
-           and then not Exact_Utf8
+           and then not Has_Site_Shape
          then
             Bad.Report
               (Item    => Bad.Type_Mismatch,
                Source  => Syn.Source_Of (Of_Tree),
                Where   => Syn.Where (Of_Tree, Node),
-               Message => "a `caller` parameter has the exact type utf8",
-               Note    => "D186: the compiler fills it with the call's"
-                          & " source-name, line and byte column",
+               Message => "a `caller` parameter needs a struct of exactly"
+                          & " file_id, line and column, each u32, in order",
+               Note    => "D192: source filenames live in a separate table",
                Related => Syn.Origin
                  (Of_Tree, Syn.Declared_Type (Of_Tree, Node)),
                Because => "this written type",
@@ -9628,6 +9677,14 @@ package body Landin.Stages.Checking is
                        Parameter.Nominal;
                      Leaf_Only : Boolean := True;
                   begin
+                     --  An identified body can have a refused field. Its
+                     --  diagnostic owns the failure; no layout exists.
+                     if not Landin.Checking.Has_Layout
+                       (Types.all, Expected)
+                     then
+                        Landin.Checking.Refuse (Types.all, Of_Tree, Argument);
+                        goto Next_Runtime_Argument;
+                     end if;
                      for Field in
                        1 .. Landin.Checking.Layout_Field_Count
                               (Types.all, Expected)

@@ -1,18 +1,29 @@
-observe: (value: i32, caller where: utf8) -> none =
+site: type = struct
+    file_id: u32
+    line: u32
+    column: u32
+end site
+
+site_alias: type = site
+site_size: () -> (bytes: usize) =
+    bytes = sizeof site
+end site_size
+
+observe: (value: i32, caller where: site) -> none =
     _ = value
-    _ = where
+    _ = where.line
 end observe
 
-forward: (value: i32, caller where: utf8) -> none =
+forward: (value: i32, caller where: site_alias) -> none =
     observe(value, where: where)
 end forward
 
-apply: (callback: (caller where: utf8) -> none) -> none =
+apply: (callback: (caller where: site) -> none) -> none =
     callback()
 end apply
 
-only_site: (caller where: utf8) -> none =
-    _ = where
+only_site: (caller where: site) -> none =
+    _ = where.line
 end only_site
 
 exercise: () -> none =

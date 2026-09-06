@@ -1,5 +1,11 @@
-note: (caller: i32, caller where: utf8) -> (echoed: i32) =
-    _ = where
+site: type = struct
+    file_id: u32
+    line: u32
+    column: u32
+end site
+
+note: (caller: i32, caller where: site) -> (echoed: i32) =
+    _ = where.line
     echoed = caller
 end note
 

@@ -1,0 +1,6 @@
+class: negative
+summary: a refused field in an inline struct argument retains its diagnostic without querying a missing layout
+program: program.ldn
+codes: L0304
+constructs: 0170, 0670, 1830, 1920
+targets: linux-x86-64, macos-arm64, synthetic-32

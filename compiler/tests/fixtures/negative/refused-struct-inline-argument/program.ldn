@@ -1,0 +1,9 @@
+box: type = struct
+    value: f16
+end box
+accept: (value: box) -> none =
+    _ = value.value
+end accept
+exercise: () -> none =
+    accept(box(value: 0))
+end exercise

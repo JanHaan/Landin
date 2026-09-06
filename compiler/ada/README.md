@@ -107,12 +107,28 @@ which would read the carrier as an address are guarded by name in
 checking gives the bound pointer the subject's own origin and gives the empty
 case none; lowering emits the reserved zero and one comparison against it.
 
-D186 follows those same seams: checking owns exact-`utf8` caller signature
-identity and the named-forward-only rule; lowering owns pooled
-`source-name:line:column` views and injects their ordinary slice carriers before
-IR calls. Flow and reference checking use the checker-owned caller signature
-fact and resolution's labelled formal positions; neither constructs source
-sites.
+D192 supersedes D186's string representation through those same seams:
+checking owns the exact three-u32 struct contract and named-forward-only rule;
+lowering constructs file_id, line and column through the ordinary aggregate
+ABI. IR records only which source files have injected coordinates, and
+`Landin.Source_Maps` renders their off-target filename table. The driver writes
+it beside the output and passes its build identity to the linker. Flow and
+reference checking use the checker-owned caller signature fact and resolution's
+labelled positions; neither constructs source sites. No per-site datum or
+filename enters the emitted runtime data.
+
+A caller-using `--emit=exe -o app` also writes `app.sources.json`. Keep that
+file with the build artifacts; it need not ship on the target. Read the
+executable's build ID with `readelf -n app`, then resolve recorded coordinates:
+
+```sh
+python3 scripts/source-location.py app.sources.json 1 42 9 --build-id HEX_ID
+```
+
+For `--emit=asm -o app.s`, use `app.s.sources.json` and `--assembly app.s`
+instead. The assembly identity includes a comment binding its file map, even
+when a source edit leaves the instructions unchanged. The decoder rejects a
+missing or mismatched build identity and preserves arbitrary filesystem bytes.
 
 Public specifications stay narrow, and a representation is private wherever a
 caller could otherwise assemble a value the package would not have produced:

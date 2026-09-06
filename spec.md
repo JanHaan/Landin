@@ -40,7 +40,9 @@ and a quoted word or sign in one of them stands for the single token
 spelled that way. A quoted word is not thereby reserved: when [1760]'s
 keyword rule omits it, the token is an identifier whose spelling the
 enclosing production recognises. Thus 'of', 'lenof', 'variant', 'begin',
-'match', 'defer', 'undo', 'unchecked', 'caller', 'range' and 'arena' remain
+'match', 'defer', 'undo', 'unchecked', 'caller', 'range', 'arena', 'loop',
+'while', 'for', 'do', 'break', 'continue', 'complete', 'with', 'concept',
+'is' and 'c' remain
 ordinary names everywhere their contextual productions do not meet them.
 A token is as long as it can be, comments excepted, whose
 opener decides [1780]: 'inc' followed by 'x' with nothing between them is
@@ -1040,9 +1042,11 @@ use of that binding is refused when the view is read before being replaced.
 Volatile reference paths remain exempt [0850].
 
 A `caller` position is part of the complete structural function signature. It
-has exactly the immutable `utf8` identity and no parameter convention or
-`escaping` modifier. It remains an ordinary runtime ABI position after the
-compiler has filled it; source calls omit it, except for D186's named forwarding
+has D192's ordinary nominal struct type: exactly three fields, in order,
+`file_id: u32`, `line: u32`, `column: u32`. Aliases retain that identity;
+other struct identities remain distinct even when their shapes qualify.
+There is no parameter convention or `escaping` modifier. It remains an ordinary runtime ABI position after the
+compiler has filled it; source calls omit it, except for D192's named forwarding
 from another `caller` parameter. `caller` is a contextual word [1760] does not
 reserve, exactly as `unchecked` and `range` are, and it is the modifier only
 where a second name follows it: a parameter of that name writes `:` next, so
@@ -1058,7 +1062,7 @@ must likewise supply a valid non-null static image.
 What a call means.
 [0980] gives no source-written parameter a default value, so a call names every
 non-`caller` runtime parameter exactly once. A `caller` position is instead
-filled by the compiler with D186's static site, unless a named argument forwards
+filled by the compiler with D192's three source coordinates, unless a named argument forwards
 another `caller` parameter into that position. A positional prefix skips caller
 positions and fills the other runtime parameters in order; a named suffix may
 write the remaining parameters in any order, but may not
@@ -8659,7 +8663,7 @@ classified failure boundary before the repository gate can pass.
 | `origins.escape` | static | 0770, 0780, 0790, 0800, 0830, 0840 | L0314--L0316 | `negative/frame-origin-return`, `negative/borrowed-source-inout`, `negative/returned-reference-missing-from`, `negative/core-arena-frame-escape`, `negative/core-text-frame-slice-escape`, `negative/core-diag-frame-message-escape`, `runtime/diagnostic-loggers-dispatch` |
 | `origins.aliasing-limit` | outside | 0770, 0910 | non-guarantee: a pre-existing copy or indistinguishable arena is not tracked | `positive/reference-origins-and-consume`, `negative/use-after-sink` |
 | `functions.abi` | static | 0870, 0880, 0890, 0900, 0920, 0930, 0980, 1000, 1020, 1030, 1460, 1920, 1970 | L0301, L0302 or L0502 | `negative/call-with-too-few-arguments`, `runtime/r230-composition` |
-| `functions.caller` | static | 0600, 0790, 1000, 1040, 1800, 1920 | caller positions have exact immutable utf8 type and structural signature identity, are compiler-filled as source-name:line:column, and accept an explicit argument only as a named forwarding of another caller parameter; L0301 rejects every other type, position or source, and `caller` decided on two tokens leaves the spelling an ordinary name | `negative/caller-parameter-forward-needs-caller`, `negative/caller-parameter-needs-utf8`, `negative/caller-parameter-positional`, `negative/caller-parameter-signature-mismatch`, `runtime/caller-parameters`, `runtime/caller-is-an-ordinary-name` |
+| `functions.caller` | static | 0670, 0790, 1000, 1040, 1800, 1920 | caller positions have immutable three-u32 struct values (file_id, line, column) and structural signature identity, are compiler-filled without source strings, and accept an explicit argument only as a named forwarding of another caller parameter; L0301 rejects every other type, position or source and L0303 rejects mutation, and `caller` decided on two tokens leaves the spelling an ordinary name | `negative/caller-parameter-extra-field`, `negative/caller-parameter-field-order`, `negative/caller-parameter-field-width`, `negative/caller-parameter-read-only`, `negative/caller-parameter-forward-copy`, `negative/caller-parameter-forward-needs-caller`, `negative/caller-parameter-needs-site`, `negative/caller-parameter-positional`, `negative/caller-parameter-signature-mismatch`, `runtime/caller-parameters`, `runtime/caller-is-an-ordinary-name` |
 | `extern.c-boundary` | static | 0430, 1570, 1580, 1975 | L0301 for a signature outside R3.50's fixed integer/bool/pointer subset | `positive/external-scalar-c-boundary`, `negative/external-aggregate-boundary`, `negative/external-float-abi-not-enabled` |
 | `host.io` | outside | 0430, 1580, 1650, 1660, 1680, 1975 | non-guarantee: files, descriptors, arguments and streams reflect mutable host state | `runtime/hosted-io-reads-parser-input`, `runtime/derived-parser` |
 | `host.io-failure` | static | 0940, 0960, 1030, 1975 | `core/io` reports foreseeable host failure as declared atoms which callers handle or declare | `runtime/hosted-io-reads-parser-input`, `runtime/diagnostic-loggers-dispatch`, `runtime/derived-parser` |
@@ -10464,6 +10468,11 @@ visible in its initializer would reverse [0110]. All were declined.
 
 ### D186 — A caller parameter is an exact compiler-filled utf8 site
 
+**Superseded by D192.** The string representation was refused because its
+filenames cannot be omitted from constrained builds. The original reasoning
+below is retained as history; the caller rules survive, and the fixtures named
+below now exercise D192's replacement (including the renamed needs-site case).
+
 **The tour said** that [1040]'s caller parameter is filled with the call site
 and may be passed on only from another caller parameter. It sketched a distinct
 integer `site`, but did not say what a site contains, how it crosses the ABI,
@@ -10541,7 +10550,7 @@ wrapper.
 
 **Pinned by** `positive/caller-parameters`,
 `negative/caller-parameter-forward-needs-caller`,
-`negative/caller-parameter-needs-utf8`,
+`negative/caller-parameter-needs-site`,
 `negative/caller-parameter-positional`,
 `negative/caller-parameter-signature-mismatch`,
 `runtime/caller-parameters`, `runtime/caller-is-an-ordinary-name`, the
@@ -11080,3 +11089,83 @@ a rule `check.py` enforces.
 `negative/arena-type-not-enabled`, `runtime/arena-is-an-ordinary-name`, and
 the `pointer.integer-origin` guarantee row, which now cites [0810] and says
 that this conversion is the derivation cut until `core` names one.
+
+### D192 — Caller coordinates are three u32 fields; filenames are optional metadata
+
+**The tour said** that a caller parameter identifies the source call and can
+only be forwarded from another caller parameter [1040]. D186 supplied that
+identity as a `utf8` string. The user refused that representation and chose a
+12-byte structured value after comparing debugger source-location models.
+
+**Chosen:** a caller parameter has an ordinary nominal struct type with exactly
+three ordinary fields, in declaration order: `file_id: u32`, `line: u32`, and
+`column: u32`. Each scalar is the exact unconstrained u32 identity; scalar
+aliases are the same identity. A type alias of the struct qualifies too. The
+contract introduces neither a builtin type name nor a privileged core module;
+a library declares the struct it uses and wrappers use that same nominal type.
+Two qualifying struct declarations are still different types [0710].
+
+The value occupies 12 target bytes with four-byte alignment on the enabled
+Linux x86-64 and synthetic-32 targets. The same three-u32 layout is required of
+future targets. It crosses the existing aggregate ABI through caller-owned
+storage, so 12 describes the value, not a promise about total stack use or
+instruction size. The compiler constructs three scalar fields at an omitted
+caller position. It creates no per-site static datum and no source string.
+
+`file_id` is the nonzero source-snapshot number assigned within this whole
+compilation, including reached modules. It identifies a source, not a basename
+or a hash of a path. The line and byte column are one-based and identify the
+call's callee anchor, using [1750]'s source coordinates. Repeated executions
+and generic instantiations of that source call retain those coordinates;
+distinct columns on one line remain distinct. IDs are not persistent across
+builds, and no packed subfield truncates a coordinate. Compiler source-count
+and source-size limits remain the existing checked host-capacity limits.
+
+D186's contextual two-token modifier, immutable binding, mutually exclusive
+conventions, skipped positional positions and function-signature identity all
+survive. Only a named argument whose complete expression is one of the current
+routine's own caller parameters can fill a caller position explicitly. A copy,
+construction, literal or field selection cannot forward. Omission at a wrapper
+reports its own call; forwarding preserves the incoming three fields. The
+value may otherwise be copied, stored or returned as an ordinary struct, and
+none of its coordinates borrows source storage.
+
+Filename lookup is optional deployment data. The compiler emits an off-target
+`<output>.sources.json` when emitting code that injects coordinates. Each used
+file has one entry with its ID, exact path bytes encoded as hexadecimal, and
+its source SHA-256. Path bytes are length-independent data: colons, quotes,
+newlines and non-UTF-8 filesystem names are unambiguous. The artifact also
+records the assembly digest and a SHA-256 build identity over the file entries
+and assembly. An assembly comment carries that identity before the final
+assembly digest is computed, so source changes that preserve code cannot share
+an assembly mapping identity. Executable emission supplies the ELF build ID.
+`scripts/source-location.py` requires the matching assembly or build ID before
+resolving a triple. A manually linked assembly can use the assembly check.
+Neither the filename map nor a lookup routine enters the running program;
+without the map a diagnostic can still print all three coordinates. This is
+bootstrap artifact packaging, not a frozen debug format or stage protocol.
+R4.60 consumes the same source identities for native debugger information.
+
+**The alternatives:** one u32 site token would reduce transport and saved-log
+storage to four bytes, but even its line would need a lookup table. The chosen
+structure keeps useful coordinates when all lookup data is omitted. A record
+containing a filename pointer or text view still retains filename storage;
+removing its file table would change or invalidate the value. D186's joined
+string has that same cost and additionally requires parsing. Raw code addresses
+would couple the language value to relocation and code transformations. These
+debugger formats inform the shared source model, not the runtime ABI. Removing
+[1040] or deferring it to source debugging was declined because the structured
+value solves its cost problem with existing aggregate machinery. Accepting any
+three words without field names was declined because their interpretation would
+then be unstated. Privileging a particular core type was unnecessary.
+
+[1670]'s future compiler-check handler still takes its stated site number;
+this decision does not implement that handler. Both features follow its
+no-mandatory-filename rule. Its implementation remains R6.70's, while this
+caller parameter is complete in R4.10.
+
+**Pinned by** `positive/caller-parameters`, `runtime/caller-parameters`,
+`runtime/caller-is-an-ordinary-name`, the `negative/caller-parameter-*` corpus,
+`driver/caller files are separate`, and the `functions.caller` guarantee row.
+The runtime case retains coordinates after returns, verifies 12-byte size,
+and covers direct, forwarded, omitted, indirect, generic and multi-file calls.

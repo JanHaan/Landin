@@ -646,91 +646,86 @@ item 2 ROUTINE f result i32 signature 2 params 0 slots 2 blocks 1 values 8
     7 LOAD i32 slot 1
     8 LEAVE <- 7
 file positive/caller-parameters/program.ldn
-unit signatures 6 items 8
-signature 1 (in i32, in [2]usize) -> none
-signature 2 (in i32, in [2]usize) -> none
-signature 3 (in [2]usize) -> none
-signature 4 (in function signature 3) -> none
-signature 5 (in [2]usize) -> none
-signature 6 () -> none
-item 1 ROUTINE observe result none signature 1 params 2 slots 3 blocks 1 values 3
+unit signatures 7 items 6
+signature 1 () -> usize
+signature 2 (in i32, in struct site) -> none
+signature 3 (in i32, in struct site) -> none
+signature 4 (in struct site) -> none
+signature 5 (in function signature 4) -> none
+signature 6 (in struct site) -> none
+signature 7 () -> none
+item 1 ROUTINE site_size result usize signature 1 params 0 slots 1 blocks 1 values 4
+  slot 1 bytes usize return
+  block 1 scope 5 BLOCK length 4
+    1 MEASURE_SIZE usize fields u32 u32 u32
+    2 STORE slot 1 <- 1
+    3 LOAD usize slot 1
+    4 LEAVE <- 3
+item 2 ROUTINE observe result none signature 2 params 2 slots 2 blocks 1 values 3
   slot 1 value i32 param 1
-  slot 2 where elements 2 of usize param 2
-  slot 3 - elements 2 of usize
-  block 1 scope 5 BLOCK length 3
+  slot 2 where aggregate fields u32 u32 u32 param 2
+  block 1 scope 7 BLOCK length 3
     1 LOAD i32 slot 1
-    2 COPY_ARRAY from slot 2 to slot 3
+    2 LOAD_FIELD u32 slot 2 field 2
     3 LEAVE
-item 2 ROUTINE forward result none signature 2 params 2 slots 4 blocks 1 values 7
+item 3 ROUTINE forward result none signature 3 params 2 slots 3 blocks 1 values 6
   slot 1 value i32 param 1
-  slot 2 where elements 2 of usize param 2
+  slot 2 where aggregate fields u32 u32 u32 param 2
   slot 3 - i32
-  slot 4 - elements 2 of usize
-  block 1 scope 7 BLOCK length 7
+  block 1 scope 9 BLOCK length 6
     1 LOAD i32 slot 1
     2 STORE slot 3 <- 1
-    3 COPY_ARRAY from slot 2 to slot 4
-    4 STORAGE_ADDRESS usize storage slot 4
-    5 LOAD i32 slot 3
-    6 CALL none callee 1 observe signature 1 <- 5 4
-    7 LEAVE
-item 3 ROUTINE apply result none signature 4 params 1 slots 3 blocks 1 values 10
-  slot 1 callback usize signature 3 param 1
-  slot 2 - usize signature 3
-  slot 3 - elements 2 of usize
-  block 1 scope 9 BLOCK length 10
+    3 STORAGE_ADDRESS usize storage slot 2
+    4 LOAD i32 slot 3
+    5 CALL none callee 2 observe signature 2 <- 4 3
+    6 LEAVE
+item 4 ROUTINE apply result none signature 5 params 1 slots 3 blocks 1 values 12
+  slot 1 callback usize signature 4 param 1
+  slot 2 - usize signature 4
+  slot 3 - aggregate fields u32 u32 u32
+  block 1 scope 11 BLOCK length 12
     1 LOAD usize slot 1
     2 STORE slot 2 <- 1
-    3 STORAGE_ADDRESS usize storage datum 6 -
-    4 NUMBER usize 12
-    5 STORE_FIELD slot 3 field 1 <- 3
-    6 STORE_FIELD slot 3 field 2 <- 4
-    7 STORAGE_ADDRESS usize storage slot 3
-    8 LOAD usize slot 2
-    9 INDIRECT_CALL none signature 3 <- 8 7
-    10 LEAVE
-item 4 ROUTINE only_site result none signature 5 params 1 slots 2 blocks 1 values 2
-  slot 1 where elements 2 of usize param 1
-  slot 2 - elements 2 of usize
-  block 1 scope 11 BLOCK length 2
-    1 COPY_ARRAY from slot 1 to slot 2
+    3 NUMBER u32 1
+    4 STORE_FIELD slot 3 field 1 <- 3
+    5 NUMBER u32 22
+    6 STORE_FIELD slot 3 field 2 <- 5
+    7 NUMBER u32 5
+    8 STORE_FIELD slot 3 field 3 <- 7
+    9 STORAGE_ADDRESS usize storage slot 3
+    10 LOAD usize slot 2
+    11 INDIRECT_CALL none signature 4 <- 10 9
+    12 LEAVE
+item 5 ROUTINE only_site result none signature 6 params 1 slots 1 blocks 1 values 2
+  slot 1 where aggregate fields u32 u32 u32 param 1
+  block 1 scope 13 BLOCK length 2
+    1 LOAD_FIELD u32 slot 1 field 2
     2 LEAVE
-item 5 ROUTINE exercise result none signature 6 params 0 slots 2 blocks 1 values 17
-  slot 1 - elements 2 of usize
-  slot 2 - elements 2 of usize
-  block 1 scope 13 BLOCK length 17
+item 6 ROUTINE exercise result none signature 7 params 0 slots 2 blocks 1 values 21
+  slot 1 - aggregate fields u32 u32 u32
+  slot 2 - aggregate fields u32 u32 u32
+  block 1 scope 15 BLOCK length 21
     1 NUMBER i32 1
-    2 STORAGE_ADDRESS usize storage datum 7 -
-    3 NUMBER usize 12
-    4 STORE_FIELD slot 1 field 1 <- 2
-    5 STORE_FIELD slot 1 field 2 <- 3
-    6 STORAGE_ADDRESS usize storage slot 1
-    7 CALL none callee 1 observe signature 1 <- 1 6
-    8 NUMBER i32 2
-    9 STORAGE_ADDRESS usize storage datum 8 -
-    10 NUMBER usize 12
-    11 STORE_FIELD slot 2 field 1 <- 9
-    12 STORE_FIELD slot 2 field 2 <- 10
-    13 STORAGE_ADDRESS usize storage slot 2
-    14 CALL none callee 2 forward signature 2 <- 8 13
-    15 FUNCTION_ADDRESS usize target 4 only_site signature 5
-    16 CALL none callee 3 apply signature 4 <- 15
-    17 LEAVE
-item 6 DATUM - result array params 0 slots 0 blocks 1 values 1
-  elements 13 of u8
-  image 108 111 119 46 108 100 110 58 49 49 58 53 0
-  block 1 scope 1 PROGRAM length 1
-    1 LEAVE
-item 7 DATUM - result array params 0 slots 0 blocks 1 values 1
-  elements 13 of u8
-  image 108 111 119 46 108 100 110 58 49 57 58 53 0
-  block 1 scope 1 PROGRAM length 1
-    1 LEAVE
-item 8 DATUM - result array params 0 slots 0 blocks 1 values 1
-  elements 13 of u8
-  image 108 111 119 46 108 100 110 58 50 48 58 53 0
-  block 1 scope 1 PROGRAM length 1
-    1 LEAVE
+    2 NUMBER u32 1
+    3 STORE_FIELD slot 1 field 1 <- 2
+    4 NUMBER u32 30
+    5 STORE_FIELD slot 1 field 2 <- 4
+    6 NUMBER u32 5
+    7 STORE_FIELD slot 1 field 3 <- 6
+    8 STORAGE_ADDRESS usize storage slot 1
+    9 CALL none callee 2 observe signature 2 <- 1 8
+    10 NUMBER i32 2
+    11 NUMBER u32 1
+    12 STORE_FIELD slot 2 field 1 <- 11
+    13 NUMBER u32 31
+    14 STORE_FIELD slot 2 field 2 <- 13
+    15 NUMBER u32 5
+    16 STORE_FIELD slot 2 field 3 <- 15
+    17 STORAGE_ADDRESS usize storage slot 2
+    18 CALL none callee 3 forward signature 3 <- 10 17
+    19 FUNCTION_ADDRESS usize target 5 only_site signature 6
+    20 CALL none callee 4 apply signature 5 <- 19
+    21 LEAVE
 file positive/comment-forms/program.ldn
 unit signatures 1 items 1
 signature 1 () -> i32

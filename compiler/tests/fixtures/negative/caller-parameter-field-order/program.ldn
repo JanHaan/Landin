@@ -1,0 +1,9 @@
+site: type = struct
+    column: u32
+    line: u32
+    file_id: u32
+end site
+
+bad: (caller where: site) -> none =
+    _ = where.line
+end bad

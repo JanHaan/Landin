@@ -1,0 +1,3 @@
+remote: () -> (result: site) =
+    result = capture()
+end remote

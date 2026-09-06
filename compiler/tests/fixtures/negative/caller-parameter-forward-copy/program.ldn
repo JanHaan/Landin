@@ -7,7 +7,7 @@ end site
 observe: (caller where: site) -> none =
     _ = where.line
 end observe
-
-bad: () -> none =
-    observe(zeroed)
+bad: (caller where: site) -> none =
+    copy: site = where
+    observe(where: copy)
 end bad

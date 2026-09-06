@@ -1,5 +1,20 @@
 package body Landin.IR is
 
+   procedure Note_Caller_Source
+     (Into : in out Unit; Source : Landin.Source.Source_Id) is
+   begin
+      if not Into.Caller_Sources.Contains (Source) then
+         Into.Caller_Sources.Append (Source);
+      end if;
+   end Note_Caller_Source;
+
+   function Caller_Source_Count (Of_Unit : Unit) return Natural
+     is (Natural (Of_Unit.Caller_Sources.Length));
+
+   function Caller_Source
+     (Of_Unit : Unit; Position : Positive) return Landin.Source.Source_Id
+     is (Of_Unit.Caller_Sources (Position));
+
    package body Nominal_Identities is
       function None return Id is (0);
 
