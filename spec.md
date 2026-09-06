@@ -1306,8 +1306,9 @@ On the first Linux x86-64 hosted path, the executable's selected no-argument
 Landin entry captures the incoming C `argc` and `argv` before its body runs.
 The repository-owned runtime bridge exposes user arguments (excluding
 `argv[0]`) and fixed wrappers for `strlen`, read-only `open`, `read`, `write`,
-`close`, and `errno`; those wrappers call libc. This is a compiler/runtime ABI
-used by `core/io`, not a set of privileged language operations. `core/io`
+`close`, `errno`, and hosted heap allocation and release; those wrappers call
+libc. This is a compiler/runtime ABI used by `core/io` and `core/heap`, not a
+set of privileged language operations. `core/io`
 turns descriptors and argument views into ordinary values, maps foreseeable
 host failures onto declared atoms, and threads its `world(provider)` concept
 as the authority for opening files and touching streams [1660] [1680]. Direct
@@ -8654,7 +8655,7 @@ classified failure boundary before the repository gate can pass.
 | `arrays.initialization` | static | 0520, 0530, 0540, 0550, 0560 | L0300--L0304 or L0313 | `negative/array-initializer-length-mismatch`, `runtime/whole-arrays-copy-between-storage` |
 | `raw.prefix` | static | 0420, 0510 | L0202 prevents representation access; `core/mem` reports `raw_full`, `uninitialized`, `raw_empty` or `raw_not_empty` before an invalid transition | `negative/core-mem-private-representation`, `runtime/core-mem-raw-storage` |
 | `raw.backing` | outside | 0430, 0470, 0510, 1720 | non-guarantee: the supplied byte pointer may be invalid, misaligned or smaller than the declared capacity | `runtime/core-mem-raw-storage` |
-| `allocation.failure` | static | 0300, 0940, 1230, 1280, 1290, 1310, 1360 | `core/mem` reports `out_of_memory`, which a caller must handle or declare; its arenas reject exhaustion and unrepresentable request arithmetic before state mutation, and `core/vec` checks byte extents and growth before provider calls while preserving the old list on failure | `runtime/core-mem-allocators`, `runtime/core-mem-arena-boundaries`, `runtime/core-vec-pointer-storage`, `runtime/r420-vec-capacity-boundaries`, `runtime/r420-vec-growth-boundary`, `runtime/r420-vec-growth-transaction`, `runtime/derived-parser` |
+| `allocation.failure` | static | 0300, 0940, 1230, 1280, 1290, 1310, 1360, 1975 | `core/mem` reports `out_of_memory`, which a caller must handle or declare; its arenas reject exhaustion and unrepresentable request arithmetic before state mutation, and `core/vec` checks byte extents and growth before provider calls while preserving the old list on failure; the hosted heap maps an unrepresentable request or libc refusal to the same atom | `runtime/core-mem-allocators`, `runtime/core-mem-arena-boundaries`, `runtime/core-vec-pointer-storage`, `runtime/r420-vec-capacity-boundaries`, `runtime/r420-vec-growth-boundary`, `runtime/r420-vec-growth-transaction`, `runtime/derived-parser`, `runtime/hosted-heap-provider` |
 | `allocation.backing` | outside | 0430, 0470, 0770, 1360, 1720 | non-guarantee: caller-supplied arena storage may be invalid or cease to live after an origin-erasing pointer conversion; provider alignment does not validate the backing extent | `runtime/core-mem-allocators`, `runtime/core-mem-arena-boundaries`, `negative/core-arena-frame-escape` |
 | `slices.bounds-known` | static | 0570, 0580, 1950 | L0300 or L0306 | `negative/index-outside-the-length`, `negative/readonly-slice-write` |
 | `slices.bounds-runtime` | trap | 0570, 0580, 1120, 1950, 1960 | trap, outside [1120]'s region | `runtime/computed-array-index-traps`, `runtime/local-array-computed-store-traps`, `runtime/slice-index-read-traps`, `runtime/slice-index-write-traps`, `runtime/slice-half-open-upper-traps`, `runtime/slice-inclusive-upper-traps`, `runtime/slice-lower-after-upper-traps` |
@@ -11299,3 +11300,56 @@ partial replacement. All were declined.
 `runtime/r420-vec-growth-boundary`, `runtime/r420-vec-growth-transaction`,
 `runtime/r420-vec-large-list`, `runtime/r420-fixed-array-pointer-whole-copy`,
 and `runtime/core-vec-pointer-storage`.
+
+### D195 — The hosted heap over-allocates through a fixed libc shim
+
+**The tour and prototype said** that one allocator concept serves heap, arena
+and fixed-buffer providers [1360], that an allocator result is an independent
+origin [0790], and that cleanup errors hidden by a monotonic arena need a real
+reclaiming provider. They did not give the hosted provider an alignment or
+zero-size contract, or choose the libc operation behind it.
+
+**Chosen:** `core/heap` is a hosted module separate from the freestanding
+`core/mem` protocol and caller-backed providers. Its `system` type conforms to
+`mem.allocator`, and `host()` mints the otherwise stateless capability. The
+module declares only two [1975] runtime routines: `(usize, usize) -> ptr mut
+u8` allocation and `ptr mut u8 -> none` release. A null allocation result is
+interpreted as `mem.out_of_memory`; no foreign error or ownership type crosses
+the seam.
+
+Every `usize` alignment is accepted. Zero and one request no stricter than
+byte alignment; every greater value returns an address whose integer value is
+an exact multiple of that value. A successful zero-byte request returns a
+distinct non-null token that may be released but not dereferenced. The Linux
+x86-64 shim asks `malloc` for the requested size plus one pointer word and at
+most `alignment - 1` padding bytes, aligns within that allocation, and records
+the original libc pointer in the preceding word. Release recovers that pointer
+and passes it to `free`; the allocator contract's size remains available to
+wrappers and is not required by libc.
+
+The shim checks both additions and refuses a total above `PTRDIFF_MAX` before
+calling `malloc`. This makes the maximum admitted request depend on alignment:
+`size + sizeof(ptr) + alignment - 1` must be representable and no greater than
+the host's `PTRDIFF_MAX`. A null `malloc` result takes the same declared
+`out_of_memory` path. Pointer-word width, the `PTRDIFF_MAX` test and hidden
+header layout are selected-backend facts in the runtime shim, not constants or
+structures in target-neutral IR. The public module therefore contains no host
+pointer-width arithmetic and creates no general C ABI, foreign-ownership,
+nullable-pointer or syscall surface.
+
+**The alternatives:** `aligned_alloc` and `posix_memalign` were considered.
+Both restrict alignment to powers of two, `posix_memalign` additionally needs
+a pointer-to-pointer carrier, and their zero-size result can be null. Adopting
+those contracts would narrow [1360] for a provider when a small over-allocation
+shim can retain every admitted alignment and deterministic empty allocations.
+Calling `malloc(0)` directly was declined because its portable result is not
+deterministic. Putting the heap in `core/mem` was declined because merely
+importing the freestanding protocol must not import hosted authority. Direct
+syscalls, a general C binding, and storing the allocator in a container remain
+outside this slice.
+
+**Pinned by** `runtime/hosted-heap-provider`, the backend case `a hosted heap
+shim checks before libc`, and the `allocation.failure` guarantee row. The
+runtime audit sees two differently aligned live blocks, exact requested
+extents, a non-null empty allocation, the old and replacement allocations
+coexisting during `vec.list(ptr node)` growth, and no live block after release.

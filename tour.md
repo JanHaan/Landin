@@ -2644,13 +2644,19 @@ and costs one argument at every call that can allocate.
 
 The parser-support modules use this exact interface. `core/mem.arena` is a
 monotonic provider over an explicit extent and `core/mem.failing` adds a count
-of allocations allowed before `out_of_memory`. `core/vec.list(T)` stores an
+of allocations allowed before `out_of_memory`. The separately imported hosted
+`core/heap` provider reaches libc through [1975]'s fixed scalar/pointer bridge,
+returns independent aligned blocks, and really releases each block. It accepts
+every `usize` alignment, treats zero and one as byte alignment, gives a
+successful zero-byte request a distinct non-null freeable token, and reports
+an unrepresentable request or host refusal as `out_of_memory`.
+`core/vec.list(T)` stores an
 honest `mem.storage(T)`: reserve copies its initialized prefix into a private
 replacement, rolls that replacement back on failure, drains and frees the old
 allocation only after the copy succeeds, and publishes last. `push`, `pop`,
 indexed `get`, length, capacity and release are the minimum parser slice. A
-non-zeroable pointer element is its executable case. Map, tree, small-vector,
-heap and an initialized-prefix slice accessor remain broader R4 library work.
+non-zeroable pointer element is its executable case. Map, tree, small-vector
+and an initialized-prefix slice accessor remain broader R4 library work.
 
 Vector reserve checks that its capacity times the item size fits `usize`
 before calling the allocator, and push checks geometric capacity growth before

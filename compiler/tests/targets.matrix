@@ -907,6 +907,7 @@ runtime/generic-structural-deduction | linux-x86-64
 runtime/generic-try-effective-signature | linux-x86-64
 runtime/generic-zero-nominal-array-signatures | linux-x86-64
 runtime/greatest-common-divisor | linux-x86-64
+runtime/hosted-heap-provider | linux-x86-64
 runtime/hosted-io-reads-parser-input | linux-x86-64
 runtime/hosted-text-traversal | linux-x86-64
 runtime/hosted-text-views | linux-x86-64

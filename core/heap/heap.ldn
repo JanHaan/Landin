@@ -1,0 +1,38 @@
+--  The hosted heap is separate from core/mem's freestanding allocator
+--  protocol and caller-backed providers.  These fixed scalar/pointer
+--  routines are supplied by the selected hosted runtime [1975].
+
+import core/mem
+
+extern(c) _landin_host_heap_allocate:
+    (size: usize, alignment: usize) -> (block: ptr mut u8)
+extern(c) _landin_host_heap_release: (block: ptr mut u8) -> none
+
+--  Every usize alignment is accepted.  Zero and one mean no stricter than
+--  byte alignment.  A zero-byte request still returns a distinct, non-null,
+--  freeable token on success.  The host shim reserves one pointer word plus
+--  at most alignment - 1 bytes and refuses an overflow or an extent above
+--  the host's PTRDIFF_MAX before calling libc.  Any other libc failure is
+--  reported through mem.out_of_memory.
+public system: type = struct
+    reserved: u8
+end system
+
+system_alloc: (inout state: system, size: usize, alignment: usize)
+              -> (block: ptr mut u8) ! mem.out_of_memory =
+    _ = state.reserved
+    block = _landin_host_heap_allocate(size, alignment)
+    fail mem.out_of_memory when usize(block) == 0
+end system_alloc
+
+system_free: (inout state: system, block: ptr mut u8, size: usize) -> none =
+    _ = state.reserved
+    _ = size
+    _landin_host_heap_release(block)
+end system_free
+
+system is mem.allocator (alloc: system_alloc, free: system_free)
+
+public host: () -> (state: system) =
+    state = (reserved: 0)
+end host
