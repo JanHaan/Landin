@@ -59,10 +59,15 @@ negative/bare-block-unclosed | linux-x86-64, macos-arm64, synthetic-32
 negative/borrowed-source-inout | linux-x86-64, macos-arm64, synthetic-32
 negative/call-of-a-non-function | linux-x86-64, macos-arm64, synthetic-32
 negative/call-with-too-few-arguments | linux-x86-64, macos-arm64
-negative/caller-parameter-forward-needs-caller | linux-x86-64, macos-arm64
-negative/caller-parameter-needs-utf8 | linux-x86-64, macos-arm64
-negative/caller-parameter-positional | linux-x86-64, macos-arm64
-negative/caller-parameter-signature-mismatch | linux-x86-64, macos-arm64
+negative/caller-parameter-extra-field | linux-x86-64, macos-arm64, synthetic-32
+negative/caller-parameter-field-order | linux-x86-64, macos-arm64, synthetic-32
+negative/caller-parameter-field-width | linux-x86-64, macos-arm64, synthetic-32
+negative/caller-parameter-forward-copy | linux-x86-64, macos-arm64, synthetic-32
+negative/caller-parameter-forward-needs-caller | linux-x86-64, macos-arm64, synthetic-32
+negative/caller-parameter-needs-site | linux-x86-64, macos-arm64, synthetic-32
+negative/caller-parameter-positional | linux-x86-64, macos-arm64, synthetic-32
+negative/caller-parameter-read-only | linux-x86-64, macos-arm64, synthetic-32
+negative/caller-parameter-signature-mismatch | linux-x86-64, macos-arm64, synthetic-32
 negative/chained-comparison | linux-x86-64, macos-arm64
 negative/character-literal-byte-escape | linux-x86-64, macos-arm64
 negative/character-literal-empty | linux-x86-64, macos-arm64
@@ -435,6 +440,7 @@ negative/recover-infallible-call | linux-x86-64, synthetic-32
 negative/recovery-clause-unclosed | linux-x86-64, synthetic-32
 negative/recursive-module-image-cycle | linux-x86-64, synthetic-32
 negative/recursive-module-image-nominal-mismatch | linux-x86-64, synthetic-32
+negative/refused-struct-inline-argument | linux-x86-64, macos-arm64, synthetic-32
 negative/refused-widths-name-their-owner | linux-x86-64, macos-arm64
 negative/remainder-by-zero | linux-x86-64, macos-arm64
 negative/result-aggregate-assignment-name-mismatch | linux-x86-64, macos-arm64, synthetic-32
@@ -623,7 +629,7 @@ positive/binding-inferred | linux-x86-64, macos-arm64
 positive/binding-mutable | linux-x86-64, macos-arm64
 positive/binding-typed | linux-x86-64, macos-arm64
 positive/call-fills-every-parameter | linux-x86-64, macos-arm64
-positive/caller-parameters | linux-x86-64, macos-arm64
+positive/caller-parameters | linux-x86-64, macos-arm64, synthetic-32
 positive/comment-forms | linux-x86-64, macos-arm64
 positive/comparison-gives-a-bool | linux-x86-64, macos-arm64
 positive/compiler-zeroable-conformances | linux-x86-64, macos-arm64, synthetic-32
@@ -827,6 +833,7 @@ runtime/binary-search | linux-x86-64
 runtime/bool-to-float-conversions | linux-x86-64
 runtime/bool-to-integer-conversions | linux-x86-64
 runtime/bools-cross-the-abi | linux-x86-64
+runtime/break-in-value-block | linux-x86-64
 runtime/caller-is-an-ordinary-name | linux-x86-64
 runtime/caller-parameters | linux-x86-64
 runtime/calls-return-through-the-abi | linux-x86-64

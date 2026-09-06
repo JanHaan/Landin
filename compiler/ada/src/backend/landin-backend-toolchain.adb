@@ -21,7 +21,8 @@ package body Landin.Backend.Toolchain is
    function Link_Arguments
      (Assembly : String;
       Output   : String;
-      Linker   : String) return Landin.Platform.Path_List
+      Linker   : String;
+      Build_Id : String := "") return Landin.Platform.Path_List
    is
       List : Landin.Platform.Path_List;
    begin
@@ -31,6 +32,10 @@ package body Landin.Backend.Toolchain is
 
       if Linker /= "" then
          Landin.Platform.Add (List, "-fuse-ld=" & Linker);
+      end if;
+
+      if Build_Id /= "" then
+         Landin.Platform.Add (List, "-Wl,--build-id=0x" & Build_Id);
       end if;
 
       return List;

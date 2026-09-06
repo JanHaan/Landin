@@ -63,6 +63,7 @@ package Landin.Backend.Toolchain is
    function Link_Arguments
      (Assembly : String;
       Output   : String;
-      Linker   : String) return Landin.Platform.Path_List;
+      Linker   : String;
+      Build_Id : String := "") return Landin.Platform.Path_List;
 
 end Landin.Backend.Toolchain;

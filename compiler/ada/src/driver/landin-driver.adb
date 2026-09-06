@@ -11,6 +11,7 @@ with Landin.Modules;
 with Landin.Resolution;
 with Landin.Source;
 with Landin.Source.Names;
+with Landin.Source_Maps;
 with Landin.Stages;
 with Landin.Stages.Checking;
 with Landin.Stages.Configuration;
@@ -609,6 +610,7 @@ package body Landin.Driver is
                else Default_Assembly);
 
             Written : Landin.Platform.Write_Status;
+            Map_Id : Unbounded.Unbounded_String;
          begin
             --  A target nothing emits for cannot be asked for a file.
             --  `synthetic-32` exists to keep layout arithmetic honest on a
@@ -683,9 +685,9 @@ package body Landin.Driver is
                end if;
             end;
 
-            Host.Write_File
-              (Assembly_Path,
-               Landin.Backend.X86_64.Text
+            declare
+               Assembly : constant String :=
+                 Landin.Backend.X86_64.Text
                  (Landin.Stages.Code (Context).all,
                   Landin.Stages.Meanings (Context).all,
                   Landin.Stages.Identities (Context).all,
@@ -694,14 +696,42 @@ package body Landin.Driver is
                     (Landin.Stages.Code (Context).all,
                      Landin.Stages.Meanings (Context).all,
                      Landin.Stages.Modules (Context).all,
-                     Landin.Stages.Identities (Context).all)),
-               Written);
-
-            if Written /= Landin.Platform.Write_Ok then
-               Note_Failure
-                 (Code_Unwritable, "cannot write: " & Assembly_Path);
-               return;
-            end if;
+                     Landin.Stages.Identities (Context).all));
+               Emitted : Unbounded.Unbounded_String :=
+                 Unbounded.To_Unbounded_String (Assembly);
+            begin
+               if Landin.IR.Caller_Source_Count
+                 (Landin.Stages.Code (Context).all) > 0
+               then
+                  declare
+                     Map : constant Landin.Source_Maps.Artifact :=
+                       Landin.Source_Maps.Create (Context, Assembly);
+                     Map_Path : constant String := Source_Map_Beside
+                       (if Emit = Emit_Executable
+                        then (if Unbounded.Length (Output) > 0
+                              then Unbounded.To_String (Output)
+                              else Default_Executable)
+                        else Assembly_Path);
+                  begin
+                     Emitted := Map.Assembly;
+                     Map_Id := Unbounded.To_Unbounded_String (Map.Build_Id);
+                     Host.Write_File
+                       (Map_Path, Unbounded.To_String (Map.JSON), Written);
+                     if Written /= Landin.Platform.Write_Ok then
+                        Note_Failure
+                          (Code_Unwritable, "cannot write: " & Map_Path);
+                        return;
+                     end if;
+                  end;
+               end if;
+               Host.Write_File
+                 (Assembly_Path, Unbounded.To_String (Emitted), Written);
+               if Written /= Landin.Platform.Write_Ok then
+                  Note_Failure
+                    (Code_Unwritable, "cannot write: " & Assembly_Path);
+                  return;
+               end if;
+            end;
 
             if Emit /= Emit_Executable then
                return;
@@ -738,7 +768,8 @@ package body Landin.Driver is
                        Landin.Backend.Toolchain.Link_Arguments
                          (Assembly => Assembly_Path,
                           Output   => Target_Path,
-                          Linker   => Unbounded.To_String (Linker)),
+                          Linker   => Unbounded.To_String (Linker),
+                          Build_Id => Unbounded.To_String (Map_Id)),
                      Result    => Ran,
                      Capture   => Landin.Platform.Merged);
                exception

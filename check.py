@@ -1061,6 +1061,21 @@ def read_grammar(path):
         out.append((offset + 1,
                     "grammar rule %r is used and not defined" % name))
 
+    #  Contextual syntax words remain identifiers; the preamble must not
+    #  lose a newly enabled family such as loops. Refused words (arena)
+    #  may also be documented, so this is deliberately a subset check.
+    reserved = set(re.findall(r'"([a-z]+)"', rules.get("keyword", "")))
+    contextual = set()
+    for name, rule in rules.items():
+        if name not in LEXICAL_RULES | {"scalar_name", "text_name"}:
+            contextual.update(re.findall(r'"([a-z][a-z_0-9]*)"', rule))
+    preamble = text.split("### [1740]", 1)[0]
+    stated = set(re.findall(r"'([a-z][a-z_0-9]*)'", preamble))
+    missing = contextual - reserved - stated
+    if missing:
+        out.append((offset + 1, "grammar preamble omits contextual words: "
+                    + ", ".join(sorted(missing))))
+
     #  Stated in the prose of [1760] and easy to lose from the rule.
     if "identifier" in trees:
         if lexical_matches(trees, "identifier", "_"):
@@ -4392,6 +4407,50 @@ def check_highlighters(full_run):
     return out
 
 
+def check_source_locations(full_run):
+    """The offline decoder requires build matching and preserves path bytes."""
+    if not full_run:
+        return []
+    import hashlib
+    import json
+    import subprocess
+    import tempfile
+    from pathlib import Path
+
+    script = "scripts/source-location.py"
+    if absent([script]):
+        return absent([script])
+    out = []
+    with tempfile.TemporaryDirectory() as directory:
+        assembly = Path(directory) / "program.s"
+        assembly.write_bytes(b"test assembly\n")
+        table = Path(directory) / "program.sources.json"
+        path = b'dir:with"quotes/\xff.ldn'
+        table.write_text(json.dumps({
+            "build_id": "abc123",
+            "assembly_sha256": hashlib.sha256(assembly.read_bytes()).hexdigest(),
+            "files": [{"file_id": 7, "path_hex": path.hex()}],
+        }), encoding="ascii")
+        base = [sys.executable, script, str(table), "7", "42", "9"]
+        for identity in (["--build-id", "abc123"],
+                         ["--assembly", str(assembly)]):
+            result = subprocess.run(base + identity, capture_output=True)
+            if result.returncode or result.stdout != path + b":42:9\n":
+                out.append((script, 1, "matching lookup loses source path bytes"))
+        assembly.write_bytes(b"different assembly\n")
+        for identity in ([], ["--build-id", "def456"],
+                         ["--assembly", str(assembly)]):
+            result = subprocess.run(base + identity, capture_output=True)
+            if result.returncode != 2 or result.stdout:
+                out.append((script, 1, "lookup accepts an absent or wrong build"))
+        base[3] = "8"
+        result = subprocess.run(base + ["--build-id", "abc123"],
+                                capture_output=True)
+        if result.returncode != 2 or result.stdout:
+            out.append((script, 1, "lookup accepts an unknown file ID"))
+    return out
+
+
 def main(argv):
     here = os.path.dirname(os.path.abspath(__file__))
     if here:
@@ -4474,6 +4533,7 @@ def main(argv):
     extra += check_project_status(full_run)
     extra += check_pinned_toolchain(full_run)
     extra += check_developer_loops(full_run)
+    extra += check_source_locations(full_run)
     extra += check_grammar_corpus(full_run)
     extra += check_token_vocabulary(full_run)
     extra += check_precedence_table(full_run)

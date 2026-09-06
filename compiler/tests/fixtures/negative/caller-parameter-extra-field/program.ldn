@@ -2,12 +2,9 @@ site: type = struct
     file_id: u32
     line: u32
     column: u32
+    extra: u32
 end site
 
-observe: (caller where: site) -> none =
+bad: (caller where: site) -> none =
     _ = where.line
-end observe
-
-bad: () -> none =
-    observe(zeroed)
 end bad

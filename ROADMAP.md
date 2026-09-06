@@ -2851,7 +2851,7 @@ that has no implementation owner.
 | `[1010]` | hosted-now | R2.30 | matrix evidence |
 | `[1020]` | hosted-now | R2.30 | matrix evidence |
 | `[1030]` | hosted-now | R2.30 | matrix evidence |
-| `[1040]` | hosted-now | R4.10 | D186 and matrix evidence |
+| `[1040]` | hosted-now | R4.10 | D192 and matrix evidence |
 | `[1050]` | hosted-now | R2.30 | matrix evidence |
 | `[1060]` | hosted-now | R2.30 | matrix evidence |
 | `[1070]` | hosted-now | R4.10 | D185 and matrix evidence |
@@ -3471,8 +3471,8 @@ part of [0150], the f16 part of [0170], and the ownership disposition for
 [0500]'s pointer/slice operations, [0810]'s derivation primitives and [0820]'s
 lexical `arena` block. No language decision is made by this inventory.
 Each entry is marked closed below rather than struck from the finding: D185
-closed [1070], D186 closed [1040], D187 closed [1120], D188 closed [0660] and
-D189 closed [0480]; D190 re-owned the u128/i128 part of [0150] and the f16
+closed [1070], D192 supersedes D186 and closes [1040], D187 closed [1120],
+D188 closed [0660] and D189 closed [0480]; D190 re-owned the u128/i128 part of [0150] and the f16
 part of [0170] to R7.20, and D191 settled the ownership disposition by
 re-owning [0500], [0810] and [0820] to R4.20. The hosted gap list is empty.
 
@@ -3484,15 +3484,27 @@ scope exists, requires its stored value to be `bool`, and reinitializes a
 statements do not see the name; an outer declaration may be shadowed, while a
 second declaration in the guarded body is a same-scope duplicate.
 
-The caller-parameter increment enables [1040] with D186's exact immutable
-`utf8` site representation. The compiler fills an omitted caller position with
-the call node's `source-name:line:column` static view, while a wrapper may
-preserve its incoming site only through a named argument from another caller
-parameter. Caller positions are skipped by positional matching, remain ordinary
-ABI positions after injection, and are part of structural function-signature
-identity. `caller` is spelled with a contextual word decided on two tokens, so
-a parameter, binding or label of that name is untouched, and a wrapper that
-forwards its site registers no site datum of its own.
+The caller-parameter increment enables [1040] with D192, superseding D186's
+refused string representation. An omitted caller position receives an ordinary
+12-byte struct of three u32 fields: file_id, line and column. Line and byte
+column remain usable when filenames are omitted from a constrained deployment.
+The off-target file table records each used source once; its assembly digest
+and the matching ELF build ID bind lookup to the emitted build. No source text
+or per-site static datum enters the program. Explicit named forwarding,
+caller-skipping positional matching, immutable bindings and structural signature
+identity survive; the two-token contextual word remains an ordinary name in
+programs that do not write the modifier. Runtime evidence covers returned
+coordinates, forwarding, omission, generic and indirect calls, multiple caller
+positions, separate source files and the 12-byte value size.
+
+The final closure repair also resolves the two pre-existing crashes found by
+the closure audit. An inline struct argument with a refused field now retains
+its source diagnostic without querying an absent layout. Loop-exit discovery
+walks expression children, so a break in a value-position begin creates the
+exit block it reaches. The caller increment additionally exposed and repaired
+aggregate assignment from a named-argument call. The grammar preamble now
+names the contextual loop words as well, with a mechanical completeness check.
+These are implementation corrections to existing rules, not deferred items.
 
 The unchecked-region increment enables [1120] with D187's Linux semantics.
 `unchecked begin ... end unchecked` is a statement and a lexical block spelled
@@ -3579,7 +3591,7 @@ checker refuses the `arena` type name [0780] writes. `arena` stays unreserved
 by [1760], so `core/mem`'s own `arena` struct and every parameter spelled
 `arena` are untouched.
 
-Delivered: thirty-six decisions, D156 to D191, closed the hosted construct
+Delivered: D156 to D192, with D192 superseding D186, close the hosted construct
 surface. Loops arrived first — transfers, labels, values, integer ranges and
 then traversal of slices, arrays, `any` elements, struct sources and the three
 text views — followed by the literal families (quoted, raw, character, decimal
@@ -3614,8 +3626,8 @@ atom-or-pointer union, the last two of which also leave a named part to R7.20.
 Target parity for `unchecked`, what an optimizer may assume, and [1580]'s
 unminted null remain with R5/R6, R4.50 and R4.40 respectively.
 
-The complete pinned Linux x86-64 debug and release gates pass 394 cases and
-10,342 checks each, and `python3 check.py` is clean over all seven documents.
+The complete pinned Linux x86-64 debug and release gates pass 395 cases and
+10,384 checks each, and `python3 check.py` is clean over all seven documents.
 
 Exit evidence: every hosted `[NNNN]` row has implementation and positive or
 negative evidence; no omission is hidden by prototype coverage.
@@ -3724,7 +3736,11 @@ Depends on: R1.70, R1.80, R4.50
 
 Emit source line tables, symbolic frames and inspectable parameters/locals for
 core scalar, pointer, aggregate and variant types. Preserve the frame pointer
-and source/type provenance through lowering.
+and source/type provenance through lowering. D192's caller file IDs must use
+that same source identity table; extend or replace the bootstrap off-target
+file-map packaging without changing the three-u32 caller ABI. Preserve exact
+build matching and optional filename deployment. Native debugger support does
+not gate caller-coordinate generation, which R4.10 already implements.
 
 Exit evidence: scripted debugger sessions prove breakpoints, stepping, stacks
 and selected locals in unoptimized and baseline-optimized builds.

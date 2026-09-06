@@ -61,6 +61,11 @@ package Landin.Driver is
    --  derived from an input file name: a compilation is one module made of
    --  any number of files [1480], so there is no one input to name it
    --  after.
+   --  Written only when emitted code injects caller coordinates. This is
+   --  an off-target artifact and is never an assembler or linker input.
+   function Source_Map_Beside (Output : String) return String
+     is (Output & ".sources.json");
+
    Default_Executable : constant String := "a.out";
    Default_Assembly   : constant String := "a.s";
 

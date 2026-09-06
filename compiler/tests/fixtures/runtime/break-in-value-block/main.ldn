@@ -1,0 +1,9 @@
+public main: () -> (code: i32) =
+    loop do
+        value: i32 = begin
+            break
+        end
+        code = value
+    end loop
+    code = 42
+end main

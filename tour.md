@@ -1839,34 +1839,47 @@ else is for the error channel only, not for unions.
 
 ### [1040] A caller parameter is filled in by the compiler with the call site
 
-A caller parameter is filled in by the compiler with the
-site of the call, so assertions and logging work without
-macros. Its type is exactly `utf8`, and its value spells the source name,
-one-based line and one-based column as `source-name:line:column`. It is omitted
-from an ordinary call. It may only be passed on by name from another caller
-parameter, otherwise a wrapper would report itself.
+A caller parameter is filled in by the compiler with the site of the call,
+so assertions and logging work without macros. Its type is an ordinary struct
+with exactly these three u32 fields, in this order:
 
 ```landin
-assert: (cond: bool, caller where: utf8) -> none =
+site: type = struct
+    file_id: u32
+    line: u32
+    column: u32
+end site
+
+assert: (cond: bool, caller where: site) -> none =
     if not cond then
         report_failure(where)
     end if
 end assert
 ```
 
-used as: assert(count > 0)
+Used as: `assert(count > 0)`.
 
-That is a program's own assertion and not the compiler's check: [1670]'s
-panic handler takes a compiler-assigned site number and no text, so a caller
-parameter is never what reaches it.
+The value is 12 bytes on both 32-bit and 64-bit targets. The file number belongs
+to this compilation; the line and byte column are one-based. Filenames live in
+a separate table that need not ship with the program. Even without it, an
+assertion can report a file number, line and column. Resolving the filename
+requires the table from the matching build. This follows [1670]'s reason for
+keeping filenames out of the required runtime data; its compiler-check handler
+retains its own numbered-site interface.
 
-A wrapper preserves the original site explicitly:
+The parameter is immutable and omitted from an ordinary call. A wrapper
+preserves the original coordinates explicitly, by naming its own caller
+parameter as the complete argument:
 
 ```landin
-checked: (cond: bool, caller where: utf8) -> none =
+checked: (cond: bool, caller where: site) -> none =
     assert(cond, where: where)
 end checked
 ```
+
+Omitting `where` in that inner call deliberately reports the wrapper's call.
+A copied or constructed value cannot be passed into a caller position. The
+coordinates may otherwise be read, copied and saved as an ordinary struct.
 
 ## CONTROL FLOW
 

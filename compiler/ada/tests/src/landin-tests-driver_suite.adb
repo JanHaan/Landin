@@ -715,6 +715,83 @@ package body Landin.Tests.Driver_Suite is
      & "    code = 42" & LF
      & "end main" & LF;
 
+   procedure Caller_Files_Are_Separate
+     (Item : in out Landin.Testing.Context);
+
+   procedure Caller_Files_Are_Separate
+     (Item : in out Landin.Testing.Context)
+   is
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Path : constant String := "caller:" & Character'Val (34) & ".ldn";
+      Program : constant String :=
+        "site: type = struct" & LF
+        & " file_id: u32 line: u32 column: u32" & LF
+        & "end site" & LF
+        & "capture: (caller where: site) -> (value: u32) =" & LF
+        & " value = where.line end capture" & LF
+        & "public main: () -> (code: i32) =" & LF
+        & " code = i32(capture() + capture()) end main" & LF;
+      Args : constant Landin.Platform.Path_List := Both (Path, "--emit=exe");
+      Result : Landin.Driver.Outcome;
+      Original : Unbounded.Unbounded_String;
+      Original_Assembly : Unbounded.Unbounded_String;
+   begin
+      Host.Add_File (Path, Program);
+      Result := Landin.Driver.Execute (Args, Host, Tools);
+      Landin.Testing.Check_Equal
+        (Item, Result.Status, Landin.Driver.Status_Success,
+         "a caller program emits its code and file map");
+      declare
+         Map : constant String := Host.Written
+           (Landin.Driver.Source_Map_Beside
+              (Landin.Driver.Default_Executable));
+         Marker : constant String := """build_id"":""";
+         First : constant Natural := Ada.Strings.Fixed.Index (Map, Marker)
+           + Marker'Length;
+      begin
+         Original := Unbounded.To_Unbounded_String (Map);
+         Original_Assembly := Unbounded.To_Unbounded_String
+           (Host.Written ("a.out.s"));
+         Landin.Testing.Check
+           (Item, Contains (Map, "63616c6c65723a222e6c646e"),
+            "the off-target map preserves colons and quotes as path bytes");
+         Landin.Testing.Check_Equal
+           (Item, Occurrences (Map, """file_id"":"), 1,
+            "two sites share one filename entry");
+         Landin.Testing.Check
+           (Item, Contains
+              (Landin.Platform.Joined (Tools.Call_At (1).Arguments),
+               "-Wl,--build-id=0x" & Map (First .. First + 63)),
+            "the linker receives the source map's build identity");
+         Landin.Testing.Check
+           (Item, not Contains (Host.Written ("a.out.s"), Path)
+              and then not Contains (Host.Written ("a.out.s"), ".rodata"),
+            "caller coordinates create no source strings or static datums");
+      end;
+      for Changed in Boolean loop
+         declare
+            Fresh : Landin.Testing.Fakes.Fake_Filesystem;
+         begin
+            Fresh.Add_File
+              (Path, Program
+               & (if Changed then "-- changed source" & LF else ""));
+            Result := Landin.Driver.Execute (Args, Fresh, Tools);
+            Landin.Testing.Check_Equal
+              (Item, Result.Status, Landin.Driver.Status_Success,
+               "the repeated or changed source emits successfully");
+            Landin.Testing.Check
+              (Item, (Fresh.Written ("a.out.sources.json")
+                 /= Unbounded.To_String (Original)) = Changed,
+               "only a changed source changes the mapping identity");
+            Landin.Testing.Check
+              (Item, (Fresh.Written ("a.out.s")
+                 /= Unbounded.To_String (Original_Assembly)) = Changed,
+               "assembly identity includes changes that do not alter code");
+         end;
+      end loop;
+   end Caller_Files_Are_Separate;
+
    procedure Assembly_Is_Written_Without_A_Tool
      (Item : in out Landin.Testing.Context);
 
@@ -1330,6 +1407,9 @@ package body Landin.Tests.Driver_Suite is
       Landin.Testing.Register
         (Into, "driver", "reached conformances share one register",
          Reached_Conformances_Share_One_Register'Access);
+      Landin.Testing.Register
+        (Into, "driver", "caller files are separate",
+         Caller_Files_Are_Separate'Access);
       Landin.Testing.Register
         (Into, "driver", "assembly is written without a tool",
          Assembly_Is_Written_Without_A_Tool'Access);

@@ -133,6 +133,7 @@ private with Ada.Containers.Vectors;
 
 with Landin.Provenance;
 with Landin.Resolution;
+with Landin.Source;
 with Landin.Types;
 
 package Landin.IR is
@@ -366,6 +367,17 @@ package Landin.IR is
    type Evidence_Id is range 0 .. Integer'Last;
 
    type Unit is tagged limited private;
+
+   --  D192's file table is metadata, never a module datum. Forwarding
+   --  contributes no source; only an injected caller value records one.
+   procedure Note_Caller_Source
+     (Into : in out Unit; Source : Landin.Source.Source_Id);
+
+   function Caller_Source_Count (Of_Unit : Unit) return Natural;
+
+   function Caller_Source
+     (Of_Unit : Unit; Position : Positive) return Landin.Source.Source_Id
+     with Pre => Position <= Caller_Source_Count (Of_Unit);
 
    --  A target-neutral nominal instance identity mapped from checking.
    --  It is opaque so source Declaration_Id remains provenance and storage
@@ -3580,7 +3592,12 @@ private
      (Index_Type   => Positive,
       Element_Type => Aggregate_Field_Image);
 
+   package Caller_Source_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Landin.Source.Source_Id,
+      "=" => Landin.Source."=");
+
    type Unit is tagged limited record
+      Caller_Sources : Caller_Source_Vectors.Vector;
       Ready      : Boolean := False;
       Items      : Item_Vectors.Vector;
       Slots      : Slot_Vectors.Vector;
