@@ -2105,7 +2105,15 @@ package body Landin.Stages.Checking is
                   --  case is added only where [1795] writes the union.
                   Empty_Atom => Res.No_Declaration);
             begin
-               if Target.Kind not in
+               --  D138 validates a parameterized struct once with symbolic
+               --  type formals, then revisits its fields for each concrete
+               --  application. A pointer to such a formal is finite without
+               --  knowing the pointee layout; leave the complete reference
+               --  descriptor for that concrete pass, just as a direct
+               --  type-formal field below remains symbolic here.
+               if Target.Kind = Ty.Undecided then
+                  return (Kind => Ty.Undecided, others => <>);
+               elsif Target.Kind not in
                  Ty.Scalar_Name | Ty.Pointer_Value | Ty.Slice_Value
                     | Ty.Atom_Value | Ty.Fixed_Array | Ty.Aggregate
                     | Ty.Any_Value | Ty.Function_Value

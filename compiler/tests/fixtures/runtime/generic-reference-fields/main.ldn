@@ -1,0 +1,49 @@
+show: type = concept (item: type)
+    value: (self: ptr item) -> (answer: i32)
+end show
+
+node: type = struct
+    number: i32
+end node
+
+node_value: (self: ptr node) -> (answer: i32) =
+    answer = self.val.number
+end node_value
+
+node is show (value: node_value)
+
+holder: type (item: type) = struct
+    part: ptr mut item
+end holder
+
+hold: (item: type, part: ptr mut item)
+      -> (result: holder(item) from part) =
+    result = (part: part)
+end hold
+
+public main: () -> (code: i32) =
+    mut number: u32 = 7
+    scalar := hold(item: u32, part: addr number)
+    scalar.part.val = 11
+
+    first: node = (number: 13)
+    mut second: node = (number: 17)
+    mut selected: ptr node = addr first
+    nested := hold(item: ptr node, part: addr selected)
+    nested.part.val = addr second
+
+    mut erased: any show = any(addr first)
+    erased_value := hold(item: any show, part: addr erased)
+
+    mut writable: ptr mut node = addr second
+    mutable_nested := hold(item: ptr mut node, part: addr writable)
+    mutable_nested.part.val.val.number = 19
+
+    if number == 11 and nested.part.val.val.number == 19
+      and mutable_nested.part.val.val.number == 19
+    then
+        code = 42
+    else
+        code = 0
+    end if
+end main

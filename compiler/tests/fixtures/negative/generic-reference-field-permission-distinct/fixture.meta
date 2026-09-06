@@ -1,0 +1,7 @@
+class: negative
+summary: a ptr mut node actual remains distinct from ptr node inside a concrete generic reference field
+program: program.ldn
+codes: L0301
+status: 1
+constructs: 0430, 0470, 0520, 0540, 0670, 0770, 0790, 1230, 1290, 1300, 1810, 1920
+targets: linux-x86-64, macos-arm64, synthetic-32

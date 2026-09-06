@@ -1,0 +1,6 @@
+class: runtime
+summary: concrete ptr T fields retain scalar nested-pointer and any-concept descriptors through generic construction
+program: main.ldn
+status: 42
+constructs: 0430, 0470, 0520, 0540, 0670, 0770, 0790, 1230, 1290, 1300, 1360, 1410, 1810, 1920
+targets: linux-x86-64
