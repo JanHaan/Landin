@@ -1416,11 +1416,12 @@ end report
 
 `core/mem` also has an explicit `arena` allocator over a supplied byte pointer
 and extent. That library value is useful where storage already exists: its
-handle derives from the supplied pointer, aligned allocation advances one
-monotonic offset, and individual `free` calls do nothing. It is not the block
-construct above and receives no stronger pointer guarantee than its unsafe
-backing storage. The paired `failing` arena adds an allocation budget so an
-out-of-memory edge is deterministic in tests.
+handle derives from the supplied pointer, allocation aligns the absolute base
+address plus its monotonic offset, and individual `free` calls do nothing. It
+is not the block construct above and receives no stronger pointer guarantee
+than its unsafe backing storage. The paired `failing` arena adds an allocation
+budget so an out-of-memory edge is deterministic in tests. [1360] records the providers'
+zero-size, zero-alignment and arithmetic-failure contracts.
 The block above is a region before it is syntax: the type its name has, where
 its bytes come from, whether exhaustion fails or traps, and how "everything
 from it has frame origin, and allocated once the arena is passed on" survives
@@ -2650,6 +2651,16 @@ allocation only after the copy succeeds, and publishes last. `push`, `pop`,
 indexed `get`, length, capacity and release are the minimum parser slice. A
 non-zeroable pointer element is its executable case. Map, tree, small-vector,
 heap and an initialized-prefix slice accessor remain broader R4 library work.
+
+The two `core/mem` arena providers align the absolute returned address, not
+merely the offset within their caller-supplied extent. An alignment of zero is
+the same request as byte alignment, and a size of zero is valid: it returns an
+aligned point, may consume the padding needed to reach that point, and counts
+against a failing allocator's successful-allocation budget. Exhaustion and an
+unrepresentable address, rounding step, or allocation end all report
+`out_of_memory` before changing the monotonic offset, budget, or counters.
+These are provider contracts rather than stronger guarantees for the unsafe
+backing pointer and stated extent [1720].
 
 ## RUNTIME DISPATCH
 

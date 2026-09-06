@@ -105,18 +105,35 @@ public dispose: (item: type, inout storage: raw(item))
     storage.capacity_count = 0
 end dispose
 
-align_up: (value: usize, alignment: usize) -> (result: usize) =
-    if alignment <= 1 then
-        result = value
-        return
+--  Find the offset whose absolute address meets the requested alignment.
+--  Zero alignment has the same byte-aligned meaning as one. Every operation
+--  that could overflow is guarded, including the end of a zero- or nonzero-
+--  sized result, so failure leaves allocator state for the caller to retain.
+allocation_offset: (base: ptr mut u8, used: usize, extent: usize,
+                    size: usize, alignment: usize)
+                   -> (offset: usize) ! out_of_memory =
+    maximum: usize = 0 -% 1
+    fail out_of_memory when used > extent
+
+    base_address: usize = usize(base)
+    fail out_of_memory when used > maximum - base_address
+    current_address: usize = base_address + used
+
+    mut padding: usize = 0
+    if alignment > 1 then
+        remainder: usize = current_address % alignment
+        if not (remainder == 0) then
+            padding = alignment - remainder
+        end if
     end if
-    remainder: usize = value % alignment
-    if remainder == 0 then
-        result = value
-    else
-        result = value + alignment - remainder
-    end if
-end align_up
+
+    fail out_of_memory when padding > extent - used
+    fail out_of_memory when padding > maximum - current_address
+    offset = used + padding
+    aligned_address: usize = current_address + padding
+    fail out_of_memory when size > extent - offset
+    fail out_of_memory when size > maximum - aligned_address
+end allocation_offset
 
 --  A library arena is a monotonic allocator over a caller-supplied byte
 --  extent. Individual frees deliberately do nothing; ending the extent ends
@@ -134,9 +151,8 @@ end arena_over
 
 arena_alloc: (inout state: arena, size: usize, alignment: usize)
              -> (block: ptr mut u8) ! out_of_memory =
-    offset: usize = align_up(state.used, alignment)
-    fail out_of_memory when offset > state.size
-    fail out_of_memory when size > state.size - offset
+    offset: usize = try allocation_offset(state.base, state.used, state.size,
+                                          size, alignment)
     address: usize = usize(state.base) + offset
     block = ptr(address)
     state.used = offset + size
@@ -172,9 +188,8 @@ end fail_over
 failing_alloc: (inout state: failing, size: usize, alignment: usize)
                -> (block: ptr mut u8) ! out_of_memory =
     fail out_of_memory when state.remaining == 0
-    offset: usize = align_up(state.used, alignment)
-    fail out_of_memory when offset > state.size
-    fail out_of_memory when size > state.size - offset
+    offset: usize = try allocation_offset(state.base, state.used, state.size,
+                                          size, alignment)
     dec state.remaining
     inc state.allocations
     address: usize = usize(state.base) + offset

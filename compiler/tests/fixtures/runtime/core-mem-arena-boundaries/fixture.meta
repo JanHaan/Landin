@@ -1,0 +1,7 @@
+class: runtime
+summary: core/mem arenas align absolute addresses and reject boundary arithmetic without mutation
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0300, 0430, 0470, 0790, 0940, 1360, 1810, 1920
+targets: linux-x86-64
