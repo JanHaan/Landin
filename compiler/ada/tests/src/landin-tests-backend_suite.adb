@@ -17,6 +17,7 @@
 with Ada.Strings.Fixed;
 
 with Landin.Backend;
+with Landin.Backend.Entry_Point;
 with Landin.Backend.X86_64;
 with Landin.IR;
 with Landin.Provenance;
@@ -5130,8 +5131,84 @@ package body Landin.Tests.Backend_Suite is
       end;
    end Any_Dispatch_Uses_A_Flattened_Real_Table;
 
+   --  D195 keeps host-width allocation policy out of neutral IR.  The shim
+   --  must reject either overflowing addition and totals above PTRDIFF_MAX
+   --  before libc, then retain the original malloc pointer for real release.
+   procedure A_Hosted_Heap_Shim_Checks_Before_Libc
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Hosted_Heap_Shim_Checks_Before_Libc
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "malloc: () -> none = end malloc" & LF
+         & "free: () -> none = end free" & LF
+         & "public main: () -> (code: i32) =" & LF
+         & "    malloc()" & LF
+         & "    free()" & LF
+         & "    code = 0" & LF
+         & "end main" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work), "the program is accepted");
+      declare
+         Hosted : constant Landin.IR.Item_Id :=
+           Landin.Backend.Entry_Point.Hosted_Main
+             (Landin.Stages.Code (Work).all,
+              Landin.Stages.Meanings (Work).all,
+              Landin.Stages.Modules (Work).all,
+              Landin.Stages.Identities (Work).all);
+         Text : constant String :=
+           Landin.Backend.X86_64.Text
+             (Landin.Stages.Code (Work).all,
+              Landin.Stages.Meanings (Work).all,
+              Landin.Stages.Identities (Work).all,
+              Landin.Targets.Linux_X86_64,
+              Hosted_Entry => Hosted);
+         First_Check : constant Natural :=
+           Index (Text, "jc .Llandin_host_heap_failed");
+         Host_Call : constant Natural := Index (Text, "call malloc");
+      begin
+         Landin.Testing.Check
+           (Item,
+            First_Check > 0 and then Host_Call > First_Check
+              and then Contains
+                (Text, "js .Llandin_host_heap_failed"),
+            "overflow and PTRDIFF_MAX are checked before malloc");
+         Landin.Testing.Check
+           (Item,
+            Contains (Text, "divq (%rsp)")
+              and then Contains (Text, "movq %rcx, -8(%rax)"),
+            "arbitrary alignment retains the original allocation");
+         Landin.Testing.Check
+           (Item,
+            Contains
+              (Text, "_landin_host_heap_release:" & LF
+                 & HT & "movq -8(%rdi), %rdi" & LF
+                 & HT & "jmp free" & LF),
+            "release passes the recovered pointer to libc free");
+         Landin.Testing.Check
+           (Item,
+            not Contains (Text, HT & ".type malloc, @function")
+              and then not Contains (Text, HT & ".type free, @function")
+              and then Occurrences (Text, "call malloc") = 1
+              and then Occurrences (Text, "jmp free") = 1,
+            "ordinary same-named routines cannot interpose on libc");
+      end;
+   end A_Hosted_Heap_Shim_Checks_Before_Libc;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "backend", "a hosted heap shim checks before libc",
+         A_Hosted_Heap_Shim_Checks_Before_Libc'Access);
       Landin.Testing.Register
         (Into, "backend", "any dispatch uses a flattened real table",
          Any_Dispatch_Uses_A_Flattened_Real_Table'Access);

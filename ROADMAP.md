@@ -3674,7 +3674,7 @@ bounded compiler follow-up: with `row: type = [3]u32` and
 store and fails IR verification. The saved pre-vector compiler reproduces it.
 It is not a refusal or a change to array legality; the runtime-address repair
 above covers pointer/computed destinations, not this constant-index path.
-Heap and fixed providers, initialized views, iterable/sort integration and
+Fixed providers, initialized views, iterable/sort integration and
 small-vector, map and tree expansion remain later increments of this active
 item.
 
@@ -3722,6 +3722,13 @@ adds scalar accumulation and a generic element call inside payload traversal;
 and computed array destinations, sentinels and evaluation counts;
 `runtime/r420-array-place-recovery` checks destination/source pointer recovery
 and slice-index recovery, including all-return operands and suppressed RHS/copy.
+
+D195 supplies the hosted allocator lane: `core/heap` is a separately imported
+libc-backed provider over [1975]'s fixed scalar/pointer runtime seam. Its
+alignment, zero-size, maximum-size and failure policies are recorded there;
+runtime audit evidence observes simultaneous vector extents and exact release.
+It adds no dependency to the freestanding `core/mem` protocol or its
+caller-backed providers.
 
 Exit evidence: containers run with heap, arena, fixed and failing allocators;
 all omission and layering choices are recorded; `[0820]`'s block is either

@@ -1188,6 +1188,10 @@ in this language. Decide it, and fix the three examples.
 Z19 RESOLVED at 0.0.11 as undo, and the argument moved twice on the
 way, so both corrections belong here.
 
+R4.20 adds the real hosted-heap pressure the original resolution was waiting
+for: `runtime/hosted-heap-provider` observes both old and replacement vector
+allocations live during growth, then observes their exact extents released.
+
 First, this finding overstated its own case. A flag and a
 conditional defer is linear, not quadratic — three lines per
 resource, however many there are. Only the else chain written

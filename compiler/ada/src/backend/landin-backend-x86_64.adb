@@ -277,6 +277,8 @@ package body Landin.Backend.X86_64 is
 
       function Is_Hosted_Dependency (Spelling : String) return Boolean
         is (Spelling = "strlen"
+            or else Spelling = "malloc"
+            or else Spelling = "free"
             or else Spelling = "open"
             or else Spelling = "read"
             or else Spelling = "write"
@@ -5284,6 +5286,66 @@ package body Landin.Backend.X86_64 is
          Emit ("ret");
          Put (Character'Val (9)
               & ".size _landin_host_errno, .-_landin_host_errno");
+
+         --  core/heap keeps allocation behind the same fixed scalar/pointer
+         --  bridge as hosted I/O.  Over-allocation leaves one pointer word
+         --  immediately before the aligned result so release can recover
+         --  the exact libc pointer.  The arithmetic and PTRDIFF_MAX checks
+         --  are host-width work here, never constants in target-neutral IR.
+         Put (Character'Val (9)
+              & ".type _landin_host_heap_allocate, @function");
+         Put ("_landin_host_heap_allocate:");
+         Emit ("cmpq $1, %rsi");
+         Emit ("ja .Llandin_host_heap_alignment_ready");
+         Emit ("movl $1, %esi");
+         Put (".Llandin_host_heap_alignment_ready:");
+         Emit ("movq %rsi, %rax");
+         Emit ("subq $1, %rax");
+         Emit ("addq $8, %rax");
+         Emit ("jc .Llandin_host_heap_failed");
+         Emit ("addq %rdi, %rax");
+         Emit ("jc .Llandin_host_heap_failed");
+         Emit ("testq %rax, %rax");
+         Emit ("js .Llandin_host_heap_failed");
+         Emit ("subq $24, %rsp");
+         Emit ("movq %rsi, (%rsp)");
+         Emit ("movq %rax, %rdi");
+         Emit ("call malloc");
+         Emit ("testq %rax, %rax");
+         Emit ("jz .Llandin_host_heap_malloc_failed");
+         Emit ("movq %rax, 8(%rsp)");
+         Emit ("addq $8, %rax");
+         Emit ("xorl %edx, %edx");
+         Emit ("divq (%rsp)");
+         Emit ("movq 8(%rsp), %rax");
+         Emit ("addq $8, %rax");
+         Emit ("testq %rdx, %rdx");
+         Emit ("jz .Llandin_host_heap_aligned");
+         Emit ("movq (%rsp), %rcx");
+         Emit ("subq %rdx, %rcx");
+         Emit ("addq %rcx, %rax");
+         Put (".Llandin_host_heap_aligned:");
+         Emit ("movq 8(%rsp), %rcx");
+         Emit ("movq %rcx, -8(%rax)");
+         Emit ("addq $24, %rsp");
+         Emit ("ret");
+         Put (".Llandin_host_heap_malloc_failed:");
+         Emit ("addq $24, %rsp");
+         Put (".Llandin_host_heap_failed:");
+         Emit ("xorl %eax, %eax");
+         Emit ("ret");
+         Put (Character'Val (9)
+              & ".size _landin_host_heap_allocate, "
+              & ".-_landin_host_heap_allocate");
+
+         Put (Character'Val (9)
+              & ".type _landin_host_heap_release, @function");
+         Put ("_landin_host_heap_release:");
+         Emit ("movq -8(%rdi), %rdi");
+         Emit ("jmp free");
+         Put (Character'Val (9)
+              & ".size _landin_host_heap_release, "
+              & ".-_landin_host_heap_release");
 
          --  Keep the two entry cells in the small initialized data section.
          --  A program may own a multi-gigabyte zero-image datum in .bss;
