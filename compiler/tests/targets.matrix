@@ -21,7 +21,9 @@ negative/any-readonly-source-for-mutable-entry | linux-x86-64, macos-arm64, synt
 negative/any-self-convention | linux-x86-64, macos-arm64, synthetic-32
 negative/any-self-not-exact | linux-x86-64, macos-arm64, synthetic-32
 negative/any-source-not-pointer | linux-x86-64, macos-arm64, synthetic-32
+negative/arena-block-names-owner | linux-x86-64, macos-arm64
 negative/arena-block-not-enabled | linux-x86-64, macos-arm64
+negative/arena-type-names-owner | linux-x86-64, macos-arm64
 negative/arena-type-not-enabled | linux-x86-64, macos-arm64
 negative/array-argument-unassigned | linux-x86-64, macos-arm64
 negative/array-copy-element-mismatch | linux-x86-64, macos-arm64

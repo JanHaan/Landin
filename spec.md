@@ -721,7 +721,7 @@ R3.10 recognizes [1430]'s import alias and [1440]'s selected import shapes and
 refuses each by name; R4.30 owns enabling them.
 R4.10 recognizes [0820]'s lexical `arena` block at a statement position and
 refuses it by name, and the checker refuses the built-in `arena` type name
-[0780] writes a parameter with; R4.20 owns enabling both. `arena` is not a
+[0780] writes a parameter with; D196 assigns both to R4.80. `arena` is not a
 word the keyword rule spells and `core/mem` declares a type of that name, so
 the block is recognized by the shape `arena name do` and nothing else spelled
 `arena` is touched.
@@ -8680,10 +8680,10 @@ classified failure boundary before the repository gate can pass.
 | `inout.exact-alias` | static | 0900 | L0301 when one provably identical binding-rooted place fills two inout parameters | `negative/inout-same-place-twice` |
 | `inout.possible-alias` | outside | 0430, 0770, 0900 | non-guarantee: distinct pointer or computed paths may still alias | `runtime/inout-pointer-alias-is-unchecked` |
 | `pointer.validity` | outside | 0430 | non-guarantee: a permitted pointer may still be invalid or stale | `runtime/r250-references` |
-| `pointer.integer-origin` | beyond-lifetime | 0470, 0810, 0860, 1690, 1720 | non-guarantee: integer-to-pointer conversion carries no origin through a direct or erased value, and D191 records it as the derivation cut [0810] describes until `core` names one | `runtime/r250-references`, `runtime/any-untracked-pointer-origin`, `runtime/diagnostic-loggers-dispatch`, `negative/frame-origin-return` |
+| `pointer.integer-origin` | beyond-lifetime | 0470, 0810, 0860, 1690, 1720 | non-guarantee: integer-to-pointer conversion carries no origin through a direct or erased value, and D196 records it as the actual derivation cut [0810] describes without privileged `core` names | `runtime/r250-references`, `runtime/any-untracked-pointer-origin`, `runtime/diagnostic-loggers-dispatch`, `negative/frame-origin-return` |
 | `pointer.integer-width` | trap | 0470, 1120, 1950, 1960 | trap, outside [1120]'s region | `runtime/pointer-to-small-integer-traps` |
 | `arrays.initialization` | static | 0520, 0530, 0540, 0550, 0560 | L0300--L0304 or L0313 | `negative/array-initializer-length-mismatch`, `runtime/whole-arrays-copy-between-storage` |
-| `raw.prefix` | static | 0420, 0510 | L0202 prevents representation access; `core/mem` reports `raw_full`, `uninitialized`, `raw_empty` or `raw_not_empty` before an invalid transition | `negative/core-mem-private-representation`, `runtime/core-mem-raw-storage` |
+| `raw.prefix` | static | 0420, 0500, 0510 | L0202 prevents representation access; `core/mem` reports `raw_full`, `uninitialized`, `raw_empty` or `raw_not_empty` before an invalid transition | `negative/core-mem-private-representation`, `runtime/core-mem-raw-storage` |
 | `raw.backing` | outside | 0430, 0470, 0510, 1720 | non-guarantee: the supplied byte pointer may be invalid, misaligned or smaller than the declared capacity | `runtime/core-mem-raw-storage` |
 | `allocation.failure` | static | 0300, 0940, 1230, 1280, 1290, 1310, 1360, 1975 | `core/mem` reports `out_of_memory`, which a caller must handle or declare; its arenas reject exhaustion and unrepresentable request arithmetic before state mutation, and `core/vec` checks byte extents and growth before provider calls while preserving the old list on failure; the hosted heap maps an unrepresentable request or libc refusal to the same atom | `runtime/core-mem-allocators`, `runtime/core-mem-arena-boundaries`, `runtime/core-vec-pointer-storage`, `runtime/r420-vec-capacity-boundaries`, `runtime/r420-vec-growth-boundary`, `runtime/r420-vec-growth-transaction`, `runtime/derived-parser`, `runtime/hosted-heap-provider` |
 | `allocation.backing` | outside | 0430, 0470, 0770, 1360, 1720 | non-guarantee: caller-supplied arena storage may be invalid or cease to live after an origin-erasing pointer conversion; provider alignment does not validate the backing extent | `runtime/core-mem-allocators`, `runtime/core-mem-arena-boundaries`, `negative/core-arena-frame-escape` |
@@ -8921,8 +8921,8 @@ handles retain `from base`; returning one over frame storage is L0314. Freeing
 does not reclaim monotonic space. The pointer and extent remain unsafe
 caller-supplied backing under [0430], [0470] and [1720]. This ordinary library
 allocator is not [0820]'s built-in lexical `arena` block, whose exact region
-semantics D191 re-owned to R4.20 and whose two written forms are refused by
-name against that item.
+semantics D191 re-owned to R4.20 and D196 transfers to R4.80. Both written
+forms are refused by name against R4.80.
 
 `core/vec.list(item)` contains one D151 `mem.storage(item)`. It threads an
 allocator through `reserve`, `push` and `release`, while `length`, `capacity`,
@@ -11051,7 +11051,7 @@ compiler privilege, and R4.20 owns them with the library slice that would add
 them. [0820] is language syntax, and it is recognized and refused by name here
 rather than enabled: the parser reports L0010 on the `arena` of `arena name do`
 and swallows the block's own `end name`, and the checker reports L0304 on a
-written `arena` type. Both notes name [0820] and R4.20. The construct
+written `arena` type. At this increment both notes name [0820] and R4.20. The construct
 applicability register moves all three rows to `later-r4` under R4.20, the
 shape [1430] and [1440] already have.
 
@@ -11120,8 +11120,9 @@ a rule `check.py` enforces.
 
 **Pinned by** `negative/arena-block-not-enabled`,
 `negative/arena-type-not-enabled`, `runtime/arena-is-an-ordinary-name`, and
-the `pointer.integer-origin` guarantee row, which now cites [0810] and says
-that this conversion is the derivation cut until `core` names one.
+the `pointer.integer-origin` guarantee row. D196 completes the [0500]/[0810]
+disposition and transfers both [0820] refusals and all four questions to
+R4.80; the compiler still grants no privilege to a `core` name.
 
 ### D192 — Caller coordinates are three u32 fields; filenames are optional metadata
 
@@ -11383,3 +11384,55 @@ shim checks before libc`, and the `allocation.failure` guarantee row. The
 runtime audit sees two differently aligned live blocks, exact requested
 extents, a non-null empty allocation, the old and replacement allocations
 coexisting during `vec.list(ptr node)` growth, and no live block after release.
+
+### D196 — The library omits pointer conveniences and transfers lexical arena to the hosted application
+
+**R4.20 inherited** D191's [0500], [0810] and [0820] dispositions. Its exit
+explicitly permits recording the two pointer conveniences as unneeded and
+naming the item that inherits the lexical block. The working caller-backed
+allocator does not implement the block's promised region semantics.
+
+**Chosen:** `offset` and `base_of` are unnecessary for this library slice.
+The allocator uses ordinary [0470] conversions; slice consumers check for
+nonempty storage before taking an element address. Neither operation is an
+enabled API or a privileged compiler name. [0810] now states the actual
+integer-to-pointer derivation cut, and [0580]'s empty-base representation no
+longer implies that an omitted accessor exists. D151's rejection of an
+arbitrary-pointer `slice_from` remains in force.
+
+Both `arena name do` and the builtin `arena` parameter type remain refused by
+name, now against R4.80. That item owns the first complete program using
+prototype 4's W7 helper-returned configuration, and precedes the R4 hosted
+parity gate. It inherits all four D191 questions: builtin type and ordinary
+allocator conformance without frontend dependence on `core/mem`; authority,
+backing and capacity on hosted and constrained targets; exhaustion behavior;
+and the relationship between direct frame-origin allocations and independent
+results of ordinary allocator calls. R4.20 gains no dependency on R4.80.
+
+The last question has a concrete counterexample to W7's historical argument.
+A helper passed the allocator can allocate through its no-`from` signature
+and store that independent pointer in module storage as a side effect. The
+reference never returns through the lexical block's boundary. Even an
+ordinary helper return carries no signature fact reconnecting its allocation
+to that block. Merely checking the block's returned value therefore does not
+establish its promise. R4.80 must implement the promised checks with explicit
+semantics or amend the promise on evidence before claiming the complete
+application. It must cover direct, helper-returned and helper-side-effect
+escapes, including aggregates, slices and `any`, while allowing simultaneous
+allocations and helper results used inside the block. Explicit unsafe
+pointer conversion remains a documented non-guarantee.
+
+**The alternatives:** a hidden frame buffer guesses capacity and returns
+independent pointers, so it still fails D191. Adding `from allocator` revives
+prototype 3's rejected Z5 behavior: a live allocation borrows the allocator
+and prevents another allocation. Neither is a region implementation. Sending
+the questions to an unspecified future library would leave R4.80's complete
+prototype and the hosted gate without an owner. Leaving the three-primitives
+claim above a contradictory caveat would retain a false rule. All are declined.
+
+**Pinned by** `negative/arena-block-not-enabled`,
+`negative/arena-type-not-enabled`, `negative/arena-block-names-owner`,
+`negative/arena-type-names-owner`, `runtime/arena-is-an-ordinary-name`,
+`runtime/core-mem-allocators`, `runtime/core-mem-arena-boundaries`, and the
+`pointer.integer-origin` guarantee row. The refusal transcripts name R4.80;
+the working allocator fixtures provide no claim about lexical arena escapes.

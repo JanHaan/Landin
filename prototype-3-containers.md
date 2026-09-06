@@ -110,6 +110,11 @@ advance across alignment padding. Any request whose current address, aligned
 address, or end cannot be represented, or whose aligned extent does not fit,
 reports `out_of_memory` before allocator state changes.
 
+D196 records the sketch's `offset` and `base_of` names as unnecessary for the
+implemented library. The actual allocator uses [0470]'s explicit conversion;
+[0810] describes its untracked result. This explicit caller-backed pool does
+not require the lexical arena block whose resolution belongs to R4.80.
+
 ## core/mem  —  a bump allocator over borrowed storage
 
 ```landin

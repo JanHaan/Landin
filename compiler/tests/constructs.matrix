@@ -11,7 +11,7 @@
 #
 #  A construct with no evidence and no refusal is this
 #  item's to answer for; see ROADMAP.md R1.90.
-#  200 constructs, 178 with evidence, 22 with neither.
+#  200 constructs, 180 with evidence, 20 with neither.
 #
 #  id    defined in  evidence
 0010   tour        accepted emitted                   Line comment, to end of line
@@ -63,7 +63,7 @@
 0470   tour        accepted emitted executed refused  Both directions between a pointer and an integer are the
 0480   tour        accepted emitted executed refused refused-by-name There is no null
 0490   tour        -                                  Pointers are a system tool
-0500   tour        -                                  Three operations sit between pointers and slices
+0500   tour        accepted emitted executed          Three operations sit between pointers and slices
 0510   tour        accepted emitted executed refused  slice_from is where uninitialised storage is smuggled in
 0520   tour        accepted emitted executed refused refused-by-name Array: a value
 0530   tour        accepted emitted executed refused  The length may be inferred from the literal
@@ -94,7 +94,7 @@
 0780   tour        accepted emitted executed refused  Parameters are non-escaping by default
 0790   tour        accepted emitted executed refused  The other direction
 0800   tour        accepted emitted executed refused  The borrow of reaches across the call from there
-0810   tour        -                                  Derivation stops at the three primitives of
+0810   tour        accepted emitted executed          Integer-to-pointer conversion ends tracked derivation
 0820   tour        refused refused-by-name            arena is built in
 0830   tour        accepted emitted executed refused  A view derived from a local borrows it
 0840   tour        accepted emitted executed refused  Origins join to the shortest-lived part

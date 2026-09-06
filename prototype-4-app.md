@@ -23,6 +23,13 @@ question is written out at the end.
 
 ---
 
+D196's current disposition qualifies W7's historical resolution below: a
+helper can retain an independent allocator result in module state without
+returning it through the arena block. R4.80 owns both refused arena forms and
+all four D191 design questions, including that side-effect escape path. The
+library slice's explicit caller-backed arena does not establish the block's
+promised checks.
+
 ## core/mem  —  one addition to what prototype 3 sketched
 
 A single object rather than a slice. No from clause: what comes
