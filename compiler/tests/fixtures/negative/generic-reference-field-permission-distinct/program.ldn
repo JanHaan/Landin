@@ -1,0 +1,22 @@
+node: type = struct
+    number: i32
+end node
+
+holder: type (item: type) = struct
+    part: ptr mut item
+end holder
+
+hold: (item: type, part: ptr mut item) -> (result: holder(item) from part) =
+    result = (part: part)
+end hold
+
+needs_mutable_pointer: (value: holder(ptr mut node)) -> none =
+    _ = value.part
+end needs_mutable_pointer
+
+bad: () -> none =
+    item: node = (number: 1)
+    mut read_only: ptr node = addr item
+    held := hold(item: ptr node, part: addr read_only)
+    needs_mutable_pointer(held)
+end bad
