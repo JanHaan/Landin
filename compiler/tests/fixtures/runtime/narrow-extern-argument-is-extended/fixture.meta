@@ -1,0 +1,6 @@
+class: runtime
+summary: [1975] a narrow integer argument to a fixed scalar C routine is extended to the width the C convention reads, so a negative i8 reaches abs as its own value
+program: main.ldn
+status: 42
+constructs: 0430, 1580, 1975
+targets: linux-x86-64

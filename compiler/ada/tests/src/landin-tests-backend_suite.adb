@@ -914,6 +914,55 @@ package body Landin.Tests.Backend_Suite is
       end;
    end Stack_Arguments_Cross_The_Call;
 
+   --  R4.21: a C callee reads a narrow integer argument as the 32-bit
+   --  register, so the caller extends it there; a Landin callee copies the
+   --  width it declared and gets the exact width as before.
+   procedure Narrow_External_Arguments_Are_Extended
+     (Item : in out Landin.Testing.Context);
+
+   procedure Narrow_External_Arguments_Are_Extended
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "extern(c) narrow: (a: i8, b: u16, c: i32, d: i32, e: i32,"
+         & " f: i32, g: u8) -> (r: i32)" & LF
+         & "own: (a: i8, b: u16) -> (r: i32) =" & LF
+         & "    r = i32(a) + i32(b)" & LF
+         & "end own" & LF
+         & "use: (x: i8, y: u16, z: u8) -> (r: i32) =" & LF
+         & "    r = narrow(x, y, 1, 2, 3, 4, z) + own(x, y)" & LF
+         & "end use" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
+      declare
+         Text : constant String := Emitted (Work);
+      begin
+         Landin.Testing.Check
+           (Item,
+            Contains (Text, "movsbl") and then Contains (Text, ", %edi" & LF)
+              and then Contains (Text, "movzwl")
+              and then Contains (Text, ", %esi" & LF),
+            "register arguments to a C callee are sign or zero extended to"
+            & " 32 bits");
+         Landin.Testing.Check
+           (Item,
+            Contains (Text, "movzbq")
+              and then Contains (Text, "movq %rax, 0(%rsp)" & LF),
+            "a stack argument to a C callee is extended to its whole slot");
+         Landin.Testing.Check
+           (Item,
+            Contains (Text, HT & "movb ")
+              and then Contains (Text, ", %dil" & LF),
+            "a Landin callee still receives the exact declared width");
+      end;
+   end Narrow_External_Arguments_Are_Extended;
+
    --  D94 preserves aggregate addresses before copying each argument into
    --  its own target-laid-out callee slot.  Register and stack positions use
    --  the same one-position internal convention.
@@ -5410,6 +5459,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "aggregate arguments are copied in the callee",
          Aggregate_Arguments_Are_Copied_In_The_Callee'Access);
+      Landin.Testing.Register
+        (Into, "backend", "narrow external arguments are extended",
+         Narrow_External_Arguments_Are_Extended'Access);
       Landin.Testing.Register
         (Into, "backend", "unsigned shift left zeroes beyond the width",
          Unsigned_Shift_Left_Zeroes_Beyond_The_Width'Access);
