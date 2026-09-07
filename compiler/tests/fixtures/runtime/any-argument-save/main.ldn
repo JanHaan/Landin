@@ -1,0 +1,107 @@
+halted: atom
+stops: type = halted
+
+display: type = concept (t: type)
+    code: (self: ptr t) -> (value: i32)
+end display
+
+thing: type = struct
+    value: i32
+end thing
+
+holder: type = struct
+    item: any display
+end holder
+
+thing_code: (self: ptr thing) -> (value: i32) =
+    value = self.val.value
+end thing_code
+
+thing is display (code: thing_code)
+
+mut trace: i32 = 0
+mut consume_calls: i32 = 0
+
+erase_one: (source: ptr thing) -> (result: any display from source) =
+    trace = trace * 10 + 1
+    result = any(source)
+end erase_one
+
+erase_three: (source: ptr thing) -> (result: any display from source) =
+    trace = trace * 10 + 3
+    result = any(source)
+end erase_three
+
+erase_seven: (source: ptr thing) -> (result: any display from source) =
+    trace = trace * 10 + 7
+    result = any(source)
+end erase_seven
+
+mark_holder: (source: ptr holder, digit: i32)
+      -> (result: ptr holder from source) =
+    trace = trace * 10 + digit
+    result = source
+end mark_holder
+
+mark_number: (value: i32, digit: i32) -> (result: i32) =
+    trace = trace * 10 + digit
+    result = value
+end mark_number
+
+stop_number: (digit: i32) -> (result: i32) ! stops =
+    trace = trace * 10 + digit
+    fail halted
+end stop_number
+
+consume: (item: any display, later: i32) -> (result: i32) =
+    inc consume_calls
+    result = item.code() + later
+end consume
+
+consume_reordered: (later: i32, item: any display) -> (result: i32) =
+    inc consume_calls
+    result = item.code() + later
+end consume_reordered
+
+attempt: (source: ptr thing) -> none ! stops =
+    _ = consume(erase_seven(source), try stop_number(8))
+    trace = trace * 10 + 9
+end attempt
+
+public main: () -> (code: i32) =
+    first: thing = (value: 40)
+    second: thing = (value: 38)
+    direct_item: thing = (value: 40)
+
+    trace = 0
+    direct := consume(
+        erase_one(addr direct_item), mark_number(2, 2))
+    direct_trace := trace
+
+    trace = 0
+    named := consume_reordered(
+        item: erase_three(addr second),
+        later: mark_number(4, 4))
+    named_trace := trace
+
+    wrapped: holder = (item: any(addr first))
+    trace = 0
+    marked_holder := mark_holder(addr wrapped, 5)
+    loaded := consume(
+        marked_holder.val.item, mark_number(2, 6))
+    loaded_trace := trace
+
+    trace = 0
+    calls_before_stop := consume_calls
+    attempt(addr first) else 0
+
+    code = 1
+    if direct == 42 and direct_trace == 12
+      and named == 42 and named_trace == 34
+      and loaded == 42 and loaded_trace == 56
+      and trace == 78 and consume_calls == calls_before_stop
+      and consume_calls == 3
+    then
+        code = 42
+    end if
+end main

@@ -1,0 +1,6 @@
+class: runtime
+summary: any arguments survive later runtime evaluation in written order across positional named pointer-loaded and terminating calls
+program: main.ldn
+status: 42
+constructs: 0410, 0430, 0670, 0700, 0770, 0790, 0840, 0980, 1230, 1240, 1370, 1380, 1390, 1660, 1920
+targets: linux-x86-64
