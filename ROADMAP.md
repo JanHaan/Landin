@@ -3776,11 +3776,20 @@ read-only relaxation, slices and a pointer-backed slice of zero-sized arrays;
 strengthen permission. This repairs missing expected type evidence without
 changing reference identity or return-source rules. The allocator-backed
 zero-sized initialized-prefix runtime remains a separate execution obligation.
-One independent defect remains owned here for a bounded repair: a local
-inferred from `erased.entry()` can query conformance provider entries before
-finalization, even without generics. Explicitly typed result locals allow the
-transport fixture to execute; this does not license erasing origin facts or
-weakening a negative fixture.
+
+The bounded erased-result staging repair removes the early provider-access defect.
+An inferred `erased.entry()` now derives its complete concrete signature from
+the selected exact concept and already-interned conformance key rather than
+reading the provider run before its later validation. Provider finalization
+remains in its dependency-ordered phase and still proves every implementation
+against that signature. `runtime/any-inferred-entry-staging` compares inferred
+and explicit bindings across reversed declaration order and heterogeneous
+mutable providers, including declared error recovery and a mutable pointer
+result with its `from` source plus an inferred `any` result round trip. The
+checking case pins the former no-crash seam,
+and `negative/any-inferred-result-frame-escape` retains that result's origin.
+No generic, library-name or provider-order privilege is introduced.
+
 The initialized-view implementation must also retain [0860]'s shallow alias
 limit: a reference inserted through an alias is not generally propagated back
 to every other view of that storage, so writable views do not establish

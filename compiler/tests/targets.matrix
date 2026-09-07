@@ -16,6 +16,7 @@ negative/any-construction-needs-context | linux-x86-64, macos-arm64, synthetic-3
 negative/any-entry-not-bound-value | linux-x86-64, macos-arm64, synthetic-32
 negative/any-entry-not-object-safe | linux-x86-64, macos-arm64, synthetic-32
 negative/any-frame-origin-escape | linux-x86-64, macos-arm64, synthetic-32
+negative/any-inferred-result-frame-escape | linux-x86-64, macos-arm64, synthetic-32
 negative/any-module-null-pair | linux-x86-64, macos-arm64, synthetic-32
 negative/any-readonly-source-for-mutable-entry | linux-x86-64, macos-arm64, synthetic-32
 negative/any-self-convention | linux-x86-64, macos-arm64, synthetic-32
@@ -865,6 +866,7 @@ runtime/any-expression-result | linux-x86-64
 runtime/any-generic-storage | linux-x86-64
 runtime/any-heterogeneous-dispatch | linux-x86-64
 runtime/any-inferred-construction | linux-x86-64
+runtime/any-inferred-entry-staging | linux-x86-64
 runtime/any-parameterized-provider | linux-x86-64
 runtime/any-return-origin | linux-x86-64
 runtime/any-untracked-pointer-origin | linux-x86-64

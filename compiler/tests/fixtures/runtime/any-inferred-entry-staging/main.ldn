@@ -1,0 +1,78 @@
+problem: atom
+problems: type = problem
+
+cell: type = struct
+    value: i32
+end cell
+
+counter: type = concept (t: type)
+    bump: (self: ptr mut t) -> (value: i32)
+    reerase: (self: ptr mut t) -> (result: any counter from self)
+    take: (self: ptr t, source: ptr mut cell, stop: bool)
+          -> (result: ptr mut cell from source) ! problems
+end counter
+
+first: type = struct
+    value: i32
+end first
+
+second: type = struct
+    prefix: u64
+    value: i32
+    suffix: u8
+end second
+
+public main: () -> (code: i32) =
+    mut left: first = (value: 9)
+    mut right: second = (prefix: 99, value: 19, suffix: 7)
+    mut primary: cell = (value: 5)
+    mut fallback: cell = (value: 4)
+    a: any counter = any(addr left)
+    b: any counter = any(addr right)
+    roundtrip := a.reerase()
+    inferred := roundtrip.bump()
+    explicit: i32 = b.bump()
+    chosen := a.take(addr primary, false) else addr fallback
+    recovered := b.take(addr primary, true) else addr fallback
+    inc chosen.val.value
+    inc recovered.val.value
+    code = inferred + explicit + primary.value + fallback.value
+end main
+
+bump_second: (self: ptr mut second) -> (value: i32) =
+    self.val.value = self.val.value + 2
+    value = self.val.value
+end bump_second
+
+take_second: (self: ptr second, source: ptr mut cell, stop: bool)
+      -> (result: ptr mut cell from source) ! problems =
+    fail problem when stop
+    result = source
+end take_second
+
+reerase_second: (self: ptr mut second)
+      -> (result: any counter from self) =
+    result = any(self)
+end reerase_second
+
+second is counter
+    (bump: bump_second, reerase: reerase_second, take: take_second)
+
+bump_first: (self: ptr mut first) -> (value: i32) =
+    inc self.val.value
+    value = self.val.value
+end bump_first
+
+take_first: (self: ptr first, source: ptr mut cell, stop: bool)
+      -> (result: ptr mut cell from source) ! problems =
+    fail problem when stop
+    result = source
+end take_first
+
+reerase_first: (self: ptr mut first)
+      -> (result: any counter from self) =
+    result = any(self)
+end reerase_first
+
+first is counter
+    (bump: bump_first, reerase: reerase_first, take: take_first)

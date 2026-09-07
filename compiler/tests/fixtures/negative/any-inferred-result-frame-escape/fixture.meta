@@ -1,0 +1,6 @@
+class: negative
+summary: an inferred erased result retains its declared frame origin
+program: main.ldn
+codes: L0314
+constructs: 0430, 0770, 0790, 0960, 1030, 1230, 1240, 1370, 1380, 1390
+targets: linux-x86-64, macos-arm64, synthetic-32
