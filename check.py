@@ -1155,8 +1155,16 @@ def check_roadmap(path):
             work_id, suffix, title = work.groups()
             works[work_id].append(n)
             work_titles[title].append(n)
-            if int(suffix) % 10:
-                out.append((n, "%s is not spaced in an increment of ten" % work_id))
+            #  Tens are the planned spacing; a unit ID is work inserted
+            #  between two existing items, and it must have somewhere to
+            #  be inserted: R4.21 needs an R4.20 above it.
+            if int(suffix) % 10 and not (
+                int(suffix) > 10
+                and work_id.split(".")[0] + ".%d" % (int(suffix) // 10 * 10)
+                in works
+            ):
+                out.append((n, "%s is neither a multiple of ten nor inserted"
+                            " after an existing item" % work_id))
             if current_phase != work_id.split(".")[0]:
                 out.append((n, "%s is under phase %s" % (work_id, current_phase)))
         elif re.match(r"^### R\d+\.", line):

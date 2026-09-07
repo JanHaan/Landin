@@ -1,0 +1,11 @@
+swap_around: (p: ptr i32, q: ptr i32) -> (result: ptr i32 from p, q) =
+    mut a: ptr i32 = p
+    mut b: ptr i32 = q
+    mut round: usize = 0
+    while round < 2 do
+        a = b
+        b = p
+        inc round
+    end while
+    result = a
+end swap_around

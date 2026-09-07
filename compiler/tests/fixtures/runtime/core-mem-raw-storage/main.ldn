@@ -9,6 +9,13 @@ node_ptr: type = ptr node
 first: node = (value: 19)
 second: node = (value: 23)
 
+--  The backing arrays live at module scope: a value read out of raw
+--  storage carries the storage's origin, and [0840] refuses handing a
+--  frame-origin value to `admit`'s escaping parameter.
+mut old_bytes: [16]u8 = zeroed
+mut short_bytes: [8]u8 = zeroed
+mut grown_bytes: [32]u8 = zeroed
+
 growth_case: () -> (ok: bool) =
     zero: usize = 0
     one: usize = 1
@@ -17,7 +24,6 @@ growth_case: () -> (ok: bool) =
     null_address: usize = 0
     fallback: ptr mut u8 = ptr(null_address)
 
-    mut old_bytes: [16]u8 = zeroed
     old_start: ptr mut u8 = addr old_bytes[0]
     mut old := mem.reserve(item: node_ptr, base: old_start, slots: two)
     _ = mem.admit(old, addr first) else two
@@ -25,7 +31,6 @@ growth_case: () -> (ok: bool) =
 
     --  A too-small replacement may be changed while it is private, then
     --  rolled back. The published old prefix is not touched.
-    mut short_bytes: [8]u8 = zeroed
     short_start: ptr mut u8 = addr short_bytes[0]
     mut short := mem.reserve(item: node_ptr, base: short_start, slots: one)
     copied_first: usize = begin
@@ -53,7 +58,6 @@ growth_case: () -> (ok: bool) =
     --  A large enough replacement receives the prefix first. Only after
     --  every fallible copy succeeds is the old prefix drained and released;
     --  the final assignment is the publication point.
-    mut grown_bytes: [32]u8 = zeroed
     grown_start: ptr mut u8 = addr grown_bytes[0]
     mut grown := mem.reserve(item: node_ptr, base: grown_start, slots: four)
     grown_first: usize = begin

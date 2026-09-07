@@ -1,0 +1,6 @@
+class: negative
+summary: a place sunk inside a loop body is dead after the loop's break
+program: program.ldn
+codes: L0302
+constructs: 0430, 0900, 0910, 1130
+targets: linux-x86-64, macos-arm64

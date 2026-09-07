@@ -71,6 +71,9 @@ negative/atom-match-not-exhaustive | linux-x86-64, synthetic-32
 negative/atom-union-member-not-atom | linux-x86-64, synthetic-32
 negative/bare-block-scope-does-not-leak | linux-x86-64, macos-arm64, synthetic-32
 negative/bare-block-unclosed | linux-x86-64, macos-arm64, synthetic-32
+negative/borrow-read-above-inout-in-loop | linux-x86-64, macos-arm64
+negative/borrow-read-after-inout-loop | linux-x86-64, macos-arm64
+negative/borrow-survives-untaken-replacement | linux-x86-64, macos-arm64
 negative/borrowed-source-inout | linux-x86-64, macos-arm64, synthetic-32
 negative/call-of-a-non-function | linux-x86-64, macos-arm64, synthetic-32
 negative/call-with-too-few-arguments | linux-x86-64, macos-arm64
@@ -191,6 +194,11 @@ negative/duplicate-in-a-module | linux-x86-64, macos-arm64
 negative/duplicate-parameter | linux-x86-64, macos-arm64
 negative/erased-typed-call-unhandled | linux-x86-64, macos-arm64
 negative/error-set-needs-an-atom | linux-x86-64, synthetic-32
+negative/escaping-argument-frame-origin | linux-x86-64, macos-arm64
+negative/escaping-argument-in-defer | linux-x86-64, macos-arm64
+negative/escaping-argument-in-if-condition | linux-x86-64, macos-arm64
+negative/escaping-argument-in-nested-argument | linux-x86-64, macos-arm64
+negative/escaping-argument-in-while-condition | linux-x86-64, macos-arm64
 negative/escaping-frame-reference | linux-x86-64, macos-arm64, synthetic-32
 negative/external-aggregate-boundary | linux-x86-64
 negative/external-convention-not-closed | linux-x86-64
@@ -225,7 +233,10 @@ negative/for-iterable-missing-conformance | linux-x86-64, macos-arm64, synthetic
 negative/for-range-endpoints-disagree | linux-x86-64, macos-arm64, synthetic-32
 negative/for-range-needs-integer | linux-x86-64, macos-arm64, synthetic-32
 negative/for-source-not-traversable | linux-x86-64, macos-arm64, synthetic-32
+negative/frame-origin-loop-carried | linux-x86-64, macos-arm64
+negative/frame-origin-loop-carried-three-steps | linux-x86-64, macos-arm64
 negative/frame-origin-return | linux-x86-64, macos-arm64, synthetic-32
+negative/frame-origin-through-assigned-copy | linux-x86-64, macos-arm64
 negative/function-field-assignment-signature-mismatch | linux-x86-64, macos-arm64, synthetic-32
 negative/function-field-cannot-be-filled-with-zeroed | linux-x86-64, macos-arm64, synthetic-32
 negative/function-field-construction-signature-mismatch | linux-x86-64, macos-arm64, synthetic-32
@@ -562,6 +573,9 @@ negative/several-independent-errors | linux-x86-64, macos-arm64
 negative/shift-amount-is-negative | linux-x86-64, macos-arm64
 negative/shift-amount-is-negative-in-a-body | linux-x86-64, macos-arm64
 negative/shift-amount-takes-the-left-type | linux-x86-64, macos-arm64
+negative/sink-in-zero-or-more-loop | linux-x86-64, macos-arm64
+negative/sink-past-continue | linux-x86-64, macos-arm64
+negative/sink-repeated-by-while | linux-x86-64, macos-arm64
 negative/sink-through-dereference | linux-x86-64, macos-arm64, synthetic-32
 negative/struct-argument-unassigned | linux-x86-64, macos-arm64
 negative/struct-array-field-clear-keeps-fields-separate | linux-x86-64, macos-arm64
@@ -632,6 +646,7 @@ negative/struct-with-a-struct-field | linux-x86-64, macos-arm64
 negative/struct-with-an-array-field | linux-x86-64, macos-arm64
 negative/struct-zeroed-assignment-nested-not-enabled | linux-x86-64, macos-arm64
 negative/struct-zeroed-assignment-not-on-every-path | linux-x86-64, macos-arm64
+negative/sunk-inout-field-in-loop | linux-x86-64, macos-arm64
 negative/sunk-inout-not-restored | linux-x86-64, macos-arm64, synthetic-32
 negative/text-conversion-exact-identities | linux-x86-64, macos-arm64
 negative/text-conversion-mutable-source | linux-x86-64, macos-arm64
@@ -672,6 +687,8 @@ negative/unterminated-raw-literal | linux-x86-64, macos-arm64
 negative/unterminated-text-literal | linux-x86-64, macos-arm64, synthetic-32
 negative/upper-case-name | linux-x86-64, macos-arm64
 negative/use-after-sink | linux-x86-64, macos-arm64, synthetic-32
+negative/use-after-sink-across-loop | linux-x86-64, macos-arm64
+negative/use-after-sink-scalar | linux-x86-64, macos-arm64
 negative/usize-is-not-u64 | linux-x86-64, macos-arm64
 negative/utf16-indexing-is-not-utf8-indexing | linux-x86-64, macos-arm64
 negative/utf8-index-needs-u32-or-position | linux-x86-64, macos-arm64
@@ -737,6 +754,8 @@ positive/binding-declared-only | linux-x86-64, macos-arm64
 positive/binding-inferred | linux-x86-64, macos-arm64
 positive/binding-mutable | linux-x86-64, macos-arm64
 positive/binding-typed | linux-x86-64, macos-arm64
+positive/borrow-replaced-each-iteration | linux-x86-64, macos-arm64
+positive/borrow-replaced-on-every-path | linux-x86-64, macos-arm64
 positive/call-fills-every-parameter | linux-x86-64, macos-arm64
 positive/caller-parameters | linux-x86-64, macos-arm64, synthetic-32
 positive/comment-forms | linux-x86-64, macos-arm64
@@ -750,6 +769,7 @@ positive/declaration-public | linux-x86-64, macos-arm64
 positive/deep-nested-struct-children | linux-x86-64, macos-arm64
 positive/deep-nested-struct-leaves | linux-x86-64, macos-arm64
 positive/defer-evaluates-at-exit | linux-x86-64, macos-arm64, synthetic-32
+positive/defer-retains-module-address | linux-x86-64, macos-arm64
 positive/discard-of-a-value | linux-x86-64, macos-arm64
 positive/divisor-is-not-known | linux-x86-64, macos-arm64
 positive/external-scalar-c-boundary | linux-x86-64
@@ -761,6 +781,7 @@ positive/fixed-conditional-generic-activity | linux-x86-64, macos-arm64, synthet
 positive/fixed-conditional-nested-inactive | linux-x86-64, macos-arm64, synthetic-32
 positive/fixed-conditional-selects-declarations | linux-x86-64, macos-arm64, synthetic-32
 positive/fixed-conditional-symmetric-boundaries | linux-x86-64, macos-arm64, synthetic-32
+positive/frame-origin-loop-chain-stays-module | linux-x86-64, macos-arm64
 positive/function-end-unnamed | linux-x86-64, macos-arm64
 positive/function-expression-body | linux-x86-64, macos-arm64
 positive/function-parameters | linux-x86-64, macos-arm64
@@ -800,6 +821,7 @@ positive/local-shadows-a-parameter | linux-x86-64, macos-arm64
 positive/local-struct-inferred-from-name | linux-x86-64, macos-arm64
 positive/local-struct-initialized-from-name | linux-x86-64, macos-arm64
 positive/local-struct-zeroed-initializer | linux-x86-64, macos-arm64
+positive/loop-carried-reference-stays-caller-owned | linux-x86-64, macos-arm64
 positive/measurement-of-a-type | linux-x86-64, macos-arm64
 positive/measurement-of-fixed-arrays | linux-x86-64, macos-arm64
 positive/measurement-of-nested-struct-field | linux-x86-64, macos-arm64
@@ -867,9 +889,12 @@ positive/recursive-module-images | linux-x86-64, synthetic-32
 positive/reference-origins-and-consume | linux-x86-64, macos-arm64, synthetic-32
 positive/return-bare | linux-x86-64, macos-arm64
 positive/return-when | linux-x86-64, macos-arm64
+positive/scalar-from-view-is-not-a-borrow | linux-x86-64, macos-arm64
 positive/scalar-subobject-zeroed-assignment | linux-x86-64, macos-arm64
 positive/scalar-zeroed-assignment | linux-x86-64, macos-arm64
 positive/shift-amount-is-not-known | linux-x86-64, macos-arm64
+positive/sink-restored-before-back-edge | linux-x86-64, macos-arm64
+positive/sink-restored-each-iteration | linux-x86-64, macos-arm64
 positive/space-forms | linux-x86-64, macos-arm64
 positive/statement-assignment | linux-x86-64, macos-arm64
 positive/statement-call | linux-x86-64, macos-arm64

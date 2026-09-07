@@ -1,0 +1,14 @@
+consume: (sink value: u32) -> none =
+    _ = value
+end consume
+
+good: () -> (result: u32) =
+    mut value: u32 = 42
+    mut i: usize = 0
+    while i < 2 do
+        consume(value)
+        value = 1
+        inc i
+    end while
+    result = value
+end good

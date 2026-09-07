@@ -1,0 +1,6 @@
+class: negative
+summary: an escaping call is checked when it is a while condition
+program: program.ldn
+codes: L0314
+constructs: 0430, 0770, 0780, 1140, 1800
+targets: linux-x86-64, macos-arm64

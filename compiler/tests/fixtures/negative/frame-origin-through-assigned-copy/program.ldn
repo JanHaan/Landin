@@ -1,0 +1,10 @@
+anchor: i32 = 0
+
+leak: () -> (result: ptr i32) =
+    local: i32 = 42
+    mut p: ptr i32 = addr anchor
+    mut q: ptr i32 = addr anchor
+    q = addr local
+    p = q
+    result = p
+end leak

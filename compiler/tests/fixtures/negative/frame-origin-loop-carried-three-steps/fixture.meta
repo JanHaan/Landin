@@ -1,0 +1,6 @@
+class: negative
+summary: a three-binding chain needs three passes to carry the frame origin to the returned binding
+program: program.ldn
+codes: L0314
+constructs: 0430, 0770, 0790, 1140
+targets: linux-x86-64, macos-arm64

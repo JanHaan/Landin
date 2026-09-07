@@ -1,0 +1,5 @@
+class: positive
+summary: a view re-derived after the inout call on every iteration is never read across the mutation
+program: program.ldn
+constructs: 0430, 0800, 0830, 0900, 1130
+targets: linux-x86-64, macos-arm64

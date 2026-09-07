@@ -1,0 +1,5 @@
+class: positive
+summary: [0830] a borrow is a view; a scalar computed from one holds no reference and does not block a later inout use of its source
+program: program.ldn
+constructs: 0430, 0800, 0830, 0900, 1810
+targets: linux-x86-64, macos-arm64

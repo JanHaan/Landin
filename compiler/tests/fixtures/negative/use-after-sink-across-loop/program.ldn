@@ -1,0 +1,12 @@
+consume: (sink value: u32) -> none =
+    _ = value
+end consume
+
+bad: () -> (result: u32) =
+    mut value: u32 = 42
+    loop do
+        consume(value)
+        break
+    end loop
+    result = value
+end bad

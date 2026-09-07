@@ -1,0 +1,5 @@
+class: positive
+summary: references swapped between bindings across iterations keep their declared parameter sources
+program: program.ldn
+constructs: 0430, 0780, 0790, 1140
+targets: linux-x86-64, macos-arm64

@@ -1,0 +1,5 @@
+class: positive
+summary: a view replaced on both arms after the inout call is not the borrow the later read uses
+program: program.ldn
+constructs: 0430, 0800, 0830, 0900, 1810
+targets: linux-x86-64, macos-arm64

@@ -1,0 +1,5 @@
+class: positive
+summary: a deferred escaping call whose argument is a module address is accepted
+program: program.ldn
+constructs: 0430, 0770, 0780, 1100
+targets: linux-x86-64, macos-arm64

@@ -1,0 +1,6 @@
+class: negative
+summary: a read written above the inout call executes after it on the next iteration
+program: program.ldn
+codes: L0315
+constructs: 0430, 0800, 0830, 0900, 1130
+targets: linux-x86-64, macos-arm64

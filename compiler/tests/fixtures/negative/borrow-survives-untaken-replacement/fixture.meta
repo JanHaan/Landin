@@ -1,0 +1,6 @@
+class: negative
+summary: an assignment on a path that does not execute does not end the borrow on the path that reads
+program: program.ldn
+codes: L0315
+constructs: 0430, 0800, 0830, 0900, 1810
+targets: linux-x86-64, macos-arm64

@@ -1,0 +1,5 @@
+class: positive
+summary: a sink followed by an assignment on every iteration is live at the head and after the while
+program: program.ldn
+constructs: 0430, 0900, 0910, 1140
+targets: linux-x86-64, macos-arm64
