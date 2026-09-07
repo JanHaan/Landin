@@ -1,0 +1,41 @@
+mut calls: usize = 0
+mut rhs_calls: usize = 0
+mut order: usize = 0
+mut numbers: [3]i32 = [10, 20, 30]
+cell: type = struct
+    before: i32
+    value: i32
+    after: i32
+end cell
+alternating: () -> (index: usize) =
+    index = calls % 2
+    inc calls
+end alternating
+next: () -> (index: usize) =
+    order = order * 10 + 1
+    index = 0
+end next
+amount: () -> (value: i32) =
+    inc rhs_calls
+    order = order * 10 + 2
+    numbers[0] = 99
+    value = 2
+end amount
+public main: () -> (code: i32) =
+    mut values: [3]i32 = [10, 20, 30]
+    items := values[0..<3]
+    inc items[alternating()]
+    dec items[alternating()]
+    whole := addr numbers
+    whole.val[next()] += if true then amount() else 100 end if
+    mut local: cell = (before: 7, value: 10, after: 9)
+    pointer := addr local
+    inc pointer.val.value
+    dec pointer.val.value
+    pointer.val.value = if local.value == 10 then 42 else 1 end if
+    code = if calls == 2 and values[0] == 11 and values[1] == 19
+              and values[2] == 30 and rhs_calls == 1 and order == 12
+              and numbers[0] == 12 and numbers[1] == 20 and numbers[2] == 30
+              and local.before == 7 and local.value == 42 and local.after == 9
+           then 42 else 1 end if
+end main

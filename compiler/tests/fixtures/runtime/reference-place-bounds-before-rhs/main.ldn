@@ -1,0 +1,10 @@
+outside: () -> (index: usize) = index = 3 end outside
+public main: () -> (code: i32) =
+    mut values: [3]i32 = [10, 20, 30]
+    whole := addr values
+    whole.val[outside()] = begin
+        code = 17
+        return
+    end
+    code = 1
+end main

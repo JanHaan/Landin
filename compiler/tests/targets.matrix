@@ -1075,6 +1075,10 @@ runtime/raw-literal-bytes | linux-x86-64
 runtime/recursive-fibonacci | linux-x86-64
 runtime/recursive-module-images-are-laid-out-and-distinct | linux-x86-64
 runtime/reference-expression-bodies | linux-x86-64
+runtime/reference-place-assignment-order | linux-x86-64
+runtime/reference-place-bounds-before-rhs | linux-x86-64
+runtime/reference-place-update-recovery | linux-x86-64
+runtime/reference-place-updates | linux-x86-64
 runtime/run-length-encoding | linux-x86-64
 runtime/scalar-selection-copies | linux-x86-64
 runtime/scalar-subobject-zeroed-assignment-clears-values | linux-x86-64

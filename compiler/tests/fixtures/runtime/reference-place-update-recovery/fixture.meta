@@ -1,0 +1,6 @@
+class: runtime
+summary: destination recovery and terminating evaluation suppress scalar assignment and update RHS loads and stores
+program: main.ldn
+status: 42
+constructs: 0390, 0410, 0430, 0520, 0570, 0790, 0940, 1030, 1050, 1810, 1820, 1900, 1920
+targets: linux-x86-64

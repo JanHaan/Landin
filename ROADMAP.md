@@ -3742,6 +3742,21 @@ retain the existing L0304 boundary pinned by
 `negative/parameterized-struct-unused-shape` and the template-order controls;
 their recursive field representation remains separate R4.20 work.
 
+The reference-storage dispatch follow-up retains scalar destinations in an
+existing checked address slot before the RHS or old-value load. Plain
+assignment and `inc`/`dec` reuse that address; destination recovery that leaves
+the routine emits no later address, RHS, load or writeback. Compound updates
+retain their old-value-before-RHS order and stop after terminating destination
+evaluation. `runtime/reference-place-assignment-order` counts the pointer-array
+index and branching RHS independently; `runtime/reference-place-updates`
+alternates slice indices and checks scalar pointer fields, untouched neighbors
+and the compound old value. `runtime/reference-place-bounds-before-rhs` traps
+before an RHS return,
+and `runtime/reference-place-update-recovery` covers both failure-edge recovery
+and unconditional destination exits for assignment, increment, decrement and
+compound update. These repair [0410]/[1900] lowering without changing reference
+identity or the separately owned nested fixed-array store paths.
+
 These prerequisites do not close the initialized-view library increment. The
 selected route remains an initialized slice witness, with ordinary typed
 stores before publishing an extended prefix; the constrained opaque-view

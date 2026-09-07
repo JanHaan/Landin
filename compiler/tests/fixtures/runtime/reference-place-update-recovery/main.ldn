@@ -1,0 +1,84 @@
+refused: atom
+mut calls: usize = 0
+mut rhs_calls: usize = 0
+mut finished: usize = 0
+index: (value: usize) -> (result: usize) ! refused =
+    inc calls
+    fail refused
+end index
+rhs: () -> (value: i32) =
+    inc rhs_calls
+    value = 99
+end rhs
+assign_failure: (whole: ptr mut [3]i32) -> none =
+    whole.val[(index(0) else (problem)
+        _ = problem
+        return
+    end)] = rhs()
+    inc finished
+end assign_failure
+increment_failure: (items: []mut i32) -> none =
+    inc items[(index(0) else (problem)
+        _ = problem
+        return
+    end)]
+    inc finished
+end increment_failure
+decrement_failure: (items: []mut i32) -> none =
+    dec items[(index(0) else (problem)
+        _ = problem
+        return
+    end)]
+    inc finished
+end decrement_failure
+compound_failure: (whole: ptr mut [3]i32) -> none =
+    whole.val[(index(0) else (problem)
+        _ = problem
+        return
+    end)] += rhs()
+    inc finished
+end compound_failure
+assign_exit: (whole: ptr mut [3]i32) -> none =
+    whole.val[(index(begin return end) else (problem)
+        _ = problem
+        return
+    end)] = rhs()
+    inc finished
+end assign_exit
+increment_exit: (items: []mut i32) -> none =
+    inc items[(index(begin return end) else (problem)
+        _ = problem
+        return
+    end)]
+    inc finished
+end increment_exit
+decrement_exit: (items: []mut i32) -> none =
+    dec items[(index(begin return end) else (problem)
+        _ = problem
+        return
+    end)]
+    inc finished
+end decrement_exit
+compound_exit: (whole: ptr mut [3]i32) -> none =
+    whole.val[(index(begin return end) else (problem)
+        _ = problem
+        return
+    end)] += rhs()
+    inc finished
+end compound_exit
+public main: () -> (code: i32) =
+    mut values: [3]i32 = [10, 20, 30]
+    whole := addr values
+    items := values[0..<3]
+    assign_failure(whole)
+    increment_failure(items)
+    decrement_failure(items)
+    compound_failure(whole)
+    assign_exit(whole)
+    increment_exit(items)
+    decrement_exit(items)
+    compound_exit(whole)
+    code = if calls == 4 and rhs_calls == 0 and finished == 0
+              and values[0] == 10 and values[1] == 20 and values[2] == 30
+           then 42 else 1 end if
+end main
