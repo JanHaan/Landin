@@ -1,0 +1,6 @@
+public main: () -> (code: i32) =
+    mut storage: [1]u8 = [194]
+    source: []u8 = storage[0..<lenof storage]
+    invalid: utf8 = utf8(source)
+    code = i32(lenof invalid)
+end main

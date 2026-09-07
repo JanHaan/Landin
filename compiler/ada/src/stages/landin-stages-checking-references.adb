@@ -17,6 +17,7 @@ package body Landin.Stages.Checking.References is
    use type Landin.Checking.Nominal_Type_Id;
    use type Landin.Checking.Routine_Instance_Id;
    use type Landin.Checking.Signature_Id;
+   use type Landin.Checking.Text_Conversion_Kind;
    use type Landin.Provenance.Declaration_Id;
    use type Res.Application_Class;
    use type Res.Argument_Role;
@@ -764,7 +765,17 @@ package body Landin.Stages.Checking.References is
                return Result;
 
             when Syn.Call | Syn.Labeled_Application =>
-               if Syn.Kind (Tree, Node) = Syn.Labeled_Application
+               if Landin.Checking.Text_Conversion_Of
+                 (Types.all, Tree, Node)
+                   /= Landin.Checking.No_Text_Conversion
+               then
+                  --  D199's text conversions change only the exact view of
+                  --  the same backing storage.  In particular, the C scan
+                  --  measures a prefix but does not mint an independent
+                  --  slice or pass through [0810]'s untracked address path.
+                  return Fact_Of
+                    (Tree, Syn.Nth_Argument (Tree, Node, 1));
+               elsif Syn.Kind (Tree, Node) = Syn.Labeled_Application
                  and then Res.Class_Of (Meanings.all, Tree, Node)
                    /= Res.Function_Call
                then

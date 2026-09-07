@@ -3863,6 +3863,38 @@ actual reference descriptor (its precondition at `landin-checking.ads:660`).
 That path is not needed by a concrete contextual text parameter and is not
 claimed or repaired by this bounded follow-up.
 
+The bounded runtime-text increment implements D199's four exact ordinary
+source-derived conversions between immutable byte slices, `utf8` and
+first-NUL `cstring`. The descriptor matrix rejects mutable sources/results,
+`utf16` representation conversion, an unmatched optional C string and
+pointer-to-cstring extent invention;
+successful and empty conversions preserve the actual base, permission and
+origin. Byte-to-text and C-to-text validate shortest-form UTF-8 and direct
+conversion traps on malformed input, while ordinary `core/text.from_bytes`
+and `from_c` report `invalid_text`. Foreign cstring scalar traversal performs
+the same validation before decoding, including in `unchecked`, and never reads
+past the first NUL. Literal pooling retains its stronger valid-encoding
+construction.
+
+`core/text` now supplies exact byte equality and substring search, checked
+decimal `u32` parsing, source-derived byte views, and caller-buffer byte and
+decimal writers. Decimal overflow is reported before arithmetic can trap, and
+writer capacity is preflighted before mutation. The prototype-4 configuration
+sketch recovers or propagates every fallible C-text conversion without losing
+its `escaping args`/`from args` contract; its file-line matcher treats malformed
+bytes as no match, separately from `--every` decimal recovery. Runtime evidence
+covers empty, ASCII, multibyte, embedded-NUL, malformed, truncated, overlong,
+surrogate and out-of-range input, zero/maximum/overflow decimal values,
+substring edges and refusal-preserving output. A fixture publishes an argument
+as a foreign `cstring`, then uses the existing explicitly unsafe
+integer-pointer round trip to install `C2 00` followed by an ignored byte; its
+byte scan yields one byte, checked UTF-8 rejects it, and traversal traps even
+inside `unchecked`. This adds no pointer-to-cstring conversion. No allocator,
+text opcode, core-name privilege, mutable alias or origin erasure is introduced.
+Matched-present optional C text retains its view and converts normally; both
+carrier forms also pin that a terminating source emits no later conversion
+work, while successful effectful sources run exactly once.
+
 The initialized-allocation library adds ordinary `mem.new`/`delete`: allocation
 is followed by a complete typed store of the supplied escaping value, including
 reference-containing and zero-sized objects. It promises no generic zero image.

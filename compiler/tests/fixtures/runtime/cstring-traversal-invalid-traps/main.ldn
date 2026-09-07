@@ -1,0 +1,15 @@
+extern(c) _landin_host_argument_at: (index: usize) -> (value: cstring)
+
+public main: () -> (code: i32) =
+    code = 1
+    source: cstring = _landin_host_argument_at(0)
+    mut first: ptr mut u8 = ptr(usize(source))
+    mut terminator: ptr mut u8 = ptr(usize(source) + 1)
+    first.val = 194
+    terminator.val = 0
+    unchecked begin
+        for scalar in source do
+            code = i32(scalar)
+        end for
+    end unchecked
+end main

@@ -1,0 +1,14 @@
+absent: atom
+c_text: type = cstring
+maybe_c: type = absent | c_text
+byte_view: type = []u8
+
+bad_bytes: (source: maybe_c) -> none =
+    value: []u8 = byte_view(source)
+    _ = value
+end bad_bytes
+
+bad_text: (source: maybe_c) -> none =
+    value: utf8 = utf8(source)
+    _ = value
+end bad_text

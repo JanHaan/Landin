@@ -1,0 +1,6 @@
+class: runtime
+summary: text conversions stop after a terminating operand and evaluate successful slice and C-string operands exactly once
+constructs: 0310, 0430, 0600, 1080
+program: main.ldn
+status: 42
+targets: linux-x86-64

@@ -11,6 +11,12 @@ end position_value
 
 public position: type = position_value
 public past_end: atom
+public invalid_text: atom
+public invalid_number: atom
+public number_overflow: atom
+public no_space: atom
+
+byte_view: type = []u8
 
 public nowhere: position = (offset: 0)
 
@@ -60,3 +66,205 @@ public slice: (source: []u8, begins: position, ends: position)
               -> (result: []u8 from source) =
     result = source[begins.offset..<ends.offset]
 end slice
+
+valid_utf8: (source: []u8) -> (yes: bool) =
+    mut cursor: usize = 0
+    while cursor < lenof source do
+        lead: u8 = source[cursor]
+        if lead < 128 then
+            cursor += 1
+        elsif lead < 194 then
+            yes = false
+            return
+        elsif lead < 224 then
+            if lenof source - cursor < 2 then
+                yes = false
+                return
+            end if
+            second: u8 = source[cursor + 1]
+            if second < 128 or second > 191 then
+                yes = false
+                return
+            end if
+            cursor += 2
+        elsif lead < 240 then
+            if lenof source - cursor < 3 then
+                yes = false
+                return
+            end if
+            second: u8 = source[cursor + 1]
+            third: u8 = source[cursor + 2]
+            if second < 128 or second > 191
+              or third < 128 or third > 191
+            then
+                yes = false
+                return
+            end if
+            if lead == 224 and second < 160 then
+                yes = false
+                return
+            end if
+            if lead == 237 and second > 159 then
+                yes = false
+                return
+            end if
+            cursor += 3
+        elsif lead <= 244 then
+            if lenof source - cursor < 4 then
+                yes = false
+                return
+            end if
+            second: u8 = source[cursor + 1]
+            third: u8 = source[cursor + 2]
+            fourth: u8 = source[cursor + 3]
+            if second < 128 or second > 191
+              or third < 128 or third > 191
+              or fourth < 128 or fourth > 191
+            then
+                yes = false
+                return
+            end if
+            if lead == 240 and second < 144 then
+                yes = false
+                return
+            end if
+            if lead == 244 and second > 143 then
+                yes = false
+                return
+            end if
+            cursor += 4
+        else
+            yes = false
+            return
+        end if
+    end while
+    yes = true
+end valid_utf8
+
+--  The checked adapters report foreign or file-data defects before the
+--  ordinary conversion establishes utf8's invariant.  Their result is a
+--  source-derived view; no allocation, copy or canonical empty carrier is
+--  introduced.
+public from_bytes: (source: []u8)
+                   -> (result: utf8 from source) ! invalid_text =
+    fail invalid_text when not valid_utf8(source)
+    result = utf8(source)
+end from_bytes
+
+public from_c: (source: cstring)
+               -> (result: utf8 from source) ! invalid_text =
+    raw: []u8 = byte_view(source)
+    result = try from_bytes(raw)
+end from_c
+
+public bytes: (source: utf8) -> (result: []u8 from source) =
+    result = byte_view(source)
+end bytes
+
+--  Equality and containment are exact encoded-byte operations.  Valid UTF-8
+--  has one shortest-form encoding per scalar sequence, so neither operation
+--  needs normalization or locale authority.
+public eq: (left: utf8, right: utf8) -> (same: bool) =
+    left_bytes: []u8 = bytes(left)
+    right_bytes: []u8 = bytes(right)
+    if lenof left_bytes <> lenof right_bytes then
+        same = false
+        return
+    end if
+    mut index: usize = 0
+    while index < lenof left_bytes do
+        if left_bytes[index] <> right_bytes[index] then
+            same = false
+            return
+        end if
+        inc index
+    end while
+    same = true
+end eq
+
+public contains: (source: utf8, sought: utf8) -> (yes: bool) =
+    source_bytes: []u8 = bytes(source)
+    sought_bytes: []u8 = bytes(sought)
+    if lenof sought_bytes == 0 then
+        yes = true
+        return
+    end if
+    if lenof sought_bytes > lenof source_bytes then
+        yes = false
+        return
+    end if
+
+    mut start: usize = 0
+    last: usize = lenof source_bytes - lenof sought_bytes
+    while start <= last do
+        mut offset: usize = 0
+        while offset < lenof sought_bytes
+          and source_bytes[start + offset] == sought_bytes[offset]
+        do
+            inc offset
+        end while
+        if offset == lenof sought_bytes then
+            yes = true
+            return
+        end if
+        inc start
+    end while
+    yes = false
+end contains
+
+public to_u32: (source: utf8)
+               -> (result: u32) ! invalid_number | number_overflow =
+    digits: []u8 = bytes(source)
+    fail invalid_number when lenof digits == 0
+    mut value: u32 = 0
+    mut index: usize = 0
+    while index < lenof digits do
+        byte: u8 = digits[index]
+        fail invalid_number when byte < 48 or byte > 57
+        digit: u32 = u32(byte - 48)
+        fail number_overflow when value > 429496729
+        fail number_overflow when value == 429496729 and digit > 5
+        value = value * 10 + digit
+        inc index
+    end while
+    result = value
+end to_u32
+
+--  Both writers preflight capacity before their first mutation.  A no_space
+--  refusal therefore preserves every caller-owned byte and the written
+--  count, including the multi-byte decimal operation.
+public write_byte: (inout into: []mut u8, used: usize, value: u8)
+                   -> (next: usize) ! no_space =
+    fail no_space when used >= lenof into
+    into[used] = value
+    next = used + 1
+end write_byte
+
+public write_u32: (inout into: []mut u8, used: usize, value: u32)
+                  -> (next: usize) ! no_space =
+    fail no_space when used > lenof into
+    mut digits: usize = 1
+    mut remaining: u32 = value
+    mut divisor: u32 = 1
+    while remaining >= 10 do
+        remaining /= 10
+        divisor *= 10
+        inc digits
+    end while
+    fail no_space when digits > lenof into - used
+
+    mut offset: usize = 0
+    while divisor > 0 do
+        digit: u8 = u8(value / divisor % 10)
+        into[used + offset] = digit + 48
+        divisor /= 10
+        inc offset
+    end while
+    next = used + digits
+end write_u32
+
+public written: (source: []u8, used: usize)
+                -> (result: []u8 from source) ! no_space =
+    fail no_space when used > lenof source
+    result = source[0..<used]
+end written

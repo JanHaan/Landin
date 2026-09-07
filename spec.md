@@ -8686,9 +8686,10 @@ classified failure boundary before the repository gate can pass.
 | `conversion.integer-to-bool` | trap | 0150, 0180, 0190, 0200, 0310, 0700, 1880, 1940, 1950, 1960 | explicit conversion from every enabled integer to bool maps zero to false and one to true; L0300 rejects every other known value and an equivalent runtime conversion traps | `negative/integer-to-bool-known-out-of-range`, `runtime/integer-to-bool-conversions`, `runtime/integer-to-bool-out-of-range-traps` |
 | `conversion.float-to-bool` | trap | 0150, 0170, 0180, 0190, 0210, 0240, 0310, 0700, 1880, 1940, 1950, 1960 | explicit conversion from f32 or f64 to bool maps either signed zero to false and exactly positive one to true; L0300 rejects every other known finite or nonfinite value and an equivalent runtime conversion traps | `negative/float-to-bool-known-invalid`, `runtime/float-to-bool-conversions`, `runtime/float-to-bool-invalid-traps` |
 | `text.literal-storage` | static | 0260, 0270, 0280, 0430, 0570, 0600, 1770, 1880, 1900, 1940 | L0301 for a mismatched identity, writable context, byte escape in text or codepoint escape in bytes; L0303 for a write through a read-only view; quoted and raw literals default to `utf8`, decode to validated UTF-8 or UTF-16, preserve canonical view identity and static origin, and share width-keyed read-only storage with one trailing zero element excluded from slice lengths | `negative/cstring-literal-write`, `negative/raw-literal-needs-read-only-slice`, `negative/raw-literal-write`, `negative/text-literal-codepoint-in-byte-context`, `negative/text-literal-needs-byte-slice`, `negative/text-literal-needs-read-only-slice`, `negative/text-literal-write`, `negative/text-view-byte-escape`, `negative/text-view-identities-are-distinct`, `runtime/hosted-text-views`, `runtime/raw-literal-bytes`, `runtime/text-literal-bytes` |
+| `text.conversion` | trap | 0310, 0430, 0570, 0600, 0660, 0790, 0940, 1050, 1650, 1880, 1950, 1960 | four exact immutable source-derived conversions connect []u8, utf8 and first-NUL cstring carriers; direct UTF-8 validation traps, checked core/text adapters report invalid_text, empty carriers retain origin, mutable views and pointer-to-cstring are L0301, and byte/decimal helpers allocate nothing and preserve output on refusal | `negative/pointer-to-cstring-conversion`, `negative/text-conversion-exact-identities`, `negative/text-conversion-mutable-source`, `runtime/core-text-runtime-helpers`, `runtime/cstring-first-nul-validation`, `runtime/text-conversion-invalid-traps`, `runtime/text-conversion-overlong-traps`, `runtime/text-conversion-out-of-range-traps`, `runtime/text-conversion-truncated-traps`, `runtime/text-ordinary-conversions` |
 | `text.indexing` | trap | 0430, 0570, 0600, 0610, 0790, 1050, 1950, 1960 | utf8 indexed by exact u32 scans linearly by codepoint ordinal; exact core/text.position supplies an O(1) byte offset; either returns one codepoint's read-only source-derived []u8, L0301 rejects every other argument or text identity, L0303 rejects mutation, L0316 enforces its declared return source, and an absent ordinal, end position or non-boundary position traps | `negative/utf16-indexing-is-not-utf8-indexing`, `negative/utf8-index-needs-u32-or-position`, `negative/utf8-index-position-identity-is-exact`, `negative/utf8-index-result-is-read-only`, `negative/utf8-index-result-keeps-origin`, `runtime/utf8-indexing`, `runtime/utf8-ordinal-out-of-range-traps`, `runtime/utf8-position-at-end-traps`, `runtime/utf8-position-not-boundary-traps` |
 | `text.slicing` | trap | 0310, 0410, 0430, 0570, 0600, 0790, 1050, 1820, 1950, 1960 | utf8 and utf16 ranges take exact usize code-unit bounds, require scalar-boundary endpoints, preserve the immutable source-derived text identity, include the complete upper scalar for `..`, and evaluate source then bounds once; cstring and other bound types are L0301, mutation is L0303, L0316 enforces the return origin, and an invalid bound or split scalar traps | `negative/cstring-range-slicing-has-no-length`, `negative/text-slice-needs-usize-bounds`, `negative/text-slice-result-is-read-only`, `negative/text-slice-result-keeps-identity`, `negative/text-slice-result-keeps-origin`, `runtime/text-range-slicing`, `runtime/utf16-slice-not-boundary-traps`, `runtime/utf8-slice-lower-not-boundary-traps`, `runtime/utf8-slice-upper-not-boundary-traps` |
-| `text.traversal` | static | 0250, 0410, 0430, 0600, 1130, 1150, 1160, 1320 | the exact utf8, utf16 and cstring identities retain one source, use private usize code-unit cursors, and yield immutable copied u32 Unicode scalars in first/at_end/item/next order; cstring stops before its first NUL, ordinary carriers are L0301, mutation is L0303, and validated hosted views add no traversal trap or declared error | `negative/text-traversal-item-is-read-only`, `negative/text-traversal-ordinary-pointer-is-not-cstring`, `runtime/hosted-text-traversal` |
+| `text.traversal` | trap | 0250, 0410, 0430, 0600, 1130, 1150, 1160, 1320, 1650, 1950, 1960 | the exact utf8, utf16 and cstring identities retain one source, use private usize code-unit cursors, and yield immutable copied u32 Unicode scalars in first/at_end/item/next order; cstring stops before its first NUL and validates before decoding, malformed foreign encoding traps even in unchecked, ordinary carriers are L0301, and mutation is L0303 | `negative/text-traversal-item-is-read-only`, `negative/text-traversal-ordinary-pointer-is-not-cstring`, `runtime/cstring-traversal-invalid-traps`, `runtime/hosted-text-traversal` |
 | `arithmetic.known` | static | 0290, 0300, 0390, 1950 | L0300 or L0306 | `negative/compound-assignment-zero-divisor`, `negative/divisor-is-zero`, `negative/literal-above-its-type` |
 | `arithmetic.runtime` | trap | 0290, 0300, 0320, 0390, 1120, 1950, 1960 | trap, outside [1120]'s region for `+`, `-`, `*` and unary `-` | `runtime/compound-assignment-overflow-traps`, `runtime/checked-overflow-traps`, `runtime/checked-subtraction-traps`, `runtime/checked-multiplication-traps`, `runtime/checked-negation-traps`, `runtime/signed-division-overflow-traps`, `runtime/a-zero-divisor-traps`, `runtime/a-zero-remainder-divisor-traps`, `runtime/negative-left-shift-traps`, `runtime/negative-right-shift-traps` |
 | `arithmetic.total` | static | 0320, 0330, 0340, 0350, 0390 | L0301 for an inapplicable operand; admitted nonnegative shifts and wrapping operations are total | `negative/compound-assignment-float-remainder`, `negative/condition-is-not-believed`, `runtime/compound-assignment`, `runtime/shifts-fill-with-zeros-beyond-the-width` |
@@ -10290,6 +10291,14 @@ relocations, including cstring fields, and the Linux backend emits every pool
 entry in read-only storage. No runtime initialization or text-specific opcode
 is introduced.
 
+Literal construction establishes valid encoding, so every pooled `cstring`
+remains shortest-form UTF-8. D199 separately admits foreign C-text values whose
+only text-specific pointer precondition is accessible read-only backing through
+the first NUL byte. Such a value is not prevalidated UTF-8 merely because it
+has `cstring` identity: byte conversion scans its extent without decoding,
+while conversion to `utf8` and scalar traversal validate. This distinction
+does not permit an ordinary pointer to acquire `cstring` identity.
+
 This decision does not inherit operations from a representation. `lenof`
 continues to expose the existing slice length for `utf8` and `utf16`, but
 integer or position indexing remains [0610]'s separate R4.10 work. Range
@@ -10473,16 +10482,20 @@ evaluation because the four implementations are intrinsic. The retained text
 source stays immutable and keeps its complete origin until traversal ends.
 
 D181 validation and D183 boundary-preserving slices make every reachable
-encoded unit sequence valid. The four intrinsic operations are therefore
-infallible, declare no atom error and do not trap for a well-formed hosted
-view. A missing terminator, malformed units or stale storage cannot be formed
-through these text operations; violating the underlying pointer validity is
-still [0430]'s existing non-guarantee rather than a text error. Lowering uses
-ordinary target-neutral scalar loads, comparisons, conversions, arithmetic
-and CFG. It introduces no text opcode, allocation, datum, mutable alias or
-evidence-table entry. D181--D183 validation, pooling, terminators, identities,
-indexing, slicing, permissions, origins, traps and errors remain unchanged,
-as do range, array, slice and declared-evidence traversal.
+`utf8` or `utf16` encoded unit sequence valid. A pooled literal `cstring`
+is valid for the same reason. D199's foreign `cstring` boundary, however,
+promises only accessible backing through the first NUL. Its intrinsic
+traversal validates each shortest-form UTF-8 scalar before decoding it and
+traps synchronously on malformed, truncated, surrogate or out-of-range
+encoding, including inside `unchecked`; a continuation equal to NUL is
+rejected before any later byte is read. The operations still declare no atom
+error. A missing terminator or stale storage violates [0430]'s pointer
+validity non-guarantee rather than becoming a text error. Lowering uses
+ordinary target-neutral scalar loads, comparisons, conversions, arithmetic,
+checked traps and CFG. It introduces no text opcode, allocation, datum,
+mutable alias or evidence-table entry. D181--D183 pooling, terminators,
+identities, indexing, slicing, permissions and origins remain unchanged, as
+do range, array, slice and declared-evidence traversal.
 
 **The alternatives:** traverse only the length-bearing identities, expose
 encoded `u8`/`u16` units or codepoint byte slices, use
@@ -11680,3 +11693,119 @@ acquisitions one/two/three with zero/one/two rollback frees, reclaiming-provider
 retry, exact old/new frees and final zero live allocations. At six-of-eight
 pressure with a preceding tombstone, an existing-key replacement under a zero
 allocation budget leaves provider attempts and map length unchanged.
+
+### D199 — Text conversion preserves carriers and validation has checked and trapping edges
+
+**The tour and prototypes said** that [0600] gives `utf8`, `utf16` and
+`cstring` identities distinct from their representations, that [0310]
+ordinary explicit conversion traps when a runtime value cannot be converted,
+and that foreseeable data faults use declared errors. Prototype 4 needs
+runtime file and C text, exact equality, substring matching, decimal parsing
+and bounded output. They did not say which representation conversions exist,
+where UTF-8 is validated, whether C text is already valid by construction, or
+what happens to empty-view origins and partially written output.
+
+**Chosen:** ordinary explicit conversion admits exactly these four
+source-derived reference conversions:
+
+| Source | Destination | Runtime work |
+| --- | --- | --- |
+| immutable ordinary `[]u8` | `utf8` | validate shortest-form UTF-8 |
+| `utf8` | immutable ordinary `[]u8` | none |
+| `cstring` | immutable ordinary `[]u8` | scan to the first NUL |
+| `cstring` | `utf8` | scan to the first NUL, then validate |
+
+Each result retains the source base, the source-derived origin and immutable
+permission. A length-bearing result retains the source length or the measured
+pre-NUL length. In particular, converting an empty non-null slice or an empty
+C string keeps that actual base and origin; it does not substitute the
+canonical empty-slice datum. The matrix is descriptor-exact: a mutable byte
+view is not itself a conversion source or result, though ordinary call
+argument weakening may pass it to a library parameter declared `[]u8`.
+A one-atom optional `cstring` is a pointer union rather than a `cstring`
+source; it must be matched, after which the present `ptr` binding retains the
+exact C-text view and may be converted.
+There is no conversion involving `utf16`, no byte- or UTF-8-to-C conversion,
+and no pointer-to-`cstring` conversion. An ordinary pointer supplies neither
+a first-NUL promise nor an extent.
+
+The byte-to-`utf8` edges accept ASCII, embedded U+0000 and shortest-form
+two-, three- and four-byte sequences. They reject stray continuations,
+truncation, C0/C1 overlong leaders, overlong E0/F0 sequences, UTF-16
+surrogates, values above U+10FFFF and leaders above F4. Direct conversion
+traps synchronously through the existing checked runtime mechanism, including
+inside `unchecked`; it declares no atom error. Conversion evaluates its
+source exactly once and introduces no copy, allocation, mutable alias,
+backend opcode or core-module privilege.
+If evaluating that source leaves the enclosing control flow, no carrier load,
+store, scan or validation follows.
+
+A `cstring` is the read-only byte carrier published by a foreign C-text
+boundary. Its pointer must have accessible backing through a first NUL byte,
+but its pre-NUL bytes are not thereby promised to be valid UTF-8. Scanning to
+ordinary bytes does not decode them. Scanning stops before validation, so
+`C2 00` yields a one-byte ordinary view but is truncated UTF-8 when converted
+to `utf8`; bytes after the first NUL are unobserved. Literal pooling remains
+stronger: D181 constructs valid encoded bytes and appends its own terminator.
+D184 traversal validates foreign C text before each scalar decode and traps
+on malformed encoding, even in `unchecked`, without reading beyond the first
+NUL. Inaccessible storage or a missing terminator remains [0430]'s pointer
+validity non-guarantee.
+
+`core/text.from_bytes` and `core/text.from_c` are ordinary source routines
+which validate first and report the declared `invalid_text` atom instead of
+entering the trapping conversion on malformed input. Their successful
+`utf8 from source` results retain the actual input origin. `from_c` first
+uses the ordinary scan conversion and then the same byte validator.
+`core/text.bytes` is the infallible `utf8` representation view.
+`eq` and `contains` compare exact encoded bytes without normalization,
+locale or grapheme policy; `contains` considers the empty sequence present.
+Shortest-form validity makes exact byte equality equivalent to equality of
+the represented scalar sequence.
+
+`to_u32` accepts one or more ASCII decimal digits, including zero and
+4294967295. Empty input and a nondigit report `invalid_number`; a value above
+the `u32` maximum reports `number_overflow` before multiplication or
+addition could trap. `write_byte` and `write_u32` write into a
+caller-supplied initialized `[]mut u8` and return the next `usize` offset.
+They report `no_space`; the complete capacity check precedes the first
+mutation, so a refusal preserves both the caller's bytes and its separate
+used count. `written` returns the bounded immutable prefix from its source.
+No helper allocates or silently truncates.
+
+Prototype 4's `config.build` therefore recovers or propagates every fallible
+`from_c` call. Its `escaping args` parameter and `config from args` result
+remain necessary because successful adapters preserve argument origins.
+`match_keep` applies `from_bytes` to arbitrary file bytes and treats
+`invalid_text` as no match; it does not invoke a trapping conversion.
+Malformed `--every` encoding is handled separately from a valid UTF-8 value
+which is not an accepted decimal.
+
+**The alternatives:** representation inheritance would erase exact text
+identity and admit mutable or wrong-element views. Treating every `cstring`
+as prevalidated would make a foreign boundary silently promise what
+`from_c` is meant to diagnose; validating before publication would instead
+move that recoverable policy into every host adapter. Pointer conversion
+would invent an unbounded scan contract. Literal-only helpers would not serve
+runtime input. Returning a copied or canonical empty value would lose origin,
+and a backend text opcode or core-name exception would make ordinary
+conversion depend on library spelling. All were declined.
+
+**Pinned by** `runtime/text-ordinary-conversions`,
+`runtime/cstring-first-nul-validation`,
+`runtime/cstring-traversal-invalid-traps`,
+`runtime/text-conversion-invalid-traps`,
+`runtime/text-conversion-overlong-traps`,
+`runtime/text-conversion-out-of-range-traps`,
+`runtime/text-conversion-truncated-traps`,
+`runtime/text-conversion-operand-exit`,
+`runtime/core-text-runtime-helpers`,
+`negative/text-conversion-exact-identities`,
+`negative/text-conversion-mutable-source`,
+`negative/text-conversion-optional-cstring`,
+`negative/pointer-to-cstring-conversion`, the retained hosted text,
+range, indexing and traversal fixtures, and the `text.conversion` guarantee
+row. The C fixture publishes its argument through an ordinary external
+`cstring` result, then uses the existing explicitly unsafe integer-pointer
+round trip to install `C2 00` and a later ignored byte; it does not add a
+pointer-to-cstring conversion.

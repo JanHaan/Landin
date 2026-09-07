@@ -1,0 +1,6 @@
+class: runtime
+summary: a direct byte-to-utf8 conversion traps on a malformed shortest-form sequence
+constructs: 0310, 0600, 0660, 1950, 1960
+program: main.ldn
+traps: yes
+targets: linux-x86-64

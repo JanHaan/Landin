@@ -760,6 +760,13 @@ stack space even for deep structures. Overflow is a declared refusal before
 publication. The recursive code below remains the equivalent counting sketch,
 not the library's execution strategy.
 
+R4.20 corrects that original representation claim without rewriting the
+historical sketch: `name` is a reference-bearing `utf8` value. A name produced
+by `text.from_bytes` or `text.from_c` retains its input origin, so storing it in
+a tree requires the corresponding escaping argument or longer-lived backing.
+Neither the tree nor the text adapter copies encoded bytes, and a raw flash
+image cannot serialize those references as offsets by assumption.
+
 ```landin
 public tree: type = struct
     nodes: vec.list(node)
