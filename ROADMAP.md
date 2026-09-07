@@ -3789,6 +3789,18 @@ result with its `from` source plus an inferred `any` result round trip. The
 checking case pins the former no-crash seam,
 and `negative/any-inferred-result-frame-escape` retains that result's origin.
 No generic, library-name or provider-order privilege is introduced.
+The staging-consistency follow-up keeps the exact concept entry's
+caller-visible parameter and result labels on both inferred and contextual
+calls. A finalized provider signature is reused only when those labels already
+preserve the concept interface; otherwise the call keeps a separate exact
+concept signature while its dispatch record still names the validated provider
+entry. The runtime case uses differently labelled implementations in reversed
+heterogeneous conformance order, and the checking case compares inferred and
+explicitly typed calls with a named concept argument. The frame-escape case now
+uses a module receiver so only its `from` argument is local;
+`negative/any-provider-result-source-mismatch` proves that ignoring provider
+labels for conformance does not ignore a mismatched result-source map. Provider
+validation and dispatch identity are unchanged, and no language rule changes.
 
 The initialized-view implementation must also retain [0860]'s shallow alias
 limit: a reference inserted through an alias is not generally propagated back

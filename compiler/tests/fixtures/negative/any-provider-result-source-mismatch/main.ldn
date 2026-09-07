@@ -1,0 +1,20 @@
+cell: type = struct
+    value: i32
+end cell
+
+lender: type = concept (t: type)
+    take: (self: ptr mut t, source: ptr mut cell)
+          -> (result: ptr mut cell from source)
+end lender
+
+receiver: type = struct
+    held: cell
+end receiver
+
+take_receiver: (self: ptr mut receiver, other: ptr mut cell)
+      -> (answer: ptr mut cell from self) =
+    _ = other
+    answer = addr self.val.held
+end take_receiver
+
+receiver is lender (take: take_receiver)

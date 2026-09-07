@@ -7055,22 +7055,24 @@ package body Landin.Tests.Checking_Suite is
    is
       Source_Text : constant String :=
         "counter: type = concept (t: type)" & LF
-        & "    bump: (self: ptr mut t) -> (n: i32)" & LF
+        & "    add: (self: ptr mut t, amount: i32) -> (value: i32)" & LF
         & "end counter" & LF
         & "node: type = struct" & LF
         & "    value: i32" & LF
         & "end node" & LF
         & "public main: () -> (code: i32) =" & LF
-        & "    mut local: node = (value: 41)" & LF
+        & "    mut local: node = (value: 40)" & LF
         & "    erased: any counter = any(addr local)" & LF
-        & "    answer := erased.bump()" & LF
-        & "    code = answer" & LF
+        & "    inferred := erased.add(amount: 1)" & LF
+        & "    typed: i32 = erased.add(amount: 1)" & LF
+        & "    code = inferred + typed" & LF
         & "end main" & LF
-        & "bump: (self: ptr mut node) -> (n: i32) =" & LF
-        & "    inc self.val.value" & LF
-        & "    n = self.val.value" & LF
-        & "end bump" & LF
-        & "node is counter (bump: bump)" & LF;
+        & "add_node: (self: ptr mut node, n: i32)"
+        & " -> (answer: i32) =" & LF
+        & "    self.val.value = self.val.value + n" & LF
+        & "    answer = self.val.value" & LF
+        & "end add_node" & LF
+        & "node is counter (add: add_node)" & LF;
       Work  : Landin.Stages.Compilation :=
         Landin.Stages.Create (Landin.Targets.Linux_X86_64);
       Order : Landin.Stages.Pipeline;
@@ -7089,7 +7091,7 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
-         "the inferred erased-call result is accepted");
+         "inferred and typed erased calls use the concept's named interface");
       declare
          Types : constant not null access Landin.Checking.Table :=
            Landin.Stages.Types (Work);
@@ -7161,7 +7163,7 @@ package body Landin.Tests.Checking_Suite is
         (Into, "checking", "generic instances infer errors per key",
          Generic_Instances_Infer_Errors_Per_Key'Access);
       Landin.Testing.Register
-        (Into, "checking", "inferred erased results use exact entry shapes",
+        (Into, "checking", "erased calls keep concept labels across staging",
          Inferred_Erased_Results_Use_Exact_Entry_Shapes'Access);
       Landin.Testing.Register
         (Into, "checking", "ordinary signatures use nominal identity only",

@@ -1,5 +1,5 @@
 class: runtime
-summary: inferred erased calls use exact entry results before provider finalization
+summary: inferred and typed erased calls keep concept labels and exact results across provider staging
 program: main.ldn
 status: 42
 constructs: 0430, 0790, 0960, 1030, 1230, 1240, 1370, 1380, 1390
