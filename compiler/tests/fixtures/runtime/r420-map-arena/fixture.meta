@@ -1,0 +1,7 @@
+class: runtime
+summary: a map grows and preserves its old contents on exhaustion in the monotonic core arena
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0430, 0470, 0510, 0520, 0540, 0770, 0790, 0940, 1200, 1230, 1240, 1250, 1290, 1340, 1350, 1360
+targets: linux-x86-64

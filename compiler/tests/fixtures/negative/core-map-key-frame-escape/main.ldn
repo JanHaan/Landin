@@ -1,0 +1,36 @@
+import core/heap
+import core/map
+
+node: type = struct
+    value: u32
+end node
+
+pointer_equal: (left: ptr node, right: ptr node) -> (same: bool) =
+    same = usize(left) == usize(right)
+end pointer_equal
+
+pointer_hash: (value: ptr node) -> (result: u64) =
+    result = u64(usize(value))
+end pointer_hash
+
+ptr node is map.equatable (eq: pointer_equal)
+ptr node is map.hashable (hash: pointer_hash)
+
+bad: () -> (result: map.map(ptr node, u32)) ! ... =
+    mut provider := heap.host()
+    mut local: node = (value: 7)
+    mut value := map.new_map(key: ptr node, item: u32)
+    item: u32 = 11
+    local_key: ptr node = addr local
+    try map.insert(value, provider, local_key, item)
+    result = value
+end bad
+
+public main: () -> (code: i32) =
+    value: map.map(ptr node, u32) = bad() else (problem)
+        _ = problem
+        code = 0
+        return
+    end
+    code = i32(map.length(value))
+end main

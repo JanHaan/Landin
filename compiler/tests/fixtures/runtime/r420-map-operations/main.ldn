@@ -1,0 +1,245 @@
+import core/heap
+import core/map
+import core/mem
+
+collision_key: type = struct
+    identity: u64
+    home: u64
+end collision_key
+
+keys_equal: (left: collision_key, right: collision_key) -> (same: bool) =
+    same = left.identity == right.identity
+end keys_equal
+
+key_hash: (value: collision_key) -> (result: u64) =
+    result = value.home
+end key_hash
+
+collision_key is map.equatable (eq: keys_equal)
+collision_key is map.hashable (hash: key_hash)
+
+node: type = struct
+    identity: u64
+    payload: i32
+end node
+
+n1: node = (identity: 1, payload: 11)
+n2: node = (identity: 2, payload: 22)
+n3: node = (identity: 3, payload: 33)
+n4: node = (identity: 4, payload: 44)
+n5: node = (identity: 5, payload: 55)
+n6: node = (identity: 6, payload: 66)
+n7: node = (identity: 7, payload: 77)
+n8: node = (identity: 8, payload: 88)
+
+pointer_equal: (left: ptr node, right: ptr node) -> (same: bool) =
+    same = usize(left) == usize(right)
+end pointer_equal
+
+pointer_hash: (value: ptr node) -> (result: u64) =
+    result = value.val.identity
+end pointer_hash
+
+ptr node is map.equatable (eq: pointer_equal)
+ptr node is map.hashable (hash: pointer_hash)
+
+expect_value: (value: map.map(collision_key, i32), identity: u64,
+               home: u64, wanted: i32) -> (ok: bool) =
+    key: collision_key = (identity: identity, home: home)
+    found: i32 = map.get(value, key) else (problem)
+        _ = problem
+        ok = false
+        return
+    end
+    ok = found == wanted
+end expect_value
+
+missing_value: (value: map.map(collision_key, i32), identity: u64,
+                home: u64) -> (ok: bool) =
+    key: collision_key = (identity: identity, home: home)
+    mut absent: bool = false
+    _ = map.get(value, key) else (problem)
+        _ = problem
+        absent = true
+    end
+    ok = absent
+end missing_value
+
+tombstone_update: () -> (ok: bool) =
+    mut provider := heap.host()
+    mut value := map.new_map(key: collision_key, item: i32)
+    a: collision_key = (identity: 1, home: 6)
+    b: collision_key = (identity: 2, home: 6)
+    map.insert(value, provider, a, 10) else 0
+    map.insert(value, provider, b, 20) else 0
+    map.remove(value, a) else 0
+
+    --  The dead A bucket precedes B in the chain. Updating B must continue
+    --  past it, preserve length one, and leave no duplicate to remove twice.
+    map.insert(value, provider, b, 29) else 0
+    first: bool = map.length(value) == 1
+                 and expect_value(value, 2, 6, 29)
+    map.remove(value, b) else 0
+    mut second_remove_missing: bool = false
+    map.remove(value, b) else (problem)
+        _ = problem
+        second_remove_missing = true
+    end
+    ok = first and map.length(value) == 0 and second_remove_missing
+    map.release_map(value, provider)
+    ok = ok and map.length(value) == 0
+end tombstone_update
+
+wrap_rehash_and_churn: () -> (ok: bool) =
+    mut provider := heap.host()
+    mut value := map.new_map(key: collision_key, item: i32)
+    k1: collision_key = (identity: 1, home: 6)
+    k2: collision_key = (identity: 2, home: 6)
+    k3: collision_key = (identity: 3, home: 6)
+    k4: collision_key = (identity: 4, home: 6)
+    k5: collision_key = (identity: 5, home: 6)
+    k6: collision_key = (identity: 6, home: 6)
+    k7: collision_key = (identity: 7, home: 6)
+    map.insert(value, provider, k1, 101) else 0
+    map.insert(value, provider, k2, 102) else 0
+    map.insert(value, provider, k3, 103) else 0
+    map.insert(value, provider, k4, 104) else 0
+    map.insert(value, provider, k5, 105) else 0
+    map.insert(value, provider, k6, 106) else 0
+
+    --  Six colliding keys wrap from bucket six through zero. The missing
+    --  lookup traverses that chain and terminates at the first free bucket.
+    before: bool = map.length(value) == 6
+                  and expect_value(value, 1, 6, 101)
+                  and expect_value(value, 6, 6, 106)
+                  and missing_value(value, 99, 6)
+
+    --  Seven crosses the three-quarter threshold and rehashes all six values.
+    map.insert(value, provider, k7, 107) else 0
+    grown: bool = map.length(value) == 7
+                 and expect_value(value, 1, 6, 101)
+                 and expect_value(value, 4, 6, 104)
+                 and expect_value(value, 7, 6, 107)
+
+    map.remove(value, k2) else 0
+    map.remove(value, k4) else 0
+    map.remove(value, k6) else 0
+    k8: collision_key = (identity: 8, home: 6)
+    k9: collision_key = (identity: 9, home: 6)
+    k10: collision_key = (identity: 10, home: 6)
+    k11: collision_key = (identity: 11, home: 6)
+    k12: collision_key = (identity: 12, home: 6)
+    map.insert(value, provider, k8, 108) else 0
+    map.insert(value, provider, k9, 109) else 0
+    map.insert(value, provider, k10, 110) else 0
+    map.insert(value, provider, k11, 111) else 0
+    map.insert(value, provider, k12, 112) else 0
+    churned: bool = map.length(value) == 9
+                   and missing_value(value, 2, 6)
+                   and missing_value(value, 4, 6)
+                   and missing_value(value, 6, 6)
+                   and expect_value(value, 3, 6, 103)
+                   and expect_value(value, 8, 6, 108)
+                   and expect_value(value, 12, 6, 112)
+    ok = before and grown and churned
+    map.release_map(value, provider)
+    ok = ok and map.length(value) == 0
+end wrap_rehash_and_churn
+
+bounded_full_and_tombstone_probes: () -> (ok: bool) =
+    mut provider := heap.host()
+    mut full := map.new_map(key: collision_key, item: i32)
+    k1: collision_key = (identity: 1, home: 6)
+    k2: collision_key = (identity: 2, home: 6)
+    k3: collision_key = (identity: 3, home: 6)
+    k4: collision_key = (identity: 4, home: 6)
+    k5: collision_key = (identity: 5, home: 6)
+    k6: collision_key = (identity: 6, home: 6)
+    map.insert(full, provider, k1, 101) else 0
+    map.insert(full, provider, k2, 102) else 0
+    map.insert(full, provider, k3, 103) else 0
+    map.insert(full, provider, k4, 104) else 0
+    map.insert(full, provider, k5, 105) else 0
+    map.insert(full, provider, k6, 106) else 0
+
+    mut full_missing: bool = false
+    begin
+        --  The public map shape and opaque bucket item still permit a whole
+        --  inferred bucket copy. Forge the two remaining records to exercise
+        --  the defensive full-table bound without publishing bucket details.
+        full_buckets := mem.used(full.buckets)
+        full_buckets[4] = full_buckets[3]
+        full_buckets[5] = full_buckets[3]
+        absent: collision_key = (identity: 99, home: 6)
+        _ = map.get(full, absent) else (problem)
+            _ = problem
+            full_missing = true
+        end
+    end
+    map.release_map(full, provider)
+
+    mut dead := map.new_map(key: collision_key, item: i32)
+    map.insert(dead, provider, k1, 101) else 0
+    map.remove(dead, k1) else 0
+    mut dead_get_missing: bool = false
+    mut dead_remove_missing: bool = false
+    begin
+        dead_buckets := mem.used(dead.buckets)
+        mut at: usize = 0
+        while at < lenof dead_buckets do
+            dead_buckets[at] = dead_buckets[6]
+            inc at
+        end while
+        absent: collision_key = (identity: 100, home: 6)
+        _ = map.get(dead, absent) else (problem)
+            _ = problem
+            dead_get_missing = true
+        end
+        map.remove(dead, absent) else (problem)
+            _ = problem
+            dead_remove_missing = true
+        end
+    end
+    map.release_map(dead, provider)
+    ok = full_missing and dead_get_missing and dead_remove_missing
+       and map.length(full) == 0 and map.length(dead) == 0
+end bounded_full_and_tombstone_probes
+
+pointer_key_and_value: () -> (ok: bool) =
+    mut provider := heap.host()
+    mut value := map.new_map(key: ptr node, item: ptr node)
+    map.insert(value, provider, addr n1, addr n2) else 0
+    map.insert(value, provider, addr n3, addr n4) else 0
+    map.insert(value, provider, addr n5, addr n6) else 0
+    map.insert(value, provider, addr n7, addr n8) else 0
+    map.insert(value, provider, addr n2, addr n3) else 0
+    map.insert(value, provider, addr n4, addr n5) else 0
+    --  The seventh distinct pointer key migrates the first six through
+    --  mem.transfer without ever claiming their spare storage is initialized.
+    map.insert(value, provider, addr n6, addr n7) else 0
+    found: ptr node = map.get(value, addr n1) else addr n1
+    other: ptr node = map.get(value, addr n3) else addr n1
+    migrated: ptr node = map.get(value, addr n6) else addr n1
+    ok = map.length(value) == 7
+         and found.val.payload == 22 and other.val.payload == 44
+         and migrated.val.payload == 77
+    map.remove(value, addr n3) else 0
+    mut removed_missing: bool = false
+    _ = map.get(value, addr n3) else (problem)
+        _ = problem
+        removed_missing = true
+    end
+    ok = ok and map.length(value) == 6 and removed_missing
+    map.release_map(value, provider)
+    ok = ok and map.length(value) == 0
+end pointer_key_and_value
+
+public main: () -> (code: i32) =
+    if tombstone_update() and wrap_rehash_and_churn()
+      and bounded_full_and_tombstone_probes() and pointer_key_and_value()
+    then
+        code = 42
+    else
+        code = 0
+    end if
+end main

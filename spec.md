@@ -11583,3 +11583,100 @@ rows. Runtime evidence covers zero and one delegation budgets, finite
 exhaustion, six simultaneous live slots, exact-alignment writes, exact
 free/reuse, inner and injected failure counts, and failed pointer-vector growth
 followed by retry and complete release.
+
+### D198 — Map buckets are initialized records over dense key and value prefixes
+
+**The tour and prototype said** that `map(K is hashable, V)` uses open
+addressing without a null or sentinel key, that hash reduction occurs before a
+possibly narrower `usize` conversion, that tombstones contribute to growth
+pressure, and that rehash makes three fallible acquisitions. The prototype's
+parallel slices nevertheless claimed every sparse K and V slot was initialized,
+left probes unbounded, and inserted into the first tombstone before proving an
+equal key did not occur later in the chain.
+
+**Chosen:** `core/map.map(K, V)` owns three `mem.storage` allocations. The
+first is a completely initialized array of bucket records whose module-private
+type contains a scalar free/used/dead tag and a dense index. The other two are equally long
+initialized prefixes of K and V. A bucket that has never held an entry has no
+dense index in use. First occupation appends one actual K and V before marking
+the bucket used. Removal marks the bucket dead without reading, zeroing or
+releasing either value. Reuse replaces the K and V at that bucket's existing
+dense index. Rehash transfers only used positions and final release drains all
+initialized positions, including dead ones. No K or V zero image, destructor
+or implicit resource ownership is introduced.
+
+`equatable(K)` and `hashable(K) is equatable` are public map concepts. A
+concrete key supplies both explicit conformances under [1340]; the child table
+does not synthesize its parent. Insert retains K and V through `escaping`
+parameters, and get returns `V from map`. Construction, insert, get, remove,
+length and release comprise this bounded public surface; the growth and rehash
+operations remain private.
+
+`map` itself is a public struct composition. Its three storages and two
+counters are public fields. A module-private bucket identity and
+`mem.storage`'s opaque raw representation do not encapsulate those fields:
+callers can use `mem` to reach the typed initialized K/V prefixes, including
+removed dense entries, and an inferred bucket view can copy or overwrite whole
+bucket values without naming their type. A caller that composes at this level
+must manually preserve equal capacities, a fully initialized bucket array,
+equal K/V prefix lengths, exactly one used or dead bucket with an in-range
+dense index for each prefix position, and count/tombstone totals equal to the
+used/dead records. The compiler neither enforces those map invariants nor
+supplies a deep-safety guarantee.
+
+The semantic conformance contract, also not compiler-proved, requires `eq` to
+be reflexive, symmetric and transitive. Equal keys produce the same hash.
+Equality and hash results for every stored key remain stable until removal,
+including when the key contains a pointer or reference: mutation of anything
+reached through it must not change either result while the key is stored.
+
+The starting capacity is eight and growth doubles after a checked maximum
+bound. Lookup, removal, placement and migration each probe at most capacity
+records and wrap without adding one to the final index. Placement records the
+first dead bucket until a free bucket or the probe bound is reached. Insert
+first performs a separate read-only bounded search for an equal used key. If
+found, it replaces that dense value and returns before load pressure or any
+allocator call; if absent, it has changed no map state and may then rehash and
+place. Thus an update after a preceding tombstone changes one value without
+changing length, duplicating the key or depending on allocation availability,
+and malformed full or all-dead records still terminate.
+`hash(K) % u64(capacity)` is evaluated before conversion to `usize`.
+
+Growth pressure has the meaning
+`(length + tombstones + 1) * 4 > capacity * 3`, but computes the occupied count
+only after proving both additions against capacity and computes the three-quarter
+threshold from quotient and remainder. Neither side can overflow. Before the
+first provider effect, rehash checks the bucket, K and V byte products. It then
+acquires initialized buckets, empty K storage and empty V storage in that order,
+registering failure-only cleanup after each acquisition. All migration remains
+private. Any failure releases every acquired replacement and leaves the old map
+untouched. After migration, only infallible drain, exact free and field
+publication steps remain. The success path frees each old extent once; release
+frees each current extent once and resets the map to its empty shape.
+
+**Why dense prefixes:** they use D151's existing honest raw-storage state
+machine without pretending sparse K/V slots contain values. A dead bucket's
+still-initialized K/V entry follows the language's manual element-resource
+contract, and its stable dense index makes tombstone reuse infallible after the
+ordinary invariant checks. The entry is exposed by the public composition; it
+is not claimed to be private. Three independent extents preserve Z19's actual
+failure pressure and D197's six-live-slot allocator case.
+
+**The alternatives:** sparse initialized K/V slices recreate Z8's false type
+claim and would require K and V to be zeroable. One allocation evades rather
+than answers the three-stage rollback case and complicates independent generic
+alignment. Stopping at the first tombstone duplicates a later equal key.
+Unbounded loops rely on load policy to hide corrupt/full termination. Wrapping
+load-factor products and narrowing the hash before modulo make valid behavior
+target-accidental. All are declined.
+
+**Pinned by** `runtime/r420-map-operations`,
+`runtime/r420-map-failure-rollback`,
+`negative/core-map-missing-parent-conformance`,
+`negative/core-map-key-frame-escape`, and
+`negative/core-map-value-frame-escape`. Runtime evidence includes pointer K/V,
+collision wrap, churn, rehash, full and all-dead bounded probes, failure at
+acquisitions one/two/three with zero/one/two rollback frees, reclaiming-provider
+retry, exact old/new frees and final zero live allocations. At six-of-eight
+pressure with a preceding tombstone, an existing-key replacement under a zero
+allocation budget leaves provider attempts and map length unchanged.

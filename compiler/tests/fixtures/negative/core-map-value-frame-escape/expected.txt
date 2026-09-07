@@ -1,0 +1,10 @@
+error[L0314]: this frame-origin reference cannot be retained beyond the call
+  --> ../tests/fixtures/negative/core-map-value-frame-escape/main.ldn:25:42
+   |
+25 |     try map.insert(value, provider, key, local_value)
+   |                                          ^^^^^^^^^^^
+  --> ../tests/fixtures/negative/core-map-value-frame-escape/main.ldn:21:5
+   |
+21 |     mut local: node = (value: 7)
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the shorter-lived reference source
+  = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`

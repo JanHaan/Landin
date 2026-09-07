@@ -1,0 +1,512 @@
+import core/mem
+
+public missing: atom
+
+public equatable: type = concept (key: type)
+    eq: (left: key, right: key) -> (same: bool)
+end equatable
+
+--  A hashable conformance composes equatable, but [1340] still requires a
+--  concrete key type to declare both conformances explicitly.
+public hashable: type = concept (key: type) is equatable
+    hash: (value: key) -> (result: u64)
+end hashable
+
+--  The compiler does not prove the semantic laws: eq must be an equivalence
+--  relation, equal keys must hash alike, and both answers must stay stable
+--  while a key is stored, including across mutation of anything a
+--  pointer/reference key reaches.
+
+slot_free: u8 = 0
+slot_used: u8 = 1
+slot_dead: u8 = 2
+
+--  Buckets are always initialized. Keys and values occupy two independent
+--  dense initialized prefixes, and each used/dead bucket names its prefix
+--  position. Reusing a tombstone replaces that position rather than forging
+--  a sparse initialized K or V slice.
+bucket: type = struct
+    state: u8
+    dense_index: usize
+end bucket
+
+--  This is deliberately a public composition, not an encapsulated object.
+--  Callers can pass each storage to mem's public operations, can reach the
+--  initialized K/V prefixes (including removed dense entries), and can copy
+--  inferred whole bucket values despite bucket's private identity. They must
+--  preserve equal capacities, a fully initialized bucket array, paired K/V
+--  prefixes, one valid used/dead bucket per dense position, and exact
+--  count/tombstone totals when composing below the map operations.
+public map: type (key: type is hashable, item: type) = struct
+    buckets: mem.storage(bucket)
+    keys: mem.storage(key)
+    values: mem.storage(item)
+    count: usize
+    tombstones: usize
+end map
+
+empty_storage: (value: type) -> (result: mem.storage(value)) =
+    zero: usize = 0
+    base: ptr mut u8 = ptr(zero)
+    result = mem.reserve(item: value, base: base, slots: zero)
+end empty_storage
+
+public new_map: (key: type is hashable, item: type)
+                -> (result: map(key, item)) =
+    empty_buckets := empty_storage(value: bucket)
+    empty_keys := empty_storage(value: key)
+    empty_values := empty_storage(value: item)
+    result = (buckets: empty_buckets, keys: empty_keys,
+              values: empty_values, count: 0, tombstones: 0)
+end new_map
+
+public length: (key: type is hashable, item: type,
+                value: map(key, item)) -> (count: usize) =
+    count = value.count
+end length
+
+capacity: (key: type is hashable, item: type,
+           value: map(key, item)) -> (count: usize) =
+    count = mem.capacity(value.buckets)
+end capacity
+
+byte_extent: (value: type, slots: usize)
+             -> (extent: usize) ! mem.out_of_memory =
+    size: usize = sizeof value
+    if size == 0 then
+        extent = 0
+        return
+    end if
+    maximum: usize = 0 -% 1
+    fail mem.out_of_memory when slots > maximum / size
+    extent = slots * size
+end byte_extent
+
+drain: (value: type, inout storage: mem.storage(value)) -> none =
+    while mem.initialized(storage) > 0 do
+        discarded: value = mem.release(storage) else (problem)
+            _ = problem
+            return
+        end
+    end while
+end drain
+
+free_empty: (value: type, provider: type is mem.allocator,
+             inout storage: mem.storage(value),
+             inout state: provider) -> none =
+    slots: usize = mem.capacity(storage)
+    return when slots == 0
+    extent: usize = slots * sizeof value
+    block: ptr mut u8 = mem.dispose(storage) else (problem)
+        _ = problem
+        return
+    end
+    provider.free(state, block, extent)
+end free_empty
+
+discard_storage: (value: type, provider: type is mem.allocator,
+                  inout storage: mem.storage(value),
+                  inout state: provider) -> none =
+    drain(storage)
+    free_empty(storage, state)
+end discard_storage
+
+replace_value: (value: type, inout storage: mem.storage(value),
+                index: usize, escaping replacement: value) -> (ok: bool) =
+    mem.replace(storage, index, replacement) else (problem)
+        _ = problem
+        ok = false
+        return
+    end
+    ok = true
+end replace_value
+
+index_of: (key: type is hashable, value: key, slots: usize)
+          -> (index: usize) =
+    --  Reduce in the hash's u64 domain before the narrowing conversion. This
+    --  remains correct when usize is 32 bits and the hash uses its high bits.
+    index = usize(key.hash(value) % u64(slots))
+end index_of
+
+next_index: (index: usize, slots: usize) -> (next: usize) =
+    if index == slots - 1 then
+        next = 0
+    else
+        next = index + 1
+    end if
+end next_index
+
+--  This is equivalent to `(count + tombstones + 1) * 4 > slots * 3`
+--  without overflowing either addition or multiplication. Corrupt counters
+--  conservatively request a rebuild rather than wrapping to "not crowded".
+crowded: (key: type is hashable, item: type,
+          value: map(key, item)) -> (yes: bool) =
+    slots: usize = capacity(value)
+    if slots == 0 then
+        yes = true
+        return
+    end if
+    if value.count > slots or value.tombstones > slots - value.count then
+        yes = true
+        return
+    end if
+    occupied: usize = value.count + value.tombstones
+    quarter: usize = slots / 4
+    remainder: usize = slots % 4
+    threshold: usize = quarter * 3 + (remainder * 3) / 4
+    yes = occupied >= threshold
+end crowded
+
+install_at: (key: type is hashable, item: type,
+             inout value: map(key, item), at: usize, was_dead: bool,
+             escaping added_key: key, escaping added_value: item)
+            -> (placed: bool) =
+    mut dense: usize = 0
+    if was_dead then
+        record: bucket = (mem.get(value.buckets, at) else (problem)
+            _ = problem
+            placed = false
+            return
+        end)
+        dense = record.dense_index
+        if not replace_value(value.keys, dense, added_key) then
+            placed = false
+            return
+        end if
+        if not replace_value(value.values, dense, added_value) then
+            placed = false
+            return
+        end if
+    else
+        dense = (mem.admit(value.keys, added_key) else (problem)
+            _ = problem
+            placed = false
+            return
+        end)
+        value_dense: usize = (mem.admit(value.values, added_value)
+            else (problem)
+            _ = problem
+            discarded: key = (mem.release(value.keys) else (release_problem)
+                _ = release_problem
+                placed = false
+                return
+            end)
+            placed = false
+            return
+        end)
+        if value_dense <> dense then
+            placed = false
+            return
+        end if
+    end if
+
+    replacement_bucket: bucket = (state: slot_used, dense_index: dense)
+    if not replace_value(value.buckets, at, replacement_bucket) then
+        placed = false
+        return
+    end if
+    inc value.count
+    if was_dead then
+        dec value.tombstones
+    end if
+    placed = true
+end install_at
+
+--  Search for an existing key before considering growth. This probe changes
+--  nothing for an absent key, including after tombstones, and a found update
+--  needs no allocator regardless of table pressure.
+update_existing: (key: type is hashable, item: type,
+                  inout value: map(key, item), wanted: key,
+                  escaping replacement: item)
+                 -> (found: bool) ! mem.out_of_memory =
+    slots: usize = capacity(value)
+    if slots == 0 then
+        found = false
+        return
+    end if
+
+    mut at: usize = index_of(wanted, slots)
+    mut probed: usize = 0
+    while probed < slots do
+        record: bucket = (mem.get(value.buckets, at) else (problem)
+            _ = problem
+            fail mem.out_of_memory
+        end)
+        if record.state == slot_free then
+            found = false
+            return
+        end if
+        if record.state == slot_used then
+            existing: key = (mem.get(value.keys, record.dense_index)
+                else (problem)
+                _ = problem
+                fail mem.out_of_memory
+            end)
+            if key.eq(existing, wanted) then
+                if not replace_value(value.values, record.dense_index,
+                                     replacement)
+                then
+                    fail mem.out_of_memory
+                end if
+                found = true
+                return
+            end if
+        end if
+        at = next_index(at, slots)
+        inc probed
+    end while
+    found = false
+end update_existing
+
+--  The caller has already proved this key absent. Probes are still bounded
+--  if no free bucket exists, and the first tombstone wins only after the
+--  search has reached a free bucket or exhausted the table.
+place_absent: (key: type is hashable, item: type,
+               inout value: map(key, item),
+               escaping added_key: key, escaping added_value: item)
+              -> (placed: bool) =
+    slots: usize = capacity(value)
+    if slots == 0 then
+        placed = false
+        return
+    end if
+
+    mut at: usize = index_of(added_key, slots)
+    mut first_dead: usize = slots
+    mut probed: usize = 0
+    while probed < slots do
+        record: bucket = (mem.get(value.buckets, at) else (problem)
+            _ = problem
+            placed = false
+            return
+        end)
+        if record.state == slot_dead then
+            if first_dead == slots then
+                first_dead = at
+            end if
+        elsif record.state == slot_free then
+            if first_dead < slots then
+                placed = install_at(value, first_dead, true,
+                                    added_key, added_value)
+            else
+                placed = install_at(value, at, false,
+                                    added_key, added_value)
+            end if
+            return
+        end if
+        at = next_index(at, slots)
+        inc probed
+    end while
+
+    if first_dead < slots then
+        placed = install_at(value, first_dead, true, added_key, added_value)
+    else
+        placed = false
+    end if
+end place_absent
+
+rehash: (key: type is hashable, item: type,
+         provider: type is mem.allocator,
+         inout value: map(key, item), inout state: provider, want: usize)
+        -> none ! mem.out_of_memory =
+    fail mem.out_of_memory when want == 0 or want < value.count
+
+    --  Preflight every byte product before the first provider effect.
+    bucket_extent: usize = try byte_extent(value: bucket, slots: want)
+    key_extent: usize = try byte_extent(value: key, slots: want)
+    value_extent: usize = try byte_extent(value: item, slots: want)
+
+    bucket_block: ptr mut u8 = try provider.alloc
+        (state, bucket_extent, alignof bucket)
+    mut new_buckets := mem.reserve
+        (item: bucket, base: bucket_block, slots: want)
+    undo discard_storage(new_buckets, state)
+
+    mut initialized: usize = 0
+    while initialized < want do
+        empty_bucket: bucket = (state: slot_free, dense_index: 0)
+        admitted: usize = mem.admit
+            (new_buckets, empty_bucket)
+            else (problem)
+            _ = problem
+            fail mem.out_of_memory
+        end
+        _ = admitted
+        inc initialized
+    end while
+
+    key_block: ptr mut u8 = try provider.alloc
+        (state, key_extent, alignof key)
+    mut new_keys := mem.reserve(item: key, base: key_block, slots: want)
+    undo discard_storage(new_keys, state)
+
+    value_block: ptr mut u8 = try provider.alloc
+        (state, value_extent, alignof item)
+    mut new_values := mem.reserve(item: item, base: value_block, slots: want)
+    undo discard_storage(new_values, state)
+
+    old_slots: usize = capacity(value)
+    mut old_at: usize = 0
+    mut migrated: usize = 0
+    while old_at < old_slots do
+        old_bucket: bucket = (mem.get(value.buckets, old_at) else (problem)
+            _ = problem
+            fail mem.out_of_memory
+        end)
+        if old_bucket.state == slot_used then
+            old_key: key = (mem.get(value.keys, old_bucket.dense_index)
+                else (problem)
+                _ = problem
+                fail mem.out_of_memory
+            end)
+            mut target: usize = index_of(old_key, want)
+            mut searched: usize = 0
+            while searched < want do
+                target_bucket: bucket = (mem.get(new_buckets, target)
+                    else (problem)
+                    _ = problem
+                    fail mem.out_of_memory
+                end)
+                break when target_bucket.state == slot_free
+                target = next_index(target, want)
+                inc searched
+            end while
+            fail mem.out_of_memory when searched == want
+
+            key_dense: usize = (mem.transfer
+                (value.keys, old_bucket.dense_index, new_keys)
+                else (problem)
+                _ = problem
+                fail mem.out_of_memory
+            end)
+            value_dense: usize = (mem.transfer
+                (value.values, old_bucket.dense_index, new_values)
+                else (problem)
+                _ = problem
+                fail mem.out_of_memory
+            end)
+            fail mem.out_of_memory when key_dense <> value_dense
+            moved_bucket: bucket =
+                (state: slot_used, dense_index: key_dense)
+            if not replace_value(new_buckets, target, moved_bucket) then
+                fail mem.out_of_memory
+            end if
+            inc migrated
+        end if
+        inc old_at
+    end while
+    fail mem.out_of_memory when migrated <> value.count
+
+    --  Migration has succeeded. Everything below is infallible: retire all
+    --  three old extents exactly once and publish the replacement last.
+    discard_storage(value.values, state)
+    discard_storage(value.keys, state)
+    discard_storage(value.buckets, state)
+    value.buckets = new_buckets
+    value.keys = new_keys
+    value.values = new_values
+    value.count = migrated
+    value.tombstones = 0
+end rehash
+
+public insert: (key: type is hashable, item: type,
+                provider: type is mem.allocator,
+                inout value: map(key, item), inout state: provider,
+                escaping added_key: key, escaping added_value: item)
+               -> none ! mem.out_of_memory =
+    updated: bool = try update_existing(value, added_key, added_value)
+    return when updated
+
+    if crowded(value) then
+        old_capacity: usize = capacity(value)
+        mut want: usize = 8
+        if old_capacity > 0 then
+            maximum: usize = 0 -% 1
+            fail mem.out_of_memory when old_capacity > maximum / 2
+            want = old_capacity * 2
+        end if
+        try rehash(value, state, want)
+    end if
+    inserted: bool = place_absent(value, added_key, added_value)
+    fail mem.out_of_memory when not inserted
+end insert
+
+public get: (key: type is hashable, item: type,
+             value: map(key, item), wanted: key)
+            -> (result: item from value) ! missing =
+    slots: usize = capacity(value)
+    fail missing when slots == 0
+    mut at: usize = index_of(wanted, slots)
+    mut probed: usize = 0
+    while probed < slots do
+        record: bucket = (mem.get(value.buckets, at) else (problem)
+            _ = problem
+            fail missing
+        end)
+        fail missing when record.state == slot_free
+        if record.state == slot_used then
+            existing: key = (mem.get(value.keys, record.dense_index)
+                else (problem)
+                _ = problem
+                fail missing
+            end)
+            if key.eq(existing, wanted) then
+                result = (mem.get(value.values, record.dense_index)
+                    else (problem)
+                    _ = problem
+                    fail missing
+                end)
+                return
+            end if
+        end if
+        at = next_index(at, slots)
+        inc probed
+    end while
+    fail missing
+end get
+
+public remove: (key: type is hashable, item: type,
+                inout value: map(key, item), wanted: key)
+               -> none ! missing =
+    slots: usize = capacity(value)
+    fail missing when slots == 0
+    mut at: usize = index_of(wanted, slots)
+    mut probed: usize = 0
+    while probed < slots do
+        record: bucket = (mem.get(value.buckets, at) else (problem)
+            _ = problem
+            fail missing
+        end)
+        fail missing when record.state == slot_free
+        if record.state == slot_used then
+            existing: key = (mem.get(value.keys, record.dense_index)
+                else (problem)
+                _ = problem
+                fail missing
+            end)
+            if key.eq(existing, wanted) then
+                dead_bucket: bucket =
+                    (state: slot_dead, dense_index: record.dense_index)
+                if not replace_value(value.buckets, at, dead_bucket) then
+                    fail missing
+                end if
+                dec value.count
+                inc value.tombstones
+                return
+            end if
+        end if
+        at = next_index(at, slots)
+        inc probed
+    end while
+    fail missing
+end remove
+
+public release_map: (key: type is hashable, item: type,
+                     provider: type is mem.allocator,
+                     inout value: map(key, item),
+                     inout state: provider) -> none =
+    discard_storage(value.values, state)
+    discard_storage(value.keys, state)
+    discard_storage(value.buckets, state)
+    value = new_map(key: key, item: item)
+end release_map
