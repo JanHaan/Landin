@@ -4056,6 +4056,71 @@ package body Landin.Stages.Lowering is
                            (Kind => IR.Frame_Slot, Slot => Temporary),
                            Site_Of (Of_Tree, Argument));
                      end;
+                  elsif Has_Runtime_After (Written)
+                    and then Parameter.Convention /= Syn.Inout_Convention
+                    and then Type_At (Of_Tree, Argument)
+                               in Ty.Aggregate | Ty.Fixed_Array
+                  then
+                     --  [0410]/D94: an `in` aggregate is a value, evaluated
+                     --  where it is written.  Its address alone kept its
+                     --  identity across the later arguments but not its
+                     --  bytes, so a later argument's side effect reached
+                     --  the callee.  A caller temporary takes the bytes
+                     --  now; `inout` keeps naming the place.
+                     declare
+                        Reached : constant Stored_Place :=
+                          Lower_Stored_Place (Of_Tree, Argument, Scope);
+                     begin
+                        if Current = IR.No_Block then
+                           return IR.No_Value;
+                        end if;
+                        declare
+                           Here : constant Landin.Provenance.Origin :=
+                             Site_Of (Of_Tree, Argument);
+                           From : constant IR.Storage :=
+                             Addressed_Storage
+                               (Reached,
+                                Neutral_Value_Shape (Of_Tree, Argument),
+                                Here);
+                           Is_Struct : constant Boolean :=
+                             Type_At (Of_Tree, Argument) = Ty.Aggregate;
+                           Temporary : constant IR.Slot_Id :=
+                             (if Is_Struct
+                              then IR.Add_Aggregate_Slot
+                                (Unit.all, Filling, Res.No_Declaration,
+                                 Here, Nominal_For (Parameter.Nominal))
+                              else IR.Add_Array_Slot
+                                (Unit.all, Filling,
+                                 Neutral_Element (Parameter),
+                                 IR.Element_Total (Parameter.Length),
+                                 Res.No_Declaration, Here));
+                        begin
+                           if Is_Struct then
+                              for Field in
+                                1 .. Landin.Checking.Layout_Field_Count
+                                       (Types.all, Parameter.Nominal)
+                              loop
+                                 Add_Stored_Field
+                                   (Parameter.Nominal, Field,
+                                    Slot => Temporary);
+                              end loop;
+                           end if;
+                           IR.Emit_Array_Copy
+                             (Unit.all, Filling, From,
+                              Addressed_Storage
+                                ((Place => (Kind => IR.Frame_Slot,
+                                            Slot => Temporary),
+                                  Base  => 0,
+                                  Steps => Stored_Path_Vectors.Empty_Vector),
+                                 Neutral_Value_Shape (Of_Tree, Argument),
+                                 Here),
+                              Here);
+                           Given (Formal_Position) := IR.Emit_Storage_Address
+                             (Unit.all, Filling,
+                              (Kind => IR.Frame_Slot, Slot => Temporary),
+                              Here);
+                        end;
+                     end;
                   else
                      if Has_Computed_Index (Of_Tree, Argument)
                        or else Has_Reference_Storage (Of_Tree, Argument)
