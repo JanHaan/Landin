@@ -1,0 +1,10 @@
+error[L0314]: this frame-origin reference cannot be retained beyond the call
+  --> ../tests/fixtures/negative/core-mem-replace-frame-any/main.ldn:16:32
+   |
+16 |     mem.replace(storage, zero, value) else (problem)
+   |                                ^^^^^
+  --> ../tests/fixtures/negative/core-mem-replace-frame-any/main.ldn:13:5
+   |
+13 |     local: node = (value: 23)
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^ the shorter-lived reference source
+  = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`

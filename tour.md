@@ -614,8 +614,10 @@ hold the inferred result of `reserve`; another core module names the same
 private identity through the public alias `storage(T)`. Neither route exposes
 the representation. `capacity` and `initialized` report the two counts,
 `admit` initializes exactly the next slot, `get` reads only the initialized
-prefix, `release` removes only its tail, and `dispose` returns the backing byte
-pointer only when the prefix is empty. `transfer` copies one initialized source
+prefix, `replace` writes an existing initialized slot, and `used` exposes that
+prefix as a mutable slice `from storage`. `release` removes only its tail, and
+`dispose` returns the backing byte pointer only when the prefix is empty. `transfer` copies one initialized
+source
 slot directly into the next slot of a private replacement, without exposing a
 reference-valued item between the two states. The four invalid requests are
 foreseeable and therefore declared outcomes: `raw_full`, `uninitialized`,
@@ -625,8 +627,13 @@ Growth uses two raw values. Allocate and reserve an empty replacement, copy
 the old initialized prefix into it, and roll that private replacement back if
 any admission fails. After every copy succeeds, release the old tail to zero,
 dispose its allocation, and assign the replacement to the published binding.
-That last assignment is the publication point. No slice ever describes the
-spare capacity and no spare byte is read as `T`.
+That last assignment is the publication point. The private initialized slice
+is the length witness. The first complete typed store precedes taking its
+singleton slice; a later append writes the next item before a narrow
+`unchecked` range extension publishes it. No slice ever describes spare
+capacity and no spare byte is read as `T`. A `used` view must end before a
+capacity or prefix transition; writes through aliases retain [0860]'s stated
+local-analysis limitation.
 
 This is not a memory-safety claim. Before `dispose`, save `capacity * sizeof T`
 as the allocator's release extent; the caller still supplies a live, aligned

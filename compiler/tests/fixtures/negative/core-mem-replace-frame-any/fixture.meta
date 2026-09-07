@@ -1,0 +1,8 @@
+class: negative
+summary: initialized prefix keeps live-view and escaping insertion checks (core-mem-replace-frame-any)
+expect: expected.txt
+args: --root=../.. ../tests/fixtures/negative/core-mem-replace-frame-any
+codes: L0314
+status: 1
+constructs: 0430, 0510, 0780, 0790, 0800
+targets: linux-x86-64, macos-arm64, synthetic-32

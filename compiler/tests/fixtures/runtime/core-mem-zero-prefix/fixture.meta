@@ -1,0 +1,7 @@
+class: runtime
+summary: zero-byte heap-backed raw prefixes retain logical length through bootstrap transfer and release
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0430, 0470, 0510, 0520, 0540, 0790, 1360
+targets: linux-x86-64

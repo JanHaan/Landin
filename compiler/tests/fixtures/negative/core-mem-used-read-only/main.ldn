@@ -1,0 +1,5 @@
+import core/mem
+bad: (storage: mem.storage(u8)) -> none =
+    view: []u8 = mem.used(storage)
+    view[0] = 23
+end bad

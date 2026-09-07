@@ -1,0 +1,7 @@
+import core/mem
+bad: (inout storage: mem.storage(u8)) -> (result: usize) =
+    view := mem.used(storage)
+    released: ptr mut u8 = mem.dispose(storage) else ptr(0)
+    _ = released
+    result = lenof view
+end bad

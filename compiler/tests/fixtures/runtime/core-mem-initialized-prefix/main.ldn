@@ -1,0 +1,93 @@
+import core/heap
+import core/mem
+
+public main: () -> (code: i32) =
+    code = 1
+    mut allocator := heap.host()
+    two: usize = 2
+    zero: usize = 0
+    one: usize = 1
+    extent: usize = two * sizeof u32
+    base: ptr mut u8 = mem.allocate(allocator, extent, alignof u32) else ptr(0)
+    other: ptr mut u8 = mem.allocate(allocator, extent, alignof u32) else ptr(0)
+    mut source := mem.reserve(item: u32, base: base, slots: two)
+    mut target := mem.reserve(item: u32, base: other, slots: two)
+    empty: bool = begin
+        view := mem.used(source)
+        lenof view == 0
+    end
+    first: u32 = 11
+    second: u32 = 23
+    replacement: u32 = 29
+    a: usize = mem.admit(source, first) else two
+    b: usize = mem.admit(source, second) else two
+    refused: usize = mem.admit(source, replacement) else two
+    mut replace_refused: bool = false
+    mem.replace(source, two, replacement) else (problem)
+        _ = problem
+        replace_refused = true
+    end
+    before: bool = begin
+        view := mem.used(source)
+        lenof view == 2 and view[0] == 11 and view[1] == 23
+    end
+    missing: usize = mem.transfer(source, two, target) else two
+    target_empty: bool = mem.initialized(target) == 0
+    c: usize = mem.transfer(source, zero, target) else two
+    d: usize = mem.transfer(source, one, target) else two
+    full: usize = mem.transfer(source, zero, target) else two
+    begin
+        view := mem.used(target)
+        view[0] = 31
+    end
+    mem.replace(target, one, replacement) else (problem)
+        _ = problem
+        return
+    end
+    copied: bool = begin
+        view := mem.used(target)
+        lenof view == 2 and view[0] == 31 and view[1] == 29
+    end
+    original: bool = begin
+        view := mem.used(source)
+        view[0] == 11 and view[1] == 23
+    end
+    blocked: usize = begin
+        refused: ptr mut u8 = mem.dispose(target) else ptr(0)
+        usize(refused)
+    end
+    tail: u32 = mem.release(target) else 0
+    remaining: bool = begin
+        view := mem.used(target)
+        lenof view == 1 and view[0] == 31
+    end
+    head: u32 = mem.release(target) else 0
+    mut empty_refused: bool = false
+    _ = mem.release(target) else (problem)
+        _ = problem
+        empty_refused = true
+        0
+    end
+    again: usize = mem.admit(target, second) else two
+    repeated: u32 = mem.release(target) else 0
+    target_block: ptr mut u8 = mem.dispose(target) else ptr(0)
+    _ = mem.release(source) else 0
+    _ = mem.release(source) else 0
+    source_block: ptr mut u8 = mem.dispose(source) else ptr(0)
+    final_empty: bool = begin
+        view := mem.used(target)
+        lenof view == 0 and mem.capacity(target) == 0
+    end
+    exact: bool = usize(target_block) == usize(other)
+                 and usize(source_block) == usize(base)
+    mem.free(allocator, target_block, extent)
+    mem.free(allocator, source_block, extent)
+    if empty and a == 0 and b == 1 and refused == 2 and replace_refused
+      and before and missing == 2 and target_empty and c == 0 and d == 1
+      and full == 2 and copied and original and blocked == 0
+      and tail == 29 and remaining and head == 31 and empty_refused
+      and again == 0 and repeated == 23 and final_empty and exact
+    then
+        code = 42
+    end if
+end main

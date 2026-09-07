@@ -10,7 +10,8 @@ public raw_not_empty: atom
 raw: type (item: type) = struct
     base: ptr mut u8
     capacity_count: usize
-    initialized_count: usize
+    first: ptr mut [1]item
+    prefix: []mut item
 end raw
 
 --  The alias is the opaque name other core modules can put in fields and
@@ -38,7 +39,10 @@ end free
 
 public reserve: (item: type, base: ptr mut u8, slots: usize)
                 -> (storage: raw(item) from base) =
-    storage = (base: base, capacity_count: slots, initialized_count: 0)
+    first: ptr mut [1]item = ptr(usize(base))
+    prefix: []mut item = []
+    storage = (base: base, capacity_count: slots,
+               first: first, prefix: prefix)
 end reserve
 
 public capacity: (item: type, storage: raw(item)) -> (count: usize) =
@@ -46,62 +50,80 @@ public capacity: (item: type, storage: raw(item)) -> (count: usize) =
 end capacity
 
 public initialized: (item: type, storage: raw(item)) -> (count: usize) =
-    count = storage.initialized_count
+    prefix := storage.prefix
+    count = lenof prefix
 end initialized
+
+public used: (item: type, storage: raw(item))
+             -> (view: []mut item from storage) =
+    view = storage.prefix
+end used
 
 public admit: (item: type, inout storage: raw(item), escaping value: item)
               -> (index: usize) ! raw_full =
-    fail raw_full when storage.initialized_count == storage.capacity_count
-    index = storage.initialized_count
-    address: usize = usize(storage.base)
-                     + storage.initialized_count * sizeof item
-    slot: ptr mut item = ptr(address)
-    slot.val = value
-    inc storage.initialized_count
+    index = initialized(storage)
+    fail raw_full when index >= storage.capacity_count
+    wanted: usize = index + 1
+    if index == 0 then
+        storage.first.val[0] = value
+        storage.prefix = storage.first.val[0..<1]
+    else
+        unchecked begin
+            storage.prefix[index] = value
+            storage.prefix = storage.prefix[0..<wanted]
+        end unchecked
+    end if
 end admit
 
 public get: (item: type, storage: raw(item), index: usize)
             -> (value: item from storage) ! uninitialized =
-    fail uninitialized when index >= storage.initialized_count
-    address: usize = usize(storage.base) + index * sizeof item
-    slot: ptr mut item = ptr(address)
-    value = slot.val
+    fail uninitialized when index >= initialized(storage)
+    value = storage.prefix[index]
 end get
 
---  Copy one initialized source item into the next destination slot without
---  exposing a reference-valued item between the two raw values. This is the
---  primitive transactional containers use while a replacement is private.
+public replace: (item: type, inout storage: raw(item), index: usize,
+                 escaping value: item) -> none ! uninitialized =
+    fail uninitialized when index >= initialized(storage)
+    storage.prefix[index] = value
+end replace
+
+--  Read a complete source value before entering the destination's narrow
+--  unchecked append. The new prefix is published only after its typed store.
 public transfer: (item: type, source: raw(item), index: usize,
                   inout target: raw(item))
                  -> (admitted: usize) ! uninitialized | raw_full =
-    fail uninitialized when index >= source.initialized_count
-    fail raw_full when target.initialized_count == target.capacity_count
-    source_address: usize = usize(source.base) + index * sizeof item
-    source_slot: ptr mut item = ptr(source_address)
-    admitted = target.initialized_count
-    target_address: usize = usize(target.base)
-                            + target.initialized_count * sizeof item
-    target_slot: ptr mut item = ptr(target_address)
-    target_slot.val = source_slot.val
-    inc target.initialized_count
+    fail uninitialized when index >= initialized(source)
+    admitted = initialized(target)
+    fail raw_full when admitted >= target.capacity_count
+    saved: item = source.prefix[index]
+    wanted: usize = admitted + 1
+    if admitted == 0 then
+        target.first.val[0] = saved
+        target.prefix = target.first.val[0..<1]
+    else
+        unchecked begin
+            target.prefix[admitted] = saved
+            target.prefix = target.prefix[0..<wanted]
+        end unchecked
+    end if
 end transfer
 
 public release: (item: type, inout storage: raw(item))
                 -> (value: item from storage) ! raw_empty =
-    fail raw_empty when storage.initialized_count == 0
-    dec storage.initialized_count
-    address: usize = usize(storage.base)
-                     + storage.initialized_count * sizeof item
-    slot: ptr mut item = ptr(address)
-    value = slot.val
+    count: usize = initialized(storage)
+    fail raw_empty when count == 0
+    tail: usize = count - 1
+    value = storage.prefix[tail]
+    storage.prefix = storage.prefix[0..<tail]
 end release
 
 public dispose: (item: type, inout storage: raw(item))
                 -> (released: ptr mut u8 from storage) ! raw_not_empty =
-    fail raw_not_empty when not (storage.initialized_count == 0)
-    raw_address: usize = usize(storage.base)
-    released = ptr(raw_address)
+    fail raw_not_empty when initialized(storage) <> 0
+    released = storage.base
     storage.base = ptr(0)
+    storage.first = ptr(0)
+    storage.prefix = []
     storage.capacity_count = 0
 end dispose
 

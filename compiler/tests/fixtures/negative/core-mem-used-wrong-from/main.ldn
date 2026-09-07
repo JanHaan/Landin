@@ -1,0 +1,5 @@
+import core/mem
+bad: (source: mem.storage(u8), other: mem.storage(u8))
+     -> (result: []mut u8 from other) =
+    result = mem.used(source)
+end bad
