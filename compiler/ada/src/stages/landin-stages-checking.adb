@@ -5823,15 +5823,21 @@ package body Landin.Stages.Checking is
             --  direct-name binding has no Written node and is admitted
             --  separately by Infer.
             --  D118: the source may sit under however many selections
-            --  [0420] composed; a module image still takes only a direct
-            --  name or one field of one, because D70 folds it rather than
-            --  copying at run time.
-            Is_Direct_Name_Init : constant Boolean :=
+            --  [0420] composed. D178's complete fixed-array element shape
+            --  also makes a locally selected array element whole storage,
+            --  including through a slice or pointer. A module image still
+            --  takes only a direct name or one field of one, because D70
+            --  folds it rather than copying at run time.
+            Is_Array_Storage_Init : constant Boolean :=
               Held = Ty.Fixed_Array
               and then Syn.Kind (Of_Tree, Node) = Syn.Binding
               and then Syn.Value_Of (Of_Tree, Node) /= Syn.No_Node
-              and then Chain_Names_Storage
-                (Of_Tree, Syn.Value_Of (Of_Tree, Node))
+              and then
+                (if Is_Local_Binding (Of_Tree, Node)
+                 then Chain_Names_Element_Storage
+                   (Of_Tree, Syn.Value_Of (Of_Tree, Node))
+                 else Chain_Names_Storage
+                   (Of_Tree, Syn.Value_Of (Of_Tree, Node)))
               and then
                 (Is_Local_Binding (Of_Tree, Node)
                  or else Syn.Kind (Of_Tree, Syn.Value_Of (Of_Tree, Node))
@@ -6022,7 +6028,7 @@ package body Landin.Stages.Checking is
             if Held = Ty.Fixed_Array
               and then Syn.Kind (Of_Tree, Node) /= Syn.Type_Declaration
               and then not Is_Zeroed_State
-              and then not Is_Direct_Name_Init
+              and then not Is_Array_Storage_Init
               and then not Is_Local_Literal_Init
               and then not Is_Typed_Repetition_Init
               and then not Is_Typed_Mixed_Repetition_Init

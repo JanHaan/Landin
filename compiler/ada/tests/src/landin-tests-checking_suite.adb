@@ -107,6 +107,9 @@ package body Landin.Tests.Checking_Suite is
    procedure Routine_Instance_Views_Keep_Source_Facts_Separate
      (Item : in out Landin.Testing.Context);
 
+   procedure Generic_Array_Selections_Keep_Field_Metadata
+     (Item : in out Landin.Testing.Context);
+
    procedure Float_Specials_Have_Canonical_Bits
      (Item : in out Landin.Testing.Context);
 
@@ -1175,6 +1178,107 @@ package body Landin.Tests.Checking_Suite is
          end;
       end;
    end Routine_Instance_Views_Keep_Source_Facts_Separate;
+
+   --  A concrete generic array result may be copied from a slice element.
+   --  The element's type is supplied by the instance, but the member that
+   --  reaches that slice remains an ordinary declaration-order field.
+   procedure Generic_Array_Selections_Keep_Field_Metadata
+     (Item : in out Landin.Testing.Context)
+   is
+      Source_Text : constant String :=
+        "box: type (item: type) = struct" & LF
+        & "    prefix: []mut item" & LF
+        & "end box" & LF
+        & "copy: (item: type, source: box(item), index: usize," & LF
+        & "       inout target: box(item)) -> (written: usize) =" & LF
+        & "    value: item = source.prefix[index]" & LF
+        & "    target.prefix[index] = value" & LF
+        & "    written = index" & LF
+        & "end copy" & LF
+        & "empty: type = [0]u8" & LF
+        & "main: () -> none =" & LF
+        & "    mut backing: [1]empty = zeroed" & LF
+        & "    view: []mut empty = backing[0..<1]" & LF
+        & "    source: box(empty) = (prefix: view)" & LF
+        & "    mut target: box(empty) = (prefix: view)" & LF
+        & "    zero: usize = 0" & LF
+        & "    written: usize = copy(source, zero, target)" & LF
+        & "end main" & LF;
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Src : Landin.Source.Source_Id;
+      Ran : Natural;
+   begin
+      Src := Landin.Stages.Add_Source
+        (Work, "generic-array-selection.ldn", Source_Text);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Configurer'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Landin.Stages.Append (Order, Checker'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "the generic array-valued slice selection is accepted");
+
+      declare
+         Of_Tree : constant not null access constant Landin.Syntax.Tree :=
+           Landin.Syntax.Forest.Tree_Of
+             (Landin.Stages.Trees (Work).all, Src);
+         Types : constant not null access Landin.Checking.Table :=
+           Landin.Stages.Types (Work);
+         Instance : constant Landin.Checking.Routine_Instance_Id :=
+           Landin.Checking.Routine_Identities.Nth (Types.all, 1);
+         Previous : Landin.Checking.Routine_Instance_Id;
+         Seen : Natural := 0;
+         Elements : Natural := 0;
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Landin.Checking.Routine_Instance_Count (Types.all), 1,
+            "the call selects one concrete generic routine");
+         Landin.Checking.Activate_Routine_View
+           (Types.all, Instance, Previous);
+         for Node in Landin.Syntax.Node_Id'(1)
+                   .. Landin.Syntax.Last_Node (Of_Tree.all)
+         loop
+            if Landin.Syntax.Kind (Of_Tree.all, Node)
+                 = Landin.Syntax.Member_Selection
+            then
+               Seen := Seen + 1;
+               Landin.Testing.Check
+                 (Item,
+                  Landin.Checking.Type_Of (Types.all, Of_Tree.all, Node)
+                    = Landin.Types.Slice_Value,
+                  "the concrete selected field keeps its slice type");
+               Landin.Testing.Check_Equal
+                 (Item,
+                  Landin.Checking.Field_Index
+                    (Types.all, Of_Tree.all, Node),
+                  1, "the concrete selected field keeps its field index");
+            elsif Landin.Syntax.Kind (Of_Tree.all, Node)
+                    = Landin.Syntax.Element_Index
+              and then Landin.Syntax.Kind
+                (Of_Tree.all,
+                 Landin.Syntax.Target_Of (Of_Tree.all, Node))
+                   = Landin.Syntax.Member_Selection
+            then
+               Elements := Elements + 1;
+               Landin.Testing.Check
+                 (Item,
+                  Landin.Checking.Type_Of (Types.all, Of_Tree.all, Node)
+                    = Landin.Types.Fixed_Array,
+                  "the concrete selected element keeps its array type");
+            end if;
+         end loop;
+         Landin.Checking.Restore_Routine_View (Types.all, Previous);
+         Landin.Testing.Check_Equal
+           (Item, Seen, 2, "the generic body has two selected fields");
+         Landin.Testing.Check_Equal
+           (Item, Elements, 2, "the generic body has two array elements");
+      end;
+   end Generic_Array_Selections_Keep_Field_Metadata;
 
    procedure Failed_Generic_Deduction_Has_No_Target
      (Item : in out Landin.Testing.Context)
@@ -7135,6 +7239,9 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Register
         (Into, "checking", "routine instance views keep source facts",
          Routine_Instance_Views_Keep_Source_Facts_Separate'Access);
+      Landin.Testing.Register
+        (Into, "checking", "generic array selections keep field metadata",
+         Generic_Array_Selections_Keep_Field_Metadata'Access);
       Landin.Testing.Register
         (Into, "checking", "failed generic deduction has no target",
          Failed_Generic_Deduction_Has_No_Target'Access);

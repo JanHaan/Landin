@@ -1,0 +1,92 @@
+box: type (item: type) = struct
+    prefix: []mut item
+    count: usize
+end box
+
+outside: atom
+
+mut selection_calls: usize = 0
+
+selected_index: (index: usize) -> (result: usize) =
+    inc selection_calls
+    result = index
+end selected_index
+
+transfer: (item: type, source: box(item), index: usize,
+           inout target: box(item)) -> (written: usize) ! outside =
+    fail outside when index >= source.count
+    fail outside when index >= target.count
+    saved: item = source.prefix[selected_index(index)]
+    target.prefix[index] = saved
+    written = index
+end transfer
+
+empty: type = [0]u8
+pair: type = [2]u8
+
+public main: () -> (code: i32) =
+    mut empty_source_before: u8 = 7
+    mut empty_source_storage: [3]empty = zeroed
+    mut empty_source_after: u8 = 11
+    mut empty_target_before: u8 = 13
+    mut empty_target_storage: [3]empty = zeroed
+    mut empty_target_after: u8 = 17
+    empty_source_view: []mut empty = empty_source_storage[0..<3]
+    empty_target_view: []mut empty = empty_target_storage[0..<3]
+    empty_source: box(empty) = (prefix: empty_source_view, count: 3)
+    mut empty_target: box(empty) = (prefix: empty_target_view, count: 3)
+
+    one: usize = 1
+    empty_written: usize = transfer(empty_source, one, empty_target) else 9
+
+    mut pair_source_before: u8 = 19
+    mut pair_source_storage: [3]pair = zeroed
+    mut pair_source_after: u8 = 47
+    pair_source_storage[0] = [23, 29]
+    pair_source_storage[1] = [31, 37]
+    pair_source_storage[2] = [41, 43]
+    mut pair_target_before: u8 = 53
+    mut pair_target_storage: [3]pair = zeroed
+    mut pair_target_after: u8 = 83
+    pair_target_storage[0] = [59, 61]
+    pair_target_storage[1] = [67, 71]
+    pair_target_storage[2] = [73, 79]
+    pair_source_view: []mut pair = pair_source_storage[0..<3]
+    pair_target_view: []mut pair = pair_target_storage[0..<3]
+    pair_source: box(pair) = (prefix: pair_source_view, count: 3)
+    mut pair_target: box(pair) = (prefix: pair_target_view, count: 3)
+
+    pair_written: usize = transfer(pair_source, one, pair_target) else 9
+
+    mut refused: bool = false
+    three: usize = 3
+    _ = transfer(empty_source, three, empty_target) else (problem)
+        _ = problem
+        refused = true
+    end
+
+    source_0: pair = pair_source.prefix[0]
+    source_1: pair = pair_source.prefix[1]
+    source_2: pair = pair_source.prefix[2]
+    target_0: pair = pair_target.prefix[0]
+    target_1: pair = pair_target.prefix[1]
+    target_2: pair = pair_target.prefix[2]
+
+    if empty_written == 1 and pair_written == 1 and refused
+      and selection_calls == 2
+      and empty_source_before == 7 and empty_source_after == 11
+      and empty_target_before == 13 and empty_target_after == 17
+      and source_0[0] == 23 and source_0[1] == 29
+      and source_1[0] == 31 and source_1[1] == 37
+      and source_2[0] == 41 and source_2[1] == 43
+      and target_0[0] == 59 and target_0[1] == 61
+      and target_1[0] == 31 and target_1[1] == 37
+      and target_2[0] == 73 and target_2[1] == 79
+      and pair_source_before == 19 and pair_source_after == 47
+      and pair_target_before == 53 and pair_target_after == 83
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

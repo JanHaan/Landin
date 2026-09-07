@@ -3910,6 +3910,28 @@ the fixed storage behind an ordinary scalar slice;
 element; and `negative/scalar-traversal-source-escaping` retains L0314 for a
 call nested in the traversal source.
 
+The bounded initialized-prefix transfer follow-up closes the remaining
+fixed-array selection metadata defect. A typed local fixed-array initializer
+may name one complete element reached through a member-and-element storage
+chain; concrete generic checking now visits that chain and records its slice
+type and field index before lowering. Module initial images retain their
+direct-name-or-field restriction. The
+`runtime/r420-generic-array-selection-transfer` case copies an actual
+`[0]u8` item and a nonzero `[2]u8` control through slice-backed generic
+selection, observes the selecting call once, recovers an out-of-range request
+before that call, and checks the exact source, destination neighbours and
+guard values. This is checker metadata completion, not a zero-extent skip or
+the separately owned place-evaluation repair.
+
+Two normalization edges remain outside that repair and outside the transfer
+used by `core/mem`: a range directly over an array-valued struct member is
+still refused at its slice-shape boundary, and a scalar index chained directly
+onto a reference-backed fixed-array element still reaches a lowering defect.
+The runtime case therefore uses direct array backing and materializes each
+selected nonzero array into its typed local before inspecting scalar members.
+Neither boundary is hidden by substituting a scalar or byte carrier for the
+zero-sized item; they remain bounded R4.20 follow-ups.
+
 D196 settles D191's inherited construct rows. [0500]'s `mem.offset` and
 `mem.base_of` are unneeded conveniences for this slice: existing [0470]
 address conversion and checked element addressing serve their actual callers.
