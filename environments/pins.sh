@@ -11,6 +11,9 @@
 LANDIN_GNAT_VERSION=16.1.0-1
 LANDIN_GPRBUILD_VERSION=26.0.0-1
 LANDIN_RELEASES=https://github.com/alire-project/GNAT-FSF-builds/releases/download
+#  The container recipe's base image, by digest; check.py holds the recipe
+#  to it.  Nothing else reads it.
+LANDIN_BASE_IMAGE=docker.io/library/debian@sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241
 
 #  sha256 of each archive, verified before it is unpacked.
 LANDIN_GNAT_SHA256_X86_64_LINUX=9f74f58a827a2ad40dd84c72a413e75ea52888e0d8f7e252fba4d26762402703

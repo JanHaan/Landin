@@ -1640,8 +1640,10 @@ without it the addition keeps its low byte and the program returns normally.
 Neither says which signal ended it, because this decision is what says that
 question has no stable answer.
 
-**Future evidence required:** the first slice that enables [0310]'s runtime
-conversions must exercise its out-of-range trap through the same contract.
+**Pinned by** `runtime/checked-overflow-traps`, `runtime/a-zero-divisor-traps`,
+and since R4.10 the conversion traps the paragraph above asked for:
+`runtime/float-to-integer-out-of-range-traps`,
+`runtime/float-to-integer-nan-traps` and `runtime/range-subtype-store-traps`.
 
 ### D12 — The first hosted path accepts one `main` shape
 
@@ -1663,7 +1665,9 @@ executable slice carry an entry-selection or argument representation rule it
 does not need; freestanding builds already have the explicit-entry rule
 [1650].
 
-**Future evidence required:** R1.80's hosted entry and exit-status cases.
+**Pinned by** `runtime/constant-return-exits-with-its-code`,
+`runtime/add-exits-with-its-sum`, and the driver suite's L0502 refusal of a
+hosted program without `public main: () -> (code: i32)`.
 
 ### D13 — An amount at or past the width gives zero on every shift
 
@@ -5663,6 +5667,8 @@ would require a nonzero target-neutral variant image, while refusing both
 scopes merely because one lacks that representation would preserve an
 accidental asymmetry.
 
+**The alternative:** require every constructed local to spell its type, or admit an inferred module binding as well. The first repeats what the construction's type name already says; the second has no runtime destination to receive the evaluated parts, which [1460] forbids running before the entry point.
+
 **Pinned by** the lowering public seam;
 `positive/variant-case-construction`; the generated token and IR records; and
 `runtime/variant-case-construction-runs-in-source-order` on Linux x86-64.
@@ -5711,6 +5717,8 @@ field keeps the IR target-neutral and the existing field semantics visible.
 Static nonzero variant images and inferred module construction follow in D81.
 General aggregate values, arguments and returns remained separate decisions;
 D94--D116 later close the internal argument and result contexts.
+
+**The alternative:** copy a variant-bearing struct part by part, or refuse whole copies of one altogether. Field-wise copying would have to know which payload is live and would skip the padding and tag a whole-storage copy carries for free; refusing the copy leaves [0540]'s value semantics with a hole where the tour has none.
 
 **Pinned by** the IR, lowering, verifier and backend public seams;
 `positive/variant-whole-copy`;
@@ -5773,6 +5781,8 @@ contiguous payload run makes the case explicit, keeps every width and offset in
 the backend, and lets D60's existing image-chain machinery copy the complete
 value without inspecting target layout.
 
+**The alternative:** build a module variant value by startup code, or refuse a selected case in a module image. [1460] leaves nothing to run before the entry point, and a refusal would make the one aggregate the freestanding driver most wants static, a device state machine, unwritable at module scope.
+
 **Pinned by** the lowering, verifier and backend public seams;
 `positive/variant-module-case-image`;
 `negative/variant-module-case-image-value-not-known`;
@@ -5819,6 +5829,8 @@ copies. Limiting D82 to finite literals alone would make `zeroed` and compact
 repetition needlessly asymmetric with D67/D68. D83 takes the separate static
 source-resolution edge; D84 supplies runtime construction and D85 supplies
 indexed match aliases.
+
+**The alternative:** treat a fixed-array payload in a module image as a general runtime value, or admit only `zeroed` there. The first makes the image a computation; the second makes the initial state of a device table a copy loop the program has to write itself.
 
 **Pinned by** the lowering, verifier and backend public seams;
 `positive/variant-module-array-payload-image`;
@@ -5870,6 +5882,8 @@ despite both representations already existing. This remains a contextual
 initializer edge: selected payload arrays are not general values. Runtime
 fixed-array payload writes follow in D84, while indexed fixed-array match
 aliases follow in D85.
+
+**The alternative:** accept any expression as a static array payload source, including local storage and deeper selections. Only a static image can be resolved when the image is formed, so every other form keeps the owner that already refuses it rather than a second, image-specific report.
 
 **Pinned by** the lowering and backend public seams;
 `positive/variant-module-array-payload-image-copy`;
@@ -5930,6 +5944,8 @@ declaration identities lets the established compact operations reach the leaf
 without putting layout bytes into the IR, and is also the address carrier a
 later fixed-array match alias needs.
 
+**The alternative:** restrict a runtime case construction's array payload to literals and `zeroed`, or evaluate the payload before the destination is selected. The first gives the payload a narrower rule than D65's ordinary array field for no reason the tour states; the second reorders D76's destination-first protocol.
+
 **Pinned by** the lowering, verifier and backend public seams;
 `positive/variant-runtime-array-payload`;
 `negative/variant-runtime-array-payload-shape-disagrees`;
@@ -5979,6 +5995,8 @@ D21 and every argument/return boundary at once. The direct alias already used
 for D78's scalar leaves preserves [1220]'s one rule while indexing supplies the
 only scalar value an expression needs.
 
+**The alternative:** copy a fixed-array payload into a fresh local binding at the arm, or refuse array bindings in a match arm. A copy hides the write an `inout` binding exists to make and costs the payload's extent on every match; a refusal leaves an array payload matchable but unreadable.
+
 **Pinned by** the IR and lowering public seams;
 `positive/variant-match-array-payload-bindings`;
 `negative/variant-match-array-binding-not-enabled`;
@@ -6025,6 +6043,8 @@ definite-assignment paths, images, clear and copy. Flattening the child into the
 parent would lose nominal provenance and make later debugger information
 reconstruct it; carrying a target byte extent would make the IR target-specific.
 
+**The alternative:** flatten a child struct's fields into the parent's placement, or refuse a struct field until layout is general. Flattening loses the child's own alignment and padding and every alias of its body identity; the depth-one slice with the child's complete padded size is what the containers needed and no more.
+
 **Pinned by** the checking, lowering and verifier public seams;
 `positive/measurement-of-nested-struct-field`;
 `positive/module-struct-image-with-a-child`; the generated layout, token
@@ -6068,6 +6088,8 @@ aggregate temporary, while a selected field or nonzero copy does. Flattening
 the child into parent fields would lose D86's nominal provenance; storing its
 target extent would make the IR target-specific. D88--D132 later close the
 remaining nonzero contextual and internal-ABI boundary.
+
+**The alternative:** admit `s.child` as a value and place in the same slice, or give a nested struct no storage until every operation on it exists. The first drags construction, copy and static images into a layout increment; the second leaves D86's measured layout with nothing to measure.
 
 **Pinned by** the lowering, verifier and backend public seams;
 `positive/nested-struct-zero-storage`;
@@ -6192,6 +6214,8 @@ expression or initializer position would decide a first-class aggregate value
 and ABI merely because a path can now name its bytes. Keeping independent
 endpoint identities also avoids flattening either nominal child.
 
+**The alternative:** make a nested array leaf a general value at once, or admit no assignment to it until it is one. The first pulls parameter, return and operand rules into a storage increment; the second leaves `parent.child.array` writable only through its parent, which is the copy loop the leaf exists to avoid.
+
 **Pinned by** the lowering, verifier and backend public seams;
 `negative/nested-struct-array-copy-unassigned`; the generated token and IR
 records; and `runtime/nested-struct-array-values` on Linux x86-64.
@@ -6264,6 +6288,8 @@ needed. Module image copying and inferred aggregate values have different
 lifetime and cycle evidence and are not consequences of naming a runtime
 source path.
 
+**The alternative:** admit module initializers from the nested paths in the same slice, or require a copy through a named local first. The first needs static image-edge and cycle decisions a runtime copy does not; the second makes the reader write the copy this decision performs.
+
 **Pinned by** the lowering and verifier public seams;
 `negative/nested-struct-child-initializer-unassigned`; the generated token and
 IR records; and `runtime/nested-struct-child-values` on Linux x86-64.
@@ -6291,6 +6317,8 @@ expression value or aggregate temporary is introduced.
 identity before lowering, unlike a bare labelled literal. Restricting the rule
 to locals keeps it in runtime storage and does not silently extend module image
 graphs or the ABI.
+
+**The alternative:** require the local's type to be spelled whenever its source is nested storage. The source carries the complete nominal identity or array shape, so a spelled type is a repetition the checker would only compare with what it already knows.
 
 **Pinned by** the checker, lowering and verifier public seams;
 `negative/nested-struct-child-inference-unassigned`; the generated token and
@@ -6326,6 +6354,8 @@ hidden reference convention. The neutral carrier keeps offsets, padding and
 extent out of verified IR; the callee-side copy makes the observable value
 independent and leaves R4.40 to classify C aggregates separately.
 
+**The alternative:** pass a struct argument by reference and let the callee copy on write, or expand the struct into one register per scalar field. The first makes a later argument's side effect visible to the callee, which R4.21 later met as a defect even under this convention; the second has no answer for a struct wider than the register run.
+
 **Pinned by** the checker, lowering, malformed-IR verifier and backend public
 seams; `negative/struct-argument-unassigned`; the generated token and IR
 records; and `runtime/struct-arguments-cross-calls` on Linux x86-64.
@@ -6356,6 +6386,8 @@ largest arrays impossible to represent compactly and would make argument
 position depend on the selected target. Passing an alias without copying would
 not implement `in` as a value. D94's one-position transport plus defensive copy
 avoids both changes without introducing a source pointer.
+
+**The alternative:** pass a fixed array as a slice, or expand it element by element. A slice is a view and [0520] says an array is a value; element expansion has no answer for a long array and a different answer for every length.
 
 **Pinned by** the checker, lowering, verifier and backend public seams;
 `negative/array-argument-unassigned`; the generated token and IR records; and
@@ -6388,6 +6420,8 @@ checked IR target-specific. The existing contextual source already proves one
 complete extent, so extending its neutral path carrier to the argument boundary
 does not create an aggregate expression value.
 
+**The alternative:** require a nested child or array to be copied into a named local before it is passed. The address carrier already names the parent and child field identities, so the copy would be a second copy of what the callee copies anyway.
+
 **Pinned by** the checker, lowering, malformed-IR verifier and backend public
 seams; `negative/nested-storage-argument-unassigned`; the generated token and
 IR records; and `runtime/nested-storage-arguments` on Linux x86-64.
@@ -6416,6 +6450,8 @@ argument would create a second convention and would make its behavior depend
 on whether the caller wrote equivalent named zero storage. Materializing the
 contextual value through existing storage keeps argument order, register/stack
 placement and by-value independence identical.
+
+**The alternative:** require a named `zeroed` local before the call, or give the callee the job of zeroing. A temporary the caller clears keeps the callee's by-value copy uniform, and a named local for one zero value is noise the tour never asks for.
 
 **Pinned by** the checker, lowering, verifier and backend public seams; the
 generated token and IR records; and `runtime/nested-storage-arguments` on
@@ -6446,6 +6482,8 @@ positions would change the convention by source form and target, while a
 callee-only construction would reverse [0410]'s caller-side argument order.
 The temporary preserves both order and one-position transport.
 
+**The alternative:** require an array literal argument to be bound to a local first, or introduce an array-valued expression result. The temporary keeps the literal contextual and the IR free of a target-sized run; a local is the same temporary with a name.
+
 **Pinned by** the checker, lowering, verifier and backend public seams;
 `negative/array-literal-argument-shape-mismatch`; the generated token and IR
 records; and `runtime/array-arguments-cross-calls` on Linux x86-64.
@@ -6473,6 +6511,8 @@ extent remain backend facts.
 source-ordered explicit prefix. Giving arguments a separate repetition
 representation would duplicate the contextual assignment and initializer
 semantics without changing the ABI carrier or callee copy.
+
+**The alternative:** expand a repetition into one store per element in lowering or in the IR. One compact fill keeps the IR target-neutral and the emitted code independent of the length; the expansion would make a 4096-element fill 4096 instructions.
 
 **Pinned by** the checker, lowering, verifier and backend public seams;
 `negative/array-repetition-argument-shape-mismatch`; the generated token and IR
@@ -6502,6 +6542,8 @@ caller-side evaluation order without duplicating D65/D76's array and variant
 leaf machinery inside call lowering. Those shapes remain valid storage
 arguments by D94/D96; only direct literal construction is narrower.
 
+**The alternative:** require a struct literal argument to be bound to a local first, or admit literals with array and child fields in the same slice. The first is the temporary with a name; the second needs the leaf materialization the later decisions add one kind at a time.
+
 **Pinned by** the checker, lowering, verifier and backend public seams;
 `negative/struct-literal-argument-nominal-mismatch`; the generated token and IR
 records; and `runtime/struct-arguments-cross-calls` on Linux x86-64.
@@ -6530,6 +6572,8 @@ callee copy.
 contextual operation family and compact shape. Ordinary-child and variant
 fields require recursive construction or case selection and remain separate
 argument slices rather than being flattened here.
+
+**The alternative:** require a struct literal's array fields to be written as `zeroed` only, or bind the literal to a local first. The first makes a small table argument unwritable inline; the second is the temporary with a name, and every array form here is one D65 already gives an ordinary field.
 
 **Pinned by** the checker, lowering, verifier and backend public seams;
 `negative/struct-literal-argument-array-shape-mismatch`; the generated token and
@@ -6561,6 +6605,8 @@ or flattening payload leaves at the call would duplicate the selected target's
 layout in neutral IR. Keeping the existing shape and copying its extent avoids
 that second authority.
 
+**The alternative:** copy a variant-bearing argument case by case, or refuse it until struct literals can select cases. The whole-storage copy already carries the tag and the inactive bytes; a refusal would keep a device state, the aggregate the driver passes most, out of every call.
+
 **Pinned by** the checker, flow, lowering, verifier and backend public seams;
 `negative/variant-struct-argument-unassigned`; the generated token and IR
 records; and `runtime/variant-struct-arguments` on Linux x86-64.
@@ -6590,6 +6636,8 @@ arguments and therefore belong in [0410]'s caller-side evaluation order.
 Flattening them into ABI operands would expose the selected target's unfolded
 layout and make equivalent named storage use a different convention.
 
+**The alternative:** require a variant-selecting literal to be bound to a local first, or select the case after the payload labels are written. The first is the temporary with a name; the second writes payload bytes that the selection then clears.
+
 **Pinned by** the checker, lowering, verifier and backend public seams;
 `negative/variant-literal-argument-payload-mismatch`; the generated token and
 IR records; and `runtime/variant-struct-arguments` on Linux x86-64.
@@ -6618,6 +6666,8 @@ D88/D89's neutral parent/child identities.
 its nominal boundary and make operand count depend on composition. The existing
 recursive target placement already derives its extent from neutral shape, so
 opaque one-position transport remains sufficient.
+
+**The alternative:** flatten the child into the outer parameter's field run for the call, or copy the child separately. The parameter slot keeps the child's own shape so the callee's copy is one whole-storage copy, and definite assignment stays a fact about one complete outer value.
 
 **Pinned by** the checker, flow, lowering, verifier and backend public seams;
 `negative/nested-struct-argument-unassigned`; the generated token and IR
@@ -6709,6 +6759,8 @@ target's byte count.
 aggregate category, rather than lifetime and target classification, decide the
 ABI. Both are fixed-size by-value storage and need the same caller lifetime.
 
+**The alternative:** return a fixed array in registers when it fits, or as a pointer into the callee's frame. The register form has a different answer for every length and none for a long array; the pointer form aliases storage that is gone when the callee returns.
+
 **Pinned by** the checker, flow, lowering, verifier and backend public seams;
 `negative/array-return-unassigned`; the generated token and IR records; and
 `runtime/array-returns-cross-calls` on Linux x86-64.
@@ -6734,6 +6786,8 @@ hidden destination carrier before a returned call can fill them directly.
 results are values, not aliases. Tail-call storage forwarding could elide a
 copy later, but it is an optimization only when it preserves the independently
 observable named-return place and all source evaluation order.
+
+**The alternative:** materialize an aggregate result as an IR value and copy it into the destination afterwards. That is a second copy of every result and an aggregate SSA value the IR was designed not to have; naming the final place as the hidden destination removes both.
 
 **Pinned by** the checker, flow, lowering, verifier and backend public seams;
 the generated token and IR records; and the forwarding paths in
@@ -6762,6 +6816,8 @@ whole aggregate copy. Passing a qualified opaque destination preserves the
 same by-value result semantics because the callee writes only its independent
 named result until the leave copy.
 
+**The alternative:** require a result destined for a field to go through a whole-aggregate local first. The hidden address already carries field identities for arguments, so the same carrier gives a field destination without a copy the reader would otherwise write.
+
 **Pinned by** the checker, flow, lowering, verifier and backend public seams;
 the generated token and IR records; `runtime/struct-returns-cross-calls`,
 `runtime/array-returns-cross-calls` and `runtime/nested-storage-arguments` on
@@ -6783,6 +6839,8 @@ as D106's hidden destination. Module inference from calls remains forbidden by
 **Why inference changes no ABI rule:** checking copies only source identity into
 the declaration, before lowering. Runtime still has exactly the same
 caller-owned destination and callee leave copy as an explicitly typed local.
+
+**The alternative:** require the local's type to be spelled when it is initialized by an aggregate-returning call. The callee's signature names the body or the array shape completely; a spelled type would only be compared with it.
 
 **Pinned by** the checker, lowering, verifier and backend public seams; the
 generated token and IR records; and the inferred locals in
@@ -6811,6 +6869,8 @@ source evaluation order.
 caller and the outer `in` boundary establishes an independent callee value.
 Optimization may combine storage only after proving neither identity can be
 observed; the language and verifier do not depend on that optimization.
+
+**The alternative:** bind a returned aggregate to a named local before it may be passed on. The fresh temporary is that local without a name, filled by the inner call's hidden destination and copied by the outer callee exactly as a named one would be.
 
 **Pinned by** the checker, lowering, verifier and backend public seams;
 `negative/returned-struct-argument-nominal-mismatch`; the generated token and
@@ -6866,6 +6926,8 @@ cannot tell the verifier how many operands or what result convention the call
 uses. Naming a semantic descriptor is target-neutral type evidence, not a
 claim that the runtime target is statically known.
 
+**The alternative:** make a function value a closure with captured environment, or refuse to infer one and require a spelled function type. A closure is an allocation the language has no idiom for and [1000] promises a code address; a spelled type would only repeat the signature the named function already carries.
+
 **Pinned by** the checker, lowering, verifier and backend public seams;
 `negative/function-value-type-mismatch`; the generated token and IR records;
 and `runtime/inferred-function-values` on Linux x86-64.
@@ -6889,6 +6951,8 @@ source ABI parameter.
 machine-readable Landin signature. Delaying disagreement until the call would
 turn a deterministic type error into register and storage corruption.
 
+**The alternative:** give indirect calls a narrower convention with no hidden aggregate destination, or let a function value be replaced by any function whose parameters merely agree in width. The first splits the ABI in two for the same signature; the second lets a call read a struct where the callee wrote an array.
+
 **Pinned by** the checker, lowering, verifier and backend public seams;
 `negative/function-value-signature-mismatch`; the generated token and IR
 records; and `runtime/indirect-function-abi` on Linux x86-64.
@@ -6908,6 +6972,8 @@ return to be complete on the edge that exits.
 **Why this is not a call-specific flow rule:** the hidden destination is only a
 transport convention. Giving it stronger flow semantics would let replacing a
 literal assignment by an equivalent call change whether later reads are legal.
+
+**The alternative:** treat a completed aggregate call as assigning each part separately, or as no assignment fact until read. Per-part facts would have to be derived from the callee's layout for what is one whole write; no fact would refuse every read of a value the call just produced.
 
 **Pinned by** `negative/aggregate-call-result-not-assigned-on-every-path` and
 `runtime/aggregate-results-across-branches` on Linux x86-64.
@@ -6929,6 +6995,8 @@ fact to that path.
 early `return` expose an unfilled caller image, while returning the callee slot's
 address would expose dead frame storage. Both violate the same by-value result
 boundary.
+
+**The alternative:** copy the named result once at a single merged exit block, or let one arm's completion satisfy another arm's exit. A merged exit runs cleanups in the wrong order relative to [1100]; a lent fact is exactly the soundness hole a path-insensitive join opens.
 
 **Pinned by** `negative/aggregate-call-result-missing-at-early-exit` and
 `runtime/aggregate-results-across-early-exits` on Linux x86-64.
@@ -7001,6 +7069,8 @@ backend. A run makes depth data. It is also what makes an aggregate variant
 payload and an aggregate array element expressible without inventing a
 second nesting mechanism beside this one.
 
+**The alternative:** keep a parent-and-child pair and add a third level when depth two arrives, or precompute offsets in the IR. A pair has a ceiling the tour never states; offsets are target facts the IR is designed not to carry.
+
 **Pinned by** the lowering, verifier and backend public seams; the malformed
 case `Path_Step_Below_A_Scalar_Leaf`; and the generated IR record, which now
 names the base field and every step of every field operation.
@@ -7037,6 +7107,8 @@ language's — the tour writes `a.b.c` and stops. The one thing a depth costs is
 that the flow stage can no longer pack a path into an integer, which it did
 with a stride that would have overflowed silently at a field count and depth
 no rule forbids.
+
+**The alternative:** cap ordinary nesting at some depth, or flatten nested structs at layout time. A cap is an implementation limit written into the language; flattening loses the child's body identity that aliases and calls rely on.
 
 **Pinned by** `positive/deep-nested-struct-leaves`,
 `negative/deep-nested-leaf-unassigned`, the generated IR record, and
@@ -7104,6 +7176,8 @@ already denotes storage; making it denote a struct's storage rather than a
 scalar's changes what it names and nothing about what a name is. Every
 selection below it is then an ordinary step of the same run.
 
+**The alternative:** restrict a variant payload to scalars and arrays, or copy a struct payload out into a local at each match. The first keeps prototype 1's device states unwritable; the second is the copy D85 already declined for arrays.
+
 **Pinned by** `positive/variant-struct-payload`,
 `negative/variant-struct-payload-mismatch`,
 `positive/variant-inside-an-element`, the generated IR
@@ -7141,6 +7215,8 @@ when they hold the same thing, not when their runs start in the same place.
 Two forms stayed refused and named this item: a whole element as a value or a
 place, and an array whose element is a struct with a variant part. D127 admits
 both, by making a known index one step of the run rather than a value.
+
+**The alternative:** forbid arrays of structs, or represent them as a struct of arrays. The first refuses the most ordinary table there is; the second changes what `a[i].f` means and what `sizeof [n]s` measures.
 
 **Pinned by** `positive/array-of-structs`,
 `positive/computed-whole-array-elements`,
@@ -7337,6 +7413,8 @@ An array element was still refused here: a run reaches a part by identities,
 and an index is a value. D127 makes a known index one of those identities and
 admits it there.
 
+**The alternative:** give variant operations their own base-and-part addressing beside D118's runs, or forbid a variant part below the storage's top level. The first is two path vocabularies for one storage model; the second keeps a state machine out of every struct that holds one.
+
 **Pinned by** `positive/nested-variant-parts`,
 `positive/variant-inside-an-element`, the malformed case
 `Variant_Path_Reaches_A_Scalar`, the generated IR record, and
@@ -7444,6 +7522,8 @@ rule. One structural image gives whole binding, field selection, destructuring
 and control joins the same value while leaving target classification to R4.40.
 Making the result nominal would invent a declaration the source never wrote and
 would contradict [0990].
+
+**The alternative:** return several values in registers as a tuple the caller unpacks, or forbid more than one named return. A register tuple is a second calling convention with a size ceiling; one return makes the tour's `(count, view)` results unwritable.
 
 **Pinned by** the return-list and destructuring parser/resolver/checker/flow
 walks; ordered checking and IR signature result runs; caller-owned result slots,
@@ -7694,6 +7774,8 @@ duplicate images per target; startup stores would contradict [1460]; and one
 new vector per depth would encode an implementation limit. The existing
 item-owned descriptor partition already represents a recursive shape once an
 ordinary child can point into it.
+
+**The alternative:** admit only `zeroed` for a nested child in a module image, or unfold an image one level and stop. Both leave a configuration table a program has to build at startup, which [1460] forbids running.
 
 **Pinned by** `positive/module-struct-image-with-a-child`,
 `positive/recursive-module-images`,
@@ -8395,6 +8477,8 @@ nor wanted. Silently checking only requested overlaps would contradict
 containers their required quantifier while keeping collision collection finite
 and independent of use.
 
+**The alternative:** resolve concepts and conformances in declaration order, or infer a conformance from a type's shape. Order-dependent resolution makes a program's meaning depend on file layout; inference is the structural typing the tour declined at [1340].
+
 **Pinned by** `positive/concepts-and-conformances`,
 `positive/parameterized-conformance-lookup`,
 `negative/conformance-collision`,
@@ -8428,6 +8512,8 @@ The set is closed and named. No source query enumerates it, no declaration is
 synthesized, and no reflection hook asks whether an arbitrary representation
 happens to be zero. A successful constrained lookup interns only the concrete
 semantic key for later evidence work.
+
+**The alternative:** let a source declare its own `zeroable` conformance, or derive zeroability from `sizeof` alone. A declared conformance could claim a zero image a type does not have; a size says nothing about pointers, atoms or function values inside it.
 
 **Pinned by** `positive/compiler-zeroable-conformances`,
 `negative/nonzeroable-constraint`,
