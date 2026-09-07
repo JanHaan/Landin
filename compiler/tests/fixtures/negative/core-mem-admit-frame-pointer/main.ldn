@@ -1,0 +1,9 @@
+import core/mem
+node: type = struct
+    value: i32
+end node
+bad: (inout storage: mem.storage(ptr mut node)) -> none =
+    mut local: node = (value: 23)
+    zero: usize = 0
+    _ = mem.admit(storage, addr local) else zero
+end bad

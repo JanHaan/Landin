@@ -8874,9 +8874,10 @@ and the parser, resolution, driver and hosted-entry cases.
 pointer element, but deliberately proposed no spelling.
 
 **Chosen:** the repository-owned `core/mem` module declares a private
-parameterized nominal `raw(item)` with a byte pointer, capacity and initialized
-count. D150 permits public routines to carry that private identity, so callers
-hold it through inferred bindings without being able to name its type or
+parameterized nominal `raw(item)` with a byte pointer, capacity, a private
+singleton pointer and an initialized slice witness. The witness length is the
+initialized count. D150 permits public routines to carry that private identity,
+so callers hold it through inferred bindings without being able to name its type or
 select its fields. R3.40 adds the public parameterized alias `storage(item)` so
 another core module may name the same identity in a field or signature without
 exposing its representation. D135's alias introduces no second nominal
@@ -8885,14 +8886,20 @@ to the private type declaration. Code in the defining module retains ordinary
 field access; no field-visibility syntax or special raw type kind is
 introduced.
 
-`reserve` records a supplied byte pointer and capacity with initialized count
-zero. `capacity` and `initialized` expose only their respective counts.
-`admit` checks for `raw_full`, writes at `base + initialized * sizeof item`,
-then increments the count and returns the admitted index. `get` checks for
-`uninitialized` before reading an index. `release` checks for `raw_empty`,
-decrements first and returns the former tail. `dispose` checks for
-`raw_not_empty`, returns the byte pointer and clears pointer and capacity. The
-caller saves the capacity-derived byte extent before disposal; allocator
+`reserve` records a supplied byte pointer and capacity with an empty witness.
+The private `ptr mut [1]item` names the first destination; constructing it is
+not a read or publication of an initialized array. `capacity` and `initialized`
+expose capacity and witness length. `admit` checks for `raw_full` before a
+complete typed store. For the first item it then takes the genuine singleton
+slice; for later items a narrow `unchecked` block stores at the old length
+before extending the witness by one. Neither step publishes spare capacity.
+`get` and `replace` check for `uninitialized` before their typed read or write;
+`replace`, like `admit`, declares the inserted value `escaping`. `used` returns
+only the initialized witness, with mutable element permission and
+`from storage`. `release` checks for `raw_empty`, saves the typed former tail
+and then shortens the witness. `dispose` checks for `raw_not_empty`, returns
+the original byte pointer and clears both pointers, witness and capacity.
+The caller saves the capacity-derived byte extent before disposal; allocator
 ownership remains R3.40's composition rather than state stored in `raw`.
 
 Growth is transactional by composition: a replacement begins empty; reads of
@@ -8909,8 +8916,13 @@ outcomes, not traps, because these are foreseeable container conditions
 The state machine does not validate the allocation behind its byte pointer.
 Supplying insufficient, misaligned, stale or otherwise invalid storage remains
 the unsafe pointer operation [0430]/[1720] says it is. Returned pointer-valued
-items retain the conservative local `from storage` origin, so a caller ends
-that view before mutating the raw value again [0800].
+items and initialized views retain the conservative local `from storage`
+origin, so a caller ends that view before mutating the raw value again [0800].
+No integer reconstruction is used to return the witness or read a transferred
+item. `unchecked` suppresses the append's dynamic bound check; it does not
+change reference permission or cut origin tracking. A writable view still has
+[0860]'s shallow alias limitation: inserting a reference through one alias is
+not generally propagated back to every other descriptor for that storage.
 
 **The alternatives:** a built-in raw-storage kind would add syntax, type-table
 and backend machinery for an invariant a private module can express. A public

@@ -1,0 +1,10 @@
+error[L0316]: the returned reference does not derive from exactly the parameters named by its `from` clause
+  --> ../tests/fixtures/negative/core-mem-used-wrong-from/main.ldn:2:1
+  |
+2 | bad: (source: mem.storage(u8), other: mem.storage(u8))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/core-mem-used-wrong-from/main.ldn:3:10
+  |
+3 |      -> (result: []mut u8 from other) =
+  |          ^^^^^^^^^^^^^^^^^^^^^^^^^^^ the named return and its declared sources
+  = note: [0790]: the written clause and every returning body edge agree both ways

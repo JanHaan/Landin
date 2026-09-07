@@ -1,0 +1,7 @@
+class: runtime
+summary: heap-backed pointer and heterogeneous any prefixes survive vector growth and writable view mutation
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0430, 0470, 0510, 0520, 0540, 0790, 0800, 1250, 1280, 1290, 1360
+targets: linux-x86-64

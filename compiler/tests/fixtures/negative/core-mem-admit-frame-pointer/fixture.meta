@@ -1,0 +1,8 @@
+class: negative
+summary: initialized prefix retains its declared origin and permission constraints (core-mem-admit-frame-pointer)
+expect: expected.txt
+args: --root=../.. ../tests/fixtures/negative/core-mem-admit-frame-pointer
+codes: L0314
+status: 1
+constructs: 0430, 0470, 0510, 0520, 0790, 0800
+targets: linux-x86-64, macos-arm64, synthetic-32

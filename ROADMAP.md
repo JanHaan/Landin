@@ -3821,6 +3821,23 @@ uses a module receiver so only its `from` argument is local;
 labels for conformance does not ignore a mismatched result-source map. Provider
 validation and dispatch identity are unchanged, and no language rule changes.
 
+The initialized-prefix library represents its count with a genuine
+slice witness. `mem.admit` stores a complete value before constructing the
+first singleton view or extending the existing prefix; `mem.transfer` saves
+an initialized source value before publishing the target's next slot.
+`mem.used` returns only that prefix `from storage`, and `mem.replace` checks
+an initialized index and requires an escaping inserted value. Pointer and
+heterogeneous `any` growth, writable replacement, frame/permission/exact-source
+refusals and live-view transition refusals have focused evidence. The generic
+array-selection transfer repair supplies the zero-sized prefix composition;
+`runtime/core-mem-zero-prefix` retains its genuine `[0]u8` item throughout.
+The complete pinned Linux debug and release suites each pass 403 cases and
+10,814 checks, including the original zero-prefix fixture; the font-aware
+repository check is clean. The authoritative native Linux integration gate
+remains required after publication. No capacity view,
+built-in raw-storage kind or integer reconstruction of the returned view is
+introduced.
+
 The initialized-view implementation must also retain [0860]'s shallow alias
 limit: a reference inserted through an alias is not generally propagated back
 to every other view of that storage, so writable views do not establish

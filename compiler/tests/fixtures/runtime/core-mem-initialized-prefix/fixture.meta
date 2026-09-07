@@ -1,0 +1,7 @@
+class: runtime
+summary: heap-backed initialized prefix transitions expose only admitted values and preserve failed states
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0430, 0470, 0510, 0520, 0540, 0790, 0800, 0940, 1120, 1360
+targets: linux-x86-64

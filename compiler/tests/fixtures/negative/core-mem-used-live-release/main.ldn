@@ -1,0 +1,6 @@
+import core/mem
+bad: (inout storage: mem.storage(u8)) -> (result: u8) =
+    view := mem.used(storage)
+    _ = mem.release(storage) else 0
+    result = view[0]
+end bad

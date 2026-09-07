@@ -1,0 +1,10 @@
+error[L0315]: this `inout` or `sink` use may move storage while a derived view is still in use
+  --> ../tests/fixtures/negative/core-mem-used-live-admit/main.ldn:6:19
+  |
+6 |     _ = mem.admit(storage, value) else zero
+  |                   ^^^^^^^
+  --> ../tests/fixtures/negative/core-mem-used-live-admit/main.ldn:3:5
+  |
+3 |     view := mem.used(storage)
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^ the live derived view
+  = note: [0800]/[0830]: take the view again after mutating its source

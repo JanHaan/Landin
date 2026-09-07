@@ -117,7 +117,15 @@ negative/core-arena-frame-escape | linux-x86-64, macos-arm64, synthetic-32
 negative/core-diag-frame-message-escape | linux-x86-64, macos-arm64, synthetic-32
 negative/core-failing-frame-escape | linux-x86-64, macos-arm64, synthetic-32
 negative/core-failing-needs-mutable-inner | linux-x86-64, macos-arm64, synthetic-32
+negative/core-mem-admit-frame-pointer | linux-x86-64, macos-arm64, synthetic-32
 negative/core-mem-private-representation | linux-x86-64, macos-arm64, synthetic-32
+negative/core-mem-replace-frame-any | linux-x86-64, macos-arm64, synthetic-32
+negative/core-mem-used-frame | linux-x86-64, macos-arm64, synthetic-32
+negative/core-mem-used-live-admit | linux-x86-64, macos-arm64, synthetic-32
+negative/core-mem-used-live-dispose | linux-x86-64, macos-arm64, synthetic-32
+negative/core-mem-used-live-release | linux-x86-64, macos-arm64, synthetic-32
+negative/core-mem-used-read-only | linux-x86-64, macos-arm64, synthetic-32
+negative/core-mem-used-wrong-from | linux-x86-64, macos-arm64, synthetic-32
 negative/core-pool-bookkeeping-frame-escape | linux-x86-64, macos-arm64, synthetic-32
 negative/core-pool-frame-escape | linux-x86-64, macos-arm64, synthetic-32
 negative/core-text-frame-slice-escape | linux-x86-64, macos-arm64, synthetic-32
@@ -914,7 +922,10 @@ runtime/control-expression-function-values | linux-x86-64
 runtime/copy-before-sink-remains-live | linux-x86-64
 runtime/core-mem-allocators | linux-x86-64
 runtime/core-mem-arena-boundaries | linux-x86-64
+runtime/core-mem-initialized-prefix | linux-x86-64
 runtime/core-mem-raw-storage | linux-x86-64
+runtime/core-mem-reference-prefix | linux-x86-64
+runtime/core-mem-zero-prefix | linux-x86-64
 runtime/core-text-byte-positions | linux-x86-64
 runtime/core-vec-pointer-storage | linux-x86-64
 runtime/declared-errors-direct-and-inferred | linux-x86-64

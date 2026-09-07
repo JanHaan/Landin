@@ -41,7 +41,11 @@ R3.40 implements the allocator interface below in repository `core/mem`, plus
 an explicit monotonic arena and a budgeted failing arena. R3.30's private
 `raw(T)` supersedes the later `slice_from` sketch: the public `storage(T)` alias
 lets `core/vec` name that nominal identity without exposing its fields, and a
-checked one-slot transfer copies initialized values during growth.
+checked one-slot transfer copies initialized values during growth. The
+initialized slice witness holds exactly that prefix: a complete typed store
+precedes each extension, and `mem.used` returns the witness `from storage`.
+It never turns capacity into a slice length; `mem.replace` checks an existing
+initialized index and declares its inserted value escaping.
 
 For ordinary initialized storage, `addr view[index]` retains the slice's
 source origin [0790], as does an address selected through a pointer's `.val`.

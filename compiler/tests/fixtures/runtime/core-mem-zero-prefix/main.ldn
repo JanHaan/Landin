@@ -1,0 +1,49 @@
+import core/heap
+import core/mem
+
+empty: type = [0]u8
+public main: () -> (code: i32) =
+    code = 1
+    mut allocator := heap.host()
+    zero: usize = 0
+    one: usize = 1
+    two: usize = 2
+    base: ptr mut u8 = mem.allocate(allocator, zero, alignof empty) else ptr(0)
+    other: ptr mut u8 = mem.allocate(allocator, zero, alignof empty) else ptr(0)
+    mut source := mem.reserve(item: empty, base: base, slots: two)
+    mut target := mem.reserve(item: empty, base: other, slots: two)
+    value: empty = zeroed
+    a: usize = mem.admit(source, value) else two
+    b: usize = mem.admit(source, value) else two
+    refused: usize = mem.admit(source, value) else two
+    c: usize = mem.transfer(source, zero, target) else two
+    d: usize = mem.transfer(source, one, target) else two
+    full: bool = begin
+        view := mem.used(target)
+        lenof view == 2
+    end
+    _ = mem.release(target) else value
+    shortened: bool = begin
+        view := mem.used(target)
+        lenof view == 1
+    end
+    _ = mem.release(target) else value
+    ended: bool = begin
+        view := mem.used(target)
+        lenof view == 0
+    end
+    _ = mem.release(source) else value
+    _ = mem.release(source) else value
+    released: ptr mut u8 = mem.dispose(source) else ptr(0)
+    released_other: ptr mut u8 = mem.dispose(target) else ptr(0)
+    exact: bool = usize(released) == usize(base)
+                 and usize(released_other) == usize(other)
+    mem.free(allocator, released, zero)
+    mem.free(allocator, released_other, zero)
+    if a == 0 and b == 1 and refused == 2 and c == 0 and d == 1
+      and full and shortened and ended and exact
+      and mem.capacity(source) == 0 and mem.capacity(target) == 0
+    then
+        code = 42
+    end if
+end main
