@@ -134,6 +134,9 @@ package body Landin.Tests.Checking_Suite is
    procedure Generic_Instances_Infer_Errors_Per_Key
      (Item : in out Landin.Testing.Context);
 
+   procedure Inferred_Erased_Results_Use_Exact_Entry_Shapes
+     (Item : in out Landin.Testing.Context);
+
    procedure Declared_Structs_Follow_Target_Layout
      (Item : in out Landin.Testing.Context);
 
@@ -7047,6 +7050,63 @@ package body Landin.Tests.Checking_Suite is
          "comparison equates signed zeros and leaves nan unordered");
    end Float_Arithmetic_Uses_IEEE_Bits;
 
+   procedure Inferred_Erased_Results_Use_Exact_Entry_Shapes
+     (Item : in out Landin.Testing.Context)
+   is
+      Source_Text : constant String :=
+        "counter: type = concept (t: type)" & LF
+        & "    bump: (self: ptr mut t) -> (n: i32)" & LF
+        & "end counter" & LF
+        & "node: type = struct" & LF
+        & "    value: i32" & LF
+        & "end node" & LF
+        & "public main: () -> (code: i32) =" & LF
+        & "    mut local: node = (value: 41)" & LF
+        & "    erased: any counter = any(addr local)" & LF
+        & "    answer := erased.bump()" & LF
+        & "    code = answer" & LF
+        & "end main" & LF
+        & "bump: (self: ptr mut node) -> (n: i32) =" & LF
+        & "    inc self.val.value" & LF
+        & "    n = self.val.value" & LF
+        & "end bump" & LF
+        & "node is counter (bump: bump)" & LF;
+      Work  : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Ran   : Natural;
+      Src   : Landin.Source.Source_Id;
+   begin
+      Src := Landin.Stages.Add_Source
+        (Work, "inferred-erased-result.ldn", Source_Text);
+      pragma Unreferenced (Src);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Configurer'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Landin.Stages.Append (Order, Checker'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "the inferred erased-call result is accepted");
+      declare
+         Types : constant not null access Landin.Checking.Table :=
+           Landin.Stages.Types (Work);
+         Evidence : constant Landin.Checking.Conformance_Id :=
+           Landin.Checking.Conformance_Identities.Nth (Types.all, 1);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Landin.Checking.Conformance_Count (Types.all), 1,
+            "the exact concept has one concrete conformance");
+         Landin.Testing.Check_Equal
+           (Item,
+            Landin.Checking.Conformance_Entry_Count
+              (Types.all, Evidence),
+            1, "provider finalization still populates the entry run");
+      end;
+   end Inferred_Erased_Results_Use_Exact_Entry_Shapes;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -7100,6 +7160,9 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Register
         (Into, "checking", "generic instances infer errors per key",
          Generic_Instances_Infer_Errors_Per_Key'Access);
+      Landin.Testing.Register
+        (Into, "checking", "inferred erased results use exact entry shapes",
+         Inferred_Erased_Results_Use_Exact_Entry_Shapes'Access);
       Landin.Testing.Register
         (Into, "checking", "ordinary signatures use nominal identity only",
          Ordinary_Function_Signatures_Use_Identity_Only'Access);

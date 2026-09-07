@@ -568,6 +568,13 @@ package body Landin.Stages.Checking is
       function Evidence_Selection_Signature
         (Of_Tree : Syn.Tree; Selection : Syn.Node_Id)
          return Landin.Checking.Signature_Id;
+      function Source_Parameter
+        (Of_Tree : Syn.Tree; Source : Syn.Node_Id) return Natural
+        is (Res.Source_Parameter_Position
+              (Meanings.all, Of_Tree, Source));
+      function Exact_Concept_Entry_Signature
+        (Evidence : Landin.Checking.Conformance_Id;
+         Position : Positive) return Landin.Checking.Signature_Id;
       function Any_Selection_Signature
         (Of_Tree : Syn.Tree; Selection : Syn.Node_Id)
          return Landin.Checking.Signature_Id;
@@ -10924,6 +10931,168 @@ package body Landin.Stages.Checking is
          end;
       end Evidence_Selection_Signature;
 
+      --  An erased call's source type is the exact concept identity, while
+      --  the concrete provider table is a later staging product.  Build the
+      --  entry signature from the already-interned conformance key and the
+      --  concept declaration, retaining every nested descriptor and `from`
+      --  association.  Validate_Conformance_Entries later proves that the
+      --  provider has this shape; typing an inferred result does not need to
+      --  read that provider before the proof has populated its table run.
+      function Exact_Concept_Entry_Signature
+        (Evidence : Landin.Checking.Conformance_Id;
+         Position : Positive) return Landin.Checking.Signature_Id
+      is
+         Concept : constant Landin.Checking.Concept_Id :=
+           Landin.Checking.Conformance_Concept (Types.all, Evidence);
+         Declaration : constant Res.Declaration_Id :=
+           Landin.Checking.Concept_Declaration (Types.all, Concept);
+         Concept_Tree : constant not null access constant Syn.Tree :=
+           Tree_For (Res.Source_Of (Meanings.all, Declaration));
+         Concept_Node : constant Syn.Node_Id :=
+           Res.Node_Of (Meanings.all, Declaration);
+         Formal_Count : constant Natural :=
+           Syn.Concept_Formal_Count (Concept_Tree.all, Concept_Node);
+         Bound : Formal_Actual_Array (1 .. Formal_Count) :=
+           [others => (others => <>)];
+         Entry_Node : Syn.Node_Id := Syn.No_Node;
+         Parameters : Landin.Checking.Signature_Part_Array
+           (1 .. (if Position <= Syn.Concept_Entry_Count
+                    (Concept_Tree.all, Concept_Node)
+                  then Syn.Parameter_Count
+                    (Concept_Tree.all,
+                     Syn.Nth_Concept_Entry
+                       (Concept_Tree.all, Concept_Node, Position))
+                  else 0)) := [others => (others => <>)];
+         Results : Landin.Checking.Signature_Part_Array
+           (1 .. (if Position <= Syn.Concept_Entry_Count
+                    (Concept_Tree.all, Concept_Node)
+                  then Syn.Return_Count
+                    (Concept_Tree.all,
+                     Syn.Nth_Concept_Entry
+                       (Concept_Tree.all, Concept_Node, Position))
+                  else 0)) := [others => (others => <>)];
+         Sources : Landin.Checking.Return_Source_Array
+           (1 .. Positive'Max (1, Syn.Node_Count (Concept_Tree.all))) :=
+             [others => (others => 1)];
+         Source_Count : Natural := 0;
+         Errors : Landin.Checking.Atom_Set_Id :=
+           Landin.Checking.No_Atom_Set;
+         Error_Form : Landin.Checking.Error_Set_Form :=
+           Landin.Checking.Infallible;
+         Valid : Boolean := True;
+
+         function Part_For
+           (Node : Syn.Node_Id) return Landin.Checking.Signature_Part;
+
+         function Part_For
+           (Node : Syn.Node_Id) return Landin.Checking.Signature_Part
+         is
+            Descriptor : constant Type_Descriptor := Normalized_Type
+              (Concept_Tree.all,
+               Syn.Declared_Type (Concept_Tree.all, Node), Bound,
+               Requirement => Identity_Only);
+            Part : Landin.Checking.Signature_Part :=
+              Signature_Part_For
+                (Descriptor, Syn.Name (Concept_Tree.all, Node),
+                 Syn.Origin (Concept_Tree.all, Node));
+         begin
+            Valid := Valid and then Descriptor.Kind in
+              Ty.Scalar_Name | Ty.Pointer_Value | Ty.Slice_Value
+                 | Ty.Atom_Value | Ty.Fixed_Array | Ty.Aggregate
+                 | Ty.Any_Value | Ty.Function_Value;
+            if Syn.Kind (Concept_Tree.all, Node) = Syn.Parameter then
+               Part.Convention := Semantic_Convention
+                 (Concept_Tree.all, Node);
+               Part.Escaping := Syn.Is_Escaping (Concept_Tree.all, Node);
+               Part.Caller := Syn.Is_Caller (Concept_Tree.all, Node);
+            end if;
+            return Part;
+         end Part_For;
+      begin
+         if Landin.Checking.Is_Compiler_Concept (Types.all, Concept)
+           or else Formal_Count = 0
+           or else Position > Syn.Concept_Entry_Count
+             (Concept_Tree.all, Concept_Node)
+           or else Landin.Checking.Conformance_Input_Count
+             (Types.all, Evidence) + 1 /= Formal_Count
+         then
+            return Landin.Checking.No_Signature;
+         end if;
+
+         Entry_Node := Syn.Nth_Concept_Entry
+           (Concept_Tree.all, Concept_Node, Position);
+         for Index in Bound'Range loop
+            Bound (Index).Formal := Declaration_At
+              (Syn.Source_Of (Concept_Tree.all),
+               Syn.Nth_Concept_Formal
+                 (Concept_Tree.all, Concept_Node, Index));
+            Bound (Index).Value :=
+              (if Index = 1
+               then Descriptor_For
+                 (Landin.Checking.Conformance_Target (Types.all, Evidence))
+               else Descriptor_For
+                 (Landin.Checking.Nth_Conformance_Input
+                    (Types.all, Evidence, Index - 1)));
+         end loop;
+
+         for Index in Parameters'Range loop
+            Parameters (Index) := Part_For
+              (Syn.Nth_Parameter (Concept_Tree.all, Entry_Node, Index));
+         end loop;
+         for Index in Results'Range loop
+            declare
+               Result_Node : constant Syn.Node_Id := Syn.Nth_Return
+                 (Concept_Tree.all, Entry_Node, Index);
+            begin
+               Results (Index) := Part_For (Result_Node);
+               for Source_Index in 1 .. Syn.Return_Source_Count
+                 (Concept_Tree.all, Result_Node)
+               loop
+                  declare
+                     Source : constant Syn.Node_Id := Syn.Nth_Return_Source
+                       (Concept_Tree.all, Result_Node, Source_Index);
+                     Parameter : constant Natural :=
+                       Source_Parameter (Concept_Tree.all, Source);
+                  begin
+                     if Parameter = 0 then
+                        Valid := False;
+                     else
+                        Source_Count := Source_Count + 1;
+                        Sources (Source_Count) :=
+                          (Result => Index, Parameter => Parameter);
+                     end if;
+                  end;
+               end loop;
+            end;
+         end loop;
+
+         if Syn.Error_Set_Of (Concept_Tree.all, Entry_Node) /= Syn.No_Node
+         then
+            declare
+               Descriptor : constant Type_Descriptor := Normalized_Type
+                 (Concept_Tree.all,
+                  Syn.Error_Set_Of (Concept_Tree.all, Entry_Node), Bound,
+                  Requirement => Identity_Only);
+            begin
+               Valid := Valid
+                 and then Descriptor.Kind = Ty.Atom_Value
+                 and then Descriptor.Atoms /= Landin.Checking.No_Atom_Set;
+               Errors := Descriptor.Atoms;
+               Error_Form := Landin.Checking.Concrete;
+            end;
+         end if;
+
+         if not Valid then
+            return Landin.Checking.No_Signature;
+         end if;
+         return Landin.Checking.Add_Signature
+           (Types.all, Parameters, Results,
+            Syn.Origin (Concept_Tree.all, Entry_Node), Errors, Error_Form,
+            (if Source_Count = 0
+             then Landin.Checking.No_Return_Sources
+             else Sources (1 .. Source_Count)));
+      end Exact_Concept_Entry_Signature;
+
       function Any_Selection_Signature
         (Of_Tree : Syn.Tree; Selection : Syn.Node_Id)
          return Landin.Checking.Signature_Id
@@ -11218,18 +11387,43 @@ package body Landin.Stages.Checking is
             return Landin.Checking.No_Signature;
          end if;
          declare
-            Instance : constant Landin.Checking.Routine_Instance_Id :=
-              Landin.Checking.Conformance_Provider_Instance
-                (Types.all, Declaring_Evidence, Positive (Direct_Entry));
-            Provider : constant Res.Declaration_Id :=
-              Landin.Checking.Conformance_Provider_Declaration
-                (Types.all, Declaring_Evidence, Positive (Direct_Entry));
-            Signature : constant Landin.Checking.Signature_Id :=
-              (if Instance /= Landin.Checking.No_Routine_Instance
-               then Landin.Checking.Routine_Signature_Of
-                 (Types.all, Instance)
-               else Landin.Checking.Signature_Of (Types.all, Provider));
+            Signature : Landin.Checking.Signature_Id :=
+              Landin.Checking.No_Signature;
          begin
+            --  Preserve the already-validated provider signature when this
+            --  call is visited in the ordinary body pass.  Only initializer
+            --  inference reaches the exact concept path before the provider
+            --  run exists; keeping that distinction also leaves established
+            --  signature identities and emitted IR unchanged.
+            if Direct_Entry <= Landin.Checking.Conformance_Entry_Count
+              (Types.all, Declaring_Evidence)
+            then
+               declare
+                  Instance : constant Landin.Checking.Routine_Instance_Id :=
+                    Landin.Checking.Conformance_Provider_Instance
+                      (Types.all, Declaring_Evidence,
+                       Positive (Direct_Entry));
+                  Provider : constant Res.Declaration_Id :=
+                    Landin.Checking.Conformance_Provider_Declaration
+                      (Types.all, Declaring_Evidence,
+                       Positive (Direct_Entry));
+               begin
+                  Signature :=
+                    (if Instance /= Landin.Checking.No_Routine_Instance
+                     then Landin.Checking.Routine_Signature_Of
+                       (Types.all, Instance)
+                     elsif Provider /= Res.No_Declaration
+                     then Landin.Checking.Signature_Of (Types.all, Provider)
+                     else Landin.Checking.No_Signature);
+               end;
+            end if;
+            if Signature = Landin.Checking.No_Signature then
+               Signature := Exact_Concept_Entry_Signature
+                 (Declaring_Evidence, Positive (Direct_Entry));
+            end if;
+            if Signature = Landin.Checking.No_Signature then
+               return Landin.Checking.No_Signature;
+            end if;
             Landin.Checking.Note_Any_Dispatch
               (Types.all, Of_Tree, Selection, Root_Evidence,
                Positive (Flat_Entry));
@@ -12746,6 +12940,13 @@ package body Landin.Stages.Checking is
                                              (Concept_Tree.all,
                                               Requirement_Node)) :=
                                              [others => (others => <>)];
+                                       Sources : Landin.Checking
+                                         .Return_Source_Array
+                                           (1 .. Positive'Max
+                                             (1, Syn.Node_Count
+                                               (Concept_Tree.all))) :=
+                                             [others => (others => 1)];
+                                       Source_Count : Natural := 0;
                                        Errors : Landin.Checking.Atom_Set_Id :=
                                          Landin.Checking.No_Atom_Set;
                                        Error_Form :
@@ -12844,6 +13045,37 @@ package body Landin.Stages.Checking is
                                              Valid := Valid and then
                                                Descriptor.Kind
                                                  /= Ty.Ill_Typed;
+                                             for Source_Index in
+                                               1 .. Syn.Return_Source_Count
+                                                 (Concept_Tree.all,
+                                                  Result_Node)
+                                             loop
+                                                declare
+                                                   Source : constant
+                                                     Syn.Node_Id :=
+                                                       Syn.Nth_Return_Source
+                                                         (Concept_Tree.all,
+                                                          Result_Node,
+                                                          Source_Index);
+                                                   Parameter : constant
+                                                     Natural :=
+                                                       Source_Parameter
+                                                         (Concept_Tree.all,
+                                                          Source);
+                                                begin
+                                                   if Parameter = 0 then
+                                                      Valid := False;
+                                                   else
+                                                      Source_Count :=
+                                                        Source_Count + 1;
+                                                      Sources
+                                                        (Source_Count) :=
+                                                          (Result => Position,
+                                                           Parameter =>
+                                                             Parameter);
+                                                   end if;
+                                                end;
+                                             end loop;
                                           end;
                                        end loop;
                                        if Syn.Error_Set_Of
@@ -12879,7 +13111,12 @@ package body Landin.Stages.Checking is
                                                     Syn.Origin
                                                       (Concept_Tree.all,
                                                        Requirement_Node),
-                                                    Errors, Error_Form);
+                                                    Errors, Error_Form,
+                                                    (if Source_Count = 0
+                                                     then Landin.Checking
+                                                       .No_Return_Sources
+                                                     else Sources
+                                                       (1 .. Source_Count)));
                                           begin
                                              if not Landin.Checking
                                                .Signatures_Agree
@@ -13658,6 +13895,11 @@ package body Landin.Stages.Checking is
                                 (1 .. Syn.Return_Count
                                   (Concept_Tree.all, Requirement_Node)) :=
                                   [others => (others => <>)];
+                              Sources : Landin.Checking.Return_Source_Array
+                                (1 .. Positive'Max
+                                  (1, Syn.Node_Count (Concept_Tree.all))) :=
+                                    [others => (others => 1)];
+                              Source_Count : Natural := 0;
                               Errors : Landin.Checking.Atom_Set_Id :=
                                 Landin.Checking.No_Atom_Set;
                               Error_Form : Landin.Checking.Error_Set_Form :=
@@ -13720,6 +13962,29 @@ package body Landin.Stages.Checking is
                                     Valid := Valid
                                       and then Descriptor.Kind
                                         /= Ty.Ill_Typed;
+                                    for Source_Index in
+                                      1 .. Syn.Return_Source_Count
+                                        (Concept_Tree.all, Result_Node)
+                                    loop
+                                       declare
+                                          Source : constant Syn.Node_Id :=
+                                            Syn.Nth_Return_Source
+                                              (Concept_Tree.all, Result_Node,
+                                               Source_Index);
+                                          Parameter : constant Natural :=
+                                            Source_Parameter
+                                              (Concept_Tree.all, Source);
+                                       begin
+                                          if Parameter = 0 then
+                                             Valid := False;
+                                          else
+                                             Source_Count := Source_Count + 1;
+                                             Sources (Source_Count) :=
+                                               (Result => Position,
+                                                Parameter => Parameter);
+                                          end if;
+                                       end;
+                                    end loop;
                                  end;
                               end loop;
 
@@ -13752,7 +14017,12 @@ package body Landin.Stages.Checking is
                                            Syn.Origin
                                              (Concept_Tree.all,
                                               Requirement_Node),
-                                           Errors, Error_Form);
+                                           Errors, Error_Form,
+                                           (if Source_Count = 0
+                                            then Landin.Checking
+                                              .No_Return_Sources
+                                            else Sources
+                                              (1 .. Source_Count)));
                                     Actual_Signature : constant
                                       Landin.Checking.Signature_Id :=
                                         Landin.Checking.Signature_Of

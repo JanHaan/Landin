@@ -1,0 +1,30 @@
+problem: atom
+problems: type = problem
+
+cell: type = struct
+    value: i32
+end cell
+
+lender: type = concept (t: type)
+    take: (self: ptr t, source: ptr mut cell)
+          -> (result: ptr mut cell from source) ! problems
+end lender
+
+receiver: type = struct
+    value: i32
+end receiver
+
+take_receiver: (self: ptr receiver, source: ptr mut cell)
+      -> (result: ptr mut cell from source) ! problems =
+    result = source
+end take_receiver
+
+receiver is lender (take: take_receiver)
+
+escape: () -> (result: ptr mut cell) =
+    held: receiver = (value: 1)
+    mut local: cell = (value: 2)
+    erased: any lender = any(addr held)
+    inferred := erased.take(addr local) else addr local
+    result = inferred
+end escape
