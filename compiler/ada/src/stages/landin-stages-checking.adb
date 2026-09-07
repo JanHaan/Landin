@@ -658,6 +658,18 @@ package body Landin.Stages.Checking is
 
       Traversal_Elements : Traversal_Element_Vectors.Vector;
 
+      type Discovered_Match is record
+         Source : Landin.Source.Source_Id;
+         Node : Syn.Node_Id;
+         Instance : Landin.Checking.Routine_Instance_Id;
+         Has_Arms : Boolean := False;
+      end record;
+
+      package Discovered_Match_Vectors is new Ada.Containers.Vectors
+        (Index_Type => Positive, Element_Type => Discovered_Match);
+
+      Discovered_Matches : Discovered_Match_Vectors.Vector;
+
       function Is_Traversal_Element (Id : Res.Declaration_Id) return Boolean;
       function Traversal_Element_Is_Writable
         (Id : Res.Declaration_Id) return Boolean;
@@ -803,7 +815,8 @@ package body Landin.Stages.Checking is
          Expected : Value_Context := No_Value_Context;
          Value_Site : Landin.Provenance.Origin :=
            Landin.Provenance.No_Origin;
-         Value_Because : String := "");
+         Value_Because : String := "";
+         Discover_Only : Boolean := False);
       procedure Check_Mixed_Array_Repetition
         (Of_Tree      : Syn.Tree;
          Site_Node    : Syn.Node_Id;
@@ -8457,6 +8470,15 @@ package body Landin.Stages.Checking is
          if Syn.Kind (Of_Tree, Node) = Syn.Anonymous_Function then
             --  Anonymous bodies are roots of their own and are discovered
             --  after every anonymous signature has been materialized.
+            return;
+         elsif Syn.Kind (Of_Tree, Node) = Syn.Match_Statement then
+            --  Match aliases carry contextual payload descriptors. Prepare
+            --  them before a nested traversal or generic call can ask to
+            --  infer a declaration which deliberately has no initializer.
+            Discover_Generic_Calls
+              (Of_Tree, Syn.Match_Subject (Of_Tree, Node));
+            Check_Match
+              (Of_Tree, Node, Ty.No_Value, Discover_Only => True);
             return;
          elsif Syn.Kind (Of_Tree, Node) = Syn.For_Statement then
             --  Generic discovery precedes the body check and error-graph
@@ -18125,9 +18147,26 @@ package body Landin.Stages.Checking is
          Expected : Value_Context := No_Value_Context;
          Value_Site : Landin.Provenance.Origin :=
            Landin.Provenance.No_Origin;
-         Value_Because : String := "")
+         Value_Because : String := "";
+         Discover_Only : Boolean := False)
       is
          Subject : constant Syn.Node_Id := Syn.Match_Subject (Of_Tree, Node);
+         Discovery : Natural := 0;
+
+         procedure Visit_Arm (Arm : Syn.Node_Id);
+
+         procedure Visit_Arm (Arm : Syn.Node_Id) is
+         begin
+            if Discover_Only then
+               Discovered_Matches (Discovery).Has_Arms := True;
+               Discover_Generic_Calls
+                 (Of_Tree, Syn.Body_Of (Of_Tree, Arm));
+            else
+               Check_Block
+                 (Of_Tree, Syn.Body_Of (Of_Tree, Arm), Returns,
+                  Expected, Value_Site, Value_Because);
+            end if;
+         end Visit_Arm;
 
          function Binding_Id (Binding : Syn.Node_Id)
            return Res.Declaration_Id;
@@ -18167,6 +18206,38 @@ package body Landin.Stages.Checking is
             end loop;
          end Refuse_Bindings;
       begin
+         --  Header diagnostics and binding descriptors are produced once
+         --  per instance. The later body walk still checks every arm against
+         --  the finalized error graph and its actual value/return context.
+         for Position in 1 .. Discovered_Matches.Last_Index loop
+            if Discovered_Matches (Position).Source = Syn.Source_Of (Of_Tree)
+              and then Discovered_Matches (Position).Node = Node
+              and then Discovered_Matches (Position).Instance =
+                Landin.Checking.Current_Routine_View (Types.all)
+            then
+               Discovery := Position;
+               exit;
+            end if;
+         end loop;
+         if Discovery /= 0 then
+            if not Discover_Only
+              and then Discovered_Matches (Discovery).Has_Arms
+            then
+               for Position in 1 .. Syn.Match_Arm_Count (Of_Tree, Node) loop
+                  Visit_Arm (Syn.Nth_Match_Arm (Of_Tree, Node, Position));
+               end loop;
+            end if;
+            return;
+         end if;
+         if Discover_Only then
+            Discovered_Matches.Append
+              (Discovered_Match'
+                 (Source => Syn.Source_Of (Of_Tree), Node => Node,
+                  Instance => Landin.Checking.Current_Routine_View
+                    (Types.all), Has_Arms => False));
+            Discovery := Discovered_Matches.Last_Index;
+         end if;
+
          --  D189/[0480]: a pointer union is the second exhaustive subject
          --  kind beside an atom set and a variant part.  Its two cases are
          --  the atom it reserves zero for and the reserved word `ptr`, and
@@ -18391,9 +18462,7 @@ package body Landin.Stages.Checking is
                         end;
                      end if;
 
-                     Check_Block
-                       (Of_Tree, Syn.Body_Of (Of_Tree, Arm), Returns,
-                        Expected, Value_Site, Value_Because);
+                     Visit_Arm (Arm);
                   end;
                end loop;
 
@@ -18462,9 +18531,7 @@ package body Landin.Stages.Checking is
                            Because => "this matched atom set",
                            Into    => Found);
                         Refuse_Bindings (Arm);
-                        Check_Block
-                          (Of_Tree, Syn.Body_Of (Of_Tree, Arm), Returns,
-                           Expected, Value_Site, Value_Because);
+                        Visit_Arm (Arm);
                         goto Next_Atom_Arm;
                      end if;
 
@@ -18568,9 +18635,7 @@ package body Landin.Stages.Checking is
                         end if;
                      end if;
 
-                     Check_Block
-                       (Of_Tree, Syn.Body_Of (Of_Tree, Arm), Returns,
-                        Expected, Value_Site, Value_Because);
+                     Visit_Arm (Arm);
                      <<Next_Atom_Arm>>
                   end;
                end loop;
@@ -18674,9 +18739,7 @@ package body Landin.Stages.Checking is
                         Because => "the matched variant part",
                         Into    => Found);
                      Refuse_Bindings (Arm);
-                     Check_Block
-                       (Of_Tree, Syn.Body_Of (Of_Tree, Arm), Returns,
-                        Expected, Value_Site, Value_Because);
+                     Visit_Arm (Arm);
                      goto Next_Variant_Arm;
                   end if;
 
@@ -18865,9 +18928,7 @@ package body Landin.Stages.Checking is
                      end;
                   end if;
 
-                  Check_Block
-                    (Of_Tree, Syn.Body_Of (Of_Tree, Arm), Returns,
-                     Expected, Value_Site, Value_Because);
+                  Visit_Arm (Arm);
                   <<Next_Variant_Arm>>
                end;
             end loop;

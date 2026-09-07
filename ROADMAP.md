@@ -3661,6 +3661,19 @@ grows, reads and releases 65,536 initialized items. Its required compiler
 repairs preserve enabled fixed-array whole stores/copies through pointer and
 computed destinations, including variant payload offsets and destination
 recovery returns, and type traversal headers before generic-call discovery.
+Match payload bindings are established before dependent traversal/generic
+discovery, and array traversal retains the selected variant payload path.
+Runtime-address array literals and mixed repetitions retain source-order
+element writes. Pointer and slice place operands may recover by returning:
+address formation stops on that exit, and a slice descriptor survives any
+index recovery blocks. These repairs implement existing enabled compositions;
+they do not change vector arithmetic, the public API or [1820].
+One separate pre-existing nested-array store defect remains owned here for a
+bounded compiler follow-up: with `row: type = [3]u32` and
+`mut rows: [1]row`, `rows[0] = [11, 13, 17]` incorrectly reaches a scalar-field
+store and fails IR verification. The saved pre-vector compiler reproduces it.
+It is not a refusal or a change to array legality; the runtime-address repair
+above covers pointer/computed destinations, not this constant-index path.
 Heap and fixed providers, initialized views, iterable/sort integration and
 small-vector, map and tree expansion remain later increments of this active
 item.
@@ -3703,7 +3716,12 @@ Vector increment evidence: `runtime/r420-vec-capacity-boundaries`,
 `runtime/r420-vec-large-list` and
 `runtime/r420-fixed-array-pointer-whole-copy` pin D194 and its compiler
 composition repairs. Existing `runtime/core-vec-pointer-storage` remains
-regression evidence.
+regression evidence. `runtime/variant-match-array-payload-bindings-update-storage`
+adds scalar accumulation and a generic element call inside payload traversal;
+`runtime/r420-runtime-array-writes` checks literal/mixed writes through pointers
+and computed array destinations, sentinels and evaluation counts;
+`runtime/r420-array-place-recovery` checks destination/source pointer recovery
+and slice-index recovery, including all-return operands and suppressed RHS/copy.
 
 Exit evidence: containers run with heap, arena, fixed and failing allocators;
 all omission and layering choices are recorded; `[0820]`'s block is either

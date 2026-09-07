@@ -1,0 +1,106 @@
+row: type = [3]u32
+
+cell: type = struct
+    pointer: ptr mut row
+end cell
+
+read_cell: type = struct
+    pointer: ptr row
+end read_cell
+
+mut target: row
+source: row = [11, 13, 17]
+mut calls: usize = 0
+mut rhs_calls: usize = 0
+mut finished: usize = 0
+refused: atom
+
+index: (value: usize, reject: bool) -> (result: usize) ! refused =
+    inc calls
+    fail refused when reject
+    result = value
+end index
+
+rhs: () -> (result: row) =
+    inc rhs_calls
+    result = source
+end rhs
+
+destination_failure: (inout pointers: [1]cell) -> none =
+    zero: usize = 0
+    pointers[(index(zero, true) else (problem)
+        _ = problem
+        return
+    end)].pointer.val = rhs()
+    inc finished
+end destination_failure
+
+source_failure: (escaping pointers: [1]read_cell) -> none =
+    zero: usize = 0
+    target = pointers[(index(zero, true) else (problem)
+        _ = problem
+        return
+    end)].pointer.val
+    inc finished
+end source_failure
+
+slice_failure: (items: []mut row) -> none =
+    zero: usize = 0
+    items[(index(zero, true) else (problem)
+        _ = problem
+        return
+    end)] = rhs()
+    inc finished
+end slice_failure
+
+--  The argument itself has no fallthrough. These three cases force the
+--  lowerer's Current to No_Block before it can form an address, independent
+--  of the separate runtime failure-edge cases above.
+destination_exit: (inout pointers: [1]cell) -> none =
+    pointers[(index(begin return end, false) else (problem)
+        _ = problem
+        return
+    end)].pointer.val = rhs()
+    inc finished
+end destination_exit
+
+source_exit: (escaping pointers: [1]read_cell) -> none =
+    target = pointers[(index(begin return end, false) else (problem)
+        _ = problem
+        return
+    end)].pointer.val
+    inc finished
+end source_exit
+
+slice_exit: (items: []mut row) -> none =
+    items[(index(begin return end, false) else (problem)
+        _ = problem
+        return
+    end)] = rhs()
+    inc finished
+end slice_exit
+
+public main: () -> (code: i32) =
+    target = [71, 73, 79]
+    mut rows: [1]row = zeroed
+    mut slot: usize = 0
+    rows[slot] = [83, 89, 97]
+    mut destinations: [1]cell
+    destinations[0] = cell(pointer: addr target)
+    mut sources: [1]read_cell
+    sources[0] = read_cell(pointer: addr source)
+    destination_failure(destinations)
+    source_failure(sources)
+    slice_failure(rows[0..<1])
+    destination_exit(destinations)
+    source_exit(sources)
+    slice_exit(rows[0..<1])
+    if target[0] == 71 and target[1] == 73 and target[2] == 79
+      and rows[0][0] == 83 and rows[0][1] == 89 and rows[0][2] == 97
+      and calls == 3 and rhs_calls == 0 and finished == 0
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

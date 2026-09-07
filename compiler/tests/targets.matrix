@@ -988,7 +988,9 @@ runtime/pointer-unions | linux-x86-64
 runtime/r230-composition | linux-x86-64
 runtime/r230-composition-trap | linux-x86-64
 runtime/r250-references | linux-x86-64
+runtime/r420-array-place-recovery | linux-x86-64
 runtime/r420-fixed-array-pointer-whole-copy | linux-x86-64
+runtime/r420-runtime-array-writes | linux-x86-64
 runtime/r420-vec-capacity-boundaries | linux-x86-64
 runtime/r420-vec-growth-boundary | linux-x86-64
 runtime/r420-vec-growth-transaction | linux-x86-64

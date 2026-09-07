@@ -2352,6 +2352,26 @@ package body Landin.Stages.Lowering is
       begin
          case Syn.Kind (Of_Tree, Node) is
             when Syn.Name_Reference =>
+               declare
+                  Means : constant Res.Declaration_Id :=
+                    Res.Bound_To (Meanings.all, Of_Tree, Node);
+                  Alias : Payload_Alias renames Aliases (Declared (Means));
+               begin
+                  if Alias.Active
+                    and then Type_At (Of_Tree, Node) = Ty.Fixed_Array
+                    and then Alias.Which /= 0
+                  then
+                     Result.Place := Alias.Source;
+                     Result.Base := Alias.Field;
+                     for Step of Payload_Steps
+                       (Alias_Steps (Of_Tree, Alias),
+                        Positive (Alias.Which), Positive (Alias.Payload_Field))
+                     loop
+                        Result.Steps.Append (Step);
+                     end loop;
+                     return Result;
+                  end if;
+               end;
                Result.Place := Rooted_Storage (Of_Tree, Node);
                Result.Base := Rooted_Base (Of_Tree, Node);
                for Step of Rooted_Steps (Of_Tree, Node) loop
@@ -2369,35 +2389,45 @@ package body Landin.Stages.Lowering is
                   declare
                      Pointer : constant IR.Value_Id := Lower_Expression
                        (Of_Tree, Syn.Target_Of (Of_Tree, Node), Scope);
-                     Address : constant IR.Value_Id :=
-                       IR.Emit_Pointer_Address
-                         (Unit.all, Filling, Pointer,
-                          Site_Of (Of_Tree, Node));
-                     Held : constant Ty.Type_Kind := Type_At (Of_Tree, Node);
-                     Shape : constant IR.Field_Shape :=
-                       (if Held in Ty.Aggregate | Ty.Fixed_Array
-                        then Neutral_Value_Shape (Of_Tree, Node)
-                        else
-                          (Kind => IR.Scalar_Field_Shape,
-                           Element => Scalar_At (Of_Tree, Node),
-                           Length => 1,
-                           others => <>));
-                     Slot : constant IR.Slot_Id := IR.Add_Address_Slot
-                       (Unit.all, Filling, Shape, Site_Of (Of_Tree, Node));
                   begin
-                     IR.Emit_Store
-                       (Unit.all, Filling, Slot, Address,
-                        Site_Of (Of_Tree, Node));
-                     return
-                       (Place => (Kind => IR.Runtime_Address,
-                                  Address => Slot),
-                        Base => 0,
-                        Steps => Stored_Path_Vectors.Empty_Vector);
+                     if Current = IR.No_Block then
+                        return Result;
+                     end if;
+                     declare
+                        Address : constant IR.Value_Id :=
+                          IR.Emit_Pointer_Address
+                            (Unit.all, Filling, Pointer,
+                             Site_Of (Of_Tree, Node));
+                        Held : constant Ty.Type_Kind :=
+                          Type_At (Of_Tree, Node);
+                        Shape : constant IR.Field_Shape :=
+                          (if Held in Ty.Aggregate | Ty.Fixed_Array
+                           then Neutral_Value_Shape (Of_Tree, Node)
+                           else
+                             (Kind => IR.Scalar_Field_Shape,
+                              Element => Scalar_At (Of_Tree, Node),
+                              Length => 1,
+                              others => <>));
+                        Slot : constant IR.Slot_Id := IR.Add_Address_Slot
+                          (Unit.all, Filling, Shape, Site_Of (Of_Tree, Node));
+                     begin
+                        IR.Emit_Store
+                          (Unit.all, Filling, Slot, Address,
+                           Site_Of (Of_Tree, Node));
+                        return
+                          (Place => (Kind => IR.Runtime_Address,
+                                     Address => Slot),
+                           Base => 0,
+                           Steps => Stored_Path_Vectors.Empty_Vector);
+                     end;
                   end;
                end if;
 
                Result := Lower_Stored_Place
                  (Of_Tree, Syn.Target_Of (Of_Tree, Node), Scope);
+               if Current = IR.No_Block then
+                  return Result;
+               end if;
                declare
                   Field : constant Positive := Positive
                     (Landin.Checking.Field_Index (Types.all, Of_Tree, Node));
@@ -2420,33 +2450,67 @@ package body Landin.Stages.Lowering is
                   declare
                      Parts : constant Slice_Values := Lower_Slice
                        (Of_Tree, Syn.Target_Of (Of_Tree, Node), Scope);
-                     Index : constant IR.Value_Id := Lower_Expression
-                       (Of_Tree, Syn.Index_Of (Of_Tree, Node), Scope);
-                     Address : constant IR.Value_Id := IR.Emit_Slice_Address
-                       (Unit.all, Filling, Parts.Base, Parts.Length,
-                        Index, Index,
-                        Slice_Shape
-                          (Of_Tree, Syn.Target_Of (Of_Tree, Node)),
-                        True, Site_Of (Of_Tree, Node));
-                     Shape : constant IR.Field_Shape :=
-                       Slice_Shape
-                         (Of_Tree, Syn.Target_Of (Of_Tree, Node));
-                     Slot : constant IR.Slot_Id := IR.Add_Address_Slot
-                       (Unit.all, Filling, Shape, Site_Of (Of_Tree, Node));
                   begin
-                     IR.Emit_Store
-                       (Unit.all, Filling, Slot, Address,
-                        Site_Of (Of_Tree, Node));
-                     return
-                       (Place => (Kind => IR.Runtime_Address,
-                                  Address => Slot),
-                        Base => 0,
-                        Steps => Stored_Path_Vectors.Empty_Vector);
+                     if Current = IR.No_Block then
+                        return Result;
+                     end if;
+                     declare
+                        Site : constant Landin.Provenance.Origin :=
+                          Site_Of (Of_Tree, Node);
+                        Base : constant IR.Slot_Id := IR.Add_Slot
+                          (Unit.all, Filling, Ty.Usize,
+                           Res.No_Declaration, Site);
+                        Length : constant IR.Slot_Id := IR.Add_Slot
+                          (Unit.all, Filling, Ty.Usize,
+                           Res.No_Declaration, Site);
+                        Index : IR.Value_Id;
+                     begin
+                        --  Recovery in the index may cross blocks. Retain
+                        --  the descriptor before evaluating that operand.
+                        IR.Emit_Store
+                          (Unit.all, Filling, Base, Parts.Base, Site);
+                        IR.Emit_Store
+                          (Unit.all, Filling, Length, Parts.Length, Site);
+                        Index := Lower_Expression
+                          (Of_Tree, Syn.Index_Of (Of_Tree, Node), Scope);
+                        if Current = IR.No_Block then
+                           return Result;
+                        end if;
+                        declare
+                           Address : constant IR.Value_Id :=
+                             IR.Emit_Slice_Address
+                               (Unit.all, Filling,
+                                IR.Emit_Load (Unit.all, Filling, Base, Site),
+                                IR.Emit_Load (Unit.all, Filling, Length, Site),
+                                Index, Index,
+                                Slice_Shape
+                                  (Of_Tree, Syn.Target_Of (Of_Tree, Node)),
+                                True, Site_Of (Of_Tree, Node));
+                           Shape : constant IR.Field_Shape :=
+                             Slice_Shape
+                               (Of_Tree, Syn.Target_Of (Of_Tree, Node));
+                           Slot : constant IR.Slot_Id := IR.Add_Address_Slot
+                             (Unit.all, Filling, Shape,
+                              Site_Of (Of_Tree, Node));
+                        begin
+                           IR.Emit_Store
+                             (Unit.all, Filling, Slot, Address,
+                              Site_Of (Of_Tree, Node));
+                           return
+                             (Place => (Kind => IR.Runtime_Address,
+                                        Address => Slot),
+                              Base => 0,
+                              Steps => Stored_Path_Vectors.Empty_Vector);
+                        end;
+                     end;
                   end;
                end if;
 
                Result := Lower_Stored_Place
                  (Of_Tree, Syn.Target_Of (Of_Tree, Node), Scope);
+               if Current = IR.No_Block then
+                  return Result;
+               end if;
                if Is_Constant_Index (Of_Tree, Node) then
                   Result.Steps.Append
                     (IR.Path_Step'
@@ -6206,7 +6270,8 @@ package body Landin.Stages.Lowering is
                      end if;
                      Cursor := Syn.Target_Of (Of_Tree, Cursor);
                   end loop;
-                  if Through_Pointer
+                  if (Through_Pointer
+                      or else Has_Computed_Index (Of_Tree, Node))
                     and then not
                       (Type_At
                          (Of_Tree, Syn.Target_Of (Of_Tree, Node))
@@ -6220,11 +6285,20 @@ package body Landin.Stages.Lowering is
                         Place : constant Stored_Place :=
                           Lower_Stored_Place (Of_Tree, Node, Scope);
                      begin
+                        if Current = IR.No_Block then
+                           return IR.No_Value;
+                        end if;
                         return IR.Emit_Load_Slot_Field
                           (Unit.all, Filling, Place.Place.Address,
                            IR.Part_Position (Place.Base),
                            Scalar_At (Of_Tree, Node), Site,
-                           Nested => Stored_Steps (Place));
+                           Nested => Stored_Steps (Place),
+                           Signature =>
+                             (if Type_At (Of_Tree, Node) = Ty.Function_Value
+                              then Signature_For
+                                (Landin.Checking.Signature_Of
+                                   (Types.all, Of_Tree, Node))
+                              else IR.No_Signature));
                      end;
                   end if;
                end;
@@ -6239,6 +6313,9 @@ package body Landin.Stages.Lowering is
                      Address : constant IR.Value_Id := Lower_Expression
                        (Of_Tree, Syn.Target_Of (Of_Tree, Node), Scope);
                   begin
+                     if Current = IR.No_Block then
+                        return IR.No_Value;
+                     end if;
                      return IR.Emit_Load_Indirect
                        (Unit.all, Filling, Address,
                         Scalar_At (Of_Tree, Node), Site);
@@ -8974,6 +9051,27 @@ package body Landin.Stages.Lowering is
                      Part : constant IR.Part_Position :=
                        IR.Part_Position (Position);
                   begin
+                     if Destination.Kind = IR.Runtime_Address then
+                        declare
+                           Index : constant IR.Value_Id := IR.Emit_Number
+                             (Unit.all, Filling, Ty.Usize,
+                              Ty.Magnitude (Position - 1), False, Site);
+                           Steps : constant IR.Path_Step_Array :=
+                             (if Variant_Payload_Field = 0 then Path
+                              else Payload_Steps
+                                (Path, Positive (Variant_Case),
+                                 Positive (Variant_Payload_Field)));
+                           Address : constant IR.Value_Id :=
+                             IR.Emit_Storage_Address
+                               (Unit.all, Filling, Destination, Site,
+                                Field => Field, Nested => Steps,
+                                Index => Index);
+                        begin
+                           IR.Emit_Store_Indirect
+                             (Unit.all, Filling, Address, Element, Site);
+                        end;
+                        return;
+                     end if;
                      if Field = 0 then
                         case Destination.Kind is
                            when IR.Module_Datum =>
