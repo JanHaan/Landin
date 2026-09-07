@@ -3741,6 +3741,13 @@ local-descriptor refusals, exact `from`, permission, escaping and live-view
 checks. This repairs the monomorphic prerequisite for initialized views without
 changing [0860]'s shallow alias limit or using an untracked pointer conversion.
 
+The retained-wrapper composition also preserves a nominal result inferred
+through `try` before generic-call discovery. Explicit static argument positions
+are excluded from runtime argument origin mapping, so a named type argument
+cannot hide the source named by `from`. `runtime/try-nominal-inference` checks
+local generic pointer use and error propagation; the explicit generic frame
+negative and `negative/core-failing-frame-escape` retain L0314.
+
 D196 settles D191's inherited construct rows. [0500]'s `mem.offset` and
 `mem.base_of` are unneeded conveniences for this slice: existing [0470]
 address conversion and checked element addressing serve their actual callers.

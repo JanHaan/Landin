@@ -19,6 +19,7 @@ package body Landin.Stages.Checking.References is
    use type Landin.Checking.Signature_Id;
    use type Landin.Provenance.Declaration_Id;
    use type Res.Application_Class;
+   use type Res.Argument_Role;
    use type Res.Declaration_Sort;
    use type Res.Verdict;
    use type Landin.Source.Byte_Offset;
@@ -288,9 +289,15 @@ package body Landin.Stages.Checking.References is
             declare
                Raw : constant Syn.Node_Id :=
                  Syn.Nth_Argument (Tree, Call, Written);
+               --  Static and runtime formals have separate positions.
+               --  A static type argument cannot supply a retained origin.
                Position : constant Natural :=
                  (if Syn.Kind (Tree, Raw) = Syn.Call_Argument
-                  then Res.Position_Of (Meanings.all, Tree, Raw)
+                  then
+                    (if Res.Role_Of (Meanings.all, Tree, Raw)
+                          = Res.Runtime_Argument
+                     then Res.Position_Of (Meanings.all, Tree, Raw)
+                     else 0)
                   elsif Called /= Landin.Checking.No_Signature
                   then Plain_Position (Written)
                   else Written);

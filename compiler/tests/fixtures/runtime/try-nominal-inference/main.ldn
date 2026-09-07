@@ -1,0 +1,31 @@
+broken: atom
+box: type = struct
+    value: i32
+    sentinel: i32
+end box
+build: (seed: i32) -> (result: box) ! broken =
+    fail broken when seed < 0
+    result = (value: seed, sentinel: 73)
+end build
+identity: (t: type, p: ptr mut t) -> (q: ptr mut t from p) =
+    q = p
+end identity
+exercise: (seed: i32) -> (ok: bool) ! broken =
+    mut local := try build(seed)
+    alias := identity(t: box, p: addr local)
+    alias.val.value = 42
+    ok = local.value == 42 and local.sentinel == 73
+end exercise
+public main: () -> (code: i32) =
+    good := exercise(9) else false
+    mut refused: bool = false
+    _ = exercise(-1) else (problem)
+        _ = problem
+        refused = true
+    end
+    if good and refused then
+        code = 42
+    else
+        code = 1
+    end if
+end main

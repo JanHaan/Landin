@@ -1,0 +1,7 @@
+identity: (t: type, p: ptr mut t) -> (q: ptr mut t from p) =
+    q = p
+end identity
+bad: () -> (result: ptr mut u32) =
+    mut local: u32 = 42
+    result = identity(t: u32, p: addr local)
+end bad
