@@ -236,6 +236,8 @@ negative/generic-single-result-layout-too-large | linux-x86-64, macos-arm64
 negative/generic-slice-field-permission | linux-x86-64, macos-arm64
 negative/generic-slice-field-wrong-from | linux-x86-64, macos-arm64
 negative/generic-structural-repeated-conflict | linux-x86-64, macos-arm64
+negative/generic-text-literal-byte-in-unicode-view | linux-x86-64, macos-arm64, synthetic-32
+negative/generic-text-literal-mutable | linux-x86-64, macos-arm64, synthetic-32
 negative/generic-try-infallible-instance | linux-x86-64, synthetic-32
 negative/generic-wrong-nominal-template | linux-x86-64, macos-arm64
 negative/hex-float-overflows-context | linux-x86-64, macos-arm64
@@ -968,6 +970,7 @@ runtime/for-value-block-statements | linux-x86-64
 runtime/function-valued-struct-fields | linux-x86-64
 runtime/generic-any-nominal-transport | linux-x86-64
 runtime/generic-composed-evidence | linux-x86-64
+runtime/generic-contextual-text-literals | linux-x86-64
 runtime/generic-declared-errors | linux-x86-64
 runtime/generic-direct-descriptor-deduction | linux-x86-64
 runtime/generic-evidence-indirect | linux-x86-64

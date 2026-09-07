@@ -8091,18 +8091,48 @@ package body Landin.Stages.Checking is
                     Syn.Declared_Type (Template_Tree.all, Parameter);
                   Argument : constant Syn.Node_Id :=
                     Runtime_Argument_At (Index);
-                  Got : Ty.Type_Kind :=
-                    (if Syn.Is_Caller (Template_Tree.all, Parameter)
-                     then Ty.Ill_Typed
-                     elsif Syn.Kind (Caller_Tree, Argument)
-                         in Syn.Name_Reference | Syn.Member_Selection
-                            | Syn.Element_Index
-                     then Selected_From (Caller_Tree, Argument)
-                     else Synthesise (Caller_Tree, Argument));
+                  Got : Ty.Type_Kind;
                begin
                   if Syn.Is_Caller (Template_Tree.all, Parameter) then
                      goto Next_Deduction_Argument;
                   end if;
+
+                  --  Deduction remains context-free for an unresolved type
+                  --  formal.  A text literal whose written parameter pattern
+                  --  is already concrete is different: [0260] gives the
+                  --  literal that exact reference context, just as an
+                  --  ordinary call does.  This must precede Synthesise,
+                  --  whose context-free text default is utf8.
+                  if Syn.Kind (Caller_Tree, Argument)
+                       in Syn.Text_Literal | Syn.Raw_Literal
+                  then
+                     declare
+                        Expected : constant Type_Descriptor := Normalized_Type
+                          (Template_Tree.all, Pattern, Bound,
+                           Syn.Origin (Caller_Tree, Call), Identity_Only);
+                     begin
+                        if Expected.Kind
+                             in Ty.Pointer_Value | Ty.Slice_Value
+                          and then Expected.Reference
+                            /= Landin.Checking.No_Reference
+                        then
+                           Check_Contextual_Value
+                             (Caller_Tree, Argument,
+                              (Kind => Expected.Kind,
+                               Reference => Expected.Reference,
+                               others => <>),
+                              Syn.Origin (Template_Tree.all, Parameter),
+                              "this generic parameter pattern");
+                        end if;
+                     end;
+                  end if;
+
+                  Got :=
+                    (if Syn.Kind (Caller_Tree, Argument)
+                         in Syn.Name_Reference | Syn.Member_Selection
+                            | Syn.Element_Index
+                     then Selected_From (Caller_Tree, Argument)
+                     else Synthesise (Caller_Tree, Argument));
                   if Got = Ty.Untyped_Integer then
                      Commit_To (Caller_Tree, Argument, Ty.Default_Integer);
                      Got := Ty.Default_Integer;
@@ -21828,10 +21858,42 @@ package body Landin.Stages.Checking is
               "a malformed text literal passed lexical analysis";
          end if;
 
-         Landin.Checking.Note
-           (Types.all, Of_Tree, Node, Descriptor.Kind);
-         Landin.Checking.Note_Reference
-           (Types.all, Of_Tree, Node, Reference);
+         declare
+            Held : constant Ty.Type_Kind :=
+              Landin.Checking.Type_Of (Types.all, Of_Tree, Node);
+            Held_Reference : constant Landin.Checking.Reference_Id :=
+              Landin.Checking.Reference_Of (Types.all, Of_Tree, Node);
+         begin
+            if Held = Ty.Undecided then
+               Landin.Checking.Note
+                 (Types.all, Of_Tree, Node, Descriptor.Kind);
+               Landin.Checking.Note_Reference
+                 (Types.all, Of_Tree, Node, Reference);
+            elsif Held = Descriptor.Kind
+              and then Held_Reference /= Landin.Checking.No_Reference
+              and then Landin.Checking.References_Agree
+                (Types.all, Held_Reference, Reference)
+            then
+               --  Generic deduction may give a contextual literal its exact
+               --  parameter identity before ordinary call validation reaches
+               --  the same syntax node.  The full descriptor agrees, so this
+               --  is validation of one answer rather than a second Note.
+               null;
+            elsif Held /= Ty.Ill_Typed then
+               Bad.Report
+                 (Item    => Bad.Type_Mismatch,
+                  Source  => Syn.Source_Of (Of_Tree),
+                  Where   => Where,
+                  Message => "this text literal already has a different"
+                             & " reference view or permission",
+                  Note    => "[0260]/D181: one literal has one exact"
+                             & " contextual text identity",
+                  Related => Site,
+                  Because => Because,
+                  Into    => Found);
+               Landin.Checking.Refuse (Types.all, Of_Tree, Node);
+            end if;
+         end;
       end Check_Text_Literal;
 
       procedure Check_Contextual_Value

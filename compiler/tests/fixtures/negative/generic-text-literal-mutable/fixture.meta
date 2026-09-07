@@ -1,0 +1,6 @@
+class: negative
+summary: a generic parameter cannot contextualize a text literal as writable storage
+program: main.ldn
+codes: L0301
+constructs: 0260, 0440, 0570, 1290, 1920
+targets: linux-x86-64, macos-arm64, synthetic-32

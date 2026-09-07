@@ -49,10 +49,12 @@ package body Landin.Tests.Checking_Suite is
    use type Landin.Checking.Instance_State;
    use type Landin.Checking.Nominal_Type_Id;
    use type Landin.Checking.Progress;
+   use type Landin.Checking.Reference_Id;
    use type Landin.Checking.Routine_Instance_Id;
    use type Landin.Checking.Routine_Instance_State;
    use type Landin.Checking.Signature_Id;
    use type Landin.Types.Magnitude;
+   use type Landin.Types.Reference_View;
    use type Landin.Targets.Byte_Alignment;
    use type Landin.Targets.Byte_Count;
    use type Landin.Types.Type_Kind;
@@ -138,6 +140,9 @@ package body Landin.Tests.Checking_Suite is
      (Item : in out Landin.Testing.Context);
 
    procedure Inferred_Erased_Results_Use_Exact_Entry_Shapes
+     (Item : in out Landin.Testing.Context);
+
+   procedure Contextual_Generic_Text_Literals_Keep_Exact_Views
      (Item : in out Landin.Testing.Context);
 
    procedure Declared_Structs_Follow_Target_Layout
@@ -7154,6 +7159,111 @@ package body Landin.Tests.Checking_Suite is
          "comparison equates signed zeros and leaves nan unordered");
    end Float_Arithmetic_Uses_IEEE_Bits;
 
+   procedure Contextual_Generic_Text_Literals_Keep_Exact_Views
+     (Item : in out Landin.Testing.Context)
+   is
+      Source_Text : constant String :=
+        "keep_utf8: (item: type, value: item, text: utf8)"
+        & " -> (answer: item) = value end keep_utf8" & LF
+        & "keep_utf16: (item: type, value: item, text: utf16)"
+        & " -> (answer: item) = value end keep_utf16" & LF
+        & "keep_cstring: (item: type, value: item, text: cstring)"
+        & " -> (answer: item) = value end keep_cstring" & LF
+        & "keep_bytes: (item: type, value: item, text: []u8)"
+        & " -> (answer: item) = value end keep_bytes" & LF
+        & "public main: () -> (code: i32) =" & LF
+        & "    seed: i32 = 42" & LF
+        & "    a := keep_utf8(seed, ""A\u{2603}"")" & LF
+        & "    b: i32 = keep_utf8(item: i32, value: seed,"
+        & " text: ""B"")" & LF
+        & "    c := keep_utf16(seed, ""C\u{1f600}"")" & LF
+        & "    d: i32 = keep_utf16(item: i32, value: seed,"
+        & " text: ""D"")" & LF
+        & "    e := keep_cstring(seed, ""E\u{2603}"")" & LF
+        & "    f: i32 = keep_cstring(item: i32, value: seed,"
+        & " text: ""F"")" & LF
+        & "    g := keep_bytes(seed, ""\x47H"")" & LF
+        & "    h: i32 = keep_bytes(item: i32, value: seed,"
+        & " text: ""I"")" & LF
+        & "    code = a + b + c + d + e + f + g + h" & LF
+        & "end main" & LF;
+      Work  : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Ran   : Natural;
+      Src   : Landin.Source.Source_Id;
+      Seen  : Natural := 0;
+      Exact : Boolean := True;
+   begin
+      Src := Landin.Stages.Add_Source
+        (Work, "generic-contextual-text.ldn", Source_Text);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Configurer'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Landin.Stages.Append (Order, Checker'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "inferred and explicit generic calls accept each concrete text"
+         & " literal view");
+      declare
+         Of_Tree : constant not null access constant Landin.Syntax.Tree :=
+           Landin.Syntax.Forest.Tree_Of
+             (Landin.Stages.Trees (Work).all, Src);
+         Types : constant not null access Landin.Checking.Table :=
+           Landin.Stages.Types (Work);
+      begin
+         for Node in Landin.Syntax.Node_Id'(1)
+           .. Landin.Syntax.Last_Node (Of_Tree.all)
+         loop
+            if Landin.Syntax.Kind (Of_Tree.all, Node)
+                 in Landin.Syntax.Text_Literal | Landin.Syntax.Raw_Literal
+            then
+               Seen := Seen + 1;
+               declare
+                  Reference : constant Landin.Checking.Reference_Id :=
+                    Landin.Checking.Reference_Of
+                      (Types.all, Of_Tree.all, Node);
+                  Expected_View : constant Landin.Types.Reference_View :=
+                    (if Seen <= 2 then Landin.Types.Utf8_View
+                     elsif Seen <= 4 then Landin.Types.Utf16_View
+                     elsif Seen <= 6 then Landin.Types.C_String_View
+                     else Landin.Types.Ordinary_View);
+               begin
+                  if Reference = Landin.Checking.No_Reference then
+                     Exact := False;
+                  else
+                     declare
+                        Descriptor : constant
+                          Landin.Checking.Reference_Descriptor :=
+                            Landin.Checking.Descriptor_Of
+                              (Types.all, Reference);
+                     begin
+                        Exact := Exact
+                          and then Descriptor.View = Expected_View
+                          and then not Descriptor.Mutable
+                          and then Descriptor.Kind =
+                            (if Expected_View = Landin.Types.C_String_View
+                             then Landin.Types.Pointer_Value
+                             else Landin.Types.Slice_Value)
+                          and then Descriptor.Referent =
+                            (if Expected_View = Landin.Types.Utf16_View
+                             then Landin.Types.U16 else Landin.Types.U8);
+                     end;
+                  end if;
+               end;
+            end if;
+         end loop;
+      end;
+      Landin.Testing.Check_Equal
+        (Item, Seen, 8, "all contextual text literals were checked");
+      Landin.Testing.Check
+        (Item, Exact,
+         "each literal retains its exact view, permission and referent");
+   end Contextual_Generic_Text_Literals_Keep_Exact_Views;
+
    procedure Inferred_Erased_Results_Use_Exact_Entry_Shapes
      (Item : in out Landin.Testing.Context)
    is
@@ -7272,6 +7382,9 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Register
         (Into, "checking", "erased calls keep concept labels across staging",
          Inferred_Erased_Results_Use_Exact_Entry_Shapes'Access);
+      Landin.Testing.Register
+        (Into, "checking", "contextual generic text literals keep exact views",
+         Contextual_Generic_Text_Literals_Keep_Exact_Views'Access);
       Landin.Testing.Register
         (Into, "checking", "ordinary signatures use nominal identity only",
          Ordinary_Function_Signatures_Use_Identity_Only'Access);

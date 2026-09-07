@@ -3838,6 +3838,27 @@ remains required after publication. No capacity view,
 built-in raw-storage kind or integer reconstruction of the returned view is
 introduced.
 
+The bounded contextual-text follow-up closes the generic-call double-check
+defect. When a text-literal argument's parameter pattern has already
+normalized to a concrete reference, generic deduction now applies that exact
+context before context-free synthesis can choose the `utf8` default. Ordinary
+call validation may revisit the literal, but accepts the prior answer only
+when kind, view, permission and complete referent identity agree; a different
+identity remains a mismatch, and `Landin.Checking.Note` keeps its once-only
+contract. `runtime/generic-contextual-text-literals` compares inferred and
+explicit calls for `utf8`, `utf16`, `cstring` and ordinary byte literals,
+observes their runtime data, and pins once-only argument and callee effects.
+The `negative/generic-text-literal-*` cases retain read-only permission and
+Unicode/byte-escape validation. This implements [0260]/[0270] for a context
+the signature already states and changes no language rule.
+
+A literal that itself deduces a type formal remains a separate generic
+reference-publication dependency: after deduction as a text view, checking the
+generic result currently reaches `Reference_Satisfies` without a published
+actual reference descriptor (its precondition at `landin-checking.ads:660`).
+That path is not needed by a concrete contextual text parameter and is not
+claimed or repaired by this bounded follow-up.
+
 The initialized-view implementation must also retain [0860]'s shallow alias
 limit: a reference inserted through an alias is not generally propagated back
 to every other view of that storage, so writable views do not establish
