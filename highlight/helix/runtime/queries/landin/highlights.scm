@@ -3,8 +3,12 @@
 
 ; Literals
 (integer_literal) @number
+(float_literal) @number.float
 (boolean_literal) @boolean
 (zeroed_literal) @constant.builtin
+(text_literal) @string
+(raw_literal) @string
+(character_literal) @character
 
 ; Declarations and names
 (function_declaration name: (identifier) @function)
@@ -33,11 +37,11 @@
 
 ; Keywords
 [
-  "addr" "alignof" "any" "atom" "begin" "concept" "dec" "defer"
-  "else" "elsif" "end" "escaping" "fail" "fixed" "from" "if"
-  "import" "in" "inc" "inout" "is" "match" "mut" "none"
-  "ptr" "public" "return" "sink" "sizeof" "struct" "then" "try"
-  "type" "undo" "when"
+  "addr" "alignof" "any" "atom" "begin" "break" "complete" "concept"
+  "continue" "dec" "defer" "do" "else" "elsif" "end" "escaping" "fail"
+  "fixed" "for" "from" "if" "import" "in" "inc" "inout" "is" "loop"
+  "match" "mut" "none" "ptr" "public" "return" "sink" "sizeof" "struct"
+  "then" "try" "type" "unchecked" "undo" "variant" "when" "while" "with"
 ] @keyword
 
 (measurement_expression
@@ -55,7 +59,9 @@
   "=" ":=" "!" "|" "+" "*" "/" "%" "+%"
   "*%" "<<" ">>" "&" "^" "~" "==" "<>" "<" "<=" ">" ">="
   ".." "..<"
+  "+=" "*=" "/=" "%=" "&=" "|=" "^=" "<<=" ">>=" "+%=" "*%="
 ] @operator
+[(minus_equals) (minus_percent_equals)] @operator
 
 [
   (minus)

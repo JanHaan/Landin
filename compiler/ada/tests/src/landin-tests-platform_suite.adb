@@ -1,4 +1,5 @@
 with Ada.Directories;
+with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 
 with Landin.Platform.Native;
@@ -400,6 +401,43 @@ package body Landin.Tests.Platform_Suite is
    --  recording is what a later stage will assert against.  Untested, a
    --  fake that silently dropped every write would look like a passing
    --  host.
+   --  R4.21: the real runner reports a program's own status and stops one
+   --  that runs past its limit.  This case spawns `sh` on the real host,
+   --  which is the deliberate exception the suite's other native case
+   --  already makes.
+   procedure Native_Runs_Report_Status_And_Are_Bounded
+     (Item : in out Landin.Testing.Context);
+
+   procedure Native_Runs_Report_Status_And_Are_Bounded
+     (Item : in out Landin.Testing.Context)
+   is
+      Runner : Landin.Platform.Native.Tools.Native_Tool_Runner;
+      Result : Landin.Platform.Tool_Result;
+      Exiting : Landin.Platform.Path_List :=
+        Landin.Platform.Arguments ("-c");
+      Sleeping : Landin.Platform.Path_List :=
+        Landin.Platform.Arguments ("-c");
+   begin
+      Landin.Platform.Add (Exiting, "echo out; exit 7");
+      Runner.Run ("sh", Exiting, Result);
+      Landin.Testing.Check
+        (Item,
+         Result.Ended = Landin.Platform.Exited
+           and then Result.Exit_Code = 7
+           and then Unbounded.To_String (Result.Output) = "out" & ASCII.LF,
+         "an ordinary exit reports its own status and output");
+
+      Landin.Platform.Native.Tools.Set_Limit (Runner, 0.2);
+      Landin.Platform.Add (Sleeping, "sleep 30");
+      Runner.Run ("sh", Sleeping, Result);
+      Landin.Testing.Check
+        (Item,
+         Result.Ended = Landin.Platform.Signaled
+           and then Ada.Strings.Fixed.Index
+             (Unbounded.To_String (Result.Output), "ran longer than") > 0,
+         "a run past the limit is stopped, reported as signaled and named");
+   end Native_Runs_Report_Status_And_Are_Bounded;
+
    procedure Fake_Writes_Are_Recorded
      (Item : in out Landin.Testing.Context);
 
@@ -588,6 +626,9 @@ package body Landin.Tests.Platform_Suite is
       Landin.Testing.Register
         (Into, "platform", "native round trips bytes",
          Native_Round_Trips_Bytes'Access);
+      Landin.Testing.Register
+        (Into, "platform", "native runs report status and are bounded",
+         Native_Runs_Report_Status_And_Are_Bounded'Access);
       Landin.Testing.Register
         (Into, "platform", "fake writes are recorded",
          Fake_Writes_Are_Recorded'Access);

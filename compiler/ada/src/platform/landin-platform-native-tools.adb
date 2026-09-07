@@ -1,14 +1,38 @@
+with Ada.Calendar;
 with Ada.Strings.Unbounded;
 
 with GNAT.OS_Lib;
+
+with Interfaces.C;
 
 package body Landin.Platform.Native.Tools is
 
    package Unbounded renames Ada.Strings.Unbounded;
    package OS renames GNAT.OS_Lib;
 
+   use type Ada.Calendar.Time;
+   use type Interfaces.C.int;
    use type OS.File_Descriptor;
+   use type OS.Process_Id;
    use type OS.String_Access;
+
+   --  GNAT's own wait reports only whether the child exited zero, and the
+   --  harness needs the status a program chose.  waitpid is the one POSIX
+   --  call that answers both without blocking, on the two hosts this
+   --  adapter serves; its status word is decoded the way both spell it.
+   function Wait_Pid
+     (Pid     : Interfaces.C.int;
+      Status  : access Interfaces.C.int;
+      Options : Interfaces.C.int) return Interfaces.C.int
+     with Import, Convention => C, External_Name => "waitpid";
+
+   No_Hang : constant Interfaces.C.int := 1;
+
+   procedure Set_Limit
+     (Host : in out Native_Tool_Runner; Seconds : Duration) is
+   begin
+      Host.Limit := Seconds;
+   end Set_Limit;
 
    overriding procedure Run
      (Host      : Native_Tool_Runner;
@@ -24,6 +48,7 @@ package body Landin.Platform.Native.Tools is
       FD      : OS.File_Descriptor := OS.Invalid_FD;
       Success : Boolean;
       Status  : Integer;
+      Timed_Out : Boolean := False;
       Reader  : Native_Filesystem;
       Read    : Read_Status;
 
@@ -61,7 +86,6 @@ package body Landin.Platform.Native.Tools is
          end if;
       end Cleanup_Capture;
 
-      pragma Unreferenced (Host);
    begin
       Result := (Ended     => Landin.Platform.Exited,
                  Exit_Code => 0,
@@ -94,21 +118,63 @@ package body Landin.Platform.Native.Tools is
       end if;
       FD := OS.Invalid_FD;
 
-      OS.Spawn
-        (Program_Name => Located.all,
-         Args         => List,
-         Output_File  => Name.all,
-         Success      => Success,
-         Return_Code  => Status,
-         Err_To_Out   => Capture = Merged);
+      declare
+         Pid : constant OS.Process_Id :=
+           OS.Non_Blocking_Spawn
+             (Program_Name => Located.all,
+              Args         => List,
+              Output_File  => Name.all,
+              Err_To_Out   => Capture = Merged);
+         Deadline : constant Ada.Calendar.Time :=
+           Ada.Calendar.Clock + Host.Limit;
+         Word   : aliased Interfaces.C.int := 0;
+         Reaped : Interfaces.C.int := 0;
+      begin
+         if Pid = OS.Invalid_Pid then
+            raise External_Tool_Failed with "could not run tool: " & Program;
+         end if;
 
-      if not Success then
-         raise External_Tool_Failed with "could not run tool: " & Program;
-      end if;
+         Timed_Out := False;
+         loop
+            Reaped :=
+              Wait_Pid (Interfaces.C.int (OS.Pid_To_Integer (Pid)),
+                        Word'Access, No_Hang);
+            exit when Reaped /= 0;
+            if Ada.Calendar.Clock > Deadline then
+               OS.Kill (Pid, Hard_Kill => True);
+               Reaped :=
+                 Wait_Pid (Interfaces.C.int (OS.Pid_To_Integer (Pid)),
+                           Word'Access, 0);
+               Timed_Out := True;
+               exit;
+            end if;
+            delay 0.02;
+         end loop;
+
+         if Reaped < 0 then
+            raise External_Tool_Failed
+              with "could not wait for tool: " & Program;
+         end if;
+
+         --  The low seven bits name a signal, or nothing; the next byte is
+         --  the exit status when there was one.
+         if Timed_Out or else Integer (Word) mod 128 /= 0 then
+            Status := -1;
+         else
+            Status := (Integer (Word) / 256) mod 256;
+         end if;
+      end;
 
       Reader.Read_File (Name.all, Result.Output, Read);
       if Read /= Read_Ok then
          Result.Output := Unbounded.Null_Unbounded_String;
+      end if;
+      if Timed_Out then
+         Unbounded.Append
+           (Result.Output,
+            "landin: " & Program & " ran longer than the limit of"
+            & Duration'Image (Host.Limit) & " seconds and was stopped"
+            & ASCII.LF);
       end if;
 
       --  A child that a signal killed is reported here as -1, and an
