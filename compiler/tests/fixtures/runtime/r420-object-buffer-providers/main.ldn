@@ -1,0 +1,102 @@
+import core/failing
+import core/heap
+import core/mem
+import core/pool
+
+node: type = struct
+    next: ptr i32
+    value: i32
+end node
+number: i32 = 37
+mut evaluations: usize = 0
+initial: () -> (value: node) =
+    inc evaluations
+    value = (next: addr number, value: 42)
+end initial
+
+exercise: (provider: type is mem.allocator, inout inner: provider)
+          -> (okay: bool) =
+    okay = false
+    zero: usize = 0
+    one: usize = 1
+    two: usize = 2
+    three: usize = 3
+    mut state := failing.count_down(addr inner, zero)
+    before: usize = evaluations
+    mut empty := mem.new_bytes(state, zero) else (problem)
+        _ = problem
+        return
+    end
+    empty_size: usize = begin
+        view := mem.bytes(empty)
+        lenof view
+    end
+    mem.drop_bytes(state, empty)
+    return when empty_size <> 0 or failing.attempts(state) <> 0
+    mut refused: bool = false
+    absent: ptr mut node = mem.new(state, initial()) else (problem)
+        refused = problem == mem.out_of_memory
+        ptr(0)
+    end
+    return when not refused or usize(absent) <> 0 or evaluations <> before + 1
+      or failing.live(state) <> 0 or failing.frees(state) <> 0
+    failing.permit(state, two)
+    value: ptr mut node = mem.new(state, initial()) else (problem)
+        _ = problem
+        return
+    end
+    mut bytes := mem.new_bytes(state, three) else (problem)
+        _ = problem
+        return
+    end
+    content_ok: bool = begin
+        view := mem.bytes(bytes)
+        zeroed_ok: bool = lenof view == 3 and view[0] == 0
+                         and view[1] == 0 and view[2] == 0
+        view[0] = 11
+        view[2] = 29
+        zeroed_ok and view[0] + view[2] == 40
+    end
+    object_ok: bool = value.val.value == 42 and value.val.next.val == 37
+      and usize(value) % alignof node == 0
+    mem.delete(state, value)
+    mem.drop_bytes(state, bytes)
+    mem.drop_bytes(state, bytes)
+    return when failing.live(state) <> 0 or failing.frees(state) <> 2
+    failing.permit(state, one)
+    mut retry := mem.new_bytes(state, three) else (problem)
+        _ = problem
+        return
+    end
+    retry_ok: bool = begin
+        view := mem.bytes(retry)
+        lenof view == 3 and view[0] == 0 and view[2] == 0
+    end
+    mem.drop_bytes(state, retry)
+    okay = content_ok and object_ok and retry_ok and evaluations == before + 2
+      and failing.attempts(state) == 4 and failing.successes(state) == 3
+      and failing.injected_failures(state) == 1 and failing.inner_failures(state) == 0
+      and failing.frees(state) == 3 and failing.live(state) == 0
+end exercise
+
+public main: () -> (code: i32) =
+    code = 1
+    mut host := heap.host()
+    heap_ok: bool = exercise(host)
+    mut arena_bytes: [256]u8 = zeroed
+    mut arena := mem.arena_over(addr arena_bytes[0], 256)
+    arena_ok: bool = exercise(arena)
+    mut pool_bytes: [128]u8 = zeroed
+    mut records: [2]pool.slot = zeroed
+    mut fixed_state := pool.over(addr pool_bytes[0], 128, 32, 2, 16,
+                                 records[0..<2]) else (problem)
+        _ = problem
+        return
+    end
+    fixed_ok: bool = exercise(fixed_state)
+    if heap_ok and arena_ok and fixed_ok and evaluations == 6
+      and arena.used > 0 and pool.allocation_count(fixed_state) == 3
+      and pool.free_count(fixed_state) == 3 and pool.live(fixed_state) == 0
+      and pool.rejected_free_count(fixed_state) == 0
+    then code = 42 end if
+end main

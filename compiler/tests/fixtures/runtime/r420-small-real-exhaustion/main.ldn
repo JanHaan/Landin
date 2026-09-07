@@ -1,0 +1,192 @@
+--  Real inner-provider exhaustion for core/small, in both states the spilled
+--  path has: the first spill out of the inline arm, and a later growth of the
+--  already spilled list. Nothing here uses an injected failure schedule.
+
+import core/mem
+import core/pool
+import core/small
+
+--  Zero inline capacity spills on the first push. A 16-byte arena cannot
+--  hold the eight-slot first capacity, so no arm is published at all.
+zero_inline_first_spill: () -> (ok: bool) =
+    ok = false
+    mut backing: [2]u64 = zeroed
+    base: ptr mut u8 = ptr(usize(addr backing[0]))
+    extent: usize = 2 * sizeof u64
+    mut state := mem.arena_over(base, extent)
+    mut values := small.new(item: i32, inline_slots: 0)
+
+    mut refused: bool = false
+    small.push(values, state, 21) else (problem)
+        refused = problem == mem.out_of_memory
+    end
+    mut empty_view: bool = false
+    begin
+        view := small.used(values)
+        empty_view = lenof view == 0
+    end
+    ok = refused and empty_view and small.length(values) == 0
+         and small.capacity(values) == 0 and state.used == 0
+    small.release(values, state)
+    ok = ok and small.length(values) == 0 and state.used == 0
+end zero_inline_first_spill
+
+--  A nonzero inline arm survives a refused first spill unchanged: the doubled
+--  first capacity needs 16 bytes and the arena has 8.
+inline_arm_survives_first_spill: () -> (ok: bool) =
+    ok = false
+    mut backing: [1]u64 = zeroed
+    base: ptr mut u8 = ptr(usize(addr backing[0]))
+    extent: usize = sizeof u64
+    mut state := mem.arena_over(base, extent)
+    mut values := small.new(item: i32, inline_slots: 2)
+
+    small.push(values, state, 21) else (problem)
+        _ = problem
+        return
+    end
+    small.push(values, state, 22) else (problem)
+        _ = problem
+        return
+    end
+    --  Both pushes stayed below the inline bound and asked for nothing.
+    return when state.used <> 0 or small.capacity(values) <> 2
+
+    mut refused: bool = false
+    small.push(values, state, 23) else (problem)
+        refused = problem == mem.out_of_memory
+    end
+    mut kept: bool = false
+    begin
+        view := small.used(values)
+        kept = lenof view == 2 and view[0] == 21 and view[1] == 22
+    end
+    --  No premature variant switch and no free of an arm that never existed.
+    ok = refused and kept and small.length(values) == 2
+         and small.capacity(values) == 2 and state.used == 0
+    small.release(values, state)
+    ok = ok and small.length(values) == 0 and small.capacity(values) == 2
+end inline_arm_survives_first_spill
+
+--  With exactly the first capacity available the spill succeeds and consumes
+--  the whole extent, so the next growth is refused by the arena and the
+--  already spilled arm must survive with its contents.
+spilled_arm_survives_growth: () -> (ok: bool) =
+    ok = false
+    mut backing: [2]u64 = zeroed
+    base: ptr mut u8 = ptr(usize(addr backing[0]))
+    extent: usize = 2 * sizeof u64
+    mut state := mem.arena_over(base, extent)
+    mut values := small.new(item: i32, inline_slots: 2)
+
+    mut at: i32 = 31
+    while at < 35 do
+        small.push(values, state, at) else (problem)
+            _ = problem
+            return
+        end
+        inc at
+    end while
+    --  Four items: two copied out of the inline arm plus two admitted into
+    --  the spare slots the spill reserved. The extent is now consumed.
+    return when small.length(values) <> 4 or small.capacity(values) <> 4
+      or state.used <> extent
+
+    mut refused: bool = false
+    small.push(values, state, 35) else (problem)
+        refused = problem == mem.out_of_memory
+    end
+    mut kept: bool = false
+    begin
+        view := small.used(values)
+        kept = lenof view == 4 and view[0] == 31 and view[1] == 32
+               and view[2] == 33 and view[3] == 34
+    end
+    ok = refused and kept and small.length(values) == 4
+         and small.capacity(values) == 4 and state.used == extent
+
+    tail: i32 = small.pop(values) else (problem)
+        _ = problem
+        return
+    end
+    ok = ok and tail == 34 and small.length(values) == 3
+    small.release(values, state)
+    --  The arena's free is a no-op, so the offset does not move.
+    ok = ok and small.length(values) == 0 and small.capacity(values) == 2
+         and state.used == extent
+end spilled_arm_survives_growth
+
+--  One pool slot lets the spill happen but cannot hold the old and the new
+--  list at the same time, which is what the later growth needs. Releasing
+--  the container returns the slot and a second container reuses it.
+pool_spill_limit_and_reuse: () -> (ok: bool) =
+    ok = false
+    mut words: [2]u64 = zeroed
+    base: ptr mut u8 = ptr(usize(addr words[0]))
+    mut records: [1]pool.slot = zeroed
+    mut state := pool.over(base, 2 * sizeof u64, 16, 1, 8,
+                           records[0..<1]) else (problem)
+        _ = problem
+        return
+    end
+    mut values := small.new(item: i32, inline_slots: 1)
+
+    small.push(values, state, 41) else (problem)
+        _ = problem
+        return
+    end
+    return when pool.allocation_count(state) <> 0
+    small.push(values, state, 42) else (problem)
+        _ = problem
+        return
+    end
+    --  The spill took the only slot for a two-slot list.
+    return when small.length(values) <> 2 or small.capacity(values) <> 2
+      or pool.live(state) <> 1 or pool.allocation_count(state) <> 1
+
+    mut refused: bool = false
+    small.push(values, state, 43) else (problem)
+        refused = problem == mem.out_of_memory
+    end
+    mut kept: bool = false
+    begin
+        view := small.used(values)
+        kept = lenof view == 2 and view[0] == 41 and view[1] == 42
+    end
+    --  The four-slot block would have fitted the slot; the old list still
+    --  occupies it, and no heap extended the pool behind the refusal.
+    return when not refused or not kept or small.length(values) <> 2
+      or small.capacity(values) <> 2 or pool.live(state) <> 1
+      or pool.allocation_count(state) <> 1 or pool.free_count(state) <> 0
+
+    small.release(values, state)
+    return when pool.live(state) <> 0 or pool.free_count(state) <> 1
+
+    mut again := small.new(item: i32, inline_slots: 1)
+    small.push(again, state, 51) else (problem)
+        _ = problem
+        return
+    end
+    small.push(again, state, 52) else (problem)
+        _ = problem
+        return
+    end
+    begin
+        view := small.used(again)
+        ok = lenof view == 2 and view[0] == 51 and view[1] == 52
+             and pool.allocation_count(state) == 2
+             and pool.live(state) == 1
+    end
+    small.release(again, state)
+    ok = ok and pool.live(state) == 0 and pool.free_count(state) == 2
+         and pool.rejected_free_count(state) == 0
+end pool_spill_limit_and_reuse
+
+public main: () -> (code: i32) =
+    code = 1
+    if zero_inline_first_spill() and inline_arm_survives_first_spill()
+      and spilled_arm_survives_growth() and pool_spill_limit_and_reuse()
+    then
+        code = 42
+    end if
+end main

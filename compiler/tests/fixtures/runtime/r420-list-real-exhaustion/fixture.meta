@@ -1,0 +1,7 @@
+class: runtime
+summary: bounded arena and fixed-slot exhaustion preserve pointer and erased list contents before reuse
+program: main.ldn
+root: ../../../../..
+constructs: 0430, 0470, 0510, 0540, 0940, 1230, 1290, 1350, 1360, 1370, 1380, 1390
+status: 42
+targets: linux-x86-64

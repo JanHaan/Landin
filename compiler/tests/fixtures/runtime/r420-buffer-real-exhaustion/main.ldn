@@ -1,0 +1,196 @@
+--  Real inner-provider exhaustion for initialized objects and byte buffers.
+--  The arena runs out of bytes and the pool runs out of slots; no injected
+--  failure schedule takes part in any refusal below.
+
+import core/mem
+import core/pool
+
+node: type = struct
+    next: ptr i32
+    value: i32
+end node
+
+number: i32 = 37
+mut evaluations: usize = 0
+
+initial: () -> (value: node) =
+    inc evaluations
+    value = (next: addr number, value: 42)
+end initial
+
+--  A monotonic arena consumed to its exact extent. Every later request is
+--  refused by the arena, publishes no typed result and moves no offset.
+arena_case: () -> (ok: bool) =
+    ok = false
+    zero: usize = 0
+    one: usize = 1
+    mut backing: [8]u64 = zeroed
+    base: ptr mut u8 = ptr(usize(addr backing[0]))
+    extent: usize = 8 * sizeof u64
+    mut state := mem.arena_over(base, extent)
+
+    before: usize = evaluations
+    value: ptr mut node = mem.new(state, initial()) else (problem)
+        _ = problem
+        return
+    end
+    return when state.used <> sizeof node
+
+    rest: usize = extent - sizeof node
+    mut keeper := mem.new_bytes(state, rest) else (problem)
+        _ = problem
+        return
+    end
+    begin
+        view := mem.bytes(keeper)
+        view[0] = 5
+        view[47] = 9
+    end
+    --  The extent is exactly consumed and both live results are sound.
+    return when state.used <> extent or value.val.value <> 42
+      or value.val.next.val <> 37 or usize(value) % alignof node <> 0
+
+    --  A zero-count buffer is still valid on an exhausted arena because it
+    --  asks the provider for nothing.
+    mut empty := mem.new_bytes(state, zero) else (problem)
+        _ = problem
+        return
+    end
+    empty_ok: bool = begin
+        view := mem.bytes(empty)
+        lenof view == 0
+    end
+    mem.drop_bytes(state, empty)
+    return when not empty_ok or state.used <> extent
+
+    --  A one-byte buffer is refused, and the refusal binds no descriptor.
+    mut bytes_refused: bool = false
+    _ = mem.new_bytes(state, one) else (problem)
+        bytes_refused = problem == mem.out_of_memory
+    end
+    --  The buffer that already existed is untouched by that refusal.
+    keeper_ok: bool = begin
+        view := mem.bytes(keeper)
+        lenof view == rest and view[0] == 5 and view[47] == 9
+    end
+    return when not bytes_refused or not keeper_ok or state.used <> extent
+
+    --  A typed object is refused after its initial value was evaluated. The
+    --  binding takes the failure arm, whose caller-supplied fallback is null;
+    --  no allocator result reaches it.
+    mut object_refused: bool = false
+    absent: ptr mut node = mem.new(state, initial()) else (problem)
+        object_refused = problem == mem.out_of_memory
+        ptr(0)
+    end
+    return when not object_refused or usize(absent) <> 0
+      or evaluations <> before + 2 or state.used <> extent
+
+    --  Taken again after the object refusal, so the neighbouring buffer is
+    --  checked intact after each of the two refusals rather than only the
+    --  first.
+    keeper_still_ok: bool = begin
+        view := mem.bytes(keeper)
+        lenof view == rest and view[0] == 5 and view[47] == 9
+    end
+    return when not keeper_still_ok
+
+    mem.delete(state, value)
+    mem.drop_bytes(state, keeper)
+    --  The arena's free is a documented no-op, so the offset does not move.
+    ok = state.used == extent
+end arena_case
+
+--  A two-slot pool at zero, one and full occupancy, exhausted by slot count
+--  and by slot width, then reused after an exact free.
+fixed_case: () -> (ok: bool) =
+    ok = false
+    zero: usize = 0
+    one: usize = 1
+    thirty_two: usize = 32
+    oversized: usize = 33
+    mut words: [8]u64 = zeroed
+    base: ptr mut u8 = ptr(usize(addr words[0]))
+    mut records: [2]pool.slot = zeroed
+    mut state := pool.over(base, 8 * sizeof u64, thirty_two, 2, 8,
+                           records[0..<2]) else (problem)
+        _ = problem
+        return
+    end
+
+    --  Zero capacity: no slot is taken and none is returned.
+    mut empty := mem.new_bytes(state, zero) else (problem)
+        _ = problem
+        return
+    end
+    empty_ok: bool = begin
+        view := mem.bytes(empty)
+        lenof view == 0
+    end
+    mem.drop_bytes(state, empty)
+    return when not empty_ok or pool.allocation_count(state) <> 0
+      or pool.free_count(state) <> 0
+
+    --  One occupied slot.
+    mut first := mem.new_bytes(state, thirty_two) else (problem)
+        _ = problem
+        return
+    end
+    begin
+        view := mem.bytes(first)
+        view[0] = 61
+        view[31] = 62
+    end
+    return when pool.live(state) <> 1 or pool.allocation_count(state) <> 1
+
+    --  Full: the object takes the remaining slot.
+    value: ptr mut node = mem.new(state, initial()) else (problem)
+        _ = problem
+        return
+    end
+    return when pool.live(state) <> 2 or pool.allocation_count(state) <> 2
+      or value.val.value <> 42 or value.val.next.val <> 37
+
+    --  Exhausted by slot count, and separately by slot width. Neither
+    --  refusal takes a slot, returns one, or falls back to a heap.
+    mut count_refused: bool = false
+    _ = mem.new_bytes(state, one) else (problem)
+        count_refused = problem == mem.out_of_memory
+    end
+    mem.drop_bytes(state, first)
+    return when pool.live(state) <> 1 or pool.free_count(state) <> 1
+    mut width_refused: bool = false
+    _ = mem.new_bytes(state, oversized) else (problem)
+        width_refused = problem == mem.out_of_memory
+    end
+    return when not count_refused or not width_refused
+      or pool.live(state) <> 1 or pool.allocation_count(state) <> 2
+      or pool.free_count(state) <> 1
+
+    --  The exactly freed slot is available again.
+    mut reused := mem.new_bytes(state, thirty_two) else (problem)
+        _ = problem
+        return
+    end
+    reused_ok: bool = begin
+        view := mem.bytes(reused)
+        fresh: bool = lenof view == 32 and view[0] == 0 and view[31] == 0
+        view[31] = 63
+        fresh and view[31] == 63
+    end
+    counts_ok: bool = pool.allocation_count(state) == 3
+                      and pool.live(state) == 2
+
+    mem.drop_bytes(state, reused)
+    mem.delete(state, value)
+    ok = reused_ok and counts_ok and pool.live(state) == 0
+         and pool.free_count(state) == 3
+         and pool.rejected_free_count(state) == 0
+end fixed_case
+
+public main: () -> (code: i32) =
+    code = 1
+    if arena_case() and fixed_case() and evaluations == 3 then
+        code = 42
+    end if
+end main

@@ -1,0 +1,7 @@
+class: runtime
+summary: initialized reference objects and byte buffers retain exact cleanup across providers
+program: main.ldn
+root: ../../../../..
+constructs: 0510, 0550, 0770, 0790, 0830, 1220, 1290, 1350
+status: 42
+targets: linux-x86-64

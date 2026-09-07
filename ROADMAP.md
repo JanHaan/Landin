@@ -4382,6 +4382,64 @@ through the pool, and finishes with no live allocation.
 `negative/core-map-value-frame-escape` retain the separate parent evidence and
 escaping insertion boundaries.
 
+The allocator acceptance matrix is recorded here as a durable mapping from
+each workload and provider column to the fixture that executes it. Every
+fixture named below reaches the repository-owned `core` modules through its
+`root` metadata rather than carrying a fixture-local copy, and each cell is
+executed behavior rather than a compiled generic instance.
+
+| Workload | Heap | Arena | Fixed pool | Failing wrapper |
+| --- | --- | --- | --- | --- |
+| provider contract | `runtime/hosted-heap-provider` | `runtime/core-mem-arena-boundaries` | `runtime/r420-pool-provider` | `runtime/r420-failing-providers` |
+| `list(pointer)` | `runtime/r420-reference-provider-matrix` | `runtime/r420-list-real-exhaustion` | `runtime/r420-list-real-exhaustion` | `runtime/r420-reference-provider-matrix` |
+| `list(any)` | `runtime/r420-reference-provider-matrix` | `runtime/r420-list-real-exhaustion` | `runtime/r420-list-real-exhaustion` | `runtime/r420-reference-provider-matrix` |
+| `small(zeroable, N)` | `runtime/r420-small-vector-providers` | `runtime/r420-small-real-exhaustion` | `runtime/r420-small-real-exhaustion` | `runtime/r420-small-vector-providers` |
+| `map(K, V)` | `runtime/r420-map-reference-providers` | `runtime/r420-map-arena` | `runtime/r420-map-reference-providers` | `runtime/r420-map-failure-rollback` |
+| tree | `runtime/core-tree-provider-failures` | `runtime/r420-tree-real-exhaustion` | `runtime/r420-tree-real-exhaustion` | `runtime/core-tree-provider-failures` |
+| initialized objects, byte buffers | `runtime/r420-object-buffer-providers` | `runtime/r420-buffer-real-exhaustion` | `runtime/r420-buffer-real-exhaustion` | `runtime/r420-object-buffer-providers` |
+
+An injected refusal from `core/failing` is evidence about the wrapper column
+and about container rollback. It is not evidence that an inner provider was
+exhausted, so the arena and fixed-pool columns are carried by fixtures whose
+refusals come from the backing extent or the slot count themselves.
+`runtime/r420-list-real-exhaustion` runs both list rows through the same two
+shapes. It spends an arena on two growths and has the third refused, then uses
+a one-slot pool to show that a vector growth needs the old and the new block
+at the same time and a two-slot pool to show the same growth succeeding; the
+released slot is reused by a later list. The pointer row checks every stored
+address and pointee after the refusal; the `list(any)` row checks that every
+retained descriptor still dispatches to the pointee it was built over, with
+the erased values constructed in `main` and passed in as escaping arguments
+so that [1380]'s explicit construction is not what is under measurement.
+`runtime/r420-small-real-exhaustion` covers both states of the spilled path
+with real extents: a refused first spill leaves the inline arm, its count and
+its capacity unchanged at zero and at nonzero inline capacity, a refused later
+growth leaves the spilled arm and its contents unchanged, and one pool slot
+limits the spill until an exact free lets a second container reuse it.
+`runtime/r420-buffer-real-exhaustion` consumes an arena to its exact extent and
+then observes that a refused buffer binds no descriptor and that a refused
+object takes the failure arm, whose caller-supplied fallback is null rather
+than an allocator result. A neighbouring buffer is taken again and checked
+intact after each of those two refusals, and the arena offset never moves. Its
+pool case covers zero, one and full occupancy, refusal by slot count and
+separately by slot width, and reuse of an exactly freed slot.
+
+`runtime/r420-reference-provider-matrix` runs a pointer list and an
+`any counter` list through the heap, arena and pool under the counted wrapper:
+the initial and growth refusals leave length, capacity and contents unchanged,
+retry succeeds, stored pointees and erased dispatch survive, and every extent
+is freed exactly once. `runtime/r420-map-reference-providers` runs pointer keys
+and values with a deliberately colliding hash through the same three
+providers, replaces a key after a preceding tombstone at the growth threshold
+with no allocation budget and no provider attempt, and fails replacement
+allocations one, two and three separately with the matching rollback frees.
+`runtime/r420-object-buffer-providers` covers zero-count buffers, a refused
+object whose initial value was still evaluated, aligned pointer-containing
+objects, written byte buffers, repeated disposal and retry.
+`runtime/r420-tree-real-exhaustion` exhausts a node-sized arena and a one-slot
+pool, checks that the refused leaf and branch appends leave the count,
+ordinals and names unchanged, and reuses the pool slot after release.
+
 Exit evidence: containers run with heap, arena, fixed and failing allocators;
 all omission and layering choices are recorded; `[0820]`'s block is either
 enabled with the four answers above written down, or its refusal names the
