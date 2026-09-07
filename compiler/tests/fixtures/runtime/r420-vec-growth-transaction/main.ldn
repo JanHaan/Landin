@@ -1,0 +1,169 @@
+import core/mem
+import core/vec
+
+node: type = struct
+    value: i32
+end node
+
+n0: node = (value: 10)
+n1: node = (value: 11)
+n2: node = (value: 12)
+n3: node = (value: 13)
+n4: node = (value: 14)
+n5: node = (value: 15)
+n6: node = (value: 16)
+n7: node = (value: 17)
+n8: node = (value: 18)
+
+audit: type = struct
+    base: ptr mut u8
+    used: usize
+    fail_next: bool
+    attempts: usize
+    allocations: usize
+    frees: usize
+    first_free_size: usize
+    second_free_size: usize
+    first_address: usize
+    second_address: usize
+    exact_frees: bool
+end audit
+
+audit_alloc: (inout state: audit, size: usize, alignment: usize)
+             -> (block: ptr mut u8) ! mem.out_of_memory =
+    inc state.attempts
+    if state.fail_next then
+        state.fail_next = false
+        fail mem.out_of_memory
+    end if
+
+    address: usize = usize(state.base) + state.used
+    mut padding: usize = 0
+    if alignment > 1 then
+        remainder: usize = address % alignment
+        if not (remainder == 0) then
+            padding = alignment - remainder
+        end if
+    end if
+    block = ptr(address + padding)
+    state.used = state.used + padding + size
+    inc state.allocations
+    if state.allocations == 1 then
+        state.first_address = usize(block)
+    else
+        state.second_address = usize(block)
+    end if
+end audit_alloc
+
+audit_free: (inout state: audit, block: ptr mut u8, size: usize) -> none =
+    inc state.frees
+    if state.frees == 1 then
+        state.first_free_size = size
+        state.exact_frees = state.exact_frees
+          and usize(block) == state.first_address
+    else
+        state.second_free_size = size
+        state.exact_frees = state.exact_frees
+          and usize(block) == state.second_address
+    end if
+end audit_free
+
+audit is mem.allocator (alloc: audit_alloc, free: audit_free)
+
+before_contents: (values: vec.list(ptr node)) -> (ok: bool) =
+    first_index: usize = 0
+    last_index: usize = 7
+    first: ptr node = vec.get(values, first_index) else addr n8
+    last: ptr node = vec.get(values, last_index) else addr n8
+    ok = first.val.value == 10 and last.val.value == 17
+end before_contents
+
+after_contents: (values: vec.list(ptr node)) -> (ok: bool) =
+    first_index: usize = 0
+    last_old_index: usize = 7
+    new_index: usize = 8
+    first: ptr node = vec.get(values, first_index) else addr n8
+    last_old: ptr node = vec.get(values, last_old_index) else addr n0
+    new: ptr node = vec.get(values, new_index) else addr n0
+    ok = first.val.value == 10 and last_old.val.value == 17
+      and new.val.value == 18
+end after_contents
+
+public main: () -> (code: i32) =
+    mut bytes: [256]u8 = zeroed
+    mut state: audit =
+        (base: addr bytes[0], used: 0, fail_next: false,
+         attempts: 0, allocations: 0, frees: 0,
+         first_free_size: 0, second_free_size: 0,
+         first_address: 0, second_address: 0, exact_frees: true)
+    mut values := vec.new_list(item: ptr node)
+
+    vec.push(values, state, addr n0) else 0
+    vec.push(values, state, addr n1) else 0
+    vec.push(values, state, addr n2) else 0
+    vec.push(values, state, addr n3) else 0
+    vec.push(values, state, addr n4) else 0
+    vec.push(values, state, addr n5) else 0
+    vec.push(values, state, addr n6) else 0
+    vec.push(values, state, addr n7) else 0
+
+    maximum: usize = 0 -% 1
+    impossible: usize = maximum / sizeof ptr node + 1
+    mut overflow_refused: bool = false
+    vec.reserve(values, state, impossible) else (problem)
+        _ = problem
+        overflow_refused = true
+    end
+    if not overflow_refused or not before_contents(values)
+      or not (vec.length(values) == 8) or not (vec.capacity(values) == 8)
+      or not (state.attempts == 1) or not (state.frees == 0)
+    then
+        code = 1
+        return
+    end if
+
+    state.fail_next = true
+    mut refused: bool = false
+    vec.push(values, state, addr n8) else (problem)
+        _ = problem
+        refused = true
+    end
+
+    if not refused
+      or not (vec.length(values) == 8) or not (vec.capacity(values) == 8)
+      or not before_contents(values)
+      or not (state.attempts == 2) or not (state.allocations == 1)
+      or not (state.frees == 0)
+    then
+        code = 1
+        return
+    end if
+
+    vec.push(values, state, addr n8) else 0
+    if not (vec.length(values) == 9) or not (vec.capacity(values) == 16)
+      or not after_contents(values)
+      or not (state.attempts == 3) or not (state.allocations == 2)
+      or not (state.frees == 1)
+      or not (state.first_free_size == 8 * sizeof ptr node)
+    then
+        code = 1
+        return
+    end if
+
+    removed: ptr node = vec.pop(values) else addr n0
+    if not (removed.val.value == 18) then
+        code = 1
+        return
+    end if
+    vec.release(values, state)
+    vec.release(values, state)
+
+    if state.frees == 2 and state.exact_frees
+      and state.second_free_size == 16 * sizeof ptr node
+      and vec.length(values) == 0 and vec.capacity(values) == 0
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

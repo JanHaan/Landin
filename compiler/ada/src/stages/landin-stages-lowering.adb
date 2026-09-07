@@ -9153,27 +9153,75 @@ package body Landin.Stages.Lowering is
                      end if;
                   else
                      --  D20/D50: a whole array source is storage, optionally
-                     --  qualified by its containing aggregate field.
+                     --  qualified by its containing aggregate field. A
+                     --  pointer dereference or computed element changes that
+                     --  storage root to a runtime address, just as D127's
+                     --  aggregate whole-copy path does.
                      declare
-                        Source_Place : constant IR.Storage :=
-                          Rooted_Storage (Of_Tree, Value);
-                        Source_Field : constant Natural :=
-                          Rooted_Base (Of_Tree, Value);
-                        Source_Steps : constant IR.Path_Step_Array :=
-                          Rooted_Steps (Of_Tree, Value);
+                        Dynamic : constant Boolean :=
+                          Has_Computed_Index (Of_Tree, Value)
+                          or else Has_Pointer_Dereference (Of_Tree, Value)
+                          or else Destination.Kind = IR.Runtime_Address;
                      begin
-                        IR.Emit_Array_Copy
-                          (Unit.all, Filling,
-                           Source => Source_Place,
-                           Destination => Destination,
-                           Site => Site,
-                           Source_Field => Source_Field,
-                           Source_Nested => Source_Steps,
-                           Destination_Field => Field,
-                           Destination_Nested => Path,
-                           Destination_Variant_Case => Variant_Case,
-                           Destination_Variant_Payload_Field =>
-                             Variant_Payload_Field);
+                        if Dynamic then
+                           declare
+                              Source : constant Stored_Place :=
+                                Lower_Stored_Place
+                                  (Of_Tree, Value, Scope);
+                              Target_Steps : constant IR.Path_Step_Array :=
+                                (if Variant_Payload_Field = 0
+                                 then Path
+                                 else Payload_Steps
+                                   (Path, Positive (Variant_Case),
+                                    Positive (Variant_Payload_Field)));
+                              Target : Stored_Place :=
+                                (Place => Destination, Base => Field,
+                                 Steps =>
+                                   Stored_Path_Vectors.Empty_Vector);
+                           begin
+                              for Step of Target_Steps loop
+                                 Target.Steps.Append (Step);
+                              end loop;
+                              if Current /= IR.No_Block then
+                                 declare
+                                    Shape : constant IR.Field_Shape :=
+                                      Neutral_Value_Shape (Of_Tree, Value);
+                                    From : constant IR.Storage :=
+                                      Addressed_Storage
+                                        (Source, Shape,
+                                         Site_Of (Of_Tree, Value));
+                                    Into : constant IR.Storage :=
+                                      Addressed_Storage
+                                        (Target, Shape, Site);
+                                 begin
+                                    IR.Emit_Array_Copy
+                                      (Unit.all, Filling, From, Into, Site);
+                                 end;
+                              end if;
+                           end;
+                        else
+                           declare
+                              Source_Place : constant IR.Storage :=
+                                Rooted_Storage (Of_Tree, Value);
+                              Source_Field : constant Natural :=
+                                Rooted_Base (Of_Tree, Value);
+                              Source_Steps : constant IR.Path_Step_Array :=
+                                Rooted_Steps (Of_Tree, Value);
+                           begin
+                              IR.Emit_Array_Copy
+                                (Unit.all, Filling,
+                                 Source => Source_Place,
+                                 Destination => Destination,
+                                 Site => Site,
+                                 Source_Field => Source_Field,
+                                 Source_Nested => Source_Steps,
+                                 Destination_Field => Field,
+                                 Destination_Nested => Path,
+                                 Destination_Variant_Case => Variant_Case,
+                                 Destination_Variant_Payload_Field =>
+                                   Variant_Payload_Field);
+                           end;
+                        end if;
                      end;
                   end if;
                end Write_Array_Value;
@@ -11257,68 +11305,131 @@ package body Landin.Stages.Lowering is
                              Syn.Value_Of (Of_Tree, Stmt);
                            Place : constant Syn.Node_Id :=
                              Syn.Target_Of (Of_Tree, Stmt);
-                           Named : constant Syn.Node_Id :=
-                             Chain_Root (Of_Tree, Place);
-                           Field : constant Natural :=
-                             Rooted_Base (Of_Tree, Place);
-                           Child_Steps : constant IR.Path_Step_Array :=
-                             Rooted_Steps (Of_Tree, Place);
-                           Destination : constant IR.Storage :=
-                             Storage_For (Of_Tree, Named);
+                           Dynamic : constant Boolean :=
+                             Has_Computed_Index (Of_Tree, Place)
+                             or else Has_Pointer_Dereference
+                               (Of_Tree, Place);
                         begin
-                           if Syn.Kind (Of_Tree, Value)
-                                in Syn.If_Statement | Syn.Match_Statement
-                                   | Syn.Bare_Block | Syn.Loop_Statement
-                                   | Syn.While_Statement | Syn.For_Statement
-                           then
+                           if Dynamic then
                               declare
-                                 Temporary : constant IR.Slot_Id :=
-                                   Add_Value_Temporary (Of_Tree, Value);
+                                 Reached : constant Stored_Place :=
+                                   Lower_Stored_Place
+                                     (Of_Tree, Place, Scope);
                               begin
-                                 Lower_Stored_Expression
-                                   (Of_Tree, Value, Scope, Temporary);
-
                                  if Current /= IR.No_Block then
-                                    IR.Emit_Array_Copy
-                                      (Unit.all, Filling,
-                                       Source =>
-                                         (Kind => IR.Frame_Slot,
-                                          Slot => Temporary),
-                                       Destination => Destination,
-                                       Site => Site,
-                                       Destination_Field => Field,
-                                       Destination_Nested => Child_Steps);
+                                    declare
+                                       Shape : constant IR.Field_Shape :=
+                                         Neutral_Value_Shape (Of_Tree, Place);
+                                       Into : constant IR.Storage :=
+                                         Addressed_Storage
+                                           (Reached, Shape, Site);
+                                    begin
+                                       if Syn.Kind (Of_Tree, Value)
+                                            in Syn.Call | Syn.Try_Expression
+                                               | Syn.If_Statement
+                                               | Syn.Match_Statement
+                                               | Syn.Bare_Block
+                                               | Syn.Loop_Statement
+                                               | Syn.While_Statement
+                                               | Syn.For_Statement
+                                       then
+                                          declare
+                                             Temporary : constant IR.Slot_Id :=
+                                               Add_Value_Temporary
+                                                 (Of_Tree, Value);
+                                          begin
+                                             Lower_Stored_Expression
+                                               (Of_Tree, Value, Scope,
+                                                Temporary);
+                                             if Current /= IR.No_Block then
+                                                IR.Emit_Array_Copy
+                                                  (Unit.all, Filling,
+                                                   Source =>
+                                                     (Kind => IR.Frame_Slot,
+                                                      Slot => Temporary),
+                                                   Destination => Into,
+                                                   Site => Site);
+                                             end if;
+                                          end;
+                                       else
+                                          Write_Array_Value
+                                            (Value, Into, Field => 0);
+                                       end if;
+                                    end;
                                  end if;
                               end;
-                           elsif Syn.Kind (Of_Tree, Value)
-                                   in Syn.Call | Syn.Try_Expression
-                           then
-                              pragma Assert
-                                (Destination.Kind in IR.Frame_Slot);
-                              declare
-                                 Actual_Call : constant Syn.Node_Id :=
-                                   (if Syn.Kind (Of_Tree, Value) = Syn.Call
-                                    then Value
-                                    else Syn.Operand_Of (Of_Tree, Value));
-                                 Ignored : constant IR.Value_Id :=
-                                   Lower_Call
-                                     (Of_Tree, Actual_Call, Scope,
-                                      Destination => Destination.Slot,
-                                      Destination_Field => Field,
-                                      Destination_Steps => Child_Steps,
-                                      Propagate =>
-                                        Syn.Kind (Of_Tree, Value)
-                                          = Syn.Try_Expression);
-                              begin
-                                 pragma Unreferenced (Ignored);
-                              end;
                            else
-                              --  D49--D53/D65 and D90 share one
-                              --  field-qualified lowering rule for each
-                              --  contextual array value.
-                              Write_Array_Value
-                                (Value, Destination, Field,
-                                 Path => Child_Steps);
+                              declare
+                                 Named : constant Syn.Node_Id :=
+                                   Chain_Root (Of_Tree, Place);
+                                 Field : constant Natural :=
+                                   Rooted_Base (Of_Tree, Place);
+                                 Child_Steps : constant IR.Path_Step_Array :=
+                                   Rooted_Steps (Of_Tree, Place);
+                                 Destination : constant IR.Storage :=
+                                   Storage_For (Of_Tree, Named);
+                              begin
+                                 if Syn.Kind (Of_Tree, Value)
+                                      in Syn.If_Statement
+                                         | Syn.Match_Statement
+                                         | Syn.Bare_Block
+                                         | Syn.Loop_Statement
+                                         | Syn.While_Statement
+                                         | Syn.For_Statement
+                                 then
+                                    declare
+                                       Temporary : constant IR.Slot_Id :=
+                                         Add_Value_Temporary (Of_Tree, Value);
+                                    begin
+                                       Lower_Stored_Expression
+                                         (Of_Tree, Value, Scope, Temporary);
+
+                                       if Current /= IR.No_Block then
+                                          IR.Emit_Array_Copy
+                                            (Unit.all, Filling,
+                                             Source =>
+                                               (Kind => IR.Frame_Slot,
+                                                Slot => Temporary),
+                                             Destination => Destination,
+                                             Site => Site,
+                                             Destination_Field => Field,
+                                             Destination_Nested =>
+                                               Child_Steps);
+                                       end if;
+                                    end;
+                                 elsif Syn.Kind (Of_Tree, Value)
+                                         in Syn.Call | Syn.Try_Expression
+                                 then
+                                    pragma Assert
+                                      (Destination.Kind in IR.Frame_Slot);
+                                    declare
+                                       Actual_Call : constant Syn.Node_Id :=
+                                         (if Syn.Kind (Of_Tree, Value)
+                                               = Syn.Call
+                                          then Value
+                                          else Syn.Operand_Of
+                                            (Of_Tree, Value));
+                                       Ignored : constant IR.Value_Id :=
+                                         Lower_Call
+                                           (Of_Tree, Actual_Call, Scope,
+                                            Destination => Destination.Slot,
+                                            Destination_Field => Field,
+                                            Destination_Steps => Child_Steps,
+                                            Propagate =>
+                                              Syn.Kind (Of_Tree, Value)
+                                                = Syn.Try_Expression);
+                                    begin
+                                       pragma Unreferenced (Ignored);
+                                    end;
+                                 else
+                                    --  D49--D53/D65 and D90 share one
+                                    --  field-qualified lowering rule for each
+                                    --  contextual array value.
+                                    Write_Array_Value
+                                      (Value, Destination, Field,
+                                       Path => Child_Steps);
+                                 end if;
+                              end;
                            end if;
                         end;
                      else

@@ -1,0 +1,20 @@
+public main: () -> (code: i32) =
+    maximum: usize = 0 -% 1
+    boundary: usize = maximum / 2
+    over: usize = boundary + 1
+    zero: usize = 0
+
+    initial: usize = grown(zero) else zero
+    doubled: usize = grown(boundary) else zero
+    mut refused: bool = false
+    _ = grown(over) else (problem)
+        _ = problem
+        refused = true
+    end
+
+    if initial == 8 and doubled == maximum - 1 and refused then
+        code = 42
+    else
+        code = 1
+    end if
+end main

@@ -2652,6 +2652,16 @@ indexed `get`, length, capacity and release are the minimum parser slice. A
 non-zeroable pointer element is its executable case. Map, tree, small-vector,
 heap and an initialized-prefix slice accessor remain broader R4 library work.
 
+Vector reserve checks that its capacity times the item size fits `usize`
+before calling the allocator, and push checks geometric capacity growth before
+doubling. An impossible request reports `out_of_memory` without changing the
+old list or calling the provider. Copy and drain use ordinary loops, so stack
+use does not grow with the initialized count. Zero-sized items keep logical
+length and capacity: each nonzero-capacity allocation is a zero-byte request
+paired with a zero-byte free. Releasing capacity zero, including repeated
+release, makes no allocator call. These rules preserve the raw initialized
+prefix and publication order rather than exposing spare capacity as a slice.
+
 The two `core/mem` arena providers align the absolute returned address, not
 merely the offset within their caller-supplied extent. An alignment of zero is
 the same request as byte alignment, and a size of zero is valid: it returns an

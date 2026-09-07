@@ -8654,7 +8654,7 @@ classified failure boundary before the repository gate can pass.
 | `arrays.initialization` | static | 0520, 0530, 0540, 0550, 0560 | L0300--L0304 or L0313 | `negative/array-initializer-length-mismatch`, `runtime/whole-arrays-copy-between-storage` |
 | `raw.prefix` | static | 0420, 0510 | L0202 prevents representation access; `core/mem` reports `raw_full`, `uninitialized`, `raw_empty` or `raw_not_empty` before an invalid transition | `negative/core-mem-private-representation`, `runtime/core-mem-raw-storage` |
 | `raw.backing` | outside | 0430, 0470, 0510, 1720 | non-guarantee: the supplied byte pointer may be invalid, misaligned or smaller than the declared capacity | `runtime/core-mem-raw-storage` |
-| `allocation.failure` | static | 0300, 0940, 1230, 1280, 1290, 1310, 1360 | `core/mem` reports `out_of_memory`, which a caller must handle or declare; its arenas reject exhaustion and unrepresentable request arithmetic before state mutation, and its failing allocator makes the boundary deterministic | `runtime/core-mem-allocators`, `runtime/core-mem-arena-boundaries`, `runtime/core-vec-pointer-storage`, `runtime/derived-parser` |
+| `allocation.failure` | static | 0300, 0940, 1230, 1280, 1290, 1310, 1360 | `core/mem` reports `out_of_memory`, which a caller must handle or declare; its arenas reject exhaustion and unrepresentable request arithmetic before state mutation, and `core/vec` checks byte extents and growth before provider calls while preserving the old list on failure | `runtime/core-mem-allocators`, `runtime/core-mem-arena-boundaries`, `runtime/core-vec-pointer-storage`, `runtime/r420-vec-capacity-boundaries`, `runtime/r420-vec-growth-boundary`, `runtime/r420-vec-growth-transaction`, `runtime/derived-parser` |
 | `allocation.backing` | outside | 0430, 0470, 0770, 1360, 1720 | non-guarantee: caller-supplied arena storage may be invalid or cease to live after an origin-erasing pointer conversion; provider alignment does not validate the backing extent | `runtime/core-mem-allocators`, `runtime/core-mem-arena-boundaries`, `negative/core-arena-frame-escape` |
 | `slices.bounds-known` | static | 0570, 0580, 1950 | L0300 or L0306 | `negative/index-outside-the-length`, `negative/readonly-slice-write` |
 | `slices.bounds-runtime` | trap | 0570, 0580, 1120, 1950, 1960 | trap, outside [1120]'s region | `runtime/computed-array-index-traps`, `runtime/local-array-computed-store-traps`, `runtime/slice-index-read-traps`, `runtime/slice-index-write-traps`, `runtime/slice-half-open-upper-traps`, `runtime/slice-inclusive-upper-traps`, `runtime/slice-lower-after-upper-traps` |
@@ -8896,13 +8896,15 @@ name against that item.
 `core/vec.list(item)` contains one D151 `mem.storage(item)`. It threads an
 allocator through `reserve`, `push` and `release`, while `length`, `capacity`,
 `get` and `pop` expose only initialized values. Growth allocates an empty
-replacement, recursively transfers the complete initialized prefix, rolls
+replacement, iteratively transfers the complete initialized prefix, rolls
 back that replacement on failure, and publishes it only after draining and
-freeing the old storage. The recursive traversal is the kernel spelling until
-loops are enabled. A failing reserve leaves the old list and its values
+freeing the old storage. D194 replaces the original recursive traversal with
+ordinary loops and checks capacity arithmetic before allocation.
+A failing reserve leaves the old list and its values
 unchanged. Pointer elements are valid inputs; no `zeroable` constraint is
-introduced. Internal raw-state errors are mapped to `out_of_memory`, `empty`
-or `out_of_bounds` at the vector boundary.
+introduced. `get` and `pop` translate raw bounds/empty results to
+`out_of_bounds` and `empty`; D194 distinguishes foreseeable capacity failures
+from the retained fallbacks for impossible internal raw-state failures.
 
 `core/text` supplies an opaque nominal byte `position`, traversal, bounded
 byte access with `past_end`, and a half-open subslice whose result is `from
@@ -11223,3 +11225,77 @@ were declined.
 monotonic and budget behavior, and `runtime/core-mem-arena-boundaries`, which
 uses misaligned caller storage, zero requests, exact exhaustion and
 maximum-`usize` size, alignment, address and end calculations.
+
+### D194 — Vector capacity arithmetic is checked before allocation and transfer uses bounded stack
+
+**The tour and prototypes said** that allocation reports `out_of_memory`
+[1360], raw storage exposes only initialized items [0510], and vector growth
+preserves the old list until replacement succeeds. D152 implemented that
+composition, but `want * sizeof item` and geometric doubling could overflow
+before reaching the provider. Its copy and drain helpers also recursed once
+per initialized item, although ordinary loops are now enabled.
+
+**Chosen:** for a positive-sized item, `reserve` checks
+`want <= maximum_usize / sizeof item` before multiplying or calling the
+provider. An unrepresentable byte extent reports `mem.out_of_memory` with
+no provider call and no change to the old capacity, initialized count or
+contents. The largest representable extent reaches the provider unchanged;
+the provider still decides whether it can supply that request. A request no
+larger than the current capacity remains a no-op.
+
+An enabled zero-sized item, such as `[0]u8`, retains logical capacity and an
+initialized count. Its byte extent is zero without division. Every successful
+increase to a nonzero capacity performs one zero-byte allocation, later paired
+with one zero-byte free using the returned pointer. Admission, transfer and
+release change the logical count without copying payload bytes. Even
+`maximum_usize` is a representable reserve capacity for this item. Capacity
+zero acquires no allocation; releasing an empty-capacity list, including a
+second release, makes no provider call. No `zeroable` constraint is added.
+
+The current geometric policy starts at eight slots and doubles thereafter.
+Doubling a capacity greater than `maximum_usize / 2` fails before multiplication
+or a provider call; `push` reports `mem.out_of_memory`. The private arithmetic
+helper is tested directly at that boundary through ordinary same-module source
+composition. It is not a public test API or a promise that a particular growth
+factor is part of the list's public interface.
+
+Copy and drain use loops with stack usage independent of list length. Only the
+old initialized prefix is transferred. The fresh list remains private until
+that copy succeeds and the old initialized values have been drained and their
+allocation freed with its original exact byte extent. Publication is last.
+Failed allocation leaves pointer values and the list shape intact, and a retry
+uses those same initialized values. No spare-capacity typed view is formed.
+
+D151's private raw counters make transfer failure impossible for a valid
+vector and a larger fresh allocation. The inherited defensive path still
+drains and frees the replacement and returns the vector's existing
+`out_of_memory` result if that invariant fails; this fallback is not evidence
+of provider exhaustion. The inherited drain/dispose rejection paths return
+early without manufacturing an allocation error. These are internal invariant
+failures, not new recoverable raw-state guarantees. Admission after a successful
+growth or spare-slot check retains the same defensive `out_of_memory` fallback
+if its supposedly available slot is rejected. The public list shape and
+unsafe raw reserve operation do not validate caller-forged backing or storage
+states. Arithmetic checks do not strengthen `allocation.backing`.
+
+Positive zero-sized coverage exposed a missing implementation path for enabled
+fixed-array whole stores through pointer `.val`. Such stores and copies use
+the ordinary runtime-address representation, retaining nested variant payload
+steps. The destination is evaluated once, before the source; if its evaluation
+leaves the block, no address instruction, RHS or store follows. Nonzero arrays
+pin actual copies as well as zero-byte execution. The large-list case also
+requires generic discovery to type traversal headers before deducing calls
+whose arguments include the range variable, preserving [1150] and D138's exact
+argument descriptors before the error graph closes.
+
+**The alternatives:** wrapping byte products or letting checked arithmetic
+trap bypasses the declared allocation error channel. Rejecting enabled
+zero-sized items or adding `zeroable` would narrow the existing generic
+contract to avoid a compiler defect. Recursing per item consumes unbounded
+stack for a valid large list. Publishing before copy completion exposes a
+partial replacement. All were declined.
+
+**Pinned by** `runtime/r420-vec-capacity-boundaries`,
+`runtime/r420-vec-growth-boundary`, `runtime/r420-vec-growth-transaction`,
+`runtime/r420-vec-large-list`, `runtime/r420-fixed-array-pointer-whole-copy`,
+and `runtime/core-vec-pointer-storage`.
