@@ -1,0 +1,9 @@
+same: (item: type, left: item, right: item) -> (answer: i32) =
+    answer = 42
+end same
+
+public main: () -> (code: i32) =
+    code = 0
+    text: utf16 = "wide"
+    bad := same("x", text)
+end main

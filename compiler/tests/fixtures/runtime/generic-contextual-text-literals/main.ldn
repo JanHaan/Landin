@@ -36,6 +36,11 @@ keep_bytes: (item: type, value: item, text: []u8) -> (answer: item) =
     answer = value
 end keep_bytes
 
+same: (item: type, left: item, right: item) -> (answer: i32) =
+    inc generic_calls
+    answer = 42
+end same
+
 public main: () -> (code: i32) =
     a := keep_utf8(mark(1), "A\u{2603}")
     b: i32 = keep_utf8(
@@ -49,9 +54,10 @@ public main: () -> (code: i32) =
     g := keep_bytes(mark(7), "\x47H")
     h: i32 = keep_bytes(
         item: i32, value: mark(8), text: "\x49J")
+    i: i32 = same(item: utf16, left: "K", right: "L")
     code = 1
-    if a + b + c + d + e + f + g + h <> 36
-      or argument_calls <> 8 or generic_calls <> 8 or observed <> 148 then
+    if a + b + c + d + e + f + g + h + i <> 78
+      or argument_calls <> 8 or generic_calls <> 9 or observed <> 148 then
         return
     end if
     code = 42

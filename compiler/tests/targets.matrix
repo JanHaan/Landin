@@ -238,6 +238,8 @@ negative/generic-slice-field-wrong-from | linux-x86-64, macos-arm64
 negative/generic-structural-repeated-conflict | linux-x86-64, macos-arm64
 negative/generic-text-literal-byte-in-unicode-view | linux-x86-64, macos-arm64, synthetic-32
 negative/generic-text-literal-mutable | linux-x86-64, macos-arm64, synthetic-32
+negative/generic-text-literal-repeated-left-first | linux-x86-64, macos-arm64, synthetic-32
+negative/generic-text-literal-repeated-right-first | linux-x86-64, macos-arm64, synthetic-32
 negative/generic-try-infallible-instance | linux-x86-64, synthetic-32
 negative/generic-wrong-nominal-template | linux-x86-64, macos-arm64
 negative/hex-float-overflows-context | linux-x86-64, macos-arm64

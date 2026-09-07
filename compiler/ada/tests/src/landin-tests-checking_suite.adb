@@ -7171,6 +7171,8 @@ package body Landin.Tests.Checking_Suite is
         & " -> (answer: item) = value end keep_cstring" & LF
         & "keep_bytes: (item: type, value: item, text: []u8)"
         & " -> (answer: item) = value end keep_bytes" & LF
+        & "same: (item: type, left: item, right: item)"
+        & " -> (answer: i32) = answer = 42 end same" & LF
         & "public main: () -> (code: i32) =" & LF
         & "    seed: i32 = 42" & LF
         & "    a := keep_utf8(seed, ""A\u{2603}"")" & LF
@@ -7185,7 +7187,9 @@ package body Landin.Tests.Checking_Suite is
         & "    g := keep_bytes(seed, ""\x47H"")" & LF
         & "    h: i32 = keep_bytes(item: i32, value: seed,"
         & " text: ""I"")" & LF
-        & "    code = a + b + c + d + e + f + g + h" & LF
+        & "    i: i32 = same(item: utf16, left: ""J"", right: ""K"")"
+        & LF
+        & "    code = a + b + c + d + e + f + g + h + i" & LF
         & "end main" & LF;
       Work  : Landin.Stages.Compilation :=
         Landin.Stages.Create (Landin.Targets.Linux_X86_64);
@@ -7230,7 +7234,8 @@ package body Landin.Tests.Checking_Suite is
                     (if Seen <= 2 then Landin.Types.Utf8_View
                      elsif Seen <= 4 then Landin.Types.Utf16_View
                      elsif Seen <= 6 then Landin.Types.C_String_View
-                     else Landin.Types.Ordinary_View);
+                     elsif Seen <= 8 then Landin.Types.Ordinary_View
+                     else Landin.Types.Utf16_View);
                begin
                   if Reference = Landin.Checking.No_Reference then
                      Exact := False;
@@ -7258,7 +7263,7 @@ package body Landin.Tests.Checking_Suite is
          end loop;
       end;
       Landin.Testing.Check_Equal
-        (Item, Seen, 8, "all contextual text literals were checked");
+        (Item, Seen, 10, "all contextual text literals were checked");
       Landin.Testing.Check
         (Item, Exact,
          "each literal retains its exact view, permission and referent");
