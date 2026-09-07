@@ -1,0 +1,45 @@
+action: type = (left: i32, right: i32) -> none
+box: type = struct
+    invoke: action
+end box
+mut trace: i32 = 0
+mut total: i32 = 0
+mark: (digit: i32) -> (result: i32) =
+    trace = trace * 10 + digit
+    result = digit
+end mark
+touch: (a: i32, b: i32) -> none =
+    total += a * 10 + b
+end touch
+select_once: () -> (index: usize) =
+    trace = trace * 10 + 5
+    index = 0
+end select_once
+store: (t: type, inout place: t, value: t) -> none =
+    place = value
+end store
+selected_first: (holder: box) -> (result: i32) =
+    holder.invoke(left: 0, right: 0)
+    result = 42
+end selected_first
+public main: () -> (code: i32) =
+    touch(b: mark(2), a: mark(1))
+    holder: box = (invoke: touch)
+    holder.invoke(right: mark(4), left: mark(3))
+    mut holders: [1]box
+    holders[0] = holder
+    holders[select_once()].invoke(left: mark(6), right: mark(7))
+    mut answer: i32 = 0
+    store(t: i32, value: 41, place: answer)
+    result: i32 = begin
+        touch(a: 0, b: 0)
+        answer + 1
+    end
+    first_result := selected_first(holder)
+    code = 1
+    if trace == 2143567 and total == 113 and result == 42
+      and first_result == 42
+    then
+        code = 42
+    end if
+end main

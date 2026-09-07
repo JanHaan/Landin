@@ -92,6 +92,7 @@ negative/condition-is-not-believed | linux-x86-64, macos-arm64
 negative/conformance-collision | linux-x86-64, macos-arm64, synthetic-32
 negative/conformance-entry-signature-mismatch | linux-x86-64, macos-arm64, synthetic-32
 negative/constraint-not-satisfied | linux-x86-64, macos-arm64, synthetic-32
+negative/construction-is-not-call-statement | linux-x86-64, macos-arm64, synthetic-32
 negative/construction-not-enabled | linux-x86-64, macos-arm64
 negative/control-expression-branch-type-mismatch | linux-x86-64, macos-arm64, synthetic-32
 negative/control-expression-early-return-needs-result | linux-x86-64, macos-arm64, synthetic-32
@@ -1002,6 +1003,7 @@ runtime/module-struct-zeroed-image-is-static | linux-x86-64
 runtime/module-values-hold-and-are-updated | linux-x86-64
 runtime/multiple-named-returns | linux-x86-64
 runtime/multiplication-exits-with-its-products | linux-x86-64
+runtime/named-call-statements | linux-x86-64
 runtime/named-return-zeroed-reads-zero | linux-x86-64
 runtime/named-runtime-call-order | linux-x86-64
 runtime/negative-left-shift-traps | linux-x86-64

@@ -3720,14 +3720,22 @@ initialized allocation helpers and allocator-backed vector growth retain their
 own execution obligations, including zero-sized elements and heterogeneous
 mutable dispatch after growth.
 
-Two independent defects exposed by the reduced probes remain owned here for
-separate bounded repairs. A local inferred from `erased.entry()` can query
-conformance provider entries before finalization, even without generics;
-explicitly typed result locals allow the transport fixture to execute. The parser
-accepts a named call as a non-final statement while [1810]'s grammar admits it
-only as an expression, including a final body expression; explicit-static
-transport tests currently use that admitted final-expression position. None
-of these gaps licenses erasing origin facts or weakening a negative fixture.
+The named-call statement repair brings [1810]'s grammar into agreement with
+[0980]: ordinary and value-producing blocks accept positional or named calls,
+including explicit static actuals and selected function values. The parser
+keeps a non-final labelled call as a statement in either block form, and
+resolution still distinguishes a call from a construction. The latter retains
+its existing destination requirement and L0304 refusal when written as a
+standalone statement. `runtime/named-call-statements` pins source-order
+arguments, once-only selected-callee evaluation, generic calls and the
+expression-body boundary; `negative/construction-is-not-call-statement`
+pins both ordinary and value-block refusals. Cleanup registration keeps its
+separately specified `call` grammar.
+One independent defect remains owned here for a bounded repair: a local
+inferred from `erased.entry()` can query conformance provider entries before
+finalization, even without generics. Explicitly typed result locals allow the
+transport fixture to execute; this does not license erasing origin facts or
+weakening a negative fixture.
 The initialized-view implementation must also retain [0860]'s shallow alias
 limit: a reference inserted through an alias is not generally propagated back
 to every other view of that storage, so writable views do not establish

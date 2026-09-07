@@ -1,0 +1,14 @@
+box: type = struct
+    value: u32
+end box
+bad: () -> none =
+    box(value: 1)
+    mut next: u32 = 2
+    _ = next
+end bad
+bad_value: () -> (result: u32) =
+    result = begin
+        box(value: 1)
+        2
+    end
+end bad_value

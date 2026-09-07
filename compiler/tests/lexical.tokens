@@ -19524,6 +19524,65 @@ file negative/constraint-not-satisfied/main.ldn tokens 57
   193 194 )
   195 198 end
   199 203 main
+file negative/construction-is-not-call-statement/main.ldn tokens 58
+  0 3 box
+  3 4 :
+  5 9 type
+  10 11 =
+  12 18 struct
+  23 28 value
+  28 29 :
+  30 33 u32
+  34 37 end
+  38 41 box
+  42 45 bad
+  45 46 :
+  47 48 (
+  48 49 )
+  50 52 ->
+  53 57 none
+  58 59 =
+  64 67 box
+  67 68 (
+  68 73 value
+  73 74 :
+  75 76 1
+  76 77 )
+  82 85 mut
+  86 90 next
+  90 91 :
+  92 95 u32
+  96 97 =
+  98 99 2
+  104 105 _
+  106 107 =
+  108 112 next
+  113 116 end
+  117 120 bad
+  121 130 bad_value
+  130 131 :
+  132 133 (
+  133 134 )
+  135 137 ->
+  138 139 (
+  139 145 result
+  145 146 :
+  147 150 u32
+  150 151 )
+  152 153 =
+  158 164 result
+  165 166 =
+  167 172 begin
+  181 184 box
+  184 185 (
+  185 190 value
+  190 191 :
+  192 193 1
+  193 194 )
+  203 204 2
+  209 212 end
+  213 216 end
+  217 226 bad_value
 file negative/construction-not-enabled/program.ldn tokens 73
   0 5 point
   5 6 :
