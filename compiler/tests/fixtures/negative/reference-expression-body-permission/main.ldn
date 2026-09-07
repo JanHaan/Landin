@@ -1,0 +1,3 @@
+bad: (source: ptr u32) -> (result: ptr mut u32 from source) =
+    source
+end bad

@@ -1,0 +1,35 @@
+empty: type = [0]u8
+pointer: (source: ptr mut u32) -> (result: ptr mut u32 from source) =
+    source
+end pointer
+read_pointer: (source: ptr mut u32) -> (result: ptr u32 from source) =
+    source
+end read_pointer
+view: (source: ptr mut [2]u32) -> (result: []mut u32 from source) =
+    source.val[0..<2]
+end view
+read_view: (source: ptr mut [2]u32) -> (result: []u32 from source) =
+    source.val[0..<2]
+end read_view
+empty_view: (source: ptr mut [1]empty)
+    -> (result: []mut empty from source) =
+    source.val[0..<1]
+end empty_view
+public main: () -> (code: i32) =
+    mut value: u32 = 7
+    mut row: [2]u32 = [11, 13]
+    mut zeros: [1]empty = zeroed
+    address := pointer(addr value)
+    address.val = 17
+    slice := view(addr row)
+    slice[0] = 19
+    read := read_view(addr row)
+    zero := empty_view(addr zeros)
+    checked := read_pointer(addr value)
+    code = 1
+    if checked.val == 17 and read[0] == 19
+      and read[1] == 13 and lenof zero == 1
+    then
+        code = 42
+    end if
+end main
