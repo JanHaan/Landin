@@ -243,6 +243,14 @@ slice accessor and iterable conformance wait with the broader R4 container
 slice; the executable pointer-vector case already proves allocation rollback
 and publication order.
 
+R4.20's D194 hardens that implementation: reserve checks the byte product and
+push checks geometric doubling before provider calls; impossible arithmetic
+reports `out_of_memory` and preserves the old list. Copy and drain now use
+loops, with a real 65,536-item list exercising growth and release. Enabled
+zero-sized items keep logical slots backed by paired zero-byte allocation/free
+requests. The earlier spare-capacity slice sketch below remains historical
+design pressure, not the implemented representation or arithmetic contract.
+
 ```landin
 import core/mem
 

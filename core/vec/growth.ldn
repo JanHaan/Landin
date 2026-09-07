@@ -1,0 +1,14 @@
+--  Kept in its own module source so a same-module fixture can exercise the
+--  exact private arithmetic without making the growth strategy public.
+
+capacity_exhausted: atom
+
+grown: (capacity: usize) -> (next: usize) ! capacity_exhausted =
+    if capacity == 0 then
+        next = 8
+    else
+        maximum: usize = 0 -% 1
+        fail capacity_exhausted when capacity > maximum / 2
+        next = capacity * 2
+    end if
+end grown

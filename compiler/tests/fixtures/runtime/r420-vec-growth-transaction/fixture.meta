@@ -1,0 +1,7 @@
+class: runtime
+summary: core/vec preserves pointer items across failed growth and retry while freeing exact extents once
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0300, 0370, 0430, 0470, 0510, 0670, 0770, 0790, 0940, 1220, 1230, 1280, 1290, 1310, 1350, 1360, 1810, 1920
+targets: linux-x86-64

@@ -3650,8 +3650,29 @@ and an extent, address-rounding or allocation-end calculation that cannot fit
 budget and counters change. `runtime/core-mem-arena-boundaries` exercises a
 deliberately misaligned base, exact exhaustion, zero requests, maximum-`usize`
 size/alignment and base-plus-used boundaries, including successful arithmetic
-at the last representable address. Heap and fixed providers and all `vec`,
-`map` and `tree` expansion remain later increments of this active item.
+at the last representable address.
+
+The second bounded increment applies D194 to `core/vec`: checked byte extents
+and geometric growth precede provider calls, zero-sized items have explicit
+logical-slot/zero-byte allocation behavior, and initialized-prefix transfer
+and drain use bounded-stack loops. Failed growth preserves pointer items and
+list shape; retry and exact allocation/free extents execute. The large case
+grows, reads and releases 65,536 initialized items. Its required compiler
+repairs preserve enabled fixed-array whole stores/copies through pointer and
+computed destinations, including variant payload offsets and destination
+recovery returns, and type traversal headers before generic-call discovery.
+Heap and fixed providers, initialized views, iterable/sort integration and
+small-vector, map and tree expansion remain later increments of this active
+item.
+
+The growth error translation follows [1820]'s existing disambiguation rule:
+a call-site `else` yields to an enclosing `then` or `elsif` arm, and
+parentheses around the recovered call make an inner recovery explicit.
+The minimal binding `next: usize = (grown() else (problem)` with its recovery
+closed by `end)` compiles under that rule. The private `next_growth` routine
+is an ordinary factoring choice; it is not required to avoid a compiler
+defect. No parser widening or additional compiler prerequisite follows from
+this composition.
 
 D191 gives this item three construct rows R4.10 could not settle. `[0500]`'s
 `mem.offset` and `mem.base_of` are library conveniences this slice adds or
@@ -3676,6 +3697,13 @@ Increment evidence: `runtime/core-mem-allocators` retains the original arena
 and failing-provider behavior, while `runtime/core-mem-arena-boundaries` pins
 absolute alignment, failure atomicity, exact exhaustion and checked arithmetic
 at the target `usize` boundary.
+
+Vector increment evidence: `runtime/r420-vec-capacity-boundaries`,
+`runtime/r420-vec-growth-boundary`, `runtime/r420-vec-growth-transaction`,
+`runtime/r420-vec-large-list` and
+`runtime/r420-fixed-array-pointer-whole-copy` pin D194 and its compiler
+composition repairs. Existing `runtime/core-vec-pointer-storage` remains
+regression evidence.
 
 Exit evidence: containers run with heap, arena, fixed and failing allocators;
 all omission and layering choices are recorded; `[0820]`'s block is either

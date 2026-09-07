@@ -1,0 +1,6 @@
+class: runtime
+summary: nonzero fixed arrays copy through pointer sources and once-evaluated pointer destinations including variant payloads
+program: main.ldn
+status: 42
+constructs: 0410, 0430, 0520, 0570, 0670, 0680, 0690, 0710, 0940, 1030, 1210, 1810, 1900, 1920
+targets: linux-x86-64

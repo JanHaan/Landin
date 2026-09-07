@@ -26,35 +26,62 @@ public capacity: (item: type, value: list(item)) -> (count: usize) =
 end capacity
 
 copy_prefix: (item: type, source: mem.storage(item),
-              inout target: mem.storage(item), at: usize, count: usize)
+              inout target: mem.storage(item), count: usize)
              -> (ok: bool) =
-    if at == count then
-        ok = true
-        return
-    end if
-
-    admitted: usize = mem.transfer(source, at, target) else (problem)
-        _ = problem
-        ok = false
-        return
-    end
-    _ = admitted
-    ok = copy_prefix(source, target, at + 1, count)
+    mut at: usize = 0
+    while at < count do
+        admitted: usize = mem.transfer(source, at, target) else (problem)
+            _ = problem
+            ok = false
+            return
+        end
+        _ = admitted
+        inc at
+    end while
+    ok = true
 end copy_prefix
 
 drain: (item: type, inout value: mem.storage(item)) -> none =
-    return when mem.initialized(value) == 0
-    discarded: item = mem.release(value) else (problem)
-        _ = problem
-        return
-    end
-    drain(value)
+    while mem.initialized(value) > 0 do
+        discarded: item = mem.release(value) else (problem)
+            --  D151 makes this unreachable after the positive initialized
+            --  query. It is an internal raw-state defect, not allocation
+            --  pressure, so do not manufacture out_of_memory here.
+            _ = problem
+            return
+        end
+    end while
 end drain
+
+byte_extent: (item: type, slots: usize)
+             -> (extent: usize) ! mem.out_of_memory =
+    item_size: usize = sizeof item
+    if item_size == 0 then
+        --  A zero-sized item still has logical slots. A nonempty capacity
+        --  acquires and eventually frees one zero-byte provider extent.
+        extent = 0
+        return
+    end if
+
+    maximum: usize = 0 -% 1
+    fail mem.out_of_memory when slots > maximum / item_size
+    extent = slots * item_size
+end byte_extent
+
+next_growth: (capacity: usize) -> (next: usize) ! mem.out_of_memory =
+    next = grown(capacity) else (problem)
+        _ = problem
+        fail mem.out_of_memory
+    end
+end next_growth
 
 free_empty: (item: type, provider: type is mem.allocator,
              inout value: mem.storage(item), inout state: provider) -> none =
     slots: usize = mem.capacity(value)
     return when slots == 0
+    --  Every capacity published by vec passed byte_extent before reserve, so
+    --  this product is an internal vector invariant rather than a second
+    --  fallible allocation request.
     extent: usize = slots * sizeof item
     block: ptr mut u8 = mem.dispose(value) else (problem)
         _ = problem
@@ -70,12 +97,16 @@ public reserve: (item: type, provider: type is mem.allocator,
     old_capacity: usize = mem.capacity(value.values)
     return when want <= old_capacity
 
+    extent: usize = try byte_extent(item: item, slots: want)
     block: ptr mut u8 = try provider.alloc
-        (state, want * sizeof item, alignof item)
+        (state, extent, alignof item)
     mut fresh := mem.reserve(item: item, base: block, slots: want)
-    first: usize = 0
-    copied: bool = copy_prefix(value.values, fresh, first, old_count)
+    copied: bool = copy_prefix(value.values, fresh, old_count)
     if not copied then
+        --  Given D151's private counters, want > old_capacity and an empty
+        --  replacement, transfer cannot reject this prefix. Keep the
+        --  established rollback and public outcome if that internal
+        --  invariant is ever violated; it is not evidence of provider OOM.
         drain(fresh)
         free_empty(fresh, state)
         fail mem.out_of_memory
@@ -86,21 +117,17 @@ public reserve: (item: type, provider: type is mem.allocator,
     value.values = fresh
 end reserve
 
-grown: (capacity: usize) -> (next: usize) =
-    if capacity == 0 then
-        next = 8
-    else
-        next = capacity * 2
-    end if
-end grown
-
 public push: (item: type, provider: type is mem.allocator,
               inout value: list(item), inout state: provider,
               escaping added: item) -> none ! mem.out_of_memory =
     if length(value) == capacity(value) then
-        try reserve(value, state, grown(capacity(value)))
+        next: usize = try next_growth(capacity(value))
+        try reserve(value, state, next)
     end if
     admitted: usize = mem.admit(value.values, added) else (problem)
+        --  After successful growth or a spare-slot check, raw_full would
+        --  indicate an internal invariant defect. Retain the established
+        --  public fallback without claiming the provider exhausted memory.
         _ = problem
         fail mem.out_of_memory
     end

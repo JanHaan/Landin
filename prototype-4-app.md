@@ -314,6 +314,12 @@ count_dest is dest (emit: count_emit, done: count_done)
 
 ## app/config  —  building the chain from argv
 
+The chain inherits D194's checked vector growth and initialized-prefix
+transaction: an unrepresentable capacity reports `out_of_memory` before any
+provider call, and a failed replacement keeps the already-built filter chain.
+Its copy and cleanup traversal use bounded stack; the complete application
+derivation remains owned by the roadmap.
+
 ```landin
 import core/mem
 import core/text

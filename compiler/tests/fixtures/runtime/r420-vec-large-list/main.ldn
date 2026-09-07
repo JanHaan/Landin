@@ -1,0 +1,47 @@
+import core/mem
+import core/vec
+
+mut backing: [530000]u8
+
+contents_ok: (values: vec.list(u32), middle: usize, last: usize)
+             -> (ok: bool) =
+    zero: usize = 0
+    first_value: u32 = vec.get(values, zero) else 1
+    middle_value: u32 = vec.get(values, middle) else 0
+    last_value: u32 = vec.get(values, last) else 0
+    ok = first_value == 0 and middle_value == 32767
+      and last_value == 65535
+end contents_ok
+
+public main: () -> (code: i32) =
+    zero: usize = 0
+    total: usize = 65536
+    middle: usize = 32767
+    last: usize = total - 1
+    allowance: usize = 14
+    mut state := mem.fail_over(addr backing[0], lenof backing, allowance)
+    mut values := vec.new_list(item: u32)
+
+    for index in zero..<total do
+        vec.push(values, state, u32(index)) else 0
+    end for
+
+    if not (vec.length(values) == total)
+      or not (vec.capacity(values) == total)
+      or not contents_ok(values, middle, last)
+      or not (state.allocations == allowance)
+      or not (state.frees == allowance - 1)
+    then
+        code = 1
+        return
+    end if
+
+    vec.release(values, state)
+    if vec.length(values) == 0 and vec.capacity(values) == 0
+      and state.frees == allowance
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

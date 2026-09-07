@@ -1,0 +1,84 @@
+row: type = [3]u32
+
+packet: type = struct
+    prefix: u8
+    kind: variant
+        empty |
+        arrays: (values: row)
+    end kind
+    tail: u8
+end packet
+
+source: row = [11, 13, 17]
+mut targets: [2]row
+mut state: packet
+mut destination_calls: usize = 0
+mut refusing_calls: usize = 0
+mut source_calls: usize = 0
+mut completed_stores: usize = 0
+mut guarded: [1]row
+
+refused: atom
+
+destination_index: () -> (result: usize) =
+    inc destination_calls
+    result = 1
+end destination_index
+
+refusing_index: () -> (result: usize) ! refused =
+    inc refusing_calls
+    fail refused
+end refusing_index
+
+counted_source: () -> (result: row) =
+    inc source_calls
+    result = source
+end counted_source
+
+attempt_refused_store: () -> none =
+    guarded[refusing_index() else (problem)
+        _ = problem
+        return
+    end] = counted_source()
+    inc completed_stores
+end attempt_refused_store
+
+public main: () -> (code: i32) =
+    source_pointer: ptr row = addr source
+    target_pointer: ptr mut row = addr targets[0]
+    target_pointer.val = source_pointer.val
+
+    --  The call is the destination place, so [0410] requires exactly one
+    --  evaluation before the pointer-backed source is copied.
+    targets[destination_index()] = source_pointer.val
+    direct_ok: bool = destination_calls == 1
+      and targets[0][0] == 11 and targets[0][1] == 13
+      and targets[0][2] == 17
+      and targets[1][0] == 11 and targets[1][1] == 13
+      and targets[1][2] == 17
+
+    --  Lowering the destination call takes its recovery return before an
+    --  address, right-hand side, or store is emitted.
+    attempt_refused_store()
+    control_ok: bool = refusing_calls == 1 and source_calls == 0
+      and completed_stores == 0
+      and guarded[0][0] == 0 and guarded[0][1] == 0
+      and guarded[0][2] == 0
+
+    state = packet(prefix: 3, kind: empty, tail: 5)
+    state.kind = arrays(values: source_pointer.val)
+    mut payload_ok: bool = false
+    match state.kind
+        empty: payload_ok = false
+        arrays(values): payload_ok = values[0] == 11
+          and values[1] == 13 and values[2] == 17
+    end match
+
+    if direct_ok and control_ok and payload_ok
+      and state.prefix == 3 and state.tail == 5
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

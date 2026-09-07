@@ -1,0 +1,103 @@
+import core/mem
+import core/vec
+
+probe: type = struct
+    calls: usize
+    frees: usize
+    last_alloc_size: usize
+    last_free_size: usize
+    base: ptr mut u8
+end probe
+
+probe_alloc: (inout state: probe, size: usize, alignment: usize)
+             -> (block: ptr mut u8) ! mem.out_of_memory =
+    _ = alignment
+    inc state.calls
+    state.last_alloc_size = size
+    block = ptr(usize(state.base))
+end probe_alloc
+
+probe_free: (inout state: probe, block: ptr mut u8, size: usize) -> none =
+    _ = block
+    inc state.frees
+    state.last_free_size = size
+end probe_free
+
+probe is mem.allocator (alloc: probe_alloc, free: probe_free)
+
+zero_item: type = [0]u8
+
+public main: () -> (code: i32) =
+    maximum: usize = 0 -% 1
+    item_size: usize = sizeof u64
+    largest: usize = maximum / item_size
+    impossible: usize = largest + 1
+
+    mut bytes: [16]u8 = zeroed
+    base: ptr mut u8 = addr bytes[0]
+
+    mut overflow_state: probe =
+        (calls: 0, frees: 0, last_alloc_size: 0,
+         last_free_size: 0, base: base)
+    mut overflow_values := vec.new_list(item: u64)
+    mut overflow_refused: bool = false
+    vec.reserve(overflow_values, overflow_state, impossible) else (problem)
+        _ = problem
+        overflow_refused = true
+    end
+
+    --  The last representable positive-sized capacity reaches the provider
+    --  with its exact, non-wrapped byte extent. No item is admitted, so the
+    --  deliberately synthetic backing address is never dereferenced.
+    mut exact_state: probe =
+        (calls: 0, frees: 0, last_alloc_size: 0,
+         last_free_size: 0, base: base)
+    mut exact_values := vec.new_list(item: u64)
+    vec.reserve(exact_values, exact_state, largest) else 0
+    vec.release(exact_values, exact_state)
+
+    mut zero_state: probe =
+        (calls: 0, frees: 0, last_alloc_size: maximum,
+         last_free_size: maximum, base: base)
+    mut zero_values := vec.new_list(item: zero_item)
+    empty_value: zero_item = zeroed
+    for index in 0..<9 do
+        _ = index
+        vec.push(zero_values, zero_state, empty_value) else 0
+    end for
+    zero_length: usize = vec.length(zero_values)
+    zero_capacity: usize = vec.capacity(zero_values)
+    vec.release(zero_values, zero_state)
+    vec.release(zero_values, zero_state)
+
+    mut maximum_zero_state: probe =
+        (calls: 0, frees: 0, last_alloc_size: maximum,
+         last_free_size: maximum, base: base)
+    mut maximum_zero := vec.new_list(item: zero_item)
+    vec.reserve(maximum_zero, maximum_zero_state, maximum) else 0
+    maximum_zero_capacity: usize = vec.capacity(maximum_zero)
+    vec.release(maximum_zero, maximum_zero_state)
+
+    if overflow_refused
+      and overflow_state.calls == 0 and overflow_state.frees == 0
+      and vec.length(overflow_values) == 0
+      and vec.capacity(overflow_values) == 0
+      and exact_state.calls == 1 and exact_state.frees == 1
+      and exact_state.last_alloc_size == largest * item_size
+      and exact_state.last_free_size == largest * item_size
+      and vec.capacity(exact_values) == 0
+      and zero_length == 9 and zero_capacity == 16
+      and zero_state.calls == 2 and zero_state.frees == 2
+      and zero_state.last_alloc_size == 0
+      and zero_state.last_free_size == 0
+      and vec.length(zero_values) == 0 and vec.capacity(zero_values) == 0
+      and maximum_zero_capacity == maximum
+      and maximum_zero_state.calls == 1 and maximum_zero_state.frees == 1
+      and maximum_zero_state.last_alloc_size == 0
+      and maximum_zero_state.last_free_size == 0
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

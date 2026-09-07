@@ -735,6 +735,9 @@ package body Landin.Stages.Checking is
          return Landin.Checking.Signature_Id;
       procedure Discover_Generic_Calls
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
+
+      procedure Check_Traversal_Header
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
       procedure Require
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
@@ -8455,6 +8458,11 @@ package body Landin.Stages.Checking is
             --  Anonymous bodies are roots of their own and are discovered
             --  after every anonymous signature has been materialized.
             return;
+         elsif Syn.Kind (Of_Tree, Node) = Syn.For_Statement then
+            --  Generic discovery precedes the body check and error-graph
+            --  closure. Its arguments need the traversal locals' exact
+            --  descriptors before deduction can inspect the loop body.
+            Check_Traversal_Header (Of_Tree, Node);
          elsif Syn.Kind (Of_Tree, Node)
                  in Syn.Call | Syn.Labeled_Application
          then
@@ -16746,7 +16754,7 @@ package body Landin.Stages.Checking is
                         null;
                      elsif Is_Storage
                        and then
-                         (not Admitted
+                         (Got /= Ty.Fixed_Array
                           or else Landin.Checking.Array_Length
                             (Types.all, Of_Tree, Given) /= Shape.Length
                           or else Landin.Checking.Array_Element
@@ -18907,12 +18915,8 @@ package body Landin.Stages.Checking is
          end if;
       end Check_Condition;
 
-      procedure Check_Loop
-        (Of_Tree : Syn.Tree;
-         Node    : Syn.Node_Id;
-         Returns : Ty.Type_Kind;
-         Expected : Value_Context := No_Value_Context;
-         Requires_Value : Boolean := False)
+      procedure Check_Traversal_Header
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
       is
          procedure Set_Traversal_Binding
            (Binding : Syn.Node_Id; Kind : Ty.Type_Kind);
@@ -19182,11 +19186,20 @@ package body Landin.Stages.Checking is
             end if;
          end Check_Collection_Traversal;
       begin
-         if Syn.Kind (Of_Tree, Node) = Syn.While_Statement then
-            Check_Condition
-              (Of_Tree, Syn.Condition_Of (Of_Tree, Node), Returns,
-               Syn.Origin (Of_Tree, Node), "the condition of this loop");
-         elsif Syn.Kind (Of_Tree, Node) = Syn.For_Statement then
+         if Syn.Kind (Of_Tree, Node) = Syn.For_Statement then
+            declare
+               Element_Id : constant Res.Declaration_Id :=
+                 Declaration_At
+                   (Syn.Source_Of (Of_Tree),
+                    Syn.Traversal_Element (Of_Tree, Node));
+            begin
+               if Element_Id /= Res.No_Declaration
+                 and then Landin.Checking.State_Of (Types.all, Element_Id)
+                   /= Landin.Checking.Untouched
+               then
+                  return;
+               end if;
+            end;
             declare
                Lower : constant Syn.Node_Id :=
                  Syn.Traversal_Lower (Of_Tree, Node);
@@ -19239,6 +19252,23 @@ package body Landin.Stages.Checking is
                   end if;
                end if;
             end;
+         end if;
+      end Check_Traversal_Header;
+
+      procedure Check_Loop
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Returns : Ty.Type_Kind;
+         Expected : Value_Context := No_Value_Context;
+         Requires_Value : Boolean := False)
+      is
+      begin
+         if Syn.Kind (Of_Tree, Node) = Syn.While_Statement then
+            Check_Condition
+              (Of_Tree, Syn.Condition_Of (Of_Tree, Node), Returns,
+               Syn.Origin (Of_Tree, Node), "the condition of this loop");
+         elsif Syn.Kind (Of_Tree, Node) = Syn.For_Statement then
+            Check_Traversal_Header (Of_Tree, Node);
          end if;
 
          Loop_Values.Append
