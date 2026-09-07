@@ -951,6 +951,7 @@ runtime/for-any-element-traversal | linux-x86-64
 runtime/for-collection-traversal | linux-x86-64
 runtime/for-iterable-evidence-traversal | linux-x86-64
 runtime/for-range-traversal | linux-x86-64
+runtime/for-value-block-statements | linux-x86-64
 runtime/function-valued-struct-fields | linux-x86-64
 runtime/generic-any-nominal-transport | linux-x86-64
 runtime/generic-composed-evidence | linux-x86-64

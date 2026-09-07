@@ -4417,7 +4417,7 @@ package body Landin.Syntax.Parser is
                              and then Kind (Result, Candidate)
                                       in If_Statement | Match_Statement
                                          | Bare_Block | Loop_Statement
-                                         | While_Statement
+                                         | While_Statement | For_Statement
                              and then not Control_Offers_Value (Candidate)
                            then
                               Items.Append (Candidate);
@@ -4428,7 +4428,7 @@ package body Landin.Syntax.Parser is
                            elsif Kind (Result, Candidate)
                                    in If_Statement | Match_Statement
                                       | Bare_Block | Loop_Statement
-                                      | While_Statement | Call
+                                      | While_Statement | For_Statement | Call
                                       | Labeled_Application | Try_Expression
                            then
                               Items.Append (Candidate);

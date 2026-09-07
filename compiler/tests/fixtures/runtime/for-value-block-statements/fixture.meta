@@ -1,0 +1,6 @@
+class: runtime
+summary: a non-final for traversal remains a statement in a value-producing block
+program: main.ldn
+constructs: 1080, 1150, 1160
+status: 42
+targets: linux-x86-64
