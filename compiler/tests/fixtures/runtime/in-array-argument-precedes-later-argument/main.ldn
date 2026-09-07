@@ -1,0 +1,18 @@
+mut global: [2]i32 = [1, 2]
+
+change: () -> (result: i32) =
+    global[0] = 3
+    result = 0
+end change
+
+first: (value: [2]i32, dummy: i32) -> (result: i32) =
+    result = value[0] + dummy
+end first
+
+public main: () -> (code: i32) =
+    code = 0
+    seen: i32 = first(global, change())
+    if seen == 1 and global[0] == 3 then
+        code = 42
+    end if
+end main

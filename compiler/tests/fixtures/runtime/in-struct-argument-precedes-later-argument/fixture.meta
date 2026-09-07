@@ -1,0 +1,6 @@
+class: runtime
+summary: [0410] arguments evaluate left to right and D94 passes an in struct by value, so a later argument's side effect on the same storage does not reach the callee
+program: main.ldn
+status: 42
+constructs: 0410, 0670, 0900, 1920
+targets: linux-x86-64

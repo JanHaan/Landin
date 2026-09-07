@@ -958,11 +958,18 @@ package body Landin.Tests.Backend_Suite is
             Contains (Text, HT & "pushq %rsi" & LF)
               and then Contains (Text, HT & "pushq 16(%rbp)" & LF),
             "register and stack aggregate addresses are preserved");
+         --  Two copies are the callee's, one per aggregate parameter.
+         --  The third is the caller's: [0410] evaluates `state.nested`
+         --  before the arguments after it, so its bytes are taken into a
+         --  temporary there (R4.21), while the last argument's address
+         --  is passed as it stands.
          Landin.Testing.Check
            (Item,
             Occurrences (Text, HT & "popq %rsi" & LF) = 2
-              and then Occurrences (Text, HT & "rep movsb" & LF) = 2,
-            "each aggregate is copied into independent callee storage");
+              and then Occurrences (Text, HT & "rep movsb" & LF) = 3,
+            "each aggregate is copied into independent callee storage,"
+            & " and the caller snapshots the one that precedes later"
+            & " arguments");
          Landin.Testing.Check
            (Item, Contains (Text, HT & "addq %rdx, %rax" & LF),
             "the nested array address follows its target-derived offset");
