@@ -1,0 +1,5 @@
+bad: () -> (result: []mut u32) =
+    mut values: [2]u32 = [1, 2]
+    local := addr values
+    result = local.val[0..<2]
+end bad

@@ -1,0 +1,7 @@
+class: negative
+summary: slicing a by-value fixed array parameter still points into the callee frame
+program: main.ldn
+constructs: 0430, 0520, 0570, 0580, 0770, 0790, 0800, 0830
+codes: L0314
+status: 1
+targets: linux-x86-64, macos-arm64, synthetic-32

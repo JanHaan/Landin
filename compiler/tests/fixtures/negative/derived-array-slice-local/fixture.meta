@@ -1,0 +1,7 @@
+class: negative
+summary: a pointer alias cannot hide the frame origin of a returned array view
+program: main.ldn
+constructs: 0430, 0520, 0570, 0580, 0770, 0790, 0800, 0830
+codes: L0314
+status: 1
+targets: linux-x86-64, macos-arm64, synthetic-32

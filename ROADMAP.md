@@ -3752,6 +3752,17 @@ local-descriptor refusals, exact `from`, permission, escaping and live-view
 checks. This repairs the monomorphic prerequisite for initialized views without
 changing [0860]'s shallow alias limit or using an untracked pointer conversion.
 
+The bounded fixed-array-view origin follow-up applies that same storage walk
+when a range slice publishes a view of a fixed array. Direct local storage,
+inline local fields and by-value array parameters remain frame-origin, while a
+fixed array reached through a pointer dereference or slice element inherits
+the descriptor's exact source facts. `runtime/derived-array-slice-origin`
+retains pointer aliases, nested slice-element selection, mutable and read-only
+views, the empty case, content sentinels and observable mutation. The four
+`negative/derived-array-slice-*` cases pin local, local-field, by-value and
+wrong-`from` refusals. This is an origin-analysis repair only: it changes no
+array normalization, lowering route, reference permission or ownership rule.
+
 The retained-wrapper composition also preserves a nominal result inferred
 through `try` before generic-call discovery. Explicit static argument positions
 are excluded from runtime argument origin mapping, so a named type argument

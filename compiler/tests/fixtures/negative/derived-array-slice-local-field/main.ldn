@@ -1,0 +1,7 @@
+box: type = struct
+    values: [2]u32
+end box
+bad: () -> (result: []mut u32) =
+    mut local: box = zeroed
+    result = local.values[0..<2]
+end bad

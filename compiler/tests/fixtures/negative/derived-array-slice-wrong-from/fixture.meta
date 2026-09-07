@@ -1,0 +1,7 @@
+class: negative
+summary: a pointer-backed array view retains its exact source parameter
+program: main.ldn
+constructs: 0430, 0520, 0570, 0580, 0770, 0790, 0800, 0830
+codes: L0316
+status: 1
+targets: linux-x86-64, macos-arm64, synthetic-32

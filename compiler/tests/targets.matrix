@@ -124,6 +124,10 @@ negative/derived-address-local-slice | linux-x86-64, macos-arm64, synthetic-32
 negative/derived-address-readonly | linux-x86-64, macos-arm64, synthetic-32
 negative/derived-address-value-array | linux-x86-64, macos-arm64, synthetic-32
 negative/derived-address-wrong-from | linux-x86-64, macos-arm64, synthetic-32
+negative/derived-array-slice-by-value | linux-x86-64, macos-arm64, synthetic-32
+negative/derived-array-slice-local | linux-x86-64, macos-arm64, synthetic-32
+negative/derived-array-slice-local-field | linux-x86-64, macos-arm64, synthetic-32
+negative/derived-array-slice-wrong-from | linux-x86-64, macos-arm64, synthetic-32
 negative/discard-of-nothing | linux-x86-64, macos-arm64
 negative/distinct-not-enabled | linux-x86-64, macos-arm64
 negative/divisor-is-zero | linux-x86-64, macos-arm64
@@ -898,6 +902,7 @@ runtime/defer-call-shapes | linux-x86-64
 runtime/defer-cleanups-follow-control-edges | linux-x86-64
 runtime/defer-does-not-unwind-traps | linux-x86-64
 runtime/derived-address-empty-slice-traps | linux-x86-64
+runtime/derived-array-slice-origin | linux-x86-64
 runtime/derived-parser | linux-x86-64
 runtime/derived-storage-address-origin | linux-x86-64
 runtime/diagnostic-loggers-dispatch | linux-x86-64

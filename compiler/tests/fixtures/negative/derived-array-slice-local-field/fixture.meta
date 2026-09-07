@@ -1,0 +1,7 @@
+class: negative
+summary: slicing an inline fixed-array field retains its containing local frame origin
+program: main.ldn
+constructs: 0520, 0570, 0580, 0670, 0770, 0790
+codes: L0314
+status: 1
+targets: linux-x86-64, macos-arm64, synthetic-32
