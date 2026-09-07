@@ -1,0 +1,8 @@
+pick: (t: type, escaping source: []mut t) -> (result: t from source) =
+    result = source[0]
+end pick
+
+bad: () -> (value: u32) =
+    mut local: [1]u32 = [42]
+    value = pick(local[0..<1])
+end bad

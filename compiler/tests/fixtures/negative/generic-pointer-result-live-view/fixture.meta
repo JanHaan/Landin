@@ -1,0 +1,6 @@
+class: negative
+summary: the same generic instantiated with a pointer keeps its source live across inout
+program: program.ldn
+codes: L0315
+constructs: 0430, 0570, 0790, 0800, 0830, 1290, 1920
+targets: linux-x86-64, macos-arm64

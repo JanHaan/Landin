@@ -1,0 +1,13 @@
+pick: (t: type, source: []mut t) -> (result: t from source) =
+    result = source[0]
+end pick
+
+advance: (t: type, inout source: []mut t) -> none =
+    source = source[1..<lenof source]
+end advance
+
+bad: (inout source: []mut ptr mut u32) -> (value: u32) =
+    chosen: ptr mut u32 = pick(source)
+    advance(source)
+    value = chosen.val
+end bad

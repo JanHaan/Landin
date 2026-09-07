@@ -1,0 +1,6 @@
+class: runtime
+summary: a concrete scalar generic result carries no source origin across a later inout call
+program: main.ldn
+status: 42
+constructs: 0570, 0790, 0800, 0830, 1290, 1920
+targets: linux-x86-64

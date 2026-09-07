@@ -3806,6 +3806,22 @@ cannot hide the source named by `from`. `runtime/try-nominal-inference` checks
 local generic pointer use and error propagation; the explicit generic frame
 negative and `negative/core-failing-frame-escape` retain L0314.
 
+The bounded scalar-call origin repair transfers a one-result signature's
+written `from` facts only when the concrete result part contains references.
+This lets a generic result instantiated as `u32` remain an ordinary copied
+value across a later `inout` use of its source, while the call's escaping and
+borrow argument checks still run before result construction. Pointer, slice,
+`any` and reference-containing aggregate results retain their exact source
+facts. `runtime/generic-scalar-result-origin` exercises the accepted scalar
+instance; `negative/generic-pointer-result-live-view` applies the same generic
+to a pointer and retains L0315; and
+`negative/generic-scalar-result-escaping` retains L0314 at the argument
+boundary. This repair is deliberately confined to call results. A direct
+scalar selection such as `chosen: u32 = source[0]` still inherits the selected
+place's fact and can produce the same false L0315 across a later `inout` use;
+that separately reduced selection-expression defect remains a bounded R4.20
+follow-up rather than being hidden by broader origin erasure here.
+
 D196 settles D191's inherited construct rows. [0500]'s `mem.offset` and
 `mem.base_of` are unneeded conveniences for this slice: existing [0470]
 address conversion and checked element addressing serve their actual callers.

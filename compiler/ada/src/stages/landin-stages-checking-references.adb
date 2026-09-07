@@ -699,6 +699,10 @@ package body Landin.Stages.Checking.References is
                      if Landin.Checking.Holds (Types.all, Called)
                        and then Landin.Checking.Signature_Result_Count
                          (Types.all, Called) = 1
+                       and then Landin.Checking.Contains_References
+                         (Types.all,
+                          Landin.Checking.Nth_Signature_Result
+                            (Types.all, Called, 1))
                      then
                         for Source in
                           1 .. Landin.Checking.Signature_Return_Source_Count
