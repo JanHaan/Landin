@@ -38,11 +38,13 @@ Fixture classes, and the directory each uses:
 | --- | --- | --- |
 | unit | `unit` | a note of one behaviour an implementation-side case covers |
 | positive | `positive` | a program that must be accepted |
-| negative | `negative` | a program that must be rejected, with the report it must produce |
+| negative | `negative` | a program that must be rejected, with the codes it must produce and, where a code alone could hide a wrong refusal, the exact report |
 | runtime | `runtime` | a program whose behaviour when run is the assertion |
-| ABI | `abi` | a calling, layout or evidence-table contract |
-| debugger | `debugger` | what a debugger must be able to show |
 | end-to-end | `end-to-end` | the toolchain from source to result |
+
+`abi` and `debugger` classes are reserved for R4.40 and R4.60 and have no
+directory yet; an empty class directory is not a fault, an absent one is
+not a class.
 
 ## Focused developer runs
 

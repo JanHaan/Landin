@@ -53,6 +53,11 @@ export LANDIN_GPRBUILD_HOME=...  # the pinned GPRbuild for this host
 ./scripts/test.sh
 ```
 
+On a Mac that `test.sh` ends with the fixture-execution case failing, by
+design: runtime fixtures are Linux x86-64 evidence and the harness fails
+rather than skips on a host that cannot finish the target. Only that case
+red is the expected Mac result.
+
 The local Linux loop runs the very same scripts inside the pinned image:
 
 ```sh
