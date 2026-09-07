@@ -26945,6 +26945,10 @@ package body Landin.Stages.Checking is
             Expected.Signature := Landin.Checking.Signature_Of
               (Types.all,
                Declaration_At (Syn.Source_Of (Of_Tree), Result));
+         elsif Gives in Ty.Pointer_Value | Ty.Slice_Value then
+            Expected.Reference := Landin.Checking.Reference_Of
+              (Types.all,
+               Declaration_At (Syn.Source_Of (Of_Tree), Result));
          elsif Gives = Ty.Any_Value then
             Expected.Concept := Landin.Checking.Any_Concept_Of
               (Types.all,

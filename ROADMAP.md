@@ -3768,6 +3768,14 @@ function body, value-bearing block or direct match arm. It retains the existing
 assignment grammar and expression refusal. `runtime/compound-statement-boundaries`
 pins plain and selected destinations in all three positions, with computed
 values and an unchanged neighboring field.
+The reference expression-body follow-up supplies the declared pointer or slice
+result descriptor to contextual checking, as it already does for other result
+shapes. `runtime/reference-expression-bodies` exercises mutable pointers,
+read-only relaxation, slices and a pointer-backed slice of zero-sized arrays;
+`negative/reference-expression-body-permission` retains the refusal to
+strengthen permission. This repairs missing expected type evidence without
+changing reference identity or return-source rules. The allocator-backed
+zero-sized initialized-prefix runtime remains a separate execution obligation.
 One independent defect remains owned here for a bounded repair: a local
 inferred from `erased.entry()` can query conformance provider entries before
 finalization, even without generics. Explicitly typed result locals allow the
