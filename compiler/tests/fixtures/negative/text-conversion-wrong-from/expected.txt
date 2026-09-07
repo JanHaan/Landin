@@ -1,0 +1,40 @@
+error[L0316]: the returned reference does not derive from exactly the parameters named by its `from` clause
+  --> ../tests/fixtures/negative/text-conversion-wrong-from/main.ldn:2:1
+  |
+2 | from_bytes: (source: []u8, other: []u8) -> (result: utf8 from other) =
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/text-conversion-wrong-from/main.ldn:2:45
+  |
+2 | from_bytes: (source: []u8, other: []u8) -> (result: utf8 from other) =
+  |                                             ^^^^^^^^^^^^^^^^^^^^^^^ the named return and its declared sources
+  = note: [0790]: the written clause and every returning body edge agree both ways
+error[L0316]: the returned reference does not derive from exactly the parameters named by its `from` clause
+  --> ../tests/fixtures/negative/text-conversion-wrong-from/main.ldn:5:1
+  |
+5 | from_text: (source: utf8, other: utf8) -> (result: []u8 from other) =
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/text-conversion-wrong-from/main.ldn:5:44
+  |
+5 | from_text: (source: utf8, other: utf8) -> (result: []u8 from other) =
+  |                                            ^^^^^^^^^^^^^^^^^^^^^^^ the named return and its declared sources
+  = note: [0790]: the written clause and every returning body edge agree both ways
+error[L0316]: the returned reference does not derive from exactly the parameters named by its `from` clause
+  --> ../tests/fixtures/negative/text-conversion-wrong-from/main.ldn:8:1
+  |
+8 | c_bytes: (source: cstring, other: cstring) -> (result: []u8 from other) =
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/text-conversion-wrong-from/main.ldn:8:48
+  |
+8 | c_bytes: (source: cstring, other: cstring) -> (result: []u8 from other) =
+  |                                                ^^^^^^^^^^^^^^^^^^^^^^^ the named return and its declared sources
+  = note: [0790]: the written clause and every returning body edge agree both ways
+error[L0316]: the returned reference does not derive from exactly the parameters named by its `from` clause
+  --> ../tests/fixtures/negative/text-conversion-wrong-from/main.ldn:11:1
+   |
+11 | c_text: (source: cstring, other: cstring) -> (result: utf8 from other) =
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/text-conversion-wrong-from/main.ldn:11:47
+   |
+11 | c_text: (source: cstring, other: cstring) -> (result: utf8 from other) =
+   |                                               ^^^^^^^^^^^^^^^^^^^^^^^ the named return and its declared sources
+  = note: [0790]: the written clause and every returning body edge agree both ways

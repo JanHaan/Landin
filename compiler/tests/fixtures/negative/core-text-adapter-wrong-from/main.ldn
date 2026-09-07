@@ -1,0 +1,10 @@
+import core/text
+
+bytes: (source: []u8, other: []u8)
+       -> (result: utf8 from other) ! text.invalid_text =
+    result = try text.from_bytes(source[0..<0])
+end bytes
+terminated: (source: cstring, other: cstring)
+            -> (result: utf8 from other) ! text.invalid_text =
+    result = try text.from_c(source)
+end terminated

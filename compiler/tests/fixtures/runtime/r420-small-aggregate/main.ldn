@@ -1,0 +1,78 @@
+import core/small
+import core/heap
+import core/failing
+
+pair: type = struct
+    x: i32
+    y: i32
+end pair
+
+public main: () -> (code: i32) =
+    code = 1
+    mut host := heap.host()
+    allowed: usize = 8
+    mut allocator := failing.count_down(addr host, allowed)
+    mut values := small.new(item: pair, inline_slots: 2)
+    first: pair = (x: 10, y: 20)
+    second: pair = (x: 30, y: 40)
+    small.push(values, allocator, first) else (problem)
+        _ = problem
+        return
+    end
+    small.push(values, allocator, second) else (problem)
+        _ = problem
+        return
+    end
+    begin
+        view := small.used(values)
+        if lenof view <> 2 or view[0].x <> 10 or view[1].y <> 40 then
+            return
+        end if
+        view[0].y = 22
+    end
+    inline_removed: pair = small.pop(values) else (problem)
+        _ = problem
+        return
+    end
+    if inline_removed.x <> 30 or inline_removed.y <> 40 then return end if
+    small.push(values, allocator, second) else (problem)
+        _ = problem
+        return
+    end
+    mut at: i32 = 2
+    while at < 9 do
+        added: pair = (x: at, y: at + 100)
+        small.push(values, allocator, added) else (problem)
+            _ = problem
+            return
+        end
+        inc at
+    end while
+    begin
+        view := small.used(values)
+        if lenof view <> 9 or view[0].x <> 10 or view[0].y <> 22
+          or view[1].x <> 30 or view[8].y <> 108 then return end if
+        view[8].x = 42
+    end
+    spilled_removed: pair = small.pop(values) else (problem)
+        _ = problem
+        return
+    end
+    if spilled_removed.x <> 42 or spilled_removed.y <> 108 then return end if
+    small.release(values, allocator)
+    if small.length(values) <> 0 or small.capacity(values) <> 2
+      or allocator.live <> 0 or allocator.frees <> allocator.successes
+    then return end if
+    small.push(values, allocator, first) else (problem)
+        _ = problem
+        return
+    end
+    begin
+        view := small.used(values)
+        if lenof view <> 1 or view[0].x <> 10 or view[0].y <> 20 then
+            return
+        end if
+    end
+    small.release(values, allocator)
+    code = 42
+end main

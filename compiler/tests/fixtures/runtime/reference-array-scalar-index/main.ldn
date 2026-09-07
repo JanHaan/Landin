@@ -1,0 +1,43 @@
+pair: type = [2]i32
+refused: atom
+mut selections: usize = 0
+mut indices: usize = 0
+
+select: (value: usize) -> (result: usize) =
+    inc selections
+    result = value
+end select
+index: (value: usize, reject: bool) -> (result: usize) ! refused =
+    inc indices
+    fail refused when reject
+    result = value
+end index
+
+read_failed: (value: []mut pair) -> (result: i32) ! refused =
+    result = value[select(0)][try index(1, true)]
+end read_failed
+
+public main: () -> (code: i32) =
+    mut rows: [2]pair = zeroed
+    rows[0] = [20, 22]
+    rows[1] = [17, 25]
+    pointer: ptr mut pair = addr rows[0]
+    view: []mut pair = rows[0..<2]
+    first: i32 = pointer.val[1]
+    at: usize = 1
+    second: i32 = pointer.val[index(at, false) else 0]
+    third: i32 = view[select(index(at, false) else 0)][0]
+    fourth: i32 = view[select(0)][index(at, true) else 1]
+    mut caught: bool = false
+    _ = read_failed(view) else (problem)
+        match problem
+            refused: caught = true
+        end match
+    end
+    if first == 22 and second == 22 and third == 17 and fourth == 22
+      and selections == 3 and indices == 4 and caught then
+        code = 42
+    else
+        code = 1
+    end if
+end main
