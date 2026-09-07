@@ -2543,7 +2543,10 @@ The conformance supplies `cur` and `item_type` as associated type inputs.
 Those identities and the four infallible signatures above are exact. Provider
 labels may be written in any order, but calls use concept declaration order.
 The source is retained as a value for every call; `item` returns a fresh loop
-binding value rather than an alias into it.
+binding value rather than an alias into it. A provider result declared
+`from s` does not match this source-free requirement. Containers that expose
+storage-derived references can instead return an initialized slice view and
+use the built-in slice traversal, as `for value in vec.used(list)` does.
 
 ### [1330] A range is not a concept
 

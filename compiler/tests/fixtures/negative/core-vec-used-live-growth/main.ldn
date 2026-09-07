@@ -1,0 +1,9 @@
+import core/heap
+import core/mem
+import core/vec
+public bad: (inout value: vec.list(i32), inout state: heap.system)
+            -> (answer: i32) ! mem.out_of_memory =
+    view := vec.used(value)
+    try vec.push(value, state, 3)
+    answer = view[0]
+end bad

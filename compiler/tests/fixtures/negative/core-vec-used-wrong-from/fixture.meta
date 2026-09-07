@@ -1,0 +1,8 @@
+class: negative
+summary: vector initialized views preserve wrong from refusal
+expect: expected.txt
+args: --root=../.. ../tests/fixtures/negative/core-vec-used-wrong-from
+status: 1
+codes: L0316
+constructs: 0430, 0790, 0800
+targets: linux-x86-64, macos-arm64, synthetic-32

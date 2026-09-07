@@ -1,0 +1,25 @@
+public ordered: type = concept (item: type)
+    less: (left: item, right: item) -> (yes: bool)
+end ordered
+
+--  A bounded-stack, allocation-free comparison sort for initialized views.
+--  The caller supplies a strict ordering; stability is not promised.
+public sort: (item: type is ordered, values: []mut item) -> none =
+    mut at: usize = 0
+    while at < lenof values do
+        mut least := at
+        mut next := at + 1
+        while next < lenof values do
+            if item.less(values[next], values[least]) then
+                least = next
+            end if
+            inc next
+        end while
+        if least <> at then
+            saved: item = values[at]
+            values[at] = values[least]
+            values[least] = saved
+        end if
+        inc at
+    end while
+end sort

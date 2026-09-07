@@ -138,6 +138,11 @@ negative/core-pool-bookkeeping-frame-escape | linux-x86-64, macos-arm64, synthet
 negative/core-pool-frame-escape | linux-x86-64, macos-arm64, synthetic-32
 negative/core-text-frame-slice-escape | linux-x86-64, macos-arm64, synthetic-32
 negative/core-text-private-position | linux-x86-64, macos-arm64, synthetic-32
+negative/core-vec-used-frame | linux-x86-64, macos-arm64, synthetic-32
+negative/core-vec-used-live-growth | linux-x86-64, macos-arm64, synthetic-32
+negative/core-vec-used-live-release | linux-x86-64, macos-arm64, synthetic-32
+negative/core-vec-used-read-only | linux-x86-64, macos-arm64, synthetic-32
+negative/core-vec-used-wrong-from | linux-x86-64, macos-arm64, synthetic-32
 negative/cstring-literal-write | linux-x86-64, macos-arm64
 negative/cstring-range-slicing-has-no-length | linux-x86-64, macos-arm64
 negative/deep-nested-child-copy-unassigned | linux-x86-64, macos-arm64
@@ -289,6 +294,7 @@ negative/integer-conversion-known-binding-out-of-range | linux-x86-64, macos-arm
 negative/integer-conversion-known-out-of-range | linux-x86-64, macos-arm64
 negative/integer-literal-not-a-float | linux-x86-64, macos-arm64
 negative/integer-to-bool-known-out-of-range | linux-x86-64, macos-arm64
+negative/iterable-retained-item-source | linux-x86-64, macos-arm64, synthetic-32
 negative/keyword-as-name | linux-x86-64, macos-arm64
 negative/latin1-byte-in-name | linux-x86-64, macos-arm64
 negative/lenof-array-literal-element-mismatch | linux-x86-64, macos-arm64
@@ -942,6 +948,8 @@ runtime/core-mem-reference-prefix | linux-x86-64
 runtime/core-mem-zero-prefix | linux-x86-64
 runtime/core-text-byte-positions | linux-x86-64
 runtime/core-vec-pointer-storage | linux-x86-64
+runtime/core-vec-used-references | linux-x86-64
+runtime/core-vec-used-sort | linux-x86-64
 runtime/declared-errors-direct-and-inferred | linux-x86-64
 runtime/declared-errors-indirect-abi | linux-x86-64
 runtime/deep-nested-struct-children | linux-x86-64

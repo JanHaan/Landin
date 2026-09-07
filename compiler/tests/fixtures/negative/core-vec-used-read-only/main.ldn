@@ -1,0 +1,5 @@
+import core/vec
+public bad: (value: vec.list(i32)) -> none =
+    view: []i32 = vec.used(value)
+    view[0] = 3
+end bad

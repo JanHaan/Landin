@@ -1,0 +1,8 @@
+import core/heap
+import core/vec
+public bad: (inout value: vec.list(i32), inout state: heap.system)
+            -> (answer: i32) =
+    view := vec.used(value)
+    vec.release(value, state)
+    answer = view[0]
+end bad

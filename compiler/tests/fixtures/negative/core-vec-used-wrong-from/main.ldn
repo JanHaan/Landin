@@ -1,0 +1,5 @@
+import core/vec
+public bad: (left: vec.list(i32), right: vec.list(i32))
+            -> (view: []mut i32 from right) =
+    view = vec.used(left)
+end bad

@@ -1,0 +1,65 @@
+import core/failing
+import core/heap
+import core/sort
+import core/vec
+
+less_i32: (left: i32, right: i32) -> (yes: bool) = left < right end less_i32
+
+i32 is sort.ordered (less: less_i32)
+
+public main: () -> (code: i32) =
+    code = 1
+    mut heap_state := heap.host()
+    budget: usize = 10
+    mut state := failing.count_down(addr heap_state, budget)
+    mut numbers := vec.new_list(item: i32)
+    sort.sort(vec.used(numbers))
+    vec.push(numbers, state, 20) else (problem)
+        _ = problem
+        return
+    end
+    sort.sort(vec.used(numbers))
+    mut n: i32 = 19
+    while n > 0 do
+        vec.push(numbers, state, n) else (problem)
+            _ = problem
+            return
+        end
+        dec n
+    end while
+    before: usize = failing.attempts(state)
+    sort.sort(vec.used(numbers))
+    sort.sort(vec.used(numbers))
+    sorted: bool = begin
+        view := vec.used(numbers)
+        mut next: i32 = 1
+        mut good: bool = true
+        for value in view do
+            good = good and value == next
+            inc next
+        end for
+        good and next == 21
+    end
+    mut squares: i32 = 0
+    for value in vec.used(numbers) do
+        squares += value * value
+    end for
+    duplicate: i32 = 7
+    vec.push(numbers, state, duplicate) else (problem)
+        _ = problem
+        return
+    end
+    sort.sort(vec.used(numbers))
+    duplicates: bool = begin
+        view := vec.used(numbers)
+        lenof view == 21 and view[6] == 7 and view[7] == 7
+          and view[20] == 20
+    end
+    after: usize = failing.attempts(state)
+    vec.release(numbers, state)
+    if sorted and squares == 2870 and duplicates and before == after
+      and failing.live(state) == 0 and failing.frees(state) == 3
+    then
+        code = 42
+    end if
+end main

@@ -1,0 +1,20 @@
+iterable: type = concept (t: type, cur: type, item_type: type)
+    first: (s: t) -> (c: cur)
+    at_end: (s: t, c: cur) -> (yes: bool)
+    item: (s: t, c: cur) -> (v: item_type)
+    next: (s: t, c: cur) -> (c2: cur)
+end iterable
+bag: type = struct
+    values: []mut i32
+end bag
+first: (s: bag) -> (c: usize) = 0 end first
+at_end: (s: bag, c: usize) -> (yes: bool) =
+    view := s.values
+    yes = c >= lenof view
+end at_end
+item: (s: bag, c: usize) -> (v: ptr mut i32 from s) =
+    v = addr s.values[c]
+end item
+next: (s: bag, c: usize) -> (c2: usize) = c + 1 end next
+bag is iterable (cur: usize, item_type: ptr mut i32,
+                 first: first, at_end: at_end, item: item, next: next)

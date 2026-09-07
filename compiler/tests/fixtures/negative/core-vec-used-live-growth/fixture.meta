@@ -1,0 +1,8 @@
+class: negative
+summary: vector initialized views preserve live growth refusal
+expect: expected.txt
+args: --root=../.. ../tests/fixtures/negative/core-vec-used-live-growth
+status: 1
+codes: L0315
+constructs: 0430, 0790, 0800
+targets: linux-x86-64, macos-arm64, synthetic-32

@@ -1,0 +1,10 @@
+error[L0303]: this place is reached through a read-only reference
+  --> ../tests/fixtures/negative/core-vec-used-read-only/main.ldn:4:5
+  |
+4 |     view[0] = 3
+  |     ^^^^^^^
+  --> ../tests/fixtures/negative/core-vec-used-read-only/main.ldn:4:5
+  |
+4 |     view[0] = 3
+  |     ^^^^ the reference path starts here
+  = note: [0430]/[0570]: only `mut` reference permission permits a write

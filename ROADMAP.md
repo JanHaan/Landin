@@ -3881,6 +3881,21 @@ release suites each pass 403 cases and 10,842 checks, and the font-aware
 repository check is clean. The authoritative native integration gate remains
 required after publication; full P4 application cleanup is not claimed here.
 
+The vector-view and sort increment uses ordinary `vec.used` to expose the
+initialized prefix `from value`. `core/sort` supplies the exact `ordered.less`
+concept and a bounded-stack, allocation-free selection sort; the caller must
+supply a strict ordering and stability is not promised. Runtime pressure
+includes empty, singleton, reverse, duplicate and already sorted views, twenty
+numbers and their squares, and copied pointer/heterogeneous `any` traversal.
+The prototype traversals now use `vec.used`: [1320]'s source-free `item` entry
+cannot implement a storage-derived reference result, and the exact mismatch
+has a negative control. No universal vector `iterable` conformance or origin
+cut is introduced. The scalar traversal-origin repair and initialized-prefix
+prerequisite are integrated. The font-aware invariant check is clean, and
+complete pinned Linux debug and release gates each pass 403 cases and 10,838
+checks on unchanged source. Authoritative native execution remains required
+after integration and publication.
+
 The initialized-view implementation must also retain [0860]'s shallow alias
 limit: a reference inserted through an alias is not generally propagated back
 to every other view of that storage, so writable views do not establish
