@@ -3839,9 +3839,12 @@ built-in raw-storage kind or integer reconstruction of the returned view is
 introduced.
 
 The bounded contextual-text follow-up closes the generic-call double-check
-defect. When a text-literal argument's parameter pattern has already
-normalized to a concrete reference, generic deduction now applies that exact
-context before context-free synthesis can choose the `utf8` default. Ordinary
+defect. When a text-literal argument's written parameter pattern normalizes to
+a concrete reference using only a saturated explicit static tuple, generic
+deduction now applies that exact context before context-free synthesis can
+choose the `utf8` default. Runtime-deduced bindings never contribute to that
+context: each argument remains independently synthesized as D138 requires, so
+repeated-formal agreement is identical in either source order. Ordinary
 call validation may revisit the literal, but accepts the prior answer only
 when kind, view, permission and complete referent identity agree; a different
 identity remains a mismatch, and `Landin.Checking.Note` keeps its once-only
@@ -3849,8 +3852,10 @@ contract. `runtime/generic-contextual-text-literals` compares inferred and
 explicit calls for `utf8`, `utf16`, `cstring` and ordinary byte literals,
 observes their runtime data, and pins once-only argument and callee effects.
 The `negative/generic-text-literal-*` cases retain read-only permission and
-Unicode/byte-escape validation. This implements [0260]/[0270] for a context
-the signature already states and changes no language rule.
+Unicode/byte-escape validation; the two `generic-text-literal-repeated-*`
+cases pin the same exact conflict with the literal before and after a `utf16`
+actual. This implements [0260]/[0270] for a context the signature or explicit
+static tuple already states and changes no language rule.
 
 A literal that itself deduces a type formal remains a separate generic
 reference-publication dependency: after deduction as a text view, checking the

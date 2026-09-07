@@ -6420,6 +6420,8 @@ package body Landin.Stages.Checking is
            Landin.Checking.Actual_Count (Forced) > 0;
          Bound : Formal_Actual_Array (1 .. Formal_Count) :=
            [others => (others => <>)];
+         Literal_Context_Bound : Formal_Actual_Array (1 .. Formal_Count) :=
+           [others => (others => <>)];
          Evidence : array
            (1 .. Positive'Max
              (1, Formal_Count * Landin.Checking.Concept_Count (Types.all)))
@@ -8077,6 +8079,13 @@ package body Landin.Stages.Checking is
             return Landin.Checking.No_Signature;
          end if;
 
+         --  Literal context may use a saturated explicit static tuple, but
+         --  never a binding deduced from an earlier runtime argument.  D138
+         --  synthesizes those arguments independently, so allowing the
+         --  evolving deduction environment here would make repeated-formal
+         --  agreement depend on source order.
+         Literal_Context_Bound := Bound;
+
          --  Deduction is deliberately context-free.  Every argument is
          --  synthesized once without a parameter context, then its complete
          --  descriptor is unified recursively with the written pattern.
@@ -8108,7 +8117,8 @@ package body Landin.Stages.Checking is
                   then
                      declare
                         Expected : constant Type_Descriptor := Normalized_Type
-                          (Template_Tree.all, Pattern, Bound,
+                          (Template_Tree.all, Pattern,
+                           Literal_Context_Bound,
                            Syn.Origin (Caller_Tree, Call), Identity_Only);
                      begin
                         if Expected.Kind
