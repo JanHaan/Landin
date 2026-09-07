@@ -1209,6 +1209,59 @@ package body Landin.Tests.Parser_Suite is
          "the report uses the nesting code");
    end Deep_Nesting_Is_Reported;
 
+   --  R4.21: a selector chain and a run of `ptr` are read iteratively, but
+   --  every later walk recurses over them, so they meet the same floor.
+   procedure Deep_Chains_Are_Reported
+     (Item : in out Landin.Testing.Context);
+
+   procedure Deep_Chains_Are_Reported
+     (Item : in out Landin.Testing.Context)
+   is
+      Length : constant Positive := Landin.Syntax.Parser.Nesting_Limit * 40;
+      Text  : Unbounded.Unbounded_String;
+      Codes : Unbounded.Unbounded_String;
+      Total : Natural;
+      Nodes : Natural;
+      Held  : Boolean;
+   begin
+      Unbounded.Append (Text, "f: () -> (n: i32) =" & ASCII.LF & "    n = a");
+      for Step in 1 .. Length loop
+         pragma Unreferenced (Step);
+         Unbounded.Append (Text, ".b");
+      end loop;
+      Unbounded.Append (Text, ASCII.LF & "end f" & ASCII.LF);
+      Read_And_Parse
+        (Unbounded.To_String (Text), Codes, Total, Nodes, Held);
+      Landin.Testing.Check
+        (Item, Held, "the table's invariants hold past a long selector chain");
+      Landin.Testing.Check
+        (Item,
+         Contains (Unbounded.To_String (Codes), "L0111"),
+         "a selector chain past the limit uses the nesting code");
+      Landin.Testing.Check
+        (Item, Nodes < Length,
+         "selectors past the limit are read and not retained");
+
+      Text := Unbounded.Null_Unbounded_String;
+      Unbounded.Append (Text, "f: () -> (n: i32) =" & ASCII.LF & "    x: ");
+      for Step in 1 .. Length loop
+         pragma Unreferenced (Step);
+         Unbounded.Append (Text, "ptr ");
+      end loop;
+      Unbounded.Append
+        (Text,
+         "i32 = ptr(0)" & ASCII.LF & "    n = 1" & ASCII.LF
+         & "end f" & ASCII.LF);
+      Read_And_Parse
+        (Unbounded.To_String (Text), Codes, Total, Nodes, Held);
+      Landin.Testing.Check
+        (Item, Held, "the table's invariants hold past a long pointer run");
+      Landin.Testing.Check
+        (Item,
+         Contains (Unbounded.To_String (Codes), "L0111"),
+         "a pointer run past the limit uses the nesting code");
+   end Deep_Chains_Are_Reported;
+
    ------------------------------------------------------------------
    --  The report, through the driver
    ------------------------------------------------------------------
@@ -2075,6 +2128,9 @@ package body Landin.Tests.Parser_Suite is
       Landin.Testing.Register
         (Into, "parser", "deep nesting is reported",
          Deep_Nesting_Is_Reported'Access);
+      Landin.Testing.Register
+        (Into, "parser", "deep chains are reported",
+         Deep_Chains_Are_Reported'Access);
       Landin.Testing.Register
         (Into, "parser", "parses parameterized type aliases",
          Parameterized_Type_Aliases_Are_Parsed'Access);

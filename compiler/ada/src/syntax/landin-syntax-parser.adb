@@ -426,6 +426,9 @@ package body Landin.Syntax.Parser is
             function Parse_Type
               (In_Parameter : Boolean;
                Declared_At  : Landin.Source.Span) return Node_Id;
+            function Parse_Type_Inner
+              (In_Parameter : Boolean;
+               Declared_At  : Landin.Source.Span) return Node_Id;
             function Parse_Declared_Name
               (Named : out Landin.Source.Names.Name_Id)
               return Landin.Source.Span;
@@ -1648,6 +1651,33 @@ package body Landin.Syntax.Parser is
 
             function Parse_Selectors (From : Node_Id) return Node_Id is
                Selected : Node_Id := From;
+               At_Chain : constant Landin.Source.Span := Here;
+               --  A chain is read iteratively, but every walk after the
+               --  parser recurses over it, so it meets the same floor as a
+               --  nest.  Past the floor the selectors are still read, to
+               --  keep the token stream in step, and no node is made.
+               Chain     : Natural := 0;
+               Truncated : Boolean := False;
+
+               procedure Count_Selector;
+
+               procedure Count_Selector is
+               begin
+                  Chain := Chain + 1;
+                  if Chain > Nesting_Limit and then not Truncated then
+                     Truncated := True;
+                     Complain
+                       (Item    => Syn.Nesting_Too_Deep,
+                        Where   => Here,
+                        Message => "this chain of selectors is longer than"
+                                   & " the compiler reads",
+                        Note    => "an implementation limit, not a rule of"
+                                   & " the language",
+                        Related => At_Chain,
+                        Because => "the chain begins here");
+                  end if;
+               end Count_Selector;
+
             begin
                --  [1820] spells `selection (("[" expression "]")
                --  | ("." identifier))*`, so a dot and a bracket may follow
@@ -1664,6 +1694,7 @@ package body Landin.Syntax.Parser is
                         At_Open : constant Landin.Source.Span := Here;
                         Index   : Node_Id;
                      begin
+                        Count_Selector;
                         Advance;
                         Index := Parse_Expression;
 
@@ -1690,10 +1721,12 @@ package body Landin.Syntax.Parser is
                                       (At_Open, After_Previous),
                                     Children => [Selected, Index, Upper]);
                               end if;
-                              Selected := Add
-                                (Form, At_Open,
-                                 Extent => Join (At_Open, After_Previous),
-                                 Children => [Selected, Index, Upper]);
+                              if not Truncated then
+                                 Selected := Add
+                                   (Form, At_Open,
+                                    Extent => Join (At_Open, After_Previous),
+                                    Children => [Selected, Index, Upper]);
+                              end if;
                            end;
                         else
                            if not Expect
@@ -1710,10 +1743,13 @@ package body Landin.Syntax.Parser is
                                  Children => [Selected, Index]);
                            end if;
 
-                           Selected :=
-                             Add (Element_Index, At_Open,
-                                  Extent   => Join (At_Open, After_Previous),
-                                  Children => [Selected, Index]);
+                           if not Truncated then
+                              Selected :=
+                                Add (Element_Index, At_Open,
+                                     Extent   =>
+                                       Join (At_Open, After_Previous),
+                                     Children => [Selected, Index]);
+                           end if;
                         end if;
                      end;
 
@@ -1726,15 +1762,18 @@ package body Landin.Syntax.Parser is
                      Named   : Landin.Source.Names.Name_Id;
                      At_Name : Landin.Source.Span;
                   begin
+                     Count_Selector;
                      Advance;
 
                      --  The anchor is the field's own name, because that
                      --  is what a report about the selection points at.
                      At_Name := Parse_Declared_Name (Named);
-                     Selected :=
-                       Add (Member_Selection, At_Name,
-                            Children => [Selected],
-                            Named    => Named);
+                     if not Truncated then
+                        Selected :=
+                          Add (Member_Selection, At_Name,
+                               Children => [Selected],
+                               Named    => Named);
+                     end if;
                   end;
 
                   <<Next>>
@@ -1835,6 +1874,27 @@ package body Landin.Syntax.Parser is
             --  ordinary declared names the kernel predeclares, so this
             --  compares interned identities and not token kinds.
             function Parse_Type
+              (In_Parameter : Boolean;
+               Declared_At  : Landin.Source.Span) return Node_Id
+            is
+               At_Type : constant Landin.Source.Span := Here;
+               Result  : Node_Id;
+            begin
+               --  `ptr`, `[]` and `[n]` recurse for their element, so a
+               --  run of them is nesting like any other and meets the
+               --  same floor; the iterative walks that follow would
+               --  otherwise recurse over a tree the parser never bounded.
+               if Too_Deep (At_Type) then
+                  Advance;
+                  return Add (Error_Type, At_Type);
+               end if;
+               Depth := Depth + 1;
+               Result := Parse_Type_Inner (In_Parameter, Declared_At);
+               Depth := Depth - 1;
+               return Result;
+            end Parse_Type;
+
+            function Parse_Type_Inner
               (In_Parameter : Boolean;
                Declared_At  : Landin.Source.Span) return Node_Id
             is
@@ -2172,7 +2232,7 @@ package body Landin.Syntax.Parser is
                   Because => "declared here");
                Advance;
                return Add (Error_Type, At_Type);
-            end Parse_Type;
+            end Parse_Type_Inner;
 
             --  atom_declaration ::= identifiers ":" "atom"      [0630]
             --  identifiers ::= identifier ("," identifier)*
