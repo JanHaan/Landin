@@ -9444,6 +9444,70 @@ package body Landin.Stages.Checking is
             return Ty.Ill_Typed;
          end if;
 
+         --  D200: a comparison takes what fits one register and has one
+         --  equality: scalars, atoms, pointers by address, function values
+         --  by address.  A slice, an erased value, an array or a struct has
+         --  no equality the language has chosen, and the kind alone let
+         --  `[]u8 == []u8` through to lowering as a defect.
+         if Comparing then
+            for Operand in 1 .. 2 loop
+               declare
+                  Node : constant Syn.Node_Id :=
+                    (if Operand = 1 then Left else Right);
+                  Held : constant Ty.Type_Kind :=
+                    (if Operand = 1 then Left_Type else Right_Type);
+               begin
+                  if Held in Ty.Slice_Value | Ty.Any_Value
+                             | Ty.Fixed_Array | Ty.Aggregate
+                  then
+                     Bad.Report
+                       (Item    => Bad.Type_Mismatch,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Where (Of_Tree, Node),
+                        Message => "a comparison takes scalars, atoms,"
+                                   & " pointers and function values, not "
+                                   & (if Held = Ty.Any_Value
+                                      then "an erased `any` value"
+                                      else Shown (Held)),
+                        Note    => "[1890]: `==` and its kin compare one"
+                                   & " register-sized value; a view or an"
+                                   & " aggregate has no equality of its own",
+                        Related => Syn.Origin (Of_Tree, Site),
+                        Because => "the comparison here",
+                        Into    => Found);
+                     Landin.Checking.Refuse (Types.all, Of_Tree, Node);
+                     return Ty.Ill_Typed;
+                  end if;
+               end;
+            end loop;
+         end if;
+
+         --  [1890]: one type on both sides.  Two pointers share a kind
+         --  whatever they point at, so the referents are compared here.
+         if Comparing
+           and then Left_Type = Ty.Pointer_Value
+           and then Right_Type = Ty.Pointer_Value
+           and then not Landin.Checking.References_Compare
+             (Types.all,
+              Landin.Checking.Reference_Of (Types.all, Of_Tree, Left),
+              Landin.Checking.Reference_Of (Types.all, Of_Tree, Right))
+         then
+            Bad.Report
+              (Item    => Bad.Type_Mismatch,
+               Source  => Syn.Source_Of (Of_Tree),
+               Where   => Syn.Where (Of_Tree, Right),
+               Message => "these pointers point at different types",
+               Note    => "[1890]: a comparison wants one type on both"
+                          & " sides, and a pointer's type includes what it"
+                          & " points at; [0440]'s permission does not"
+                          & " enter an address comparison",
+               Related => Syn.Origin (Of_Tree, Left),
+               Because => "the pointer compared here",
+               Into    => Found);
+            Landin.Checking.Refuse (Types.all, Of_Tree, Right);
+            return Ty.Ill_Typed;
+         end if;
+
          if Left_Type = Ty.Atom_Value or else Right_Type = Ty.Atom_Value then
             if Left_Type = Ty.Atom_Value
               and then Right_Type = Ty.Atom_Value
@@ -25521,9 +25585,14 @@ package body Landin.Stages.Checking is
                   if Left_Overflowed or else Right_Overflowed then
                      Overflowed := True;
                   elsif Left_Known and then Right_Known
-                    and then Right >= 0
+                    and then (Right >= 0
+                              or else Op not in Syn.Shift_Left
+                                                  | Syn.Shift_Right)
                     and then Kind in Ty.Scalar_Name
                   then
+                     --  A negative shift amount is [0320]'s refusal and is
+                     --  left unknown here; a negative mask operand is an
+                     --  ordinary two's-complement pattern.
                      declare
                         Bits : constant Landin.Targets.Bit_Width :=
                           Fold_Width (Ty.Scalar_Name (Kind));
@@ -25736,26 +25805,20 @@ package body Landin.Stages.Checking is
                         Known := True;
                      end;
                   elsif Held = Ty.Fixed_Array then
+                     --  [0520]: an array is its element repeated, whatever
+                     --  the element is; the scalar query alone answered a
+                     --  struct element with its default and folded
+                     --  `sizeof [4]point` to 4.
                      declare
-                        Length : constant Landin.Checking.Element_Count :=
-                          Landin.Checking.Array_Length
-                            (Types.all, Of_Tree, Asked);
-                        Element : constant Ty.Scalar_Name :=
-                          Landin.Checking.Array_Element
-                            (Types.all, Of_Tree, Asked);
-                        Size : constant Landin.Targets.Scalar_Size :=
-                          Ty.Storage_Size (Element, Facts);
+                        Size : Landin.Targets.Byte_Count;
+                        Alignment : Landin.Targets.Byte_Alignment;
                      begin
+                        Landin.Checking.Array_Type_Extent
+                          (Types.all, Of_Tree, Asked, Facts, Size, Alignment);
                         Value :=
                           (if Syn.Kind (Of_Tree, Node) = Syn.Align_Of
-                           then (if Length = 0 then 1
-                                 else Ty.Folded
-                                        (Landin.Targets.Alignment_Of
-                                           (Facts, Size)))
-                           else Ty.Folded
-                                  (Landin.Targets.Byte_Count (Length)
-                                   * Landin.Targets.Byte_Count
-                                       (Landin.Targets.Bytes (Size))));
+                           then Ty.Folded (Alignment)
+                           else Ty.Folded (Size));
                         Known := True;
                      end;
                   elsif Held = Ty.Aggregate then

@@ -1,0 +1,6 @@
+class: runtime
+summary: [0320]/[0660] a negative bitwise operand is an ordinary two's-complement pattern, so a module binding of a range subtype folds and is range-checked
+program: main.ldn
+status: 42
+constructs: 0320, 0660, 1940
+targets: linux-x86-64

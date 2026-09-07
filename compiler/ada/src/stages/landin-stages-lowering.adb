@@ -25,6 +25,7 @@ package body Landin.Stages.Lowering is
    package IR  renames Landin.IR;
 
    use type IR.Block_Id;
+   use type IR.Opcode;
    use type IR.Element_Total;
    use type IR.Field_Image_Form;
    use type IR.Field_Shape_Kind;
@@ -57,7 +58,6 @@ package body Landin.Stages.Lowering is
    use type Landin.Source.Names.Name_Id;
    use type Landin.Tokens.Assignment_Operator;
    use type Landin.Targets.Bit_Width;
-   use type Landin.Targets.Byte_Count;
    use type Res.Application_Class;
    use type Res.Argument_Role;
    use type Res.Call_Match_State;
@@ -6064,12 +6064,21 @@ package body Landin.Stages.Lowering is
                     Landin.Checking.Type_Of (Types.all, Of_Tree, Asked);
                   Result : constant Ty.Scalar_Name :=
                     Scalar_At (Of_Tree, Node);
-               begin
-                  if Held = Ty.Aggregate then
-                     declare
-                        Declared : constant Landin.Checking.Nominal_Type_Id :=
-                          Landin.Checking.Nominal_Of
-                            (Types.all, Of_Tree, Asked);
+                  Of_Code : constant IR.Opcode :=
+                    (if Syn.Kind (Of_Tree, Node) = Syn.Size_Of
+                     then IR.Measure_Size else IR.Measure_Align);
+
+                  function Measure_Nominal
+                    (Declared : Landin.Checking.Nominal_Type_Id)
+                     return IR.Value_Id;
+                  function Measure_Shape
+                    (Shape : Landin.Checking.Field_Shape)
+                     return IR.Value_Id;
+
+                  function Measure_Nominal
+                    (Declared : Landin.Checking.Nominal_Type_Id)
+                     return IR.Value_Id
+                  is
                         function Total_Cases return Natural;
                         function Total_Payload_Fields return Natural;
 
@@ -6134,7 +6143,7 @@ package body Landin.Stages.Lowering is
                             [others => (others => <>)];
                         Next_Case : Natural := 1;
                         Next_Payload : Natural := 1;
-                     begin
+                  begin
                         for Field in Fields'Range loop
                            case Landin.Checking.Field_Kind_Of
                              (Types.all, Declared, Field)
@@ -6285,18 +6294,107 @@ package body Landin.Stages.Lowering is
                         end loop;
 
                         return IR.Emit_Aggregate_Measurement
-                          (Unit.all, Filling,
-                           (if Syn.Kind (Of_Tree, Node) = Syn.Size_Of
-                            then IR.Measure_Size else IR.Measure_Align),
+                          (Unit.all, Filling, Of_Code,
                            Fields, Result, Site,
                            Cases => Cases, Payloads => Payloads);
-                     end;
+                  end Measure_Nominal;
+
+                  --  [0520]: an array is its element repeated, whatever
+                  --  the element is, so the element is measured by its
+                  --  shape and the count applied once, the way the
+                  --  checker's fold does.  A reference element is one or
+                  --  two words, as the direct cases below say.
+                  function Measure_Shape
+                    (Shape : Landin.Checking.Field_Shape)
+                     return IR.Value_Id
+                  is
+                     function Words (Count : Ty.Magnitude)
+                       return IR.Value_Id;
+
+                     function Words (Count : Ty.Magnitude)
+                       return IR.Value_Id
+                     is
+                        Word : constant IR.Value_Id := IR.Emit_Measurement
+                          (Unit.all, Filling, Of_Code,
+                           Ty.Usize, Result, Site);
+                     begin
+                        if Count = 1 or else Of_Code = IR.Measure_Align then
+                           return Word;
+                        end if;
+                        return IR.Emit_Binary
+                          (Unit.all, Filling, IR.Multiply, Word,
+                           IR.Emit_Number
+                             (Unit.all, Filling, Result, Count, False, Site),
+                           Result, Site);
+                     end Words;
+
+                     function Reference_Words
+                       (Reference : Landin.Checking.Reference_Id)
+                        return IR.Value_Id
+                       is (Words
+                             (if Landin.Checking.Descriptor_Of
+                                   (Types.all, Reference).Kind
+                                     in Ty.Slice_Value | Ty.Any_Value
+                              then 2 else 1));
+
+                     Element : IR.Value_Id;
+                  begin
+                     case Shape.Kind is
+                        when Landin.Checking.Scalar_Field =>
+                           if Shape.Nominal
+                                /= Landin.Checking.No_Nominal_Type
+                           then
+                              return Measure_Nominal (Shape.Nominal);
+                           end if;
+                           return IR.Emit_Measurement
+                             (Unit.all, Filling, Of_Code,
+                              Shape.Element, Result, Site);
+                        when Landin.Checking.Reference_Field =>
+                           return Reference_Words (Shape.Reference);
+                        when Landin.Checking.Aggregate_Field =>
+                           return Measure_Nominal (Shape.Nominal);
+                        when Landin.Checking.Fixed_Array_Field =>
+                           if Of_Code = IR.Measure_Align
+                             and then Shape.Length = 0
+                           then
+                              return IR.Emit_Number
+                                (Unit.all, Filling, Result, 1, False, Site);
+                           end if;
+                           if Shape.Reference
+                                /= Landin.Checking.No_Reference
+                           then
+                              Element := Reference_Words (Shape.Reference);
+                           elsif Shape.Nominal
+                                   /= Landin.Checking.No_Nominal_Type
+                           then
+                              Element := Measure_Nominal (Shape.Nominal);
+                           else
+                              Element := IR.Emit_Measurement
+                                (Unit.all, Filling, Of_Code,
+                                 Shape.Element, Result, Site);
+                           end if;
+                           if Of_Code = IR.Measure_Align then
+                              return Element;
+                           end if;
+                           return IR.Emit_Binary
+                             (Unit.all, Filling, IR.Multiply,
+                              IR.Emit_Number
+                                (Unit.all, Filling, Result,
+                                 Ty.Magnitude (Shape.Length), False, Site),
+                              Element, Result, Site);
+                        when Landin.Checking.Variant_Field =>
+                           raise Landin.Compiler_Defect with
+                             "a variant part has no measurement of its own";
+                     end case;
+                  end Measure_Shape;
+               begin
+                  if Held = Ty.Aggregate then
+                     return Measure_Nominal
+                       (Landin.Checking.Nominal_Of
+                          (Types.all, Of_Tree, Asked));
                   elsif Held = Ty.Pointer_Value then
                      return IR.Emit_Measurement
-                       (Unit.all, Filling,
-                        (if Syn.Kind (Of_Tree, Node) = Syn.Size_Of
-                         then IR.Measure_Size else IR.Measure_Align),
-                        Ty.Usize, Result, Site);
+                       (Unit.all, Filling, Of_Code, Ty.Usize, Result, Site);
                   elsif Held in Ty.Slice_Value | Ty.Any_Value then
                      if Syn.Kind (Of_Tree, Node) = Syn.Align_Of then
                         return IR.Emit_Measurement
@@ -6316,9 +6414,7 @@ package body Landin.Stages.Lowering is
                      end;
                   elsif Held /= Ty.Fixed_Array then
                      return IR.Emit_Measurement
-                              (Unit.all, Filling,
-                               (if Syn.Kind (Of_Tree, Node) = Syn.Size_Of
-                                then IR.Measure_Size else IR.Measure_Align),
+                              (Unit.all, Filling, Of_Code,
                                Ty.Scalar_Name (Held), Result, Site);
                   end if;
 
@@ -6326,35 +6422,30 @@ package body Landin.Stages.Lowering is
                      Length : constant Landin.Checking.Element_Count :=
                        Landin.Checking.Array_Length
                          (Types.all, Of_Tree, Asked);
-                     Element : constant Ty.Scalar_Name :=
-                       Landin.Checking.Array_Element
-                         (Types.all, Of_Tree, Asked);
                   begin
-                     if Syn.Kind (Of_Tree, Node) = Syn.Align_Of then
-                        if Length = 0 then
-                           return IR.Emit_Number
-                                    (Unit.all, Filling, Result,
-                                     1, False, Site);
-                        end if;
-
-                        return IR.Emit_Measurement
-                                 (Unit.all, Filling, IR.Measure_Align,
-                                  Element, Result, Site);
+                     --  An empty array aligns to a byte and measures
+                     --  nothing: the answer is a number, with no
+                     --  measurement of an element nobody stores.
+                     if Syn.Kind (Of_Tree, Node) = Syn.Align_Of
+                       and then Length = 0
+                     then
+                        return IR.Emit_Number
+                                 (Unit.all, Filling, Result, 1, False, Site);
                      end if;
-
                      declare
-                        Element_Size : constant IR.Value_Id :=
-                          IR.Emit_Measurement
-                            (Unit.all, Filling, IR.Measure_Size,
-                             Element, Result, Site);
-                        Count : constant IR.Value_Id :=
-                          IR.Emit_Number
-                            (Unit.all, Filling, Result,
-                             Ty.Magnitude (Length), False, Site);
+                        Element : constant IR.Value_Id := Measure_Shape
+                          (Landin.Checking.Array_Element_Shape
+                             (Types.all, Of_Tree, Asked));
                      begin
+                        if Syn.Kind (Of_Tree, Node) = Syn.Align_Of then
+                           return Element;
+                        end if;
                         return IR.Emit_Binary
                                  (Unit.all, Filling, IR.Multiply,
-                                  Count, Element_Size, Result, Site);
+                                  IR.Emit_Number
+                                    (Unit.all, Filling, Result,
+                                     Ty.Magnitude (Length), False, Site),
+                                  Element, Result, Site);
                      end;
                   end;
                end;
@@ -14626,29 +14717,19 @@ package body Landin.Stages.Lowering is
                            Known := True;
                         end;
                      elsif Held = Ty.Fixed_Array then
+                        --  The same element-shaped extent the checker
+                        --  folded, so the image agrees with its answer.
                         declare
-                           Length : constant Landin.Checking.Element_Count
-                             :=
-                               Landin.Checking.Array_Length
-                                 (Types.all, Of_Tree, Asked);
-                           Element : constant Ty.Scalar_Name :=
-                             Landin.Checking.Array_Element
-                               (Types.all, Of_Tree, Asked);
-                           Size : constant Landin.Targets.Scalar_Size :=
-                             Ty.Storage_Size (Element, Facts);
+                           Size : Landin.Targets.Byte_Count;
+                           Alignment : Landin.Targets.Byte_Alignment;
                         begin
+                           Landin.Checking.Array_Type_Extent
+                             (Types.all, Of_Tree, Asked, Facts,
+                              Size, Alignment);
                            if Syn.Kind (Of_Tree, Node) = Syn.Align_Of then
-                              Value :=
-                                (if Length = 0 then 1
-                                 else Ty.Folded
-                                        (Landin.Targets.Alignment_Of
-                                           (Facts, Size)));
+                              Value := Ty.Folded (Alignment);
                            else
-                              Value :=
-                                Ty.Folded
-                                  (Landin.Targets.Byte_Count (Length)
-                                   * Landin.Targets.Byte_Count
-                                       (Landin.Targets.Bytes (Size)));
+                              Value := Ty.Folded (Size);
                            end if;
                            Known := True;
                         end;

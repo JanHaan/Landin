@@ -1,0 +1,7 @@
+sized: type = concept (t: type)
+    size: (value: t) -> (n: usize)
+end sized
+
+same: (a: any sized, b: any sized) -> (r: bool) =
+    r = a == b
+end same

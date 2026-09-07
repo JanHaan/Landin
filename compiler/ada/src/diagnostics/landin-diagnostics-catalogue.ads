@@ -507,6 +507,9 @@ package Landin.Diagnostics.Catalogue is
      is (case Of_Code is
             when Literal_Out_Of_Range | Impossible_Operand
                | Unsupported_Use => 1,
+            --  A module value of a range subtype has bounds to point at,
+            --  and an erased pair has the site that asked for the image.
+            when Not_Known_At_Compile_Time => 1,
             when others => Minimum_Secondaries (Of_Code));
 
    --  How many notes. [1830] promises a diagnostic that names the construct

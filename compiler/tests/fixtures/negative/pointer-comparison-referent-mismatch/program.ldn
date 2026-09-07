@@ -1,0 +1,3 @@
+same: (a: ptr u8, b: ptr u32) -> (r: bool) =
+    r = a == b
+end same

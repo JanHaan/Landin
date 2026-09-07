@@ -4498,9 +4498,9 @@ item that inherits it.
 Status: active
 Depends on: R2.50, R4.10, R4.20
 
-Two independent reviews of `da42169` (kept as `.scratch/comp-review-1.md`
-and `.scratch/comp-review-2.md` while the work runs; their durable content
-is this section) reproduced defects in slices already marked complete. This
+Two independent reviews of `da42169`, kept as local scratch notes while
+the work runs and whose durable content is this section, reproduced
+defects in slices already marked complete. This
 item repairs them before R4.30 widens the language further. The work is
 ordered by consequence: the language's own safety claims first, then silent
 miscompiles and compiler crashes, then the gates that let them through.
@@ -4559,8 +4559,8 @@ entry enumeration (R4.70), `core/io` `errno` fidelity and `EINTR` (R4.40),
 codegen-scale items such as the verifier's unreachable-island pass and the
 stack probe (R4.50).
 
-Exit evidence: every reproducer in `.scratch/project-review/` is a fixture
-with its documented verdict; complete pinned Linux debug and release suites
+Exit evidence: every reproducer the reviews shipped is a fixture with its
+documented verdict; complete pinned Linux debug and release suites
 pass; `highlight/test.sh --integration` passes on every compiler and core
 source; `check.py`'s code rules run on the tagged fences and refuse an
 untagged one; the authoritative native gate is green on the closing commit.

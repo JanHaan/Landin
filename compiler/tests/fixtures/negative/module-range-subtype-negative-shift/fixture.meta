@@ -1,0 +1,6 @@
+class: negative
+summary: [0320] a negative shift amount is refused, and a module binding of a range subtype that depends on it has no folded value to check
+program: program.ldn
+codes: L0305, L0306
+constructs: 0320, 0660, 1940
+targets: linux-x86-64, macos-arm64
