@@ -179,6 +179,7 @@ negative/driver-unknown-option | linux-x86-64, macos-arm64
 negative/duplicate-in-a-body | linux-x86-64, macos-arm64
 negative/duplicate-in-a-module | linux-x86-64, macos-arm64
 negative/duplicate-parameter | linux-x86-64, macos-arm64
+negative/erased-typed-call-unhandled | linux-x86-64, macos-arm64
 negative/error-set-needs-an-atom | linux-x86-64, synthetic-32
 negative/escaping-frame-reference | linux-x86-64, macos-arm64, synthetic-32
 negative/external-aggregate-boundary | linux-x86-64
@@ -977,6 +978,8 @@ runtime/derived-parser | linux-x86-64
 runtime/derived-storage-address-origin | linux-x86-64
 runtime/diagnostic-loggers-dispatch | linux-x86-64
 runtime/division-and-remainder-exit-with-their-results | linux-x86-64
+runtime/erased-named-recovery | linux-x86-64
+runtime/erased-parameterized-recovery | linux-x86-64
 runtime/evaluation-order-is-left-then-right | linux-x86-64
 runtime/fixed-array-any-shapes | linux-x86-64
 runtime/fixed-array-bound-expression | linux-x86-64

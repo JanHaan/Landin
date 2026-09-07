@@ -1,0 +1,100 @@
+unavailable: atom
+service: type = concept (item: type)
+    read: (self: ptr mut item) -> (value: i32) ! unavailable
+    touch: (self: ptr mut item) -> none ! unavailable
+end service
+state: type = struct
+    value: i32
+    calls: i32
+end state
+read_value: (self: ptr mut state) -> (answer: i32) ! unavailable =
+    self.val.calls = self.val.calls + 1
+    fail unavailable when self.val.value == 0
+    answer = self.val.value
+end read_value
+touch_value: (self: ptr mut state) -> none ! unavailable =
+    self.val.calls = self.val.calls + 1
+    fail unavailable when self.val.value == 0
+end touch_value
+state is service (read: read_value, touch: touch_value)
+
+typed: (value: any service) -> (answer: i32) =
+    result: i32 = value.read() else (problem)
+        answer = 10
+        if problem <> unavailable then answer = 1 end if
+        return
+    end
+    answer = result
+end typed
+inferred: (value: any service) -> (answer: i32) =
+    result := value.read() else (problem)
+        answer = 11
+        if problem <> unavailable then answer = 1 end if
+        return
+    end
+    answer = result
+end inferred
+statement: (value: any service) -> (answer: i32) =
+    value.touch() else (problem)
+        answer = 12
+        if problem <> unavailable then answer = 1 end if
+        return
+    end
+    answer = 13
+end statement
+
+rethrow: (value: any service) -> (answer: i32) ! ... =
+    result: i32 = value.read() else (problem)
+        fail problem
+    end
+    answer = result
+end rethrow
+propagate: (value: any service) -> (answer: i32) ! unavailable =
+    answer = try value.read()
+end propagate
+outer: (value: any service) -> (answer: i32) =
+    result: i32 = rethrow(value) else (problem)
+        answer = 14
+        if problem <> unavailable then answer = 1 end if
+        return
+    end
+    answer = result
+end outer
+outer_try: (value: any service) -> (answer: i32) =
+    result: i32 = propagate(value) else (problem)
+        answer = 15
+        if problem <> unavailable then answer = 1 end if
+        return
+    end
+    answer = result
+end outer_try
+
+generic_read: (item: type is service, inout value: item)
+              -> (answer: i32) ! unavailable =
+    answer = try item.read(addr value)
+end generic_read
+
+public main: () -> (code: i32) =
+    code = 1
+    mut backing: state = (value: 0, calls: 0)
+    value: any service = any(addr backing)
+    if typed(value) <> 10 then return end if
+    if inferred(value) <> 11 then return end if
+    if statement(value) <> 12 then return end if
+    if outer(value) <> 14 then return end if
+    if outer_try(value) <> 15 then return end if
+    if backing.calls <> 5 then return end if
+    backing.value = 42
+    if typed(value) <> 42 then return end if
+    if inferred(value) <> 42 then return end if
+    if statement(value) <> 13 then return end if
+    if outer(value) <> 42 then return end if
+    if outer_try(value) <> 42 then return end if
+    if backing.calls <> 10 then return end if
+    final: i32 = generic_read(backing) else (problem)
+        _ = problem
+        return
+    end
+    if final <> 42 or backing.calls <> 11 then return end if
+    code = 42
+end main

@@ -762,6 +762,15 @@ package body Landin.Stages.Checking is
       procedure Discover_Generic_Calls
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
 
+      type Pending_Selection is record
+         Source : Landin.Source.Source_Id;
+         Node   : Syn.Node_Id;
+         View   : Landin.Checking.Routine_Instance_Id;
+      end record;
+      package Selection_Lists is new Ada.Containers.Vectors
+        (Index_Type => Positive, Element_Type => Pending_Selection);
+      Pending_Selections : Selection_Lists.Vector;
+
       procedure Check_Traversal_Header
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
       procedure Require
@@ -8772,6 +8781,24 @@ package body Landin.Stages.Checking is
             --  Anonymous bodies are roots of their own and are discovered
             --  after every anonymous signature has been materialized.
             return;
+         elsif Syn.Kind (Of_Tree, Node) = Syn.Binding
+           and then Syn.Value_Of (Of_Tree, Node) /= Syn.No_Node
+           and then Syn.Kind (Of_Tree, Syn.Value_Of (Of_Tree, Node))
+             = Syn.Any_Construction
+           and then Declared_As_Node (Of_Tree, Node) = Ty.Any_Value
+         then
+            --  Written context can instantiate a parameterized provider.
+            --  Preserve that context before queued erased calls need its
+            --  concrete table; flow and origins still run with the body.
+            Check_Contextual_Value
+              (Of_Tree, Syn.Value_Of (Of_Tree, Node),
+               (Kind => Ty.Any_Value,
+                Concept => Landin.Checking.Any_Concept_Of
+                  (Types.all, Declaration_At (Syn.Source_Of (Of_Tree), Node)),
+                others => <>),
+               Syn.Origin (Of_Tree, Syn.Declared_Type (Of_Tree, Node)),
+               "the runtime-dispatch type written here",
+               Static_Image => not Is_Local_Binding (Of_Tree, Node));
          elsif Syn.Kind (Of_Tree, Node) = Syn.Match_Statement then
             --  Match aliases carry contextual payload descriptors. Prepare
             --  them before a nested traversal or generic call can ask to
@@ -8818,6 +8845,34 @@ package body Landin.Stages.Checking is
                         begin
                            pragma Unreferenced (Signature);
                         end;
+                     end if;
+                  end;
+               elsif Syn.Kind (Of_Tree, Callee) = Syn.Member_Selection
+                 and then not
+                   (Res.Verdict_Of
+                      (Meanings.all, Of_Tree,
+                       Syn.Target_Of (Of_Tree, Callee)) = Res.Bound
+                    and then Res.Sort_Of
+                      (Meanings.all, Res.Bound_To
+                         (Meanings.all, Of_Tree,
+                          Syn.Target_Of (Of_Tree, Callee)))
+                        in Res.Type_Parameter | Res.Module_Type
+                          | Res.Module_Concept)
+                 and then Landin.Checking.Signature_Of
+                   (Types.all, Of_Tree, Callee) = Landin.Checking.No_Signature
+                 and then Selected_From
+                   (Of_Tree, Syn.Target_Of (Of_Tree, Callee)) = Ty.Any_Value
+               then
+                  --  A later body can construct the parameterized provider
+                  --  needed by this interface. Keep its overlay until all
+                  --  evidence discovery has run, then synthesize once.
+                  declare
+                     Pending : constant Pending_Selection :=
+                       (Syn.Source_Of (Of_Tree), Callee,
+                        Landin.Checking.Current_Routine_View (Types.all));
+                  begin
+                     if not Pending_Selections.Contains (Pending) then
+                        Pending_Selections.Append (Pending);
                      end if;
                   end;
                end if;
@@ -22112,6 +22167,11 @@ package body Landin.Stages.Checking is
 
             when Ty.Any_Value =>
                if Syn.Kind (Of_Tree, Node) = Syn.Any_Construction then
+                  if Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
+                    = Ty.Ill_Typed
+                  then
+                     return;
+                  end if;
                   if Static_Image then
                      Bad.Report
                        (Item => Bad.Not_Known_At_Compile_Time,
@@ -22513,6 +22573,20 @@ package body Landin.Stages.Checking is
                            end if;
                            Landin.Checking.Refuse
                              (Types.all, Of_Tree, Node);
+                           return;
+                        end if;
+                        if Landin.Checking.Evidence_Of
+                          (Types.all, Of_Tree, Node)
+                            /= Landin.Checking.No_Conformance
+                        then
+                           if Landin.Checking.Evidence_Of
+                             (Types.all, Of_Tree, Node) /= Evidence
+                             or else Landin.Checking.Any_Concept_Of
+                               (Types.all, Of_Tree, Node) /= Expected.Concept
+                           then
+                              Context_Mismatch
+                                (Of_Tree, Node, Expected, Site, Because);
+                           end if;
                            return;
                         end if;
                         Landin.Checking.Note
@@ -27771,7 +27845,42 @@ package body Landin.Stages.Checking is
          end;
       end loop;
 
-      Finalize_Error_Sets;
+      declare
+         Next : Positive := 1;
+      begin
+         --  Provider instantiation can append work while discovery runs.
+         --  Drain the complete queue before capturing the graph inventory.
+         while Next <= Natural (Pending_Selections.Length) loop
+            declare
+               Pending : constant Pending_Selection :=
+                 Pending_Selections (Next);
+               Previous : constant Landin.Checking.Routine_Instance_Id :=
+                 Landin.Checking.Current_Routine_View (Types.all);
+            begin
+               Landin.Checking.Restore_Routine_View (Types.all, Pending.View);
+               declare
+                  Held : constant Ty.Type_Kind :=
+                    Synthesise (Tree_For (Pending.Source).all, Pending.Node);
+               begin
+                  pragma Unreferenced (Held);
+               end;
+               Landin.Checking.Restore_Routine_View (Types.all, Previous);
+            exception
+               when others =>
+                  Landin.Checking.Restore_Routine_View (Types.all, Previous);
+                  raise;
+            end;
+            Next := Next + 1;
+         end loop;
+      end;
+
+      declare
+         Count : constant Natural :=
+           Landin.Checking.Signature_Count (Types.all);
+      begin
+         Finalize_Error_Sets;
+         pragma Assert (Landin.Checking.Signature_Count (Types.all) = Count);
+      end;
 
       --  Instance discovery published signatures and nested targets but did
       --  not check a generic body against provisional errors.  Every ready

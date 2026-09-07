@@ -3961,6 +3961,31 @@ scalar identity. It does not widen contextual aggregate arguments,
 parameterized struct fields, raw storage, origins or permissions, and it does
 not duplicate the separately owned contextual text-literal staging work.
 
+The bounded erased-recovery staging follow-up addresses a dependency exposed
+by the hosted world capability. An explicitly typed result or statement call
+could reach error inference before its erased interface was synthesized,
+leaving a named recovery binding without a storable atom type. Inferred result
+bindings had already synthesized the same interface. Missing erased member
+signatures are queued by source node and generic overlay during discovery.
+Direct typed `any` initializers first materialize their contextual concrete
+conformance, including parameterized providers. Rechecking a successful
+construction reuses only its same concept and evidence identity. The queued
+interfaces then pass through ordinary synthesis before error inference sizes
+its graph, preserving once-only dispatch metadata, the concept's exact labels
+and declared errors. Error closure asserts that its signature inventory does
+not grow. A checker regression inspects recovery binding types and
+error sets; runtime controls cover typed, inferred and statement calls, exact
+error identity, rethrow and `try` propagation through outer recovery,
+successful calls and once-only dispatch. The parameterized-provider runtime
+places its erased consumer before the construction, uses two concrete generic
+overlays and an effectful construction operand, and recovers the exact provider
+error through named rethrow. Discovery of contextual constructions in fields,
+assignments, returns and arguments is not established by this direct-binding
+seam. An unhandled typed call remains refused. This changes no language rule
+or I/O contract. Complete pinned Linux debug and release gates each pass 405
+cases and 10,909 checks on unchanged compiler source and fixtures. The full
+font-aware document check passes; authoritative integration remains required.
+
 The initialized-view implementation must also retain [0860]'s shallow alias
 limit: a reference inserted through an alias is not generally propagated back
 to every other view of that storage, so writable views do not establish
