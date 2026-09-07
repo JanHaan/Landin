@@ -38,6 +38,12 @@ bounded_note: (fixed capacity: usize, self: ptr mut bounded(capacity),
                where: text.position, kind: severity, escaping what: []u8)
               -> none ! io.io_failed =
     if self.val.stored < capacity then
+        --  The entry keeps the message's address as an integer rather than
+        --  the view itself, so that an entry stays reference-free: the log
+        --  is then zero-initialisable and `note_at` returns a plain value
+        --  with no `from` clause.  The origin check happens at the call:
+        --  `what` is escaping, so a frame buffer is refused there, and a
+        --  logged view is the caller's to keep alive, as `escaping` says.
         mut data: usize = 0
         if lenof what > 0 then
             data = usize(addr what[0])

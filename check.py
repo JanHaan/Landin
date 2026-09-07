@@ -993,6 +993,10 @@ def landin_tokens(source, signs, trees=None):
     return out, None
 
 
+class LeftRecursion(Exception):
+    """A production that reaches itself before consuming a token."""
+
+
 def grammar_recognises(rules, trees, tokens, start="program"):
     """Does the grammar derive exactly this token list?"""
     reserved = set(re.findall(r'"([a-z]+)"', rules.get("keyword", "")))
@@ -1001,8 +1005,14 @@ def grammar_recognises(rules, trees, tokens, start="program"):
     def item(node, at):
         key = (id(node), at)
         if key in seen:
+            if seen[key] is None:
+                #  The rule asked about itself at the same position with
+                #  nothing consumed: left recursion, which this recogniser
+                #  cannot derive.  Reported, rather than quietly answering
+                #  that the program is underivable (R4.21).
+                raise LeftRecursion(node[1] if node[0] == "rule" else "?")
             return seen[key]
-        seen[key] = ()
+        seen[key] = None
         kind = node[0]
 
         if kind == "lit":
@@ -1817,7 +1827,9 @@ def frontend_codes():
         found = re.search(r"function Code_For[^;]*?is \(case .*?\);",
                           io.open(full, encoding="utf-8").read(), re.S)
         if not found:
-            continue
+            #  The same fail-closed answer as a missing file: a table that
+            #  moved is not a table with fewer rows (R4.21).
+            return set()
         for name in re.findall(r"(?:Rows|Catalogue)\.([A-Za-z0-9_]+)",
                                found.group(0)):
             if name in by_name:
@@ -1920,8 +1932,14 @@ def check_grammar_corpus(full_run):
                 #  would be character offsets rather than byte offsets.
                 text = io.open(path, "rb").read().decode("latin-1")
                 tokens, complaint = landin_tokens(text, signs, trees)
-                derives = (tokens is not None
-                           and grammar_recognises(rules, trees, tokens))
+                try:
+                    derives = (tokens is not None
+                               and grammar_recognises(rules, trees, tokens))
+                except LeftRecursion as rule:
+                    out.append((where, 1,
+                                "the grammar's `%s` is left-recursive, which"
+                                " the recogniser cannot derive" % rule))
+                    continue
 
                 if must_derive and not derives:
                     out.append((where, 1,

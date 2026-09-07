@@ -2537,6 +2537,7 @@ package body Landin.Backend.X86_64 is
                             (Landin.Targets.Byte_Count'Image (Size))
                         & ", %rcx");
                      Emit ("xorl %eax, %eax");
+                     Emit ("cld");
                      Emit ("rep stosb");
 
                      --  rep stosb advances %rdi, so form the part base
@@ -5120,6 +5121,13 @@ package body Landin.Backend.X86_64 is
                elsif Shared_With (Index) = Landin.IR.No_Item then
                   Emit_Routine (Item);
                else
+                  --  An alias is still this routine's symbol: a public one
+                  --  keeps its visibility and its function type, so a
+                  --  linker and a debugger see it as before the fold.
+                  if Is_Public_Item (Item) then
+                     Emit (".globl " & Symbol (Item));
+                  end if;
+                  Emit (".type " & Symbol (Item) & ", @function");
                   Emit
                     (".set " & Symbol (Item) & ", "
                      & Symbol (Shared_With (Index)));

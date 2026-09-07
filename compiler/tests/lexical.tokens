@@ -26848,7 +26848,7 @@ file negative/error-set-needs-an-atom/program.ldn tokens 10
   16 17 =
   18 21 end
   22 23 f
-file negative/escaping-argument-frame-origin/program.ldn tokens 58
+file negative/escaping-argument-frame-origin/program.ldn tokens 60
   0 6 anchor
   6 7 :
   8 11 i32
@@ -26860,8 +26860,10 @@ file negative/escaping-argument-frame-origin/program.ldn tokens 58
   27 30 ptr
   31 34 i32
   35 36 =
-  37 41 addr
-  42 48 anchor
+  37 40 ptr
+  40 41 (
+  41 47 0x1000
+  47 48 )
   50 56 retain
   56 57 :
   58 59 (
@@ -26907,7 +26909,7 @@ file negative/escaping-argument-frame-origin/program.ldn tokens 58
   209 210 )
   211 214 end
   215 218 bad
-file negative/escaping-argument-in-defer/program.ldn tokens 50
+file negative/escaping-argument-in-defer/program.ldn tokens 52
   0 6 anchor
   6 7 :
   8 11 i32
@@ -26919,8 +26921,10 @@ file negative/escaping-argument-in-defer/program.ldn tokens 50
   27 30 ptr
   31 34 i32
   35 36 =
-  37 41 addr
-  42 48 anchor
+  37 40 ptr
+  40 41 (
+  41 47 0x1000
+  47 48 )
   50 56 retain
   56 57 :
   58 59 (
@@ -26958,7 +26962,7 @@ file negative/escaping-argument-in-defer/program.ldn tokens 50
   189 190 )
   191 194 end
   195 198 bad
-file negative/escaping-argument-in-if-condition/program.ldn tokens 63
+file negative/escaping-argument-in-if-condition/program.ldn tokens 65
   0 6 anchor
   6 7 :
   8 11 i32
@@ -26970,8 +26974,10 @@ file negative/escaping-argument-in-if-condition/program.ldn tokens 63
   27 30 ptr
   31 34 i32
   35 36 =
-  37 41 addr
-  42 48 anchor
+  37 40 ptr
+  40 41 (
+  41 47 0x1000
+  47 48 )
   50 56 retain
   56 57 :
   58 59 (
@@ -27022,7 +27028,7 @@ file negative/escaping-argument-in-if-condition/program.ldn tokens 63
   237 239 if
   240 243 end
   244 247 bad
-file negative/escaping-argument-in-nested-argument/program.ldn tokens 80
+file negative/escaping-argument-in-nested-argument/program.ldn tokens 82
   0 6 anchor
   6 7 :
   8 11 i32
@@ -27034,8 +27040,10 @@ file negative/escaping-argument-in-nested-argument/program.ldn tokens 80
   27 30 ptr
   31 34 i32
   35 36 =
-  37 41 addr
-  42 48 anchor
+  37 40 ptr
+  40 41 (
+  41 47 0x1000
+  47 48 )
   50 56 retain
   56 57 :
   58 59 (
@@ -27103,7 +27111,7 @@ file negative/escaping-argument-in-nested-argument/program.ldn tokens 80
   296 297 )
   298 301 end
   302 305 bad
-file negative/escaping-argument-in-while-condition/program.ldn tokens 61
+file negative/escaping-argument-in-while-condition/program.ldn tokens 63
   0 6 anchor
   6 7 :
   8 11 i32
@@ -27115,8 +27123,10 @@ file negative/escaping-argument-in-while-condition/program.ldn tokens 61
   27 30 ptr
   31 34 i32
   35 36 =
-  37 41 addr
-  42 48 anchor
+  37 40 ptr
+  40 41 (
+  41 47 0x1000
+  47 48 )
   50 56 retain
   56 57 :
   58 59 (
@@ -34740,6 +34750,20 @@ file negative/missing-then/program.ldn tokens 25
   61 63 if
   64 67 end
   68 69 f
+file negative/module-address-initializer-refused/program.ldn tokens 13
+  0 6 anchor
+  6 7 :
+  8 11 i32
+  12 13 =
+  14 15 0
+  16 19 mut
+  20 25 saved
+  25 26 :
+  27 30 ptr
+  31 34 i32
+  35 36 =
+  37 41 addr
+  42 48 anchor
 file negative/module-array-fold-agreement/program.ldn tokens 111
   0 4 zero
   4 5 :

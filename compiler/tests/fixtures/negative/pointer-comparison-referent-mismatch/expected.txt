@@ -1,0 +1,10 @@
+error[L0301]: these pointers point at different types
+  --> ../tests/fixtures/negative/pointer-comparison-referent-mismatch/program.ldn:2:14
+  |
+2 |     r = a == b
+  |              ^
+  --> ../tests/fixtures/negative/pointer-comparison-referent-mismatch/program.ldn:2:9
+  |
+2 |     r = a == b
+  |         ^ the pointer compared here
+  = note: [1890]: a comparison wants one type on both sides, and a pointer's type includes what it points at; [0440]'s permission does not enter an address comparison

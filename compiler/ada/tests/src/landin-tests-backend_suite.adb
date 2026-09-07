@@ -5128,8 +5128,10 @@ package body Landin.Tests.Backend_Suite is
             Contains (Text, "movq 16(%rax), %rax")
               and then Occurrences (Text, "call *") = 1,
             "the first semantic function offset feeds one indirect call");
+         --  A folded instance is an alias that keeps its symbol's type, so
+         --  the body count is the count of sizes, which only a body has.
          Landin.Testing.Check_Equal
-           (Item, Occurrences (Text, ".type .Llandin_anonymous_"), 1,
+           (Item, Occurrences (Text, ".size .Llandin_anonymous_"), 1,
             "representation-compatible instances emit one machine body");
          Landin.Testing.Check_Equal
            (Item, Occurrences (Text, ".set .Llandin_anonymous_"), 1,

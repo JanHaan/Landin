@@ -1,5 +1,5 @@
 anchor: i32 = 0
-mut saved: ptr i32 = addr anchor
+mut saved: ptr i32 = ptr(0x1000)
 
 retain: (escaping value: ptr i32) -> none =
     saved = value
