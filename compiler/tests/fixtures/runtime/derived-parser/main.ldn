@@ -107,23 +107,24 @@ end notes_are_expected
 public main: () -> (code: i32) =
     code = 1
     mut host := io.host()
+    world: any io.world = any(addr host)
     first_argument: usize = 0
-    source_argument := io.argument_at(host, first_argument) else (problem)
+    source_argument := world.argument(first_argument) else (problem)
         _ = problem
         return
     end
-    opened := io.open_read(host, source_argument.data) else (problem)
+    opened := world.open_read(source_argument.data) else (problem)
         _ = problem
         return
     end
     dead_stream: io.file = opened
     mut source_bytes: [256]u8 = zeroed
-    source_length: usize = io.read(host, opened, source_bytes[0..<256])
+    source_length: usize = world.read(opened, source_bytes[0..<256])
       else (problem)
         _ = problem
         return
     end
-    io.close(host, opened) else (problem)
+    world.close(opened) else (problem)
         _ = problem
         return
     end
@@ -149,8 +150,8 @@ public main: () -> (code: i32) =
 
     mut second_memory: [4096]u8 = zeroed
     mut second_arena := mem.arena_over(addr second_memory[0], 4096)
-    diagnostic_stream := io.err(host)
-    mut immediate := diag.to(addr host, addr diagnostic_stream)
+    diagnostic_stream := world.err()
+    mut immediate := diag.to(addr world, addr diagnostic_stream)
     mut streaming_log: any diag.log = any(addr immediate)
     mut streamed_tree := parser.empty()
     parser.parse_file(source, streaming_log, second_arena, streamed_tree)
@@ -178,7 +179,7 @@ public main: () -> (code: i32) =
 
     mut third_memory: [4096]u8 = zeroed
     mut third_arena := mem.arena_over(addr third_memory[0], 4096)
-    mut broken := diag.to(addr host, addr dead_stream)
+    mut broken := diag.to(addr world, addr dead_stream)
     mut broken_log: any diag.log = any(addr broken)
     mut interrupted_tree := parser.empty()
     mut saw_io_failure: bool = false

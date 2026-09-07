@@ -5228,6 +5228,20 @@ package body Landin.Backend.X86_64 is
               & ".size _landin_host_argument_count, "
               & ".-_landin_host_argument_count");
 
+         --  Publish the user-argument table itself so core/io can retain the
+         --  real backing capability in its system value.  Indexed results
+         --  then derive from that stored table instead of from hidden global
+         --  state; argv[0] remains outside the published table.
+         Put (Character'Val (9)
+              & ".type _landin_host_argument_table, @function");
+         Put ("_landin_host_argument_table:");
+         Emit ("movq .Llandin_host_argv(%rip), %rax");
+         Emit ("addq $8, %rax");
+         Emit ("ret");
+         Put (Character'Val (9)
+              & ".size _landin_host_argument_table, "
+              & ".-_landin_host_argument_table");
+
          Put (Character'Val (9)
               & ".type _landin_host_argument_at, @function");
          Put ("_landin_host_argument_at:");
@@ -5237,6 +5251,18 @@ package body Landin.Backend.X86_64 is
          Put (Character'Val (9)
               & ".size _landin_host_argument_at, "
               & ".-_landin_host_argument_at");
+
+         --  Keep the established one-index helper above for the existing
+         --  foreign-C boundary fixtures.  The capability-aware variant has a
+         --  distinct symbol and derives its result from the explicit table.
+         Put (Character'Val (9)
+              & ".type _landin_host_argument_at_from, @function");
+         Put ("_landin_host_argument_at_from:");
+         Emit ("movq (%rdi,%rsi,8), %rax");
+         Emit ("ret");
+         Put (Character'Val (9)
+              & ".size _landin_host_argument_at_from, "
+              & ".-_landin_host_argument_at_from");
 
          Put (Character'Val (9)
               & ".type _landin_host_text_length, @function");
@@ -5255,6 +5281,20 @@ package body Landin.Backend.X86_64 is
          Put (Character'Val (9)
               & ".size _landin_host_open_read, "
               & ".-_landin_host_open_read");
+
+         --  A fixed Landin signature fronts libc's variadic open.  Linux
+         --  O_WRONLY | O_CREAT | O_TRUNC is 577; 0666 is filtered by the
+         --  process umask.  Clearing eax satisfies the SysV variadic ABI.
+         Put (Character'Val (9)
+              & ".type _landin_host_open_write, @function");
+         Put ("_landin_host_open_write:");
+         Emit ("movl $577, %esi");
+         Emit ("movl $438, %edx");
+         Emit ("xorl %eax, %eax");
+         Emit ("jmp open");
+         Put (Character'Val (9)
+              & ".size _landin_host_open_write, "
+              & ".-_landin_host_open_write");
 
          Put (Character'Val (9) & ".type _landin_host_read, @function");
          Put ("_landin_host_read:");

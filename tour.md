@@ -3293,9 +3293,12 @@ and [0760] separated those two on purpose.
 Entry point. Hosted, main follows the system C ABI. The
 no-argument form is the ordinary one, because argc and argv
 in the C shape cannot be indexed without slice_from, which
-is core's by [0500] — so the arguments come from core as a
-slice instead. The C form stays available for whoever wants
-it. Freestanding there is no main; the build description
+is not enabled — so the hosted world retains the argument table
+and offers bounded indexed pointer-and-length views instead.
+Those views derive from the world; a caller that must mutate the
+same backing-aware provider while retaining one first copies what
+it needs into its own storage. The C form stays available for
+whoever wants it. Freestanding there is no main; the build description
 names the entry.
 
 ### [1660] And this is where capabilities come from
@@ -3308,11 +3311,12 @@ main is an argument list being filled.
 
 ```landin
 public main: () -> (code: i32) =
-    args := io.args()           -- []cstring, from core
     mut h := io.host()          -- out of nothing, once, here
-    mut w := any(addr h)
+    mut w: any io.world = any(addr h)
+    args := copy_arguments(w)   -- application-owned representation
     arena program do
-        mut logger := diag.to(w.err())
+        stream := w.err()
+        mut logger := diag.to(addr w, addr stream)
         mut d := any(addr logger)
         code = run(w, program, d, args) else 1
     end program
@@ -3326,7 +3330,7 @@ not learn the difference.
 ```landin
 test_drops_debug: () -> none =
     mut h := io.in_memory([(name: "in.log", body: "DEBUG a\nERROR b\n")])
-    mut w := any(addr h)
+    mut w: any io.world = any(addr h)
     arena scratch do
         mut logger := diag.new_log(N: 32)
         mut d := any(addr logger)

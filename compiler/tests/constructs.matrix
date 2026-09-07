@@ -179,7 +179,7 @@
 1630   tour        -                                  Inline assembly, for what has no builtin
 1640   tour        -                                  Kept against section garbage collection, and placed
 1650   tour        accepted emitted executed          Entry point
-1660   tour        accepted emitted executed          And this is where capabilities come from
+1660   tour        accepted emitted executed refused  And this is where capabilities come from
 1670   tour        accepted emitted executed          A failed check calls a fixed, never-returning symbol
 1680   tour        accepted emitted executed refused  Require a capability, do not track an effect
 1690   tour        accepted emitted executed          One mechanism, two readings, is better than two mechanisms

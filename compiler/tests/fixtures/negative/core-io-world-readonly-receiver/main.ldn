@@ -1,0 +1,8 @@
+import core/io
+
+public main: () -> (code: i32) =
+    state := io.host()
+    world: any io.world = any(addr state)
+    _ = world.argument_count()
+    code = 0
+end main

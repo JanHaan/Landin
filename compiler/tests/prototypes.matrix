@@ -14,7 +14,7 @@ runtime/struct-literal-order-and-fill | prototype-3-containers.md | Z17:1219 | 0
 runtime/undo-cleanups-follow-failure-edges | prototype-3-containers.md | Z19:1253 | 0340, 0640, 0940, 0960, 0970, 1030, 1090, 1100, 1110, 1200, 1800, 1810, 1920 | linux-x86-64 | failure cleanup moves its arguments at execution
 runtime/generic-parameterized-evidence | prototype-3-containers.md | Z1:967, Z4:1011 | 1230, 1240, 1250, 1290, 1310 | linux-x86-64 | parameterized providers receive target-derived evidence
 negative/parameterized-conformance-entry-signature-mismatch | prototype-3-containers.md | Z1:967, Z4:1011 | 1230, 1240, 1250, 1260, 1290, 1310 | linux-x86-64, macos-arm64, synthetic-32 | substituted provider signatures must agree
-runtime/constant-return-exits-with-its-code | prototype-4-app.md | W2:693 | 1660, 1770, 1800, 1970 | linux-x86-64 | hosted entry uses the ordinary no-argument shape
-runtime/generic-composed-evidence | prototype-4-app.md | W4:726 | 1230, 1240, 1290, 1310, 1340 | linux-x86-64 | a narrow concept composes rather than widening
-runtime/any-heterogeneous-dispatch | prototype-4-app.md | W6:795 | 0430, 0670, 1230, 1240, 1260, 1370, 1380, 1390 | linux-x86-64 | erased state retains mutable permission and dispatch identity
-negative/any-frame-origin-escape | prototype-4-app.md | W6:795 | 0770, 0840, 1230, 1240, 1370, 1380 | linux-x86-64, macos-arm64, synthetic-32 | erased state retains pointee origin
+runtime/constant-return-exits-with-its-code | prototype-4-app.md | W2:706 | 1660, 1770, 1800, 1970 | linux-x86-64 | hosted entry uses the ordinary no-argument shape
+runtime/generic-composed-evidence | prototype-4-app.md | W4:739 | 1230, 1240, 1290, 1310, 1340 | linux-x86-64 | a narrow concept composes rather than widening
+runtime/any-heterogeneous-dispatch | prototype-4-app.md | W6:808 | 0430, 0670, 1230, 1240, 1260, 1370, 1380, 1390 | linux-x86-64 | erased state retains mutable permission and dispatch identity
+negative/any-frame-origin-escape | prototype-4-app.md | W6:808 | 0770, 0840, 1230, 1240, 1370, 1380 | linux-x86-64, macos-arm64, synthetic-32 | erased state retains pointee origin

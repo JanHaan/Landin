@@ -103,7 +103,7 @@ end message_byte
     (note: bounded_note, failed: bounded_failed)
 
 streaming_value: type = struct
-    state: ptr mut io.system
+    state: ptr any io.world
     where_to: ptr io.file
     errors: usize
 end streaming_value
@@ -124,41 +124,41 @@ digit_7: [1]u8 = [55]
 digit_8: [1]u8 = [56]
 digit_9: [1]u8 = [57]
 
-write_digit: (inout state: io.system, where_to: io.file, digit: usize)
+write_digit: (state: any io.world, where_to: io.file, digit: usize)
              -> none ! io.io_failed =
     if digit == 0 then
-        try io.write(state, where_to, digit_0[0..<1])
+        try state.write(where_to, digit_0[0..<1])
     end if
     if digit == 1 then
-        try io.write(state, where_to, digit_1[0..<1])
+        try state.write(where_to, digit_1[0..<1])
     end if
     if digit == 2 then
-        try io.write(state, where_to, digit_2[0..<1])
+        try state.write(where_to, digit_2[0..<1])
     end if
     if digit == 3 then
-        try io.write(state, where_to, digit_3[0..<1])
+        try state.write(where_to, digit_3[0..<1])
     end if
     if digit == 4 then
-        try io.write(state, where_to, digit_4[0..<1])
+        try state.write(where_to, digit_4[0..<1])
     end if
     if digit == 5 then
-        try io.write(state, where_to, digit_5[0..<1])
+        try state.write(where_to, digit_5[0..<1])
     end if
     if digit == 6 then
-        try io.write(state, where_to, digit_6[0..<1])
+        try state.write(where_to, digit_6[0..<1])
     end if
     if digit == 7 then
-        try io.write(state, where_to, digit_7[0..<1])
+        try state.write(where_to, digit_7[0..<1])
     end if
     if digit == 8 then
-        try io.write(state, where_to, digit_8[0..<1])
+        try state.write(where_to, digit_8[0..<1])
     end if
     if digit == 9 then
-        try io.write(state, where_to, digit_9[0..<1])
+        try state.write(where_to, digit_9[0..<1])
     end if
 end write_digit
 
-write_position: (inout state: io.system, where_to: io.file, value: usize)
+write_position: (state: any io.world, where_to: io.file, value: usize)
                 -> none ! io.io_failed =
     if value >= 10 then
         try write_position(state, where_to, value / 10)
@@ -166,25 +166,25 @@ write_position: (inout state: io.system, where_to: io.file, value: usize)
     try write_digit(state, where_to, value % 10)
 end write_position
 
-public to: (state: ptr mut io.system, where_to: ptr io.file)
+public to: (state: ptr any io.world, where_to: ptr io.file)
            -> (result: streaming from state, where_to) =
     result = streaming(state: state, where_to: where_to, errors: 0)
 end to
 
 stream_note: (self: ptr mut streaming, where: text.position,
               kind: severity, escaping what: []u8) -> none ! io.io_failed =
-    state: ptr mut io.system = self.val.state
+    state: ptr any io.world = self.val.state
     where_to: ptr io.file = self.val.where_to
     if kind == error then
         inc self.val.errors
-        try io.write(state.val, where_to.val, error_prefix[0..<2])
+        try state.val.write(where_to.val, error_prefix[0..<2])
     else
-        try io.write(state.val, where_to.val, warning_prefix[0..<2])
+        try state.val.write(where_to.val, warning_prefix[0..<2])
     end if
 
     try write_position(state.val, where_to.val, text.ordinal(where))
-    try io.write(state.val, where_to.val, separator[0..<1])
-    try io.write(state.val, where_to.val, what)
+    try state.val.write(where_to.val, separator[0..<1])
+    try state.val.write(where_to.val, what)
 end stream_note
 
 stream_failed: (self: ptr streaming) -> (yes: bool) =
