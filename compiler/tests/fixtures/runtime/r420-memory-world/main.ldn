@@ -1,0 +1,119 @@
+import core/io
+
+mut input: [5]u8 = [65, 66, 67, 68, 69]
+mut destination: [12]u8 = zeroed
+mut output: [12]u8 = zeroed
+mut errors: [8]u8 = zeroed
+path_in_bytes: [3]u8 = [105, 110, 0]
+path_out_bytes: [4]u8 = [111, 117, 116, 0]
+
+public main: () -> (code: i32) =
+    code = 1
+    name_in: []u8 = "in"
+    name_out: []u8 = "out"
+    first: io.memory_file =
+      (name: name_in, contents: input[0..<lenof input], length: 5, cursor: 0,
+       readable: true, writable: false, opened: false, writing: false)
+    second: io.memory_file =
+      (name: name_out, contents: destination[0..<lenof destination], length: 0, cursor: 0,
+       readable: true, writable: true, opened: false, writing: false)
+    mut files: [2]io.memory_file
+    files[0] = first
+    files[1] = second
+    no_arguments: []io.argument = []
+    mut state := io.memory_world(files[0..<lenof files], no_arguments, output[0..<lenof output], errors[0..<lenof errors])
+    state.read_limit = 2
+    state.write_limit = 2
+    world: any io.world = any(addr state)
+    if world.argument_count() <> 0 then return end if
+    if not missing_argument(world) then return end if
+    path_in := addr path_in_bytes[0]
+    opened: io.file = world.open_read(path_in) else (problem)
+        _ = problem
+        return
+    end
+    mut chunk: [3]u8 = zeroed
+    first_count: usize = world.read(opened, chunk[0..<3]) else (problem)
+        _ = problem
+        return
+    end
+    if first_count <> 2 or chunk[0] <> 65 or chunk[1] <> 66 then return end if
+    second_count: usize = world.read(opened, chunk[0..<3]) else (problem)
+        _ = problem
+        return
+    end
+    if second_count <> 2 or chunk[0] <> 67 or chunk[1] <> 68 then return end if
+    third_count: usize = world.read(opened, chunk[0..<3]) else (problem)
+        _ = problem
+        return
+    end
+    end_count: usize = world.read(opened, chunk[0..<3]) else (problem)
+        _ = problem
+        return
+    end
+    if third_count <> 1 or chunk[0] <> 69 or end_count <> 0 then return end if
+    state.fail_close_at = 1
+    mut close_failed: bool = false
+    world.close(opened) else (problem)
+        close_failed = problem == io.io_failed
+    end
+    if not close_failed or files[0].opened or state.close_calls <> 1 then return end if
+    stdout: io.file = world.out()
+    state.fail_write_at = 3
+    mut partial_failed: bool = false
+    bytes: []u8 = "abcdefg"
+    world.write(stdout, bytes) else (problem)
+        partial_failed = problem == io.io_failed
+    end
+    if not partial_failed or state.output_used <> 4
+      or output[0] <> 97 or output[3] <> 100 or output[4] <> 0
+    then return end if
+    state.fail_write_at = 0
+    tail: []u8 = "efg"
+    world.write(stdout, tail) else (problem)
+        _ = problem
+        return
+    end
+    state.write_limit = 0
+    mut no_progress: bool = false
+    world.write(stdout, tail) else (problem)
+        no_progress = problem == io.io_failed
+    end
+    if not no_progress or state.output_used <> 7 then return end if
+    state.write_limit = 2
+    path_out := addr path_out_bytes[0]
+    destination_file: io.file = world.open_write(path_out) else (problem)
+        _ = problem
+        return
+    end
+    world.write(destination_file, bytes) else (problem)
+        _ = problem
+        return
+    end
+    world.close(destination_file) else (problem)
+        _ = problem
+        return
+    end
+    stderr: io.file = world.err()
+    warning: []u8 = "bad"
+    world.write(stderr, warning) else (problem)
+        _ = problem
+        return
+    end
+    output_view := io.written(state)
+    if lenof output_view == 7 and output_view[6] == 103
+      and files[1].length == 7 and not files[1].opened
+      and destination[0] == 97 and destination[6] == 103
+      and state.errors_used == 3 and errors[0] == 98 and errors[2] == 100
+      and state.open_calls == 2 and state.close_calls == 2
+    then code = 42 end if
+end main
+
+missing_argument: (world: any io.world) -> (yes: bool) =
+    value: io.argument = world.argument(0) else (problem)
+        yes = problem == io.no_argument
+        return
+    end
+    _ = value.length
+    yes = false
+end missing_argument

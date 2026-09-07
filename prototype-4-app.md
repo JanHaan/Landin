@@ -30,6 +30,23 @@ all four D191 design questions, including that side-effect escape path. The
 library slice's explicit caller-backed arena does not establish the block's
 promised checks.
 
+The bounded memory-world pressure uses ordinary `core/io.memory` with explicit
+caller file tables, output/error buffers and injected argument descriptors.
+Its nonempty reads distinguish EOF from zero-progress failure; partial writes
+retain their completed prefix, and a close error still consumes valid open
+state. Source-derived output and argument views retain local origin checks.
+Descriptors, nested backing, nonoverlap and copied-handle validity remain
+manual obligations under D153. Small complete library clients exercise these
+contracts; they do not claim the full `read`, `filter`, `dest`, `config` and
+command-line application below, which remain R4.80.
+
+For the argument path touched by this slice, both providers expose only user
+arguments and index zero is the first of them, never `argv[0]`. The ordinary
+adapter copies a pointer-and-length `io.argument` into exact caller scratch and
+returns its initialized prefix for `text.from_bytes`; it does not reinterpret
+the pointer as a C string or manufacture a slice. The complete application's
+argument closure remains R4.80.
+
 ## core/mem  —  one addition to what prototype 3 sketched
 
 A single object rather than a slice. No from clause: what comes

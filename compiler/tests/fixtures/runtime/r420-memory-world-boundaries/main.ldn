@@ -1,0 +1,154 @@
+import core/io
+
+mut backing: [3]u8 = [65, 66, 67]
+mut output: [3]u8 = zeroed
+mut errors: [1]u8 = zeroed
+path: [2]u8 = [102, 0]
+missing: [2]u8 = [120, 0]
+arg_first: [2]u8 = [97, 98]
+arg_second: [1]u8 = [99]
+
+arguments_ok: (world: any io.world) -> (yes: bool) =
+    yes = false
+    return when world.argument_count() <> 3
+    first: io.argument = world.argument(0) else (problem)
+        _ = problem
+        return
+    end
+    second: io.argument = world.argument(1) else (problem)
+        _ = problem
+        return
+    end
+    empty: io.argument = world.argument(2) else (problem)
+        _ = problem
+        return
+    end
+    return when first.length <> 2 or first.data.val <> 97
+      or second.length <> 1 or second.data.val <> 99 or empty.length <> 0
+    absent: io.argument = world.argument(3) else (problem)
+        yes = problem == io.no_argument
+        return
+    end
+    _ = absent.length
+end arguments_ok
+
+public main: () -> (code: i32) =
+    code = 1
+    name: []u8 = "f"
+    file_value: io.memory_file =
+      (name: name, contents: backing[0..<3], length: 3, cursor: 0,
+       readable: true, writable: false, opened: false, writing: false)
+    mut files: [1]io.memory_file
+    files[0] = file_value
+    first: io.argument = (data: addr arg_first[0], length: 2)
+    second: io.argument = (data: addr arg_second[0], length: 1)
+    empty: io.argument = (data: addr arg_second[0], length: 0)
+    mut args: [3]io.argument
+    args[0] = first
+    args[1] = second
+    args[2] = empty
+    mut state := io.memory_world(files[0..<1], args[0..<3],
+                                output[0..<3], errors[0..<1])
+    world: any io.world = any(addr state)
+    return when not arguments_ok(world)
+    missing_ok: bool = missing_file(world)
+    denied_ok: bool = denied_file(world)
+    return when not missing_ok or not denied_ok or files[0].opened
+      or files[0].length <> 3
+    opened: io.file = world.open_read(addr path[0]) else (problem)
+        _ = problem
+        return
+    end
+    mut into: [2]u8 = [7, 9]
+    state.read_limit = 0
+    mut stalled: bool = false
+    stalled_count: usize = world.read(opened, into[0..<2]) else (problem)
+        stalled = problem == io.io_failed
+        0
+    end
+    return when not stalled or stalled_count <> 0 or files[0].cursor <> 0
+      or into[0] <> 7 or into[1] <> 9
+    state.read_limit = 2
+    state.fail_read_at = 2
+    mut read_failed: bool = false
+    failed_count: usize = world.read(opened, into[0..<2]) else (problem)
+        read_failed = problem == io.io_failed
+        0
+    end
+    return when not read_failed or failed_count <> 0 or files[0].cursor <> 0
+      or into[0] <> 7 or into[1] <> 9
+    state.fail_read_at = 0
+    read_count: usize = world.read(opened, into[0..<2]) else (problem)
+        _ = problem
+        return
+    end
+    return when read_count <> 2 or into[0] <> 65 or into[1] <> 66
+    final_count: usize = world.read(opened, into[0..<2]) else (problem)
+        _ = problem
+        return
+    end
+    return when final_count <> 1 or into[0] <> 67
+    state.read_limit = 0
+    eof_count: usize = world.read(opened, into[0..<2]) else (problem)
+        _ = problem
+        return
+    end
+    return when eof_count <> 0 or files[0].cursor <> files[0].length
+    closed_read: io.file = opened
+    world.close(opened) else (problem)
+        _ = problem
+        return
+    end
+    empty_count: usize = world.read(closed_read, into[0..<0]) else (problem)
+        _ = problem
+        return
+    end
+    return when empty_count <> 0 or state.read_calls <> 5
+    stdout: io.file = world.out()
+    bytes: []u8 = "abcd"
+    mut full: bool = false
+    world.write(stdout, bytes) else (problem)
+        full = problem == io.io_failed
+    end
+    return when not full or state.output_used <> 3
+      or output[0] <> 97 or output[2] <> 99
+    world.close(stdout) else (problem)
+        _ = problem
+        return
+    end
+    closed_output: io.file = world.out()
+    mut closed: bool = false
+    world.write(closed_output, bytes) else (problem)
+        closed = problem == io.io_failed
+    end
+    if closed and state.output_used == 3 and not state.output_open
+      and not files[0].opened and state.close_calls == 2
+      and state.open_calls == 3 and state.read_calls == 5
+    then code = 42 end if
+end main
+
+missing_file: (world: any io.world) -> (yes: bool) =
+    opened: io.file = world.open_read(addr missing[0]) else (problem)
+        yes = problem == io.not_found
+        return
+    end
+    world.close(opened) else (problem)
+        _ = problem
+        yes = false
+        return
+    end
+    yes = false
+end missing_file
+
+denied_file: (world: any io.world) -> (yes: bool) =
+    opened: io.file = world.open_write(addr path[0]) else (problem)
+        yes = problem == io.no_access
+        return
+    end
+    world.close(opened) else (problem)
+        _ = problem
+        yes = false
+        return
+    end
+    yes = false
+end denied_file

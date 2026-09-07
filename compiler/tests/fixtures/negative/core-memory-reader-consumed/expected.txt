@@ -1,0 +1,10 @@
+error[L0302]: this place was consumed by `sink` and has not been assigned again
+  --> ../tests/fixtures/negative/core-memory-reader-consumed/main.ldn:11:21
+   |
+11 |     address = usize(value.buffer)
+   |                     ^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/core-memory-reader-consumed/main.ldn:9:7
+  |
+9 | bad: (value: reader) -> (address: usize) =
+  |       ^^^^^^^^^^^^^ the binding containing the consumed place
+  = note: [0910]: a sunk place is dead until assignment

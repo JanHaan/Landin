@@ -118,6 +118,7 @@ negative/core-diag-frame-message-escape | linux-x86-64, macos-arm64, synthetic-3
 negative/core-diag-frame-world-escape | linux-x86-64, macos-arm64, synthetic-32
 negative/core-failing-frame-escape | linux-x86-64, macos-arm64, synthetic-32
 negative/core-failing-needs-mutable-inner | linux-x86-64, macos-arm64, synthetic-32
+negative/core-io-argument-copy-frame | linux-x86-64, macos-arm64, synthetic-32
 negative/core-io-file-use-after-close | linux-x86-64, macos-arm64, synthetic-32
 negative/core-io-world-readonly-receiver | linux-x86-64, macos-arm64, synthetic-32
 negative/core-map-key-frame-escape | linux-x86-64, macos-arm64, synthetic-32
@@ -140,6 +141,10 @@ negative/core-mem-used-live-dispose | linux-x86-64, macos-arm64, synthetic-32
 negative/core-mem-used-live-release | linux-x86-64, macos-arm64, synthetic-32
 negative/core-mem-used-read-only | linux-x86-64, macos-arm64, synthetic-32
 negative/core-mem-used-wrong-from | linux-x86-64, macos-arm64, synthetic-32
+negative/core-memory-argument-frame | linux-x86-64, macos-arm64, synthetic-32
+negative/core-memory-reader-consumed | linux-x86-64, macos-arm64, synthetic-32
+negative/core-memory-written-frame | linux-x86-64, macos-arm64, synthetic-32
+negative/core-memory-written-live | linux-x86-64, macos-arm64, synthetic-32
 negative/core-pool-bookkeeping-frame-escape | linux-x86-64, macos-arm64, synthetic-32
 negative/core-pool-frame-escape | linux-x86-64, macos-arm64, synthetic-32
 negative/core-small-frame-view | linux-x86-64, macos-arm64, synthetic-32
@@ -1123,6 +1128,7 @@ runtime/pointer-unions | linux-x86-64
 runtime/r230-composition | linux-x86-64
 runtime/r230-composition-trap | linux-x86-64
 runtime/r250-references | linux-x86-64
+runtime/r420-argument-text-worlds | linux-x86-64
 runtime/r420-array-place-recovery | linux-x86-64
 runtime/r420-failing-providers | linux-x86-64
 runtime/r420-fixed-array-pointer-whole-copy | linux-x86-64
@@ -1130,10 +1136,15 @@ runtime/r420-generic-array-selection-transfer | linux-x86-64
 runtime/r420-map-arena | linux-x86-64
 runtime/r420-map-failure-rollback | linux-x86-64
 runtime/r420-map-operations | linux-x86-64
+runtime/r420-memory-delivery | linux-x86-64
+runtime/r420-memory-world | linux-x86-64
+runtime/r420-memory-world-boundaries | linux-x86-64
 runtime/r420-pool-provider | linux-x86-64
+runtime/r420-reader-cleanup | linux-x86-64
 runtime/r420-runtime-array-writes | linux-x86-64
 runtime/r420-small-vector | linux-x86-64
 runtime/r420-small-vector-providers | linux-x86-64
+runtime/r420-stateful-filter-list | linux-x86-64
 runtime/r420-static-nested-array-stores | linux-x86-64
 runtime/r420-vec-capacity-boundaries | linux-x86-64
 runtime/r420-vec-growth-boundary | linux-x86-64

@@ -1,0 +1,9 @@
+import core/io
+bad: () -> (view: []u8) =
+    mut output: [2]u8 = zeroed
+    mut errors: [1]u8 = zeroed
+    files: []mut io.memory_file = []
+    args: []io.argument = []
+    mut state := io.memory_world(files, args, output[0..<2], errors[0..<1])
+    view = io.written(state)
+end bad

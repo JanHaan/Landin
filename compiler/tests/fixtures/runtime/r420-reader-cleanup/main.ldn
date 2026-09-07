@@ -1,0 +1,129 @@
+import core/io
+import core/mem
+import core/heap
+import core/failing
+
+reader: type = struct
+    opened: io.file
+    buffer: ptr mut [2]u8
+end reader
+mut publications: usize = 0
+mut input: [5]u8 = [65, 66, 67, 68, 69]
+mut output: [1]u8 = zeroed
+mut errors: [1]u8 = zeroed
+path: [2]u8 = [102, 0]
+
+acquire: (provider: type is mem.allocator, inout allocator: provider,
+          world: any io.world) -> (value: reader)
+         ! io.not_found | io.no_access | io.io_failed | mem.out_of_memory =
+    opened: io.file = try world.open_read(addr path[0])
+    initial: [2]u8 = zeroed
+    buffer: ptr mut [2]u8 = mem.new(allocator, initial) else (problem)
+        _ = problem
+        world.close(opened) else (close_problem)
+            _ = close_problem
+        end
+        fail mem.out_of_memory
+    end
+    value = (opened: opened, buffer: buffer)
+    inc publications
+end acquire
+
+release_reader: (provider: type is mem.allocator, inout allocator: provider,
+                 world: any io.world, sink value: reader)
+                -> none ! io.io_failed =
+    world.close(value.opened) else (problem)
+        mem.delete(allocator, value.buffer)
+        fail problem
+    end
+    mem.delete(allocator, value.buffer)
+end release_reader
+
+consume: (provider: type is mem.allocator, inout allocator: provider,
+          world: any io.world, sink value: reader)
+         -> (sum: usize) ! io.io_failed =
+    sum = 0
+    loop do
+        count: usize = world.read(value.opened, value.buffer.val[0..<2])
+          else (problem)
+            release_reader(allocator, world, value) else (close_problem)
+                _ = close_problem
+            end
+            fail problem
+        end
+        break when count == 0
+        bytes: [2]u8 = value.buffer.val
+        mut at: usize = 0
+        while at < count do
+            sum += usize(bytes[at])
+            inc at
+        end while
+    end loop
+    try release_reader(allocator, world, value)
+end consume
+
+allocation_refused: (provider: type is mem.allocator, inout allocator: provider,
+                     world: any io.world) -> (yes: bool) =
+    value: reader = acquire(allocator, world) else (problem)
+        yes = problem == mem.out_of_memory
+        return
+    end
+    release_reader(allocator, world, value) else (problem)
+        _ = problem
+    end
+    yes = false
+end allocation_refused
+
+public main: () -> (code: i32) =
+    code = 1
+    name: []u8 = "f"
+    file_value: io.memory_file =
+      (name: name, contents: input[0..<5], length: 5, cursor: 0,
+       readable: true, writable: false, opened: false, writing: false)
+    mut files: [1]io.memory_file
+    files[0] = file_value
+    args: []io.argument = []
+    mut state := io.memory_world(files[0..<1], args, output[0..<1], errors[0..<1])
+    state.read_limit = 2
+    state.fail_close_at = 1
+    world: any io.world = any(addr state)
+    mut heap_state := heap.host()
+    budget: usize = 0
+    mut allocator := failing.count_down(addr heap_state, budget)
+    return when not allocation_refused(allocator, world)
+    return when publications <> 0 or state.open_calls <> 1
+      or state.close_calls <> 1 or files[0].opened
+      or failing.attempts(allocator) <> 1 or failing.live(allocator) <> 0
+      or failing.frees(allocator) <> 0
+    allowed: usize = 2
+    failing.permit(allocator, allowed)
+    value: reader = acquire(allocator, world) else (problem)
+        _ = problem
+        return
+    end
+    sum: usize = consume(allocator, world, value) else (problem)
+        _ = problem
+        return
+    end
+    return when sum <> 335 or publications <> 1 or files[0].opened
+      or state.read_calls <> 4 or state.close_calls <> 2
+      or failing.live(allocator) <> 0 or failing.frees(allocator) <> 1
+    state.fail_read_at = 5
+    state.fail_close_at = 3
+    failed_reader: reader = acquire(allocator, world) else (problem)
+        _ = problem
+        return
+    end
+    mut refused: bool = false
+    failed_sum: usize = consume(allocator, world, failed_reader) else (problem)
+        refused = problem == io.io_failed
+        0
+    end
+    if refused and failed_sum == 0 and publications == 2
+      and not files[0].opened and state.open_calls == 3
+      and state.close_calls == 3 and state.read_calls == 5
+      and failing.attempts(allocator) == 3 and failing.successes(allocator) == 2
+      and failing.injected_failures(allocator) == 1
+      and failing.live(allocator) == 0 and failing.frees(allocator) == 2
+    then code = 42 end if
+end main

@@ -1,0 +1,8 @@
+class: negative
+summary: written output cannot escape its frame-backed memory world
+expect: expected.txt
+args: --root=../.. ../tests/fixtures/negative/core-memory-written-frame
+status: 1
+constructs: 0790, 0940, 1390, 1660
+codes: L0314
+targets: linux-x86-64, macos-arm64, synthetic-32

@@ -1,0 +1,106 @@
+import core/io
+import core/text
+
+memory_word: [5]u8 = [97, 108, 112, 104, 97]
+memory_number: [10]u8 = [52, 50, 57, 52, 57, 54, 55, 50, 57, 53]
+memory_empty: [1]u8 = [0]
+
+pair_is_expected: (world: any io.world, expected_count: usize,
+                   word_scratch: []mut u8, number_scratch: []mut u8)
+                  -> (yes: bool) =
+    yes = false
+    return when world.argument_count() <> expected_count
+    word_argument: io.argument = world.argument(0) else (problem)
+        _ = problem
+        return
+    end
+    number_argument: io.argument = world.argument(1) else (problem)
+        _ = problem
+        return
+    end
+    word_bytes: []u8 = io.copy_argument(word_argument, word_scratch)
+      else (problem)
+        _ = problem
+        return
+    end
+    number_bytes: []u8 = io.copy_argument(number_argument, number_scratch)
+      else (problem)
+        _ = problem
+        return
+    end
+    word: utf8 = text.from_bytes(word_bytes) else (problem)
+        _ = problem
+        return
+    end
+    number: utf8 = text.from_bytes(number_bytes) else (problem)
+        _ = problem
+        return
+    end
+    parsed: u32 = text.to_u32(number) else (problem)
+        _ = problem
+        return
+    end
+    yes = text.eq(word, "alpha") and parsed == 4294967295
+end pair_is_expected
+
+copy_is_refused: (source: io.argument, scratch: []mut u8) -> (yes: bool) =
+    bytes: []u8 = io.copy_argument(source, scratch) else (problem)
+        yes = problem == io.argument_too_long
+        return
+    end
+    _ = lenof bytes
+    yes = false
+end copy_is_refused
+
+public main: () -> (code: i32) =
+    code = 1
+    mut host := io.host()
+    host_world: any io.world = any(addr host)
+    mut host_word: [5]u8 = zeroed
+    mut host_number: [10]u8 = zeroed
+    return when not pair_is_expected(host_world, 2,
+                                     host_word[0..<5], host_number[0..<10])
+
+    first: io.argument = (data: addr memory_word[0], length: 5)
+    second: io.argument = (data: addr memory_number[0], length: 10)
+    empty: io.argument = (data: addr memory_empty[0], length: 0)
+    mut arguments: [3]io.argument
+    arguments[0] = first
+    arguments[1] = second
+    arguments[2] = empty
+    files: []mut io.memory_file = []
+    output: []mut u8 = []
+    errors: []mut u8 = []
+    mut state := io.memory_world(files, arguments[0..<3], output, errors)
+    memory_world: any io.world = any(addr state)
+    mut memory_word_copy: [5]u8 = zeroed
+    mut memory_number_copy: [10]u8 = zeroed
+    return when not pair_is_expected(memory_world, 3,
+                                     memory_word_copy[0..<5],
+                                     memory_number_copy[0..<10])
+
+    mut too_small: [4]u8 = [7, 8, 9, 10]
+    return when not copy_is_refused(first, too_small[0..<4])
+      or too_small[0] <> 7 or too_small[1] <> 8
+      or too_small[2] <> 9 or too_small[3] <> 10
+
+    empty_argument: io.argument = memory_world.argument(2) else (problem)
+        _ = problem
+        return
+    end
+    mut empty_scratch: [0]u8 = zeroed
+    empty_bytes: []u8 = io.copy_argument(empty_argument,
+                                         empty_scratch[0..<0])
+      else (problem)
+        _ = problem
+        return
+    end
+    empty_text: utf8 = text.from_bytes(empty_bytes) else (problem)
+        _ = problem
+        return
+    end
+    if lenof empty_bytes == 0 and text.eq(empty_text, "")
+      and state.open_calls == 0 and state.read_calls == 0
+      and state.write_calls == 0 and state.close_calls == 0
+    then code = 42 end if
+end main

@@ -1,0 +1,6 @@
+import core/io
+
+bad: (source: io.argument) -> (bytes: []u8) ! io.argument_too_long =
+    mut scratch: [2]u8 = zeroed
+    bytes = try io.copy_argument(source, scratch[0..<2])
+end bad

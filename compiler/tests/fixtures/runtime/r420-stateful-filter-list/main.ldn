@@ -1,0 +1,71 @@
+import core/failing
+import core/heap
+import core/vec
+
+filter: type = concept (item: type)
+    keep: (self: ptr mut item, value: i32) -> (yes: bool)
+end filter
+threshold: type = struct
+    calls: i32
+    minimum: i32
+end threshold
+alternating: type = struct
+    sentinel: i32
+    calls: i32
+    total: i32
+end alternating
+above: (self: ptr mut threshold, value: i32) -> (yes: bool) =
+    inc self.val.calls
+    yes = value >= self.val.minimum
+end above
+every_other: (self: ptr mut alternating, value: i32) -> (yes: bool) =
+    inc self.val.calls
+    self.val.total += value
+    yes = self.val.calls % 2 == 0
+end every_other
+threshold is filter (keep: above)
+alternating is filter (keep: every_other)
+mut low: threshold = (calls: 0, minimum: 10)
+mut alternate: alternating = (sentinel: 917, calls: 0, total: 0)
+
+public main: () -> (code: i32) =
+    code = 1
+    mut host := heap.host()
+    budget: usize = 3
+    mut allocator := failing.count_down(addr host, budget)
+    mut filters := vec.new_list(item: any filter)
+    first: any filter = any(addr low)
+    second: any filter = any(addr alternate)
+    mut index: usize = 0
+    while index < 20 do
+        selected: any filter = if index % 2 == 0 then first else second end if
+        vec.push(filters, allocator, selected) else (problem)
+            _ = problem
+            vec.release(filters, allocator)
+            return
+        end
+        inc index
+    end while
+    mut accepted: i32 = 0
+    mut value: i32 = 0
+    for selected in vec.used(filters) do
+        if selected.keep(value) then inc accepted end if
+        inc value
+    end for
+    mut second_pass: i32 = 0
+    for selected in vec.used(filters) do
+        if selected.keep(20) then inc second_pass end if
+    end for
+    shape_ok: bool = vec.length(filters) == 20
+      and failing.attempts(allocator) == 3
+      and failing.live(allocator) == 1
+    vec.release(filters, allocator)
+    if shape_ok and accepted == 10 and second_pass == 15
+      and low.calls == 20 and low.minimum == 10
+      and alternate.calls == 20 and alternate.total == 300
+      and alternate.sentinel == 917
+      and failing.live(allocator) == 0 and failing.frees(allocator) == 3
+    then
+        code = 42
+    end if
+end main

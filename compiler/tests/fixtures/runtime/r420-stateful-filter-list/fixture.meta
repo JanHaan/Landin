@@ -1,0 +1,7 @@
+class: runtime
+summary: two stateful filter implementations retain independent dispatch and state through vector growth
+program: main.ldn
+root: ../../../../..
+constructs: 0790, 1230, 1320, 1370, 1380, 1390
+status: 42
+targets: linux-x86-64

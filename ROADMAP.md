@@ -4255,6 +4255,34 @@ repairs are prerequisites, not I/O-specific compiler behavior. Deterministic
 short-write schedules, in-memory handles and output ownership remain the
 following memory-world increment.
 
+The bounded memory-world increment supplies an ordinary `core/io.memory`
+conformance from caller-owned file, argument and output tables. D153 records
+its first-match existing-file policy, bounded transfers, zero-progress
+refusal distinct from true EOF, partial-write prefixes, injected close
+semantics, empty no-ops and manual backing, nonoverlap, counter and copied-
+handle obligations. Construction, argument lookup and written-output views
+retain their exact source clauses. `runtime/r420-memory-world` and
+`runtime/r420-memory-world-boundaries` execute short reads, true EOF, failure
+atomicity, partial writes, exact output, standard streams, injected failures
+and zero-limit boundaries without ambient host state.
+
+`core/io.copy_argument` bridges the public pointer-and-length argument shape
+to ordinary text without manufacturing a slice: it preflights exact caller
+scratch, copies into its initialized prefix and returns that view `from`
+scratch. Valid source backing, representable address arithmetic and
+source/destination nonoverlap remain caller obligations.
+`runtime/r420-argument-text-worlds` runs the same copy,
+`text.from_bytes` and numeric validation through system and memory worlds;
+both sequences exclude `argv[0]`. The dedicated frame refusal retains the
+scratch origin. `runtime/r420-reader-cleanup` executes open-then-allocation
+failure, successful consumption, read/close failure precedence, exactly-once
+handle cleanup and exact buffer frees. `runtime/r420-stateful-filter-list`
+retains two mutable evidence identities across vector growth, and
+`runtime/r420-memory-delivery` runs two erased delivery implementations plus
+the repository `core/diag.streaming` logger against the supplied memory
+world. These complete library clients do not complete R4.80's application,
+command-line parsing or arbitrary-length line policy.
+
 D196 settles D191's inherited construct rows. [0500]'s `mem.offset` and
 `mem.base_of` are unneeded conveniences for this slice: existing [0470]
 address conversion and checked element addressing serve their actual callers.
