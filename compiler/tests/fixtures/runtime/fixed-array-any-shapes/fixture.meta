@@ -1,0 +1,6 @@
+class: runtime
+summary: singleton and larger any arrays retain heterogeneous data and evidence through generic copies typed stores and slices
+program: main.ldn
+status: 42
+constructs: 0430, 0440, 0520, 0570, 0790, 1290, 1370, 1390, 1920
+targets: linux-x86-64

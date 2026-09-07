@@ -1,0 +1,6 @@
+class: negative
+summary: array any zeroed preserves complete array element rules
+program: main.ldn
+constructs: 0430, 0440, 0520, 0540, 0770, 1290, 1370, 1920
+targets: linux-x86-64, macos-arm64
+codes: L0301

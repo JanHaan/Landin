@@ -457,6 +457,9 @@ package body Landin.Stages.Lowering is
          return Any_Evidence (Position);
       end Any_Evidence_For;
 
+      function Neutral_Element
+        (Part : Landin.Checking.Signature_Part) return IR.Field_Shape;
+
       function Signature_For
         (Source : Landin.Checking.Signature_Id) return IR.Signature_Id;
 
@@ -783,9 +786,19 @@ package body Landin.Stages.Lowering is
          Source_Count : Natural := 0;
 
          function Converted
+           (Part : Landin.Checking.Signature_Part) return IR.Signature_Part;
+
+         function Converted
            (Part : Landin.Checking.Signature_Part)
             return IR.Signature_Part
-           is (Kind    =>
+         is
+            Element : constant IR.Field_Shape :=
+              (if Part.Kind = Ty.Fixed_Array
+                  and then Part.Convention /= Syn.Inout_Convention
+               then Neutral_Element (Part) else (others => <>));
+         begin
+            return (Element_Shape => Element,
+               Kind    =>
                  (if Part.Convention = Syn.Inout_Convention then Ty.Usize
                   elsif Part.Kind = Ty.Atom_Value then Ty.U32
                   elsif Part.Kind = Ty.Pointer_Value then Ty.Usize
@@ -806,9 +819,7 @@ package body Landin.Stages.Lowering is
                   elsif Part.Kind in Ty.Slice_Value | Ty.Any_Value
                   then Ty.Usize
                   elsif Part.Kind = Ty.Fixed_Array
-                    and then Part.Nominal
-                      /= Landin.Checking.No_Nominal_Type
-                  then Ty.Bool
+                  then Element.Element
                   else Part.Element),
                Signature =>
                  (if Part.Convention /= Syn.Inout_Convention
@@ -826,6 +837,7 @@ package body Landin.Stages.Lowering is
                     and then Part.Kind = Ty.Atom_Value
                   then Atom_Set_For (Part.Atoms)
                   else IR.No_Atom_Set));
+         end Converted;
       begin
          if Signatures (Positive (Source)) /= IR.No_Signature then
             return Signatures (Positive (Source));
@@ -1047,7 +1059,7 @@ package body Landin.Stages.Lowering is
       function Has_Computed_Index
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
 
-      function Has_Pointer_Dereference
+      function Has_Reference_Storage
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
 
       --  Evaluate every computed index in a storage chain from its root
@@ -1646,8 +1658,6 @@ package body Landin.Stages.Lowering is
       function Neutral_Element
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return IR.Field_Shape;
 
-      function Neutral_Element
-        (Part : Landin.Checking.Signature_Part) return IR.Field_Shape;
 
       function Neutral_Value_Shape
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return IR.Field_Shape;
@@ -1688,6 +1698,23 @@ package body Landin.Stages.Lowering is
             when Landin.Checking.Fixed_Array_Field =>
                --  D121: an ordinary-struct element is one run of exactly
                --  one shape, appended before the array shape names it.
+               if Source.Reference /= Landin.Checking.No_Reference then
+                  declare
+                     Element : constant IR.Field_Shape := Neutral_Shape
+                       ((Kind => Landin.Checking.Reference_Field,
+                         Reference => Source.Reference, others => <>));
+                     First : constant Natural :=
+                       (if Element.Kind = IR.Scalar_Field_Shape then 0
+                        else IR.Add_Shape_Run (Unit.all, [1 => Element]));
+                  begin
+                     return
+                       (Kind => IR.Array_Field_Shape,
+                        Element => Element.Element,
+                        Length => IR.Element_Total (Source.Length),
+                        Cases => (if First = 0 then 0 else 1),
+                        Payloads_First => First, others => <>);
+                  end;
+               end if;
                if Source.Nominal /= Landin.Checking.No_Nominal_Type then
                   declare
                      First : constant Natural :=
@@ -1747,6 +1774,8 @@ package body Landin.Stages.Lowering is
          if Part.Kind /= Ty.Fixed_Array then
             raise Landin.Compiler_Defect with
               "a non-array signature part was requested as an element";
+         elsif Part.Element_Shape.Kind /= Landin.Checking.Scalar_Field then
+            return Neutral_Shape (Part.Element_Shape);
          elsif Part.Nominal /= Landin.Checking.No_Nominal_Type then
             return Neutral_Body (Part.Nominal);
          end if;
@@ -1838,22 +1867,24 @@ package body Landin.Stages.Lowering is
                   others => <>);
             when Landin.Checking.Fixed_Array_Actual_Type =>
                declare
-                  Nominal_Element : constant Boolean :=
-                    Landin.Checking.Array_Element_Form_Of
-                      (Types.all, Actual)
-                        = Landin.Checking.Nominal_Array_Element;
                   Element : constant IR.Field_Shape :=
-                    (if Nominal_Element
-                     then Neutral_Body
-                       (Landin.Checking.Array_Nominal_Element_Of
-                          (Types.all, Actual))
-                     else
-                       (Kind => IR.Scalar_Field_Shape,
-                        Element => Landin.Checking.Array_Scalar_Element_Of
-                          (Types.all, Actual),
-                        Length => 1, others => <>));
+                    (case Landin.Checking.Array_Element_Form_Of
+                       (Types.all, Actual) is
+                       when Landin.Checking.Nominal_Array_Element =>
+                         Neutral_Body
+                           (Landin.Checking.Array_Nominal_Element_Of
+                              (Types.all, Actual)),
+                       when Landin.Checking.Shaped_Array_Element =>
+                         Neutral_Shape
+                           (Landin.Checking.Array_Element_Shape_Of
+                              (Types.all, Actual)),
+                       when Landin.Checking.Scalar_Array_Element =>
+                         (Kind => IR.Scalar_Field_Shape,
+                          Element => Landin.Checking.Array_Scalar_Element_Of
+                            (Types.all, Actual),
+                          Length => 1, others => <>));
                   First : constant Natural :=
-                    (if Nominal_Element
+                    (if Element.Kind /= IR.Scalar_Field_Shape
                      then IR.Add_Shape_Run (Unit.all, [1 => Element]) else 0);
                begin
                   return
@@ -1938,28 +1969,20 @@ package body Landin.Stages.Lowering is
             when Ty.Aggregate =>
                return Neutral_Body (Part.Nominal);
             when Ty.Fixed_Array =>
-               if Part.Nominal /= Landin.Checking.No_Nominal_Type then
-                  declare
-                     First : constant Natural :=
-                       IR.Add_Shape_Run
-                         (Unit.all,
-                          [1 => Neutral_Body (Part.Nominal)]);
-                  begin
-                     return
-                       (Kind           => IR.Array_Field_Shape,
-                        Element        => Ty.Bool,
-                        Length         => IR.Element_Total (Part.Length),
-                        Cases          => 1,
-                        Payloads_First => First,
-                        Nominal        => Nominal_For (Part.Nominal),
-                        others         => <>);
-                  end;
-               end if;
-               return
-                 (Kind => IR.Array_Field_Shape,
-                  Element => Part.Element,
-                  Length => IR.Element_Total (Part.Length),
-                  others => <>);
+               declare
+                  Element : constant IR.Field_Shape := Neutral_Element (Part);
+                  First : constant Natural :=
+                    (if Element.Kind /= IR.Scalar_Field_Shape
+                     then IR.Add_Shape_Run (Unit.all, [1 => Element]) else 0);
+               begin
+                  return
+                    (Kind => IR.Array_Field_Shape,
+                     Element => Element.Element,
+                     Length => IR.Element_Total (Part.Length),
+                     Cases => (if First = 0 then 0 else 1),
+                     Payloads_First => First, Nominal => Element.Nominal,
+                     others => <>);
+               end;
             when others =>
                raise Landin.Compiler_Defect with
                  "a non-value result part reached neutral lowering";
@@ -2322,7 +2345,7 @@ package body Landin.Stages.Lowering is
       --  boundary directly; aggregate arguments and copies must choose the
       --  same Lower_Stored_Place path instead of encoding `.val` as field
       --  zero.
-      function Has_Pointer_Dereference
+      function Has_Reference_Storage
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
       is
          Where : Syn.Node_Id := Node;
@@ -2330,7 +2353,12 @@ package body Landin.Stages.Lowering is
          while Syn.Kind (Of_Tree, Where)
            in Syn.Member_Selection | Syn.Element_Index
          loop
-            if Syn.Kind (Of_Tree, Where) = Syn.Member_Selection
+            if Syn.Kind (Of_Tree, Where) = Syn.Element_Index
+              and then Type_At
+                (Of_Tree, Syn.Target_Of (Of_Tree, Where)) = Ty.Slice_Value
+            then
+               return True;
+            elsif Syn.Kind (Of_Tree, Where) = Syn.Member_Selection
               and then Landin.Checking.Field_Index
                 (Types.all, Of_Tree, Where) = 0
               and then Type_At
@@ -2341,7 +2369,7 @@ package body Landin.Stages.Lowering is
             Where := Syn.Target_Of (Of_Tree, Where);
          end loop;
          return False;
-      end Has_Pointer_Dereference;
+      end Has_Reference_Storage;
 
       function Lower_Stored_Place
         (Of_Tree : Syn.Tree;
@@ -4029,7 +4057,7 @@ package body Landin.Stages.Lowering is
                      end;
                   else
                      if Has_Computed_Index (Of_Tree, Argument)
-                       or else Has_Pointer_Dereference (Of_Tree, Argument)
+                       or else Has_Reference_Storage (Of_Tree, Argument)
                      then
                         declare
                            Reached : constant Stored_Place :=
@@ -4379,12 +4407,24 @@ package body Landin.Stages.Lowering is
          elsif Descriptor.Referent = Ty.Aggregate then
             return Neutral_Body (Descriptor.Nominal);
          elsif Descriptor.Referent = Ty.Fixed_Array then
-            return
-              (Kind => IR.Array_Field_Shape,
-               Element => Descriptor.Element,
-               Length => IR.Element_Total (Descriptor.Length),
-               Nominal => Nominal_For (Descriptor.Element_Nominal),
-               others => <>);
+            declare
+               Element : constant IR.Field_Shape := Neutral_Element
+                 ((Kind => Ty.Fixed_Array,
+                   Element => Descriptor.Element,
+                   Nominal => Descriptor.Element_Nominal,
+                   Element_Shape => Descriptor.Element_Shape, others => <>));
+               First : constant Natural :=
+                 (if Element.Kind /= IR.Scalar_Field_Shape
+                  then IR.Add_Shape_Run (Unit.all, [1 => Element]) else 0);
+            begin
+               return
+                 (Kind => IR.Array_Field_Shape,
+                  Element => Element.Element,
+                  Length => IR.Element_Total (Descriptor.Length),
+                  Nominal => Element.Nominal,
+                  Cases => (if First = 0 then 0 else 1),
+                  Payloads_First => First, others => <>);
+            end;
          elsif Descriptor.Referent
            in Ty.Slice_Value | Ty.Any_Value
          then
@@ -6781,7 +6821,7 @@ package body Landin.Stages.Lowering is
            (Landin.Checking.Field_Index (Types.all, Of_Tree, Subject));
          Computed : constant Boolean :=
            Has_Computed_Index (Of_Tree, Holder)
-           or else Has_Pointer_Dereference (Of_Tree, Holder);
+           or else Has_Reference_Storage (Of_Tree, Holder);
          Location : Stored_Place;
          Alias_Subject : Syn.Node_Id := Subject;
          Shape : constant Landin.Checking.Field_Shape :=
@@ -8915,7 +8955,7 @@ package body Landin.Stages.Lowering is
                   end loop;
 
                   if Has_Computed_Index (Of_Tree, Source_Node)
-                    or else Has_Pointer_Dereference (Of_Tree, Source_Node)
+                    or else Has_Reference_Storage (Of_Tree, Source_Node)
                     or else Destination.Kind = IR.Runtime_Address
                   then
                      Source := Lower_Stored_Place
@@ -9151,6 +9191,7 @@ package body Landin.Stages.Lowering is
                                   | Syn.Zeroed_Literal
                                   | Syn.Name_Reference
                                   | Syn.Member_Selection
+                                  | Syn.Element_Index
                                   | Syn.Inclusive_Slice
                                   | Syn.Half_Open_Slice
                                   | Syn.Empty_Slice_Literal
@@ -9269,7 +9310,7 @@ package body Landin.Stages.Lowering is
                      declare
                         Dynamic : constant Boolean :=
                           Has_Computed_Index (Of_Tree, Value)
-                          or else Has_Pointer_Dereference (Of_Tree, Value)
+                          or else Has_Reference_Storage (Of_Tree, Value)
                           or else Destination.Kind = IR.Runtime_Address;
                      begin
                         if Dynamic then
@@ -9782,7 +9823,8 @@ package body Landin.Stages.Lowering is
                begin
                   --  Only a directly named flat array has a scalar-field
                   --  shortcut. Nested selections retain their array path.
-                  if Syn.Kind (Of_Tree, Place) /= Syn.Element_Index
+                  if Has_Reference_Storage (Of_Tree, Place)
+                    or else Syn.Kind (Of_Tree, Place) /= Syn.Element_Index
                     or else
                       (Is_Constant_Index (Of_Tree, Place)
                        and then Syn.Kind
@@ -9893,6 +9935,26 @@ package body Landin.Stages.Lowering is
                   Means : constant Res.Declaration_Id :=
                     Res.Bound_To (Meanings.all, Of_Tree, Named);
                begin
+                  if Syn.Kind (Of_Tree, Place) = Syn.Element_Index
+                    and then Has_Reference_Storage (Of_Tree, Place)
+                  then
+                     declare
+                        Reached : constant Stored_Place :=
+                          Lower_Stored_Place (Of_Tree, Place, Scope);
+                        Storage : constant IR.Storage := Addressed_Storage
+                          (Reached,
+                           (Kind => IR.Scalar_Field_Shape,
+                            Element => Scalar_At (Of_Tree, Place),
+                            Length => 1, others => <>), Site);
+                        Address : constant IR.Value_Id := IR.Emit_Load
+                          (Unit.all, Filling, Storage.Address, Site);
+                     begin
+                        IR.Emit_Store_Indirect
+                          (Unit.all, Filling, Address, Value, Site);
+                        return;
+                     end;
+                  end if;
+
                   if Syn.Kind (Of_Tree, Place) = Syn.Element_Index
                     and then Type_At
                       (Of_Tree, Syn.Target_Of (Of_Tree, Place))
@@ -10589,31 +10651,9 @@ package body Landin.Stages.Lowering is
                                      (Kind => IR.Frame_Slot, Slot => Where),
                                  Site        => Site);
                            else
-                              --  D21: the initializer copies a whole array
-                              --  from storage into this fresh local slot.
-                              --  D51 reuses D50's source-field identity when
-                              --  that storage is a containing struct; no
-                              --  opcode or target offset is introduced.
-                              declare
-                                 Source_Place : constant IR.Storage :=
-                                   Rooted_Storage (Of_Tree, Value);
-                                 Source_Field : constant Natural :=
-                                   Rooted_Base (Of_Tree, Value);
-                                 Source_Steps :
-                                   constant IR.Path_Step_Array :=
-                                     Rooted_Steps (Of_Tree, Value);
-                              begin
-                                 IR.Emit_Array_Copy
-                                   (Unit.all, Filling,
-                                    Source => Source_Place,
-                                    Destination =>
-                                      IR.Storage'
-                                        (Kind => IR.Frame_Slot,
-                                         Slot => Where),
-                                    Site => Site,
-                                    Source_Field => Source_Field,
-                                    Source_Nested => Source_Steps);
-                              end;
+                              Write_Array_Value
+                                (Value, (Kind => IR.Frame_Slot, Slot => Where),
+                                 Field => 0);
                            end if;
                         elsif Landin.Checking.Type_Of (Types.all, Id)
                                 = Ty.Aggregate
@@ -10797,7 +10837,7 @@ package body Landin.Stages.Lowering is
                              Scalar_At (Of_Tree, Place);
                            Dynamic : constant Boolean :=
                              Has_Computed_Index (Of_Tree, Place)
-                             or else Has_Pointer_Dereference
+                             or else Has_Reference_Storage
                                (Of_Tree, Place);
                         begin
                            if Current /= IR.No_Block then
@@ -11128,7 +11168,7 @@ package body Landin.Stages.Lowering is
                              Syn.Value_Of (Of_Tree, Stmt);
                            Dynamic : constant Boolean :=
                              Has_Computed_Index (Of_Tree, Place)
-                             or else Has_Pointer_Dereference
+                             or else Has_Reference_Storage
                                (Of_Tree, Place);
                            Named : constant Syn.Node_Id :=
                              (if Dynamic then Syn.No_Node
@@ -11426,7 +11466,7 @@ package body Landin.Stages.Lowering is
                              Syn.Target_Of (Of_Tree, Stmt);
                            Dynamic : constant Boolean :=
                              Has_Computed_Index (Of_Tree, Place)
-                             or else Has_Pointer_Dereference
+                             or else Has_Reference_Storage
                                (Of_Tree, Place);
                         begin
                            if Dynamic then

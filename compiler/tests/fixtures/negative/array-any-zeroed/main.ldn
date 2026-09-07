@@ -1,0 +1,9 @@
+a: type = concept (t: type)
+    read: (self: ptr t) -> (value: i32)
+end a
+b: type = concept (t: type)
+    read: (self: ptr t) -> (value: i32)
+end b
+bad: () -> none =
+    value: [1]any a = zeroed
+end bad

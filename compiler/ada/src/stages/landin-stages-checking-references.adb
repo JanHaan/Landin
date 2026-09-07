@@ -200,16 +200,10 @@ package body Landin.Stages.Checking.References is
                    (Types.all, Nominal);
             end;
          elsif Kind = Ty.Fixed_Array then
-            declare
-               Nominal : constant Landin.Checking.Nominal_Type_Id :=
-                 Landin.Checking.Array_Element_Nominal (Types.all, Id);
-            begin
-               return Landin.Checking.Array_Length (Types.all, Id) > 0
-                 and then Nominal /= Landin.Checking.No_Nominal_Type
-                 and then Landin.Checking.Has_Layout (Types.all, Nominal)
-                 and then Landin.Checking.Contains_References
-                   (Types.all, Nominal);
-            end;
+            return Landin.Checking.Array_Length (Types.all, Id) > 0
+              and then Landin.Checking.Contains_References
+                (Types.all,
+                 Landin.Checking.Array_Element_Shape (Types.all, Id));
          end if;
          return False;
       end Has_References;

@@ -1,0 +1,82 @@
+counter: type = concept (t: type)
+    bump: (self: ptr mut t) -> (value: i32)
+end counter
+one: type = struct
+    value: i32
+end one
+two: type = struct
+    sentinel: i32
+    value: i32
+end two
+bump_one: (self: ptr mut one) -> (value: i32) =
+    inc self.val.value
+    value = self.val.value
+end bump_one
+bump_two: (self: ptr mut two) -> (value: i32) =
+    self.val.value = self.val.value + 2
+    value = self.val.value
+end bump_two
+one is counter (bump: bump_one)
+two is counter (bump: bump_two)
+mut left: one = (value: 17)
+mut right: two = (sentinel: 123, value: 24)
+row: type (t: type, fixed n: usize) = [n]t
+copy: (fixed n: usize, t: type, source: row(t, n))
+      -> (result: row(t, n) from source) =
+    result = source
+end copy
+identity: (t: type, value: t) -> (result: t from value) =
+    result = value
+end identity
+replace: (fixed n: usize, t: type, target: ptr mut [n]t, value: t) -> none =
+    target.val[0] = value
+end replace
+shelf: type (t: type) = struct
+    values: [3]t
+end shelf
+copy_shelf: (t: type, source: shelf(t))
+            -> (result: shelf(t) from source) =
+    result = source
+end copy_shelf
+public main: () -> (code: i32) =
+    mut single: [1]any counter
+    single[0] = any(addr left)
+    mut saved := identity(copy(single))
+    owner := addr saved
+    replacement: any counter = any(addr right)
+    replace(owner, replacement)
+    one_view := owner.val[0..<1]
+    first := one_view[0]
+    x: i32 = first.bump()
+    if x <> 26 or right.sentinel <> 123 then
+        code = 1
+        return
+    end if
+    mut values: [3]any counter
+    values[0] = any(addr left)
+    values[1] = any(addr right)
+    values[2] = any(addr left)
+    mut copied: [3]any counter = identity(copy(values))
+    stored: shelf(any counter) = (values: copied)
+    stored_copy := copy_shelf(stored)
+    stored_erased := stored_copy.values[0]
+    q: i32 = stored_erased.bump()
+    if q <> 18 then
+        code = 3
+        return
+    end if
+    whole := addr copied
+    index: usize = 2
+    whole.val[index] = any(addr right)
+    selected := whole.val[0..<3]
+    a := selected[0]
+    b := selected[1]
+    c := selected[2]
+    y: i32 = a.bump()
+    z: i32 = b.bump()
+    w: i32 = c.bump()
+    code = if y == 19 and z == 28 and w == 30
+              and left.value == 19 and right.value == 30
+              and right.sentinel == 123 and lenof selected == 3
+           then 42 else 2 end if
+end main

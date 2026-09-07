@@ -483,6 +483,7 @@ package Landin.IR is
    type Parameter_Convention is (In_Value, Inout_Place, Sink_Value);
 
    type Signature_Part is record
+      Element_Shape : Field_Shape := (others => <>);
       Kind    : Landin.Types.Type_Kind := Landin.Types.No_Value;
       Nominal : Nominal_Type_Id := No_Nominal_Type;
       Length  : Element_Total          := 0;

@@ -3657,8 +3657,169 @@ package body Landin.Tests.Verifier_Suite is
       end;
    end Malformed_Runtime_Addresses_Are_Rejected;
 
+   procedure Nested_Array_Address_Shapes_Keep_Children
+     (Item : in out Landin.Testing.Context);
+
+   procedure Nested_Array_Address_Shapes_Keep_Children
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Site : Landin.Provenance.Origin;
+   begin
+      Ready (Work, Site);
+      for Scenario in 1 .. 3 loop
+         declare
+            Unit : IR.Unit;
+            Routine : IR.Item_Id;
+            Result, Address : IR.Slot_Id;
+            Block : IR.Block_Id;
+            Value : IR.Value_Id;
+            First : Natural;
+            Child : IR.Field_Shape :=
+              (Kind => IR.Array_Field_Shape, Element => Landin.Types.Usize,
+               Length => 2, others => <>);
+         begin
+            IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+            Routine := IR.Add_Item
+              (Unit, IR.Routine, 1, Landin.Types.U32, Site);
+            Result := IR.Add_Slot
+              (Unit, Routine, Landin.Types.U32, 2, Site);
+            IR.Set_Result_Slot (Unit, Routine, Result);
+            if Scenario = 2 then
+               Child := (Kind => IR.Scalar_Field_Shape,
+                         Element => Landin.Types.Usize, others => <>);
+            elsif Scenario = 3 then
+               Child.Cases := 2;
+            end if;
+            First := IR.Add_Shape_Run (Unit, [1 => Child]);
+            Address := IR.Add_Address_Slot
+              (Unit, Routine,
+               (Kind => IR.Array_Field_Shape, Element => Landin.Types.Usize,
+                Length => 3, Cases => 1, Payloads_First => First,
+                others => <>), Site);
+            Landin.Testing.Check
+              (Item, IR.Is_Address (Unit, Routine, Address),
+               "the nested array uses an existing address slot");
+            Block := IR.Add_Block
+              (Unit, Routine, Landin.Resolution.Program_Scope, Site);
+            IR.Enter (Unit, Routine, Block);
+            Value := IR.Emit_Number
+              (Unit, Routine, Landin.Types.U32, 0, False, Site);
+            IR.Emit_Store (Unit, Routine, Result, Value, Site);
+            Value := IR.Emit_Load (Unit, Routine, Result, Site);
+            IR.Emit_Leave (Unit, Routine, Value, Site);
+            IR.Leave_Block (Unit, Routine);
+            Expect
+              (Item, V.Check (Unit),
+               (if Scenario = 1 then V.Nothing_Wrong
+                else V.Runtime_Address_Is_Not_Valid),
+               "array children need complete valid non-scalar shapes");
+         end;
+      end loop;
+   end Nested_Array_Address_Shapes_Keep_Children;
+
+   procedure Array_Routine_Parts_Keep_Complete_Children
+     (Item : in out Landin.Testing.Context);
+
+   procedure Array_Routine_Parts_Keep_Complete_Children
+     (Item : in out Landin.Testing.Context)
+   is
+      type Scenario_Kind is
+        (Legacy_Scalar, Scalar_Versus_Descriptor, Exact_Descriptor,
+         Wrong_Descriptor_Length, Legacy_Nominal, Scalar_Versus_Variant,
+         Wrong_Explicit_Scalar, Exact_Scalar);
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Site : Landin.Provenance.Origin;
+   begin
+      Ready (Work, Site);
+      for Scenario in Scenario_Kind loop
+         declare
+            Unit : IR.Unit;
+            Routine : IR.Item_Id;
+            Parameter : IR.Slot_Id;
+            Signature : IR.Signature_Id;
+            Block : IR.Block_Id;
+            First : Natural;
+            Part : IR.Signature_Part :=
+              (Kind => Landin.Types.Fixed_Array, Length => 3,
+               Element => Landin.Types.Usize, others => <>);
+            Child : IR.Field_Shape :=
+              (Kind => IR.Scalar_Field_Shape,
+               Element => Landin.Types.Usize, others => <>);
+         begin
+            IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+            case Scenario is
+               when Legacy_Scalar => null;
+               when Scalar_Versus_Descriptor | Exact_Descriptor
+                    | Wrong_Descriptor_Length =>
+                  --  Slice and any carriers use array-shaped children.
+                  --  Equal scalar carrier kinds cannot erase that extent.
+                  Child.Kind := IR.Array_Field_Shape;
+                  Child.Length := 2;
+                  if Scenario /= Scalar_Versus_Descriptor then
+                     Part.Element_Shape := Child;
+                     if Scenario = Wrong_Descriptor_Length then
+                        Part.Element_Shape.Length := 3;
+                     end if;
+                  end if;
+               when Legacy_Nominal =>
+                  Part.Element := Landin.Types.Bool;
+                  Part.Nominal := IR.Add_Nominal_Type (Unit, 3);
+                  First := IR.Add_Shape_Run (Unit, [1 => Child]);
+                  Child :=
+                    (Kind => IR.Aggregate_Field_Shape,
+                     Element => Landin.Types.Bool, Length => 1,
+                     Cases => 1, Payloads_First => First,
+                     Nominal => Part.Nominal, others => <>);
+               when Scalar_Versus_Variant =>
+                  First := IR.Add_Shape_Run (Unit, [1 => Child]);
+                  First := IR.Add_Case_Run
+                    (Unit, [1 => (First => First, Count => 1)]);
+                  Child :=
+                    (Kind => IR.Variant_Field_Shape,
+                     Element => Landin.Types.U8, Length => 1,
+                     Cases => 1, Payloads_First => First, others => <>);
+                  Part.Element := Landin.Types.U8;
+               when Wrong_Explicit_Scalar =>
+                  Part.Element_Shape :=
+                    (Kind => IR.Scalar_Field_Shape,
+                     Element => Landin.Types.U32, others => <>);
+               when Exact_Scalar =>
+                  Part.Element_Shape := Child;
+            end case;
+            Signature := IR.Add_Signature
+              (Unit, [1 => Part], (Kind => Landin.Types.No_Value,
+                                  others => <>));
+            Routine := IR.Add_Item
+              (Unit, IR.Routine, 1, Landin.Types.No_Value, Site);
+            IR.Set_Signature (Unit, Routine, Signature);
+            Parameter := IR.Add_Array_Parameter
+              (Unit, Routine, Child, 3, 2, Site);
+            Landin.Testing.Check
+              (Item, IR.Is_Array (Unit, Routine, Parameter),
+               "the parameter holds the separately supplied child shape");
+            Block := IR.Add_Block
+              (Unit, Routine, Landin.Resolution.Program_Scope, Site);
+            IR.Enter (Unit, Routine, Block);
+            IR.Emit_Leave (Unit, Routine, IR.No_Value, Site);
+            IR.Leave_Block (Unit, Routine);
+            Expect
+              (Item, V.Check (Unit),
+               (if Scenario in Legacy_Scalar | Exact_Descriptor
+                    | Legacy_Nominal | Exact_Scalar
+                then V.Nothing_Wrong else V.Routine_Signature_Disagrees),
+               "complete array parameter child: " & Scenario'Image);
+         end;
+      end loop;
+   end Array_Routine_Parts_Keep_Complete_Children;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "verifier", "array routine parts keep complete children",
+         Array_Routine_Parts_Keep_Complete_Children'Access);
       Landin.Testing.Register
         (Into, "verifier", "a sound unit is accepted",
          A_Sound_Unit_Is_Accepted'Access);
@@ -3701,6 +3862,9 @@ package body Landin.Tests.Verifier_Suite is
       Landin.Testing.Register
         (Into, "verifier", "malformed runtime addresses are rejected",
          Malformed_Runtime_Addresses_Are_Rejected'Access);
+      Landin.Testing.Register
+        (Into, "verifier", "nested array address shapes keep children",
+         Nested_Array_Address_Shapes_Keep_Children'Access);
    end Register;
 
 end Landin.Tests.Verifier_Suite;

@@ -1,0 +1,10 @@
+a: type = concept (t: type)
+    read: (self: ptr t) -> (value: i32)
+end a
+b: type = concept (t: type)
+    read: (self: ptr t) -> (value: i32)
+end b
+same: (t: type, left: t, right: t) -> none = end same
+reject: (left: [1]any a, right: [1]any b) -> none =
+    same(left, right)
+end reject

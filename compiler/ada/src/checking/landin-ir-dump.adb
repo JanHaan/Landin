@@ -81,6 +81,8 @@ package body Landin.IR.Dump is
          return Unbounded.To_String (Text);
       end Atom_Set_Text;
 
+      function Shape_Text (Shape : Field_Shape) return String;
+
       function Signature_Part_Text (Part : Signature_Part) return String
         is (case Part.Kind is
                when Landin.Types.No_Value => "none",
@@ -90,7 +92,9 @@ package body Landin.IR.Dump is
                   "struct " & Named (Template_Of (Of_Unit, Part.Nominal)),
                when Landin.Types.Fixed_Array =>
                   "[" & Trimmed (Element_Total'Image (Part.Length)) & "]"
-                  & (if Part.Nominal = No_Nominal_Type
+                  & (if Part.Element_Shape.Kind = Array_Field_Shape
+                     then Shape_Text (Part.Element_Shape)
+                     elsif Part.Nominal = No_Nominal_Type
                      then Landin.Types.Spelling (Part.Element)
                      else "struct "
                        & Named (Template_Of (Of_Unit, Part.Nominal))),
@@ -104,7 +108,6 @@ package body Landin.IR.Dump is
       --  D74/D75 use one target-neutral shape spelling for measurement,
       --  datum and slot runs.  Variant payloads are depth-one leaves, so
       --  their case runs can be rendered without inventing target offsets.
-      function Shape_Text (Shape : Field_Shape) return String;
 
       function Shape_Text (Shape : Field_Shape) return String is
          Result : Unbounded.Unbounded_String;

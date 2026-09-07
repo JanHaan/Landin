@@ -1,0 +1,9 @@
+a: type = concept (t: type)
+    read: (self: ptr t) -> (value: i32)
+end a
+b: type = concept (t: type)
+    read: (self: ptr t) -> (value: i32)
+end b
+reject: (source: [3]any a) -> none =
+    wrong: [3]any b = source
+end reject
