@@ -104,6 +104,7 @@ negative/core-diag-frame-message-escape | linux-x86-64, macos-arm64, synthetic-3
 negative/core-failing-frame-escape | linux-x86-64, macos-arm64, synthetic-32
 negative/core-failing-needs-mutable-inner | linux-x86-64, macos-arm64, synthetic-32
 negative/core-mem-private-representation | linux-x86-64, macos-arm64, synthetic-32
+negative/core-pool-bookkeeping-frame-escape | linux-x86-64, macos-arm64, synthetic-32
 negative/core-pool-frame-escape | linux-x86-64, macos-arm64, synthetic-32
 negative/core-text-frame-slice-escape | linux-x86-64, macos-arm64, synthetic-32
 negative/core-text-private-position | linux-x86-64, macos-arm64, synthetic-32

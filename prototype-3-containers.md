@@ -1217,8 +1217,8 @@ for: `runtime/hosted-heap-provider` observes both old and replacement vector
 allocations live during growth, then observes their exact extents released.
 `runtime/r420-failing-providers` also injects the replacement failure over a
 two-slot reclaiming pool, proves the old pointer vector remains intact, then
-permits one retry and observes the old slot freed only after publication and
-the replacement freed by release.
+permits one retry, observes a successful replacement, and observes eventual
+exact release of both allocation extents.
 
 First, this finding overstated its own case. A flag and a
 conditional defer is linear, not quadratic — three lines per

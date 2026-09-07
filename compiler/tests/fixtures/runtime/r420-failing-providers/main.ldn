@@ -27,6 +27,8 @@ heap_budgets: () -> (ok: bool) =
     first_last: ptr mut u8 = ptr(usize(first) + size_1 - 1)
     first.val = 11
     first_last.val = 13
+    first_observed: bool = usize(first) % alignment_1 == 0
+                          and first.val == 11 and first_last.val == 13
     mem.free(state, first, size_1)
 
     two: usize = 2
@@ -35,6 +37,7 @@ heap_budgets: () -> (ok: bool) =
     alignment_2: usize = 64
     second: ptr mut u8 = mem.allocate(state, size_1, alignment_1) else ptr(0)
     third: ptr mut u8 = mem.allocate(state, size_2, alignment_2) else ptr(0)
+    third_aligned: bool = usize(third) % alignment_2 == 0
     mut failed_after_two: bool = false
     _ = mem.allocate(state, one, one) else (problem)
         _ = problem
@@ -43,10 +46,8 @@ heap_budgets: () -> (ok: bool) =
     mem.free(state, second, size_1)
     mem.free(state, third, size_2)
 
-    ok = failed_zero and failed_after_two
-         and usize(first) % alignment_1 == 0
-         and usize(third) % alignment_2 == 0
-         and first.val == 11 and first_last.val == 13
+    ok = failed_zero and failed_after_two and first_observed
+         and third_aligned
          and failing.attempts(state) == 5
          and failing.delegated(state) == 3
          and failing.successes(state) == 3

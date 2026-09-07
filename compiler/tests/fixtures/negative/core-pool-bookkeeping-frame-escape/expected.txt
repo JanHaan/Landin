@@ -1,0 +1,10 @@
+error[L0314]: this returned reference still has frame origin
+  --> ../tests/fixtures/negative/core-pool-bookkeeping-frame-escape/main.ldn:17:1
+   |
+17 | bad: (base: ptr mut u8)
+   | ^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/core-pool-bookkeeping-frame-escape/main.ldn:17:7
+   |
+17 | bad: (base: ptr mut u8)
+   |       ^^^^^^^^^^^^^^^^ the shorter-lived reference source
+  = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`

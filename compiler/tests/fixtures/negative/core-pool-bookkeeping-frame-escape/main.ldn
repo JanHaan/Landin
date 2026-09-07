@@ -1,0 +1,22 @@
+import core/mem
+import core/pool
+
+pool_state: type = pool.provider
+
+forward: (base: ptr mut u8, bookkeeping: []mut pool.slot)
+         -> (state: pool_state from base, bookkeeping)
+            ! mem.out_of_memory =
+    extent: usize = 64
+    slot_size: usize = 64
+    slot_count: usize = 1
+    alignment: usize = 1
+    state = try pool.over
+        (base, extent, slot_size, slot_count, alignment, bookkeeping)
+end forward
+
+bad: (base: ptr mut u8)
+     -> (state: pool_state from base) ! mem.out_of_memory =
+    mut records: [1]pool.slot = zeroed
+    bookkeeping: []mut pool.slot = records[0..<lenof records]
+    state = try forward(base, bookkeeping)
+end bad

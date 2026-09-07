@@ -3800,6 +3800,10 @@ provider, including a local pool or hosted heap, and distinguishes injected
 failure from delegated inner failure while forwarding every free. Runtime
 evidence covers a six-live-slot map-rehash bound and pointer-vector rollback
 and retry without putting an allocator in the container.
+For tracked base and metadata actuals, `from base, bookkeeping` joins both
+origins. D197 also records the existing whole-value Untracked-OR limit: an
+integer-derived base makes the returned provider untracked, so the checker
+does not independently enforce a tracked metadata origin in that mixed case.
 
 Exit evidence: containers run with heap, arena, fixed and failing allocators;
 all omission and layering choices are recorded; `[0820]`'s block is either
