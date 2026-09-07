@@ -3677,6 +3677,13 @@ Literal and mixed-repetition writes, whole copies and fills now compose through
 that path, including a fixed-array field reached inside a constant-indexed
 struct element. This is not a change to array legality or normalization and
 does not force a source index to become dynamic.
+The scalar-leaf follow-up restricts the flat-array store shortcut to a directly
+named array. A nested scalar assignment or increment/decrement retains the
+containing path instead of asking resolution to bind an intermediate index
+expression as a name. Compound writeback likewise retains that path,
+materializing only its already-constant leaf index when no runtime index was
+saved. `runtime/nested-scalar-array-stores` pins module and frame arrays,
+neighboring values, compound updates and RHS call counts.
 Fixed providers, initialized views, iterable/sort integration and
 small-vector, map and tree expansion remain later increments of this active
 item.

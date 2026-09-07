@@ -1013,6 +1013,7 @@ runtime/named-return-zeroed-reads-zero | linux-x86-64
 runtime/named-runtime-call-order | linux-x86-64
 runtime/negative-left-shift-traps | linux-x86-64
 runtime/negative-right-shift-traps | linux-x86-64
+runtime/nested-scalar-array-stores | linux-x86-64
 runtime/nested-storage-arguments | linux-x86-64
 runtime/nested-struct-array-elements | linux-x86-64
 runtime/nested-struct-array-values | linux-x86-64

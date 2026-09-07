@@ -9780,12 +9780,14 @@ package body Landin.Stages.Lowering is
 
                function Index_For (Place : Syn.Node_Id) return IR.Value_Id is
                begin
+                  --  Only a directly named flat array has a scalar-field
+                  --  shortcut. Nested selections retain their array path.
                   if Syn.Kind (Of_Tree, Place) /= Syn.Element_Index
                     or else
                       (Is_Constant_Index (Of_Tree, Place)
                        and then Syn.Kind
                                   (Of_Tree, Syn.Target_Of (Of_Tree, Place))
-                                /= Syn.Member_Selection
+                                = Syn.Name_Reference
                        and then not Aliases
                          (Declared
                             (Res.Bound_To
@@ -10094,11 +10096,19 @@ package body Landin.Stages.Lowering is
                           Chain_Base (Of_Tree, Selected);
                         Child_Steps : constant IR.Path_Step_Array :=
                           Chain_Steps (Of_Tree, Selected);
+                        At_Index : IR.Value_Id := Index;
                      begin
+                        if At_Index = IR.No_Value
+                          and then (Field > 0 or else Child_Steps'Length > 0)
+                        then
+                           pragma Assert (Is_Constant_Index (Of_Tree, Place));
+                           At_Index := Lower_Expression
+                             (Of_Tree, Syn.Index_Of (Of_Tree, Place), Scope);
+                        end if;
                         if Res.Sort_Of (Meanings.all, Means)
                            = Res.Local_Binding
                         then
-                           if Index = IR.No_Value then
+                           if At_Index = IR.No_Value then
                               IR.Emit_Store_Slot_Field
                                 (Unit.all, Filling,
                                  Slot_For (Of_Tree, Named, Means),
@@ -10108,10 +10118,10 @@ package body Landin.Stages.Lowering is
                               IR.Emit_Store_Slot_Element
                                 (Unit.all, Filling,
                                  Slot_For (Of_Tree, Named, Means),
-                                 Index, Value, Site, Field => Field,
+                                 At_Index, Value, Site, Field => Field,
                                  Nested => Child_Steps);
                            end if;
-                        elsif Index = IR.No_Value then
+                        elsif At_Index = IR.No_Value then
                            IR.Emit_Store_Field
                              (Unit.all, Filling,
                               IR.Item_For (Unit.all, Means),
@@ -10120,7 +10130,7 @@ package body Landin.Stages.Lowering is
                            IR.Emit_Store_Element
                              (Unit.all, Filling,
                               IR.Item_For (Unit.all, Means),
-                              Index, Value, Site, Field => Field,
+                              At_Index, Value, Site, Field => Field,
                               Nested => Child_Steps);
                         end if;
                      end;
