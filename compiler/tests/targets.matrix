@@ -109,6 +109,14 @@ negative/deep-nested-leaf-unassigned | linux-x86-64, macos-arm64
 negative/defer-cannot-see-later-local | linux-x86-64, macos-arm64, synthetic-32
 negative/defer-needs-call | linux-x86-64, macos-arm64, synthetic-32
 negative/defer-read-not-assigned-on-return | linux-x86-64, macos-arm64, synthetic-32
+negative/derived-address-escaping | linux-x86-64, macos-arm64, synthetic-32
+negative/derived-address-live-view | linux-x86-64, macos-arm64, synthetic-32
+negative/derived-address-local-array | linux-x86-64, macos-arm64, synthetic-32
+negative/derived-address-local-descriptor | linux-x86-64, macos-arm64, synthetic-32
+negative/derived-address-local-slice | linux-x86-64, macos-arm64, synthetic-32
+negative/derived-address-readonly | linux-x86-64, macos-arm64, synthetic-32
+negative/derived-address-value-array | linux-x86-64, macos-arm64, synthetic-32
+negative/derived-address-wrong-from | linux-x86-64, macos-arm64, synthetic-32
 negative/discard-of-nothing | linux-x86-64, macos-arm64
 negative/distinct-not-enabled | linux-x86-64, macos-arm64
 negative/divisor-is-zero | linux-x86-64, macos-arm64
@@ -881,7 +889,9 @@ runtime/deep-nested-struct-leaves | linux-x86-64
 runtime/defer-call-shapes | linux-x86-64
 runtime/defer-cleanups-follow-control-edges | linux-x86-64
 runtime/defer-does-not-unwind-traps | linux-x86-64
+runtime/derived-address-empty-slice-traps | linux-x86-64
 runtime/derived-parser | linux-x86-64
+runtime/derived-storage-address-origin | linux-x86-64
 runtime/diagnostic-loggers-dispatch | linux-x86-64
 runtime/division-and-remainder-exit-with-their-results | linux-x86-64
 runtime/evaluation-order-is-left-then-right | linux-x86-64

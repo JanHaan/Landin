@@ -3717,13 +3717,10 @@ initialized allocation helpers and allocator-backed vector growth retain their
 own execution obligations, including zero-sized elements and heterogeneous
 mutable dispatch after growth.
 
-Three independent defects exposed by the reduced probes remain owned here for
+Two independent defects exposed by the reduced probes remain owned here for
 separate bounded repairs. A local inferred from `erased.entry()` can query
 conformance provider entries before finalization, even without generics;
-explicitly typed result locals allow the transport fixture to execute. Taking
-`addr source[0]` from a slice parameter is wrongly assigned frame origin even
-in a monomorphic function; the transport constructor instead accepts a genuine
-pointer and slice separately and declares both sources. Finally, the parser
+explicitly typed result locals allow the transport fixture to execute. The parser
 accepts a named call as a non-final statement while [1810]'s grammar admits it
 only as an expression, including a final body expression; explicit-static
 transport tests currently use that admitted final-expression position. None
@@ -3732,6 +3729,17 @@ The initialized-view implementation must also retain [0860]'s shallow alias
 limit: a reference inserted through an alias is not generally propagated back
 to every other view of that storage, so writable views do not establish
 whole-program escape safety.
+
+The bounded storage-address origin repair distinguishes a reference descriptor
+from the storage it addresses. `addr` through a slice index or pointer
+dereference retains the source reference's local origin facts, including
+through local descriptor aliases and subsequent field/array selections.
+`runtime/derived-storage-address-origin` pins reads, writes and once-only index
+evaluation; `runtime/derived-address-empty-slice-traps` retains the dynamic
+bound check. The `negative/derived-address-*` cases retain frame-array and
+local-descriptor refusals, exact `from`, permission, escaping and live-view
+checks. This repairs the monomorphic prerequisite for initialized views without
+changing [0860]'s shallow alias limit or using an untracked pointer conversion.
 
 D191 gives this item three construct rows R4.10 could not settle. `[0500]`'s
 `mem.offset` and `mem.base_of` are library conveniences this slice adds or

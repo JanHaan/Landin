@@ -43,6 +43,12 @@ an explicit monotonic arena and a budgeted failing arena. R3.30's private
 lets `core/vec` name that nominal identity without exposing its fields, and a
 checked one-slot transfer copies initialized values during growth.
 
+For ordinary initialized storage, `addr view[index]` retains the slice's
+source origin [0790], as does an address selected through a pointer's `.val`.
+The descriptor may be copied into a local binding without making its backing
+frame-local. This does not permit returning an address into a local array or
+constructing a view over uninitialized slots.
+
 ```landin
 public out_of_memory: atom
 

@@ -1,0 +1,5 @@
+retain: (escaping value: ptr u32) -> none =
+end retain
+bad: (source: []u32) -> none =
+    retain(addr source[0])
+end bad

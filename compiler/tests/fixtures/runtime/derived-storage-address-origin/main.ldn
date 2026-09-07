@@ -1,0 +1,65 @@
+cell: type = struct
+    value: u32
+end cell
+
+first: (source: []mut u32) -> (result: ptr mut u32 from source) =
+    result = addr source[0]
+end first
+
+aliased: (source: []mut u32) -> (result: ptr mut u32 from source) =
+    local := source[1..<2]
+    result = addr local[0]
+end aliased
+
+pointee: (source: ptr mut u32) -> (result: ptr mut u32 from source) =
+    local := source
+    result = addr local.val
+end pointee
+
+field: (source: []mut cell) -> (result: ptr mut u32 from source) =
+    result = addr source[0].value
+end field
+
+array_element: (source: ptr mut [2]u32)
+               -> (result: ptr mut u32 from source) =
+    result = addr source.val[1]
+end array_element
+
+read_only: (source: []u32) -> (result: ptr u32 from source) =
+    result = addr source[0]
+end read_only
+
+index_once: (inout calls: u32) -> (index: usize) =
+    inc calls
+    index = 1
+end index_once
+
+computed: (source: []mut u32, inout calls: u32)
+          -> (result: ptr mut u32 from source) =
+    result = addr source[index_once(calls)]
+end computed
+
+public main: () -> (code: i32) =
+    mut values: [2]u32 = [3, 5]
+    mut cells: [1]cell = zeroed
+    cells[0].value = 7
+    first_item := first(values[0..<2])
+    first_item.val = 11
+    next_item := aliased(values[0..<2])
+    next_item.val = 13
+    same := pointee(first_item)
+    same.val = 17
+    nested := field(cells[0..<1])
+    nested.val = 19
+    last := array_element(addr values)
+    last.val = 23
+    checked := read_only(values[0..<2])
+    mut calls: u32 = 0
+    selected := computed(values[0..<2], calls)
+    code = 1
+    if checked.val == 17 and values[1] == 23 and cells[0].value == 19
+      and selected.val == 23 and calls == 1
+    then
+        code = 42
+    end if
+end main

@@ -457,6 +457,10 @@ it the pointee is read-only. .val names the pointee, so it
 reads on the right of an assignment and, with mut, is an
 ordinary target on the left.
 
+`addr p.val` addresses the pointee and keeps `p`'s origin. Likewise,
+`addr items[i]` for a slice addresses its backing element. Taking `addr p`
+instead addresses the pointer variable itself, whose storage may be local.
+
 ```landin
 mut value: u32 = 42
 p: ptr mut u32 = addr value

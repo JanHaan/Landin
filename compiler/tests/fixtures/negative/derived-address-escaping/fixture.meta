@@ -1,0 +1,7 @@
+class: negative
+summary: an address behind an ordinary borrowed slice is not an escaping capability
+program: main.ldn
+constructs: 0430, 0520, 0770, 0790, 0800, 0830, 1910
+codes: L0314
+status: 1
+targets: linux-x86-64, macos-arm64, synthetic-32

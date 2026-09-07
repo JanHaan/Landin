@@ -1,0 +1,9 @@
+first: (source: []mut u32) -> (result: ptr mut u32 from source) =
+    result = addr source[0]
+end first
+
+public main: () -> (code: i32) =
+    mut values: [1]u32 = [42]
+    missing := first(values[0..<0])
+    code = i32(missing.val)
+end main

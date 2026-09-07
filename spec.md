@@ -1032,7 +1032,12 @@ This is definite assignment of one consumed place, not ownership; copies made
 before the sink remain live.
 
 The reference-origin walk is a second local flow fact. `addr` of local storage
-and a slice of a by-value array parameter have frame origin. A returned value
+and a slice of a by-value array parameter have frame origin. An address reached
+through a pointer dereference or slice index instead retains that reference's
+origin, including when ordinary fields or fixed-array indices follow it.
+Taking the address of the local pointer or slice descriptor itself still has
+frame origin; copying a descriptor locally does not move its backing storage
+into the frame. A returned value
 with frame origin is refused. A retained `escaping` argument must be independent
 or derive only from parameters themselves declared `escaping`. Integer-created
 pointers are explicitly untracked [0470]. For a tracked returned reference, the

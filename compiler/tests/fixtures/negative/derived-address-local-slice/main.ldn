@@ -1,0 +1,5 @@
+bad: () -> (result: ptr mut u32) =
+    mut source: [2]u32 = [1, 2]
+    local := source[0..<2]
+    result = addr local[0]
+end bad
