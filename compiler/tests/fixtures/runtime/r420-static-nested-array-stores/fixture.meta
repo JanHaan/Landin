@@ -1,0 +1,6 @@
+class: runtime
+summary: constant-index nested arrays retain every dimension for literal repetition and copy stores
+program: main.ldn
+status: 42
+constructs: 0410, 0520, 0540, 0560, 0750, 1810, 1920
+targets: linux-x86-64

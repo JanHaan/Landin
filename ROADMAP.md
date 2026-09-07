@@ -3668,12 +3668,15 @@ element writes. Pointer and slice place operands may recover by returning:
 address formation stops on that exit, and a slice descriptor survives any
 index recovery blocks. These repairs implement existing enabled compositions;
 they do not change vector arithmetic, the public API or [1820].
-One separate pre-existing nested-array store defect remains owned here for a
-bounded compiler follow-up: with `row: type = [3]u32` and
-`mut rows: [1]row`, `rows[0] = [11, 13, 17]` incorrectly reaches a scalar-field
-store and fails IR verification. The saved pre-vector compiler reproduces it.
-It is not a refusal or a change to array legality; the runtime-address repair
-above covers pointer/computed destinations, not this constant-index path.
+The bounded compiler follow-up closes the separate pre-existing nested-array
+store defect: a field-zero destination is direct array storage only when its
+neutral path is empty. A constant index into an array of fixed arrays retains
+that path on the existing element-store operation, so verification and each
+target derive every containing dimension before selecting the scalar element.
+Literal and mixed-repetition writes, whole copies and fills now compose through
+that path, including a fixed-array field reached inside a constant-indexed
+struct element. This is not a change to array legality or normalization and
+does not force a source index to become dynamic.
 Fixed providers, initialized views, iterable/sort integration and
 small-vector, map and tree expansion remain later increments of this active
 item.
@@ -3783,6 +3786,10 @@ adds scalar accumulation and a generic element call inside payload traversal;
 and computed array destinations, sentinels and evaluation counts;
 `runtime/r420-array-place-recovery` checks destination/source pointer recovery
 and slice-index recovery, including all-return operands and suppressed RHS/copy.
+`runtime/r420-static-nested-array-stores` checks literal and mixed repetition,
+whole copy and fill through first and last constant array indexes, plus
+containing-struct fields, sentinels, evaluation counts and both nested
+fixed-array bounds.
 
 D195 supplies the hosted allocator lane: `core/heap` is a separately imported
 libc-backed provider over [1975]'s fixed scalar/pointer runtime seam. Its

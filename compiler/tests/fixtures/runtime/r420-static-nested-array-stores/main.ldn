@@ -1,0 +1,63 @@
+row: type = [3]u32
+
+guarded_row: type = struct
+    before: u32
+    values: row
+    after: u32
+end guarded_row
+
+mut module_before: u32 = 101
+mut module_rows: [4]row = zeroed
+mut module_after: u32 = 103
+mut guarded: [2]guarded_row = zeroed
+source: row = [31, 37, 41]
+mut evaluations: u32 = 0
+
+next: (base: u32) -> (result: u32) =
+    inc evaluations
+    result = base + evaluations
+end next
+
+public main: () -> (code: i32) =
+    --  First and last indexes at both fixed-array dimensions pin the
+    --  path and bounds whose loss formerly produced a scalar-field store.
+    module_rows[0] = [next(10), next(10), next(10)]
+    module_rows[1] = [next(10), of next(10)]
+    module_rows[2] = source
+    module_rows[3] = [of 43]
+
+    guarded[0].before = 107
+    guarded[0].after = 109
+    guarded[0].values = [47, 53, 59]
+    guarded[1].before = 113
+    guarded[1].after = 127
+    guarded[1].values = source
+
+    if module_before == 101 and module_after == 103
+      and evaluations == 5
+      and module_rows[0][0] == 11
+      and module_rows[0][1] == 12
+      and module_rows[0][2] == 13
+      and module_rows[1][0] == 14
+      and module_rows[1][1] == 15
+      and module_rows[1][2] == 15
+      and module_rows[2][0] == 31
+      and module_rows[2][1] == 37
+      and module_rows[2][2] == 41
+      and module_rows[3][0] == 43
+      and module_rows[3][1] == 43
+      and module_rows[3][2] == 43
+      and guarded[0].before == 107 and guarded[0].after == 109
+      and guarded[0].values[0] == 47
+      and guarded[0].values[1] == 53
+      and guarded[0].values[2] == 59
+      and guarded[1].before == 113 and guarded[1].after == 127
+      and guarded[1].values[0] == 31
+      and guarded[1].values[1] == 37
+      and guarded[1].values[2] == 41
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main
