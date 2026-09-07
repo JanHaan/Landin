@@ -8996,11 +8996,14 @@ slice of a by-value fixed-array parameter from a retained slice parameter or
 `inout` storage. These are general language rules rather than privileges for
 `core/*`.
 
-Maps and trees are absent because the R3 parser does not need them. A public
-initialized-prefix slice, small-vector storage, iterable integration and the
-broader container surface remain R4.20. Allocator acquisition and ownership
-also remain outside the compiler; the current modules only thread an allocator
-supplied by their caller.
+Maps and trees are absent because the R3 parser does not need them. R4.20 adds
+the typed initialized-prefix slice witness and `core/small.small(item, N)`:
+its honest initialized inline array keeps the written `zeroable` constraint,
+while its spilled arm owns a `core/vec.list(item)` and reuses that list's
+transactional growth. Iterable integration and the broader container surface
+remain R4.20. Allocator acquisition and ownership also remain outside the
+compiler; the current modules only thread an allocator supplied by their
+caller.
 
 **The alternatives:** expose vector capacity as `[]mut item`, require
 `zeroable`, publish a partially copied replacement, store an allocator in each
@@ -9011,8 +9014,10 @@ confuses capability threading with ownership; and the last two settle wider
 library design without parser evidence. All were declined.
 
 **Pinned by** `runtime/core-mem-allocators`,
-`runtime/core-vec-pointer-storage`, `runtime/core-text-byte-positions`,
-`negative/core-arena-frame-escape`,
+`runtime/core-vec-pointer-storage`, `runtime/r420-small-vector`,
+`runtime/r420-small-vector-providers`, `runtime/core-text-byte-positions`,
+`negative/core-arena-frame-escape`, `negative/core-small-live-view`,
+`negative/core-small-frame-view`, `negative/core-small-pointer-item`,
 `negative/core-text-frame-slice-escape`,
 `negative/core-text-private-position`, and the `allocation.failure`,
 `allocation.backing`, `raw.prefix`, `origins.escape` and

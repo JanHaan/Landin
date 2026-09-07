@@ -1,0 +1,10 @@
+error[L0315]: this `inout` or `sink` use may move storage while a derived view is still in use
+  --> ../tests/fixtures/negative/variant-match-reference-payload-live-view/main.ldn:17:19
+   |
+17 |             clear(source)
+   |                   ^^^^^^
+  --> ../tests/fixtures/negative/variant-match-reference-payload-live-view/main.ldn:16:13
+   |
+16 |             saved: ptr mut i32 = value
+   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^ the live derived view
+  = note: [0800]/[0830]: take the view again after mutating its source

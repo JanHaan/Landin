@@ -1,0 +1,131 @@
+--  A zeroable-constrained vector with an initialized inline prefix. The
+--  spilled arm owns an ordinary core/vec list, so all growth after the first
+--  allocation uses vec's checked transactional protocol.
+
+import core/mem
+import core/vec
+
+public empty: atom
+
+public small: type (item: type is zeroable, fixed inline_slots: u32) = struct
+    count: usize
+    store: variant
+        inline: (values: [inline_slots]item) |
+        spilled: (values: vec.list(item))
+    end store
+end small
+
+public new: (item: type is zeroable, fixed inline_slots: u32)
+            -> (value: small(item, inline_slots)) =
+    value = (count: 0, store: inline(values: zeroed))
+end new
+
+public length: (item: type is zeroable, fixed inline_slots: u32,
+                value: small(item, inline_slots)) -> (count: usize) =
+    count = value.count
+end length
+
+public capacity: (item: type is zeroable, fixed inline_slots: u32,
+                  value: small(item, inline_slots)) -> (count: usize) =
+    match value.store
+        inline(values): begin
+            _ = lenof values
+            count = usize(inline_slots)
+        end
+        spilled(values): count = vec.capacity(values)
+    end match
+end capacity
+
+first_capacity: (fixed inline_slots: u32)
+                -> (count: usize) ! mem.out_of_memory =
+    current: usize = usize(inline_slots)
+    if current == 0 then
+        count = 8
+        return
+    end if
+    maximum: usize = 0 -% 1
+    fail mem.out_of_memory when current > maximum / 2
+    count = current * 2
+end first_capacity
+
+pop_list: (item: type is zeroable, inout values: vec.list(item))
+          -> (removed: item from values) ! empty =
+    removed = vec.pop(values) else (problem)
+        _ = problem
+        fail empty
+    end
+end pop_list
+
+public push: (item: type is zeroable, fixed inline_slots: u32,
+              provider: type is mem.allocator,
+              inout value: small(item, inline_slots),
+              inout state: provider, escaping added: item)
+             -> none ! mem.out_of_memory =
+    match value.store
+        inline(inout values): begin
+            if value.count < usize(inline_slots) then
+                values[value.count] = added
+                inc value.count
+                return
+            end if
+
+            wanted: usize = try first_capacity(inline_slots: inline_slots)
+            mut fresh := vec.new_list(item: item)
+            try vec.reserve(fresh, state, wanted)
+
+            mut at: usize = 0
+            while at < value.count do
+                --  reserve established room for the whole inline prefix, so
+                --  these pushes cannot reach their growth path.
+                try vec.push(fresh, state, values[at])
+                inc at
+            end while
+            try vec.push(fresh, state, added)
+
+            value.store = spilled(values: fresh)
+            inc value.count
+        end
+
+        spilled(inout values): begin
+            try vec.push(values, state, added)
+            inc value.count
+        end
+    end match
+end push
+
+public used: (item: type is zeroable, fixed inline_slots: u32,
+              inout value: small(item, inline_slots))
+             -> (view: []mut item from value) =
+    match value.store
+        inline(inout values): view = values[0..<value.count]
+        spilled(values): view = mem.used(values.values)
+    end match
+end used
+
+public pop: (item: type is zeroable, fixed inline_slots: u32,
+             inout value: small(item, inline_slots))
+            -> (removed: item from value) ! empty =
+    fail empty when value.count == 0
+    match value.store
+        inline(inout values): begin
+            dec value.count
+            removed = values[value.count]
+            values[value.count] = zeroed
+        end
+        spilled(inout values): begin
+            removed = try pop_list(values)
+            dec value.count
+        end
+    end match
+end pop
+
+public release: (item: type is zeroable, fixed inline_slots: u32,
+                 provider: type is mem.allocator,
+                 inout value: small(item, inline_slots),
+                 inout state: provider) -> none =
+    match value.store
+        inline(values): _ = lenof values
+        spilled(inout values): vec.release(values, state)
+    end match
+    value = new(item: item, inline_slots: inline_slots)
+end release

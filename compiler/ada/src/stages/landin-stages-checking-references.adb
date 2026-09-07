@@ -72,6 +72,11 @@ package body Landin.Stages.Checking.References is
         (Res.Declaration_Id'(1)
          .. Res.Declaration_Id (Res.Declaration_Count (Meanings.all))) :=
            [others => No_Origin];
+      --  A pattern binding's value and its backing storage can have distinct
+      --  origins.  Pointer/slice-backed and computed match subjects are
+      --  copied into a frame temporary by lowering, while a reference value
+      --  carried in their payload still points where the subject said.
+      Pattern_Storage : Origin_Table (Origins'Range) := [others => No_Origin];
       Parameter_Of : array (Origins'Range) of Natural := [others => 0];
       Parameter_Escapes : array (1 .. Parameters) of Boolean :=
         [others => False];
@@ -91,6 +96,9 @@ package body Landin.Stages.Checking.References is
         (Tree : Syn.Tree; Node : Syn.Node_Id) return Res.Declaration_Id;
 
       function Has_References (Id : Res.Declaration_Id) return Boolean;
+
+      function Match_Subject_Is_Copied
+        (Tree : Syn.Tree; Subject : Syn.Node_Id) return Boolean;
 
       function Storage_Fact
         (Tree : Syn.Tree; Place : Syn.Node_Id) return Origin_Fact;
@@ -207,6 +215,58 @@ package body Landin.Stages.Checking.References is
          end if;
          return False;
       end Has_References;
+
+      function Match_Subject_Is_Copied
+        (Tree : Syn.Tree; Subject : Syn.Node_Id) return Boolean
+      is
+         Where : Syn.Node_Id := Subject;
+
+         function Is_Constant_Index (Node : Syn.Node_Id) return Boolean;
+
+         function Is_Constant_Index (Node : Syn.Node_Id) return Boolean is
+            Written : constant Syn.Node_Id := Syn.Index_Of (Tree, Node);
+         begin
+            return Syn.Kind (Tree, Written) = Syn.Integer_Literal
+              or else
+                (Syn.Kind (Tree, Written) = Syn.Negation
+                 and then Syn.Kind
+                   (Tree, Syn.Operand_Of (Tree, Written))
+                     = Syn.Integer_Literal);
+         end Is_Constant_Index;
+      begin
+         if Syn.Kind (Tree, Subject) /= Syn.Member_Selection then
+            return False;
+         end if;
+         Where := Syn.Target_Of (Tree, Subject);
+         --  Keep this predicate identical to Lower_Variant_Match's
+         --  Has_Computed_Index/Has_Reference_Storage choice.  Those subjects
+         --  are copied once; every other checked named place is matched in
+         --  its actual storage.
+         while Syn.Kind (Tree, Where)
+           in Syn.Member_Selection | Syn.Element_Index
+         loop
+            if Syn.Kind (Tree, Where) = Syn.Element_Index
+              and then not Is_Constant_Index (Where)
+            then
+               return True;
+            elsif Syn.Kind (Tree, Where) = Syn.Element_Index
+              and then Landin.Checking.Type_Of
+                (Types.all, Tree, Syn.Target_Of (Tree, Where)) = Ty.Slice_Value
+            then
+               return True;
+            elsif Syn.Kind (Tree, Where) = Syn.Member_Selection
+              and then Landin.Checking.Field_Index
+                (Types.all, Tree, Where) = 0
+              and then Landin.Checking.Type_Of
+                (Types.all, Tree, Syn.Target_Of (Tree, Where))
+                  = Ty.Pointer_Value
+            then
+               return True;
+            end if;
+            Where := Syn.Target_Of (Tree, Where);
+         end loop;
+         return False;
+      end Match_Subject_Is_Copied;
 
       function Call_Signature
         (Tree : Syn.Tree; Call : Syn.Node_Id)
@@ -581,6 +641,11 @@ package body Landin.Stages.Checking.References is
                         Result.Frame := True;
                      end if;
                   end;
+               when Res.Pattern_Binding =>
+                  --  D85/D121: this is the payload's actual backing place,
+                  --  distinct from origins carried by its copied value.
+                  Result := Pattern_Storage (Id);
+                  Result.Derives (Positive (Id)) := True;
                when others =>
                   null;
             end case;
@@ -731,7 +796,23 @@ package body Landin.Stages.Checking.References is
                                 Runtime_Argument (Tree, Node, Formal);
                            begin
                               if Argument /= Syn.No_Node then
-                                 Join (Result, Fact_Of (Tree, Argument));
+                                 --  An inout return source names a place. A
+                                 --  returned view may point into that place
+                                 --  even when its current value contains no
+                                 --  reference (an inline fixed array is the
+                                 --  motivating case). Other conventions keep
+                                 --  describing origins carried by the value.
+                                 if Landin.Checking.Nth_Signature_Parameter
+                                   (Types.all, Called, Formal).Convention
+                                      = Syn.Inout_Convention
+                                 then
+                                    Join
+                                      (Result,
+                                       Storage_Fact (Tree, Argument));
+                                 else
+                                    Join
+                                      (Result, Fact_Of (Tree, Argument));
+                                 end if;
                                  declare
                                     Id : constant Res.Declaration_Id :=
                                       Root_Declaration (Tree, Argument);
@@ -960,8 +1041,14 @@ package body Landin.Stages.Checking.References is
 
             when Syn.Match_Statement =>
                declare
-                  Subject : constant Origin_Fact :=
-                    Fact_Of (Tree, Syn.Match_Subject (Tree, Node));
+                  Subject_Node : constant Syn.Node_Id :=
+                    Syn.Match_Subject (Tree, Node);
+                  Subject_Value : constant Origin_Fact :=
+                    Fact_Of (Tree, Subject_Node);
+                  Subject_Storage : constant Origin_Fact :=
+                    (if Match_Subject_Is_Copied (Tree, Subject_Node)
+                     then (Frame => True, others => <>)
+                     else Storage_Fact (Tree, Subject_Node));
                   Before : constant Origin_Table := Origins;
                   Merged : Origin_Table (Origins'Range) :=
                     [others => No_Origin];
@@ -973,28 +1060,30 @@ package body Landin.Stages.Checking.References is
                           Syn.Nth_Match_Arm (Tree, Node, Arm);
                      begin
                         Origins := Before;
-                        --  D189/[0480]: the present case of a pointer union
-                        --  is the union's own carrier, so the bound name
-                        --  derives from wherever the subject came from.  A
-                        --  union built from `addr local` therefore still
-                        --  refuses an escaping use of the binding.
-                        if Syn.Kind (Tree, Syn.Match_Pattern (Tree, This))
-                             = Syn.Pointer_Case
-                          and then Syn.Match_Binding_Count (Tree, This) = 1
-                        then
+                        --  D85/D121: a binding's value keeps subject origins
+                        --  only when it can carry references. Its storage
+                        --  separately follows the actual match place or the
+                        --  independent temporary selected above.
+                        for Position in
+                          1 .. Syn.Match_Binding_Count (Tree, This)
+                        loop
                            declare
                               Id : constant Res.Declaration_Id :=
                                 Declaration_At
                                   (Tree, Syn.Nth_Match_Binding
-                                           (Tree, This, 1));
+                                           (Tree, This, Position));
                            begin
                               if Id /= Res.No_Declaration
                                 and then Id in Origins'Range
                               then
-                                 Origins (Id) := Subject;
+                                 Origins (Id) :=
+                                   (if Has_References (Id)
+                                    then Subject_Value
+                                    else No_Origin);
+                                 Pattern_Storage (Id) := Subject_Storage;
                               end if;
                            end;
-                        end if;
+                        end loop;
                      end;
                      Process_Block
                        (Tree, Syn.Body_Of

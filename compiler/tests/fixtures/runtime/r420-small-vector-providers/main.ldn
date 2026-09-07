@@ -1,0 +1,165 @@
+import core/failing
+import core/heap
+import core/mem
+import core/pool
+import core/small
+
+pool_provider: type = pool.provider
+
+heap_path: () -> (ok: bool) =
+    mut state := heap.host()
+    mut values := small.new(item: i32, inline_slots: 0)
+    small.push(values, state, 1) else 0
+    small.push(values, state, 2) else 0
+    small.push(values, state, 3) else 0
+    small.push(values, state, 4) else 0
+    small.push(values, state, 5) else 0
+    small.push(values, state, 6) else 0
+    small.push(values, state, 7) else 0
+    small.push(values, state, 8) else 0
+    small.push(values, state, 9) else 0
+    begin
+        view := small.used(values)
+        view[0] = 11
+        view[8] = 19
+    end
+    last: i32 = small.pop(values) else 0
+    begin
+        view := small.used(values)
+        ok = last == 19 and small.length(values) == 8
+             and small.capacity(values) == 16
+             and view[0] == 11 and view[7] == 8
+    end
+    small.release(values, state)
+    small.release(values, state)
+    ok = ok and small.length(values) == 0 and small.capacity(values) == 0
+end heap_path
+
+arena_path: () -> (ok: bool) =
+    mut words: [32]u64 = zeroed
+    base: ptr mut u8 = ptr(usize(addr words[0]))
+    mut state := mem.arena_over
+        (base, lenof words * sizeof u64)
+    mut values := small.new(item: i32, inline_slots: 2)
+    small.push(values, state, 21) else 0
+    small.push(values, state, 22) else 0
+    mut inline_free: bool = state.used == 0
+    small.push(values, state, 23) else 0
+    small.push(values, state, 24) else 0
+    small.push(values, state, 25) else 0
+    begin
+        view := small.used(values)
+        ok = inline_free and small.length(values) == 5
+             and small.capacity(values) == 8
+             and view[0] == 21 and view[2] == 23 and view[4] == 25
+             and state.used == 12 * sizeof i32
+    end
+    small.release(values, state)
+end arena_path
+
+fixed_path: () -> (ok: bool) =
+    mut words: [20]u64 = zeroed
+    base: ptr mut u8 = ptr(usize(addr words[0]))
+    mut records: [2]pool.slot = zeroed
+    bookkeeping: []mut pool.slot = records[0..<lenof records]
+    mut state := pool.over
+        (base, lenof words * sizeof u64,
+         64, 2, 8, bookkeeping)
+        else (problem)
+        _ = problem
+        ok = false
+        return
+    end
+    mut values := small.new(item: i32, inline_slots: 1)
+    small.push(values, state, 31) else 0
+    small.push(values, state, 32) else 0
+    small.push(values, state, 33) else 0
+    begin
+        view := small.used(values)
+        view[1] = 42
+        ok = small.length(values) == 3 and small.capacity(values) == 4
+             and view[0] == 31 and view[1] == 42 and view[2] == 33
+    end
+    small.release(values, state)
+    ok = ok and pool.allocation_count(state) == 2
+         and pool.free_count(state) == 2 and pool.live(state) == 0
+         and pool.rejected_free_count(state) == 0
+end fixed_path
+
+failing_path: () -> (ok: bool) =
+    mut words: [20]u64 = zeroed
+    base: ptr mut u8 = ptr(usize(addr words[0]))
+    mut records: [2]pool.slot = zeroed
+    bookkeeping: []mut pool.slot = records[0..<lenof records]
+    mut inner := pool.over
+        (base, lenof words * sizeof u64,
+         64, 2, 8, bookkeeping)
+        else (problem)
+        _ = problem
+        ok = false
+        return
+    end
+    zero: usize = 0
+    one: usize = 1
+    mut state := failing.count_down
+        (inner_provider: pool_provider, inner: addr inner,
+         allowed_attempts: zero)
+    mut values := small.new(item: i32, inline_slots: 1)
+    small.push(values, state, 51) else 0
+
+    mut first_failed: bool = false
+    small.push(values, state, 52) else (problem)
+        _ = problem
+        first_failed = true
+    end
+    begin
+        view := small.used(values)
+        ok = first_failed and small.length(values) == 1
+             and small.capacity(values) == 1 and view[0] == 51
+             and failing.delegated(state) == 0
+             and pool.allocation_count(inner) == 0
+    end
+
+    failing.permit(state, one)
+    small.push(values, state, 52) else 0
+    mut growth_failed: bool = false
+    small.push(values, state, 53) else (problem)
+        _ = problem
+        growth_failed = true
+    end
+    begin
+        view := small.used(values)
+        ok = ok and growth_failed and small.length(values) == 2
+             and small.capacity(values) == 2
+             and view[0] == 51 and view[1] == 52
+             and failing.successes(state) == 1
+             and failing.frees(state) == 0
+             and pool.live(inner) == 1
+    end
+
+    failing.permit(state, one)
+    small.push(values, state, 53) else 0
+    begin
+        view := small.used(values)
+        ok = ok and small.length(values) == 3
+             and small.capacity(values) == 4 and view[2] == 53
+    end
+    small.release(values, state)
+    ok = ok and failing.attempts(state) == 4
+         and failing.delegated(state) == 2
+         and failing.successes(state) == 2
+         and failing.injected_failures(state) == 2
+         and failing.inner_failures(state) == 0
+         and failing.frees(state) == 2 and failing.live(state) == 0
+         and pool.allocation_count(inner) == 2
+         and pool.free_count(inner) == 2 and pool.live(inner) == 0
+         and pool.rejected_free_count(inner) == 0
+end failing_path
+
+public main: () -> (code: i32) =
+    if heap_path() and arena_path() and fixed_path() and failing_path() then
+        code = 42
+    else
+        code = 1
+    end if
+end main

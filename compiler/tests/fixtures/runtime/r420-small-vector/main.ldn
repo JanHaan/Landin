@@ -1,0 +1,184 @@
+import core/mem
+import core/small
+
+audit: type = struct
+    base: ptr mut u8
+    used: usize
+    fail_next: bool
+    attempts: usize
+    allocations: usize
+    frees: usize
+    first_free_size: usize
+    second_free_size: usize
+end audit
+
+audit_alloc: (inout state: audit, size: usize, alignment: usize)
+             -> (block: ptr mut u8) ! mem.out_of_memory =
+    inc state.attempts
+    if state.fail_next then
+        state.fail_next = false
+        fail mem.out_of_memory
+    end if
+    address: usize = usize(state.base) + state.used
+    mut padding: usize = 0
+    if alignment > 1 then
+        remainder: usize = address % alignment
+        if remainder <> 0 then
+            padding = alignment - remainder
+        end if
+    end if
+    block = ptr(address + padding)
+    state.used = state.used + padding + size
+    inc state.allocations
+end audit_alloc
+
+audit_free: (inout state: audit, block: ptr mut u8, size: usize) -> none =
+    _ = block
+    inc state.frees
+    if state.frees == 1 then
+        state.first_free_size = size
+    else
+        state.second_free_size = size
+    end if
+end audit_free
+
+audit is mem.allocator (alloc: audit_alloc, free: audit_free)
+
+zero_inline_capacity: () -> (ok: bool) =
+    mut bytes: [64]u8 = zeroed
+    mut state: audit =
+        (base: addr bytes[0], used: 0, fail_next: false,
+         attempts: 0, allocations: 0, frees: 0,
+         first_free_size: 0, second_free_size: 0)
+    mut values := small.new(item: i32, inline_slots: 0)
+    small.push(values, state, 31) else (problem)
+        _ = problem
+        ok = false
+        return
+    end
+    begin
+        view := small.used(values)
+        ok = small.length(values) == 1 and small.capacity(values) == 8
+             and view[0] == 31 and state.attempts == 1
+             and state.allocations == 1 and state.frees == 0
+    end
+    small.release(values, state)
+    ok = ok and state.frees == 1
+         and state.first_free_size == 8 * sizeof i32
+end zero_inline_capacity
+
+larger_inline_capacity: () -> (ok: bool) =
+    mut bytes: [64]u8 = zeroed
+    mut state: audit =
+        (base: addr bytes[0], used: 0, fail_next: false,
+         attempts: 0, allocations: 0, frees: 0,
+         first_free_size: 0, second_free_size: 0)
+    mut values := small.new(item: i32, inline_slots: 3)
+    small.push(values, state, 41) else 0
+    small.push(values, state, 42) else 0
+    small.push(values, state, 43) else 0
+    begin
+        view := small.used(values)
+        view[1] = 52
+    end
+    removed: i32 = small.pop(values) else 0
+    begin
+        view := small.used(values)
+        ok = removed == 43 and small.length(values) == 2
+             and small.capacity(values) == 3
+             and view[0] == 41 and view[1] == 52
+             and state.attempts == 0 and state.frees == 0
+    end
+    small.release(values, state)
+    ok = ok and small.length(values) == 0
+         and small.capacity(values) == 3
+         and state.attempts == 0 and state.frees == 0
+end larger_inline_capacity
+
+public main: () -> (code: i32) =
+    if not zero_inline_capacity() or not larger_inline_capacity() then
+        code = 1
+        return
+    end if
+
+    mut bytes: [256]u8 = zeroed
+    mut state: audit =
+        (base: addr bytes[0], used: 0, fail_next: false,
+         attempts: 0, allocations: 0, frees: 0,
+         first_free_size: 0, second_free_size: 0)
+    mut values := small.new(item: i32, inline_slots: 1)
+
+    small.push(values, state, 10) else 0
+    if state.attempts <> 0 or small.length(values) <> 1
+      or small.capacity(values) <> 1
+    then
+        code = 1
+        return
+    end if
+
+    begin
+        view := small.used(values)
+        view[0] = 11
+    end
+
+    state.fail_next = true
+    mut first_failed: bool = false
+    small.push(values, state, 12) else (problem)
+        _ = problem
+        first_failed = true
+    end
+    begin
+        view := small.used(values)
+        if not first_failed or small.length(values) <> 1
+          or small.capacity(values) <> 1 or view[0] <> 11
+          or state.allocations <> 0 or state.frees <> 0
+        then
+            code = 1
+            return
+        end if
+    end
+
+    small.push(values, state, 12) else 0
+    state.fail_next = true
+    mut growth_failed: bool = false
+    small.push(values, state, 13) else (problem)
+        _ = problem
+        growth_failed = true
+    end
+    begin
+        view := small.used(values)
+        if not growth_failed or small.length(values) <> 2
+          or small.capacity(values) <> 2
+          or view[0] <> 11 or view[1] <> 12
+          or state.allocations <> 1 or state.frees <> 0
+        then
+            code = 1
+            return
+        end if
+        view[1] = 22
+    end
+
+    small.push(values, state, 13) else 0
+    begin
+        view := small.used(values)
+        if small.length(values) <> 3 or small.capacity(values) <> 4
+          or view[0] <> 11 or view[1] <> 22 or view[2] <> 13
+          or state.first_free_size <> 2 * sizeof i32
+        then
+            code = 1
+            return
+        end if
+    end
+
+    removed: i32 = small.pop(values) else 0
+    small.release(values, state)
+    if removed == 13 and small.length(values) == 0
+      and small.capacity(values) == 1
+      and state.attempts == 4 and state.allocations == 2
+      and state.frees == 2 and state.second_free_size == 4 * sizeof i32
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

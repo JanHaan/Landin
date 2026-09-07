@@ -1,0 +1,20 @@
+error[L0315]: this `inout` or `sink` use may move storage while a derived view is still in use
+  --> ../tests/fixtures/negative/core-small-live-view/main.ldn:8:20
+  |
+8 |     try small.push(value, state, 2)
+  |                    ^^^^^
+  --> ../tests/fixtures/negative/core-small-live-view/main.ldn:7:5
+  |
+7 |     view := small.used(value)
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^ the live derived view
+  = note: [0800]/[0830]: take the view again after mutating its source
+error[L0315]: this `inout` or `sink` use may move storage while a derived view is still in use
+  --> ../tests/fixtures/negative/core-small-live-view/main.ldn:15:19
+   |
+15 |     small.release(value, state)
+   |                   ^^^^^
+  --> ../tests/fixtures/negative/core-small-live-view/main.ldn:14:5
+   |
+14 |     view := small.used(value)
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^ the live derived view
+  = note: [0800]/[0830]: take the view again after mutating its source

@@ -1,0 +1,8 @@
+class: negative
+summary: array payload views follow temporary local value and genuine inout match storage separately
+expect: expected.txt
+args: ../tests/fixtures/negative/variant-match-copied-array-view-escape/main.ldn
+codes: L0314, L0314, L0314, L0314
+status: 1
+constructs: 0430, 0510, 0520, 0550, 0570, 0770, 0790, 0830, 1100
+targets: linux-x86-64, macos-arm64, synthetic-32
