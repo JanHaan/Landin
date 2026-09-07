@@ -551,7 +551,36 @@ package body Landin.Stages.Checking.References is
                   Place : constant Syn.Node_Id := Syn.Operand_Of (Tree, Node);
                   Id : constant Res.Declaration_Id :=
                     Root_Declaration (Tree, Place);
+                  Selected : Syn.Node_Id := Place;
                begin
+                  --  A dereference or slice index selects storage behind a
+                  --  reference, not the local descriptor which holds it.
+                  --  Ordinary fields and fixed-array indices keep selecting
+                  --  their containing storage until such a boundary occurs.
+                  while Syn.Kind (Tree, Selected)
+                    in Syn.Member_Selection | Syn.Element_Index
+                  loop
+                     declare
+                        Target : constant Syn.Node_Id :=
+                          Syn.Target_Of (Tree, Selected);
+                        Kind : constant Ty.Type_Kind :=
+                          Landin.Checking.Type_Of (Types.all, Tree, Target);
+                     begin
+                        if (Syn.Kind (Tree, Selected) = Syn.Member_Selection
+                            and then Kind = Ty.Pointer_Value)
+                          or else
+                            (Syn.Kind (Tree, Selected) = Syn.Element_Index
+                             and then Kind = Ty.Slice_Value)
+                        then
+                           Result := Fact_Of (Tree, Target);
+                           if Id /= Res.No_Declaration then
+                              Result.Derives (Positive (Id)) := True;
+                           end if;
+                           return Result;
+                        end if;
+                        Selected := Target;
+                     end;
+                  end loop;
                   if Id /= Res.No_Declaration then
                      Result.Derives (Positive (Id)) := True;
                      case Res.Sort_Of (Meanings.all, Id) is

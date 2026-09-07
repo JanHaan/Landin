@@ -1,0 +1,6 @@
+class: runtime
+summary: addresses behind slice and pointer descriptors preserve their source through local aliases and nested storage
+program: main.ldn
+constructs: 0430, 0520, 0770, 0790, 0800, 0830, 1910
+status: 42
+targets: linux-x86-64

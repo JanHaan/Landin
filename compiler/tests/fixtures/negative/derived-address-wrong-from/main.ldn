@@ -1,0 +1,4 @@
+bad: (source: []mut u32, other: []mut u32)
+     -> (result: ptr mut u32 from other) =
+    result = addr source[0]
+end bad

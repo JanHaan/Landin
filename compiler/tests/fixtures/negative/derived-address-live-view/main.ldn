@@ -1,0 +1,8 @@
+mutate: (inout source: []mut u32) -> none =
+end mutate
+bad: (source: []mut u32) -> (result: u32) =
+    mut local := source
+    view := addr local[0]
+    mutate(local)
+    result = view.val
+end bad

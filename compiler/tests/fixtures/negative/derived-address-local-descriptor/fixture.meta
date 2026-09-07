@@ -1,0 +1,7 @@
+class: negative
+summary: addressing a local slice descriptor is frame storage even when its backing came from a parameter
+program: main.ldn
+codes: L0314
+status: 1
+constructs: 0430, 0520, 0770, 0790, 1910
+targets: linux-x86-64, macos-arm64, synthetic-32

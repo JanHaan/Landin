@@ -1,0 +1,6 @@
+class: runtime
+summary: taking the address of a slice element still checks the dynamic bound before forming its pointer
+program: main.ldn
+traps: yes
+constructs: 0430, 0520, 0770, 0790, 1910, 1960
+targets: linux-x86-64
