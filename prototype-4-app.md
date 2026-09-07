@@ -137,8 +137,9 @@ public in_memory: (files: [](name: utf8, body: utf8)) -> (h: memory) = ... end
 public written:   (h: memory) -> (text: utf8 from h) = ... end
 
 ```
-The arguments are exposed as a slice over initialized, process-lifetime C
-string descriptors. The hosted adapter owns that construction and backing;
+The sketch's future `args` adapter exposes only user arguments as a slice
+over initialized, process-lifetime C string descriptors; index zero is the
+first user argument. The hosted adapter owns that construction and backing;
 D151 supplies no `slice_from` operation or core-only exemption. Both `run` and
 `config.build` require retainable argument backing because configuration and
 match-filter objects keep text borrowed from it. An in-memory caller must
@@ -237,8 +238,10 @@ through generic nominal copies and typed pointer reads. Their original
 pointees receive the mutations. `runtime/fixed-array-any-shapes` extends this
 evidence to genuine singleton and larger erased arrays, preserving both data
 and evidence through typed array-pointer stores, slices, generic copies and
-array fields. Initialized allocation and vector growth remain separate R4.20
-obligations.
+array fields. Initialized allocation and vector growth are exercised by
+`runtime/r420-object-buffer-providers` and
+`runtime/r420-reference-provider-matrix`; the stateful filter composition is
+executed by `runtime/r420-stateful-filter-list`.
 
 'self: ptr mut T', because a filter may count. The permission is
 in the type since 0.1.0, so the entry says what it does without
@@ -409,7 +412,7 @@ public build: (A: type is allocator, inout h: any io.world, inout a: A,
     mut input:   utf8 = ""
     mut to_file: utf8 = ""
 
-    mut k: usize = 1
+    mut k: usize = 0
     while k < lenof args do
         arg := text.from_c(args[k]) else (encoding)
             _ = encoding
@@ -592,8 +595,8 @@ end on_progress
 
 ```
 Hosted entry. The `io.args` adapter supplies initialized argument descriptors
-with process-lifetime backing. The full adapter and application remain later
-hosted work; no uninitialized view constructor is implied.
+with process-lifetime backing. The full adapter and application remain
+R4.80 work; no uninitialized view constructor is implied.
 ```landin
 public main: () -> (code: i32) =
     mut h := io.host()
@@ -620,7 +623,7 @@ never learns which world it was handed.
 The test argument descriptor array has module backing, as do its string
 literals, so both levels satisfy `run`'s retention contract.
 ```landin
-test_args: [2]cstring = ["logtool", "in.log"]
+test_args: [1]cstring = ["in.log"]
 
 test_drops_debug_lines: () -> none =
     mut h := io.in_memory([(name: "in.log", body: "DEBUG a\nERROR b\n")])
@@ -628,7 +631,7 @@ test_drops_debug_lines: () -> none =
     arena scratch do
         mut logger := diag.new_log(N: 32)
         d := any(addr logger)
-        kept := run(w, scratch, d, test_args[0..<2]) else 0
+        kept := run(w, scratch, d, test_args[0..<1]) else 0
         assert(kept == 1)
         assert(text.eq(io.written(h), "ERROR b\n"))
     end scratch

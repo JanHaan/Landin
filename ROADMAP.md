@@ -3684,8 +3684,8 @@ expression as a name. Compound writeback likewise retains that path,
 materializing only its already-constant leaf index when no runtime index was
 saved. `runtime/nested-scalar-array-stores` pins module and frame arrays,
 neighboring values, compound updates and RHS call counts.
-Iterable/sort integration and map and tree expansion remain later increments
-of this active item.
+The later vector/sort, map and tree increments below complete this library
+composition with named runtime evidence.
 
 The growth error translation follows [1820]'s existing disambiguation rule:
 a call-site `else` yields to an enclosing `then` or `elsif` arm, and
@@ -3794,7 +3794,8 @@ read-only relaxation, slices and a pointer-backed slice of zero-sized arrays;
 `negative/reference-expression-body-permission` retains the refusal to
 strengthen permission. This repairs missing expected type evidence without
 changing reference identity or return-source rules. The allocator-backed
-zero-sized initialized-prefix runtime remains a separate execution obligation.
+zero-sized initialized-prefix runtime is supplied by
+`runtime/core-mem-zero-prefix`.
 
 The bounded erased-result staging repair removes the early provider-access defect.
 An inferred `erased.entry()` now derives its complete concrete signature from
@@ -3961,12 +3962,14 @@ debug and release gates each pass 404 cases and 10,855 checks on unchanged
 source. The font-aware repository check is clean; authoritative native
 validation remains required after integration and publication.
 
-Tree integration also exposed two compiler follow-ups: a scalar `lenof`
-snapshot still inherits its reference operand fact across a later mutation,
-and a typed variant-bearing struct local initialized through `try` is refused
-by the initializer-shape classification. The tree uses immediate content
-assertions and explicit call-site error forwarding; these do not close either
-general compiler behavior. The independent reductions remain under `.scratch/`.
+Tree clients use immediate content assertions, ordinary scalar-returning
+length helpers and explicit call-site error forwarding. A direct saved `lenof`
+can retain its operand's origin and encounter false L0315 across later mutation;
+the scalar call-result and member/index repairs do not settle that operator.
+R4.70 owns this remaining scalar-operator origin normalization. The later
+local aggregate-`try` repair below supersedes only the initializer observation;
+its runtime pins the admitted local call destination without claiming every
+aggregate transport shape or the complete P3-derived program.
 
 The bounded map increment selects D198's initialized bucket plus dense-prefix
 representation. `core/map` provides its own composed `equatable`/`hashable`
@@ -4083,11 +4086,9 @@ facts. `runtime/generic-scalar-result-origin` exercises the accepted scalar
 instance; `negative/generic-pointer-result-live-view` applies the same generic
 to a pointer and retains L0315; and
 `negative/generic-scalar-result-escaping` retains L0314 at the argument
-boundary. This repair is deliberately confined to call results. A direct
-scalar selection such as `chosen: u32 = source[0]` still inherits the selected
-place's fact and can produce the same false L0315 across a later `inout` use;
-that separately reduced selection-expression defect remains a bounded R4.20
-follow-up rather than being hidden by broader origin erasure here.
+boundary. This repair is deliberately confined to call results. The separate
+scalar-selection defect is closed by the following increment, preserving
+reference-bearing results rather than erasing their origins.
 
 The bounded scalar-selection follow-up closes that recorded defect for
 concrete scalar member and element values only. Reference checking still
@@ -4269,9 +4270,9 @@ and denied paths, `/dev/full`, close and byte/UTF-8 path validation. The scoped
 `negative/core-io-*` and `negative/core-diag-frame-world-escape` cases retain
 receiver permission, sink consumption and logger retention refusals. The
 separately recorded erased-recovery staging and erased-argument address-save
-repairs are prerequisites, not I/O-specific compiler behavior. Deterministic
-short-write schedules, in-memory handles and output ownership remain the
-following memory-world increment.
+repairs are prerequisites, not I/O-specific compiler behavior. The following
+memory-world increment supplies deterministic short-write schedules,
+in-memory handles and output ownership.
 
 The bounded memory-world increment supplies an ordinary `core/io.memory`
 conformance from caller-owned file, argument and output tables. D153 records
@@ -4440,6 +4441,44 @@ objects, written byte buffers, repeated disposal and retry.
 pool, checks that the refused leaf and branch appends leave the count,
 ordinals and names unchanged, and reuses the pool slot after release.
 
+R4.20 delivers the reusable hosted library slice and bounded pressure clients.
+The following is the API correspondence for the live prototype sketches; it
+does not claim that their ellipses form complete programs.
+
+| Required surface | Delivered API or equivalent | Deliberate boundary |
+| --- | --- | --- |
+| Allocator authority | `mem.allocator`, caller-backed `arena_over`, `pool.over`, `heap.host`, `failing.count_down` | Containers receive the provider on allocating/freeing operations; no stored allocator, implicit cleanup or hidden heap fallback. |
+| Initialized storage | `mem.storage`, `reserve`, `admit`, `replace`, `get`, `transfer`, `used`, `release`, `dispose` | Only the initialized prefix is exposed; raw backing and alias writes retain D151's unsafe obligations. |
+| Initialized objects/buffers | `mem.new`/`delete`, `new_bytes`/`bytes`/`drop_bytes` | Values are initialized before publication; explicit release retains the original extent. |
+| Vector and sorting | `vec.new_list`, `reserve`, `push`, `pop`, `get`, `used`, `release`; `sort.ordered` with strict `less`, and `sort.sort` over a writable slice | Sorting is allocation-free, bounded-stack and unstable. `vec.used` supplies source-derived traversal; D180's source-free iterable item cannot promise retained pointer/any origins. |
+| Small vector | `small.new`, `push`, `pop`, `used`, `release` | Inline items retain the written zeroable constraint; aggregate zeroable items execute. |
+| Map | `map.new_map`, `insert`, `get`, `remove`, `release_map` | D198's public bucket/dense-prefix composition, explicit hash/equality laws and three-stage transactional rehash. |
+| Tree | `tree.new_tree`, `add_leaf`, `add_branch`, `get`, `count_leaves`, `release` | Nominal u32 IDs, checked existing child ranges and retained UTF-8 names; no serialized-pointer claim. |
+| Runtime text | Exact D199 conversions; `text.from_bytes`, `from_c`, `bytes`, `eq`, `contains`, `to_u32`, `write_byte`, `write_u32`, `written` | Checked UTF-8, exact byte equality and decimal u32; no normalization, locale, regex or general formatting. |
+| Hosted I/O | Object-safe `io.world`, generic wrappers, `io.system`, `io.memory`, read/write opens, reads, writes and close | Provider-local copyable handles and manual cleanup; no generational ownership guarantee. |
+| Paths and arguments | `terminate_path`, byte/text open wrappers, `copy_argument` followed by `text.from_bytes` | Explicit caller scratch; no fabricated slice, implicit terminator storage or truncation. User arguments exclude argv[0]. |
+| Diagnostics and application pressure | `diag.bounded` for retained diagnostics and `diag.streaming` through the supplied world; reader cleanup, stateful erased filter list and delivery clients | Named runtime evidence covers bounded composition, not the complete P4 application. |
+
+Freestanding `core/mem`, containers, pool, sort and text use ordinary source
+capabilities. Importing them does not import `core/heap`. The explicit hosted
+heap and system world use libc through [1975]'s fixed scalar/pointer bridge;
+R4.20 adds neither raw-syscall policy nor the general foreign ABI owned by
+R4.40. The memory world has caller-owned backing and no host calls or hidden
+allocation. Actual freestanding deployment and execution remain R6.70;
+this evidence establishes source layering and no implicit heap dependency.
+D151/D197/D198's backing, alias, counter and public-composition
+obligations remain visible; these APIs establish useful local checks rather
+than ownership or transitive memory safety.
+
+R4.70 owns the complete P3-derived program, full derivation mapping,
+specialization/debugging integration and remaining nested-array field
+representation/range composition. R4.80 owns the complete line reader across
+chunk boundaries, long-line and final-unterminated-line policy; configuration
+and argument retention; full filter/destination selection; arbitrary message
+buffering and delivery/retry policy; and the four D191 lexical-arena questions
+already transferred by D196. Neither a chunk-reader cleanup fixture nor a
+caller-known suffix retry closes those complete application obligations.
+
 Exit evidence: containers run with heap, arena, fixed and failing allocators;
 all omission and layering choices are recorded; `[0820]`'s block is either
 enabled with the four answers above written down, or its refusal names the
@@ -4532,6 +4571,11 @@ Depends on: R4.20, R4.50, R4.60
 
 Turn prototype 3 into a complete hosted `.ldn` program and negative corpus,
 with derivation mapping and deliberately failing allocator cases.
+
+Complete direct scalar-operator origin normalization, including saved `lenof`
+across later source mutation. R4.20 uses ordinary scalar-returning length
+helpers and immediate assertions; that equivalent does not close the operator
+limitation.
 
 Own the remaining nested-array field range normalization observed by R4.20:
 a range over a struct field whose elements are fixed arrays must preserve the

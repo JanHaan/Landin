@@ -937,8 +937,10 @@ construction, copy and return, and deduce the same erased concept back from a
 nominal actual tuple. `runtime/fixed-array-reference-shapes` adds genuine
 singleton and larger pointer arrays, nested slices and fixed-array elements
 through generic normalization, typed pointer stores, copies and slicing.
-This is compiler prerequisite evidence; allocator-backed initialized views
-remain a separate R4.20 increment.
+Allocator-backed initialized views are exercised by
+`runtime/core-mem-initialized-prefix` and
+`runtime/r420-reference-provider-matrix`, which retain the stored pointer
+and evidence identities across actual container growth.
 
 ---
 
