@@ -1,0 +1,10 @@
+error[L0315]: this `inout` or `sink` use may move storage while a derived view is still in use
+  --> ../tests/fixtures/negative/core-vec-used-live-growth/main.ldn:7:18
+  |
+7 |     try vec.push(value, state, 3)
+  |                  ^^^^^
+  --> ../tests/fixtures/negative/core-vec-used-live-growth/main.ldn:6:5
+  |
+6 |     view := vec.used(value)
+  |     ^^^^^^^^^^^^^^^^^^^^^^^ the live derived view
+  = note: [0800]/[0830]: take the view again after mutating its source

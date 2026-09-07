@@ -265,10 +265,11 @@ end drop_slice
 
 R3.40 implements the parser-support subset with honest raw storage rather than
 the spare-capacity slice sketched below. It supplies construction, reserve,
-push, pop, indexed get, length, capacity and release. The initialized-prefix
-slice accessor and iterable conformance wait with the broader R4 container
-slice; the executable pointer-vector case already proves allocation rollback
-and publication order.
+push, pop, indexed get, length, capacity and release. R4.20 adds `used`,
+which exposes only the initialized prefix with its storage-derived origin.
+The executable pointer-vector case already proves allocation rollback and
+publication order. Traversal uses `for value in vec.used(list)`; a universal
+list conformance to [1320] is not supplied.
 
 R4.20's D194 hardens that implementation: reserve checks the byte product and
 push checks geometric doubling before provider calls; impossible arithmetic
@@ -376,10 +377,13 @@ end release
 
 ```
 
-The four entries of iterable, and the same missing quantifier as
-before. The cursor is an index rather than a pointer, so nothing
-can move under the traversal, at the price of one bounds check the
-compiler can hoist. [Z1]
+The following original family-conformance sketch remains design pressure
+[Z1]. Its `item` signature is source-free, as [1320] requires, whereas a
+reference-valued element read from vector storage retains `from` that storage.
+Those contracts do not match. R4.20 therefore traverses `vec.used(list)` with
+the existing slice traversal rules instead of discarding the returned origin
+or widening `iterable`. `negative/iterable-retained-item-source` pins the exact
+signature refusal. The cursor sketch below is not an implemented conformance.
 
 ```landin
 list_first:  (T: type, s: list(T)) -> (c: usize)   = 0 end
@@ -880,7 +884,7 @@ A map from those to their squares.
 
 ```landin
     mut squares := map.new_map(K: u32, V: u32)
-    for n in numbers do
+    for n in vec.used(numbers) do
         try map.insert(squares, a, u32(n), u32(n) * u32(n))
     end for
     nine := map.get(squares, 3) else 0
@@ -909,7 +913,7 @@ from [1340].
 
 ```landin
 draw_all: (items: vec.list(any drawable), target: ptr canvas) -> none =
-    for w in items do
+    for w in vec.used(items) do
         w.draw(target)
     end for
 end draw_all

@@ -1,0 +1,6 @@
+class: negative
+summary: an iterable source-free item contract does not accept a storage-derived result
+program: main.ldn
+codes: L0301
+constructs: 0790, 1240, 1320
+targets: linux-x86-64, macos-arm64, synthetic-32

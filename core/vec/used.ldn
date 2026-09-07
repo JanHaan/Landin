@@ -1,0 +1,8 @@
+import core/mem
+
+--  Only initialized elements are exposed. The descriptor derives from the
+--  list; changing capacity or releasing storage requires ending that view.
+public used: (item: type, value: list(item))
+             -> (items: []mut item from value) =
+    items = mem.used(value.values)
+end used

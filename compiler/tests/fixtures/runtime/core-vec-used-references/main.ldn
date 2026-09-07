@@ -1,0 +1,79 @@
+import core/heap
+import core/vec
+
+counter: type = concept (t: type)
+    bump: (self: ptr mut t) -> (result: i32)
+end counter
+one: type = struct
+    value: i32
+end one
+two: type = struct
+    sentinel: i32
+    value: i32
+end two
+bump_one: (self: ptr mut one) -> (result: i32) =
+    inc self.val.value
+    result = self.val.value
+end bump_one
+bump_two: (self: ptr mut two) -> (result: i32) =
+    self.val.value += 2
+    result = self.val.value
+end bump_two
+one is counter (bump: bump_one)
+two is counter (bump: bump_two)
+mut left: one = (value: 11)
+mut right: two = (sentinel: 123, value: 23)
+mut other: one = (value: 37)
+node_ptr: type = ptr mut one
+
+public main: () -> (code: i32) =
+    code = 1
+    mut allocator := heap.host()
+    mut pointers := vec.new_list(item: node_ptr)
+    mut erased := vec.new_list(item: any counter)
+    a: any counter = any(addr left)
+    b: any counter = any(addr right)
+    mut at: usize = 0
+    while at < 17 do
+        vec.push(pointers, allocator, addr left) else (problem)
+            _ = problem
+            return
+        end
+        added: any counter = if at % 2 == 0 then a else b end if
+        vec.push(erased, allocator, added) else (problem)
+            _ = problem
+            return
+        end
+        inc at
+    end while
+    pointer_ok: bool = begin
+        view := vec.used(pointers)
+        mut good: bool = lenof view == 17
+        for saved in view do
+            good = good and usize(saved) == usize(addr left)
+        end for
+        view[16] = addr other
+        good and view[16].val.value == 37 and view[0].val.value == 11
+    end
+    dispatch_ok: bool = begin
+        view := vec.used(erased)
+        mut good: bool = lenof view == 17
+        for saved in view do
+            actual: i32 = saved.bump()
+            good = good and actual > 0
+        end for
+        view[0] = b
+        replaced: any counter = view[0]
+        actual: i32 = replaced.bump()
+        good and actual == 41
+    end
+    count_ok: bool = vec.length(pointers) == 17 and vec.length(erased) == 17
+    vec.release(pointers, allocator)
+    vec.release(erased, allocator)
+    if pointer_ok and dispatch_ok and count_ok and left.value == 20
+      and right.value == 41 and right.sentinel == 123 and other.value == 37
+      and vec.capacity(pointers) == 0 and vec.capacity(erased) == 0
+    then
+        code = 42
+    end if
+end main

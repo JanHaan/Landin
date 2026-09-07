@@ -1,0 +1,10 @@
+error[L0316]: the returned reference does not derive from exactly the parameters named by its `from` clause
+  --> ../tests/fixtures/negative/core-vec-used-wrong-from/main.ldn:2:1
+  |
+2 | public bad: (left: vec.list(i32), right: vec.list(i32))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/core-vec-used-wrong-from/main.ldn:3:17
+  |
+3 |             -> (view: []mut i32 from right) =
+  |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^ the named return and its declared sources
+  = note: [0790]: the written clause and every returning body edge agree both ways

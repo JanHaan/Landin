@@ -1,0 +1,10 @@
+error[L0314]: this returned reference still has frame origin
+  --> ../tests/fixtures/negative/core-vec-used-frame/main.ldn:3:1
+  |
+3 | public bad: () -> (view: []mut u8) =
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/core-vec-used-frame/main.ldn:4:5
+  |
+4 |     mut backing: [1]u8 = [0]
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^ the shorter-lived reference source
+  = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`
