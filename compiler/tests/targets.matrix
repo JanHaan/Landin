@@ -204,6 +204,7 @@ negative/generic-explicit-computed-pattern-mismatch | linux-x86-64, macos-arm64
 negative/generic-explicit-reference-frame | linux-x86-64, macos-arm64
 negative/generic-inferred-error-unhandled | linux-x86-64, macos-arm64
 negative/generic-inferred-template-not-function-value | linux-x86-64, macos-arm64
+negative/generic-pointer-result-live-view | linux-x86-64, macos-arm64
 negative/generic-reference-array-extent | linux-x86-64, macos-arm64
 negative/generic-reference-carrier-live-view | linux-x86-64, macos-arm64
 negative/generic-reference-field-permission-distinct | linux-x86-64, macos-arm64, synthetic-32
@@ -220,6 +221,7 @@ negative/generic-routine-repeated-deduction-conflict | linux-x86-64, macos-arm64
 negative/generic-routine-repeated-fixed-deduction-conflict | linux-x86-64, macos-arm64
 negative/generic-routine-undeduced-formal | linux-x86-64, macos-arm64
 negative/generic-routine-unused-unconditional-defect | linux-x86-64, macos-arm64
+negative/generic-scalar-result-escaping | linux-x86-64, macos-arm64
 negative/generic-single-result-layout-too-large | linux-x86-64, macos-arm64
 negative/generic-slice-field-permission | linux-x86-64, macos-arm64
 negative/generic-slice-field-wrong-from | linux-x86-64, macos-arm64
@@ -957,6 +959,7 @@ runtime/generic-reference-fields | linux-x86-64
 runtime/generic-reference-results | linux-x86-64
 runtime/generic-routine-inferred-errors | linux-x86-64
 runtime/generic-same-key-recursion | linux-x86-64
+runtime/generic-scalar-result-origin | linux-x86-64
 runtime/generic-structural-deduction | linux-x86-64
 runtime/generic-try-effective-signature | linux-x86-64
 runtime/generic-zero-nominal-array-signatures | linux-x86-64
