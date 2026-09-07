@@ -421,6 +421,24 @@ package body Landin.Tests.Lexer_Suite is
       Landin.Testing.Check
         (Item, Fault = Landin.Tokens.Text.Codepoint_Where_Bytes_Are_Meant,
          "a scalar escape is not accepted in a byte context");
+
+      --  R4.21: a literal that may still be text is read to its end, so
+      --  an escape after `\u{...}` is judged, and the codepoint answer
+      --  points at the first codepoint escape.
+      Decode ("""\u{41}\q""");
+      Landin.Testing.Check
+        (Item, Fault = Landin.Tokens.Text.Unknown_Escape,
+         "an unknown escape after a codepoint escape is the fault");
+      Decode ("""\u{41}\x4""");
+      Landin.Testing.Check
+        (Item, Fault = Landin.Tokens.Text.Short_Byte_Escape,
+         "a short byte escape after a codepoint escape is the fault");
+      Decode ("""\u{41}\x41\u{42}""");
+      Landin.Testing.Check
+        (Item,
+         Fault = Landin.Tokens.Text.Codepoint_Where_Bytes_Are_Meant
+           and then First = 1 and then Last = 7,
+         "a well-formed literal with codepoints answers with its first one");
    end Text_Literal_Decoding;
 
    --  D163 uses the same decoder in lexing, checking and lowering.  Hold

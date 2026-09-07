@@ -1,10 +1,7 @@
-with Ada.Unchecked_Conversion;
-with Interfaces;
+with Ada.Numerics.Big_Numbers.Big_Integers;
 
 package body Landin.Types is
 
-   use type Interfaces.Unsigned_32;
-   use type Interfaces.Unsigned_64;
 
    --  How many digits a base has, which is the only thing Evaluate needs
    --  from one.  Landin.Tokens owns the prefix that selected it, because a
@@ -175,6 +172,12 @@ package body Landin.Types is
    --------------------
 
    procedure Evaluate_Hex_Float
+     (Text       : String;
+      Item       : Float_Name;
+      Bits       : out Magnitude;
+      Overflowed : out Boolean);
+
+   procedure Evaluate_Decimal_Float
      (Text       : String;
       Item       : Float_Name;
       Bits       : out Magnitude;
@@ -389,59 +392,230 @@ package body Landin.Types is
       end;
    end Evaluate_Hex_Float;
 
-   procedure Evaluate_Float
+   --  D162 asks for one rounding from the written decimal to the target
+   --  width.  The host's own conversion rounds through its widest float
+   --  and so can land a hair off a binary32 midpoint, which is exactly the
+   --  case a fixture has to be able to write.  This is the exact route:
+   --  the digits are an integer scaled by a power of ten, the quotient by
+   --  a power of two is taken with its remainder, and the remainder alone
+   --  decides the rounding, ties to even.  Work is bounded: digits past
+   --  the cap can only break a tie and fold into one sticky bit, and a
+   --  scale past every representable value is answered without forming
+   --  the number.
+   procedure Evaluate_Decimal_Float
      (Text       : String;
       Item       : Float_Name;
       Bits       : out Magnitude;
       Overflowed : out Boolean)
    is
-      subtype F32_Value is Interfaces.IEEE_Float_32;
-      subtype F64_Value is Interfaces.IEEE_Float_64;
-      function Pattern_32 is new Ada.Unchecked_Conversion
-        (F32_Value, Interfaces.Unsigned_32);
-      function Pattern_64 is new Ada.Unchecked_Conversion
-        (F64_Value, Interfaces.Unsigned_64);
-      Clean : String (1 .. Text'Length);
-      Last  : Natural := 0;
+      use Ada.Numerics.Big_Numbers.Big_Integers;
+
+      package Magnitudes is new Signed_Conversions (Int => Magnitude);
+
+      Precision : constant Natural :=
+        (case Item is when F32 => 24, when F64 => 53);
+      Minimum_Exponent : constant Integer :=
+        (case Item is when F32 => -126, when F64 => -1022);
+      Maximum_Exponent : constant Integer :=
+        (case Item is when F32 => 127, when F64 => 1023);
+      Bias : constant Natural :=
+        (case Item is when F32 => 127, when F64 => 1023);
+
+      --  768 significant digits write any double exactly; beyond the cap
+      --  a digit can only say "more than the tie".  A decimal scale past
+      --  the cap is below every subnormal or above every finite value of
+      --  both widths, whatever the digits.
+      Digit_Cap    : constant := 800;
+      Scale_Cap    : constant := 400;
+      Exponent_Cap : constant := 1_000_000;
+
+      Mantissa    : Big_Integer := To_Big_Integer (0);
+      Digits_Kept : Natural := 0;
+      Scale       : Integer := 0;
+      Sticky      : Boolean := False;
+      After_Point : Boolean := False;
+      Index       : Natural := Text'First;
    begin
-      if Text'Length >= 2 and then Text (Text'First + 1) = 'x' then
-         Evaluate_Hex_Float (Text, Item, Bits, Overflowed);
+      Bits := 0;
+      Overflowed := False;
+
+      while Index <= Text'Last and then Text (Index) not in 'e' | 'E' loop
+         declare
+            Byte : constant Character := Text (Index);
+         begin
+            if Byte = '.' then
+               After_Point := True;
+            elsif Byte in '0' .. '9' then
+               declare
+                  Digit : constant Natural :=
+                    Character'Pos (Byte) - Character'Pos ('0');
+               begin
+                  if Digits_Kept = 0 and then Digit = 0 then
+                     --  A leading zero is worth nothing but its place.
+                     if After_Point then
+                        Scale := Scale - 1;
+                     end if;
+                  elsif Digits_Kept < Digit_Cap then
+                     Mantissa := Mantissa * 10 + To_Big_Integer (Digit);
+                     Digits_Kept := Digits_Kept + 1;
+                     if After_Point then
+                        Scale := Scale - 1;
+                     end if;
+                  else
+                     if not After_Point then
+                        Scale := Scale + 1;
+                     end if;
+                     if Digit /= 0 then
+                        Sticky := True;
+                     end if;
+                  end if;
+               end;
+            elsif Byte /= '_' then
+               raise Compiler_Defect with
+                 "a decimal float byte the scan should have refused";
+            end if;
+         end;
+         Index := Index + 1;
+      end loop;
+
+      if Index <= Text'Last then
+         declare
+            Negative : Boolean := False;
+            Amount   : Integer := 0;
+         begin
+            Index := Index + 1;
+            if Index <= Text'Last and then Text (Index) in '+' | '-' then
+               Negative := Text (Index) = '-';
+               Index := Index + 1;
+            end if;
+            while Index <= Text'Last loop
+               if Text (Index) in '0' .. '9' and then Amount < Exponent_Cap
+               then
+                  Amount := Amount * 10
+                    + Character'Pos (Text (Index)) - Character'Pos ('0');
+               end if;
+               Index := Index + 1;
+            end loop;
+            Scale := Scale + (if Negative then -Amount else Amount);
+         end;
+      end if;
+
+      if Mantissa = To_Big_Integer (0) then
          return;
       end if;
 
-      for Byte of Text loop
-         if Byte /= '_' then
-            Last := Last + 1;
-            Clean (Last) := Byte;
-         end if;
-      end loop;
-
-      Overflowed := False;
-      case Item is
-         when F32 =>
-            declare
-               Pattern : constant Interfaces.Unsigned_32 :=
-                 Pattern_32 (F32_Value'Value (Clean (1 .. Last)));
-            begin
-               Bits := Magnitude (Pattern);
-               Overflowed :=
-                 (Pattern and 16#7F80_0000#) = 16#7F80_0000#;
-            end;
-         when F64 =>
-            declare
-               Pattern : constant Interfaces.Unsigned_64 :=
-                 Pattern_64 (F64_Value'Value (Clean (1 .. Last)));
-            begin
-               Bits := Magnitude (Pattern);
-               Overflowed :=
-                 (Pattern and 16#7FF0_0000_0000_0000#)
-                   = 16#7FF0_0000_0000_0000#;
-            end;
-      end case;
-   exception
-      when Constraint_Error =>
-         Bits := 0;
+      if Scale + Digits_Kept > Scale_Cap then
          Overflowed := True;
+         return;
+      elsif Scale + Digits_Kept < -Scale_Cap then
+         return;
+      end if;
+
+      declare
+         Ten : constant Big_Integer := To_Big_Integer (10);
+         Two : constant Big_Integer := To_Big_Integer (2);
+         Numerator : constant Big_Integer :=
+           (if Scale >= 0 then Mantissa * Ten ** Natural (Scale)
+            else Mantissa);
+         Denominator : constant Big_Integer :=
+           (if Scale >= 0 then To_Big_Integer (1)
+            else Ten ** Natural (-Scale));
+         Lower  : constant Big_Integer := Two ** (Precision - 1);
+         Upper  : constant Big_Integer := Two ** Precision;
+         --  The unit of the smallest subnormal: below it nothing is
+         --  representable, so the quotient is taken there and may be short.
+         Unit_Exponent : constant Integer :=
+           Minimum_Exponent - (Precision - 1);
+         --  A decimal digit is worth log2(10) bits; the estimate is
+         --  corrected below by looking at the quotient itself.
+         Exponent : Integer :=
+           Integer
+             (Float (To_String (Numerator)'Length
+                     - To_String (Denominator)'Length) * 3.3219)
+           - Precision - 2;
+         Quotient  : Big_Integer;
+         Remainder : Big_Integer;
+         Divisor   : Big_Integer;
+
+         procedure Divide;
+
+         procedure Divide is
+         begin
+            if Exponent >= 0 then
+               Divisor := Denominator * Two ** Natural (Exponent);
+               Quotient := Numerator / Divisor;
+               Remainder := Numerator rem Divisor;
+            else
+               declare
+                  Scaled : constant Big_Integer :=
+                    Numerator * Two ** Natural (-Exponent);
+               begin
+                  Divisor := Denominator;
+                  Quotient := Scaled / Divisor;
+                  Remainder := Scaled rem Divisor;
+               end;
+            end if;
+         end Divide;
+      begin
+         Exponent := Integer'Max (Exponent, Unit_Exponent);
+         Divide;
+         while Quotient >= Upper loop
+            Exponent := Exponent + 1;
+            Divide;
+         end loop;
+         while Quotient < Lower and then Exponent > Unit_Exponent loop
+            Exponent := Exponent - 1;
+            Divide;
+         end loop;
+
+         --  Ties to even, with the digits past the cap breaking a tie
+         --  upward: they said the value is more than the midpoint.
+         declare
+            Doubled : constant Big_Integer := Remainder * Two;
+         begin
+            if Doubled > Divisor
+              or else (Doubled = Divisor
+                       and then (Sticky
+                                 or else Quotient rem Two
+                                          = To_Big_Integer (1)))
+            then
+               Quotient := Quotient + To_Big_Integer (1);
+            end if;
+         end;
+
+         if Quotient = Upper then
+            Quotient := Lower;
+            Exponent := Exponent + 1;
+         end if;
+
+         if Exponent + (Precision - 1) > Maximum_Exponent then
+            Overflowed := True;
+            return;
+         end if;
+
+         if Quotient < Lower then
+            --  A subnormal, or zero when even the unit was too much.
+            Bits := Magnitudes.From_Big_Integer (Quotient);
+         else
+            Bits :=
+              Magnitude (Exponent + (Precision - 1) + Bias)
+                * Magnitudes.From_Big_Integer (Lower)
+                + Magnitudes.From_Big_Integer (Quotient - Lower);
+         end if;
+      end;
+   end Evaluate_Decimal_Float;
+
+   procedure Evaluate_Float
+     (Text       : String;
+      Item       : Float_Name;
+      Bits       : out Magnitude;
+      Overflowed : out Boolean) is
+   begin
+      if Text'Length >= 2 and then Text (Text'First + 1) = 'x' then
+         Evaluate_Hex_Float (Text, Item, Bits, Overflowed);
+      else
+         Evaluate_Decimal_Float (Text, Item, Bits, Overflowed);
+      end if;
    end Evaluate_Float;
 
    -------------------------

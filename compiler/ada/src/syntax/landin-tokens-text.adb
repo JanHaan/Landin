@@ -91,6 +91,9 @@ package body Landin.Tokens.Text is
       First : constant Positive := Lexeme'First + 1;
       Last  : constant Natural  := Lexeme'Last - 1;
       At_Byte : Positive := First;
+      Codepoint_Seen : Boolean := False;
+      Codepoint_At   : Positive := First;
+      Codepoint_Stop : Natural := 0;
 
       procedure Keep (Item : Character);
 
@@ -193,8 +196,16 @@ package body Landin.Tokens.Text is
                            Natural'Min (Last, Stop));
                         return;
                      end if;
-                     Fail (Codepoint_Where_Bytes_Are_Meant, Stop);
-                     return;
+                     --  A codepoint has no bytes here, but the literal is
+                     --  still read to its end: the scanner accepts this
+                     --  answer for a literal that may yet be text, so an
+                     --  escape after it has to be judged now, not never.
+                     if not Codepoint_Seen then
+                        Codepoint_Seen := True;
+                        Codepoint_At := At_Byte;
+                        Codepoint_Stop := Stop;
+                     end if;
+                     At_Byte := Stop - 1;
                   end;
                when others =>
                   Fail (Unknown_Escape, At_Byte + 1);
@@ -203,6 +214,11 @@ package body Landin.Tokens.Text is
             At_Byte := At_Byte + 2;
          end if;
       end loop;
+
+      if Codepoint_Seen then
+         At_Byte := Codepoint_At;
+         Fail (Codepoint_Where_Bytes_Are_Meant, Codepoint_Stop);
+      end if;
    end Decode;
 
    procedure Decode_Character

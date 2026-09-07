@@ -1,0 +1,6 @@
+class: runtime
+summary: D162 a decimal literal rounds once to its target width: binary32 and binary64 midpoints tie to even, a digit anywhere past a midpoint rounds up, subnormals and the smallest normal are exact
+program: main.ldn
+status: 42
+constructs: 0170, 0210, 0220, 1880
+targets: linux-x86-64

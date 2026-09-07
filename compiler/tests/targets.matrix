@@ -1042,6 +1042,7 @@ runtime/fixed-array-reference-shapes | linux-x86-64
 runtime/fixed-conditional-generic-runtime | linux-x86-64
 runtime/fixed-conditional-runtime | linux-x86-64
 runtime/fizzbuzz | linux-x86-64
+runtime/float-decimal-rounding | linux-x86-64
 runtime/float-decimal-runtime | linux-x86-64
 runtime/float-hexadecimal-runtime | linux-x86-64
 runtime/float-named-specials | linux-x86-64
