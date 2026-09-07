@@ -4159,6 +4159,17 @@ nominal and is refused by D124 as L0301. This increment does not erase that
 shape or special-case `core`; the array-valued selection work must close the
 normalization boundary before aggregate-item execution is claimed.
 
+The bounded erased-argument save repair completes [0410]'s existing call
+staging for `any`. An erased actual is already passed by the address of its
+two-word descriptor; when a later runtime actual may change blocks, lowering
+now saves that address in the same `usize` carrier used for aggregate,
+fixed-array and slice addresses rather than asking the erased value for a
+nonexistent scalar carrier. `runtime/any-argument-save` exercises positional
+and reversed named/formal order with once-only effects, an erased field loaded
+through a pointer, and a later propagated failure that prevents both the call
+and following statement. Dispatch, source evaluation order, termination and
+origin rules are unchanged.
+
 D196 settles D191's inherited construct rows. [0500]'s `mem.offset` and
 `mem.base_of` are unneeded conveniences for this slice: existing [0470]
 address conversion and checked element addressing serve their actual callers.

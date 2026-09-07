@@ -4112,7 +4112,7 @@ package body Landin.Stages.Lowering is
                        (if Parameter.Convention = Syn.Inout_Convention
                           or else Type_At (Of_Tree, Argument)
                                     in Ty.Aggregate | Ty.Fixed_Array
-                                       | Ty.Slice_Value
+                                       | Ty.Slice_Value | Ty.Any_Value
                         then Ty.Usize else Scalar_At (Of_Tree, Argument)),
                        Res.No_Declaration, Site_Of (Of_Tree, Argument),
                        Signature =>
