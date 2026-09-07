@@ -353,7 +353,12 @@ package body Landin.IR is
                   when Landin.Types.Fixed_Array =>
                      A.Length = B.Length
                      and then A.Element = B.Element
-                     and then A.Nominal = B.Nominal,
+                     and then A.Nominal = B.Nominal
+                     and then
+                       ((A.Element_Shape.Kind = Scalar_Field_Shape
+                         and then B.Element_Shape.Kind = Scalar_Field_Shape)
+                        or else Same_Shape
+                          (Of_Unit, A.Element_Shape, B.Element_Shape)),
                   when Landin.Types.Function_Value =>
                      Budget > 0
                      and then Holds (Of_Unit, A.Signature)

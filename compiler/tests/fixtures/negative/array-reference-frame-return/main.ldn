@@ -1,0 +1,9 @@
+node: type = struct
+    value: i32
+end node
+bad: () -> (result: [1]ptr mut node) =
+    mut local: node = (value: 17)
+    mut array: [1]ptr mut node
+    array[0] = addr local
+    result = array
+end bad

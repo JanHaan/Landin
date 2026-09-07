@@ -3715,17 +3715,41 @@ referent and concept keys while reusing aliases. The corresponding
 `negative/generic-any-*` cases retain permission, exact referent extent,
 concept, frame-escape, live-view and wrong-source refusals.
 
-This prerequisite does not close the initialized-view library increment. The
+The bounded array-reference prerequisite carries complete immediate
+pointer/slice/any element descriptors through fixed-array referents, generic
+normalization and keys, results, local inference and ordinary array fields.
+D138, D178 and D179 supply the existing identity and representation contract;
+no new decision, operation or core privilege is introduced. Lowering reuses the
+runtime-address path for stores and whole-array copies through pointer or slice
+storage, and verified IR signatures retain nested array element shapes. The
+x86-64 parameter prologue copies the complete stored shape using the existing
+target extent calculation, including slice descriptors and erased values.
+`runtime/fixed-array-reference-shapes` and `runtime/fixed-array-any-shapes`
+execute bounds one and three, generic copies and stored fields, typed pointer
+stores and slices, including heterogeneous mutable erased providers. The
+checking cases `array actuals keep complete identity` and
+`array reference fields follow target` distinguish extent, permission,
+referent and concept identities and measure pointer/slice/any fields against
+both 32-bit and 64-bit target facts. The corresponding `negative/array-reference-*`
+and `negative/array-any-*` cases retain whole-array identity, field identity,
+frame-return and zero-image refusals. The verifier case
+`nested array address shapes keep children` rejects malformed child shapes.
+The verifier case `array routine parts keep complete children` retains only
+legacy scalar/canonical nominal part compatibility and rejects scalar parts
+paired with wider descriptors or variant children, conflicting explicit scalar
+metadata and mismatched descriptor extents. Nested fixed-array struct fields
+retain the existing L0304 boundary pinned by
+`negative/parameterized-struct-unused-shape` and the template-order controls;
+their recursive field representation remains separate R4.20 work.
+
+These prerequisites do not close the initialized-view library increment. The
 selected route remains an initialized slice witness, with ordinary typed
 stores before publishing an extended prefix; the constrained opaque-view
-alternative is not selected. Nonempty pointer-element fixed arrays and
-pointer/any fixed-array referent normalization remain a separate bounded
-compiler increment here. The carrier fixture's pointer and nested-slice
-actuals transport an empty slice beside a genuine typed pointee; that is not
-evidence for nonempty pointer arrays or raw-storage bootstrap. Raw transitions,
-initialized allocation helpers and allocator-backed vector growth retain their
-own execution obligations, including zero-sized elements and heterogeneous
-mutable dispatch after growth.
+alternative is not selected. Genuine initialized arrays supply the compiler
+evidence, not a forged larger allocation or byte-buffer substitute. Raw
+transitions, initialized allocation helpers and allocator-backed vector growth
+retain their own execution obligations, including zero-sized elements and
+heterogeneous mutable dispatch after growth.
 
 The named-call statement repair brings [1810]'s grammar into agreement with
 [0980]: ordinary and value-producing blocks accept positional or named calls,
@@ -3758,6 +3782,11 @@ bound check. The `negative/derived-address-*` cases retain frame-array and
 local-descriptor refusals, exact `from`, permission, escaping and live-view
 checks. This repairs the monomorphic prerequisite for initialized views without
 changing [0860]'s shallow alias limit or using an untracked pointer conversion.
+
+The array-shape fixtures consume their slices locally; they do not waive the
+return-source obligation or select the constrained owner alternative. The
+separate storage-origin and constant nested-store repairs retain their own
+fixtures and scope alongside this shape transport.
 
 The bounded fixed-array-view origin follow-up applies that same storage walk
 when a range slice publishes a view of a fixed array. Direct local storage,
@@ -3792,6 +3821,7 @@ counterexample W7's historical proof misses: a helper can retain an allocated
 pointer in module state without returning it through the lexical boundary.
 R4.80 must settle that behavior before the complete application and hosted
 gate. This handoff creates no reverse dependency and enables no region syntax.
+
 
 Sources: legacy B5, which had no tracked citation; `[0500]`, `[0810]`,
 `[0820]` and `[1360]`, re-owned here by D191.

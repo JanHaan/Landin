@@ -423,7 +423,13 @@ package body Landin.Backend.X86_64 is
                return A.Kind = B.Kind
                  and then A.Length = B.Length
                  and then A.Element = B.Element
-                 and then A.Nominal = B.Nominal;
+                 and then A.Nominal = B.Nominal
+                 and then
+                   ((A.Element_Shape.Kind = Landin.IR.Scalar_Field_Shape
+                     and then B.Element_Shape.Kind
+                       = Landin.IR.Scalar_Field_Shape)
+                    or else Landin.IR.Same_Shape
+                      (Of_Unit, A.Element_Shape, B.Element_Shape));
             end if;
             return True;
          end Parts_Agree;
@@ -3549,20 +3555,11 @@ package body Landin.Backend.X86_64 is
                         Landin.Backend.Aggregate_Extent
                           (Of_Unit, Item, Slot, Facts, Bytes, Alignment);
                      else
-                        Bytes := Landin.Targets.Byte_Count
-                          (Landin.IR.Slot_Array_Length
-                             (Of_Unit, Item, Slot))
-                          * Landin.Targets.Byte_Count
-                              (Landin.Targets.Bytes
-                                 (Size_Of
-                                    (Landin.IR.Slot_Array_Element
-                                       (Of_Unit, Item, Slot), Facts)));
-                        Alignment := Landin.Targets.Byte_Alignment'Max
-                          (1, Landin.Targets.Byte_Alignment
-                                (Landin.Targets.Bytes
-                                   (Size_Of
-                                      (Landin.IR.Slot_Array_Element
-                                         (Of_Unit, Item, Slot), Facts))));
+                        Landin.Backend.Field_Extent
+                          (Of_Unit,
+                           Landin.IR.Whole_Slot_Array_Shape
+                             (Of_Unit, Item, Slot),
+                           Facts, Bytes, Alignment);
                      end if;
                      Emit ("popq %rsi");
                      Storage_Address

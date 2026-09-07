@@ -647,6 +647,9 @@ width-dependent wrapping, bitwise and shift operations are not bound forms. A
 negative result is refused. A zero result is accepted: `[0]T` and an admitted
 fixed expression that folds to zero denote a zero-length array. This does not
 add an empty array literal or make zero-length repetition valid.
+An array retains its complete element type through a pointer, slice, generic
+call or stored field. Pointer and slice element permissions remain part of
+that identity, and an `any C` element retains its own data and evidence for C.
 A whole element of aggregate type is the same value and place whether its index
 is written as a known position or computed at run time. A computed index is
 evaluated and

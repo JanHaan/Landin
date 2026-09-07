@@ -1,0 +1,7 @@
+node: type = struct
+    value: i32
+end node
+same: (t: type, left: t, right: t) -> none = end same
+reject: (left: [3]ptr node, right: [3]ptr mut node) -> none =
+    same(left, right)
+end reject

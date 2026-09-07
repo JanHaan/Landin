@@ -174,6 +174,24 @@ package body Landin.Checking is
          Owner => Of_Table'Address, Length => Length, Nominal => Element,
          others => <>);
 
+   function Fixed_Array_Type_Actual
+     (Of_Table : Table;
+      Length   : Element_Count;
+      Element  : Field_Shape) return Actual_Key
+     is (Kind => Type_Actual_Kind, Type_Form => Fixed_Array_Actual_Type,
+         Owner => Of_Table'Address, Length => Length,
+         Element_Shape => Element, others => <>);
+
+   function Array_Element_Shape_Of
+     (Of_Table : Table; Key : Actual_Key) return Field_Shape is
+   begin
+      if not Holds (Of_Table, Key) then
+         raise Landin.Compiler_Defect with
+           "an array actual key belongs to another checking table";
+      end if;
+      return Key.Element_Shape;
+   end Array_Element_Shape_Of;
+
    function Nominal_Type_Actual
      (Of_Table : Table; Nominal : Nominal_Type_Id) return Actual_Key
      is (Kind => Type_Actual_Kind, Type_Form => Nominal_Actual_Type,
@@ -240,7 +258,9 @@ package body Landin.Checking is
          raise Landin.Compiler_Defect with
            "an array actual key belongs to another checking table";
       end if;
-      return (if Key.Nominal = No_Nominal_Type
+      return (if Key.Element_Shape.Kind /= Scalar_Field
+              then Shaped_Array_Element
+              elsif Key.Nominal = No_Nominal_Type
               then Scalar_Array_Element else Nominal_Array_Element);
    end Array_Element_Form_Of;
 
@@ -323,7 +343,10 @@ package body Landin.Checking is
             return Key.Owner = Of_Table'Address
               and then Holds (Of_Table, Key.Atoms);
          when Fixed_Array_Actual_Type =>
-            return Key.Nominal = No_Nominal_Type
+            return (if Key.Element_Shape.Kind /= Scalar_Field
+                    then Key.Owner = Of_Table'Address
+                      and then Holds (Of_Table, Key.Element_Shape)
+                    else Key.Nominal = No_Nominal_Type)
               or else (Key.Owner = Of_Table'Address
                        and then Holds (Of_Table, Key.Nominal));
          when Nominal_Actual_Type =>
@@ -378,7 +401,9 @@ package body Landin.Checking is
          when Atom_Set_Actual_Type =>
             return Atom_Sets_Agree (Of_Table, Left.Atoms, Right.Atoms);
          when Fixed_Array_Actual_Type =>
-            if Left.Length /= Right.Length
+            if not Field_Shapes_Agree
+              (Of_Table, Left.Element_Shape, Right.Element_Shape)
+              or else Left.Length /= Right.Length
               or else (Left.Nominal = No_Nominal_Type)
                         /= (Right.Nominal = No_Nominal_Type)
             then
@@ -1628,6 +1653,73 @@ package body Landin.Checking is
      (Of_Table : Table; View : Landin.Types.Text_View) return Reference_Id
      is (Of_Table.Text_References (View));
 
+   function Array_Field_Element (Shape : Field_Shape) return Field_Shape
+     is (if Shape.Reference /= No_Reference
+         then (Kind => Reference_Field, Reference => Shape.Reference,
+               others => <>)
+         elsif Shape.Nominal /= No_Nominal_Type
+         then (Kind => Aggregate_Field, Nominal => Shape.Nominal, others => <>)
+         else (Kind => Scalar_Field, Element => Shape.Element, others => <>));
+
+   function Holds (Of_Table : Table; Shape : Field_Shape) return Boolean is
+   begin
+      return Is_Prepared (Of_Table)
+        and then
+          (case Shape.Kind is
+              when Scalar_Field =>
+                Shape.Signature = No_Signature
+                or else Holds (Of_Table, Shape.Signature),
+              when Reference_Field => Holds (Of_Table, Shape.Reference),
+              when Aggregate_Field => Holds (Of_Table, Shape.Nominal),
+              when Fixed_Array_Field =>
+                (Shape.Nominal = No_Nominal_Type
+                 or else Holds (Of_Table, Shape.Nominal))
+                and then (Shape.Reference = No_Reference
+                          or else Holds (Of_Table, Shape.Reference)),
+              when Variant_Field => False);
+   end Holds;
+
+   function Field_Shapes_Agree
+     (Of_Table : Table; Left, Right : Field_Shape) return Boolean is
+   begin
+      if Left.Kind /= Right.Kind then
+         return False;
+      elsif Left.Kind = Fixed_Array_Field then
+         return Left.Length = Right.Length
+           and then Left.Nominal = Right.Nominal
+           and then Left.Element = Right.Element
+           and then
+             ((Left.Reference = No_Reference
+               and then Right.Reference = No_Reference)
+              or else Field_Shapes_Agree
+                (Of_Table,
+                 (Kind => Reference_Field, Reference => Left.Reference,
+                  others => <>),
+                 (Kind => Reference_Field, Reference => Right.Reference,
+                  others => <>)));
+      elsif Left.Kind = Reference_Field then
+         if not Holds (Of_Table, Left.Reference)
+           or else not Holds (Of_Table, Right.Reference)
+         then
+            return False;
+         end if;
+         declare
+            A : constant Reference_Descriptor :=
+              Descriptor_Of (Of_Table, Left.Reference);
+            B : constant Reference_Descriptor :=
+              Descriptor_Of (Of_Table, Right.Reference);
+         begin
+            if A.Kind = Landin.Types.Any_Value then
+               return B.Kind = A.Kind and then Holds (Of_Table, A.Concept)
+                 and then A.Concept = B.Concept;
+            end if;
+            return References_Agree
+              (Of_Table, Left.Reference, Right.Reference);
+         end;
+      end if;
+      return Left = Right;
+   end Field_Shapes_Agree;
+
    function Referents_Agree
      (Of_Table : Table; Left, Right : Reference_Descriptor) return Boolean;
 
@@ -1654,7 +1746,9 @@ package body Landin.Checking is
          when Landin.Types.Fixed_Array =>
             return Left.Length = Right.Length
               and then Left.Element = Right.Element
-              and then Left.Element_Nominal = Right.Element_Nominal;
+              and then Left.Element_Nominal = Right.Element_Nominal
+              and then Field_Shapes_Agree
+                (Of_Table, Left.Element_Shape, Right.Element_Shape);
          when Landin.Types.Aggregate =>
             return Left.Nominal = Right.Nominal;
          when Landin.Types.Any_Value =>
@@ -1917,7 +2011,8 @@ package body Landin.Checking is
               and then Part.Reference = No_Reference
               and then Holds (Of_Table, Part.Atoms);
          when Landin.Types.Fixed_Array =>
-            return Part.Signature = No_Signature
+            return Holds (Of_Table, Part.Element_Shape)
+              and then Part.Signature = No_Signature
               and then Part.Reference = No_Reference
               and then Part.Atoms = No_Atom_Set
               and then
@@ -1944,6 +2039,25 @@ package body Landin.Checking is
             return False;
       end case;
    end Holds;
+
+   function Contains_References
+     (Of_Table : Table; Shape : Field_Shape) return Boolean is
+   begin
+      case Shape.Kind is
+         when Reference_Field =>
+            return True;
+         when Aggregate_Field =>
+            return Contains_References (Of_Table, Shape.Nominal);
+         when Fixed_Array_Field =>
+            return Shape.Length > 0
+              and then (Shape.Reference /= No_Reference
+                        or else (Shape.Nominal /= No_Nominal_Type
+                                 and then Contains_References
+                                   (Of_Table, Shape.Nominal)));
+         when Scalar_Field | Variant_Field =>
+            return False;
+      end case;
+   end Contains_References;
 
    function Contains_References
      (Of_Table : Table; Nominal : Nominal_Type_Id) return Boolean
@@ -1975,7 +2089,9 @@ package body Landin.Checking is
                         return True;
                      end if;
                   when Fixed_Array_Field =>
-                     if Shape.Nominal /= No_Nominal_Type
+                     if Shape.Reference /= No_Reference then
+                        return True;
+                     elsif Shape.Nominal /= No_Nominal_Type
                        and then Visit (Shape.Nominal)
                      then
                         return True;
@@ -1996,9 +2112,10 @@ package body Landin.Checking is
                                    and then Visit (Payload.Nominal))
                                 or else
                                   (Payload.Kind = Fixed_Array_Field
-                                   and then Payload.Nominal
-                                     /= No_Nominal_Type
-                                   and then Visit (Payload.Nominal))
+                                   and then (Payload.Reference /= No_Reference
+                                     or else (Payload.Nominal
+                                       /= No_Nominal_Type
+                                       and then Visit (Payload.Nominal))))
                               then
                                  return True;
                               end if;
@@ -2028,8 +2145,10 @@ package body Landin.Checking is
             return Contains_References (Of_Table, Part.Nominal);
          when Landin.Types.Fixed_Array =>
             return Part.Length > 0
-              and then Part.Nominal /= No_Nominal_Type
-              and then Contains_References (Of_Table, Part.Nominal);
+              and then (Contains_References (Of_Table, Part.Element_Shape)
+                        or else (Part.Nominal /= No_Nominal_Type
+                                 and then Contains_References
+                                   (Of_Table, Part.Nominal)));
          when others =>
             return False;
       end case;
@@ -2350,7 +2469,9 @@ package body Landin.Checking is
          when Landin.Types.Fixed_Array =>
             return A.Length = B.Length
               and then A.Element = B.Element
-              and then A.Nominal = B.Nominal;
+              and then A.Nominal = B.Nominal
+              and then Field_Shapes_Agree
+                (Of_Table, A.Element_Shape, B.Element_Shape);
          when Landin.Types.Any_Value =>
             return A.Concept = B.Concept;
          when Landin.Types.Function_Value =>
@@ -2790,7 +2911,15 @@ package body Landin.Checking is
                end if;
             end;
          elsif Field.Kind = Fixed_Array_Field then
-            if Field.Nominal /= No_Nominal_Type then
+            if Field.Reference /= No_Reference then
+               Extent_Of
+                 ((Kind => Reference_Field, Reference => Field.Reference,
+                   others => <>), Size, Alignment);
+               Size := Landin.Targets.Byte_Count (Field.Length) * Size;
+               if Field.Length = 0 then
+                  Alignment := 1;
+               end if;
+            elsif Field.Nominal /= No_Nominal_Type then
                if not Holds (Into, Field.Nominal)
                  or else not Has_Layout (Into, Field.Nominal)
                then
@@ -3197,14 +3326,18 @@ package body Landin.Checking is
       Of_Tree : Landin.Syntax.Tree;
       Node    : Landin.Syntax.Node_Id;
       Length  : Element_Count;
-      Element : Landin.Types.Scalar_Name) is
+      Element : Landin.Types.Scalar_Name;
+      Shape   : Field_Shape := (others => <>)) is
    begin
       declare
          Where : constant Positive := Slot (Into, Of_Tree, Node);
       begin
          if Into.Current_Routine = No_Routine_Instance then
             Into.Node_Shapes (Where) :=
-              Array_Shape'(Length => Length, Element => Element, others => <>);
+              Array_Shape'(Length => Length, Element => Element,
+                        Has_Complex_Element =>
+                                Shape.Kind /= Scalar_Field,
+                        Complex_Element => Shape, others => <>);
          else
             declare
                Overlay : constant Positive :=
@@ -3213,7 +3346,9 @@ package body Landin.Checking is
                Into.Node_Overlays (Overlay).Has_Array := True;
                Into.Node_Overlays (Overlay).Shape :=
                  Array_Shape'(Length => Length, Element => Element,
-                              others => <>);
+                              Has_Complex_Element =>
+                                Shape.Kind /= Scalar_Field,
+                              Complex_Element => Shape, others => <>);
             end;
          end if;
       end;
@@ -3335,11 +3470,15 @@ package body Landin.Checking is
      (Into    : in out Table;
       Id      : Declaration_Id;
       Length  : Element_Count;
-      Element : Landin.Types.Scalar_Name) is
+      Element : Landin.Types.Scalar_Name;
+      Shape   : Field_Shape := (others => <>)) is
    begin
       if Into.Current_Routine = No_Routine_Instance then
          Into.Shapes (Natural (Id)) :=
-           Array_Shape'(Length => Length, Element => Element, others => <>);
+           Array_Shape'(Length => Length, Element => Element,
+                        Has_Complex_Element =>
+                                Shape.Kind /= Scalar_Field,
+                        Complex_Element => Shape, others => <>);
       else
          declare
             Overlay : constant Positive :=
@@ -3348,7 +3487,9 @@ package body Landin.Checking is
             Into.Declaration_Overlays (Overlay).Has_Array := True;
             Into.Declaration_Overlays (Overlay).Shape :=
               Array_Shape'(Length => Length, Element => Element,
-                           others => <>);
+                              Has_Complex_Element =>
+                                Shape.Kind /= Scalar_Field,
+                              Complex_Element => Shape, others => <>);
          end;
       end if;
    end Note_Array;

@@ -582,7 +582,37 @@ package Landin.Checking is
    type Reference_Id is range 0 .. Integer'Last;
    No_Reference : constant Reference_Id := 0;
 
+   --  Field order is declaration order [0750].  D45 adds one compact
+   --  fixed-array leaf, D74 an unfolded variant part, and D86 a
+   --  measurement-only named ordinary child.  The child keeps its nominal
+   --  body; no target offset or byte extent is stored here.
+   type Field_Kind is
+     (Scalar_Field, Reference_Field, Fixed_Array_Field, Aggregate_Field,
+      Variant_Field);
+
+   type Field_Shape is record
+      Kind    : Field_Kind               := Scalar_Field;
+      Element : Landin.Types.Scalar_Name := Landin.Types.Bool;
+      Length  : Element_Count            := 1;
+      Cases   : Natural                  := 0;
+      Payloads_First : Natural           := 0;
+      --  The child's body for an Aggregate_Field, and since D121 the
+      --  element's body for a Fixed_Array_Field whose elements are an
+      --  ordinary struct.  Both answer the same question -- which nominal
+      --  instance this field is made of.
+      Nominal : Nominal_Type_Id   := No_Nominal_Type;
+      --  Function and reference fields retain complete target-neutral type
+      --  evidence beside their one-word or two-word runtime carriers.
+      Signature : Signature_Id            := No_Signature;
+      --  For Fixed_Array_Field this is the immediate reference element.
+      Reference : Reference_Id            := No_Reference;
+   end record;
+
+   type Field_Shape_Array is
+     array (Positive range <>) of Field_Shape;
+
    type Reference_Descriptor is record
+      Element_Shape : Field_Shape := (others => <>);
       Kind      : Landin.Types.Type_Kind := Landin.Types.Pointer_Value;
       View      : Landin.Types.Reference_View := Landin.Types.Ordinary_View;
       Mutable   : Boolean := False;
@@ -603,6 +633,15 @@ package Landin.Checking is
       --  would read the empty case as an address is named and refused.
       Empty_Atom : Declaration_Id := No_Declaration;
    end record;
+
+   function Array_Field_Element (Shape : Field_Shape) return Field_Shape
+     with Pre => Shape.Kind = Fixed_Array_Field;
+
+   function Holds (Of_Table : Table; Shape : Field_Shape) return Boolean;
+
+   --  Complete immediate element identity; layout never supplies identity.
+   function Field_Shapes_Agree
+     (Of_Table : Table; Left, Right : Field_Shape) return Boolean;
 
    function Reference_Count (Of_Table : Table) return Natural
      with Pre => Is_Prepared (Of_Table);
@@ -708,6 +747,7 @@ package Landin.Checking is
    type Error_Set_Form is (Infallible, Concrete, Inferred);
 
    type Signature_Part is record
+      Element_Shape : Field_Shape := (others => <>);
       Kind    : Landin.Types.Type_Kind := Landin.Types.No_Value;
       Nominal : Nominal_Type_Id := No_Nominal_Type;
       Length  : Element_Count          := 0;
@@ -753,6 +793,9 @@ package Landin.Checking is
    --  descriptor IDs at this public seam rather than letting a later
    --  structural walk dereference a malformed part.
    function Holds (Of_Table : Table; Part : Signature_Part) return Boolean;
+
+   function Contains_References
+     (Of_Table : Table; Shape : Field_Shape) return Boolean;
 
    function Contains_References
      (Of_Table : Table; Part : Signature_Part) return Boolean
@@ -963,7 +1006,7 @@ package Landin.Checking is
       Reference_Actual_Type,
       Any_Actual_Type);
    type Array_Element_Form is
-     (Scalar_Array_Element, Nominal_Array_Element);
+     (Scalar_Array_Element, Nominal_Array_Element, Shaped_Array_Element);
 
    function Empty_Actuals return Actual_Tuple;
 
@@ -992,6 +1035,16 @@ package Landin.Checking is
       Length   : Element_Count;
       Element  : Nominal_Type_Id) return Actual_Key
      with Pre => Holds (Of_Table, Element);
+
+   function Fixed_Array_Type_Actual
+     (Of_Table : Table;
+      Length   : Element_Count;
+      Element  : Field_Shape) return Actual_Key
+     with Pre => Holds (Of_Table, Element)
+                 and then Element.Kind in Reference_Field | Fixed_Array_Field;
+
+   function Array_Element_Shape_Of
+     (Of_Table : Table; Key : Actual_Key) return Field_Shape;
 
    function Nominal_Type_Actual
      (Of_Table : Table; Nominal : Nominal_Type_Id) return Actual_Key
@@ -1600,34 +1653,6 @@ package Landin.Checking is
                  and then Signature_Result_Count (Of_Table, Left) > 1
                  and then Signature_Result_Count (Of_Table, Right) > 1;
 
-   --  Field order is declaration order [0750].  D45 adds one compact
-   --  fixed-array leaf, D74 an unfolded variant part, and D86 a
-   --  measurement-only named ordinary child.  The child keeps its nominal
-   --  body; no target offset or byte extent is stored here.
-   type Field_Kind is
-     (Scalar_Field, Reference_Field, Fixed_Array_Field, Aggregate_Field,
-      Variant_Field);
-
-   type Field_Shape is record
-      Kind    : Field_Kind               := Scalar_Field;
-      Element : Landin.Types.Scalar_Name := Landin.Types.Bool;
-      Length  : Element_Count            := 1;
-      Cases   : Natural                  := 0;
-      Payloads_First : Natural           := 0;
-      --  The child's body for an Aggregate_Field, and since D121 the
-      --  element's body for a Fixed_Array_Field whose elements are an
-      --  ordinary struct.  Both answer the same question -- which nominal
-      --  instance this field is made of.
-      Nominal : Nominal_Type_Id   := No_Nominal_Type;
-      --  Function and reference fields retain complete target-neutral type
-      --  evidence beside their one-word or two-word runtime carriers.
-      Signature : Signature_Id            := No_Signature;
-      Reference : Reference_Id            := No_Reference;
-   end record;
-
-   type Field_Shape_Array is
-     array (Positive range <>) of Field_Shape;
-
    --  One case's payload is a slice of the payload Field_Shape array
    --  supplied to Lay_Out.  A bare case has Count = 0.  These are source
    --  identities only; target offsets are deliberately absent.
@@ -1920,7 +1945,8 @@ package Landin.Checking is
       Of_Tree : Landin.Syntax.Tree;
       Node    : Landin.Syntax.Node_Id;
       Length  : Element_Count;
-      Element : Landin.Types.Scalar_Name)
+      Element : Landin.Types.Scalar_Name;
+      Shape   : Field_Shape := (others => <>))
      with Pre  => Is_Prepared (Into)
                   and then Covers (Into, Of_Tree)
                   and then Landin.Syntax.Contains (Of_Tree, Node),
@@ -1941,7 +1967,8 @@ package Landin.Checking is
      (Into    : in out Table;
       Id      : Declaration_Id;
       Length  : Element_Count;
-      Element : Landin.Types.Scalar_Name)
+      Element : Landin.Types.Scalar_Name;
+      Shape   : Field_Shape := (others => <>))
      with Pre  => Is_Prepared (Into) and then Contains (Into, Id),
           Post => Array_Length (Into, Id) = Length
                   and then Array_Element (Into, Id) = Element;
@@ -2109,6 +2136,7 @@ private
      (Index_Type => Positive, Element_Type => Routine_Instance_Id);
 
    type Actual_Key is record
+      Element_Shape : Field_Shape := (others => <>);
       Kind      : Actual_Kind := Type_Actual_Kind;
       Type_Form : Actual_Type_Form := Scalar_Actual_Type;
       Owner     : System.Address := System.Null_Address;

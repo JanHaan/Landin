@@ -1113,6 +1113,9 @@ package body Landin.IR.Verifier is
       function Atom_Metadata_Is_Subset
         (Left, Right : Atom_Set_Id) return Boolean;
 
+      --  A legacy array part has the default Element_Shape. Its Element
+      --  fixes a scalar extent, or its Nominal names the canonical body
+      --  checked independently below. No other child can use that fallback.
       function Part_Agrees_With_Slot
         (Item : Item_Id; Part : Signature_Part; Slot : Slot_Id)
          return Boolean;
@@ -1159,9 +1162,12 @@ package body Landin.IR.Verifier is
                return Shape.Nominal /= No_Nominal_Type
                  or else Shape.Payloads_First /= 0;
             end if;
-            return not Holds (Of_Unit, Shape.Nominal)
+            return (Shape.Nominal /= No_Nominal_Type
+                      and then not Holds (Of_Unit, Shape.Nominal))
               or else Shape.Cases /= 1
               or else not Array_Element_Is_Aggregate (Of_Unit, Shape)
+              or else Array_Element_Shape (Of_Unit, Shape).Kind
+                        not in Array_Field_Shape | Aggregate_Field_Shape
               or else Array_Element_Shape (Of_Unit, Shape).Nominal
                         /= Shape.Nominal
               or else Left = 0
@@ -1310,7 +1316,9 @@ package body Landin.IR.Verifier is
                  or else Part.Signature /= No_Signature
                  or else Part.Atoms /= No_Atom_Set;
             when Landin.Types.Fixed_Array =>
-               return (Part.Nominal /= No_Nominal_Type
+               return Field_Shape_Is_Malformed
+                 (Part.Element_Shape, Aggregate_Allowed => True)
+                 or else (Part.Nominal /= No_Nominal_Type
                          and then not Holds (Of_Unit, Part.Nominal))
                  or else Part.Signature /= No_Signature
                  or else Part.Atoms /= No_Atom_Set;
@@ -1548,7 +1556,15 @@ package body Landin.IR.Verifier is
                   and then Slot_Array_Element (Of_Unit, Item, Slot)
                              = Part.Element
                   and then Slot_Array_Element_Shape
-                    (Of_Unit, Item, Slot).Nominal = Part.Nominal,
+                    (Of_Unit, Item, Slot).Nominal = Part.Nominal
+                  and then
+                    ((Part.Element_Shape = Field_Shape'(others => <>)
+                      and then Slot_Array_Element_Shape
+                        (Of_Unit, Item, Slot).Kind
+                          in Scalar_Field_Shape | Aggregate_Field_Shape)
+                     or else Same_Shape
+                       (Of_Unit, Slot_Array_Element_Shape
+                          (Of_Unit, Item, Slot), Part.Element_Shape)),
                when Landin.Types.Function_Value =>
                   not Is_Aggregate (Of_Unit, Item, Slot)
                   and then not Is_Array (Of_Unit, Item, Slot)

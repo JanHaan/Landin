@@ -203,8 +203,11 @@ R4.20's `runtime/generic-any-nominal-transport` derives the mutable-dispatch
 pressure below without allocating an uninitialized object: two initialized
 providers with different layouts and methods retain their data and evidence
 through generic nominal copies and typed pointer reads. Their original
-pointees receive the mutations. Initialized allocation and vector growth
-remain separate R4.20 obligations.
+pointees receive the mutations. `runtime/fixed-array-any-shapes` extends this
+evidence to genuine singleton and larger erased arrays, preserving both data
+and evidence through typed array-pointer stores, slices, generic copies and
+array fields. Initialized allocation and vector growth remain separate R4.20
+obligations.
 
 'self: ptr mut T', because a filter may count. The permission is
 in the type since 0.1.0, so the entry says what it does without

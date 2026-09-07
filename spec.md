@@ -8094,7 +8094,12 @@ D136 bound never contributes an equation to solve: the checker defers it until
 another direct occurrence or an explicit static tuple has bound every formal
 it references, then folds and compares the result exactly. A formal that occurs
 only inside `n * 2` or another computed expression remains undeduced. Nominal
-elements participate by identity.
+elements participate by identity. Pointer and slice elements retain their
+permission and complete referent descriptor; an `any C` element retains C.
+Fixed-array referents, generic actuals, results and stored fields carry the
+same immediate element shape. A shared target size never makes two element
+types equal; D178 and D179's existing stored-shape paths also apply through
+these positions.
 
 A parameterized nominal pattern requires an argument instance interned from the
 same source template, then recursively matches every stored normalized actual
@@ -10112,7 +10117,8 @@ choices lose element aliasing, lose structural identity or permission, confuse
 two unrelated two-cell representations, or bypass the checked evidence call.
 All were declined.
 
-**Pinned by** `runtime/for-aggregate-element-traversal`,
+**Pinned by** `runtime/fixed-array-reference-shapes`,
+`runtime/for-aggregate-element-traversal`,
 `negative/for-array-element-read-only`,
 `runtime/for-any-element-traversal`, the retained
 `negative/for-iterable-missing-conformance`, and the `control.loops` guarantee
@@ -10156,7 +10162,8 @@ sources at the same time. Those choices respectively lose element aliasing,
 discard the erased identity, confuse unrelated representations, or couple a
 storage walk to an unimplemented evidence call. All were declined.
 
-**Pinned by** `runtime/for-any-element-traversal`,
+**Pinned by** `runtime/fixed-array-any-shapes`,
+`runtime/for-any-element-traversal`,
 `negative/for-any-element-read-only`, the retained
 `runtime/for-iterable-evidence-traversal`, and the `control.loops` guarantee
 row.

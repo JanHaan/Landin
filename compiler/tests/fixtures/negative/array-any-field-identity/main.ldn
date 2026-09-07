@@ -1,0 +1,6 @@
+first: type = concept (t: type) read: (self: ptr t) -> (n: i32) end first
+second: type = concept (t: type) read: (self: ptr t) -> (n: i32) end second
+holder: type = struct values: [3]any first end holder
+reject: (source: [3]any second) -> none =
+    wrong: holder = (values: source)
+end reject

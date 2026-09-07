@@ -906,9 +906,11 @@ pointer first, while the list/slice storage carries the pair and D146's pointee
 origin rather than copying the hidden object. R4.20's bounded reference
 transport fixtures additionally carry pointer and slice fields through generic
 construction, copy and return, and deduce the same erased concept back from a
-nominal actual tuple. This is compiler prerequisite evidence; allocator-backed
-initialized views and pointer-element fixed-array referents remain separate
-R4.20 increments.
+nominal actual tuple. `runtime/fixed-array-reference-shapes` adds genuine
+singleton and larger pointer arrays, nested slices and fixed-array elements
+through generic normalization, typed pointer stores, copies and slicing.
+This is compiler prerequisite evidence; allocator-backed initialized views
+remain a separate R4.20 increment.
 
 ---
 

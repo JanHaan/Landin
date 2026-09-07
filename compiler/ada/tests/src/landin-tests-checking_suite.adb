@@ -1352,6 +1352,76 @@ package body Landin.Tests.Checking_Suite is
          "permission, referent and concept split keys; an alias reuses one");
    end Reference_Actuals_Keep_Complete_Identity;
 
+   procedure Array_Actuals_Keep_Complete_Identity
+     (Item : in out Landin.Testing.Context);
+
+   procedure Array_Actuals_Keep_Complete_Identity
+     (Item : in out Landin.Testing.Context)
+   is
+      Text : constant String :=
+        "box: type (t: type) = struct" & LF
+        & "    marker: bool" & LF
+        & "end box" & LF
+        & "node: type = struct" & LF
+        & "    value: i32" & LF
+        & "end node" & LF
+        & "other: type = struct" & LF
+        & "    value: i32" & LF
+        & "end other" & LF
+        & "alias: type = node" & LF
+        & "first: type = concept (t: type)" & LF
+        & "    value: (self: ptr t) -> (n: i32)" & LF
+        & "end first" & LF
+        & "second: type = concept (t: type)" & LF
+        & "    value: (self: ptr t) -> (n: i32)" & LF
+        & "end second" & LF
+        & "observe: (t: type, source: box(t)) -> none =" & LF
+        & "end observe" & LF
+        & "use: () -> none =" & LF
+        & "    a: box([1]ptr node) = (marker: true)" & LF
+        & "    b: box([1]ptr mut node) = (marker: true)" & LF
+        & "    c: box([1]ptr other) = (marker: true)" & LF
+        & "    d: box([1]any first) = (marker: true)" & LF
+        & "    e: box([1]any second) = (marker: true)" & LF
+        & "    f: box([3][]node) = (marker: true)" & LF
+        & "    g: box([3][]mut node) = (marker: true)" & LF
+        & "    h: box([1]ptr alias) = (marker: true)" & LF
+        & "    i: box([3]ptr node) = (marker: true)" & LF
+        & "    j: box([0]any first) = (marker: true)" & LF
+        & "    observe(i)" & LF
+        & "    observe(j)" & LF
+        & "    observe(a)" & LF
+        & "    observe(b)" & LF
+        & "    observe(c)" & LF
+        & "    observe(d)" & LF
+        & "    observe(e)" & LF
+        & "    observe(f)" & LF
+        & "    observe(g)" & LF
+        & "    observe(h)" & LF
+        & "end use" & LF;
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Ran : Natural;
+      Src : Landin.Source.Source_Id;
+      pragma Unreferenced (Src);
+   begin
+      Src := Landin.Stages.Add_Source (Work, "array-keys.ldn", Text);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Configurer'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Landin.Stages.Append (Order, Checker'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+      Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "array reference and any actuals deduce through nominal instances");
+      Landin.Testing.Check_Equal
+        (Item, Landin.Checking.Routine_Instance_Count
+           (Landin.Stages.Types (Work).all), 9,
+         "extent, permission, referent and concept split array keys");
+   end Array_Actuals_Keep_Complete_Identity;
+
    procedure Generic_Signatures_Keep_Nominal_Array_Elements
      (Item : in out Landin.Testing.Context)
    is
@@ -6689,6 +6759,100 @@ package body Landin.Tests.Checking_Suite is
          "two atoms and one pointer keep a 32-bit tag-plus-payload layout");
    end Reference_Unions_Follow_Target_Layout;
 
+   procedure Array_Reference_Fields_Follow_Target
+     (Item : in out Landin.Testing.Context);
+
+   procedure Array_Reference_Fields_Follow_Target
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Target (Facts : Landin.Targets.Target_Facts);
+
+      procedure Check_Target (Facts : Landin.Targets.Target_Facts) is
+         Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+         Order : Landin.Stages.Pipeline;
+         Ran : Natural;
+         Src : Landin.Source.Source_Id;
+         pragma Unreferenced (Src);
+         Count : Natural := 0;
+      begin
+         Src := Landin.Stages.Add_Source
+           (Work, "array-reference-layout.ldn",
+            "show: type = concept (t: type)" & LF
+            & "    read: (self: ptr t) -> (value: i32)" & LF
+            & "end show" & LF
+            & "node: type = struct value: i32 end node" & LF
+            & "holder: type (t: type) = struct values: [3]t end holder" & LF
+            & "p: usize = sizeof holder(ptr node)" & LF
+            & "s: usize = sizeof holder([]mut u32)" & LF
+            & "a: usize = sizeof holder(any show)" & LF);
+         Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
+         Landin.Stages.Append (Order, Names'Access);
+         Landin.Stages.Append (Order, Checker'Access);
+         Ran := Landin.Stages.Run (Order, Work);
+         Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
+         Landin.Testing.Check
+           (Item, not Landin.Stages.Failed (Work),
+            "generic array fields retain their reference element");
+         declare
+            Types : constant not null access Landin.Checking.Table :=
+              Landin.Stages.Types (Work);
+         begin
+            for Position in 1 .. Landin.Checking.Nominal_Type_Count (Types.all)
+            loop
+               declare
+                  Nominal : constant Landin.Checking.Nominal_Type_Id :=
+                    Landin.Checking.Nth_Nominal_Type (Types.all, Position);
+               begin
+                  if Landin.Checking.Has_Layout (Types.all, Nominal)
+                    and then Landin.Checking.Layout_Field_Count
+                      (Types.all, Nominal) = 1
+                  then
+                     declare
+                        Field : constant Landin.Checking.Field_Shape :=
+                          Landin.Checking.Field_Shape_Of
+                            (Types.all, Nominal, 1);
+                     begin
+                        if Field.Kind = Landin.Checking.Fixed_Array_Field then
+                           declare
+                              Ref : constant
+                                Landin.Checking.Reference_Descriptor :=
+                                  Landin.Checking.Descriptor_Of
+                                    (Types.all, Field.Reference);
+                              Bytes : constant Landin.Targets.Byte_Count :=
+                                (if Ref.Kind = Landin.Types.Any_Value
+                                 then Landin.Targets.Any_Value_Size (Facts)
+                                 else Landin.Targets.Byte_Count
+                                   (Landin.Targets.Bytes
+                                      (Landin.Targets.Pointer_Size (Facts)))
+                                   * (if Ref.Kind = Landin.Types.Slice_Value
+                                      then 2 else 1));
+                           begin
+                              Count := Count + 1;
+                              Landin.Testing.Check
+                                (Item, Field.Length = 3
+                                 and then Landin.Checking.Layout_Size
+                                   (Types.all, Nominal) = 3 * Bytes,
+                                 "three complete elements use target bytes");
+                              Landin.Testing.Check
+                                (Item, Landin.Checking.Contains_References
+                                   (Types.all, Nominal),
+                                 "array fields keep reference origin checks");
+                           end;
+                        end if;
+                     end;
+                  end if;
+               end;
+            end loop;
+         end;
+         Landin.Testing.Check_Equal
+           (Item, Count, 3, "all three array field layouts were checked");
+      end Check_Target;
+   begin
+      Check_Target (Landin.Targets.Linux_X86_64);
+      Check_Target (Landin.Targets.Synthetic_32);
+   end Array_Reference_Fields_Follow_Target;
+
    procedure Conformance_Register_Uses_Normalized_Keys
      (Item : in out Landin.Testing.Context);
 
@@ -6918,6 +7082,12 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Register
         (Into, "checking", "reference actuals keep complete identity",
          Reference_Actuals_Keep_Complete_Identity'Access);
+      Landin.Testing.Register
+        (Into, "checking", "array actuals keep complete identity",
+         Array_Actuals_Keep_Complete_Identity'Access);
+      Landin.Testing.Register
+        (Into, "checking", "array reference fields follow target",
+         Array_Reference_Fields_Follow_Target'Access);
       Landin.Testing.Register
         (Into, "checking", "generic signatures keep nominal array elements",
          Generic_Signatures_Keep_Nominal_Array_Elements'Access);

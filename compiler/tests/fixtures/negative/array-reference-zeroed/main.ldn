@@ -1,0 +1,6 @@
+node: type = struct
+    value: i32
+end node
+bad: () -> none =
+    value: [3]ptr node = zeroed
+end bad

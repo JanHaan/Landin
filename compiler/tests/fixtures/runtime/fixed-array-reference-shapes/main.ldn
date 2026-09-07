@@ -1,0 +1,103 @@
+node: type = struct
+    value: i32
+end node
+mut left: node = (value: 17)
+mut right: node = (value: 25)
+row: type (t: type, fixed n: usize) = [n]t
+copy: (fixed n: usize, t: type, source: row(t, n))
+      -> (result: row(t, n) from source) =
+    result = source
+end copy
+identity: (t: type, value: t) -> (result: t from value) =
+    result = value
+end identity
+replace: (fixed n: usize, t: type, target: ptr mut [n]t, value: t) -> none =
+    target.val[0] = value
+end replace
+shelf: type (t: type) = struct
+    values: [3]t
+end shelf
+copy_shelf: (t: type, source: shelf(t))
+            -> (result: shelf(t) from source) =
+    result = source
+end copy_shelf
+public main: () -> (code: i32) =
+    mut single: [1]ptr node
+    single[0] = addr left
+    mut saved := identity(copy(single))
+    owner := addr saved
+    replacement: ptr node = addr right
+    replace(owner, replacement)
+    one := owner.val[0..<1]
+    first := one[0]
+    if first.val.value <> 25 then
+        code = 1
+        return
+    end if
+    mut pointers: [3]ptr mut node
+    pointers[0] = addr left
+    pointers[1] = addr right
+    pointers[2] = addr left
+    mut copied: [3]ptr mut node = identity(copy(pointers))
+    stored: shelf(ptr mut node) = (values: copied)
+    stored_copy := copy_shelf(stored)
+    stored_pointer := stored_copy.values[1]
+    if stored_pointer.val.value <> 25 then
+        code = 6
+        return
+    end if
+    whole := addr copied
+    index: usize = 2
+    whole.val[index] = addr right
+    selected := whole.val[1..<3]
+    second := selected[1]
+    if lenof selected <> 2 or second.val.value <> 25 then
+        code = 2
+        return
+    end if
+    mut readonly: [3]ptr node
+    readonly[0] = addr left
+    readonly[1] = addr right
+    readonly[2] = addr left
+    readonly_copy := identity(copy(readonly))
+    read := readonly_copy[2]
+    if read.val.value <> 17 then
+        code = 3
+        return
+    end if
+    mut numbers: [3]i32 = [10, 20, 30]
+    mut slices: [3][]mut i32
+    slices[0] = numbers[0..<1]
+    slices[1] = numbers[1..<3]
+    slices[2] = []
+    mut slice_copy := identity(copy(slices))
+    slice_owner := addr slice_copy
+    slice_owner.val[2] = numbers[2..<3]
+    outer := slice_owner.val[0..<3]
+    inner := outer[2]
+    inner[0] = 42
+    if lenof outer <> 3 or lenof inner <> 1 or numbers[2] <> 42 then
+        code = 4
+        return
+    end if
+    mut slice_single: [1][]mut i32
+    slice_single[0] = numbers[0..<2]
+    single_copy := copy(slice_single)
+    last := single_copy[0]
+    if lenof last <> 2 then
+        code = 5
+        return
+    end if
+    row_value: [2]i32 = [20, 22]
+    mut matrix: [3][2]i32 = zeroed
+    mut at: usize = 0
+    while at < 3 do
+        matrix[at] = row_value
+        inc at
+    end while
+    mut matrix_copy := identity(copy(matrix))
+    matrix_owner := addr matrix_copy
+    matrix_view := matrix_owner.val[0..<3]
+    row_copy := matrix_view[2]
+    code = row_copy[0] + row_copy[1]
+end main

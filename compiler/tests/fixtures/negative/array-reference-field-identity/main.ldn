@@ -1,0 +1,5 @@
+node: type = struct value: i32 end node
+holder: type = struct values: [3]ptr node end holder
+reject: (source: [3]ptr mut node) -> none =
+    wrong: holder = (values: source)
+end reject

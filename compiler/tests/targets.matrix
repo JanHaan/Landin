@@ -25,6 +25,11 @@ negative/arena-block-names-owner | linux-x86-64, macos-arm64
 negative/arena-block-not-enabled | linux-x86-64, macos-arm64
 negative/arena-type-names-owner | linux-x86-64, macos-arm64
 negative/arena-type-not-enabled | linux-x86-64, macos-arm64
+negative/array-any-assignment-concept | linux-x86-64, macos-arm64
+negative/array-any-copy-concept | linux-x86-64, macos-arm64
+negative/array-any-deduction-concept | linux-x86-64, macos-arm64
+negative/array-any-field-identity | linux-x86-64, macos-arm64
+negative/array-any-zeroed | linux-x86-64, macos-arm64
 negative/array-argument-unassigned | linux-x86-64, macos-arm64
 negative/array-copy-element-mismatch | linux-x86-64, macos-arm64
 negative/array-copy-length-mismatch | linux-x86-64, macos-arm64
@@ -39,6 +44,12 @@ negative/array-mixed-repetition-assignment-prefix-too-long | linux-x86-64, macos
 negative/array-mixed-repetition-assignment-reads-incoming-state | linux-x86-64, macos-arm64
 negative/array-mixed-repetition-general-value-not-enabled | linux-x86-64, macos-arm64
 negative/array-mixed-repetition-prefix-too-long | linux-x86-64, macos-arm64
+negative/array-reference-assignment-permission | linux-x86-64, macos-arm64
+negative/array-reference-copy-permission | linux-x86-64, macos-arm64
+negative/array-reference-deduction-permission | linux-x86-64, macos-arm64
+negative/array-reference-field-identity | linux-x86-64, macos-arm64
+negative/array-reference-frame-return | linux-x86-64, macos-arm64
+negative/array-reference-zeroed | linux-x86-64, macos-arm64
 negative/array-repetition-argument-shape-mismatch | linux-x86-64, macos-arm64
 negative/array-repetition-count-mismatch | linux-x86-64, macos-arm64
 negative/array-repetition-countless-inferred-initializer-not-enabled | linux-x86-64, macos-arm64
@@ -908,8 +919,10 @@ runtime/derived-storage-address-origin | linux-x86-64
 runtime/diagnostic-loggers-dispatch | linux-x86-64
 runtime/division-and-remainder-exit-with-their-results | linux-x86-64
 runtime/evaluation-order-is-left-then-right | linux-x86-64
+runtime/fixed-array-any-shapes | linux-x86-64
 runtime/fixed-array-bound-expression | linux-x86-64
 runtime/fixed-array-bound-zero | linux-x86-64
+runtime/fixed-array-reference-shapes | linux-x86-64
 runtime/fixed-conditional-generic-runtime | linux-x86-64
 runtime/fixed-conditional-runtime | linux-x86-64
 runtime/fizzbuzz | linux-x86-64
