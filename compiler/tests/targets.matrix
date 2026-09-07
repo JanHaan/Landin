@@ -367,6 +367,7 @@ negative/match-scalar-not-enabled | linux-x86-64, macos-arm64
 negative/measuring-refused-types | linux-x86-64, macos-arm64
 negative/missing-end | linux-x86-64, macos-arm64
 negative/missing-then | linux-x86-64, macos-arm64
+negative/module-address-initializer-refused | linux-x86-64, macos-arm64
 negative/module-array-fold-agreement | linux-x86-64, macos-arm64
 negative/module-array-from-struct-field-cycle-array-first | linux-x86-64, macos-arm64
 negative/module-array-from-struct-field-cycle-struct-first | linux-x86-64, macos-arm64

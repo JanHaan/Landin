@@ -1,0 +1,10 @@
+error[L0301]: a comparison takes scalars, atoms, pointers and function values, not an erased `any` value
+  --> ../tests/fixtures/negative/any-comparison-refused/program.ldn:6:9
+  |
+6 |     r = a == b
+  |         ^
+  --> ../tests/fixtures/negative/any-comparison-refused/program.ldn:6:9
+  |
+6 |     r = a == b
+  |         ^^^^^^ the comparison here
+  = note: [1890]: `==` and its kin compare one register-sized value; a view or an aggregate has no equality of its own

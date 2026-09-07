@@ -23223,6 +23223,34 @@ package body Landin.Stages.Checking is
          end case;
       end Is_Known;
 
+      --  The first `addr` in a module initializer, or No_Node.  A nested
+      --  routine body is its own world and is not searched.
+      function First_Address
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Syn.Node_Id;
+
+      function First_Address
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Syn.Node_Id is
+      begin
+         if Node = Syn.No_Node
+           or else Syn.Kind (Of_Tree, Node) = Syn.Anonymous_Function
+         then
+            return Syn.No_Node;
+         elsif Syn.Kind (Of_Tree, Node) = Syn.Address_Of then
+            return Node;
+         end if;
+         for Position in 1 .. Syn.Slot_Count (Of_Tree, Node) loop
+            declare
+               Found_At : constant Syn.Node_Id :=
+                 First_Address (Of_Tree, Syn.Slot (Of_Tree, Node, Position));
+            begin
+               if Found_At /= Syn.No_Node then
+                  return Found_At;
+               end if;
+            end;
+         end loop;
+         return Syn.No_Node;
+      end First_Address;
+
       procedure Check_Module_Value
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
       is
@@ -23456,6 +23484,31 @@ package body Landin.Stages.Checking is
          --  after this generic module boundary.
          if Module_Struct_Literal then
             return;
+         end if;
+
+         if Value /= Syn.No_Node then
+            declare
+               Taken : constant Syn.Node_Id := First_Address (Of_Tree, Value);
+            begin
+               --  R4.21: `addr` of a module binding is known to the linker,
+               --  not to the compiler's image, which holds numbers; the
+               --  backend refused it as a defect.  It is a relocation the
+               --  freestanding vector tables of R6.60 will need.
+               if Taken /= Syn.No_Node then
+                  Bad.Report
+                    (Item    => Bad.Not_Known_At_Compile_Time,
+                     Source  => Syn.Source_Of (Of_Tree),
+                     Where   => Syn.Where (Of_Tree, Taken),
+                     Message => "a module value cannot hold the address of"
+                                & " storage in this compiler",
+                     Note    => "[1940]: a static address is a relocation"
+                                & " the backend does not emit yet; R6.60"
+                                & " owns the vector tables that need one",
+                     Into    => Found);
+                  Landin.Checking.Refuse (Types.all, Of_Tree, Value);
+                  return;
+               end if;
+            end;
          end if;
 
          if Value = Syn.No_Node or else Is_Known (Of_Tree, Value) then

@@ -4,3 +4,6 @@ program: program.ldn
 codes: L0301
 constructs: 0350, 1230, 1890
 targets: linux-x86-64, macos-arm64
+expect: expected.txt
+args: ../tests/fixtures/negative/any-comparison-refused/program.ldn
+status: 1

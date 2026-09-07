@@ -98,7 +98,7 @@ public used: (item: type is zeroable, fixed inline_slots: u32,
              -> (view: []mut item from value) =
     match value.store
         inline(inout values): view = values[0..<value.count]
-        spilled(values): view = mem.used(values.values)
+        spilled(values): view = vec.used(values)
     end match
 end used
 

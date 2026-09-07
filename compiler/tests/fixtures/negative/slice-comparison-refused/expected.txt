@@ -1,0 +1,10 @@
+error[L0301]: a comparison takes scalars, atoms, pointers and function values, not a slice
+  --> ../tests/fixtures/negative/slice-comparison-refused/program.ldn:2:9
+  |
+2 |     r = a == b
+  |         ^
+  --> ../tests/fixtures/negative/slice-comparison-refused/program.ldn:2:9
+  |
+2 |     r = a == b
+  |         ^^^^^^ the comparison here
+  = note: [1890]: `==` and its kin compare one register-sized value; a view or an aggregate has no equality of its own

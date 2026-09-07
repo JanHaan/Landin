@@ -1,0 +1,6 @@
+class: negative
+summary: [1940] a module value is a number the compiler holds; the address of storage is a relocation the backend does not emit yet, so it is refused by name rather than reaching the backend
+program: program.ldn
+codes: L0305
+constructs: 0430, 1940
+targets: linux-x86-64, macos-arm64
