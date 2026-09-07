@@ -1,0 +1,44 @@
+cell: type = struct
+    value: i32
+    sentinel: i32
+end cell
+choice: type = struct
+    kind: variant
+        zero | one
+    end kind
+end choice
+mut stored: cell = (value: 3, sentinel: 47)
+
+start: (inout value: i32) -> none =
+    value += 4
+end start
+selected_start: () -> none =
+    stored.value *= 3
+end selected_start
+
+public main: () -> (code: i32) =
+    start(stored.value)
+    selected_start()
+    first: i32 = begin
+        stored.value -= 2
+        stored.value
+    end
+    second: i32 = if true then
+        stored.value += 5
+        stored.value
+    else
+        stored.value += 100
+        stored.value
+    end if
+    item: choice = (kind: one)
+    match item.kind
+        zero: stored.value -= 1
+        one: stored.value *= 2
+    end match
+    if first == 19 and second == 24 and stored.value == 48
+      and stored.sentinel == 47 then
+        code = 42
+    else
+        code = 1
+    end if
+end main

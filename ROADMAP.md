@@ -3762,6 +3762,12 @@ arguments, once-only selected-callee evaluation, generic calls and the
 expression-body boundary; `negative/construction-is-not-call-statement`
 pins both ordinary and value-block refusals. Cleanup registration keeps its
 separately specified `call` grammar.
+The compound-statement boundary follow-up treats D165's compound assignment
+operators like `=` when distinguishing a statement from an expression at a
+function body, value-bearing block or direct match arm. It retains the existing
+assignment grammar and expression refusal. `runtime/compound-statement-boundaries`
+pins plain and selected destinations in all three positions, with computed
+values and an unchanged neighboring field.
 One independent defect remains owned here for a bounded repair: a local
 inferred from `erased.entry()` can query conformance provider entries before
 finalization, even without generics. Explicitly typed result locals allow the

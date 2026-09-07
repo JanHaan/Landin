@@ -893,6 +893,7 @@ runtime/checks-return-after-the-region | linux-x86-64
 runtime/comparisons-exit-with-their-verdict | linux-x86-64
 runtime/compound-assignment | linux-x86-64
 runtime/compound-assignment-overflow-traps | linux-x86-64
+runtime/compound-statement-boundaries | linux-x86-64
 runtime/computed-aggregate-elements | linux-x86-64
 runtime/computed-array-index-reads-and-writes | linux-x86-64
 runtime/computed-array-index-traps | linux-x86-64
