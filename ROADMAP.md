@@ -4216,6 +4216,45 @@ through a pointer, and a later propagated failure that prevents both the call
 and following statement. Dispatch, source evaluation order, termination and
 origin rules are unchanged.
 
+The hosted-world increment applies D146 directly to `core/io.world`: every
+entry receives an exact self pointer, the system conformance works through
+`any world`, and generic wrappers remain for statically known providers. The
+private system value stores the actual `argv + 1` table and bounded user count;
+capability-aware indexed bridge lookup takes that table explicitly, so
+`argument from self` is a real source-derived contract shared with the
+caller-backed memory provider, not an annotation over hidden global storage.
+Its distinct symbol leaves the established one-index foreign helper unchanged.
+The public argument remains the
+bounded pointer-and-length descriptor already used by hosted clients. It does
+not become `cstring` merely because the system instance happens to point into
+C argument backing, and no integer-created pointer is used to fabricate its
+origin.
+
+Write-open is the narrow libc bridge for `O_WRONLY | O_CREAT | O_TRUNC` with
+mode `0666` and the process umask. Both opens distinguish `ENOENT`,
+`EPERM`/`EACCES`/`EROFS` and other failures. Writes iterate with bounded stack until
+the offered slice is complete and reject zero progress, the failure sentinel
+or an oversized host count. Public `open_read_text`/`open_write_text` obtain a
+byte view through `core/text`, then share the byte adapters that validate empty
+input, embedded NUL and caller scratch capacity
+before copying or appending the terminator; there is no allocator or silent
+truncation. D133 gives cleanup precedence: a close failure is `io_failed` on
+an otherwise successful path but cannot replace an already propagating atom
+when close runs as `undo`.
+
+`core/diag.streaming` now retains a pointer to an erased world and a borrowed
+file, so delivery is provider-independent while both retained addresses keep
+their ordinary origin obligations. The derived parser and logger dispatch
+clients use the same dynamic route. `runtime/core-io-erased-system` covers the
+argument boundary, EOF, read/write open, exact output, empty writes, missing
+and denied paths, `/dev/full`, close and byte/UTF-8 path validation. The scoped
+`negative/core-io-*` and `negative/core-diag-frame-world-escape` cases retain
+receiver permission, sink consumption and logger retention refusals. The
+separately recorded erased-recovery staging and erased-argument address-save
+repairs are prerequisites, not I/O-specific compiler behavior. Deterministic
+short-write schedules, in-memory handles and output ownership remain the
+following memory-world increment.
+
 D196 settles D191's inherited construct rows. [0500]'s `mem.offset` and
 `mem.base_of` are unneeded conveniences for this slice: existing [0470]
 address conversion and checked element addressing serve their actual callers.

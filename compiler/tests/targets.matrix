@@ -115,8 +115,11 @@ negative/control-expression-function-signature-mismatch | linux-x86-64, macos-ar
 negative/control-result-field-name-mismatch | linux-x86-64, macos-arm64, synthetic-32
 negative/core-arena-frame-escape | linux-x86-64, macos-arm64, synthetic-32
 negative/core-diag-frame-message-escape | linux-x86-64, macos-arm64, synthetic-32
+negative/core-diag-frame-world-escape | linux-x86-64, macos-arm64, synthetic-32
 negative/core-failing-frame-escape | linux-x86-64, macos-arm64, synthetic-32
 negative/core-failing-needs-mutable-inner | linux-x86-64, macos-arm64, synthetic-32
+negative/core-io-file-use-after-close | linux-x86-64, macos-arm64, synthetic-32
+negative/core-io-world-readonly-receiver | linux-x86-64, macos-arm64, synthetic-32
 negative/core-map-key-frame-escape | linux-x86-64, macos-arm64, synthetic-32
 negative/core-map-missing-parent-conformance | linux-x86-64, macos-arm64, synthetic-32
 negative/core-map-value-frame-escape | linux-x86-64, macos-arm64, synthetic-32
@@ -955,6 +958,7 @@ runtime/control-expression-aggregate-joins | linux-x86-64
 runtime/control-expression-edges-keep-source-order | linux-x86-64
 runtime/control-expression-function-values | linux-x86-64
 runtime/copy-before-sink-remains-live | linux-x86-64
+runtime/core-io-erased-system | linux-x86-64
 runtime/core-mem-allocators | linux-x86-64
 runtime/core-mem-arena-boundaries | linux-x86-64
 runtime/core-mem-initialized-objects | linux-x86-64

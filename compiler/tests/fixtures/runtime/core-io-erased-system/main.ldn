@@ -1,0 +1,346 @@
+import core/io
+
+path_rules_code: () -> (code: i32) =
+    code = 10
+    mut scratch: [4]u8 = [91, 92, 93, 94]
+    empty: [1]u8 = [65]
+    mut empty_path: ptr u8 = addr scratch[0]
+    empty_path = io.terminate_path(empty[0..<0], scratch[0..<4])
+      else (problem)
+        if problem <> io.empty_path or scratch[0] <> 91
+          or scratch[1] <> 92 or scratch[2] <> 93 or scratch[3] <> 94
+        then
+            return
+        end if
+    end
+    _ = empty_path
+    code = 11
+
+    with_nul: [3]u8 = [65, 0, 66]
+    mut nul_path: ptr u8 = addr scratch[0]
+    nul_path = io.terminate_path(with_nul[0..<3], scratch[0..<4])
+      else (problem)
+        if problem <> io.path_contains_nul or scratch[0] <> 91
+          or scratch[1] <> 92 or scratch[2] <> 93 or scratch[3] <> 94
+        then
+            return
+        end if
+    end
+    _ = nul_path
+    code = 12
+
+    too_wide: [2]u8 = [65, 66]
+    mut short_scratch: [2]u8 = [81, 82]
+    mut long_path: ptr u8 = addr short_scratch[0]
+    long_path = io.terminate_path(too_wide[0..<2], short_scratch[0..<2])
+      else (problem)
+        if problem <> io.path_too_long or short_scratch[0] <> 81
+          or short_scratch[1] <> 82
+        then
+            return
+        end if
+    end
+    _ = long_path
+    code = 13
+
+    mut exact_scratch: [3]u8 = [71, 72, 73]
+    exact: ptr u8 = io.terminate_path(too_wide[0..<2],
+                                      exact_scratch[0..<3])
+      else (problem)
+        _ = problem
+        return
+    end
+    if exact <> addr exact_scratch[0] or exact_scratch[0] <> 65
+      or exact_scratch[1] <> 66 or exact_scratch[2] <> 0
+    then
+        return
+    end if
+    code = 42
+end path_rules_code
+
+text_path_rules_code: (inout state: io.system) -> (code: i32) =
+    mut scratch: [4]u8 = [91, 92, 93, 94]
+    mut opened: io.file = io.out(state)
+    code = 32
+    opened = io.open_read_text(state, "", scratch[0..<4]) else (problem)
+        if problem <> io.empty_path or scratch[0] <> 91
+          or scratch[1] <> 92 or scratch[2] <> 93 or scratch[3] <> 94
+        then
+            return
+        end if
+        code = 33
+        io.out(state)
+    end
+    if code <> 33 then
+        return
+    end if
+
+    opened = io.open_read_text(state, "A\u{0}B", scratch[0..<4])
+      else (problem)
+        if problem <> io.path_contains_nul or scratch[0] <> 91
+          or scratch[1] <> 92 or scratch[2] <> 93 or scratch[3] <> 94
+        then
+            return
+        end if
+        code = 34
+        io.out(state)
+    end
+    if code <> 34 then
+        return
+    end if
+
+    opened = io.open_read_text(state, "ABCD", scratch[0..<4])
+      else (problem)
+        if problem <> io.path_too_long or scratch[0] <> 91
+          or scratch[1] <> 92 or scratch[2] <> 93 or scratch[3] <> 94
+        then
+            return
+        end if
+        code = 42
+        io.out(state)
+    end
+end text_path_rules_code
+
+no_second_argument: (state: any io.world) -> (yes: bool) =
+    second: usize = 1
+    unexpected := state.argument(second) else (problem)
+        yes = problem == io.no_argument
+        return
+    end
+    _ = unexpected.length
+    yes = false
+end no_second_argument
+
+missing_read_is_reported: (state: any io.world, path: ptr u8)
+                          -> (yes: bool) =
+    opened := state.open_read(path) else (problem)
+        yes = problem == io.not_found
+        return
+    end
+    state.close(opened) else (problem)
+        _ = problem
+    end
+    yes = false
+end missing_read_is_reported
+
+missing_write_is_reported: (state: any io.world, path: ptr u8)
+                           -> (yes: bool) =
+    opened := state.open_write(path) else (problem)
+        yes = problem == io.not_found
+        return
+    end
+    state.close(opened) else (problem)
+        _ = problem
+    end
+    yes = false
+end missing_write_is_reported
+
+denied_write_is_reported: (state: any io.world, path: ptr u8)
+                          -> (yes: bool) =
+    opened := state.open_write(path) else (problem)
+        yes = problem == io.no_access
+        return
+    end
+    state.close(opened) else (problem)
+        _ = problem
+    end
+    yes = false
+end denied_write_is_reported
+
+public main: () -> (code: i32) =
+    code = 1
+    path_code: i32 = path_rules_code()
+    if path_code <> 42 then
+        code = path_code
+        return
+    end if
+
+    mut host := io.host()
+    code = 2
+    if io.argument_count(host) <> 1 then
+        return
+    end if
+    source_state: ptr io.system = addr host
+    direct_index: usize = 0
+    direct_source := io.argument_at(source_state, direct_index) else (problem)
+        _ = problem
+        return
+    end
+    code = 3
+    if direct_source.length == 0 then
+        return
+    end if
+    text_path_code: i32 = text_path_rules_code(host)
+    if text_path_code <> 42 then
+        code = text_path_code
+        return
+    end if
+    mut world: any io.world = any(addr host)
+    code = 4
+    if world.argument_count() <> 1 then
+        return
+    end if
+
+    code = 5
+    first: usize = 0
+    source := world.argument(first) else (problem)
+        _ = problem
+        return
+    end
+    code = 6
+    if source.length == 0 then
+        return
+    end if
+    return when not no_second_argument(world)
+    code = 7
+
+    opened := world.open_read(source.data) else (problem)
+        _ = problem
+        return
+    end
+    code = 8
+    mut copied_opened: io.file = opened
+    mut input: [13]u8 = zeroed
+    count: usize = world.read(opened, input[0..<13]) else (problem)
+        _ = problem
+        return
+    end
+    code = 9
+    if count <> 13 or input[0] <> 112 or input[6] <> 32
+      or input[12] <> 10
+    then
+        return
+    end if
+    code = 14
+    eof: usize = world.read(opened, input[0..<13]) else (problem)
+        _ = problem
+        return
+    end
+    if eof <> 0 then
+        return
+    end if
+    code = 15
+    world.close(opened) else (problem)
+        _ = problem
+        return
+    end
+    code = 16
+    world.close(copied_opened) else (problem)
+        if problem <> io.io_failed then
+            return
+        end if
+        copied_opened = world.out()
+    end
+    code = 17
+
+    mut generic_host := io.host()
+    mut path_scratch: [30]u8 = zeroed
+    code = 18
+    output := io.open_write_text(generic_host,
+                                 "/tmp/landin-r420-io-world.out",
+                                 path_scratch[0..<30]) else (problem)
+        _ = problem
+        return
+    end
+    code = 19
+    payload: [7]u8 = [76, 97, 110, 100, 105, 110, 10]
+    world.write(output, payload[0..<0]) else (problem)
+        _ = problem
+        return
+    end
+    world.write(output, payload[0..<7]) else (problem)
+        _ = problem
+        return
+    end
+    code = 20
+    world.close(output) else (problem)
+        _ = problem
+        return
+    end
+    code = 21
+
+    mut second_scratch: [30]u8 = zeroed
+    verify := io.open_read_text(generic_host,
+                                "/tmp/landin-r420-io-world.out",
+                                second_scratch[0..<30]) else (problem)
+        _ = problem
+        return
+    end
+    code = 22
+    mut result: [8]u8 = zeroed
+    result_length: usize = io.read(generic_host, verify, result[0..<8])
+      else (problem)
+        _ = problem
+        return
+    end
+    code = 23
+    io.close(generic_host, verify) else (problem)
+        _ = problem
+        return
+    end
+    code = 24
+    if result_length <> 7 or result[0] <> 76 or result[1] <> 97
+      or result[2] <> 110 or result[3] <> 100 or result[4] <> 105
+      or result[5] <> 110 or result[6] <> 10
+    then
+        return
+    end if
+    code = 25
+
+    missing: [45]u8 =
+        [47, 100, 101, 102, 105, 110, 105, 116, 101, 108, 121, 45,
+         110, 111, 116, 45, 97, 45, 108, 97, 110, 100, 105, 110, 45,
+         100, 105, 114, 101, 99, 116, 111, 114, 121, 45, 114, 52, 50,
+         48, 47, 102, 105, 108, 101, 0]
+    missing_path: ptr u8 = addr missing[0]
+    return when not missing_read_is_reported(world, missing_path)
+    code = 26
+    return when not missing_write_is_reported(world, missing_path)
+    code = 27
+
+    denied: [24]u8 =
+        [47, 115, 121, 115, 47, 108, 97, 110, 100, 105, 110, 45,
+         114, 52, 50, 48, 45, 100, 101, 110, 105, 101, 100, 0]
+    denied_path: ptr u8 = addr denied[0]
+    return when not denied_write_is_reported(world, denied_path)
+    code = 28
+
+    full_name: [10]u8 = [47, 100, 101, 118, 47, 102, 117, 108, 108, 0]
+    full_path: ptr u8 = addr full_name[0]
+    full := world.open_write(full_path) else (problem)
+        _ = problem
+        return
+    end
+    code = 29
+    world.write(full, payload[0..<0]) else (problem)
+        _ = problem
+        return
+    end
+    mut saw_write_failure: bool = false
+    world.write(full, payload[0..<7]) else (problem)
+        if problem <> io.io_failed then
+            return
+        end if
+        saw_write_failure = true
+    end
+    return when not saw_write_failure
+    code = 30
+    world.close(full) else (problem)
+        _ = problem
+        return
+    end
+    code = 31
+
+    output_stream := world.out()
+    error_stream := world.err()
+    world.write(error_stream, payload[0..<0]) else (problem)
+        _ = problem
+        return
+    end
+    okay: [3]u8 = [79, 75, 10]
+    world.write(output_stream, okay[0..<3]) else (problem)
+        _ = problem
+        return
+    end
+    code = 42
+end main

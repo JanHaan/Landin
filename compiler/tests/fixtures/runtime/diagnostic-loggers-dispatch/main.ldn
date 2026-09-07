@@ -75,7 +75,8 @@ public main: () -> (code: i32) =
 
     mut host := io.host()
     diagnostic_stream := io.err(host)
-    mut immediate := diag.to(addr host, addr diagnostic_stream)
+    world: any io.world = any(addr host)
+    mut immediate := diag.to(addr world, addr diagnostic_stream)
     mut streaming_log: any diag.log = any(addr immediate)
     emit_notes(streaming_log) else (unexpected_stream_failure)
         _ = unexpected_stream_failure
@@ -98,21 +99,23 @@ public main: () -> (code: i32) =
     end if
 
     first_argument: usize = 0
-    path := io.argument_at(host, first_argument) else (argument_failure)
+    argument_source: ptr io.system = addr host
+    path := io.argument_at(argument_source, first_argument)
+      else (argument_failure)
         _ = argument_failure
         return
     end
-    opened := io.open_read(host, path.data) else (open_failure)
+    opened := world.open_read(path.data) else (open_failure)
         _ = open_failure
         return
     end
     dead_stream: io.file = opened
-    io.close(host, opened) else (close_failure)
+    world.close(opened) else (close_failure)
         _ = close_failure
         return
     end
 
-    mut broken := diag.to(addr host, addr dead_stream)
+    mut broken := diag.to(addr world, addr dead_stream)
     mut broken_log: any diag.log = any(addr broken)
     broken_log.note(text.first(message_a[0..<2]), diag.error,
                     message_a[0..<2])

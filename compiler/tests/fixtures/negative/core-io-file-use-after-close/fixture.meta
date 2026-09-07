@@ -1,0 +1,8 @@
+class: negative
+summary: closing a file consumes that named handle place
+expect: expected.txt
+args: --root=../.. ../tests/fixtures/negative/core-io-file-use-after-close
+codes: L0302
+status: 1
+constructs: 0520, 0570, 0770, 0910, 0960, 1030, 1290, 1660, 1680, 1810, 1975
+targets: linux-x86-64, macos-arm64, synthetic-32

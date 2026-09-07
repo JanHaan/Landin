@@ -1,0 +1,8 @@
+class: negative
+summary: a read-only system pointer cannot expose the mutable world entries
+expect: expected.txt
+args: --root=../.. ../tests/fixtures/negative/core-io-world-readonly-receiver
+codes: L0301
+status: 1
+constructs: 0430, 1230, 1240, 1370, 1380, 1660, 1680, 1975
+targets: linux-x86-64, macos-arm64, synthetic-32

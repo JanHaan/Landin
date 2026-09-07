@@ -1,21 +1,22 @@
 import core/io
 
 public main: () -> (code: i32) =
-    mut host := io.host()
+    argument_host := io.host()
     fail_code: i32 = 1
 
-    if io.argument_count(host) <> 1 then
+    if io.argument_count(argument_host) <> 1 then
         code = fail_code
         return
     end if
 
     first: usize = 0
-    source := io.argument_at(host, first) else (argument_problem)
+    source := io.argument_at(addr argument_host, first) else (argument_problem)
         _ = argument_problem
         code = fail_code
         return
     end
 
+    mut host := io.host()
     opened := io.open_read(host, source.data) else (open_problem)
         _ = open_problem
         code = fail_code

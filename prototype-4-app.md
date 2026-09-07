@@ -617,6 +617,19 @@ test_drops_debug_lines: () -> none =
     end scratch
 end test_drops_debug_lines
 ```
+
+The bounded R4.20 executable slice keeps this sketch's provider distinction but
+uses D146's exact object-safe receiver shape: every `world` entry starts with a
+`ptr H` or `ptr mut H`, and both system and memory providers may travel through
+`any world`. The system provider retains the actual host argument table and
+returns each pointer-and-length argument view from itself, excluding `argv[0]`;
+an in-memory provider returns its caller-supplied argument backing under the
+same origin contract. Dynamic UTF-8 paths are converted to bytes and copied
+into explicit caller scratch with a checked trailing NUL, never a hidden
+allocation or truncation. `diag.streaming` retains a pointer to the erased
+world and a borrowed stream rather than naming the system provider. The
+historical sketches and findings below retain their original spelling.
+
 The arena is a block, so its extent is exact and everything the
 program allocated dies with it [0820]. Hosted, that is the same
 moment the process exits, so the block is bookkeeping rather than

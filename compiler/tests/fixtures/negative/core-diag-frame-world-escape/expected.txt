@@ -1,0 +1,10 @@
+error[L0314]: this frame-origin reference cannot be retained beyond the call
+  --> ../tests/fixtures/negative/core-diag-frame-world-escape/main.ldn:12:12
+   |
+12 |     retain(logger)
+   |            ^^^^^^
+  --> ../tests/fixtures/negative/core-diag-frame-world-escape/main.ldn:9:5
+  |
+9 |     world: any io.world = any(addr host)
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the shorter-lived reference source
+  = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`

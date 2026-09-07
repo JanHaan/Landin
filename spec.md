@@ -1315,15 +1315,17 @@ thread-local state, foreign ownership and generated bindings—belongs to R4.40.
 
 On the first Linux x86-64 hosted path, the executable's selected no-argument
 Landin entry captures the incoming C `argc` and `argv` before its body runs.
-The repository-owned runtime bridge exposes user arguments (excluding
-`argv[0]`) and fixed wrappers for `strlen`, read-only `open`, `read`, `write`,
-`close`, `errno`, and hosted heap allocation and release; those wrappers call
-libc. This is a compiler/runtime ABI used by `core/io` and `core/heap`, not a
-set of privileged language operations. `core/io`
-turns descriptors and argument views into ordinary values, maps foreseeable
-host failures onto declared atoms, and threads its `world(provider)` concept
-as the authority for opening files and touching streams [1660] [1680]. Direct
-Linux syscalls are not part of this route.
+The repository-owned runtime bridge exposes the user-argument table beginning
+after `argv[0]`, its bounded count, an indexed pointer derived from that table,
+retains the established one-index compatibility helper, and provides fixed
+wrappers for `strlen`, read-only and write-create-truncate `open`,
+`read`, `write`, `close`, `errno`, and hosted heap allocation and release;
+those wrappers call libc. This is a compiler/runtime ABI used by `core/io` and
+`core/heap`, not a set of privileged language operations. `core/io` turns
+descriptors and pointer-and-length argument views into ordinary values, maps
+foreseeable host failures onto declared atoms, and threads its
+`world(provider)` concept as the authority for opening files and touching
+streams [1660] [1680]. Direct Linux syscalls are not part of this route.
 
 ### [1980] Declared errors are an orthogonal payload-free atom outcome
 
@@ -8716,8 +8718,8 @@ classified failure boundary before the repository gate can pass.
 | `functions.abi` | static | 0870, 0880, 0890, 0900, 0920, 0930, 0980, 1000, 1020, 1030, 1460, 1920, 1970 | L0301, L0302 or L0502 | `negative/call-with-too-few-arguments`, `runtime/r230-composition` |
 | `functions.caller` | static | 0670, 0790, 1000, 1040, 1800, 1920 | caller positions have immutable three-u32 struct values (file_id, line, column) and structural signature identity, are compiler-filled without source strings, and accept an explicit argument only as a named forwarding of another caller parameter; L0301 rejects every other type, position or source and L0303 rejects mutation, and `caller` decided on two tokens leaves the spelling an ordinary name | `negative/caller-parameter-extra-field`, `negative/caller-parameter-field-order`, `negative/caller-parameter-field-width`, `negative/caller-parameter-read-only`, `negative/caller-parameter-forward-copy`, `negative/caller-parameter-forward-needs-caller`, `negative/caller-parameter-needs-site`, `negative/caller-parameter-positional`, `negative/caller-parameter-signature-mismatch`, `runtime/caller-parameters`, `runtime/caller-is-an-ordinary-name` |
 | `extern.c-boundary` | static | 0430, 1570, 1580, 1975 | L0301 for a signature outside R3.50's fixed integer/bool/pointer subset | `positive/external-scalar-c-boundary`, `negative/external-aggregate-boundary`, `negative/external-float-abi-not-enabled` |
-| `host.io` | outside | 0430, 1580, 1650, 1660, 1680, 1975 | non-guarantee: files, descriptors, arguments and streams reflect mutable host state | `runtime/hosted-io-reads-parser-input`, `runtime/derived-parser` |
-| `host.io-failure` | static | 0940, 0960, 1030, 1975 | `core/io` reports foreseeable host failure as declared atoms which callers handle or declare | `runtime/hosted-io-reads-parser-input`, `runtime/diagnostic-loggers-dispatch`, `runtime/derived-parser` |
+| `host.io` | outside | 0430, 1580, 1650, 1660, 1680, 1975 | non-guarantee: files, descriptors, arguments and streams reflect mutable host state | `runtime/hosted-io-reads-parser-input`, `runtime/core-io-erased-system`, `runtime/derived-parser` |
+| `host.io-failure` | static | 0940, 0960, 1030, 1975 | `core/io` reports foreseeable host failure as declared atoms which callers handle or declare | `runtime/hosted-io-reads-parser-input`, `runtime/core-io-erased-system`, `runtime/diagnostic-loggers-dispatch`, `runtime/derived-parser` |
 | `diagnostics.retention` | outside | 0950, 1680 | non-guarantee: `core/diag.bounded(N)` retains at most N notes and reports every later note through its `dropped` count instead | `runtime/diagnostic-loggers-dispatch`, `runtime/derived-parser` |
 | `diagnostics.delivery-failure` | static | 0940, 0960, 0950, 1030, 1680 | a streaming diagnostic write reports `io_failed`, which a caller must handle or declare; bounded overflow does not use that channel | `runtime/diagnostic-loggers-dispatch`, `runtime/derived-parser` |
 | `execution.resource-exhaustion` | outside | 0950, 1770, 1970 | non-guarantee: the kernel sets no recursion-depth, stack, or host-resource bound | `runtime/recursive-fibonacci` |
@@ -9037,21 +9039,51 @@ foreign surface must become executable before the complete C work.
 `extern(c)` declarations for fixed scalar/pointer signatures and carries them
 as signature-only IR routines. The Linux backend captures entry `argc` and
 `argv`, then emits a small fixed bridge whose implementations tail-call libc
-for arguments, text length, read-only open, file read/write/close and errno.
-`core/io` alone declares that bridge and turns it into a `world(provider)`
-capability, an opaque file value, a public pointer-and-length argument view,
-standard output/error descriptors and declared host-failure atoms. The system
-provider is ordinary conformance evidence; generic callers do not know which
-provider they received.
+for argument length, read-only and write-create-truncate open, file
+read/write/close and errno. One bridge entry publishes `argv + 1`; the private
+system provider stores that actual table capability and `max(argc - 1, 0)`.
+The capability-aware indexed lookup has a distinct symbol, receives the stored
+table explicitly and returns its pointer `from` that table; the existing
+one-index helper remains unchanged for earlier foreign-boundary fixtures. The
+`world.argument` entry in turn returns its public
+pointer-and-length descriptor `from self`. Thus an in-memory provider may
+return caller backing under the same contract, while the system provider does
+not disguise a source-free global pointer with a false origin annotation.
+
+Every `world` entry has D146's exact first `self` pointer. Open, close, read and
+write use `ptr mut provider`; standard streams, argument count and argument
+lookup use `ptr provider`. The system provider is ordinary composed conformance
+evidence and may be erased behind `any world`; generic wrappers retain the
+same operations for statically known providers. A read-only provider pointer
+cannot construct an erased world containing the mutable entries. The opaque
+file value remains one scalar descriptor whose interpretation belongs to its
+provider; `sink` on close consumes only the named handle place, so an earlier
+copy can still attempt a second close.
 
 The bridge uses libc rather than direct syscalls because the hosted executable
 already uses the C runtime and libc supplies the smallest stable host contract
 for this workload. File descriptors remain private library representation.
 Arguments exclude `argv[0]`; a runtime fixture's new `run_args` metadata pins
 the distinction. Reads expose EOF as count zero and host failure as
-`io_failed`; writes complete the requested slice or fail. `open_read` maps
-Linux libc `ENOENT` to `not_found`, `EACCES` to `no_access`, and every other
-failure to `io_failed`.
+`io_failed`. Writes use bounded-stack iteration until the complete slice has
+been accepted; zero progress, the host failure sentinel, or a count larger
+than the offered remainder is `io_failed`. An empty write succeeds without a
+host call. `open_read` and `open_write` map Linux libc `ENOENT` to `not_found`,
+`EPERM`, `EACCES` or `EROFS` to `no_access`, and every other failure to `io_failed`.
+`open_write` supplies `O_WRONLY | O_CREAT | O_TRUNC` and mode `0666`, subject
+to the process umask.
+
+The pointer-path entries require an already NUL-terminated path. The ordinary
+dynamic adapters take a byte view plus caller-owned writable scratch, reject
+an empty view, an embedded NUL, or scratch without one extra terminator byte
+in that order, and copy nothing before all three checks pass. No path is
+silently truncated and no hidden allocator is consulted. Public
+`open_read_text` and `open_write_text` obtain that byte view through
+`core/text` and use the same byte adapters and termination helper.
+Close maps a nonzero libc result to `io_failed`. On an otherwise successful
+path that failure is observable; when close is a reached `undo` while another
+declared failure is already propagating, D133 preserves the primary atom and
+cleanup cannot replace it.
 
 The backend's calls to `strlen`, `open`, `read`, `write`, `close` and
 `__errno_location` are private runtime dependencies, not names reserved from
@@ -9078,8 +9110,10 @@ capability without changing its callers.
 
 **Pinned by** `positive/external-scalar-c-boundary`,
 `negative/external-aggregate-boundary`,
-`runtime/hosted-io-reads-parser-input`, `runtime/derived-parser`, the rooted
-fixture execution path, and
+`negative/core-io-world-readonly-receiver`,
+`negative/core-io-file-use-after-close`,
+`runtime/hosted-io-reads-parser-input`, `runtime/core-io-erased-system`,
+`runtime/derived-parser`, the rooted fixture execution path, and
 the `host.io`, `host.io-failure` and `extern.c-boundary` guarantee rows.
 
 ### D154 — Diagnostics separate retention from delivery failure
@@ -9110,12 +9144,15 @@ The `escaping` parameter prevents a frame-backed slice at the capability
 boundary; explicit integer-pointer conversion remains subject to [0470]'s
 honest validity limit.
 
-`streaming` retains a mutable `core/io.system` pointer and a borrowed file. It
-writes `W:` or `E:`, the decimal byte position, `:`, and the message bytes as the
-note arrives. Each write propagates `io_failed`; the error count is updated
-before delivery is attempted, so `failed` describes what the logger received
-rather than what the host accepted. Both implementations receive the same
-ordered calls in the executable evidence.
+`streaming` retains a pointer to an erased `core/io.world` and a borrowed file,
+not a system-provider pointer. Its construction result derives from both
+stored addresses, so neither frame-local world-pair storage nor frame-local
+stream storage may escape through it. It writes `W:` or `E:`, the decimal byte
+position, `:`, and the message bytes as the note arrives through ordinary
+dynamic world dispatch. Each write propagates `io_failed`; the error count is
+updated before delivery is attempted, so `failed` describes what the logger
+received rather than what the selected provider accepted. Both logger
+implementations receive the same ordered calls in the executable evidence.
 
 The implementation pressure also closes two existing representation seams. A
 fixed formal used in a generic routine body is D138's per-instance constant and
@@ -9132,7 +9169,8 @@ to [1310]. Retaining arbitrary frame bytes behind an origin-erasing address was
 also declined; `escaping` states the lifetime consequence at the call.
 
 **Pinned by** `runtime/diagnostic-loggers-dispatch`,
-`negative/core-diag-frame-message-escape`, the parameterized and erased
+`negative/core-diag-frame-message-escape`,
+`negative/core-diag-frame-world-escape`, the parameterized and erased
 conformance registers, the `diagnostics.retention`,
 `diagnostics.delivery-failure`, `origins.escape`, `pointer.integer-origin` and
 `host.io-failure` guarantee rows, and the rooted fixture execution path's

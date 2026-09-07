@@ -1,0 +1,8 @@
+class: negative
+summary: a streaming logger cannot retain frame-local world and stream storage
+expect: expected.txt
+args: --root=../.. ../tests/fixtures/negative/core-diag-frame-world-escape
+codes: L0314
+status: 1
+constructs: 0770, 0780, 0840, 1230, 1370, 1380, 1660, 1680
+targets: linux-x86-64, macos-arm64, synthetic-32

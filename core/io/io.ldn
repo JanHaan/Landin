@@ -1,11 +1,16 @@
---  R3.50's Linux hosted service layer.  The foreign declarations are the
+--  R4.20's Linux hosted service layer.  The foreign declarations are the
 --  compiler/runtime seam: fixed scalar and pointer carriers only.  Files and
 --  streams above it remain ordinary values reached through a world capability.
 
+import core/text
+
 extern(c) _landin_host_argument_count: () -> (count: usize)
-extern(c) _landin_host_argument_at: (index: usize) -> (data: ptr u8)
+extern(c) _landin_host_argument_table: () -> (table: ptr ptr u8)
+extern(c) _landin_host_argument_at_from: (table: ptr ptr u8, index: usize)
+                                          -> (data: ptr u8 from table)
 extern(c) _landin_host_text_length: (data: ptr u8) -> (length: usize)
 extern(c) _landin_host_open_read: (path: ptr u8) -> (descriptor: i32)
+extern(c) _landin_host_open_write: (path: ptr u8) -> (descriptor: i32)
 extern(c) _landin_host_read: (descriptor: i32, data: ptr mut u8,
                               length: usize) -> (read_count: usize)
 extern(c) _landin_host_write: (descriptor: i32, data: ptr u8,
@@ -17,6 +22,9 @@ public not_found: atom
 public no_access: atom
 public io_failed: atom
 public no_argument: atom
+public empty_path: atom
+public path_contains_nul: atom
+public path_too_long: atom
 
 file_value: type = struct
     descriptor: i32
@@ -30,88 +38,177 @@ public argument: type = struct
 end argument
 
 public world: type = concept (provider: type)
-    open_read: (inout state: provider, path: ptr u8)
+    open_read: (self: ptr mut provider, path: ptr u8)
                -> (opened: file) ! not_found | no_access | io_failed
-    close: (inout state: provider, sink opened: file)
+    open_write: (self: ptr mut provider, path: ptr u8)
+                -> (opened: file) ! not_found | no_access | io_failed
+    close: (self: ptr mut provider, sink opened: file)
            -> none ! io_failed
-    read: (inout state: provider, opened: file, into: []mut u8)
+    read: (self: ptr mut provider, opened: file, into: []mut u8)
           -> (count: usize) ! io_failed
-    write: (inout state: provider, opened: file, bytes: []u8)
+    write: (self: ptr mut provider, opened: file, bytes: []u8)
            -> none ! io_failed
-    out: (state: provider) -> (stream: file)
-    err: (state: provider) -> (stream: file)
-    argument_count: (state: provider) -> (count: usize)
-    argument: (state: provider, index: usize)
-              -> (value: argument) ! no_argument
+    out: (self: ptr provider) -> (stream: file)
+    err: (self: ptr provider) -> (stream: file)
+    argument_count: (self: ptr provider) -> (count: usize)
+    argument: (self: ptr provider, index: usize)
+              -> (value: argument from self) ! no_argument
 end world
 
 public open_read: (provider: type is world, inout state: provider,
                    path: ptr u8)
                   -> (opened: file) ! not_found | no_access | io_failed =
-    opened = try provider.open_read(state, path)
+    opened = try provider.open_read(addr state, path)
 end open_read
+
+public open_write: (provider: type is world, inout state: provider,
+                    path: ptr u8)
+                   -> (opened: file) ! not_found | no_access | io_failed =
+    opened = try provider.open_write(addr state, path)
+end open_write
 
 public close: (provider: type is world, inout state: provider,
                sink opened: file) -> none ! io_failed =
-    try provider.close(state, opened)
+    try provider.close(addr state, opened)
 end close
 
 public read: (provider: type is world, inout state: provider,
               opened: file, into: []mut u8)
              -> (count: usize) ! io_failed =
-    count = try provider.read(state, opened, into)
+    count = try provider.read(addr state, opened, into)
 end read
 
 public write: (provider: type is world, inout state: provider,
                opened: file, bytes: []u8) -> none ! io_failed =
-    try provider.write(state, opened, bytes)
+    try provider.write(addr state, opened, bytes)
 end write
 
 public out: (provider: type is world, state: provider) -> (stream: file) =
-    stream = provider.out(state)
+    stream = provider.out(addr state)
 end out
 
 public err: (provider: type is world, state: provider) -> (stream: file) =
-    stream = provider.err(state)
+    stream = provider.err(addr state)
 end err
 
 public argument_count: (provider: type is world, state: provider)
                        -> (count: usize) =
-    count = provider.argument_count(state)
+    count = provider.argument_count(addr state)
 end argument_count
 
-public argument_at: (provider: type is world, state: provider, index: usize)
-                    -> (value: argument) ! no_argument =
+public argument_at: (provider: type is world, state: ptr provider,
+                     index: usize)
+                    -> (value: argument from state) ! no_argument =
     value = try provider.argument(state, index)
 end argument_at
 
-public system: type = struct
-    reserved: u8
-end system
+--  A world entry receives one already terminated pointer. Dynamic callers
+--  make that precondition explicit with caller-owned scratch: empty input,
+--  an embedded NUL, and insufficient terminator capacity are distinct and
+--  checked in that order. No byte is copied before all checks pass.
+public terminate_path: (source: []u8, scratch: []mut u8)
+                       -> (path: ptr u8 from scratch)
+                       ! empty_path | path_contains_nul | path_too_long =
+    fail empty_path when lenof source == 0
+    mut checked: usize = 0
+    while checked < lenof source do
+        fail path_contains_nul when source[checked] == 0
+        inc checked
+    end while
+    fail path_too_long when lenof source >= lenof scratch
 
-system_open_read: (inout state: system, path: ptr u8)
+    mut copied: usize = 0
+    while copied < lenof source do
+        scratch[copied] = source[copied]
+        inc copied
+    end while
+    scratch[lenof source] = 0
+    path = addr scratch[0]
+end terminate_path
+
+public open_read_bytes: (provider: type is world, inout state: provider,
+                         path: []u8, scratch: []mut u8)
+                        -> (opened: file)
+                        ! empty_path | path_contains_nul | path_too_long
+                        | not_found | no_access | io_failed =
+    terminated: ptr u8 = try terminate_path(path, scratch)
+    opened = try open_read(state, terminated)
+end open_read_bytes
+
+public open_write_bytes: (provider: type is world, inout state: provider,
+                          path: []u8, scratch: []mut u8)
+                         -> (opened: file)
+                         ! empty_path | path_contains_nul | path_too_long
+                         | not_found | no_access | io_failed =
+    terminated: ptr u8 = try terminate_path(path, scratch)
+    opened = try open_write(state, terminated)
+end open_write_bytes
+
+--  UTF-8 paths remain ordinary immutable, source-derived views.  Conversion
+--  to bytes does not allocate or invent a terminator; the same caller-owned
+--  scratch and validation policy as the byte adapters applies.
+public open_read_text: (provider: type is world, inout state: provider,
+                        path: utf8, scratch: []mut u8)
+                       -> (opened: file)
+                       ! empty_path | path_contains_nul | path_too_long
+                       | not_found | no_access | io_failed =
+    raw: []u8 = text.bytes(path)
+    opened = try open_read_bytes(state, raw, scratch)
+end open_read_text
+
+public open_write_text: (provider: type is world, inout state: provider,
+                         path: utf8, scratch: []mut u8)
+                        -> (opened: file)
+                        ! empty_path | path_contains_nul | path_too_long
+                        | not_found | no_access | io_failed =
+    raw: []u8 = text.bytes(path)
+    opened = try open_write_bytes(state, raw, scratch)
+end open_write_text
+
+system_value: type = struct
+    arguments: ptr ptr u8
+    argument_length: usize
+end system_value
+
+public system: type = system_value
+
+system_open_read: (self: ptr mut system, path: ptr u8)
                   -> (opened: file) ! not_found | no_access | io_failed =
-    _ = state.reserved
+    _ = self.val.argument_length
     descriptor: i32 = _landin_host_open_read(path)
     if descriptor < 0 then
         number: i32 = _landin_host_errno()
         fail not_found when number == 2
-        fail no_access when number == 13
+        fail no_access when number == 1 or number == 13 or number == 30
         fail io_failed
     end if
     opened = (descriptor: descriptor)
 end system_open_read
 
-system_close: (inout state: system, sink opened: file)
+system_open_write: (self: ptr mut system, path: ptr u8)
+                   -> (opened: file)
+                   ! not_found | no_access | io_failed =
+    _ = self.val.argument_length
+    descriptor: i32 = _landin_host_open_write(path)
+    if descriptor < 0 then
+        number: i32 = _landin_host_errno()
+        fail not_found when number == 2
+        fail no_access when number == 1 or number == 13 or number == 30
+        fail io_failed
+    end if
+    opened = (descriptor: descriptor)
+end system_open_write
+
+system_close: (self: ptr mut system, sink opened: file)
               -> none ! io_failed =
-    _ = state.reserved
+    _ = self.val.argument_length
     status: i32 = _landin_host_close(opened.descriptor)
     fail io_failed when status <> 0
 end system_close
 
-system_read: (inout state: system, opened: file, into: []mut u8)
+system_read: (self: ptr mut system, opened: file, into: []mut u8)
              -> (count: usize) ! io_failed =
-    _ = state.reserved
+    _ = self.val.argument_length
     if lenof into == 0 then
         count = 0
         return
@@ -119,61 +216,68 @@ system_read: (inout state: system, opened: file, into: []mut u8)
     base: ptr mut u8 = addr into[0]
     read_count: usize = _landin_host_read
         (opened.descriptor, base, lenof into)
-    fail io_failed when read_count == 18446744073709551615
+    failed: usize = 0 -% 1
+    fail io_failed when read_count == failed or read_count > lenof into
     count = read_count
 end system_read
 
-write_from: (descriptor: i32, base: ptr u8, length: usize, offset: usize)
-            -> none ! io_failed =
-    return when offset == length
-    address: usize = usize(base) + offset
-    remaining: ptr u8 = ptr(address)
-    write_count: usize = _landin_host_write
-        (descriptor, remaining, length - offset)
-    fail io_failed when write_count == 0
-    fail io_failed when write_count == 18446744073709551615
-    try write_from(descriptor, base, length, offset + write_count)
-end write_from
+write_all: (descriptor: i32, bytes: []u8) -> none ! io_failed =
+    failed: usize = 0 -% 1
+    mut written: usize = 0
+    while written < lenof bytes do
+        remaining: []u8 = bytes[written..<lenof bytes]
+        count: usize = lenof remaining
+        base: ptr u8 = addr remaining[0]
+        write_count: usize = _landin_host_write(descriptor, base, count)
+        fail io_failed when write_count == 0 or write_count == failed
+                            or write_count > count
+        written += write_count
+    end while
+end write_all
 
-system_write: (inout state: system, opened: file, bytes: []u8)
+system_write: (self: ptr mut system, opened: file, bytes: []u8)
               -> none ! io_failed =
-    _ = state.reserved
+    _ = self.val.argument_length
     return when lenof bytes == 0
-    base: ptr u8 = addr bytes[0]
-    try write_from(opened.descriptor, base, lenof bytes, 0)
+    try write_all(opened.descriptor, bytes)
 end system_write
 
-system_out: (state: system) -> (stream: file) =
-    _ = state.reserved
+system_out: (self: ptr system) -> (stream: file) =
+    _ = self.val.argument_length
     stream = (descriptor: 1)
 end system_out
 
-system_err: (state: system) -> (stream: file) =
-    _ = state.reserved
+system_err: (self: ptr system) -> (stream: file) =
+    _ = self.val.argument_length
     stream = (descriptor: 2)
 end system_err
 
-system_argument_count: (state: system) -> (count: usize) =
-    _ = state.reserved
-    count = _landin_host_argument_count()
+system_argument_count: (self: ptr system) -> (count: usize) =
+    count = self.val.argument_length
 end system_argument_count
 
-system_argument: (state: system, index: usize)
-                 -> (value: argument) ! no_argument =
-    _ = state.reserved
-    count: usize = _landin_host_argument_count()
-    fail no_argument when index >= count
-    data: ptr u8 = _landin_host_argument_at(index)
+system_argument_table: (self: ptr system)
+                       -> (table: ptr ptr u8 from self) =
+    table = self.val.arguments
+end system_argument_table
+
+system_argument: (self: ptr system, index: usize)
+                 -> (value: argument from self) ! no_argument =
+    fail no_argument when index >= self.val.argument_length
+    table: ptr ptr u8 = system_argument_table(self)
+    data: ptr u8 = _landin_host_argument_at_from(table, index)
     length: usize = _landin_host_text_length(data)
     value = (data: data, length: length)
 end system_argument
 
 system is world
-    (open_read: system_open_read, close: system_close,
+    (open_read: system_open_read, open_write: system_open_write,
+     close: system_close,
      read: system_read, write: system_write, out: system_out,
      err: system_err, argument_count: system_argument_count,
      argument: system_argument)
 
 public host: () -> (state: system) =
-    state = (reserved: 0)
+    state = (arguments: _landin_host_argument_table(),
+             argument_length: _landin_host_argument_count())
 end host

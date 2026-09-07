@@ -1,0 +1,13 @@
+import core/diag
+import core/io
+
+retain: (escaping value: diag.streaming) -> none =
+end retain
+
+bad: () -> none =
+    mut host := io.host()
+    world: any io.world = any(addr host)
+    stream := world.err()
+    logger := diag.to(addr world, addr stream)
+    retain(logger)
+end bad
