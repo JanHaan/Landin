@@ -1,0 +1,32 @@
+row: type = [2]u32
+mut global: [2]row = zeroed
+mut calls: u32 = 0
+value: () -> (result: u32) =
+    inc calls
+    result = 23
+end value
+public main: () -> (code: i32) =
+    mut local: [2]row = zeroed
+    global[0][0] = 7
+    global[0][1] = 13
+    global[1][0] = value()
+    global[1][1] = 29
+    inc global[1][0]
+    dec global[0][1]
+    global[1][1] += 2
+    local[0][0] = 31
+    local[0][1] = 37
+    local[1][0] = value()
+    local[1][1] = 41
+    inc local[1][0]
+    dec local[0][1]
+    local[1][1] += 2
+    code = 1
+    if calls == 2 and global[0][0] == 7 and global[0][1] == 12
+      and global[1][0] == 24 and global[1][1] == 31
+      and local[0][0] == 31 and local[0][1] == 36
+      and local[1][0] == 24 and local[1][1] == 43
+    then
+        code = 42
+    end if
+end main

@@ -1,0 +1,6 @@
+class: runtime
+summary: constant nested scalar stores and updates preserve array paths in module and frame storage
+program: main.ldn
+constructs: 0390, 0400, 0410, 0520, 0530, 1900, 1910
+status: 42
+targets: linux-x86-64
