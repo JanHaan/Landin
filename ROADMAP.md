@@ -4534,7 +4534,11 @@ miscompiles and compiler crashes, then the gates that let them through.
    copied when the callee started, so a later argument's side effect was
    visible to the callee, against [0410] and D94/D95. Narrow `extern(c)`
    scalars the checker already admits were passed without the 32-bit
-   extension C callees rely on; new C ABI shapes remain R4.40.
+   extension C callees rely on; the caller now sign- or zero-extends a
+   one- or two-byte argument to a C callee into the 32-bit register, and
+   into the whole slot on the stack, which is the x86-64 caller's
+   obligation and one R5's arm64 contract states for itself. New C ABI
+   shapes remain R4.40.
 4. Literals and lexer: decimal `f32` literals delegated to the host float
    conversion and missed a rounding midpoint, against D162; decoding
    stopped at the first `\u{}` so a later malformed escape was an internal

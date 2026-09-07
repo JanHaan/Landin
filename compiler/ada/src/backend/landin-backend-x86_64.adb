@@ -3292,8 +3292,35 @@ package body Landin.Backend.X86_64 is
                           (Of_Unit, Item, Value));
                      Offset : constant Natural :=
                        (if Indirect then 1 else 0);
+                     --  A C callee reads a narrow integer argument as the
+                     --  32-bit register: GCC and Clang assume the caller
+                     --  extended it, and passing only the low byte left the
+                     --  upper bits to chance (R4.21).  The internal
+                     --  convention keeps the exact width for Landin callees,
+                     --  which copy the width they declared.
+                     External : constant Boolean :=
+                       not Indirect
+                       and then Landin.IR.Is_External (Of_Unit, Callee);
                      Count : constant Natural :=
                        Landin.IR.Operand_Count (Of_Unit, Item, Value) - Offset;
+
+                     function Extension
+                       (Argument : Landin.IR.Value_Id;
+                        Held     : Held_Size;
+                        Wide     : Held_Size) return String;
+
+                     function Extension
+                       (Argument : Landin.IR.Value_Id;
+                        Held     : Held_Size;
+                        Wide     : Held_Size) return String
+                     is
+                        Signed : constant Boolean :=
+                          Landin.IR.Result_Of (Of_Unit, Item, Argument)
+                            in Landin.Types.I8 | Landin.Types.I16;
+                     begin
+                        return "mov" & (if Signed then "s" else "z")
+                          & Suffix (Held) & Suffix (Wide);
+                     end Extension;
                      Stack_Bytes : constant Landin.Targets.Byte_Count :=
                        (if Count <= Register_Arguments then 0
                         else Landin.Targets.Align_Up
@@ -3316,11 +3343,36 @@ package body Landin.Backend.X86_64 is
                              Operand (Index + Offset);
                            Held : constant Held_Size :=
                              Size_Of_Value (Argument);
+                           Narrow : constant Boolean :=
+                             External
+                             and then Held in Landin.Targets.Byte_1
+                                              | Landin.Targets.Byte_2;
                         begin
                            if Index <= Register_Arguments then
-                              Emit ("mov" & Suffix (Held) & " "
-                                    & Value_Cell (Argument) & ", "
-                                    & Argument_Register (Index, Held));
+                              if Narrow then
+                                 Emit (Extension
+                                         (Argument, Held,
+                                          Landin.Targets.Byte_4)
+                                       & " " & Value_Cell (Argument) & ", "
+                                       & Argument_Register
+                                           (Index, Landin.Targets.Byte_4));
+                              else
+                                 Emit ("mov" & Suffix (Held) & " "
+                                       & Value_Cell (Argument) & ", "
+                                       & Argument_Register (Index, Held));
+                              end if;
+                           elsif Narrow then
+                              Emit (Extension
+                                      (Argument, Held, Landin.Targets.Byte_8)
+                                    & " " & Value_Cell (Argument)
+                                    & ", %rax");
+                              Emit ("movq %rax, "
+                                    & Trimmed
+                                        (Landin.Targets.Byte_Count'Image
+                                           (Landin.Targets.Byte_Count
+                                              (Index - Register_Arguments - 1)
+                                            * Stack_Argument_Bytes))
+                                    & "(%rsp)");
                            else
                               Carry
                                 (Held, Value_Cell (Argument),

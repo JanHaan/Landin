@@ -1,0 +1,11 @@
+extern(c) abs: (value: i8) -> (magnitude: i32)
+
+public main: () -> (code: i32) =
+    code = 0
+    small: i8 = -7
+    --  Without the extension the low byte 0xF9 reaches abs as 249 when
+    --  the upper bits of the register happen to be clear.
+    if abs(small) == 7 and abs(42) == 42 then
+        code = 42
+    end if
+end main
