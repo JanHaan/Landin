@@ -1,0 +1,58 @@
+mut argument_calls: i32 = 0
+mut generic_calls: i32 = 0
+mut observed: i32 = 0
+
+mark: (value: i32) -> (result: i32) =
+    inc argument_calls
+    result = value
+end mark
+
+keep_utf8: (item: type, value: item, text: utf8) -> (answer: item) =
+    inc generic_calls
+    observed += i32(lenof text)
+    answer = value
+end keep_utf8
+
+keep_utf16: (item: type, value: item, text: utf16) -> (answer: item) =
+    inc generic_calls
+    observed += i32(lenof text)
+    answer = value
+end keep_utf16
+
+byte_at: (text: cstring, index: usize) -> (byte: u8) =
+    pointer: ptr u8 = ptr(usize(text) + index)
+    byte = pointer.val
+end byte_at
+
+keep_cstring: (item: type, value: item, text: cstring) -> (answer: item) =
+    inc generic_calls
+    observed += i32(byte_at(text, 0))
+    answer = value
+end keep_cstring
+
+keep_bytes: (item: type, value: item, text: []u8) -> (answer: item) =
+    inc generic_calls
+    observed += i32(lenof text)
+    answer = value
+end keep_bytes
+
+public main: () -> (code: i32) =
+    a := keep_utf8(mark(1), "A\u{2603}")
+    b: i32 = keep_utf8(
+        item: i32, value: mark(2), text: "B\u{2603}")
+    c := keep_utf16(mark(3), "C\u{1f600}")
+    d: i32 = keep_utf16(
+        item: i32, value: mark(4), text: "D\u{1f600}")
+    e := keep_cstring(mark(5), "A\u{2603}")
+    f: i32 = keep_cstring(
+        item: i32, value: mark(6), text: "A\u{1f600}")
+    g := keep_bytes(mark(7), "\x47H")
+    h: i32 = keep_bytes(
+        item: i32, value: mark(8), text: "\x49J")
+    code = 1
+    if a + b + c + d + e + f + g + h <> 36
+      or argument_calls <> 8 or generic_calls <> 8 or observed <> 148 then
+        return
+    end if
+    code = 42
+end main

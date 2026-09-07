@@ -1,0 +1,6 @@
+class: runtime
+summary: inferred and explicit generic calls contextualize exact text literal views and evaluate once
+program: main.ldn
+status: 42
+constructs: 0260, 0270, 0570, 1290, 1920
+targets: linux-x86-64

@@ -1,0 +1,9 @@
+identity: (item: type, value: item, text: utf16) -> (answer: item) =
+    _ = text
+    answer = value
+end identity
+
+public main: () -> (code: i32) =
+    code = 0
+    bad := identity(42, "bad\x41")
+end main
