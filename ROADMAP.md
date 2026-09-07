@@ -3634,7 +3634,7 @@ negative evidence; no omission is hidden by prototype coverage.
 
 ### R4.20 — Complete hosted core containers and library slice
 
-Status: active
+Status: complete
 Depends on: R3.40, R4.10
 
 Complete the Landin `core/vec`, `core/map`, `core/tree`, allocator and hosted
@@ -4479,6 +4479,13 @@ buffering and delivery/retry policy; and the four D191 lexical-arena questions
 already transferred by D196. Neither a chunk-reader cleanup fixture nor a
 caller-known suffix retry closes those complete application obligations.
 
+Closure evidence: reviewed integrated commit `22c18b8` passes complete
+pinned Linux debug and release suites, each with 405/405 cases and
+11,070 checks. The full-font repository check is clean. Authoritative
+native Linux [job 1882927](https://builds.sr.ht/~sinnfrei/job/1882927) passes
+both build modes and repository checks on that same commit. These integrated
+results supersede the increment-local gate notes above.
+
 Exit evidence: containers run with heap, arena, fixed and failing allocators;
 all omission and layering choices are recorded; `[0820]`'s block is either
 enabled with the four answers above written down, or its refusal names the
@@ -4486,7 +4493,7 @@ item that inherits it.
 
 ### R4.30 — Complete hosted modules and toolchain directives
 
-Status: planned
+Status: active
 Depends on: R3.10, R4.10
 
 Implement the remaining ordered-root, fixed option, `landin/compiler`,
