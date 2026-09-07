@@ -8,6 +8,8 @@ enum TokenType {
   MINUS,
   ARROW,
   MINUS_PERCENT,
+  MINUS_EQUALS,
+  MINUS_PERCENT_EQUALS,
 };
 
 void *tree_sitter_landin_external_scanner_create(void) { return NULL; }
@@ -45,8 +47,22 @@ bool tree_sitter_landin_external_scanner_scan(void *payload, TSLexer *lexer,
     return true;
   }
 
-  if (lexer->lookahead == '%' && valid_symbols[MINUS_PERCENT]) {
+  if (lexer->lookahead == '=' && valid_symbols[MINUS_EQUALS]) {
     advance(lexer);
+    lexer->mark_end(lexer);
+    lexer->result_symbol = MINUS_EQUALS;
+    return true;
+  }
+  if (lexer->lookahead == '%' &&
+      (valid_symbols[MINUS_PERCENT] || valid_symbols[MINUS_PERCENT_EQUALS])) {
+    advance(lexer);
+    if (lexer->lookahead == '=' && valid_symbols[MINUS_PERCENT_EQUALS]) {
+      advance(lexer);
+      lexer->mark_end(lexer);
+      lexer->result_symbol = MINUS_PERCENT_EQUALS;
+      return true;
+    }
+    if (!valid_symbols[MINUS_PERCENT]) return false;
     lexer->mark_end(lexer);
     lexer->result_symbol = MINUS_PERCENT;
     return true;

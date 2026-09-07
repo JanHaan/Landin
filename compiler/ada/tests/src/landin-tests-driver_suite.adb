@@ -138,6 +138,49 @@ package body Landin.Tests.Driver_Suite is
         (Item, Contains (Text, "--wat"), "the option is named");
    end Unknown_Options_Are_Diagnosed;
 
+   --  R4.21: an emission request without a source, and an empty root,
+   --  are misuse rather than a silent success or a search from `/`.
+   procedure Emission_Without_Sources_Is_Misuse
+     (Item : in out Landin.Testing.Context);
+
+   procedure Emission_Without_Sources_Is_Misuse
+     (Item : in out Landin.Testing.Context)
+   is
+      Host   : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools  : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Emit   : Landin.Platform.Path_List := Arguments_Of ("--emit=exe");
+      Rooted : constant Landin.Platform.Path_List := Arguments_Of ("--root=");
+   begin
+      Emit.Append ("-o");
+      Emit.Append ("app");
+      declare
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute (Emit, Host, Tools);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Landin.Driver.Status_Misuse,
+            "emitting with no source is misuse");
+         Landin.Testing.Check
+           (Item,
+            Contains (Unbounded.To_String (Result.Report),
+                      "need a source"),
+            "the report says what was missing");
+      end;
+      declare
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute (Rooted, Host, Tools);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Landin.Driver.Status_Misuse,
+            "an empty root is misuse");
+         Landin.Testing.Check
+           (Item,
+            Contains (Unbounded.To_String (Result.Report),
+                      "names no directory"),
+            "the report says the root is empty");
+      end;
+   end Emission_Without_Sources_Is_Misuse;
+
    procedure Missing_Sources_Are_Data (Item : in out Landin.Testing.Context);
 
    procedure Missing_Sources_Are_Data
@@ -1360,6 +1403,9 @@ package body Landin.Tests.Driver_Suite is
       Landin.Testing.Register
         (Into, "driver", "unknown options are diagnosed",
          Unknown_Options_Are_Diagnosed'Access);
+      Landin.Testing.Register
+        (Into, "driver", "emission without sources is misuse",
+         Emission_Without_Sources_Is_Misuse'Access);
       Landin.Testing.Register
         (Into, "driver", "missing sources are data",
          Missing_Sources_Are_Data'Access);

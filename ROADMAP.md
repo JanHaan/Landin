@@ -4545,7 +4545,20 @@ miscompiles and compiler crashes, then the gates that let them through.
    failed on 127 sources, so R3.80's all-source claim did not hold;
    `scripts/build.sh` compared the manifest only when one existed and had
    no lock, so a failed build was eligible for timestamp reuse and two
-   same-tag runs corrupted each other.
+   same-tag runs corrupted each other. The repairs: the rules run over the
+   `landin` blocks with module headings kept visible, and a bare fence is
+   a fault; the structural grammar transcribes [1810]'s statements,
+   [1130]-[1190]'s loops, transfers and `complete`, condition
+   declarations, compound assignment, `unchecked`, range subtypes,
+   pointer unions, `caller` parameters, scalar-headed expressions and
+   every literal, and the compiler and `core` corpus parses clean; the
+   build takes a per-tag-and-mode lock, records the toolchain on `PATH`
+   and the scripts in its manifest, publishes the manifest atomically
+   after both projects, and rebuilds from clean when it finds objects
+   without one. The native tool runner bounds a run at ten minutes and
+   reports one it stopped, so a fixture that never ends names itself; the
+   driver refuses `--emit` or `-o` without a source and an empty
+   `--root=`.
 
 Document drift (thirteen scalar names, phase status, the macOS `test.sh`
 verdict, tour and README inconsistencies) is exit evidence rather than a

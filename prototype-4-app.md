@@ -790,7 +790,7 @@ The original finding, overstated, for the record.
 
 [1150] and [1320] contradict each other, and it is reached at once.
 
-```landin
+```text
 for inout item, idx in items do
     item = item + i32(idx)
 end for

@@ -21,8 +21,11 @@ const PREC = {
   sum: 8,
   product: 9,
   unary: 10,
-  selection: 11,
-  call: 12,
+  // Above the assignment statement's 100: a selector or call that follows
+  // an expression extends it, and must win the static shift/reduce
+  // decision against closing the statement and reading `[` as a literal.
+  selection: 110,
+  call: 120,
 };
 
 module.exports = grammar({
@@ -45,6 +48,8 @@ module.exports = grammar({
     $.minus,
     $.arrow,
     $.minus_percent,
+    $.minus_equals,
+    $.minus_percent_equals,
   ],
 
   extras: $ => [
@@ -82,6 +87,15 @@ module.exports = grammar({
     [$.variant_part],
     [$.block, $._statement],
     [$._statement, $._primary_expression],
+    [$._value_statement, $._primary_expression],
+    [$._type, $.indexed_expression],
+    [$.binding, $.condition_declaration],
+    [$.condition_declaration, $.indexed_expression],
+    [$.condition_declaration, $.indexed_expression, $.declaration_reference],
+    [$.condition_declaration, $.indexed_expression, $.declaration_reference, $.measurement_expression],
+    [$.condition_declaration, $.indexed_expression, $.measurement_expression, $.of_keyword],
+    [$.binding, $.loop_statement, $.while_statement, $.for_statement],
+    [$.identifier_list, $.binding, $.type_declaration, $.concept_declaration, $.function_declaration, $.loop_statement, $.while_statement, $.for_statement],
     [$.identifier_list, $.binding, $.type_declaration, $.concept_declaration, $.function_declaration],
   ],
 
@@ -171,15 +185,21 @@ module.exports = grammar({
     scalar_type: _ => choice(
       'u8', 'u16', 'u32', 'u64',
       'i8', 'i16', 'i32', 'i64',
-      'usize', 'isize', 'bool',
+      'usize', 'isize', 'bool', 'f32', 'f64',
     ),
 
     type_declaration: $ => seq(
       field('name', $.identifier), ':', 'type',
       choice(
-        seq('=', choice($.atom_union, $._type, $.struct_body)),
+        seq('=', choice($.atom_union, $.range_subtype, $._type, $.struct_body)),
         seq($.type_formals, '=', choice($._type, $.struct_body)),
       ),
+    ),
+    // [0660]: a scalar with a range it must stay in.
+    range_subtype: $ => seq(
+      field('base', $._type), 'range',
+      field('lower', $._expression), field('operator', choice('..', '..<')),
+      field('upper', $._expression),
     ),
 
     concept_declaration: $ => seq(
@@ -204,6 +224,7 @@ module.exports = grammar({
       $.array_type,
       $.pointer_type,
       $.slice_type,
+      $.any_type,
       $.type_application,
       $.declaration_reference,
     ),
@@ -220,12 +241,14 @@ module.exports = grammar({
       seq('fixed', field('name', $.identifier), ':', field('type', $._type)),
     ),
 
+    // An atom set, or [0480]'s pointer union of atoms and one pointer.
     atom_union: $ => seq(
-      $.declaration_reference,
+      $._union_member,
       '|',
-      $.declaration_reference,
-      repeat(seq('|', $.declaration_reference)),
+      $._union_member,
+      repeat(seq('|', $._union_member)),
     ),
+    _union_member: $ => choice($.declaration_reference, $.pointer_type),
 
     struct_body: $ => seq(
       'struct', repeat1(choice($.field, $.variant_part)), 'end', optional($.identifier),
@@ -258,10 +281,16 @@ module.exports = grammar({
     ),
     routine_formals: $ => commaSep1(choice($.parameter, $.type_formal)),
     parameters: $ => commaSep1($.parameter),
-    parameter: $ => seq(
-      optional('escaping'),
-      optional($.parameter_convention),
-      field('name', $.identifier), ':', field('type', $._type),
+    // `caller` marks D192's site parameter and is not reserved, so a
+    // parameter may also be named caller.
+    parameter: $ => choice(
+      seq('caller', field('name', $.identifier), ':', field('type', $._type)),
+      seq(field('name', alias('caller', $.identifier)), ':', field('type', $._type)),
+      seq(
+        optional('escaping'),
+        optional($.parameter_convention),
+        field('name', $.identifier), ':', field('type', $._type),
+      ),
     ),
     parameter_convention: _ => choice('in', 'inout', 'sink'),
     returns: $ => choice(
@@ -281,14 +310,11 @@ module.exports = grammar({
       repeat1($._statement),
       seq(repeat($._value_statement), field('value', $._expression)),
     ),
+    // [1810]'s `value_statement`: everything that may precede a block's
+    // value.  `unchecked` alone is a statement only.
     _statement: $ => prec.dynamic(3, choice(
       $._value_statement,
-      $.call_expression,
-      $.labeled_application,
-      $.try_expression,
-      $.if_expression,
-      $.match_expression,
-      $.bare_block,
+      $.unchecked_block,
     )),
     _value_statement: $ => prec.dynamic(5, choice(
       $.binding,
@@ -296,11 +322,74 @@ module.exports = grammar({
       $.assignment_statement,
       $.increment_statement,
       $.discard_statement,
+      $.call_expression,
+      $.labeled_application,
+      $.try_expression,
       $.defer_statement,
       $.undo_statement,
       $.return_statement,
       $.fail_statement,
+      $.break_statement,
+      $.continue_statement,
+      $.loop_statement,
+      $.while_statement,
+      $.for_statement,
+      $.if_expression,
+      $.match_expression,
+      $.bare_block,
     )),
+
+    // R4.10's loops, [1130]-[1190].  `loop`, `while`, `for`, `do`, `break`,
+    // `continue`, `complete` and `with` are words [1760] does not reserve,
+    // so they stay out of `reserved` and are keywords only where a rule
+    // expects them, which is how the parser's refusal table treats them.
+    loop_statement: $ => choice(
+      seq('loop', 'do', optional($.block), 'end', 'loop'),
+      seq(field('label', $.identifier), ':', 'loop', 'do', optional($.block),
+          'end', field('end_label', $.identifier)),
+    ),
+    while_statement: $ => choice(
+      seq('while', field('condition', $._condition), 'do', optional($.block),
+          optional(seq('complete', optional(field('completion', $.block)))),
+          'end', 'while'),
+      seq(field('label', $.identifier), ':', 'while', field('condition', $._condition),
+          'do', optional($.block),
+          optional(seq('complete', optional(field('completion', $.block)))),
+          'end', field('end_label', $.identifier)),
+    ),
+    for_statement: $ => choice(
+      seq('for', $._traversal, 'do', optional($.block),
+          optional(seq('complete', optional(field('completion', $.block)))),
+          'end', 'for'),
+      seq(field('label', $.identifier), ':', 'for', $._traversal, 'do', optional($.block),
+          optional(seq('complete', optional(field('completion', $.block)))),
+          'end', field('end_label', $.identifier)),
+    ),
+    _traversal: $ => seq(
+      field('element', $.identifier), optional(seq(',', field('index', $.identifier))),
+      'in', field('source', $._expression),
+      optional(seq(field('operator', choice('..', '..<')), field('upper', $._expression))),
+    ),
+    break_statement: $ => prec.right(seq(
+      'break',
+      optional(field('label', $.identifier)),
+      optional(seq('with', field('value', $._expression))),
+      optional(seq('when', field('condition', $._expression))),
+    )),
+    continue_statement: $ => prec.right(seq(
+      'continue',
+      optional(field('label', $.identifier)),
+      optional(seq('when', field('condition', $._expression))),
+    )),
+    unchecked_block: $ => seq('unchecked', 'begin', optional($.block), 'end', 'unchecked'),
+
+    // [1140]'s condition may declare the value it tests.
+    _condition: $ => choice($._expression, $.condition_declaration),
+    condition_declaration: $ => choice(
+      seq(optional('mut'), field('name', $.identifier), ':=', field('value', $._expression)),
+      seq(optional('mut'), field('name', $.identifier), ':', field('type', $._type),
+          '=', field('value', $._expression)),
+    ),
 
     destructuring_binding: $ => seq(
       '(', commaSep1($.destructured_field), ')', ':=', $._expression,
@@ -310,7 +399,12 @@ module.exports = grammar({
       seq(field('name', $.identifier), optional(seq(':', choice($.identifier, '_')))),
     ),
     assignment_statement: $ => prec.right(100, seq(
-      field('left', $.place), '=', field('right', $._expression),
+      field('left', $.place),
+      field('operator', choice(
+        '=', '+=', '*=', '/=', '%=', '&=', '|=', '^=', '<<=', '>>=',
+        '+%=', '*%=', $.minus_equals, $.minus_percent_equals,
+      )),
+      field('right', $._expression),
     )),
     increment_statement: $ => seq(choice('inc', 'dec'), $.place),
     discard_statement: $ => seq('_', '=', $._expression),
@@ -320,8 +414,8 @@ module.exports = grammar({
     fail_statement: $ => seq('fail', $._expression, optional(seq('when', $._expression))),
 
     if_expression: $ => prec.dynamic(4, prec.right(seq(
-      'if', field('condition', $._expression), 'then', optional(field('consequence', $.block)),
-      repeat(seq('elsif', field('condition', $._expression), 'then', optional(field('consequence', $.block)))),
+      'if', field('condition', $._condition), 'then', optional(field('consequence', $.block)),
+      repeat(seq('elsif', field('condition', $._condition), 'then', optional(field('consequence', $.block)))),
       optional(seq('else', optional(field('alternative', $.block)))),
       'end', 'if',
     ))),
@@ -329,7 +423,7 @@ module.exports = grammar({
       'match', field('value', $._expression), repeat1($.match_arm), 'end', 'match',
     )),
     match_arm: $ => seq(
-      field('case', choice($.declaration_reference, '_')),
+      field('case', choice($.declaration_reference, 'ptr', '_')),
       optional(seq('(', commaSep1($.match_binding), ')')),
       ':', field('body', choice($._statement, $._expression)),
     ),
@@ -364,6 +458,9 @@ module.exports = grammar({
       $.if_expression,
       $.match_expression,
       $.bare_block,
+      $.loop_statement,
+      $.while_statement,
+      $.for_statement,
       $.literal,
       $.array_literal,
       $.array_repetition,
@@ -381,15 +478,33 @@ module.exports = grammar({
       seq('(', $._expression, ')'),
     ),
 
-    literal: $ => choice($.integer_literal, $.boolean_literal, $.zeroed_literal),
+    literal: $ => choice(
+      $.float_literal, $.integer_literal, $.boolean_literal, $.zeroed_literal,
+      $.character_literal, $.text_literal, $.raw_literal,
+    ),
     boolean_literal: _ => choice('true', 'false'),
     zeroed_literal: _ => 'zeroed',
+    // The float needs a fraction on both sides of its point, so `0..` in
+    // a range never starts one; the hexadecimal form needs its exponent.
+    float_literal: _ => token(prec(2, choice(
+      /[0-9][0-9_]*\.[0-9][0-9_]*([eE][+-]?[0-9][0-9_]*)?/,
+      /0[xX][0-9A-Fa-f][0-9A-Fa-f_]*\.[0-9A-Fa-f][0-9A-Fa-f_]*[pP][+-]?[0-9][0-9_]*/,
+    ))),
     integer_literal: _ => token(choice(
       /0[xX][0-9A-Fa-f][0-9A-Fa-f_]*/,
       /0[oO][0-7][0-7_]*/,
       /0[bB][01][01_]*/,
       /[0-9][0-9_]*/,
     )),
+    character_literal: _ => token(/'([^'\\\n]|\\[^\n])*'/),
+    // A raw literal is a run of three quotes or more around any bytes.  A
+    // token cannot count, so the three- and four-quote runs are spelled
+    // out and a longer run is left to the compiler.
+    raw_literal: _ => token(prec(3, choice(
+      /""""([^"]|"[^"]|""[^"]|"""[^"])*""""/,
+      /"""([^"]|"[^"]|""[^"])*"""/,
+    ))),
+    text_literal: _ => token(prec(1, /"([^"\\\n]|\\[^\n])*"/)),
 
     array_literal: $ => prec.dynamic(4, seq('[', commaSep1($._expression), ']')),
     array_repetition: $ => choice(
@@ -419,18 +534,26 @@ module.exports = grammar({
     labeled_argument: $ => seq(field('name', $.identifier), ':', field('value', $.argument_rhs)),
     argument_rhs: $ => choice($._expression, $._type),
 
+    // A scalar type name heads an expression as a conversion (`u32(n)`)
+    // or a named special (`f64.infinity`), so it stands where a name does.
+    // Explicit left recursion rather than a repeat: the postfix production
+    // itself carries the precedence, so a `[` or `.` after a selector
+    // extends the chain instead of closing the statement around it.
     indexed_expression: $ => choice(
-      prec.dynamic(1, $.identifier),
+      prec.dynamic(1, choice($.identifier, $.scalar_type)),
       prec.dynamic(2, prec.left(PREC.selection, seq(
-        $.identifier,
-        repeat1(choice($.member_selection, $.index_selection, $.slice_selection)),
+        $.indexed_expression,
+        choice($.member_selection, $.index_selection),
       ))),
     ),
     member_selection: $ => seq('.', field('member', $.identifier)),
-    index_selection: $ => seq('[', field('index', $._expression), ']'),
-    slice_selection: $ => seq(
-      '[', field('lower', $._expression), field('operator', choice('..', '..<')),
-      field('upper', $._expression), ']',
+    // One bracket reads an index, or a slice when a range operator follows:
+    // both begin with an expression, which is one decision too many for
+    // two separate rules.
+    index_selection: $ => seq(
+      '[', field('index', $._expression),
+      optional(seq(field('operator', choice('..', '..<')), field('upper', $._expression))),
+      ']',
     ),
     declaration_reference: $ => seq(
       $.identifier, repeat($.member_selection),

@@ -810,6 +810,27 @@ package body Landin.Driver is
             Note_Failure (Code_Unknown_Option, "unknown option: " & Option);
          end loop;
 
+         --  A request to emit with nothing to compile exited zero and
+         --  wrote nothing, which a script read as success (R4.21).  An
+         --  empty root named the filesystem root and searched it.
+         if Natural (Inputs.Length) = 0
+           and then (Emit /= Emit_Nothing
+                     or else Unbounded.Length (Output) > 0)
+         then
+            Bad_Use := True;
+            Note_Failure
+              (Code_Unknown_Option,
+               "--emit and -o need a source to compile");
+         end if;
+
+         for Root of Roots loop
+            if Root'Length = 0 then
+               Bad_Use := True;
+               Note_Failure
+                 (Code_Unknown_Option, "--root= names no directory");
+            end if;
+         end loop;
+
          if Natural (Roots.Length) > 0 then
             if Natural (Inputs.Length) /= 1 then
                Bad_Use := True;

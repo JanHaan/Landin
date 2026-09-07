@@ -275,8 +275,13 @@ def sections(lines):
 
 
 def module_banner(line):
-    """A module header inside a prototype: names may repeat across them."""
-    return re.match(r"^[a-z][a-z0-9_/]*(?:  —|\s*$)", line) and "/" in line
+    """A module header inside a prototype: names may repeat across them.
+
+    In the Markdown form it is a `## core/x  —  ...` heading; the bare
+    form is the .txt one and is kept so a harness case can still use it.
+    """
+    s = re.sub(r"^#+\s+", "", line)
+    return bool(re.match(r"^[a-z][a-z0-9_/]*(?:  —|\s*$)", s)) and "/" in s
 
 
 def looks_like_code(line):
@@ -291,13 +296,42 @@ def looks_like_code(line):
 def check(path):
     text = io.open(path, encoding="utf-8").read()
     all_lines = text.split("\n")
-    #  Only the code section is checked. Findings and the changelog quote
-    #  the wording that decisions retired, on purpose.
-    chunks = [(start - 1, chunk) for kind, start, chunk in sections(all_lines)
-              if kind == "code"]
     out = []
-    for offset, lines in chunks:
-        out += check_code(lines, offset)
+
+    #  A fence says what its block is; one that says nothing is a fault.
+    #  This was documented and never enforced: `sections` filed a bare
+    #  fence under "text", and the rules below asked for a kind no
+    #  document produces (R4.21).
+    in_fence = False
+    for n, line in enumerate(all_lines, 1):
+        fence = re.match(r"^```(\S*)\s*$", line.strip())
+        if not fence:
+            continue
+        if in_fence:
+            in_fence = False
+        else:
+            in_fence = True
+            if not fence.group(1):
+                out.append((n, "this fence says nothing about what its"
+                               " block is; tag it landin, landin-grammar"
+                               " or text"))
+
+    #  Only the Landin code is checked. Findings and the changelog quote
+    #  the wording that decisions retired, on purpose.  The rules run over
+    #  the file with everything but the `landin` blocks blanked, so line
+    #  numbers hold and the two whole-file rules -- a name declared twice
+    #  in one module, an `end NAME` with no opener -- see every block.
+    code = [""] * len(all_lines)
+    for kind, start, chunk in sections(all_lines):
+        if kind == "landin":
+            for i, line in enumerate(chunk):
+                code[start - 1 + i] = line
+    #  The module headings stay visible, so a name may repeat across the
+    #  modules a prototype file contains without being declared twice.
+    for i, line in enumerate(all_lines):
+        if module_banner(line):
+            code[i] = line
+    out += check_code(code, 0)
     return sorted(set(out))
 
 
