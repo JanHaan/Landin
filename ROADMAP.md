@@ -4591,6 +4591,14 @@ direct array backing and typed whole-array selection copies; this additional
 composition must be implemented or explicitly amended before complete P3
 parity is claimed.
 
+Repair the direct fixed-array parameter access exposed by the running
+fannkuch example. Changing `reverse_prefix` in
+`runtime/benchmark-game-fannkuch-redux` from `(values: []mut u8)` to
+`(inout values: [7]u8)` and passing `permutation` directly makes the pinned
+R4.20 compiler report an internal defect. Its prefix-swap body also reproduces
+the failure in isolation. The example executes through the writable slice;
+that equivalent does not close the direct-parameter composition defect.
+
 Exit evidence: list, small vector, map and tree paths execute on Linux x86-64;
 raw-storage, evidence and origin invariants are exercised.
 

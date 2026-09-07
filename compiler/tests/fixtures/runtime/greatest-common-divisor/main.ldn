@@ -1,11 +1,14 @@
---  Euclid's algorithm repeatedly replaces a pair by the divisor and remainder.
---  The recursion terminates when that remainder reaches zero.
+--  Euclid's algorithm repeatedly replaces a pair by the divisor and remainder
+--  until that remainder reaches zero.
 gcd: (a: u32, b: u32) -> (result: u32) =
-    if b == 0 then
-        result = a
-    else
-        result = gcd(b, a % b)
-    end if
+    mut dividend: u32 = a
+    mut divisor: u32 = b
+    while divisor <> 0 do
+        remainder: u32 = dividend % divisor
+        dividend = divisor
+        divisor = remainder
+    end while
+    result = dividend
 end gcd
 
 public main: () -> (code: i32) =

@@ -1,0 +1,68 @@
+--  The Benchmark Game correctness image is 200 by 200.  Each membership bit
+--  is packed most-significant first and written in binary PBM format.
+import core/io
+
+in_set: (pixel_x: usize, pixel_y: usize, size: usize)
+        -> (member: bool) =
+    real_coordinate: f64 = 2.0 * f64(pixel_x) / f64(size) - 1.5
+    imaginary_coordinate: f64 = 2.0 * f64(pixel_y) / f64(size) - 1.0
+    mut real: f64 = 0.0
+    mut imaginary: f64 = 0.0
+    mut real_squared: f64 = 0.0
+    mut imaginary_squared: f64 = 0.0
+    mut iteration: u32 = 0
+
+    while iteration < 50
+      and real_squared + imaginary_squared <= 4.0
+    do
+        imaginary = 2.0 * real * imaginary + imaginary_coordinate
+        real = real_squared - imaginary_squared + real_coordinate
+        real_squared = real * real
+        imaginary_squared = imaginary * imaginary
+        inc iteration
+    end while
+    member = real_squared + imaginary_squared <= 4.0
+end in_set
+
+render: (inout host: io.system) -> (members: u32) ! io.io_failed =
+    size: usize = 200
+    bytes_per_row: usize = size / 8
+    bits_per_byte: usize = 8
+    first: usize = 0
+    stream: io.file = io.out(host)
+    mut byte: [1]u8 = zeroed
+    members = 0
+
+    try io.write(host, stream, "P4\n200 200\n")
+    for row in first..<size do
+        for byte_column in first..<bytes_per_row do
+            mut packed: u8 = 0
+            for offset in first..<bits_per_byte do
+                packed <<= 1
+                pixel_x: usize = byte_column * bits_per_byte + offset
+                if in_set(pixel_x, row, size) then
+                    packed |= 1
+                    inc members
+                end if
+            end for
+            byte[0] = packed
+            output: []u8 = byte[0..<lenof byte]
+            try io.write(host, stream, output)
+        end for
+    end for
+end render
+
+public main: () -> (code: i32) =
+    mut host := io.host()
+    members := render(host) else (problem)
+        _ = problem
+        code = 1
+        return
+    end
+
+    if members == 15899 then
+        code = 42
+    else
+        code = 1
+    end if
+end main

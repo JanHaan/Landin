@@ -69,11 +69,11 @@ the complete local gate.
 ## Complete programs to try
 
 The runtime fixtures include small, complete programs rather than only
-single-construct probes. Seven of them are collected in `examples.md` and use
-only the kernel the compiler implements today:
+single-construct probes. Ten of them are collected in `examples.md` and use
+the language and hosted library implemented through R4.20:
 
-- [FizzBuzz](fixtures/runtime/fizzbuzz/main.ldn) classifies one through 100
-  with atoms and tallies the result;
+- [FizzBuzz](fixtures/runtime/fizzbuzz/main.ldn) traverses one through 100,
+  prints the traditional lines and tallies their atom classifications;
 - [greatest common divisor](fixtures/runtime/greatest-common-divisor/main.ldn)
   implements Euclid's remainder reduction;
 - [insertion sort](fixtures/runtime/insertion-sort/main.ldn) sorts
@@ -85,26 +85,46 @@ only the kernel the compiler implements today:
 - [run-length encoding](fixtures/runtime/run-length-encoding/main.ldn)
   transforms a read-only slice into caller-owned structured output;
 - [merge sort](fixtures/runtime/merge-sort/main.ldn) divides recursively and
-  merges through a second fixed array.
+  loops over caller-owned storage and a local work array;
+- [fannkuch-redux](fixtures/runtime/benchmark-game-fannkuch-redux/main.ldn)
+  enumerates all permutations of seven values and reports the official
+  checksum and maximum flip count;
+- [Mandelbrot](fixtures/runtime/benchmark-game-mandelbrot/main.ldn) plots the
+  official 200-by-200 correctness image as a binary portable bitmap;
+- [FASTA](fixtures/runtime/benchmark-game-fasta/main.ldn) emits the official
+  1,000-unit repeated and weighted-random DNA sequences.
 
-The kernel still has no loops, text or hosted output, so these examples use
-recursion and verify their results through status 42. Together they exercise
-aggregate parameters, fixed arrays, slices, `inout`, atoms, variants, pattern
-matching and computed indexing. The narrower runtime fixtures retain the
-single-construct and composition coverage behind those examples. On Linux
-x86-64, compile one from the repository root with:
+The examples use loops for ordinary traversal, reserve recursion for merge
+sort's divide-and-conquer step, and verify their results through status 42;
+FizzBuzz and the three Benchmark Game programs additionally have exact output
+oracles. Together they exercise aggregate parameters, fixed arrays, slices,
+`inout`, atoms, variants,
+pattern matching, computed indexing, valued loop exits, text literals,
+floating-point arithmetic, binary output and hosted I/O. The Benchmark Game
+ports use its published algorithms and small correctness inputs, not its
+performance inputs; they are correctness and compiler-pressure workloads, not
+competitive benchmark targets. Their generated oracles were compared byte for
+byte with the official
+[fannkuch-redux](https://benchmarksgame-team.pages.debian.net/benchmarksgame/description/fannkuchredux.html),
+[Mandelbrot](https://benchmarksgame-team.pages.debian.net/benchmarksgame/description/mandelbrot.html),
+and [FASTA](https://benchmarksgame-team.pages.debian.net/benchmarksgame/description/fasta.html)
+outputs.
+
+The narrower runtime fixtures retain the single-construct and composition
+coverage behind those examples. On Linux x86-64, compile one from the
+repository root with:
 
 ```sh
-refine --target=linux-x86-64 --emit=exe \
+refine --root=. --target=linux-x86-64 --emit=exe \
   -o /tmp/landin-insertion-sort \
-  compiler/tests/fixtures/runtime/insertion-sort/main.ldn
+  compiler/tests/fixtures/runtime/insertion-sort
 /tmp/landin-insertion-sort
 test $? -eq 42
 ```
 
 Each program returns 42 when its result is the expected one. They are runtime
 fixtures as well as examples, so the authoritative Linux gate compiles, runs
-and checks all seven on every push.
+and checks all ten on every push.
 
 ## Metadata
 

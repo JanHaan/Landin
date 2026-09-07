@@ -1,26 +1,21 @@
---  The public operation accepts caller-owned storage through inout; recursive
---  helpers work through a writable slice because loops are not implemented yet.
-insert_at: (values: []mut i32, index: usize) -> none =
-    return when index == 0
-
-    previous: usize = index - 1
-    if values[previous] > values[index] then
-        saved: i32 = values[previous]
-        values[previous] = values[index]
-        values[index] = saved
-        insert_at(values, previous)
-    end if
-end insert_at
-
-insertion_sort_from: (values: []mut i32, index: usize) -> none =
-    return when index >= lenof values
-    insert_at(values, index)
-    insertion_sort_from(values, index + 1)
-end insertion_sort_from
-
+--  The public operation accepts caller-owned storage through inout; its
+--  writable slice lets the nested loops exchange adjacent values in place.
 insertion_sort: (inout values: [8]i32) -> none =
     view: []mut i32 = values[0..<lenof values]
-    insertion_sort_from(view, 1)
+    first_unsorted: usize = 1
+    for index in first_unsorted..<lenof view do
+        mut current: usize = index
+        loop do
+            break when current == 0
+            previous: usize = current - 1
+            break when view[previous] <= view[current]
+
+            saved: i32 = view[previous]
+            view[previous] = view[current]
+            view[current] = saved
+            dec current
+        end loop
+    end for
 end insertion_sort
 
 public main: () -> (code: i32) =

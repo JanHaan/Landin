@@ -11,6 +11,7 @@ to itself, so it works from anywhere.
     python3 check.py FILE...    # only these
 """
 import collections
+import hashlib
 import io
 import os
 import re
@@ -80,7 +81,27 @@ RUNNING_EXAMPLES = [
      "compiler/tests/fixtures/runtime/run-length-encoding/main.ldn"),
     ("Merge sort",
      "compiler/tests/fixtures/runtime/merge-sort/main.ldn"),
+    ("Benchmark Game fannkuch-redux",
+     "compiler/tests/fixtures/runtime/benchmark-game-fannkuch-redux/main.ldn"),
+    ("Benchmark Game Mandelbrot",
+     "compiler/tests/fixtures/runtime/benchmark-game-mandelbrot/main.ldn"),
+    ("Benchmark Game FASTA",
+     "compiler/tests/fixtures/runtime/benchmark-game-fasta/main.ldn"),
 ]
+
+#  These are the official small-input output files linked by the Benchmark
+#  Game descriptions.  The runtime harness proves that Landin produces the
+#  repository copies; these digests separately keep those copies equal to the
+#  upstream correctness oracles without making an ordinary check use the
+#  network.
+BENCHMARK_GAME_ORACLES = {
+    "compiler/tests/fixtures/runtime/benchmark-game-fannkuch-redux/output.txt":
+        "2dc0a3cd4a547ba69389f97f3b447bd4d487fe6216c3cacd2f9bf8c908dc127f",
+    "compiler/tests/fixtures/runtime/benchmark-game-mandelbrot/output.pbm":
+        "97610473750700638fc63d13cfa49d339b67c18e7f26b3f9c9acb61e746472d5",
+    "compiler/tests/fixtures/runtime/benchmark-game-fasta/output.txt":
+        "62d1e8d0df7938d2aefda9a37887e0389231ea72c099c29a51afb6edca1bdc73",
+}
 
 #  Every word the language reserves. Kept here rather than imported from
 #  docs/site/render_html.py because the highlighter's set is about colour
@@ -4151,6 +4172,26 @@ def check_running_examples(full_run):
     return out
 
 
+def check_benchmark_game_oracles(full_run):
+    """The three correctness outputs stay byte-for-byte canonical."""
+    if not full_run:
+        return []
+
+    paths = [os.path.join(ROOT, path) for path in BENCHMARK_GAME_ORACLES]
+    missing = absent(paths)
+    if missing:
+        return missing
+
+    out = []
+    for relative, expected in BENCHMARK_GAME_ORACLES.items():
+        with open(os.path.join(ROOT, relative), "rb") as source:
+            actual = hashlib.sha256(source.read()).hexdigest()
+        if actual != expected:
+            out.append((relative, 1,
+                        "the Benchmark Game correctness oracle changed"))
+    return out
+
+
 def check_table_shape(full_run):
     """Every row of a table has the cell count its header has.
 
@@ -4543,6 +4584,7 @@ def main(argv):
     extra += check_ascii_dashes(full_run)
     extra += check_unfenced_code(full_run)
     extra += check_running_examples(full_run)
+    extra += check_benchmark_game_oracles(full_run)
     extra += check_table_shape(full_run)
     extra += check_icon(full_run)
     extra += check_fonts(full_run)
