@@ -3894,6 +3894,22 @@ nested target and direct index; and
 `negative/scalar-selection-derived-origins` retains L0316 for both an address
 and a range that claim the wrong source.
 
+The bounded scalar-traversal follow-up applies the same whole-value boundary
+at D160's ordinary array/slice element binding. The traversal source is still
+evaluated through reference checking before the element is classified, but
+its fact is installed on the loop binding only when that binding's concrete
+type contains references. Scalar arithmetic therefore cannot turn an
+accumulator into a false live view of the traversed storage. Pointer, `any`
+and reference-containing aggregate elements retain the source fact through
+the existing descriptor classifier, and D180's evidence-driven iterable item
+remains source-free. This is confined to the `For_Statement` origin mapping;
+it adds no general scalar-fact erasure or field-sensitive alias claim.
+`runtime/scalar-traversal-values` observes a squares accumulator after sinking
+the fixed storage behind an ordinary scalar slice;
+`negative/reference-traversal-value-live-view` retains L0315 for a pointer
+element; and `negative/scalar-traversal-source-escaping` retains L0314 for a
+call nested in the traversal source.
+
 D196 settles D191's inherited construct rows. [0500]'s `mem.offset` and
 `mem.base_of` are unneeded conveniences for this slice: existing [0470]
 address conversion and checked element addressing serve their actual callers.

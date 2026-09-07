@@ -490,6 +490,7 @@ negative/recovery-clause-unclosed | linux-x86-64, synthetic-32
 negative/recursive-module-image-cycle | linux-x86-64, synthetic-32
 negative/recursive-module-image-nominal-mismatch | linux-x86-64, synthetic-32
 negative/reference-expression-body-permission | linux-x86-64, macos-arm64, synthetic-32
+negative/reference-traversal-value-live-view | linux-x86-64, macos-arm64
 negative/refused-struct-inline-argument | linux-x86-64, macos-arm64, synthetic-32
 negative/refused-widths-name-their-owner | linux-x86-64, macos-arm64
 negative/remainder-by-zero | linux-x86-64, macos-arm64
@@ -505,6 +506,7 @@ negative/returned-struct-argument-nominal-mismatch | linux-x86-64, macos-arm64
 negative/scalar-selection-derived-origins | linux-x86-64, macos-arm64
 negative/scalar-selection-operand-escaping | linux-x86-64, macos-arm64
 negative/scalar-struct-field-is-not-indexable | linux-x86-64, macos-arm64
+negative/scalar-traversal-source-escaping | linux-x86-64, macos-arm64
 negative/selected-pointer-live-view | linux-x86-64, macos-arm64
 negative/selection-from-a-call | linux-x86-64, macos-arm64
 negative/selection-from-a-scalar | linux-x86-64, macos-arm64
@@ -1083,6 +1085,7 @@ runtime/run-length-encoding | linux-x86-64
 runtime/scalar-selection-copies | linux-x86-64
 runtime/scalar-subobject-zeroed-assignment-clears-values | linux-x86-64
 runtime/scalar-subobject-zeroed-computed-index-traps | linux-x86-64
+runtime/scalar-traversal-values | linux-x86-64
 runtime/scalar-zeroed-assignment-clears-values | linux-x86-64
 runtime/selection-sort | linux-x86-64
 runtime/shifts-fill-with-zeros-beyond-the-width | linux-x86-64

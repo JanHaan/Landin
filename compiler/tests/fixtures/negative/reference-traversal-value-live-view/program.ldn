@@ -1,0 +1,13 @@
+mut fallback: u32 = 0
+
+move: (inout source: []mut ptr mut u32) -> none =
+end move
+
+bad: (inout source: []mut ptr mut u32) -> (result: u32) =
+    mut chosen: ptr mut u32 = addr fallback
+    for value in source do
+        chosen = value
+    end for
+    move(source)
+    result = chosen.val
+end bad
