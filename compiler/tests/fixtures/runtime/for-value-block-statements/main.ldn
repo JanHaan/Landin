@@ -1,0 +1,11 @@
+public main: () -> (code: i32) =
+    values: [3]i32 = [1, 2, 3]
+    sum: i32 = begin
+        mut total: i32 = 0
+        for value in values do
+            total += value
+        end for
+        total
+    end
+    code = if sum == 6 then 42 else 1 end if
+end main

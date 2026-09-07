@@ -3768,6 +3768,10 @@ function body, value-bearing block or direct match arm. It retains the existing
 assignment grammar and expression refusal. `runtime/compound-statement-boundaries`
 pins plain and selected destinations in all three positions, with computed
 values and an unchanged neighboring field.
+The value-block traversal follow-up includes `for` beside `while` and `loop`
+when classifying a parsed control expression as a non-final statement.
+`runtime/for-value-block-statements` pins a traversal followed by the block's
+computed answer. This changes no loop syntax or value-transfer rule.
 The reference expression-body follow-up supplies the declared pointer or slice
 result descriptor to contextual checking, as it already does for other result
 shapes. `runtime/reference-expression-bodies` exercises mutable pointers,
