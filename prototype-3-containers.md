@@ -961,10 +961,11 @@ one step short of where containers need it; Z16, what a parameter
 convention means for a reference; and Z19, the first concrete evidence
 in the errdefer argument rather than another opinion about it.
 
-Fifteen went into tour 0.0.8 as forced, Z1 among them. Z5 and Z16 went
-into 0.0.9 together, having turned out to be one question. Z13 and Z18
-went into 0.0.10, both settled by asking what the compiler already
-knows, and Z19 into 0.0.11 as undo. All nineteen are worked in.
+Fourteen went into tour 0.0.8, Z1 among them and Z15 as the one
+observation that forced nothing. Z5 and Z16 went into 0.0.9 together,
+having turned out to be one question. Z13 and Z18 went into 0.0.10, both
+settled by asking what the compiler already knows, and Z19 into 0.0.11
+as undo. All nineteen are worked in.
 
 Z1  A conformance for a parameterised type has nowhere to put its
 quantifier. "counted(A) is allocator" and "list(T) is iterable"
@@ -1076,7 +1077,8 @@ missing half of a mechanism that exists. What it does not do is
 let two old mechanisms leave, so it should be argued rather than
 slipped in, and (b) is a legitimate answer.
 
-Z6  escaping on a generic value parameter says the right thing at both
+Z6  RESOLVED at 0.0.8, written into the tour at [0780]: escaping on a
+generic value parameter says the right thing at both
 extremes with no special case: vacuous for T = u32, since [0840]
 already has it that a value holding no references is
 unconstrained, and exact for T = ptr node. A pleasant result,

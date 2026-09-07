@@ -164,8 +164,9 @@ code — `L0010` is raised by the scanner and by the parser both.
 `codes` is an ordered list and not a set. Two refused constructs in one file
 are two reports, and a regression that doubles a count is invisible to a set,
 so a fixture that contains two refused uses names its code twice in source
-order. `float-literal-not-enabled` now names one `L0010`: its one literal is
-the construct the frontend refuses. `check.py` holds every name in `codes` to
+order. `float-literal-not-enabled` names one `L0301`: its one literal is a
+float in an integer context, refused by the checker, so the grammar must
+derive it. `check.py` holds every name in `codes` to
 the catalogue, and
 refuses a negative fixture with a program that names none; the parser suite
 scans and parses the program and holds the report to the exact sequence.

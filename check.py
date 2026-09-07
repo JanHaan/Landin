@@ -1629,14 +1629,21 @@ def check_pinned_toolchain(full_run):
         "GNAT_SHA256": re.compile(r"ARG GNAT_SHA256=(\S+)"),
         "GPRBUILD_SHA256": re.compile(r"ARG GPRBUILD_SHA256=(\S+)"),
     }
+    #  Two more places a fetch could diverge: where the archives come from
+    #  and which base image the recipe stands on.  Both are held to pins.sh
+    #  alone; TOOLCHAIN.md records compilers, not download sites (R4.21).
+    pins_only = {
+        "RELEASES": re.compile(r"ARG RELEASES=(\S+)"),
+        "BASE_IMAGE": re.compile(r"FROM (\S+@sha256:[0-9a-f]+)"),
+    }
 
-    for name, pattern in wanted.items():
+    for name, pattern in list(wanted.items()) + list(pins_only.items()):
         found = pattern.search(recipe_text)
         if not found:
             out.append((recipe, 1, "%s is not pinned in the recipe" % name))
             continue
         value = found.group(1)
-        if value not in record_text:
+        if name in wanted and value not in record_text:
             out.append((recipe, 1,
                         "%s %s is not recorded in compiler/ada/TOOLCHAIN.md"
                         % (name, value)))
@@ -4452,6 +4459,108 @@ def check_stale_backlog(paths, full_run):
     return out
 
 
+def check_register_entries(full_run):
+    """Every register entry records what it chose against, and what pins it.
+
+    `spec.md`'s own rule for the register promises the chosen answer, the
+    alternative it was chosen over, and the fixture that pins it.  Review 5
+    found 41 entries with a choice and a pin but no alternative in any
+    form, and two with evidence under another heading; the register's
+    promise is now held mechanically (R4.21).
+    """
+    if not full_run:
+        return []
+    path = os.path.join(ROOT, SPEC_NAME)
+    if not os.path.exists(path):
+        return []
+    text = io.open(path, encoding="utf-8").read()
+    out = []
+    parts = re.split(r"\n### (D\d+) — [^\n]*\n", text)
+    for name, body in zip(parts[1::2], parts[2::2]):
+        line = text.index("### %s — " % name)
+        line = text.count("\n", 0, line) + 1
+        if not re.search(r"\*\*(The alternatives?|Alternatives?|Why not[^*]*|"
+                         r"Declined[^*]*)[:*]", body) \
+                and not re.search(r"\b(declined|instead|alternative|rejected|"
+                                  r"why not)\b", body, re.I):
+            out.append((line, "%s records no alternative it was chosen"
+                        " over" % name))
+        if "**Pinned by" not in body:
+            out.append((line, "%s names no fixture that pins it" % name))
+    return [(SPEC_NAME, n, message) for n, message in out]
+
+
+def check_highlight_vocabulary(full_run):
+    """The highlighters' vocabulary contains the grammar's.
+
+    Colour may cover more than the kernel reserves -- the tour's future
+    words are highlighted before they are enabled -- but never less: a
+    keyword of the `keyword` production or a scalar of `scalar_name` that
+    a highlighter does not know is a word the pages show in the wrong
+    face.  The tree-sitter `reserved` list is a transcription of the
+    keyword production and is held to it exactly (R4.21).
+    """
+    if not full_run:
+        return []
+    tour = os.path.join(ROOT, SPEC_NAME)
+    shared = os.path.join(ROOT, "highlight/landin_highlight.py")
+    grammar = os.path.join(ROOT, "highlight/tree-sitter/grammar.js")
+    missing = absent((tour, shared, grammar))
+    if missing:
+        return missing
+    rules, trees, problems = read_grammar(tour)
+    if problems:
+        return []
+    keywords = set(re.findall(r'"([a-z]+)"', rules.get("keyword", "")))
+    scalars = set(re.findall(r'"([a-z0-9]+)"', rules.get("scalar_name", "")))
+
+    out = []
+    shared_text = io.open(shared, encoding="utf-8").read()
+
+    def block(name):
+        found = re.search(r"^%s = \{(.*?)^\}" % name, shared_text,
+                          re.S | re.M)
+        return set(re.findall(r'"([a-z0-9]+)"', found.group(1))) if found \
+            else set()
+
+    known = block("KEYWORDS") | block("CONSTANTS")
+    lost = sorted(keywords - known)
+    if lost:
+        out.append((shared, 1,
+                    "keywords the grammar reserves and the highlighter does"
+                    " not colour: %s" % " ".join(lost)))
+    lost = sorted(scalars - block("TYPES"))
+    if lost:
+        out.append((shared, 1,
+                    "scalar names the grammar has and the highlighter does"
+                    " not colour: %s" % " ".join(lost)))
+
+    grammar_text = io.open(grammar, encoding="utf-8").read()
+    reserved = re.search(r"reserved:\s*\{\s*global:\s*\$\s*=>\s*\[(.*?)\]",
+                         grammar_text, re.S)
+    if not reserved:
+        out.append((grammar, 1, "the tree-sitter grammar has no reserved"
+                    " word list to hold to the keyword production"))
+    else:
+        listed = set(re.findall(r"'([a-z]+)'", reserved.group(1)))
+        if listed != keywords:
+            out.append((grammar, 1,
+                        "the tree-sitter reserved list differs from the"
+                        " keyword production: missing %s, extra %s"
+                        % (sorted(keywords - listed) or "none",
+                           sorted(listed - keywords) or "none")))
+    scalar_rule = re.search(r"scalar_type: _ => choice\((.*?)\),", grammar_text,
+                            re.S)
+    if scalar_rule:
+        lost = sorted(scalars - set(re.findall(r"'([a-z0-9]+)'",
+                                               scalar_rule.group(1))))
+        if lost:
+            out.append((grammar, 1,
+                        "scalar names the tree-sitter grammar lacks: %s"
+                        % " ".join(lost)))
+    return out
+
+
 def check_highlighters(full_run):
     """Editor packages exist and generated renderings match their source."""
     if not full_run:
@@ -4649,6 +4758,8 @@ def main(argv):
     extra += check_icon(full_run)
     extra += check_fonts(full_run)
     extra += check_highlighters(full_run)
+    extra += check_highlight_vocabulary(full_run)
+    extra += check_register_entries(full_run)
     extra += check_borrowed_icons(full_run)
     extra += check_named_files(full_run)
     extra += check_catalogue(full_run)

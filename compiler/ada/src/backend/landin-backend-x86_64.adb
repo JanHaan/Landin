@@ -2255,7 +2255,9 @@ package body Landin.Backend.X86_64 is
                            when Landin.IR.Bitwise_And => "and",
                            when Landin.IR.Bitwise_Xor => "xor",
                            when Landin.IR.Bitwise_Or => "or",
-                           when others => raise Program_Error);
+                           when others =>
+                             raise Landin.Compiler_Defect
+                               with "an unreachable operator case");
                   begin
                      Emit ("mov" & Suffix (Held) & " "
                            & Value_Cell (Operand (1)) & ", "
@@ -3186,7 +3188,9 @@ package body Landin.Backend.X86_64 is
                              (if Signed then "setg" else "seta"),
                            when Landin.IR.Greater_Or_Equal =>
                              (if Signed then "setge" else "setae"),
-                           when others => raise Program_Error);
+                           when others =>
+                             raise Landin.Compiler_Defect
+                               with "an unreachable operator case");
                   begin
                      if Kind in Landin.Types.Float_Name then
                         Emit ((if Kind = Landin.Types.F32

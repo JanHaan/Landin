@@ -234,6 +234,13 @@ condition declarations, caller parameters, `unchecked` regions, range subtypes
 and the atom-or-pointer union. Every hosted construct row now carries fixture
 evidence or a refusal that names the item enabling it, and `check.py` audits
 that whenever the item is not active.
+R4.20 completes the hosted `core` library slice: heap, arena, pool and
+failing allocators threaded as capabilities; `core/vec`, `core/small`,
+`core/map`, `core/tree` and `core/sort` over honest raw storage; `core/text`
+with validated conversions; and the system and memory I/O worlds. Every
+container transition, allocation rollback and unsafe obligation is written
+down, and the ten running examples exercise the slice with exact output
+oracles.
 
 **Current roadmap work: R4.21 — Repair review-found soundness and correctness defects.**
 
@@ -262,6 +269,7 @@ replace tested Ada stages incrementally, but none is scheduled now.
 ## Working style
 
 German conversation, English keywords, identifiers and documents
-throughout. No backticks in prose. Prefer deciding over deferring, and
+throughout. Backticks mark code, names and paths, never emphasis. Prefer
+deciding over deferring, and
 say plainly where a decision is a guess. Push back with reasons rather
 than agreeing.

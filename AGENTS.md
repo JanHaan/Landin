@@ -157,7 +157,7 @@ The prototypes jointly define the implementation pressure on the specification:
 
 - Prototype 1 covers freestanding hardware: generated SVD modules, packed registers, volatile access, DMA, interrupts, and vector placement.
 - Prototype 2 covers a recovering parser and distinguishes foreseeable syntax diagnostics from failures such as allocation failure.
-- Prototype 3 develops the conceptual `core/mem`, `core/vec`, `core/map`, and `core/tree` layers and stresses generics, allocators, evidence tables, origins, and raw storage.
+- Prototype 3 develops the conceptual `core/mem`, `core/vec`, `core/small`, `core/map`, `core/tree` and `core/sort` layers and stresses generics, allocators, evidence tables, origins, and raw storage.
 - Prototype 4 builds on prototypes 2 and 3, adds hosted I/O, and exercises heterogeneous runtime dispatch through `any C`.
 
 Repeated module names describe shared future subsystems, not separately checked source dependencies. Prototypes 1 and 4 cover the freestanding and hosted authority roots respectively; capabilities below those roots are passed as ordinary arguments.

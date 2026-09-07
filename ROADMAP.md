@@ -2719,6 +2719,7 @@ finding labels, so moving prose cannot stale a hand-copied location.
 | `runtime/struct-literal-order-and-fill` | P3 | Z17 | contextual anonymous aggregate construction |
 | `runtime/undo-cleanups-follow-failure-edges` | P3 | Z19 | failure cleanup moves its arguments at execution |
 | `runtime/generic-parameterized-evidence` | P3 | Z1, Z4 | parameterized providers receive target-derived evidence |
+| `runtime/allocator-vec-pressure` | P3 | Z6 | an escaping generic value parameter is vacuous for a scalar item and exact for a pointer item |
 | `negative/parameterized-conformance-entry-signature-mismatch` | P3 | Z1, Z4 | substituted provider signatures must agree |
 | `runtime/constant-return-exits-with-its-code` | P4 | W2 | hosted entry uses the ordinary no-argument shape |
 | `runtime/generic-composed-evidence` | P4 | W4 | a narrow concept composes rather than widening |
@@ -4481,6 +4482,11 @@ buffering and delivery/retry policy; and the four D191 lexical-arena questions
 already transferred by D196. Neither a chunk-reader cleanup fixture nor a
 caller-known suffix retry closes those complete application obligations.
 
+The example refresh `da42169` landed after that closure and is not in its
+counts: it added and rewrote running examples and their fixtures under the
+completed slice, and R4.21's gates, which re-ran the complete debug and
+release suites on the tree containing it, are its evidence.
+
 Closure evidence: reviewed integrated commit `22c18b8` passes complete
 pinned Linux debug and release suites, each with 405/405 cases and
 11,070 checks. The full-font repository check is clean. Authoritative
@@ -4566,7 +4572,14 @@ miscompiles and compiler crashes, then the gates that let them through.
 
 Document drift (thirteen scalar names, phase status, the macOS `test.sh`
 verdict, tour and README inconsistencies) is exit evidence rather than a
-numbered increment. Every fixture this item touches must fail on the defect
+numbered increment. A third review of the same commit read the register
+and the prototypes: 41 decisions recorded a choice and a pin but no
+alternative, two recorded evidence under another heading, and the
+register's own promise was not held by any check. Every entry now names
+its alternative and its pin, and `check.py` holds the register to both;
+the prototype accounting, the R4.20 closure's scope over `da42169`, and
+the highlighter vocabulary against the grammar's productions are held the
+same way. Every fixture this item touches must fail on the defect
 it pins; a negative whose code a wrong refusal could also raise carries its
 expected text. Fixtures land with their repair; the suite is never pushed
 red.
