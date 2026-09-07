@@ -1,0 +1,13 @@
+holder: type = struct
+    row: [2]u32
+end holder
+
+bad_address: (left: ptr mut holder, right: ptr mut holder)
+             -> (result: ptr mut u32 from right) =
+    result = addr left.val.row[0]
+end bad_address
+
+bad_range: (left: ptr mut holder, right: ptr mut holder)
+           -> (result: []mut u32 from right) =
+    result = left.val.row[0..<2]
+end bad_range

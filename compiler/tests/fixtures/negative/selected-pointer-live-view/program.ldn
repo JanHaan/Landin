@@ -1,0 +1,12 @@
+holder: type = struct
+    link: ptr mut u32
+end holder
+
+move: (inout source: ptr mut holder) -> none =
+end move
+
+bad: (inout source: ptr mut holder) -> (value: u32) =
+    chosen: ptr mut u32 = source.val.link
+    move(source)
+    value = chosen.val
+end bad

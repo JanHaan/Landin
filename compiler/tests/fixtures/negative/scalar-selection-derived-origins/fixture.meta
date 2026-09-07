@@ -1,0 +1,6 @@
+class: negative
+summary: addresses and ranges through scalar storage retain exact written sources
+program: program.ldn
+codes: L0316, L0316
+constructs: 0430, 0520, 0570, 0750, 0790
+targets: linux-x86-64, macos-arm64

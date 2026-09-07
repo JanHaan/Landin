@@ -502,7 +502,10 @@ negative/return-shares-a-parameter-name | linux-x86-64, macos-arm64
 negative/return-with-value | linux-x86-64, macos-arm64
 negative/returned-reference-missing-from | linux-x86-64, macos-arm64, synthetic-32
 negative/returned-struct-argument-nominal-mismatch | linux-x86-64, macos-arm64
+negative/scalar-selection-derived-origins | linux-x86-64, macos-arm64
+negative/scalar-selection-operand-escaping | linux-x86-64, macos-arm64
 negative/scalar-struct-field-is-not-indexable | linux-x86-64, macos-arm64
+negative/selected-pointer-live-view | linux-x86-64, macos-arm64
 negative/selection-from-a-call | linux-x86-64, macos-arm64
 negative/selection-from-a-scalar | linux-x86-64, macos-arm64
 negative/selection-from-a-scalar-element | linux-x86-64, macos-arm64
@@ -1072,6 +1075,7 @@ runtime/recursive-fibonacci | linux-x86-64
 runtime/recursive-module-images-are-laid-out-and-distinct | linux-x86-64
 runtime/reference-expression-bodies | linux-x86-64
 runtime/run-length-encoding | linux-x86-64
+runtime/scalar-selection-copies | linux-x86-64
 runtime/scalar-subobject-zeroed-assignment-clears-values | linux-x86-64
 runtime/scalar-subobject-zeroed-computed-index-traps | linux-x86-64
 runtime/scalar-zeroed-assignment-clears-values | linux-x86-64
