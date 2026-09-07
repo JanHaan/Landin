@@ -1,0 +1,6 @@
+class: runtime
+summary: scalar fields and elements copy values without borrowing their pointer or slice sources
+program: main.ldn
+status: 42
+constructs: 0430, 0520, 0570, 0750, 0800, 0830, 0860, 1810
+targets: linux-x86-64

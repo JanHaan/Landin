@@ -1,0 +1,31 @@
+pair: type = struct
+    first: u32
+    next: u32
+end pair
+
+discard_pointer: (sink source: ptr mut pair) -> none =
+end discard_pointer
+
+advance: (inout source: []mut u32) -> none =
+    source = source[1..<lenof source]
+end advance
+
+public main: () -> (code: i32) =
+    mut item: pair = (first: 17, next: 25)
+    object: ptr mut pair = addr item
+    correct: bool = object.val.first == 17 and object.val.next == 25
+    discard_pointer(object)
+
+    mut values: [2]u32 = [31, 37]
+    mut source: []mut u32 = values[0..<2]
+    chosen: u32 = source[0]
+    advance(source)
+
+    code = if correct and chosen == 31 and lenof source == 1
+      and source[0] == 37
+    then
+        42
+    else
+        1
+    end if
+end main

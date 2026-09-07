@@ -1,0 +1,6 @@
+class: negative
+summary: selecting a real pointer field keeps its source live across inout
+program: program.ldn
+codes: L0315
+constructs: 0430, 0570, 0750, 0800, 0830
+targets: linux-x86-64, macos-arm64

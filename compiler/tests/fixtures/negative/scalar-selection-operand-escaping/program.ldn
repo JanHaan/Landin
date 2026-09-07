@@ -1,0 +1,18 @@
+cell: type = struct
+    value: u32
+end cell
+
+retained_index: (escaping source: ptr u32) -> (index: usize) =
+    index = 0
+end retained_index
+
+bad: () -> (result: u32) =
+    first_local: u32 = 1
+    second_local: u32 = 2
+    mut rows: [1]cell = zeroed
+    rows[0] = (value: 17)
+    values: [1]u32 = [25]
+    first: u32 = rows[retained_index(addr first_local)].value
+    second: u32 = values[retained_index(addr second_local)]
+    result = first + second
+end bad

@@ -3857,6 +3857,24 @@ place's fact and can produce the same false L0315 across a later `inout` use;
 that separately reduced selection-expression defect remains a bounded R4.20
 follow-up rather than being hidden by broader origin erasure here.
 
+The bounded scalar-selection follow-up closes that recorded defect for
+concrete scalar member and element values only. Reference checking still
+visits the selection target and every index operand, so nested calls retain
+their escaping and borrow checks, but a result in [1790]'s `Scalar_Name` band
+contributes no storage-origin fact to the copied value. Pointer, slice, `any`
+and reference-containing aggregate selections retain the prior facts; `addr`
+and range slicing continue through their storage-origin paths with exact
+`from` agreement. This is whole-value classification, not field-sensitive
+alias analysis, and it neither erases general origin facts nor changes place
+evaluation or lowering. `runtime/scalar-selection-copies` observes composed
+pointer-backed field comparisons after sinking the pointer and a copied slice
+element after advancing the descriptor.
+`negative/selected-pointer-live-view` retains L0315 for a selected pointer;
+`negative/scalar-selection-operand-escaping` retains argument checks in a
+nested target and direct index; and
+`negative/scalar-selection-derived-origins` retains L0316 for both an address
+and a range that claim the wrong source.
+
 D196 settles D191's inherited construct rows. [0500]'s `mem.offset` and
 `mem.base_of` are unneeded conveniences for this slice: existing [0470]
 address conversion and checked element addressing serve their actual callers.

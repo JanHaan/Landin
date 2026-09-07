@@ -630,6 +630,21 @@ package body Landin.Stages.Checking.References is
                   return Storage_Fact (Tree, Syn.Target_Of (Tree, Node));
                end if;
                Result := Fact_Of (Tree, Syn.Target_Of (Tree, Node));
+               for Slot in 2 .. Syn.Slot_Count (Tree, Node) loop
+                  declare
+                     Ignored : constant Origin_Fact :=
+                       Fact_Of (Tree, Syn.Slot (Tree, Node, Slot));
+                  begin
+                     pragma Unreferenced (Ignored);
+                  end;
+               end loop;
+               if Syn.Kind (Tree, Node)
+                    in Syn.Member_Selection | Syn.Element_Index
+                 and then Landin.Checking.Type_Of (Types.all, Tree, Node)
+                   in Ty.Scalar_Name
+               then
+                  return No_Origin;
+               end if;
                declare
                   Id : constant Res.Declaration_Id :=
                     Root_Declaration (Tree, Node);
