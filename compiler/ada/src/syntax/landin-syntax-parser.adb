@@ -4024,18 +4024,13 @@ package body Landin.Syntax.Parser is
                     and then Ahead (1) not in Tok.Colon | Tok.Colon_Equal
                     and then After_Selectors /= Tok.Equal
                   then
-                     if Ahead (1) /= Tok.Left_Paren then
+                     if After_Selectors /= Tok.Left_Paren then
                         return Parse_Expression;
                      end if;
 
                      declare
-                        At_Name : constant Landin.Source.Span := Here;
-                        Named   : constant Landin.Source.Names.Name_Id :=
-                          Named_Here;
-                        Called  : Node_Id;
+                        Called : constant Node_Id := Parse_Primary;
                      begin
-                        Advance;
-                        Called := Parse_Call (At_Name, Named);
 
                         if Peek = Tok.Kw_End then
                            return Called;
@@ -4433,7 +4428,7 @@ package body Landin.Syntax.Parser is
                                    in If_Statement | Match_Statement
                                       | Bare_Block | Loop_Statement
                                       | While_Statement | Call
-                                      | Try_Expression
+                                      | Labeled_Application | Try_Expression
                            then
                               Items.Append (Candidate);
                            else
@@ -4875,7 +4870,9 @@ package body Landin.Syntax.Parser is
                         declare
                            Called : constant Node_Id := Parse_Primary;
                         begin
-                           if Kind (Result, Called) = Call then
+                           if Kind (Result, Called)
+                                in Call | Labeled_Application
+                           then
                               return Called;
                            end if;
 

@@ -1710,6 +1710,7 @@ formal, it names every static formal; those entries neither evaluate nor fill a
 runtime position. A call through a stored or selected function uses the parameter
 labels of that value's static function type; changing those labels does not
 change function-type identity [1000].
+Named arguments work in a call statement as well as in a call expression.
 
 ```landin
 r1 := divide(10, 3)

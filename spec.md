@@ -403,7 +403,8 @@ named_return ::= identifier ":" type
 body        ::= block
 block       ::= statement* | value_statement* expression
 value_statement ::= binding | destructuring_binding | assignment
-                  | increment | discard | call | defer | undo | try
+                  | increment | discard | call | labeled_application
+                  | defer | undo | try
                   | "return" "when" expression
                   | "fail" expression "when" expression
                   | break | continue | loop | while | for
@@ -428,11 +429,15 @@ spellings.
 a function hands back. `fail` is the other early exit [0970]: it carries one
 payload-free atom on the declared channel and does not read the successful
 named return.
-A direct or selected call is a statement as well as an expression, because a
-function returning none has nothing to bind and [1020] wants a result discarded
+A direct or selected call, with positional or named arguments, is a statement
+as well as an expression, because a function returning none has nothing to
+bind and [1020] wants a result discarded
 on purpose rather than by omission. A call whose result is dropped that way is
 the one place the kernel accepts an ordinary expression standing
-alone. A standalone `try call` explicitly propagates its failure and discards
+alone. A labelled application in this position must resolve to a function
+call; the shared construction syntax still requires its ordinary value
+context and does not make constructed values standalone statements. A
+standalone `try call` explicitly propagates its failure and discards
 any successful result. `defer` and `undo` each register one call when their
 statement is reached and evaluate the callee and arguments only on applicable
 exits from the lexical block [1100] [1110]. They are statements rather than
@@ -550,7 +555,8 @@ D178--D180 range, array, slice and declared-evidence traversal.
 
 ```landin-grammar
 statement   ::= binding | destructuring_binding | assignment | increment
-              | discard | call | defer | undo | try | return | fail
+              | discard | call | labeled_application | defer | undo | try
+              | return | fail
               | break | continue | loop | while | for | if | match
               | unchecked | bare_block
 assignment  ::= place assignment_operator expression

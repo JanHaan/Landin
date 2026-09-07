@@ -1,0 +1,7 @@
+class: negative
+summary: shared labelled syntax does not make a struct construction a standalone call statement
+program: main.ldn
+constructs: 0700, 0980, 1810, 1820
+codes: L0304, L0304
+status: 1
+targets: linux-x86-64, macos-arm64, synthetic-32
