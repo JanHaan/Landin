@@ -809,7 +809,7 @@ gives bool its two values; written out, that is:
 | `[]T`, `[]mut T` | one non-null aligned base and a `usize` length [0570] [0580] |
 | `utf8` | a distinct immutable `[]u8` view of validated shortest-form UTF-8; its length counts bytes [0600] |
 | `utf16` | a distinct immutable `[]u16` view of valid UTF-16; its length counts code units [0600] |
-| `cstring` | a distinct immutable `ptr u8` view of validated UTF-8 followed by NUL, with no length [0600] |
+| `cstring` | a distinct immutable `ptr u8` view of NUL-terminated bytes with no length; a literal's bytes are validated UTF-8, a foreign boundary's promise only accessible backing through the first NUL [0600] |
 | an atom union | exactly the declaration identities in its flattened set [0630] [0640] |
 
 Two's complement is not a new decision. [0300]'s wrapping
@@ -856,6 +856,12 @@ neither an arm nor `_` is L0312 exactly as for an atom set. The bound pointer
 carries the subject's own origin [0770] [0780], and the empty case carries
 none, so a union built from a frame address still refuses an escaping use of
 the bound pointer.
+An origin names a kind of storage, not a lifetime: "allocated" says a
+reference came from an allocator, and nothing about whether that allocator
+has since released or reset it [0770] [0860]. Two arenas are one origin,
+and a pointer stored in a field and read back carries the field's origin.
+The checks here are the local ones [0770] promises, and freeing storage
+under a live reference remains outside them.
 Fixed arrays hold their declaration-order elements [0520], and ordinary or
 variant-bearing structs hold the fields their nominal declaration gives them
 [0710] [0750]. A function type holds a target code address with the complete

@@ -70,6 +70,11 @@ export LANDIN_GPRBUILD_HOME=/path/to/gprbuild-26.0.0-1
 ./scripts/test.sh         # build, then run the test program
 ```
 
+On macOS the last command ends with the fixture-execution case failing, by
+design: runtime fixtures need `x86_64-pc-linux-gnu-gcc`, and the harness
+fails rather than skips on a host that cannot finish the target. Only that
+case red is the expected Mac result; `scripts/linux-loop.sh` runs them.
+
 Every command prints the toolchain identification first, so a captured log
 names its own compiler.
 

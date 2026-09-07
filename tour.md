@@ -535,8 +535,10 @@ is a property of the access path, not of the number.
 There is no null. "maybe a pointer" is an ordinary union of
 an atom and a pointer type. With one atom, the compiler represents
 it as a plain pointer with 0 for the empty case. The spelling does
-not decide how a union of several atoms and a pointer is laid out;
-R2.50 measures that case against R2.20's variant representation.
+not decide how a union of several atoms and a pointer is laid out.
+The kernel enables the one-atom form only; [1870] names R7.20 as the work
+that enables several atoms beside a pointer, with a tag beside the
+pointer.
 
 ```landin
 none_found: atom
@@ -847,7 +849,7 @@ is visible in the type, but worth saying out loud.
 ### [0600] Text types are distinct views
 
 Text types are distinct views, not one string type:
-utf8    distinct []u8      text, UTF-8 by convention
+utf8    distinct []u8      text, validated shortest-form UTF-8
 utf16   distinct []u16
 cstring distinct ptr u8    no length, NUL terminated
 
@@ -3511,13 +3513,14 @@ authority for open work, implementation dependencies, phase gates,
 dispositions and completion evidence. Every inherited item is traced to
 the construct, prototype finding or archived review section it came from.
 
-The bootstrap compiler now exists. R0's Ada chassis and R1's executable
-kernel are complete: `refine` checks and lowers a program, emits Linux x86-64
-assembly, and can assemble and link a hosted executable. R2 is settling the
-semantic and representation core from executable cases. The first major
-compiler milestone is R3, a complete derived parser program with evidence-
-table dispatch and `any` but without specialization. Target work continues
-through native macOS arm64 and emulator-first Cortex-M.
+The bootstrap compiler now exists. R0's Ada chassis, R1's executable
+kernel, R2's semantic and representation core and R3's first major
+milestone are complete: `refine` checks and lowers a program, emits Linux
+x86-64 assembly, assembles and links a hosted executable, and runs the
+complete derived parser program with evidence-table dispatch and `any` but
+without specialization. R4 is completing the hosted Linux x86-64 path.
+Target work continues through native macOS arm64 and emulator-first
+Cortex-M.
 
 The endpoint is feature-complete pre-v1. Production status, release
 versioning, package acquisition, competitive optimization and

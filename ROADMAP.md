@@ -3147,42 +3147,6 @@ missing path takes a declared recovery edge. The external-boundary fixtures
 pin acceptance of the scalar subset and L0301 for an aggregate signature. The
 complete pinned Linux gate passes 389 cases and 9,140 checks.
 
-### R3.80 — Ship editor and forge language support
-
-Status: complete
-Depends on: R3.50
-
-Make the language immediately usable in the editor families that dominate the
-current systems-programming workflow without granting any editor grammar
-semantic authority. The existing standard-library-only scanner remains the
-single lexical vocabulary for the site and Pygments. Deterministic renderings
-now provide a TextMate grammar and VS Code extension, native Vim, Nano and Kate
-definitions, a Notepad++ UDL, and the Sublime package; the TextMate extension
-is also the importable bundle for JetBrains and Eclipse IDEs and the source
-consumed by Visual Studio.
-
-A checked tree-sitter grammar transcribes the enabled kernel, retains nested
-comments and contextual words, and ships highlighting, indentation, folds,
-locals, brackets and text-object queries. Thin packages make it usable from
-Neovim, Helix and Zed. Emacs has a native major mode and selects its structural
-mode when the grammar is installed. Each package owns file recognition,
-comments and installation instructions rather than exposing only a bare
-grammar. The suffix is R3.80 because R3.60 and R3.70 are stable identities;
-physical order and the dependency below place this effort immediately after
-R3.50 without renumbering them.
-
-Sources: `[1740]`–`[1820]`; `highlight/README.md`.
-
-Exit evidence: the standard-library generator reproduces every lexical
-adapter byte for byte; the isolated highlighter fixtures exercise lexical and
-structural behaviour without building or invoking `refine`; native Vim and
-Neovim smoke tests assert file recognition and real syntax/parser results; the
-generated tree-sitter parser also parses every positive, runtime and `core/*`
-source without an error node in the optional integration pass; TextMate and
-editor manifests parse as JSON, TOML, XML, Vim script, Lua or Emacs Lisp as
-applicable; and `check.py` holds the package inventory and generated
-renderings to their shared sources.
-
 ### R3.60 — Implement diagnostics as runtime dispatch
 
 Status: complete
@@ -3265,6 +3229,42 @@ host bridge's libc `open` call.
 The complete pinned Linux x86-64 debug and release gates pass 389 cases and
 9,153 checks each, including the exact three-line merged diagnostic output and
 the program's own exit status.
+
+### R3.80 — Ship editor and forge language support
+
+Status: complete
+Depends on: R3.50
+
+Make the language immediately usable in the editor families that dominate the
+current systems-programming workflow without granting any editor grammar
+semantic authority. The existing standard-library-only scanner remains the
+single lexical vocabulary for the site and Pygments. Deterministic renderings
+now provide a TextMate grammar and VS Code extension, native Vim, Nano and Kate
+definitions, a Notepad++ UDL, and the Sublime package; the TextMate extension
+is also the importable bundle for JetBrains and Eclipse IDEs and the source
+consumed by Visual Studio.
+
+A checked tree-sitter grammar transcribes the enabled kernel, retains nested
+comments and contextual words, and ships highlighting, indentation, folds,
+locals, brackets and text-object queries. Thin packages make it usable from
+Neovim, Helix and Zed. Emacs has a native major mode and selects its structural
+mode when the grammar is installed. Each package owns file recognition,
+comments and installation instructions rather than exposing only a bare
+grammar. The suffix is R3.80 because R3.60 and R3.70 are stable identities;
+physical order and the dependency below place this effort immediately after
+R3.50 without renumbering them.
+
+Sources: `[1740]`–`[1820]`; `highlight/README.md`.
+
+Exit evidence: the standard-library generator reproduces every lexical
+adapter byte for byte; the isolated highlighter fixtures exercise lexical and
+structural behaviour without building or invoking `refine`; native Vim and
+Neovim smoke tests assert file recognition and real syntax/parser results; the
+generated tree-sitter parser also parses every positive, runtime and `core/*`
+source without an error node in the optional integration pass; TextMate and
+editor manifests parse as JSON, TOML, XML, Vim script, Lua or Emacs Lisp as
+applicable; and `check.py` holds the package inventory and generated
+renderings to their shared sources.
 
 ### R3 gate
 

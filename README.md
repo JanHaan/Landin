@@ -111,7 +111,7 @@ four prototypes and two outside reviews, and that archive is kept
 separately — the conversation, the review, the implementation handoff
 and the full revision log. Nothing here depends on it.
 
-What was worth carrying came along: the specification's closing
+What was worth carrying came along: the tour's closing
 section, WHAT WAS TRIED AND DROPPED, keeps
 the reversals, the things that were designed and then taken out again,
 because a reader who does not know them will propose them back.
@@ -125,6 +125,12 @@ export LANDIN_GPRBUILD_HOME=...  # the pinned GPRbuild
 ./scripts/build.sh
 ./scripts/test.sh
 ```
+
+On a Mac the no-argument `test.sh` always ends with the fixture-execution
+case failing, by design: runtime fixtures are Linux x86-64 evidence and the
+harness fails rather than skips on a host without `x86_64-pc-linux-gnu-gcc`.
+Only that case red is a green Mac run; `scripts/linux-loop.sh` runs the
+fixtures where they execute.
 
 For checksum-safe focused feedback during an edit, use
 `./scripts/dev-test.sh --suite=NAME`, `--case=SUITE/NAME`, or
