@@ -9078,7 +9078,7 @@ package body Landin.Stages.Lowering is
                         end;
                         return;
                      end if;
-                     if Field = 0 then
+                     if Field = 0 and then Path'Length = 0 then
                         case Destination.Kind is
                            when IR.Module_Datum =>
                               IR.Emit_Store_Field
@@ -9094,6 +9094,11 @@ package body Landin.Stages.Lowering is
                                 & " field";
                         end case;
                      else
+                        --  A zero base with a nonempty path is an array
+                        --  reached through constant indexes in array
+                        --  storage.  Keep that path on Store_Element so the
+                        --  verifier and target derive every containing
+                        --  dimension before selecting this scalar element.
                         declare
                            Index : constant IR.Value_Id :=
                              IR.Emit_Number
