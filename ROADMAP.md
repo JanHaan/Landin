@@ -3687,6 +3687,52 @@ is an ordinary factoring choice; it is not required to avoid a compiler
 defect. No parser widening or additional compiler prerequisite follows from
 this composition.
 
+The bounded generic-reference prerequisite now admits symbolic pointer and
+slice fields, preserving their concrete reference descriptors when the nominal
+instance is built. D138's structural deduction descends through exact pointer
+and slice patterns and compares repeated erased actuals by concept identity,
+including actuals recovered from nominal instances. Lowering uses the existing
+stored shapes for slice/any dereferences and copies complete any fields in
+ordinary structs. No grammar, representation, origin rule or core-name
+privilege changes. `runtime/generic-reference-results`,
+`runtime/generic-reference-carriers` and
+`runtime/generic-any-nominal-transport` cover typed construction, field writes,
+copy, return and mutable erased dispatch; the carrier actuals include scalars,
+pointers, reference-containing structs, slices and erased concepts. The
+checking case `reference actuals keep complete identity` separates permission,
+referent and concept keys while reusing aliases. The corresponding
+`negative/generic-reference-*`, `negative/generic-slice-field-*` and
+`negative/generic-any-*` cases retain permission, exact referent extent,
+concept, frame-escape, live-view and wrong-source refusals.
+
+This prerequisite does not close the initialized-view library increment. The
+selected route remains an initialized slice witness, with ordinary typed
+stores before publishing an extended prefix; the constrained opaque-view
+alternative is not selected. Nonempty pointer-element fixed arrays and
+pointer/any fixed-array referent normalization remain a separate bounded
+compiler increment here. The carrier fixture's pointer and nested-slice
+actuals transport an empty slice beside a genuine typed pointee; that is not
+evidence for nonempty pointer arrays or raw-storage bootstrap. Raw transitions,
+initialized allocation helpers and allocator-backed vector growth retain their
+own execution obligations, including zero-sized elements and heterogeneous
+mutable dispatch after growth.
+
+Three independent defects exposed by the reduced probes remain owned here for
+separate bounded repairs. A local inferred from `erased.entry()` can query
+conformance provider entries before finalization, even without generics;
+explicitly typed result locals allow the transport fixture to execute. Taking
+`addr source[0]` from a slice parameter is wrongly assigned frame origin even
+in a monomorphic function; the transport constructor instead accepts a genuine
+pointer and slice separately and declares both sources. Finally, the parser
+accepts a named call as a non-final statement while [1810]'s grammar admits it
+only as an expression, including a final body expression; explicit-static
+transport tests currently use that admitted final-expression position. None
+of these gaps licenses erasing origin facts or weakening a negative fixture.
+The initialized-view implementation must also retain [0860]'s shallow alias
+limit: a reference inserted through an alias is not generally propagated back
+to every other view of that storage, so writable views do not establish
+whole-program escape safety.
+
 D191 gives this item three construct rows R4.10 could not settle. `[0500]`'s
 `mem.offset` and `mem.base_of` are library conveniences this slice adds or
 records as unneeded; `slice_from` is not among them, because D151 rejected it

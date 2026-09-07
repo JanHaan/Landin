@@ -1,0 +1,6 @@
+class: negative
+summary: reference deduction retains the complete fixed-array referent extent
+program: program.ldn
+constructs: 0430, 0440, 0570, 0790, 1290, 1920
+targets: linux-x86-64, macos-arm64
+codes: L0301

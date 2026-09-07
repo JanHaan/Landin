@@ -2412,7 +2412,10 @@ leaves every static formal for deduction, or names every one explicitly in its
 single call list; partial explicit/deduced tuples are refused. A direct call
 recursively matches each written runtime parameter type against the argument's
 independently synthesized normalized type. Direct type formals bind complete
-descriptors. Fixed arrays match exact bounds and elements; a direct fixed bound
+descriptors, including the exact concept of an `any` value. Pointer and slice
+patterns match permission and ordinary view exactly, then match their complete
+referents recursively; deduction does not perform reference relaxation.
+Fixed arrays match exact bounds and elements; a direct fixed bound
 binds its length, while a computed bound such as `N * 2` is never inverted and
 is checked only after another occurrence has bound `N`. Parameterized nominal
 patterns require the same source template and match their complete stored tuple,

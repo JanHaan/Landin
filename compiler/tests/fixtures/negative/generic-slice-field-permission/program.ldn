@@ -1,0 +1,6 @@
+carrier: type (t: type) = struct
+    prefix: []mut t
+end carrier
+bad: (inout target: carrier(u32), source: []u32) -> none =
+    target.prefix = source
+end bad

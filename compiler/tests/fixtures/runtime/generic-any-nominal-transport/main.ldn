@@ -1,0 +1,60 @@
+counter: type = concept (t: type)
+    bump: (self: ptr mut t) -> (n: i32)
+end counter
+one: type = struct
+    value: i32
+end one
+two: type = struct
+    sentinel: i32
+    value: i32
+end two
+bump_one: (self: ptr mut one) -> (n: i32) =
+    inc self.val.value
+    n = self.val.value
+end bump_one
+bump_two: (self: ptr mut two) -> (n: i32) =
+    self.val.value = self.val.value + 2
+    n = self.val.value
+end bump_two
+one is counter (bump: bump_one)
+two is counter (bump: bump_two)
+mut left: one = (value: 16)
+mut right: two = (sentinel: 123, value: 21)
+box: type (t: type) = struct
+    value: t
+end box
+pack: (t: type, value: t) -> (result: box(t) from value) =
+    result = (value: value)
+end pack
+copy: (t: type, source: box(t)) -> (result: box(t) from source) =
+    result = source
+end copy
+replace: (t: type, inout target: box(t), value: t) -> none =
+    target.value = value
+end replace
+explicit_replace: (inout target: box(any counter), value: any counter)
+                  -> none =
+    replace(t: any counter, target: target, value: value)
+end explicit_replace
+read: (t: type, source: ptr mut t) -> (value: t from source) =
+    value = source.val
+end read
+public main: () -> (code: i32) =
+    a: any counter = any(addr left)
+    b: any counter = any(addr right)
+    mut saved := copy(pack(a))
+    first := read(addr saved.value)
+    x: i32 = first.bump()
+    replace(saved, b)
+    second := read(addr saved.value)
+    y: i32 = second.bump()
+    explicit: box(any counter) = copy(saved)
+    last := explicit.value
+    _ = last.bump()
+    explicit_replace(saved, a)
+    third := read(addr saved.value)
+    _ = third.bump()
+    code = if x == 17 and y == 23 and left.value == 18
+              and right.value == 25 and right.sentinel == 123
+           then 42 else 1 end if
+end main

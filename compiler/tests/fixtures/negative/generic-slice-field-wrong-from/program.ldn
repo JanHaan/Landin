@@ -1,0 +1,11 @@
+carrier: type (t: type) = struct
+    prefix: []mut t
+end carrier
+wrong: (t: type, left: carrier(t), right: carrier(t))
+       -> (result: []mut t from right) =
+    result = left.prefix
+end wrong
+use: (left: carrier(u32), right: carrier(u32)) -> none =
+    value := wrong(left, right)
+    _ = lenof value
+end use

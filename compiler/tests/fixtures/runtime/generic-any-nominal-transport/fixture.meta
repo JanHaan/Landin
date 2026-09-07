@@ -1,0 +1,6 @@
+class: runtime
+summary: heterogeneous mutable any values retain data and evidence through nominal deduction and pointer results
+program: main.ldn
+status: 42
+constructs: 0430, 0750, 0790, 1290, 1370, 1380, 1390, 1920
+targets: linux-x86-64

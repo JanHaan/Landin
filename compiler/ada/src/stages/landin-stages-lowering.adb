@@ -2402,6 +2402,7 @@ package body Landin.Stages.Lowering is
                           Type_At (Of_Tree, Node);
                         Shape : constant IR.Field_Shape :=
                           (if Held in Ty.Aggregate | Ty.Fixed_Array
+                                | Ty.Slice_Value | Ty.Any_Value
                            then Neutral_Value_Shape (Of_Tree, Node)
                            else
                              (Kind => IR.Scalar_Field_Shape,
@@ -8781,7 +8782,8 @@ package body Landin.Stages.Lowering is
                                (Types.all, Wrote, Field);
                         begin
                            if Landin.Checking.Descriptor_Of
-                             (Types.all, Shape.Reference).Kind = Ty.Slice_Value
+                             (Types.all, Shape.Reference).Kind
+                               in Ty.Slice_Value | Ty.Any_Value
                            then
                               IR.Emit_Array_Copy
                                 (Unit.all, Filling,

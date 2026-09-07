@@ -1,0 +1,113 @@
+counter: type = concept (t: type)
+    bump: (self: ptr mut t) -> (value: i32)
+end counter
+node: type = struct
+    value: i32
+end node
+holder: type = struct
+    value: ptr mut node
+end holder
+bump: (self: ptr mut node) -> (value: i32) =
+    inc self.val.value
+    value = self.val.value
+end bump
+node is counter (bump: bump)
+mut left: node = (value: 16)
+mut right: node = (value: 24)
+
+carrier: type (t: type) = struct
+    first: ptr mut t
+    prefix: []mut t
+end carrier
+make: (t: type, first: ptr mut t, source: []mut t)
+      -> (result: carrier(t) from first, source) =
+    result = (first: first, prefix: source)
+end make
+make_empty: (t: type, first: ptr mut t)
+            -> (result: carrier(t) from first) =
+    result = (first: first, prefix: [])
+end make_empty
+copy: (t: type, source: carrier(t)) -> (result: carrier(t) from source) =
+    result = source
+end copy
+used: (t: type, source: carrier(t)) -> (result: []mut t from source) =
+    result = source.prefix
+end used
+get: (t: type, source: carrier(t)) -> (result: t from source) =
+    result = source.first.val
+end get
+replace: (t: type, source: carrier(t), value: t) -> none =
+    source.first.val = value
+end replace
+explicit_replace: (source: carrier(any counter), value: any counter)
+                  -> none =
+    replace(t: any counter, source: source, value: value)
+end explicit_replace
+retarget: (t: type, inout target: carrier(t), source: []mut t) -> none =
+    target.first = addr source[0]
+    target.prefix = source
+end retarget
+public main: () -> (code: i32) =
+    mut numbers: [2]u32 = [17, 25]
+    mut scalar := make(addr numbers[0], numbers[0..<2])
+    copied_scalar := copy(scalar)
+    scalar_view := used(copied_scalar)
+    if lenof scalar_view <> 2 or get(copied_scalar) <> 17 then
+        code = 1
+        return
+    end if
+    retarget(scalar, numbers[1..<2])
+    replacement: u32 = 26
+    replace(scalar, replacement)
+    if get(scalar) <> 26 or numbers[1] <> 26 then
+        code = 2
+        return
+    end if
+    mut stored_pointer: ptr mut node = addr left
+    pointer_carrier := copy(make_empty(addr stored_pointer))
+    pointer_view := used(pointer_carrier)
+    replace(pointer_carrier, addr right)
+    pointer := get(pointer_carrier)
+    if pointer.val.value <> 24 or lenof pointer_view <> 0 then
+        code = 3
+        return
+    end if
+    mut holders: [2]holder
+    holders[0] = (value: addr left)
+    holders[1] = (value: addr right)
+    nominal_carrier := copy(make(addr holders[0], holders[0..<2]))
+    replacement_holder: holder = (value: addr right)
+    replace(nominal_carrier, replacement_holder)
+    held := get(nominal_carrier)
+    if held.value.val.value <> 24 then
+        code = 5
+        return
+    end if
+    mut nested_slice: []mut u32 = numbers[0..<2]
+    slice_carrier := copy(make_empty(addr nested_slice))
+    returned_slice := get(slice_carrier)
+    if lenof returned_slice <> 2 then
+        code = 6
+        return
+    end if
+    replace(slice_carrier, numbers[1..<2])
+    if lenof nested_slice <> 1 or nested_slice[0] <> 26 then
+        code = 7
+        return
+    end if
+    mut erased: [2]any counter
+    erased[0] = any(addr left)
+    erased[1] = any(addr right)
+    erased_carrier := copy(make(addr erased[0], erased[0..<2]))
+    erased_view := used(erased_carrier)
+    first := get(erased_carrier)
+    _ = first.bump()
+    replace(erased_carrier, erased_view[1])
+    second := get(erased_carrier)
+    _ = second.bump()
+    explicit_carrier: carrier(any counter) = copy(erased_carrier)
+    explicit_replace(explicit_carrier, first)
+    third := get(explicit_carrier)
+    _ = third.bump()
+    code = if left.value == 18 and right.value == 25 then 42 else 4 end if
+end main

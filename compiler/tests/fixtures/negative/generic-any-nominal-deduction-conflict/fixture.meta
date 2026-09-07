@@ -1,0 +1,6 @@
+class: negative
+summary: a nominal any actual cannot deduce a different concept at a repeated formal
+program: program.ldn
+constructs: 0430, 0440, 0570, 0790, 1290, 1920
+targets: linux-x86-64, macos-arm64
+codes: L0301

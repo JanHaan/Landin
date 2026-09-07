@@ -1,0 +1,7 @@
+view: (t: type, source: []mut t) -> (result: []mut t from source) =
+    result = source
+end view
+bad: (left: []mut u32, right: []mut u32)
+     -> (result: []mut u32 from right) =
+    result = view(left)
+end bad

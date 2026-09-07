@@ -1,0 +1,11 @@
+first: type = struct
+    value: i32
+end first
+second: type = struct
+    value: i32
+end second
+same: (t: type, left: ptr t, right: ptr t) -> none =
+end same
+bad: (left: ptr first, right: ptr second) -> none =
+    same(left, right)
+end bad
