@@ -1,0 +1,11 @@
+retain: (escaping source: []u32) -> (result: []u32 from source) =
+    result = source
+end retain
+
+bad: () -> (result: u32) =
+    values: [1]u32 = [42]
+    result = 0
+    for value in retain(values[0..<1]) do
+        result += value
+    end for
+end bad

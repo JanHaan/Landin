@@ -1,0 +1,6 @@
+class: runtime
+summary: scalar traversal values do not make an accumulator borrow source storage
+program: main.ldn
+status: 42
+constructs: 0520, 0800, 0830, 0860, 1320
+targets: linux-x86-64

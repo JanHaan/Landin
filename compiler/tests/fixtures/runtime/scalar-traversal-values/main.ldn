@@ -1,0 +1,13 @@
+discard: (sink source: [4]i32) -> none =
+end discard
+
+public main: () -> (code: i32) =
+    mut values: [4]i32 = [1, 2, 3, 4]
+    mut source: []mut i32 = values[0..<4]
+    mut squares: i32 = 0
+    for value in source do
+        squares += value * value
+    end for
+    discard(values)
+    code = if squares == 30 then 42 else 1 end if
+end main

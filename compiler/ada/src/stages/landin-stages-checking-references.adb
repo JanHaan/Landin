@@ -1047,19 +1047,17 @@ package body Landin.Stages.Checking.References is
                            if Landin.Checking.Traversal_Evidence_Of
                              (Types.all, Tree, Node)
                                 = Landin.Checking.No_Conformance
+                             and then Has_References (Element)
                            then
-                              --  D160: the element is a place inside the
-                              --  traversed storage, so a reference read out
-                              --  of it derives from wherever that storage
-                              --  came from.
+                              --  D160: a reference-bearing element read out
+                              --  of the traversed storage derives from
+                              --  wherever that storage came from.
                               Origins (Element) := Source_Fact;
                            else
-                              --  D180: iterable.item returns an ordinary
-                              --  value with [1320]'s source-free result
-                              --  signature.  Its origin is therefore the
-                              --  same empty fact an explicit call with that
-                              --  signature produces, not the source alias
-                              --  fact used by arrays and slices.
+                              --  A reference-free ordinary element carries
+                              --  no origin into scalar computations. D180's
+                              --  iterable.item likewise returns an ordinary
+                              --  value with [1320]'s source-free signature.
                               Origins (Element) := No_Origin;
                            end if;
                         end if;
