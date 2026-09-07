@@ -575,6 +575,10 @@ package body Landin.Stages.Checking is
       function Exact_Concept_Entry_Signature
         (Evidence : Landin.Checking.Conformance_Id;
          Position : Positive) return Landin.Checking.Signature_Id;
+      function Provider_Preserves_Concept_Labels
+        (Evidence  : Landin.Checking.Conformance_Id;
+         Position  : Positive;
+         Signature : Landin.Checking.Signature_Id) return Boolean;
       function Any_Selection_Signature
         (Of_Tree : Syn.Tree; Selection : Syn.Node_Id)
          return Landin.Checking.Signature_Id;
@@ -11093,6 +11097,75 @@ package body Landin.Stages.Checking is
              else Sources (1 .. Source_Count)));
       end Exact_Concept_Entry_Signature;
 
+      --  A provider signature is also the runtime target signature, but its
+      --  written names are implementation details.  It may stand in for the
+      --  concept-facing call interface only when every caller-visible label
+      --  is already the concept label.  Structural conformance deliberately
+      --  ignores those names, so Signatures_Agree cannot answer this
+      --  interface question.
+      function Provider_Preserves_Concept_Labels
+        (Evidence  : Landin.Checking.Conformance_Id;
+         Position  : Positive;
+         Signature : Landin.Checking.Signature_Id) return Boolean
+      is
+         Concept : constant Landin.Checking.Concept_Id :=
+           Landin.Checking.Conformance_Concept (Types.all, Evidence);
+         Declaration : constant Res.Declaration_Id :=
+           Landin.Checking.Concept_Declaration (Types.all, Concept);
+         Concept_Tree : constant not null access constant Syn.Tree :=
+           Tree_For (Res.Source_Of (Meanings.all, Declaration));
+         Concept_Node : constant Syn.Node_Id :=
+           Res.Node_Of (Meanings.all, Declaration);
+         Entry_Node : Syn.Node_Id;
+      begin
+         if Position > Syn.Concept_Entry_Count
+           (Concept_Tree.all, Concept_Node)
+         then
+            return False;
+         end if;
+         Entry_Node := Syn.Nth_Concept_Entry
+           (Concept_Tree.all, Concept_Node, Position);
+         if Landin.Checking.Signature_Parameter_Count
+              (Types.all, Signature)
+              /= Syn.Parameter_Count (Concept_Tree.all, Entry_Node)
+           or else Landin.Checking.Signature_Result_Count
+              (Types.all, Signature)
+              /= Syn.Return_Count (Concept_Tree.all, Entry_Node)
+         then
+            return False;
+         end if;
+
+         --  The erased receiver is supplied by dispatch and has no written
+         --  call-site label.  Every remaining parameter can be named by the
+         --  caller, and every result label names a multiple-result field.
+         for Index in 2 .. Syn.Parameter_Count
+           (Concept_Tree.all, Entry_Node)
+         loop
+            if Landin.Checking.Nth_Signature_Parameter
+              (Types.all, Signature, Index).Name
+                /= Syn.Name
+                  (Concept_Tree.all,
+                   Syn.Nth_Parameter
+                     (Concept_Tree.all, Entry_Node, Index))
+            then
+               return False;
+            end if;
+         end loop;
+         for Index in 1 .. Syn.Return_Count
+           (Concept_Tree.all, Entry_Node)
+         loop
+            if Landin.Checking.Nth_Signature_Result
+              (Types.all, Signature, Index).Name
+                /= Syn.Name
+                  (Concept_Tree.all,
+                   Syn.Nth_Return (Concept_Tree.all, Entry_Node, Index))
+            then
+               return False;
+            end if;
+         end loop;
+         return True;
+      end Provider_Preserves_Concept_Labels;
+
       function Any_Selection_Signature
         (Of_Tree : Syn.Tree; Selection : Syn.Node_Id)
          return Landin.Checking.Signature_Id
@@ -11390,11 +11463,11 @@ package body Landin.Stages.Checking is
             Signature : Landin.Checking.Signature_Id :=
               Landin.Checking.No_Signature;
          begin
-            --  Preserve the already-validated provider signature when this
-            --  call is visited in the ordinary body pass.  Only initializer
-            --  inference reaches the exact concept path before the provider
-            --  run exists; keeping that distinction also leaves established
-            --  signature identities and emitted IR unchanged.
+            --  Preserve an already-validated provider signature only when it
+            --  is also the caller-visible concept interface.  A provider may
+            --  rename parameters and results because conformance is
+            --  structural; dispatch still targets that provider, while the
+            --  erased call must retain the concept's labels in every pass.
             if Direct_Entry <= Landin.Checking.Conformance_Entry_Count
               (Types.all, Declaring_Evidence)
             then
@@ -11408,13 +11481,24 @@ package body Landin.Stages.Checking is
                       (Types.all, Declaring_Evidence,
                        Positive (Direct_Entry));
                begin
-                  Signature :=
-                    (if Instance /= Landin.Checking.No_Routine_Instance
-                     then Landin.Checking.Routine_Signature_Of
-                       (Types.all, Instance)
-                     elsif Provider /= Res.No_Declaration
-                     then Landin.Checking.Signature_Of (Types.all, Provider)
-                     else Landin.Checking.No_Signature);
+                  declare
+                     Candidate : constant Landin.Checking.Signature_Id :=
+                       (if Instance /= Landin.Checking.No_Routine_Instance
+                        then Landin.Checking.Routine_Signature_Of
+                          (Types.all, Instance)
+                        elsif Provider /= Res.No_Declaration
+                        then Landin.Checking.Signature_Of
+                          (Types.all, Provider)
+                        else Landin.Checking.No_Signature);
+                  begin
+                     if Candidate /= Landin.Checking.No_Signature
+                       and then Provider_Preserves_Concept_Labels
+                         (Declaring_Evidence, Positive (Direct_Entry),
+                          Candidate)
+                     then
+                        Signature := Candidate;
+                     end if;
+                  end;
                end;
             end if;
             if Signature = Landin.Checking.No_Signature then

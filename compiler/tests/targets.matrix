@@ -18,6 +18,7 @@ negative/any-entry-not-object-safe | linux-x86-64, macos-arm64, synthetic-32
 negative/any-frame-origin-escape | linux-x86-64, macos-arm64, synthetic-32
 negative/any-inferred-result-frame-escape | linux-x86-64, macos-arm64, synthetic-32
 negative/any-module-null-pair | linux-x86-64, macos-arm64, synthetic-32
+negative/any-provider-result-source-mismatch | linux-x86-64, macos-arm64, synthetic-32
 negative/any-readonly-source-for-mutable-entry | linux-x86-64, macos-arm64, synthetic-32
 negative/any-self-convention | linux-x86-64, macos-arm64, synthetic-32
 negative/any-self-not-exact | linux-x86-64, macos-arm64, synthetic-32
