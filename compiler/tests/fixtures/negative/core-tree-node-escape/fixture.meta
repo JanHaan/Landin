@@ -1,0 +1,8 @@
+class: negative
+summary: index-tree retained names and borrowed nodes preserve source escape checks
+expect: expected.txt
+args: --root=../.. ../tests/fixtures/negative/core-tree-node-escape
+codes: L0314
+status: 1
+constructs: 0790, 0800, 0830, 1200
+targets: linux-x86-64, macos-arm64, synthetic-32

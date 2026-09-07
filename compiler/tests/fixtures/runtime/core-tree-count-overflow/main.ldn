@@ -1,0 +1,73 @@
+import core/failing
+import core/heap
+import core/tree
+
+label: utf8 = "node"
+
+public main: () -> (code: i32) =
+    code = 1
+    mut host := heap.host()
+    budget: usize = 10
+    mut state := failing.count_down(addr host, budget)
+    mut value := tree.new_tree()
+    first: tree.node_id = tree.add_leaf(value, state, label) else (problem)
+        _ = problem
+        return
+    end
+    second: tree.node_id = tree.add_leaf(value, state, label) else (problem)
+        _ = problem
+        return
+    end
+    return when tree.ordinal(first) <> 0
+    mut last: tree.node_id = second
+    mut left: u64 = 1
+    mut right: u64 = 1
+    two: u32 = 2
+    mut overflow: bool = false
+    mut unchanged: bool = false
+    mut at: usize = 0
+    while at < 50 do
+        expected: u64 = left + right
+        before: usize = tree.length(value)
+        start: tree.node_id = tree.id(u32(before - 2))
+        added: tree.node_id = tree.add_branch(value, state, label, start, two)
+            else (problem)
+                _ = problem
+                overflow = true
+                last
+            end
+        if overflow then
+            unchanged = tree.length(value) == before
+            return when expected <= 4294967295
+            break
+        end if
+        count: u32 = tree.count_leaves(value, added) else (problem)
+            _ = problem
+            return
+        end
+        return when u64(count) <> expected
+        left = right
+        right = expected
+        last = added
+        inc at
+    end while
+    final: u32 = tree.count_leaves(value, last) else (problem)
+        _ = problem
+        return
+    end
+    mut invalid: bool = false
+    maximum: u32 = 0 -% 1
+    _ = tree.count_leaves(value, tree.id(maximum)) else (problem)
+        _ = problem
+        invalid = true
+        0
+    end
+    before_release: usize = tree.length(value)
+    tree.release(value, state)
+    if overflow and unchanged and invalid and before_release == 47
+       and final == 2971215073 and failing.attempts(state) == 4
+       and failing.frees(state) == 4 and failing.live(state) == 0
+    then
+        code = 42
+    end if
+end main

@@ -3896,6 +3896,31 @@ complete pinned Linux debug and release gates each pass 403 cases and 10,838
 checks on unchanged source. Authoritative native execution remains required
 after integration and publication.
 
+The index-tree increment uses append-only nodes and explicit retained-name
+contracts. Its node ID is a private single-`u32` nominal wrapper, with explicit
+construction/extraction; [0650]'s general `distinct` syntax stays refused.
+Branches may select only existing contiguous children. Empty branches count
+zero, and shared children count with path multiplicity. A checked cached `u32`
+leaf total avoids recursion and refuses overflow before mutation. Neither
+integer edges nor the cache erase the `utf8` names' backing origins, and no
+serialization claim follows. Source-built Linux preflight covers heap, arena
+and fixed-provider allocation failure/retry, unchanged IDs and names, exact
+release accounting, and cached leaf-count overflow before mutation. New
+negative controls refuse retained frame names, escaping borrowed nodes and
+out-of-range ID literals. With the reviewed generic-call text-literal repair,
+the original runtime also executes deep chains, shared and empty branches,
+retained names after growth, and invalid child ranges. Complete pinned Linux
+debug and release gates each pass 404 cases and 10,855 checks on unchanged
+source. The font-aware repository check is clean; authoritative native
+validation remains required after integration and publication.
+
+Tree integration also exposed two compiler follow-ups: a scalar `lenof`
+snapshot still inherits its reference operand fact across a later mutation,
+and a typed variant-bearing struct local initialized through `try` is refused
+by the initializer-shape classification. The tree uses immediate content
+assertions and explicit call-site error forwarding; these do not close either
+general compiler behavior. The independent reductions remain under `.scratch/`.
+
 The initialized-view implementation must also retain [0860]'s shallow alias
 limit: a reference inserted through an alias is not generally propagated back
 to every other view of that storage, so writable views do not establish

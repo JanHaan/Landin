@@ -1,0 +1,8 @@
+class: negative
+summary: tree node identifiers reject an ordinal outside their u32 representation
+expect: expected.txt
+args: --root=../.. ../tests/fixtures/negative/core-tree-id-out-of-range
+codes: L0300
+status: 1
+constructs: 0160, 1200
+targets: linux-x86-64, macos-arm64, synthetic-32

@@ -1,0 +1,6 @@
+import core/tree
+
+public main: () -> (code: i32) =
+    wrong: tree.node_id = tree.id(4294967296)
+    code = i32(tree.ordinal(wrong))
+end main

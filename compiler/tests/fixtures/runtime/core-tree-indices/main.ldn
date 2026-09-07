@@ -1,0 +1,87 @@
+import core/failing
+import core/heap
+import core/tree
+
+public main: () -> (code: i32) =
+    code = 1
+    mut host := heap.host()
+    budget: usize = 10
+    mut state := failing.count_down(addr host, budget)
+    zero_count: u32 = 0
+    one_count: u32 = 1
+    three_count: u32 = 3
+    four_count: u32 = 4
+    maximum: u32 = 0 -% 1
+    mut value := tree.new_tree()
+    a: tree.node_id = tree.add_leaf(value, state, "a") else (problem)
+            _ = problem
+            return
+        end
+    b: tree.node_id = tree.add_leaf(value, state, "b") else (problem)
+            _ = problem
+            return
+        end
+    c: tree.node_id = tree.add_leaf(value, state, "c") else (problem)
+            _ = problem
+            return
+        end
+    root: tree.node_id = tree.add_branch(value, state, "root", a, three_count)
+        else (problem)
+            _ = problem
+            return
+        end
+    three: u32 = tree.count_leaves(value, root) else 0
+    zero: tree.node_id = tree.add_branch(value, state, "empty", a, zero_count)
+        else (problem)
+            _ = problem
+            return
+        end
+    empty: u32 = tree.count_leaves(value, zero) else 1
+    shared: tree.node_id = tree.add_branch(value, state, "shared", a, four_count)
+        else (problem)
+            _ = problem
+            return
+        end
+    six: u32 = tree.count_leaves(value, shared) else 0
+    mut deep: tree.node_id = root
+    mut at: usize = 0
+    while at < 512 do
+        deep = tree.add_branch(value, state, "nested", deep, one_count)
+            else (problem)
+            _ = problem
+            return
+        end
+        inc at
+    end while
+    if not begin
+        selected := tree.get(value, b) else (problem)
+            _ = problem
+            return
+        end
+        text: utf8 = tree.name(selected)
+        bytes: []u8 = text[0]
+        lenof text == 1 and bytes[0] == 98
+    end then
+        return
+    end if
+    deep_count: u32 = tree.count_leaves(value, deep) else 0
+    before: usize = tree.length(value)
+    mut invalid: bool = false
+    _ = tree.add_branch(value, state, "invalid", c, maximum)
+        else (problem)
+            _ = problem
+            invalid = true
+            return_id()
+        end
+    unchanged: bool = tree.length(value) == before
+    tree.release(value, state)
+    if three == 3 and empty == 0 and six == 6 and deep_count == 3
+      and invalid and unchanged and tree.length(value) == 0
+      and failing.live(state) == 0 and failing.successes(state) == 8
+      and failing.frees(state) == 8
+    then
+        code = 42
+    end if
+end main
+
+return_id: () -> (id: tree.node_id) = tree.id(0) end return_id
