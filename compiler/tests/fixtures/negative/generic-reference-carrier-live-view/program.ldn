@@ -1,0 +1,13 @@
+box: type (t: type) = struct
+    value: t
+end box
+get: (t: type, source: box(t)) -> (result: t from source) =
+    result = source.value
+end get
+move: (t: type, inout source: box(t)) -> none =
+end move
+bad: (inout source: box([]mut u32)) -> (n: u32) =
+    view := get(source)
+    move(source)
+    n = view[0]
+end bad

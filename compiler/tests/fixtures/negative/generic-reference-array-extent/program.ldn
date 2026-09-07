@@ -1,0 +1,5 @@
+same: (t: type, left: ptr t, right: ptr t) -> none =
+end same
+bad: (left: ptr [2]u32, right: ptr [3]u32) -> none =
+    same(left, right)
+end bad

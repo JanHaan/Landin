@@ -1,0 +1,6 @@
+identity: (t: type, p: ptr mut t) -> (q: ptr mut t from p) =
+    q = p
+end identity
+bad: (source: ptr u32) -> none =
+    result := identity(source)
+end bad

@@ -1,0 +1,9 @@
+identity: (t: type, p: ptr mut t) -> (q: ptr mut t from p) =
+    q = p
+end identity
+retain: (escaping value: ptr mut u32) -> none =
+end retain
+bad: (source: ptr mut u32) -> none =
+    copied := identity(source)
+    retain(copied)
+end bad

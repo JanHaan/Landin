@@ -8069,6 +8069,14 @@ structural atom-set, fixed-array, nominal, pointer/slice reference,
 `any`-concept or concrete function-signature descriptor; every repeat must
 agree exactly.
 
+A pointer or slice pattern first matches its reference kind, permission and
+ordinary view exactly, then recursively matches its complete referent
+descriptor. Deduction does not relax a mutable reference to a read-only
+pattern or treat a text view or pointer union as an ordinary reference.
+Referent identity includes nested references, nominal identity, fixed-array
+extent, function signature and erased concept as applicable. A direct formal
+or stored nominal actual containing `any C` agrees only with that same C.
+
 A fixed-array pattern recursively matches its exact element descriptor and
 bound. A direct fixed formal in the bound binds the argument length. A computed
 D136 bound never contributes an equation to solve: the checker defers it until
@@ -8086,7 +8094,8 @@ inventing an actual. A function-signature pattern recursively matches parameter
 and result counts and types plus its infallible, concrete or still-inferred
 error form; parameter and result labels do not participate [1000]. A nested
 type formal may therefore bind from a nominal actual tuple, fixed-array element,
-function parameter, function result or concrete function error set.
+function parameter, function result, reference referent or concrete function
+error set.
 
 Every static formal must be bound. Deduction uses no return context, conversion,
 constraint search, arithmetic inversion or user-code execution. A call either
@@ -8168,6 +8177,22 @@ facts`, the lowering case `generic routines lower once per key`,
 `runtime/generic-identity-deduction`,
 `runtime/generic-fixed-array-deduction`,
 `runtime/generic-direct-descriptor-deduction`,
+`runtime/generic-reference-results`,
+`runtime/generic-reference-carriers`,
+`runtime/generic-any-nominal-transport`,
+`negative/generic-any-nominal-deduction-conflict`,
+`negative/generic-reference-nested-permission`,
+`negative/generic-reference-referent-identity`,
+`negative/generic-reference-array-extent`,
+`negative/generic-reference-pattern-permission`,
+`negative/generic-reference-result-frame`,
+`negative/generic-reference-result-wrong-from`,
+`negative/generic-reference-result-immutable`,
+`negative/generic-reference-result-escaping`,
+`negative/generic-reference-carrier-live-view`,
+`negative/generic-any-carrier-frame-escape`,
+`negative/generic-slice-field-permission`,
+`negative/generic-slice-field-wrong-from`,
 `runtime/generic-structural-deduction`,
 `runtime/generic-zero-nominal-array-signatures`,
 `runtime/generic-declared-errors`,

@@ -1,0 +1,24 @@
+show: type = concept (t: type)
+    value: (self: ptr t) -> (n: i32)
+end show
+node: type = struct
+    value: i32
+end node
+value: (self: ptr node) -> (n: i32) =
+    n = self.val.value
+end value
+node is show (value: value)
+box: type (t: type) = struct
+    value: t
+end box
+pack: (t: type, value: t) -> (result: box(t) from value) =
+    result = (value: value)
+end pack
+retain: (escaping value: box(any show)) -> none =
+end retain
+bad: () -> none =
+    local: node = (value: 42)
+    erased: any show = any(addr local)
+    copied := pack(erased)
+    retain(copied)
+end bad

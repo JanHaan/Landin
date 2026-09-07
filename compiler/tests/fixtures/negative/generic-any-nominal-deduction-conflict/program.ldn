@@ -1,0 +1,15 @@
+first: type = concept (t: type)
+    value: (self: ptr t) -> (n: i32)
+end first
+second: type = concept (t: type)
+    value: (self: ptr t) -> (n: i32)
+end second
+box: type (t: type) = struct
+    marker: bool
+end box
+same: (t: type, source: box(t), value: t) -> none =
+end same
+bad: (value: any second) -> none =
+    source: box(any first) = (marker: true)
+    same(source, value)
+end bad

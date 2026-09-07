@@ -6855,6 +6855,9 @@ package body Landin.Stages.Checking is
                when Ty.Pointer_Value | Ty.Slice_Value =>
                   return Landin.Checking.References_Agree
                     (Types.all, Left.Reference, Right.Reference);
+               when Ty.Any_Value =>
+                  return Left.Concept /= Landin.Checking.No_Concept
+                    and then Left.Concept = Right.Concept;
                when others =>
                   return False;
             end case;
@@ -7460,6 +7463,52 @@ package body Landin.Stages.Checking is
                            Position, Item.Parent_Limit);
                      end;
                   end if;
+               end;
+            end if;
+
+            if Kind in Syn.Pointer_Type | Syn.Slice_Type then
+               if Actual.Kind /=
+                 (if Kind = Syn.Pointer_Type then Ty.Pointer_Value
+                  else Ty.Slice_Value)
+                 or else Actual.Reference = Landin.Checking.No_Reference
+               then
+                  Report_Pattern_Failure
+                    (Argument, Position, Pattern_Tree, Pattern,
+                     "this argument is not the reference required by its"
+                     & " parameter pattern");
+                  return False;
+               end if;
+               declare
+                  Reference : constant Landin.Checking.Reference_Descriptor :=
+                    Landin.Checking.Descriptor_Of
+                      (Types.all, Actual.Reference);
+                  Referent : constant Type_Descriptor :=
+                    (Kind => Reference.Referent,
+                     Nominal => Reference.Nominal,
+                     Length => Reference.Length,
+                     Element => Reference.Element,
+                     Element_Nominal => Reference.Element_Nominal,
+                     Reference => Reference.Reference,
+                     Signature => Reference.Signature,
+                     Concept => Reference.Concept,
+                     Atoms => Reference.Atoms,
+                     others => <>);
+               begin
+                  if Reference.Mutable /= Syn.Is_Referent_Mutable
+                    (Pattern_Tree, Pattern)
+                    or else Reference.View /= Ty.Ordinary_View
+                    or else Reference.Empty_Atom /= Res.No_Declaration
+                  then
+                     Report_Pattern_Failure
+                       (Argument, Position, Pattern_Tree, Pattern,
+                        "this argument has a different reference permission"
+                        & " or view from its parameter pattern");
+                     return False;
+                  end if;
+                  return Match_Type_Pattern
+                    (Pattern_Tree,
+                     Syn.Referenced_Type (Pattern_Tree, Pattern),
+                     Referent, Argument, Position, Map_Limit);
                end;
             end if;
 

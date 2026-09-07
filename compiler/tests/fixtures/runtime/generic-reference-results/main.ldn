@@ -1,0 +1,61 @@
+counter: type = concept (t: type)
+    bump: (self: ptr mut t) -> (value: i32)
+end counter
+node: type = struct
+    value: i32
+end node
+bump: (self: ptr mut node) -> (value: i32) =
+    inc self.val.value
+    value = self.val.value
+end bump
+node is counter (bump: bump)
+mut left: node = (value: 16)
+mut right: node = (value: 24)
+
+identity: (t: type, p: ptr mut t) -> (q: ptr mut t from p) =
+    q = p
+end identity
+read: (t: type, p: ptr mut t) -> (value: t from p) =
+    value = p.val
+end read
+write: (t: type, p: ptr mut t, value: t) -> none =
+    p.val = value
+end write
+view: (t: type, source: []mut t) -> (result: []mut t from source) =
+    result = source
+end view
+public main: () -> (code: i32) =
+    mut number: u32 = 1
+    q := identity(addr number)
+    q.val = 42
+    mut pointer: ptr mut node = addr left
+    pp := identity(addr pointer)
+    write(pp, addr right)
+    copied := read(pp)
+    if copied.val.value <> 24 or number <> 42 then
+        code = 1
+        return
+    end if
+    mut words: [2]u32 = [17, 25]
+    mut words_view: []mut u32 = view(words[0..<2])
+    vp := identity(addr words_view)
+    selected := read(vp)
+    if lenof selected <> 2 or selected[0] + selected[1] <> 42 then
+        code = 2
+        return
+    end if
+    write(vp, words[1..<2])
+    if lenof words_view <> 1 or words_view[0] <> 25 then
+        code = 3
+        return
+    end if
+    mut erased: any counter = any(addr left)
+    ap := identity(addr erased)
+    first := read(ap)
+    _ = first.bump()
+    replacement: any counter = any(addr right)
+    write(ap, replacement)
+    second := read(ap)
+    _ = second.bump()
+    code = if left.value == 17 and right.value == 25 then 42 else 4 end if
+end main

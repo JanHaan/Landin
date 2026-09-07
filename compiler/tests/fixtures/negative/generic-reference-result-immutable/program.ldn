@@ -1,0 +1,7 @@
+view: (t: type, source: []t) -> (result: []t from source) =
+    result = source
+end view
+bad: (source: []u32) -> none =
+    result := view(source)
+    result[0] = 42
+end bad

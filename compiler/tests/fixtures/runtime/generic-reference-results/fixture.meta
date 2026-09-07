@@ -1,0 +1,6 @@
+class: runtime
+summary: generic reference patterns preserve nested referents and stored slice and any results
+program: main.ldn
+status: 42
+constructs: 0430, 0440, 0570, 0750, 0790, 1290, 1370, 1920
+targets: linux-x86-64

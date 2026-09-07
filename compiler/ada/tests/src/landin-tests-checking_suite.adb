@@ -119,6 +119,9 @@ package body Landin.Tests.Checking_Suite is
    procedure Structural_Deduction_Interns_Complete_Tuple
      (Item : in out Landin.Testing.Context);
 
+   procedure Reference_Actuals_Keep_Complete_Identity
+     (Item : in out Landin.Testing.Context);
+
    procedure Generic_Signatures_Keep_Nominal_Array_Elements
      (Item : in out Landin.Testing.Context);
 
@@ -1285,6 +1288,69 @@ package body Landin.Tests.Checking_Suite is
             "nested array and phantom tuple relations intern i32 and three");
       end;
    end Structural_Deduction_Interns_Complete_Tuple;
+
+   procedure Reference_Actuals_Keep_Complete_Identity
+     (Item : in out Landin.Testing.Context)
+   is
+      Text : constant String :=
+        "box: type (t: type) = struct" & LF
+        & "    marker: bool" & LF
+        & "end box" & LF
+        & "node: type = struct" & LF
+        & "    value: i32" & LF
+        & "end node" & LF
+        & "other: type = struct" & LF
+        & "    value: i32" & LF
+        & "end other" & LF
+        & "alias: type = node" & LF
+        & "first: type = concept (t: type)" & LF
+        & "    value: (self: ptr t) -> (n: i32)" & LF
+        & "end first" & LF
+        & "second: type = concept (t: type)" & LF
+        & "    value: (self: ptr t) -> (n: i32)" & LF
+        & "end second" & LF
+        & "observe: (t: type, source: box(t)) -> none =" & LF
+        & "end observe" & LF
+        & "use: () -> none =" & LF
+        & "    a: box(ptr node) = (marker: true)" & LF
+        & "    b: box(ptr mut node) = (marker: true)" & LF
+        & "    c: box(ptr other) = (marker: true)" & LF
+        & "    d: box(any first) = (marker: true)" & LF
+        & "    e: box(any second) = (marker: true)" & LF
+        & "    f: box([]node) = (marker: true)" & LF
+        & "    g: box([]mut node) = (marker: true)" & LF
+        & "    h: box(ptr alias) = (marker: true)" & LF
+        & "    observe(a)" & LF
+        & "    observe(b)" & LF
+        & "    observe(c)" & LF
+        & "    observe(d)" & LF
+        & "    observe(e)" & LF
+        & "    observe(f)" & LF
+        & "    observe(g)" & LF
+        & "    observe(h)" & LF
+        & "end use" & LF;
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Ran : Natural;
+      Src : Landin.Source.Source_Id;
+      pragma Unreferenced (Src);
+   begin
+      Src := Landin.Stages.Add_Source (Work, "reference-keys.ldn", Text);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Configurer'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Landin.Stages.Append (Order, Checker'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+      Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "reference and any actuals deduce through nominal instances");
+      Landin.Testing.Check_Equal
+        (Item, Landin.Checking.Routine_Instance_Count
+           (Landin.Stages.Types (Work).all), 7,
+         "permission, referent and concept split keys; an alias reuses one");
+   end Reference_Actuals_Keep_Complete_Identity;
 
    procedure Generic_Signatures_Keep_Nominal_Array_Elements
      (Item : in out Landin.Testing.Context)
@@ -6849,6 +6915,9 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Register
         (Into, "checking", "structural deduction interns complete tuple",
          Structural_Deduction_Interns_Complete_Tuple'Access);
+      Landin.Testing.Register
+        (Into, "checking", "reference actuals keep complete identity",
+         Reference_Actuals_Keep_Complete_Identity'Access);
       Landin.Testing.Register
         (Into, "checking", "generic signatures keep nominal array elements",
          Generic_Signatures_Keep_Nominal_Array_Elements'Access);

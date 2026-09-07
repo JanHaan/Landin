@@ -167,10 +167,22 @@ negative/function-type-return-name-duplicate | linux-x86-64, macos-arm64, synthe
 negative/function-value-signature-mismatch | linux-x86-64, macos-arm64
 negative/function-value-type-mismatch | linux-x86-64, macos-arm64
 negative/function-variant-payload-signature-mismatch | linux-x86-64, macos-arm64, synthetic-32
+negative/generic-any-carrier-frame-escape | linux-x86-64, macos-arm64
+negative/generic-any-nominal-deduction-conflict | linux-x86-64, macos-arm64
 negative/generic-computed-pattern-undeduced | linux-x86-64, macos-arm64
 negative/generic-explicit-computed-pattern-mismatch | linux-x86-64, macos-arm64
 negative/generic-inferred-error-unhandled | linux-x86-64, macos-arm64
 negative/generic-inferred-template-not-function-value | linux-x86-64, macos-arm64
+negative/generic-reference-array-extent | linux-x86-64, macos-arm64
+negative/generic-reference-carrier-live-view | linux-x86-64, macos-arm64
+negative/generic-reference-field-permission-distinct | linux-x86-64, macos-arm64, synthetic-32
+negative/generic-reference-nested-permission | linux-x86-64, macos-arm64
+negative/generic-reference-pattern-permission | linux-x86-64, macos-arm64
+negative/generic-reference-referent-identity | linux-x86-64, macos-arm64
+negative/generic-reference-result-escaping | linux-x86-64, macos-arm64
+negative/generic-reference-result-frame | linux-x86-64, macos-arm64
+negative/generic-reference-result-immutable | linux-x86-64, macos-arm64
+negative/generic-reference-result-wrong-from | linux-x86-64, macos-arm64
 negative/generic-routine-inferred-module-conflict | linux-x86-64, macos-arm64
 negative/generic-routine-infinite-expansion | linux-x86-64, macos-arm64
 negative/generic-routine-repeated-deduction-conflict | linux-x86-64, macos-arm64
@@ -178,6 +190,8 @@ negative/generic-routine-repeated-fixed-deduction-conflict | linux-x86-64, macos
 negative/generic-routine-undeduced-formal | linux-x86-64, macos-arm64
 negative/generic-routine-unused-unconditional-defect | linux-x86-64, macos-arm64
 negative/generic-single-result-layout-too-large | linux-x86-64, macos-arm64
+negative/generic-slice-field-permission | linux-x86-64, macos-arm64
+negative/generic-slice-field-wrong-from | linux-x86-64, macos-arm64
 negative/generic-structural-repeated-conflict | linux-x86-64, macos-arm64
 negative/generic-try-infallible-instance | linux-x86-64, synthetic-32
 negative/generic-wrong-nominal-template | linux-x86-64, macos-arm64
@@ -892,6 +906,7 @@ runtime/for-collection-traversal | linux-x86-64
 runtime/for-iterable-evidence-traversal | linux-x86-64
 runtime/for-range-traversal | linux-x86-64
 runtime/function-valued-struct-fields | linux-x86-64
+runtime/generic-any-nominal-transport | linux-x86-64
 runtime/generic-composed-evidence | linux-x86-64
 runtime/generic-declared-errors | linux-x86-64
 runtime/generic-direct-descriptor-deduction | linux-x86-64
@@ -901,6 +916,9 @@ runtime/generic-explicit-static | linux-x86-64
 runtime/generic-fixed-array-deduction | linux-x86-64
 runtime/generic-identity-deduction | linux-x86-64
 runtime/generic-parameterized-evidence | linux-x86-64
+runtime/generic-reference-carriers | linux-x86-64
+runtime/generic-reference-fields | linux-x86-64
+runtime/generic-reference-results | linux-x86-64
 runtime/generic-routine-inferred-errors | linux-x86-64
 runtime/generic-same-key-recursion | linux-x86-64
 runtime/generic-structural-deduction | linux-x86-64
