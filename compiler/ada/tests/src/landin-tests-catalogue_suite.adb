@@ -66,6 +66,7 @@ package body Landin.Tests.Catalogue_Suite is
          if Name not in Rows.Literal_Out_Of_Range
                       | Rows.Impossible_Operand
                       | Rows.Unsupported_Use
+                      | Rows.Not_Known_At_Compile_Time
          then
             Landin.Testing.Check_Equal
               (Item, Rows.Minimum_Secondaries (Name),

@@ -673,6 +673,13 @@ package Landin.Checking is
      (Of_Table : Table; Left, Right : Reference_Id) return Boolean
      with Pre => Holds (Of_Table, Left) and then Holds (Of_Table, Right);
 
+   --  D200: what an address comparison needs to agree on.  Permission is
+   --  not part of it: [0440] lets a mut pointer stand where a plain one
+   --  does, and comparing two addresses writes through neither.
+   function References_Compare
+     (Of_Table : Table; Left, Right : Reference_Id) return Boolean
+     with Pre => Holds (Of_Table, Left) and then Holds (Of_Table, Right);
+
    --  D189/[0480]: True when this reference is a pointer union rather than
    --  a plain pointer, so a caller that would read its bits as an address
    --  can refuse it by name.
@@ -2026,6 +2033,33 @@ package Landin.Checking is
      with Pre => Is_Prepared (Of_Table)
                  and then Holds (Of_Table, Element)
                  and then Has_Layout (Of_Table, Element);
+
+   --  The room one field shape takes, for every shape a field or an array
+   --  element can have: a scalar, a reference carrier, a laid-out struct
+   --  body, or itself a fixed array.  A variant part never stands alone
+   --  and is a defect here.
+   procedure Shape_Extent
+     (Of_Table  : Table;
+      Field     : Field_Shape;
+      Facts     : Landin.Targets.Target_Facts;
+      Size      : out Landin.Targets.Byte_Count;
+      Alignment : out Landin.Targets.Byte_Alignment)
+     with Pre => Is_Prepared (Of_Table);
+
+   --  What a fixed-array type node measures: [0520]'s array is its
+   --  element repeated, whatever the element is, and [0750] lays the
+   --  elements end to end.  A length of zero takes no room and aligns to
+   --  a byte.
+   procedure Array_Type_Extent
+     (Of_Table  : Table;
+      Of_Tree   : Landin.Syntax.Tree;
+      Node      : Landin.Syntax.Node_Id;
+      Facts     : Landin.Targets.Target_Facts;
+      Size      : out Landin.Targets.Byte_Count;
+      Alignment : out Landin.Targets.Byte_Alignment)
+     with Pre => Is_Prepared (Of_Table)
+                 and then Covers (Of_Table, Of_Tree)
+                 and then Landin.Syntax.Contains (Of_Tree, Node);
 
    --  Says what a node synthesised.  Once: a second Note on one node is a
    --  pass that walked it twice, which is the defect this refuses rather

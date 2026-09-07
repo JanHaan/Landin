@@ -1,0 +1,15 @@
+point: type = struct
+    x: i32
+    y: i32
+end point
+
+public main: () -> (code: i32) =
+    code = 0
+    if sizeof [4]point == 4 * sizeof point and sizeof [4]point == 32
+       and alignof [4]point == alignof point and sizeof [0]point == 0
+       and alignof [0]point == 1 and sizeof [2][3]point == 48
+       and sizeof [3]ptr u8 == 24 and sizeof [2][]u8 == 32
+       and sizeof [5]u16 == 10 and alignof [5]u16 == 2 then
+        code = 42
+    end if
+end main

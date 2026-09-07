@@ -1,0 +1,6 @@
+class: runtime
+summary: [0520] an array is its element repeated: sizeof of arrays of structs, nested arrays and reference elements measures the element's own extent
+program: main.ldn
+status: 42
+constructs: 0370, 0520, 0750
+targets: linux-x86-64

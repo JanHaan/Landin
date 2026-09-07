@@ -1,0 +1,3 @@
+same: (a: []u8, b: []u8) -> (r: bool) =
+    r = a == b
+end same

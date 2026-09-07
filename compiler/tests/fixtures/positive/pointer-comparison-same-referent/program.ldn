@@ -1,0 +1,3 @@
+same: (a: ptr u8, b: ptr u8, c: ptr mut u8) -> (r: bool) =
+    r = a == b and a <> b and a == c and c <> b
+end same

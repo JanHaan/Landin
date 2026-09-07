@@ -951,7 +951,7 @@ second type to go.
 | `%`, and [0300]'s `+%` `-%` `*%` | one integer type, and that type back [0290] |
 | `&` `^` `\|`, and the unary `~` | one integer type, and that type back [0330] |
 | `<<` `>>` | an integer shifted by an integer of that same type, and that type back [0320]. The amount is not bounded by the width: [0320] fills with zeros beyond it for any amount. |
-| `==` `<>` `<` `<=` `>` `>=` | one type on both sides, and a bool back [0350]; atom sets have identity equality and inequality only |
+| `==` `<>` `<` `<=` `>` `>=` | one type on both sides, and a bool back [0350]; atom sets have identity equality and inequality only. D200: the type is a scalar, an atom set, a pointer or a function value; two pointers must point at one type, permission aside, and a slice, an erased value, an array or a struct has no comparison |
 | `and` `or` `not` | bool, and a bool back [0340] |
 | unary `-` | one integer or float type, and that type back |
 
@@ -11890,3 +11890,33 @@ row. The C fixture publishes its argument through an ordinary external
 `cstring` result, then uses the existing explicitly unsafe integer-pointer
 round trip to install `C2 00` and a later ignored byte; it does not add a
 pointer-to-cstring conversion.
+
+### D200 — A comparison takes one register-sized value with one equality
+
+**The tour said** at [0350] which six comparison operators exist and at
+[1890] that they want one type on both sides and give a bool back. It did
+not say which types may stand on those sides. The compiler compared type
+kinds alone, so `ptr u8 == ptr u32` was accepted and lowered as an address
+compare, and `[]u8 == []u8` or `any C == any C` passed the checker and was
+an internal defect in lowering.
+
+**Chosen:** a comparison operand is a scalar of [1790], an atom set (identity
+only, as [1890] already said), a pointer, or a function value. Two pointers
+compare by address and must point at one type; permission does not enter,
+because [0440] lets a mut pointer stand where a plain one does and an
+address comparison writes through neither. Two function values must agree
+in signature, as before. A slice, an erased `any` value, a fixed array
+and a struct are refused at the operator with L0301, naming the operand.
+
+**The alternatives:** elementwise equality for slices and arrays, fieldwise
+equality for structs, and base-and-length identity for slices were each
+considered. Elementwise equality needs a defined equality for the element,
+which reopens the question one level down and silently costs a loop; base
+identity for slices answers a question nobody asks. All were declined for
+the pre-v1 slice; a later version can add an operator or a `core` routine
+without changing what the compiler accepts today.
+
+**Pinned by** `negative/slice-comparison-refused`,
+`negative/any-comparison-refused`,
+`negative/pointer-comparison-referent-mismatch` and
+`positive/pointer-comparison-same-referent`.

@@ -1779,6 +1779,18 @@ package body Landin.Checking is
         and then Referents_Agree (Of_Table, A, B);
    end References_Agree;
 
+   function References_Compare
+     (Of_Table : Table; Left, Right : Reference_Id) return Boolean
+   is
+      A : constant Reference_Descriptor := Descriptor_Of (Of_Table, Left);
+      B : constant Reference_Descriptor := Descriptor_Of (Of_Table, Right);
+   begin
+      return A.Kind = B.Kind
+        and then A.View = B.View
+        and then A.Empty_Atom = B.Empty_Atom
+        and then Referents_Agree (Of_Table, A, B);
+   end References_Compare;
+
    function Is_Optional_Pointer
      (Of_Table : Table; Id : Reference_Id) return Boolean
      is (Descriptor_Of (Of_Table, Id).Empty_Atom /= No_Declaration);
@@ -3435,6 +3447,98 @@ package body Landin.Checking is
          end if;
       end;
    end Note_Array_Element_Nominal;
+
+   procedure Shape_Extent
+     (Of_Table  : Table;
+      Field     : Field_Shape;
+      Facts     : Landin.Targets.Target_Facts;
+      Size      : out Landin.Targets.Byte_Count;
+      Alignment : out Landin.Targets.Byte_Alignment)
+   is
+      procedure Reference_Extent (Reference : Reference_Id);
+
+      procedure Reference_Extent (Reference : Reference_Id) is
+         Descriptor : constant Reference_Descriptor :=
+           Descriptor_Of (Of_Table, Reference);
+         Pointer_Bytes : constant Landin.Targets.Byte_Count :=
+           Landin.Targets.Byte_Count
+             (Landin.Targets.Bytes (Landin.Targets.Pointer_Size (Facts)));
+      begin
+         if Descriptor.Kind = Landin.Types.Any_Value then
+            Size := Landin.Targets.Any_Value_Size (Facts);
+            Alignment := Landin.Targets.Any_Value_Alignment (Facts);
+         else
+            Size :=
+              (if Descriptor.Kind = Landin.Types.Slice_Value
+               then 2 * Pointer_Bytes else Pointer_Bytes);
+            Alignment := Landin.Targets.Pointer_Alignment (Facts);
+         end if;
+      end Reference_Extent;
+   begin
+      case Field.Kind is
+         when Scalar_Field =>
+            if Field.Nominal /= No_Nominal_Type then
+               Size := Layout_Size (Of_Table, Field.Nominal);
+               Alignment := Layout_Alignment (Of_Table, Field.Nominal);
+            else
+               Array_Extent (1, Field.Element, Facts, Size, Alignment);
+            end if;
+         when Reference_Field =>
+            Reference_Extent (Field.Reference);
+         when Aggregate_Field =>
+            if Field.Nominal = No_Nominal_Type
+              or else not Holds (Of_Table, Field.Nominal)
+              or else not Has_Layout (Of_Table, Field.Nominal)
+            then
+               raise Landin.Compiler_Defect with
+                 "an aggregate shape has no laid-out body";
+            end if;
+            Size := Layout_Size (Of_Table, Field.Nominal);
+            Alignment := Layout_Alignment (Of_Table, Field.Nominal);
+         when Fixed_Array_Field =>
+            if Field.Reference /= No_Reference then
+               Reference_Extent (Field.Reference);
+            elsif Field.Nominal /= No_Nominal_Type then
+               if not Holds (Of_Table, Field.Nominal)
+                 or else not Has_Layout (Of_Table, Field.Nominal)
+               then
+                  raise Landin.Compiler_Defect with
+                    "an aggregate array element has no laid-out body";
+               end if;
+               Size := Layout_Size (Of_Table, Field.Nominal);
+               Alignment := Layout_Alignment (Of_Table, Field.Nominal);
+            else
+               Array_Extent (1, Field.Element, Facts, Size, Alignment);
+            end if;
+            Size := Landin.Targets.Byte_Count (Field.Length) * Size;
+            if Field.Length = 0 then
+               Alignment := 1;
+            end if;
+         when Variant_Field =>
+            raise Landin.Compiler_Defect with
+              "a variant part has no extent of its own";
+      end case;
+   end Shape_Extent;
+
+   procedure Array_Type_Extent
+     (Of_Table  : Table;
+      Of_Tree   : Landin.Syntax.Tree;
+      Node      : Landin.Syntax.Node_Id;
+      Facts     : Landin.Targets.Target_Facts;
+      Size      : out Landin.Targets.Byte_Count;
+      Alignment : out Landin.Targets.Byte_Alignment)
+   is
+      Length : constant Element_Count :=
+        Array_Length (Of_Table, Of_Tree, Node);
+   begin
+      Shape_Extent
+        (Of_Table, Array_Element_Shape (Of_Table, Of_Tree, Node), Facts,
+         Size, Alignment);
+      Size := Landin.Targets.Byte_Count (Length) * Size;
+      if Length = 0 then
+         Alignment := 1;
+      end if;
+   end Array_Type_Extent;
 
    function Array_Element_Shape
      (Of_Table : Table;

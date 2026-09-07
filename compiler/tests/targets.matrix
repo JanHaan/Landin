@@ -11,6 +11,7 @@ negative/a-fold-deeper-than-any-limit | linux-x86-64, macos-arm64
 negative/aggregate-call-result-missing-at-early-exit | linux-x86-64, macos-arm64
 negative/aggregate-call-result-not-assigned-on-every-path | linux-x86-64, macos-arm64
 negative/anonymous-function-captures-local | linux-x86-64, macos-arm64, synthetic-32
+negative/any-comparison-refused | linux-x86-64, macos-arm64
 negative/any-concept-identity-mismatch | linux-x86-64, macos-arm64, synthetic-32
 negative/any-construction-needs-context | linux-x86-64, macos-arm64, synthetic-32
 negative/any-entry-not-bound-value | linux-x86-64, macos-arm64, synthetic-32
@@ -398,6 +399,7 @@ negative/module-function-image-cycle | linux-x86-64, macos-arm64, synthetic-32
 negative/module-function-replacement-signature-mismatch | linux-x86-64, macos-arm64, synthetic-32
 negative/module-function-without-image | linux-x86-64, macos-arm64, synthetic-32
 negative/module-not-found | linux-x86-64, macos-arm64
+negative/module-range-subtype-negative-shift | linux-x86-64, macos-arm64
 negative/module-scalar-fold-agreement | linux-x86-64, macos-arm64
 negative/module-scalar-fold-overflow | linux-x86-64, macos-arm64
 negative/module-scalar-storage-selection | linux-x86-64, macos-arm64
@@ -506,6 +508,7 @@ negative/parameterized-struct-unused-unknown | linux-x86-64, macos-arm64
 negative/parameterized-struct-used-actual-overflow | linux-x86-64, macos-arm64
 negative/parameterized-struct-used-array-actual-overflow | linux-x86-64, macos-arm64
 negative/pointer-case-arm-is-not-an-atom | linux-x86-64, macos-arm64, synthetic-32
+negative/pointer-comparison-referent-mismatch | linux-x86-64, macos-arm64
 negative/pointer-to-cstring-conversion | linux-x86-64, macos-arm64
 negative/pointer-union-address-of-referent | linux-x86-64, macos-arm64, synthetic-32
 negative/pointer-union-any-construction | linux-x86-64, macos-arm64, synthetic-32
@@ -577,6 +580,7 @@ negative/sink-in-zero-or-more-loop | linux-x86-64, macos-arm64
 negative/sink-past-continue | linux-x86-64, macos-arm64
 negative/sink-repeated-by-while | linux-x86-64, macos-arm64
 negative/sink-through-dereference | linux-x86-64, macos-arm64, synthetic-32
+negative/slice-comparison-refused | linux-x86-64, macos-arm64
 negative/struct-argument-unassigned | linux-x86-64, macos-arm64
 negative/struct-array-field-clear-keeps-fields-separate | linux-x86-64, macos-arm64
 negative/struct-array-field-clear-not-on-every-path | linux-x86-64, macos-arm64
@@ -874,6 +878,7 @@ positive/parameterized-struct-signature-value-layout | linux-x86-64, macos-arm64
 positive/parameterized-type-alias-fixed-array | linux-x86-64, macos-arm64
 positive/parameterized-type-alias-scalar | linux-x86-64, macos-arm64
 positive/parentheses-override | linux-x86-64, macos-arm64
+positive/pointer-comparison-same-referent | linux-x86-64, macos-arm64
 positive/pointer-unions | linux-x86-64, macos-arm64
 positive/precedence-alternation-over-comparison | linux-x86-64, macos-arm64
 positive/precedence-and-over-or | linux-x86-64, macos-arm64
@@ -1128,6 +1133,7 @@ runtime/module-array-zeroed-reads-zero | linux-x86-64
 runtime/module-float-arithmetic | linux-x86-64
 runtime/module-known-short-circuit-bools | linux-x86-64
 runtime/module-mixed-array-repetition-holds-hybrid | linux-x86-64
+runtime/module-range-subtype-negative-mask-operand | linux-x86-64
 runtime/module-scalar-zeroed-reads-zero | linux-x86-64
 runtime/module-struct-initializers-copy-images | linux-x86-64
 runtime/module-struct-literal-array-image-copy-is-independent | linux-x86-64
@@ -1215,6 +1221,7 @@ runtime/selection-sort | linux-x86-64
 runtime/shifts-fill-with-zeros-beyond-the-width | linux-x86-64
 runtime/sieve-of-eratosthenes | linux-x86-64
 runtime/signed-division-overflow-traps | linux-x86-64
+runtime/sizeof-of-nominal-element-array | linux-x86-64
 runtime/slice-half-open-upper-traps | linux-x86-64
 runtime/slice-inclusive-upper-traps | linux-x86-64
 runtime/slice-index-read-traps | linux-x86-64
