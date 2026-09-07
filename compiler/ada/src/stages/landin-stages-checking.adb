@@ -22845,6 +22845,7 @@ package body Landin.Stages.Checking is
                  and then (Direct_Struct
                            or else Syn.Kind (Of_Tree.all, Value)
                                      in Syn.Call | Syn.Labeled_Application
+                                        | Syn.Try_Expression
                            or else Control_Source)
                then
                   declare

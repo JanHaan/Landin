@@ -1,4 +1,4 @@
-error[L0301]: this argument does not match its exact constant type pattern
+error[L0301]: this argument has a different reference permission or view from its parameter pattern
   --> ../tests/fixtures/negative/core-failing-needs-mutable-inner/main.ldn:10:48
    |
 10 |         (inner_provider: heap_provider, inner: addr inner,

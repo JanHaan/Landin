@@ -184,6 +184,7 @@ negative/generic-any-carrier-frame-escape | linux-x86-64, macos-arm64
 negative/generic-any-nominal-deduction-conflict | linux-x86-64, macos-arm64
 negative/generic-computed-pattern-undeduced | linux-x86-64, macos-arm64
 negative/generic-explicit-computed-pattern-mismatch | linux-x86-64, macos-arm64
+negative/generic-explicit-reference-frame | linux-x86-64, macos-arm64
 negative/generic-inferred-error-unhandled | linux-x86-64, macos-arm64
 negative/generic-inferred-template-not-function-value | linux-x86-64, macos-arm64
 negative/generic-reference-array-extent | linux-x86-64, macos-arm64
@@ -1074,6 +1075,7 @@ runtime/struct-zeroed-assignment-clears-storage | linux-x86-64
 runtime/structs-copy-whole | linux-x86-64
 runtime/text-literal-bytes | linux-x86-64
 runtime/text-range-slicing | linux-x86-64
+runtime/try-nominal-inference | linux-x86-64
 runtime/unary-and-bitwise-exit-with-their-results | linux-x86-64
 runtime/unchecked-arithmetic-wraps | linux-x86-64
 runtime/unchecked-does-not-cross-a-call | linux-x86-64
