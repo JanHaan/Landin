@@ -1,0 +1,6 @@
+class: runtime
+summary: compound assignments stay statements at function, value-block and direct match-arm boundaries
+program: main.ldn
+status: 42
+constructs: 0390, 0410, 1080, 1130, 1180, 1800, 1810
+targets: linux-x86-64

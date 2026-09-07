@@ -4016,13 +4016,14 @@ package body Landin.Syntax.Parser is
                   end if;
 
                   --  A selection [1820] is an expression and a place at
-                  --  once, so the `=` after the whole chain is what says
+                  --  once, so an assignment operator after the chain says
                   --  this is an assignment rather than the expression
                   --  body [1800] offers instead of a block.
                   if Peek = Tok.Identifier
                     and then Word_At_Hand = Word_None
                     and then Ahead (1) not in Tok.Colon | Tok.Colon_Equal
-                    and then After_Selectors /= Tok.Equal
+                    and then After_Selectors
+                               not in Tok.Equal | Tok.Compound_Assign
                   then
                      if After_Selectors /= Tok.Left_Paren then
                         return Parse_Expression;
@@ -4392,7 +4393,7 @@ package body Landin.Syntax.Parser is
                     or else Opens_Arena_Block
                     or else Word_At_Hand /= Word_None
                     or else Ahead (1) in Tok.Colon | Tok.Colon_Equal
-                    or else After_Selectors = Tok.Equal;
+                    or else After_Selectors in Tok.Equal | Tok.Compound_Assign;
                end Clearly_A_Statement;
             begin
                if Seed /= No_Node then
@@ -5650,7 +5651,8 @@ package body Landin.Syntax.Parser is
                                      (Word_At_Hand /= Word_None
                                       or else Ahead (1)
                                         in Tok.Colon | Tok.Colon_Equal
-                                      or else After_Selectors = Tok.Equal))));
+                                      or else After_Selectors
+                                        in Tok.Equal | Tok.Compound_Assign))));
                      begin
                         if Pre.Begins_Expression (Peek)
                           and then not Is_Statement
