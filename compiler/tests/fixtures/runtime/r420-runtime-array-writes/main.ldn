@@ -1,0 +1,48 @@
+row: type = [3]u32
+
+mut rows: [3]row
+mut destination_calls: usize = 0
+mut source_calls: u32 = 0
+
+destination: () -> (result: usize) =
+    inc destination_calls
+    result = 1
+end destination
+
+source: () -> (result: u32) =
+    inc source_calls
+    result = source_calls
+end source
+
+public main: () -> (code: i32) =
+    mut sentinel: usize = 0
+    rows[sentinel] = [91, 92, 93]
+    sentinel = 2
+    rows[sentinel] = [97, 98, 99]
+    pointer: ptr mut row = addr rows[1]
+    pointer.val = [source(), source(), source()]
+    if not (rows[1][0] == 1 and rows[1][1] == 2 and rows[1][2] == 3) then
+        code = 1
+        return
+    end if
+    pointer.val = [source(), of source()]
+    if not (rows[1][0] == 4 and rows[1][1] == 5 and rows[1][2] == 5) then
+        code = 2
+        return
+    end if
+    rows[destination()] = [source(), source(), source()]
+    if not (rows[1][0] == 6 and rows[1][1] == 7 and rows[1][2] == 8) then
+        code = 3
+        return
+    end if
+    rows[destination()] = [source(), of source()]
+    if rows[1][0] == 9 and rows[1][1] == 10 and rows[1][2] == 10
+      and rows[0][0] == 91 and rows[0][1] == 92 and rows[0][2] == 93
+      and rows[2][0] == 97 and rows[2][1] == 98 and rows[2][2] == 99
+      and source_calls == 10 and destination_calls == 2
+    then
+        code = 42
+    else
+        code = 4
+    end if
+end main
