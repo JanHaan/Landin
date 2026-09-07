@@ -1,0 +1,7 @@
+class: runtime
+summary: allocated objects store complete initialized scalar and reference descriptors, survive independent allocations and release exactly once
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0430, 0470, 0540, 0780, 0830, 0940, 1230, 1360
+targets: linux-x86-64

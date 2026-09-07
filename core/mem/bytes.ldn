@@ -1,0 +1,56 @@
+--  The full allocation extent stays private beside the initialized witness.
+--  Borrowed byte views do not replace that allocation identity.
+buffer: type = struct
+    values: storage(u8)
+    extent: usize
+end buffer
+public byte_buffer: type = buffer
+
+public bytes: (source: buffer) -> (view: []mut u8 from source) =
+    view = used(source.values)
+end bytes
+
+public new_bytes: (provider: type is allocator, inout state: provider,
+                   count: usize) -> (result: buffer) ! out_of_memory =
+    zero: usize = 0
+    if count == 0 then
+        base: ptr mut u8 = ptr(0)
+        result = (values: reserve(item: u8, base: base, slots: zero),
+                  extent: zero)
+        return
+    end if
+    block: ptr mut u8 = try provider.alloc(state, count, alignof u8)
+    mut fresh := reserve(item: u8, base: block, slots: count)
+    mut index: usize = 0
+    initial: u8 = 0
+    while index < count do
+        admitted: usize = admit(fresh, initial) else (problem)
+            --  Refusal is unreachable for this private state. If it occurs,
+            --  release the saved allocation without trusting damaged counts.
+            _ = problem
+            provider.free(state, block, count)
+            fail out_of_memory
+        end
+        _ = admitted
+        inc index
+    end while
+    result = (values: fresh, extent: count)
+end new_bytes
+
+public drop_bytes: (provider: type is allocator, inout state: provider,
+                    inout value: buffer) -> none =
+    return when value.extent == 0
+    extent: usize = value.extent
+    while initialized(value.values) > 0 do
+        _ = release(value.values) else (problem)
+            _ = problem
+            return
+        end
+    end while
+    block: ptr mut u8 = dispose(value.values) else (problem)
+        _ = problem
+        return
+    end
+    value.extent = 0
+    provider.free(state, block, extent)
+end drop_bytes

@@ -1,0 +1,20 @@
+import core/heap
+import core/mem
+reader: type = concept (t: type)
+    read: (self: ptr t) -> (value: i32)
+end reader
+node: type = struct
+    value: i32
+end node
+read_node: (self: ptr node) -> (value: i32) =
+    value = self.val.value
+end read_node
+node is reader (read: read_node)
+bad: () -> none =
+    mut state := heap.host()
+    local: node = (value: 23)
+    value: any reader = any(addr local)
+    _ = mem.new(state, value) else (problem)
+        _ = problem
+    end
+end bad

@@ -8924,6 +8924,18 @@ change reference permission or cut origin tracking. A writable view still has
 [0860]'s shallow alias limitation: inserting a reference through one alias is
 not generally propagated back to every other descriptor for that storage.
 
+Initialized allocation composes with this state machine using ordinary
+library routines. `new` accepts an `escaping` complete initial value, allocates
+its target extent and alignment, stores it and then returns the pointer;
+`delete` consumes one pointer binding and frees that original extent. The
+byte-specific `new_bytes` returns a private `byte_buffer` containing the full
+allocation extent and an initialized byte prefix. Zero count makes no provider
+call; nonzero count publishes a view only after every byte is initialized.
+`bytes` derives its mutable view from the owner. `drop_bytes` drains and clears
+the owner before freeing its original base and extent; a shortened borrowed
+slice is never used as allocation identity. These routines introduce no
+ownership, implicit destruction or exemption from shallow origin analysis.
+
 **The alternatives:** a built-in raw-storage kind would add syntax, type-table
 and backend machinery for an invariant a private module can express. A public
 record would let callers forge counts. Reintroducing `slice_from` would make

@@ -118,6 +118,14 @@ negative/core-diag-frame-message-escape | linux-x86-64, macos-arm64, synthetic-3
 negative/core-failing-frame-escape | linux-x86-64, macos-arm64, synthetic-32
 negative/core-failing-needs-mutable-inner | linux-x86-64, macos-arm64, synthetic-32
 negative/core-mem-admit-frame-pointer | linux-x86-64, macos-arm64, synthetic-32
+negative/core-mem-bytes-live-drop | linux-x86-64, macos-arm64, synthetic-32
+negative/core-mem-bytes-private-extent | linux-x86-64, macos-arm64, synthetic-32
+negative/core-mem-bytes-read-only | linux-x86-64, macos-arm64, synthetic-32
+negative/core-mem-bytes-wrong-from | linux-x86-64, macos-arm64, synthetic-32
+negative/core-mem-delete-consumed | linux-x86-64, macos-arm64, synthetic-32
+negative/core-mem-new-borrowed-text | linux-x86-64, macos-arm64, synthetic-32
+negative/core-mem-new-frame-any | linux-x86-64, macos-arm64, synthetic-32
+negative/core-mem-new-frame-pointer | linux-x86-64, macos-arm64, synthetic-32
 negative/core-mem-private-representation | linux-x86-64, macos-arm64, synthetic-32
 negative/core-mem-replace-frame-any | linux-x86-64, macos-arm64, synthetic-32
 negative/core-mem-used-frame | linux-x86-64, macos-arm64, synthetic-32
@@ -926,7 +934,9 @@ runtime/control-expression-function-values | linux-x86-64
 runtime/copy-before-sink-remains-live | linux-x86-64
 runtime/core-mem-allocators | linux-x86-64
 runtime/core-mem-arena-boundaries | linux-x86-64
+runtime/core-mem-initialized-objects | linux-x86-64
 runtime/core-mem-initialized-prefix | linux-x86-64
+runtime/core-mem-owned-bytes | linux-x86-64
 runtime/core-mem-raw-storage | linux-x86-64
 runtime/core-mem-reference-prefix | linux-x86-64
 runtime/core-mem-zero-prefix | linux-x86-64

@@ -1,0 +1,8 @@
+class: negative
+summary: byte owner contract live drop
+expect: expected.txt
+args: --root=../.. ../tests/fixtures/negative/core-mem-bytes-live-drop
+constructs: 0430, 0570, 0770, 0790, 0800, 0830
+codes: L0315
+status: 1
+targets: linux-x86-64, macos-arm64, synthetic-32

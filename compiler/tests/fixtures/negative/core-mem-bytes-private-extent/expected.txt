@@ -1,0 +1,10 @@
+error[L0202]: this type's representation is module-internal
+  --> ../tests/fixtures/negative/core-mem-bytes-private-extent/main.ldn:3:20
+  |
+3 |     count = source.extent
+  |                    ^^^^^^
+  --> ../../core/mem/bytes.ldn:3:1
+  |
+3 | buffer: type = struct
+  | ^^^^^^^^^^^^^^^^^^^^^ declared without `public` here
+  = note: D150: a private identity may cross a public signature without exposing its fields

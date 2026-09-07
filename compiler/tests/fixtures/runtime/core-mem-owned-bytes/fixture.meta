@@ -1,0 +1,7 @@
+class: runtime
+summary: byte owners initialize complete extents and release independent heap allocations after failures
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0430, 0470, 0540, 0570, 0780, 0830, 0940, 1230
+targets: linux-x86-64

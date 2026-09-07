@@ -1,0 +1,5 @@
+import core/mem
+bad: (left: mem.byte_buffer, right: mem.byte_buffer)
+     -> (view: []u8 from right) =
+    view = mem.bytes(left)
+end bad

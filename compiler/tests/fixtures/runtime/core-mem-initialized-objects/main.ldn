@@ -1,0 +1,101 @@
+import core/failing
+import core/heap
+import core/mem
+
+counter: type = concept (t: type)
+    bump: (self: ptr mut t) -> (result: i32)
+end counter
+node: type = struct
+    value: i32
+end node
+bump_node: (self: ptr mut node) -> (result: i32) =
+    inc self.val.value
+    result = self.val.value
+end bump_node
+node is counter (bump: bump_node)
+bundle: type = struct
+    sentinel: u32
+    head: ptr mut node
+    action: any counter
+    bytes: []mut u8
+end bundle
+filter: type = struct
+    needle: utf8
+end filter
+keep_text: (provider: type is mem.allocator, inout state: provider,
+            escaping source: utf8)
+           -> (result: ptr mut filter) ! mem.out_of_memory =
+    initial: filter = (needle: source)
+    result = try mem.new(state, initial)
+end keep_text
+empty: type = [0]u8
+mut target: node = (value: 11)
+mut data: [2]u8 = [17, 23]
+mut evaluations: u32 = 0
+initial_value: () -> (value: u32) =
+    inc evaluations
+    value = 29
+end initial_value
+
+public main: () -> (code: i32) =
+    code = 1
+    mut heap_state := heap.host()
+    zero: usize = 0
+    four: usize = 4
+    mut state := failing.count_down(addr heap_state, zero)
+    mut refused: bool = false
+    failed: ptr mut u32 = mem.new(state, initial_value()) else (problem)
+        _ = problem
+        refused = true
+        ptr(0)
+    end
+    failing.permit(state, four)
+    scalar: ptr mut u32 = mem.new(state, initial_value()) else ptr(0)
+    return when usize(scalar) == 0
+    initial: bundle = (sentinel: 101, head: addr target,
+                       action: any(addr target), bytes: data[0..<2])
+    object: ptr mut bundle = mem.new(state, initial) else ptr(0)
+    return when usize(object) == 0
+    nothing: empty = zeroed
+    empty_object: ptr mut empty = mem.new(state, nothing) else ptr(0)
+    return when usize(empty_object) == 0
+    text: utf8 = "needle"
+    filter_object: ptr mut filter = keep_text(state, text) else ptr(0)
+    return when usize(filter_object) == 0
+    text_ok: bool = begin
+        saved := filter_object.val.needle
+        c0: []u8 = saved[0]
+        c1: []u8 = saved[1]
+        c2: []u8 = saved[2]
+        c3: []u8 = saved[3]
+        c4: []u8 = saved[4]
+        c5: []u8 = saved[5]
+        lenof saved == 6 and lenof c0 == 1 and c0[0] == 110
+          and lenof c1 == 1 and c1[0] == 101
+          and lenof c2 == 1 and c2[0] == 101
+          and lenof c3 == 1 and c3[0] == 100
+          and lenof c4 == 1 and c4[0] == 108
+          and lenof c5 == 1 and c5[0] == 101
+    end
+    scalar_ok: bool = scalar.val == 29
+    object_ok: bool = begin
+        saved: any counter = object.val.action
+        bumped: i32 = saved.bump()
+        object.val.bytes[1] = 31
+        object.val.head.val.value += 2
+        bumped == 12 and object.val.sentinel == 101
+    end
+    mem.delete(state, scalar)
+    mem.delete(state, object)
+    mem.delete(state, empty_object)
+    mem.delete(state, filter_object)
+    if refused and usize(failed) == 0 and evaluations == 2
+      and scalar_ok and object_ok and text_ok and target.value == 14
+      and data[0] == 17 and data[1] == 31
+      and failing.attempts(state) == 5 and failing.successes(state) == 4
+      and failing.injected_failures(state) == 1
+      and failing.frees(state) == 4 and failing.live(state) == 0
+    then
+        code = 42
+    end if
+end main

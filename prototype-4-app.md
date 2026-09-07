@@ -36,7 +36,7 @@ A single object rather than a slice. No from clause: what comes
 back is independent of the allocator, which is why two live
 allocations from one allocator are unremarkable [0790].
 ```landin
-public new: (T: type, A: type is allocator, inout a: A)
+public new: (T: type, A: type is allocator, inout a: A, escaping value: T)
             -> (p: ptr mut T) ! out_of_memory = ... end
 
 ```
@@ -120,10 +120,12 @@ public in_memory: (files: [](name: utf8, body: utf8)) -> (h: memory) = ... end
 public written:   (h: memory) -> (text: utf8 from h) = ... end
 
 ```
-The arguments as a slice. A hosted main is handed argc and argv in
-the C shape by [1650], and turning those into something indexable
-needs slice_from, which is core-only by [0500], so core hands the
-program a slice instead.
+The arguments are exposed as a slice over initialized, process-lifetime C
+string descriptors. The hosted adapter owns that construction and backing;
+D151 supplies no `slice_from` operation or core-only exemption. Both `run` and
+`config.build` require retainable argument backing because configuration and
+match-filter objects keep text borrowed from it. An in-memory caller must
+supply equally retainable backing or make an allocated copy before the call.
 ```landin
 public args: () -> (a: []cstring) = ... end
 
@@ -131,13 +133,20 @@ public args: () -> (a: []cstring) = ... end
 
 ## app/read  —  a buffered line reader
 
+The buffer is an allocation owner with its complete extent, not a freeable
+slice. `mem.new_bytes` initializes every byte before returning; `mem.bytes`
+borrows a writable view and `mem.drop_bytes` releases the owner's original
+backing. Object allocation likewise receives a complete initial value before
+publishing its pointer. These library operations leave copied aliases and the
+application's arena lifetime under manual control.
+
 ```landin
 import core/mem
 import core/io
 
 public reader: type = struct
     f:    io.none_open | io.file
-    buf:  []mut u8
+    buf:  mem.byte_buffer
     fill: usize
     pos:  usize
 end reader
@@ -147,7 +156,7 @@ public open: (A: type is allocator, inout h: any io.world, inout a: A,
     f := try io.open_read(h, path)
     undo io.close(h, f)
 
-    buf := try mem.new_slice(T: u8, a: a, n: size)
+    buf := try mem.new_bytes(state: a, count: size)
 
     r = (f: f, buf: buf, fill: 0, pos: 0)
 end open
@@ -165,13 +174,17 @@ it, which is the bug this would otherwise be.
 public next_line: (inout r: reader, inout h: any io.world)
                   -> (line: []u8 from r) ! io.io_failed | io.at_end =
     loop do
-        k := newline_in(r.buf[r.pos ..< r.fill])
+        k := begin
+            buf := mem.bytes(r.buf)
+            newline_in(buf[r.pos ..< r.fill])
+        end
         match k
             not_present: try refill(r, h)
             found (at):
                 start := r.pos
                 r.pos = r.pos + at + 1
-                line  = r.buf[start ..< start + at]
+                buf := mem.bytes(r.buf)
+                line = buf[start ..< start + at]
                 return
         end match
     end loop
@@ -192,7 +205,8 @@ public shut: (A: type is allocator, sink r: reader,
         none_open: _ = 0
         file (fd): io.close(h, fd)
     end match
-    mem.drop_slice(a, r.buf)
+    mut owned := r.buf
+    mem.drop_bytes(a, owned)
 end shut
 
 ```
@@ -280,7 +294,7 @@ end dest
 ```landin
 public text_dest: type = struct
     f:    io.file
-    buf:  []u8
+    buf:  mem.byte_buffer
     used: usize
 end text_dest
 
@@ -290,10 +304,17 @@ public open_text_dest: (A: type is allocator, inout h: any io.world,
     f := try io.open_write(h, path)
     undo io.close(h, f)
 
-    buf := try mem.new_slice(T: u8, a: a, n: size)
+    buf := try mem.new_bytes(state: a, count: size)
 
     d = (f: f, buf: buf, used: 0)
 end open_text_dest
+
+public discard_text_dest: (A: type is allocator, inout h: any io.world,
+                           inout a: A, sink d: text_dest) -> none =
+    io.close(h, d.f)
+    mut owned := d.buf
+    mem.drop_bytes(a, owned)
+end discard_text_dest
 
 text_emit: (self: ptr mut text_dest, inout h: any io.world, line: []u8)
            -> none ! io.io_failed = ... end
@@ -360,8 +381,8 @@ public config: type = struct
 end config
 
 public build: (A: type is allocator, inout h: any io.world, inout a: A,
-               args: []cstring, inout d: any diag.log)
-              -> (c: config) ! ... =
+               escaping args: []cstring, inout d: any diag.log)
+              -> (c: config from args) ! ... =
     mut chain := vec.new_list(T: any filter.filter)
     mut input:   utf8 = ""
     mut to_file: utf8 = ""
@@ -373,15 +394,16 @@ public build: (A: type is allocator, inout h: any io.world, inout a: A,
         if text.eq(arg, "--level") then
             k = k + 1
             fail bad_argument when k >= lenof args
-            f := try mem.new(T: filter.level_filter, a: a)
-            f.val = (least: try level_named(text.from_c(args[k])))
+            initial: filter.level_filter =
+                (least: try level_named(text.from_c(args[k])))
+            f := try mem.new(state: a, value: initial)
             try vec.push(chain, a, any(f))
 
         elsif text.eq(arg, "--match") then
             k = k + 1
             fail bad_argument when k >= lenof args
-            f := try mem.new(T: filter.match_filter, a: a)
-            f.val = (needle: text.from_c(args[k]))
+            initial: filter.match_filter = (needle: text.from_c(args[k]))
+            f := try mem.new(state: a, value: initial)
             try vec.push(chain, a, any(f))
 
         elsif text.eq(arg, "--every") then
@@ -410,8 +432,8 @@ hold, so [0950] says check it here.
                        "--every 0 makes no sense, using 1")
                 n = 1
             end if
-            f := try mem.new(T: filter.sample_filter, a: a)
-            f.val = (every: n, seen: 0)
+            initial: filter.sample_filter = (every: n, seen: 0)
+            f := try mem.new(state: a, value: initial)
             try vec.push(chain, a, any(f))
 
         elsif text.eq(arg, "--out") then
@@ -433,12 +455,13 @@ downstream sees 'any dest'.
 ```landin
     mut chosen: any dest.dest
     if lenof to_file > 0 then
-        t := try mem.new(T: dest.text_dest, a: a)
-        t.val  = try dest.open_text_dest(h, a, to_file, 8 * 1024)
+        initial := try dest.open_text_dest(h, a, to_file, 8 * 1024)
+        undo dest.discard_text_dest(h, a, initial)
+        t := try mem.new(state: a, value: initial)
         chosen = any(t)
     else
-        t := try mem.new(T: dest.count_dest, a: a)
-        t.val  = (by_level: zeroed, total: 0)
+        initial: dest.count_dest = (by_level: zeroed, total: 0)
+        t := try mem.new(state: a, value: initial)
         chosen = any(t)
     end if
 
@@ -468,7 +491,7 @@ world must be handed its command line too, or the root is only
 half replaced and the test cannot say what it is testing.
 ```landin
 run: (inout h: any io.world, inout a: arena, inout d: any diag.log,
-      args: []cstring) -> (kept: u32) ! ... =
+      escaping args: []cstring) -> (kept: u32) ! ... =
     mut cfg := try config.build(h, a, args, d)
 
     fail config.bad_argument when lenof cfg.input == 0
@@ -522,9 +545,9 @@ public on_progress: type = struct
 end on_progress
 
 ```
-Hosted entry. No arguments: argc and argv in the C shape cannot
-be indexed without core's slice_from, so the arguments come from
-core as a slice instead.
+Hosted entry. The `io.args` adapter supplies initialized argument descriptors
+with process-lifetime backing. The full adapter and application remain later
+hosted work; no uninitialized view constructor is implied.
 ```landin
 public main: () -> (code: i32) =
     mut h := io.host()
@@ -548,14 +571,18 @@ end main
 ```
 And what the root buys, which is the reason for all of it. run
 never learns which world it was handed.
+The test argument descriptor array has module backing, as do its string
+literals, so both levels satisfy `run`'s retention contract.
 ```landin
+test_args: [2]cstring = ["logtool", "in.log"]
+
 test_drops_debug_lines: () -> none =
     mut h := io.in_memory([(name: "in.log", body: "DEBUG a\nERROR b\n")])
     w := any(addr h)
     arena scratch do
         mut logger := diag.new_log(N: 32)
         d := any(addr logger)
-        kept := run(w, scratch, d, ["logtool", "in.log"]) else 0
+        kept := run(w, scratch, d, test_args[0..<2]) else 0
         assert(kept == 1)
         assert(text.eq(io.written(h), "ERROR b\n"))
     end scratch
