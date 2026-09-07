@@ -1,0 +1,46 @@
+row: type = [2]u32
+
+view: (source: ptr mut row) -> (result: []mut u32 from source) =
+    result = source.val[0..<2]
+end view
+
+alias_view: (source: ptr mut row) -> (result: []mut u32 from source) =
+    local := source
+    result = local.val[0..1]
+end alias_view
+
+nested_view: (source: []mut row) -> (result: []mut u32 from source) =
+    result = source[1][0..<2]
+end nested_view
+
+read_view: (source: ptr row) -> (result: []u32 from source) =
+    result = source.val[0..<2]
+end read_view
+
+empty_view: (source: ptr mut row) -> (result: []mut u32 from source) =
+    result = source.val[2..<2]
+end empty_view
+
+public main: () -> (code: i32) =
+    mut values: row = [3, 5]
+    first := view(addr values)
+    first[0] = 11
+    second := alias_view(addr values)
+    second[1] = 13
+    first_row: row = [17, 19]
+    second_row: row = [23, 29]
+    mut rows: [2]row = zeroed
+    rows[0] = first_row
+    rows[1] = second_row
+    selected := nested_view(rows[0..<2])
+    selected[0] = 31
+    checked := read_view(addr values)
+    empty := empty_view(addr values)
+    code = 1
+    if checked[0] == 11 and checked[1] == 13 and lenof empty == 0
+      and rows[0][0] == 17 and rows[0][1] == 19
+      and rows[1][0] == 31 and rows[1][1] == 29
+    then
+        code = 42
+    end if
+end main

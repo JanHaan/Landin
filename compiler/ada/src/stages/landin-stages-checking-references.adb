@@ -92,6 +92,9 @@ package body Landin.Stages.Checking.References is
 
       function Has_References (Id : Res.Declaration_Id) return Boolean;
 
+      function Storage_Fact
+        (Tree : Syn.Tree; Place : Syn.Node_Id) return Origin_Fact;
+
       function Fact_Of
         (Tree : Syn.Tree; Node : Syn.Node_Id) return Origin_Fact;
 
@@ -525,6 +528,72 @@ package body Landin.Stages.Checking.References is
          end loop;
       end Check_Borrows;
 
+      function Storage_Fact (Tree : Syn.Tree; Place : Syn.Node_Id)
+        return Origin_Fact
+      is
+         Result : Origin_Fact := No_Origin;
+         Id : constant Res.Declaration_Id :=
+           Root_Declaration (Tree, Place);
+         Selected : Syn.Node_Id := Place;
+      begin
+         --  A dereference or slice index selects storage behind a
+         --  reference, not the local descriptor which holds it.
+         --  Ordinary fields and fixed-array indices keep selecting
+         --  their containing storage until such a boundary occurs.
+         while Syn.Kind (Tree, Selected)
+           in Syn.Member_Selection | Syn.Element_Index
+         loop
+            declare
+               Target : constant Syn.Node_Id :=
+                 Syn.Target_Of (Tree, Selected);
+               Kind : constant Ty.Type_Kind :=
+                 Landin.Checking.Type_Of (Types.all, Tree, Target);
+            begin
+               if (Syn.Kind (Tree, Selected) = Syn.Member_Selection
+                   and then Kind = Ty.Pointer_Value)
+                 or else
+                   (Syn.Kind (Tree, Selected) = Syn.Element_Index
+                    and then Kind = Ty.Slice_Value)
+               then
+                  Result := Fact_Of (Tree, Target);
+                  if Id /= Res.No_Declaration then
+                     Result.Derives (Positive (Id)) := True;
+                  end if;
+                  return Result;
+               end if;
+               Selected := Target;
+            end;
+         end loop;
+         if Id /= Res.No_Declaration then
+            Result.Derives (Positive (Id)) := True;
+            case Res.Sort_Of (Meanings.all, Id) is
+               when Res.Local_Binding | Res.Named_Return =>
+                  Result.Frame := True;
+               when Res.Parameter =>
+                  declare
+                     Parameter_Tree : constant
+                       not null access constant Syn.Tree :=
+                         Tree_For
+                           (Res.Source_Of (Meanings.all, Id));
+                     Parameter_Node : constant Syn.Node_Id :=
+                       Res.Node_Of (Meanings.all, Id);
+                  begin
+                     if Syn.Convention_Of
+                       (Parameter_Tree.all, Parameter_Node)
+                         = Syn.Inout_Convention
+                     then
+                        Result.From (Parameter_Of (Id)) := True;
+                     else
+                        Result.Frame := True;
+                     end if;
+                  end;
+               when others =>
+                  null;
+            end case;
+         end if;
+         return Result;
+      end Storage_Fact;
+
       function Fact_Of (Tree : Syn.Tree; Node : Syn.Node_Id)
         return Origin_Fact
       is
@@ -554,72 +623,18 @@ package body Landin.Stages.Checking.References is
                return Result;
 
             when Syn.Address_Of =>
-               declare
-                  Place : constant Syn.Node_Id := Syn.Operand_Of (Tree, Node);
-                  Id : constant Res.Declaration_Id :=
-                    Root_Declaration (Tree, Place);
-                  Selected : Syn.Node_Id := Place;
-               begin
-                  --  A dereference or slice index selects storage behind a
-                  --  reference, not the local descriptor which holds it.
-                  --  Ordinary fields and fixed-array indices keep selecting
-                  --  their containing storage until such a boundary occurs.
-                  while Syn.Kind (Tree, Selected)
-                    in Syn.Member_Selection | Syn.Element_Index
-                  loop
-                     declare
-                        Target : constant Syn.Node_Id :=
-                          Syn.Target_Of (Tree, Selected);
-                        Kind : constant Ty.Type_Kind :=
-                          Landin.Checking.Type_Of (Types.all, Tree, Target);
-                     begin
-                        if (Syn.Kind (Tree, Selected) = Syn.Member_Selection
-                            and then Kind = Ty.Pointer_Value)
-                          or else
-                            (Syn.Kind (Tree, Selected) = Syn.Element_Index
-                             and then Kind = Ty.Slice_Value)
-                        then
-                           Result := Fact_Of (Tree, Target);
-                           if Id /= Res.No_Declaration then
-                              Result.Derives (Positive (Id)) := True;
-                           end if;
-                           return Result;
-                        end if;
-                        Selected := Target;
-                     end;
-                  end loop;
-                  if Id /= Res.No_Declaration then
-                     Result.Derives (Positive (Id)) := True;
-                     case Res.Sort_Of (Meanings.all, Id) is
-                        when Res.Local_Binding | Res.Named_Return =>
-                           Result.Frame := True;
-                        when Res.Parameter =>
-                           declare
-                              Parameter_Tree : constant
-                                not null access constant Syn.Tree :=
-                                  Tree_For
-                                    (Res.Source_Of (Meanings.all, Id));
-                              Parameter_Node : constant Syn.Node_Id :=
-                                Res.Node_Of (Meanings.all, Id);
-                           begin
-                              if Syn.Convention_Of
-                                (Parameter_Tree.all, Parameter_Node)
-                                  = Syn.Inout_Convention
-                              then
-                                 Result.From (Parameter_Of (Id)) := True;
-                              else
-                                 Result.Frame := True;
-                              end if;
-                           end;
-                        when others =>
-                           null;
-                     end case;
-                  end if;
-               end;
-               return Result;
+               return Storage_Fact (Tree, Syn.Operand_Of (Tree, Node));
 
             when Syn.Member_Selection | Syn.Element_Index
                | Syn.Inclusive_Slice | Syn.Half_Open_Slice =>
+               if Syn.Kind (Tree, Node)
+                    in Syn.Inclusive_Slice | Syn.Half_Open_Slice
+                 and then Landin.Checking.Type_Of
+                   (Types.all, Tree, Syn.Target_Of (Tree, Node))
+                     = Ty.Fixed_Array
+               then
+                  return Storage_Fact (Tree, Syn.Target_Of (Tree, Node));
+               end if;
                Result := Fact_Of (Tree, Syn.Target_Of (Tree, Node));
                declare
                   Id : constant Res.Declaration_Id :=

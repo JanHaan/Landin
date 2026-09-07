@@ -1,0 +1,4 @@
+bad: (left: ptr mut [2]u32, right: ptr mut [2]u32)
+     -> (result: []mut u32 from right) =
+    result = left.val[0..<2]
+end bad

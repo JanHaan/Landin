@@ -1,0 +1,6 @@
+class: runtime
+summary: fixed-array views inherit referenced storage through pointers and slice elements
+program: main.ldn
+constructs: 0430, 0520, 0570, 0580, 0770, 0790, 0800, 0830
+status: 42
+targets: linux-x86-64
