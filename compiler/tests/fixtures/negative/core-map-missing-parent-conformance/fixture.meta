@@ -1,0 +1,8 @@
+class: negative
+summary: a map hashable conformance does not imply its required equatable conformance
+expect: expected.txt
+args: --root=../.. ../tests/fixtures/negative/core-map-missing-parent-conformance
+status: 1
+codes: L0318
+constructs: 1230, 1240, 1340, 1350
+targets: linux-x86-64, macos-arm64, synthetic-32

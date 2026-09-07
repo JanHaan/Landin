@@ -2701,8 +2701,51 @@ honest `mem.storage(T)`: reserve copies its initialized prefix into a private
 replacement, rolls that replacement back on failure, drains and frees the old
 allocation only after the copy succeeds, and publishes last. `push`, `pop`,
 indexed `get`, length, capacity and release are the minimum parser slice. A
-non-zeroable pointer element is its executable case. Map, tree and
-iterable/sort integration remain broader R4 library work.
+non-zeroable pointer element is its executable case.
+
+`core/map.map(K, V)` is the ordinary open-addressed map. `K is hashable` uses
+the separately declared `equatable` and composed `hashable` conformances;
+composition does not synthesize the parent conformance [1340]. Construction,
+insert, get, remove, length and release are its public operations. `get`
+returns `V from map`, while retained pointer keys and values enter through
+`escaping` parameters. The implementation keeps fully initialized bucket
+records beside dense initialized key and value prefixes, so neither `K` nor
+`V` needs a zero image. A removed entry remains initialized storage until its
+tombstone is reused or the allocation is released; resource ownership of
+elements remains manual.
+
+`map` is a public struct composition, not an encapsulated or deep-safe object.
+Its bucket, key and value storages and its counters are public fields. The
+private identity of the bucket record and the opaque representation of
+`mem.storage` do not make the map private: `mem` operations expose the typed
+initialized key/value prefixes, including removed dense entries, and inferred
+views can copy and overwrite whole bucket records. Code that composes below
+the map operations must manually preserve equal storage capacities, a fully
+initialized bucket array, paired key/value prefixes, exactly one used or dead
+bucket with a valid index for each dense position, and counters equal to the
+numbers of used and dead records. The compiler does not enforce those
+container invariants.
+
+The supplied equality must be an equivalence relation. Equal keys must produce
+the same hash, and equality and hash results for a stored key must remain
+stable for as long as it is in the map. That stability obligation includes
+state reached through a pointer or reference inside a key: mutating such a
+referent can invalidate lookup just as directly as overwriting the exposed key
+prefix. These are semantic caller obligations, not compiler proofs.
+
+Every lookup, removal and insertion probe is bounded by capacity, including a
+full or all-tombstone table. Insertion first searches for an equal key and
+updates its dense value without consulting the allocator, even when a preceding
+tombstone makes the table crowded. Only an absent key considers pressure;
+placement then remembers the first tombstone until it reaches a free bucket or
+the probe bound. Hashes are reduced modulo capacity as `u64` before conversion
+to `usize`, and load pressure counts tombstones with checked-equivalent
+arithmetic that cannot overflow. Rehash preflights all byte extents, acquires
+bucket, key and value storage in that order, migrates only used records into a
+private replacement, and publishes only after every fallible step. Failure of
+acquisition one, two or three consequently releases zero, one or two
+replacement allocations while leaving the old map unchanged. Successful
+rehash retires all three old extents exactly once.
 
 Vector reserve checks that its capacity times the item size fits `usize`
 before calling the allocator, and push checks geometric capacity growth before

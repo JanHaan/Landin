@@ -1,0 +1,181 @@
+import core/failing
+import core/map
+import core/mem
+import core/pool
+
+fixed_provider: type = pool.provider
+
+key_equal: (left: u64, right: u64) -> (same: bool) =
+    same = left == right
+end key_equal
+
+colliding_hash: (value: u64) -> (result: u64) =
+    _ = value
+    result = 6
+end colliding_hash
+
+u64 is map.equatable (eq: key_equal)
+u64 is map.hashable (hash: colliding_hash)
+
+node: type = struct
+    payload: i32
+end node
+
+n1: node = (payload: 11)
+n2: node = (payload: 22)
+n3: node = (payload: 33)
+n4: node = (payload: 44)
+n5: node = (payload: 55)
+n6: node = (payload: 66)
+n7: node = (payload: 77)
+
+has: (value: map.map(u64, ptr node), key: u64, wanted: i32)
+     -> (ok: bool) =
+    found: ptr node = map.get(value, key) else (problem)
+        _ = problem
+        ok = false
+        return
+    end
+    ok = found.val.payload == wanted
+end has
+
+failure_case: (allowed: usize, rollback_frees: usize) -> (ok: bool) =
+    --  Six uniform reclaiming slots hold the three old and three replacement
+    --  allocations simultaneously. 256 bytes is the largest capacity-16
+    --  extent (the initialized bucket records).
+    mut words: [193]u64 = zeroed
+    base: ptr mut u8 = ptr(usize(addr words[0]) + 1)
+    extent: usize = 1543
+    slot_size: usize = 256
+    slot_count: usize = 6
+    alignment: usize = 8
+    mut records: [6]pool.slot = zeroed
+    bookkeeping: []mut pool.slot = records[0..<lenof records]
+    mut inner := pool.over
+        (base, extent, slot_size, slot_count, alignment, bookkeeping)
+        else (problem)
+        _ = problem
+        ok = false
+        return
+    end
+
+    three: usize = 3
+    mut state := failing.count_down
+        (inner_provider: fixed_provider, inner: addr inner,
+         allowed_attempts: three)
+    mut value := map.new_map(key: u64, item: ptr node)
+    k1: u64 = 1
+    k2: u64 = 2
+    k3: u64 = 3
+    k4: u64 = 4
+    k5: u64 = 5
+    k6: u64 = 6
+    k7: u64 = 7
+    map.insert(value, state, k1, addr n1) else 0
+    map.insert(value, state, k2, addr n2) else 0
+    map.insert(value, state, k3, addr n3) else 0
+    map.insert(value, state, k4, addr n4) else 0
+    map.insert(value, state, k5, addr n5) else 0
+    map.insert(value, state, k6, addr n6) else 0
+
+    mut initial: bool = map.length(value) == 6
+                        and failing.attempts(state) == 3
+                        and failing.successes(state) == 3
+                        and failing.frees(state) == 0
+                        and failing.live(state) == 3
+                        and pool.allocation_count(inner) == 3
+                        and pool.free_count(inner) == 0
+                        and pool.live(inner) == 3
+
+    --  Six occupied records are already at the 8-slot pressure threshold.
+    --  Removing the first colliding key leaves a preceding tombstone but does
+    --  not reduce pressure. With no allocation budget, replacing the last key
+    --  must still search, update, and return without consulting the provider.
+    map.remove(value, k1) else 0
+    zero: usize = 0
+    failing.permit(state, zero)
+    map.insert(value, state, k6, addr n7) else (problem)
+        _ = problem
+        initial = false
+    end
+    mut first_missing: bool = false
+    _ = map.get(value, k1) else (problem)
+        _ = problem
+        first_missing = true
+    end
+    updated_without_allocation: bool = map.length(value) == 5
+                                       and has(value, k6, 77)
+                                       and first_missing
+                                       and failing.attempts(state) == 3
+                                       and failing.injected_failures(state) == 0
+                                       and failing.frees(state) == 0
+                                       and failing.live(state) == 3
+
+    failing.permit(state, allowed)
+    mut failed: bool = false
+    map.insert(value, state, k7, addr n7) else (problem)
+        _ = problem
+        failed = true
+    end
+
+    --  No old allocation was released, every acquired replacement was, and
+    --  all old logical contents remain observable after each failure stage.
+    mut preserved: bool = failed and map.length(value) == 5
+                          and has(value, k2, 22) and has(value, k3, 33)
+                          and has(value, k6, 77)
+                          and failing.frees(state) == rollback_frees
+                          and failing.live(state) == 3
+                          and pool.free_count(inner) == rollback_frees
+                          and pool.live(inner) == 3
+                          and pool.rejected_free_count(inner) == 0
+    mut seventh_missing: bool = false
+    _ = map.get(value, k7) else (problem)
+        _ = problem
+        seventh_missing = true
+    end
+    preserved = preserved and seventh_missing
+
+    --  The rollback returned every temporary slot to the pool. A three-call
+    --  retry can therefore coexist with all three unchanged old allocations.
+    failing.permit(state, three)
+    map.insert(value, state, k7, addr n7) else (problem)
+        _ = problem
+        preserved = false
+    end
+    retried: bool = map.length(value) == 6 and has(value, k2, 22)
+                   and has(value, k4, 44) and has(value, k7, 77)
+                   and failing.frees(state) == rollback_frees + 3
+                   and failing.live(state) == 3
+                   and pool.free_count(inner) == rollback_frees + 3
+                   and pool.live(inner) == 3
+                   and pool.rejected_free_count(inner) == 0
+
+    expected_allocations: usize = 6 + allowed
+    expected_attempts: usize = 7 + allowed
+    counts: bool = failing.attempts(state) == expected_attempts
+                   and failing.delegated(state) == expected_allocations
+                   and failing.successes(state) == expected_allocations
+                   and failing.injected_failures(state) == 1
+                   and failing.inner_failures(state) == 0
+                   and pool.allocation_count(inner) == expected_allocations
+
+    map.release_map(value, state)
+    released: bool = map.length(value) == 0
+                     and failing.frees(state) == rollback_frees + 6
+                     and failing.live(state) == 0
+                     and pool.free_count(inner) == rollback_frees + 6
+                     and pool.live(inner) == 0
+                     and pool.rejected_free_count(inner) == 0
+    ok = initial and updated_without_allocation and preserved
+         and retried and counts and released
+end failure_case
+
+public main: () -> (code: i32) =
+    if failure_case(0, 0) and failure_case(1, 1)
+      and failure_case(2, 2)
+    then
+        code = 42
+    else
+        code = 0
+    end if
+end main

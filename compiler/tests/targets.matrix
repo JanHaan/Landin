@@ -117,6 +117,9 @@ negative/core-arena-frame-escape | linux-x86-64, macos-arm64, synthetic-32
 negative/core-diag-frame-message-escape | linux-x86-64, macos-arm64, synthetic-32
 negative/core-failing-frame-escape | linux-x86-64, macos-arm64, synthetic-32
 negative/core-failing-needs-mutable-inner | linux-x86-64, macos-arm64, synthetic-32
+negative/core-map-key-frame-escape | linux-x86-64, macos-arm64, synthetic-32
+negative/core-map-missing-parent-conformance | linux-x86-64, macos-arm64, synthetic-32
+negative/core-map-value-frame-escape | linux-x86-64, macos-arm64, synthetic-32
 negative/core-mem-admit-frame-pointer | linux-x86-64, macos-arm64, synthetic-32
 negative/core-mem-bytes-live-drop | linux-x86-64, macos-arm64, synthetic-32
 negative/core-mem-bytes-private-extent | linux-x86-64, macos-arm64, synthetic-32
@@ -1108,6 +1111,9 @@ runtime/r420-array-place-recovery | linux-x86-64
 runtime/r420-failing-providers | linux-x86-64
 runtime/r420-fixed-array-pointer-whole-copy | linux-x86-64
 runtime/r420-generic-array-selection-transfer | linux-x86-64
+runtime/r420-map-arena | linux-x86-64
+runtime/r420-map-failure-rollback | linux-x86-64
+runtime/r420-map-operations | linux-x86-64
 runtime/r420-pool-provider | linux-x86-64
 runtime/r420-runtime-array-writes | linux-x86-64
 runtime/r420-small-vector | linux-x86-64

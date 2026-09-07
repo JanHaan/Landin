@@ -3920,6 +3920,47 @@ by the initializer-shape classification. The tree uses immediate content
 assertions and explicit call-site error forwarding; these do not close either
 general compiler behavior. The independent reductions remain under `.scratch/`.
 
+The bounded map increment selects D198's initialized bucket plus dense-prefix
+representation. `core/map` provides its own composed `equatable`/`hashable`
+concepts and ordinary construction, insertion, lookup, removal, length and
+release. Pointer K/V instances require no zero image. Every probe is bounded.
+Insert searches for and updates an existing equal key before consulting load
+pressure or the allocator; an absent-key placement remembers the first
+tombstone. Hash reduction stays in `u64` until after modulo, and nonoverflowing
+pressure counts both live and dead records. Rehash preflights all three extents,
+acquires and migrates privately, publishes last, and makes no fallible call
+after that point. The three injected acquisition failures free exactly zero,
+one and two new extents while the old map remains intact, and each retries
+successfully on the reclaiming six-slot pool. Successful growth and final
+release each free their three owned extents exactly once. The same runtime
+first replaces a key after a tombstone at six-of-eight pressure with an
+allocation budget of zero; length, provider attempts and live extents stay
+unchanged.
+
+The map remains a public composition rather than an encapsulated abstraction:
+its storages and counters are fields, `mem.used` exposes initialized K/V entries
+including dead dense positions, and inferred views can copy opaque whole bucket
+records. The private bucket identity and opaque raw representation do not hide
+that state. Composition below the public map operations therefore carries the
+manual obligation to preserve equal capacities, full bucket initialization,
+paired dense prefixes, one valid used/dead record per dense position, and exact
+counters. Equality must be an equivalence relation; equal keys must hash
+alike; and both results must remain stable while stored, including across
+mutation reached through a pointer/reference key. None of these laws or map
+invariants gains compiler enforcement or a deep-safety claim.
+
+The only compiler-surface reductions encountered were existing enabled-kernel
+boundaries, not missing map semantics: a generic-call aggregate actual needs a
+typed local before the call; a generic returned struct containing an atom union
+is still outside the substituted-field shape admitted by R2.20; and the arena
+fixture's first collision hash tried to discard its whole struct argument,
+whose value use R2.20 does not enable, before reducing to an ordinary scalar
+field read. D198 therefore uses typed bucket temporaries and a private scalar
+bucket tag, while the fixture computes its constant collision from the key's
+scalar identity. It does not widen contextual aggregate arguments,
+parameterized struct fields, raw storage, origins or permissions, and it does
+not duplicate the separately owned contextual text-literal staging work.
+
 The initialized-view implementation must also retain [0860]'s shallow alias
 limit: a reference inserted through an alias is not generally propagated back
 to every other view of that storage, so writable views do not establish
@@ -4154,6 +4195,25 @@ For tracked base and metadata actuals, `from base, bookkeeping` joins both
 origins. D197 also records the existing whole-value Untracked-OR limit: an
 integer-derived base makes the returned provider untracked, so the checker
 does not independently enforce a tracked metadata origin in that mixed case.
+
+D198 supplies the open-addressed map lane. `runtime/r420-map-operations`
+executes explicit composed evidence, pointer key/value migration, collisions,
+wraparound, a preceding-tombstone update, churn, growth and bounded missing
+searches through deliberately full and all-dead bucket records.
+`runtime/r420-map-arena` separately executes the actual `core/mem` monotonic
+arena: collisions, replacement, deletion and growth precede bounded arena
+exhaustion; the failed growth preserves the old logical map, and release resets
+the map while the arena's no-op free leaves its used offset unchanged.
+`runtime/r420-map-failure-rollback` executes allocation failures one, two and
+three over D197's counted reclaiming provider. Before each failure it replaces
+an existing key after a preceding tombstone at the growth threshold with zero
+allocation budget and no provider attempt. It then proves exact rollback and
+old contents for an absent key, retries each case, checks every exact free
+through the pool, and finishes with no live allocation.
+`negative/core-map-missing-parent-conformance`,
+`negative/core-map-key-frame-escape` and
+`negative/core-map-value-frame-escape` retain the separate parent evidence and
+escaping insertion boundaries.
 
 Exit evidence: containers run with heap, arena, fixed and failing allocators;
 all omission and layering choices are recorded; `[0820]`'s block is either

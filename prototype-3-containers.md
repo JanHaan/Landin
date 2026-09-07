@@ -1092,6 +1092,13 @@ into a private replacement and publishes it only after the old prefix is
 drained. The caller still owns pointer validity, alignment and the
 capacity-derived allocator extent.
 
+R4.20's D198 applies that state machine to the map without the sparse `[]K`
+and `[]V` claim in the sketch above. Fully initialized bucket records name
+positions in dense initialized K/V prefixes. A free bucket appends both real
+values; a reused tombstone replaces both real values at its existing dense
+position; and rehash transfers only used positions. Neither K nor V acquires
+a zero-image constraint, and no spare-capacity slice is forged.
+
 The original finding, for the record.
 
 There is no notion of uninitialised storage, and a container
@@ -1130,6 +1137,10 @@ Z11 [1340] says a conformance is declared explicitly even when the body
 is empty, then shows button is widget supplying only focus, with
 no sign of the drawable and clickable conformances it also needs.
 The rule is right; the example undercuts it.
+
+R4.20's D198 executes the rule at the map boundary: a concrete K declares
+both `map.equatable` and `map.hashable`, and the map's `K is hashable`
+constraint dispatches equality through the separate parent evidence.
 
 Z12 Passing a pointer target where an inout is wanted,
 A.alloc(c.inner.val, size, align). Ordinary and surely intended,
@@ -1242,6 +1253,12 @@ allocations live during growth, then observes their exact extents released.
 two-slot reclaiming pool, proves the old pointer vector remains intact, then
 permits one retry, observes a successful replacement, and observes eventual
 exact release of both allocation extents.
+
+D198 supplies Z19's original three-acquisition case. Map rehash allocates its
+initialized bucket records, key storage and value storage in order. The three
+injected failure stages release zero, one and two replacements; each retry on
+the six-slot reclaiming pool succeeds, successful publication releases the
+three old extents, and final release leaves no live extent.
 
 First, this finding overstated its own case. A flag and a
 conditional defer is linear, not quadratic — three lines per
