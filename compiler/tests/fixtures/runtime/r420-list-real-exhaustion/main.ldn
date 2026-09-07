@@ -1,0 +1,326 @@
+--  Real inner-provider exhaustion for vec.list(pointer) and vec.list(any).
+--  No allocation here is refused by an injected schedule: every refusal below
+--  is the backing arena running out of bytes or the fixed pool running out of
+--  slots. Both item kinds run the same two shapes -- a monotonic extent spent
+--  to its end, and a growth that needs the old and the new block at once.
+
+import core/mem
+import core/pool
+import core/vec
+
+node: type = struct
+    value: i32
+end node
+node_ptr: type = ptr node
+
+counter: type = concept (t: type)
+    read: (self: ptr t) -> (result: i32)
+end counter
+
+read_node: (self: ptr node) -> (result: i32) =
+    result = self.val.value
+end read_node
+
+node is counter (read: read_node)
+
+mut first_source: node = (value: 11)
+mut second_source: node = (value: 23)
+
+mut table: [17]node = zeroed
+
+--  One pointee address per index, derived once from the table's own base.
+entry: (at: usize) -> (result: node_ptr) =
+    result = ptr(usize(addr table[0]) + at * sizeof node)
+end entry
+
+contents_ok: (values: vec.list(node_ptr), count: usize) -> (ok: bool) =
+    ok = vec.length(values) == count
+    mut at: usize = 0
+    while at < count do
+        saved: node_ptr = vec.get(values, at) else (problem)
+            _ = problem
+            ok = false
+            return
+        end
+        ok = ok and usize(saved) == usize(entry(at))
+             and saved.val.value == i32(at) + 100
+        inc at
+    end while
+end contents_ok
+
+--  Alternating erased items dispatch back to their own pointees.
+erased_ok: (values: vec.list(any counter), count: usize) -> (ok: bool) =
+    checked: bool = begin
+        view := vec.used(values)
+        mut good: bool = lenof view == count
+        mut index: usize = 0
+        for saved in view do
+            wanted: i32 = if index % 2 == 0 then 11 else 23 end if
+            good = good and saved.read() == wanted
+            inc index
+        end for
+        good
+    end
+    ok = checked and vec.length(values) == count
+end erased_ok
+
+fill_erased: (provider: type is mem.allocator, inout state: provider,
+              inout values: vec.list(any counter), upto: usize,
+              escaping a: any counter, escaping b: any counter)
+             -> (ok: bool) =
+    ok = false
+    mut at: usize = vec.length(values)
+    while at < upto do
+        added: any counter = if at % 2 == 0 then a else b end if
+        vec.push(values, state, added) else (problem)
+            _ = problem
+            return
+        end
+        inc at
+    end while
+    ok = true
+end fill_erased
+
+fill: (provider: type is mem.allocator, inout state: provider,
+       inout values: vec.list(node_ptr), upto: usize) -> (ok: bool) =
+    ok = false
+    mut at: usize = vec.length(values)
+    while at < upto do
+        vec.push(values, state, entry(at)) else (problem)
+            _ = problem
+            return
+        end
+        inc at
+    end while
+    ok = true
+end fill
+
+--  A monotonic arena sized to exactly two growths. The third growth is
+--  refused by the arena itself and must leave the old vector intact.
+arena_case: () -> (ok: bool) =
+    ok = false
+    mut backing: [24]u64 = zeroed
+    base: ptr mut u8 = ptr(usize(addr backing[0]))
+    extent: usize = 24 * sizeof u64
+    mut state := mem.arena_over(base, extent)
+    mut values := vec.new_list(item: node_ptr)
+
+    eight: usize = 8
+    return when not fill(state, values, eight)
+    --  Repeated growth consumes monotonic capacity: 8 slots, 64 bytes.
+    return when vec.capacity(values) <> 8
+      or state.used <> 8 * sizeof node_ptr
+
+    sixteen: usize = 16
+    return when not fill(state, values, sixteen)
+    --  The second growth took 128 further bytes and ended the extent.
+    return when vec.capacity(values) <> 16 or state.used <> extent
+
+    mut exhausted: bool = false
+    vec.push(values, state, entry(sixteen)) else (problem)
+        exhausted = problem == mem.out_of_memory
+    end
+    preserved: bool = exhausted and contents_ok(values, sixteen)
+                      and vec.capacity(values) == 16
+                      and state.used == extent
+
+    vec.release(values, state)
+    --  The arena's free is a documented no-op, so the offset does not move.
+    ok = preserved and vec.length(values) == 0 and vec.capacity(values) == 0
+         and state.used == extent
+end arena_case
+
+--  One slot wide enough for the grown block still cannot satisfy a growth
+--  that needs the old and the new block at the same time.
+single_slot_case: () -> (ok: bool) =
+    ok = false
+    mut words: [16]u64 = zeroed
+    base: ptr mut u8 = ptr(usize(addr words[0]))
+    mut records: [1]pool.slot = zeroed
+    slot_size: usize = 16 * sizeof node_ptr
+    mut state := pool.over(base, 16 * sizeof u64, slot_size, 1, 8,
+                           records[0..<1]) else (problem)
+        _ = problem
+        return
+    end
+    mut values := vec.new_list(item: node_ptr)
+
+    eight: usize = 8
+    return when not fill(state, values, eight)
+    return when vec.capacity(values) <> 8 or pool.live(state) <> 1
+
+    mut exhausted: bool = false
+    vec.push(values, state, entry(eight)) else (problem)
+        exhausted = problem == mem.out_of_memory
+    end
+    --  The old block is still the only live one and nothing fell back.
+    return when not exhausted or not contents_ok(values, eight)
+      or vec.capacity(values) <> 8 or pool.live(state) <> 1
+      or pool.allocation_count(state) <> 1 or pool.free_count(state) <> 0
+
+    vec.release(values, state)
+    return when pool.live(state) <> 0 or pool.free_count(state) <> 1
+
+    --  Release returned the slot, so an ordinary later vector reuses it.
+    mut again := vec.new_list(item: node_ptr)
+    return when not fill(state, again, eight)
+    reused: bool = contents_ok(again, eight)
+                   and pool.allocation_count(state) == 2
+                   and pool.live(state) == 1
+    vec.release(again, state)
+    ok = reused and pool.live(state) == 0 and pool.free_count(state) == 2
+         and pool.rejected_free_count(state) == 0
+end single_slot_case
+
+--  The same growth succeeds when a second slot can hold the new block while
+--  the old one is still live. That is what the single-slot refusal measured.
+two_slot_case: () -> (ok: bool) =
+    ok = false
+    mut words: [32]u64 = zeroed
+    base: ptr mut u8 = ptr(usize(addr words[0]))
+    mut records: [2]pool.slot = zeroed
+    slot_size: usize = 16 * sizeof node_ptr
+    mut state := pool.over(base, 32 * sizeof u64, slot_size, 2, 8,
+                           records[0..<2]) else (problem)
+        _ = problem
+        return
+    end
+    mut values := vec.new_list(item: node_ptr)
+
+    nine: usize = 9
+    return when not fill(state, values, nine)
+    --  Two slots were taken and the old one returned inside that one growth.
+    grown: bool = contents_ok(values, nine) and vec.capacity(values) == 16
+                  and pool.allocation_count(state) == 2
+                  and pool.free_count(state) == 1 and pool.live(state) == 1
+    vec.release(values, state)
+    ok = grown and pool.live(state) == 0 and pool.free_count(state) == 2
+         and pool.rejected_free_count(state) == 0
+end two_slot_case
+
+--  The erased item repeats the arena shape. [1380] keeps construction
+--  explicit, so both erased values are built in main and handed in here; what
+--  is being measured is the provider, not where the descriptor was made.
+arena_any_case: (escaping a: any counter, escaping b: any counter)
+                -> (ok: bool) =
+    ok = false
+    mut backing: [128]u64 = zeroed
+    base: ptr mut u8 = ptr(usize(addr backing[0]))
+    item_bytes: usize = sizeof any counter
+    extent: usize = 24 * item_bytes
+    return when extent > lenof backing * sizeof u64
+    mut state := mem.arena_over(base, extent)
+    mut values := vec.new_list(item: any counter)
+
+    eight: usize = 8
+    return when not fill_erased(state, values, eight, a, b)
+    return when vec.capacity(values) <> 8 or state.used <> 8 * item_bytes
+
+    sixteen: usize = 16
+    return when not fill_erased(state, values, sixteen, a, b)
+    --  The second growth took sixteen further items and ended the extent.
+    return when vec.capacity(values) <> 16 or state.used <> extent
+
+    mut exhausted: bool = false
+    vec.push(values, state, a) else (problem)
+        exhausted = problem == mem.out_of_memory
+    end
+    --  Every descriptor still dispatches to the pointee it was built over.
+    preserved: bool = exhausted and erased_ok(values, sixteen)
+                      and vec.capacity(values) == 16
+                      and state.used == extent
+
+    vec.release(values, state)
+    ok = preserved and vec.length(values) == 0 and vec.capacity(values) == 0
+         and state.used == extent
+end arena_any_case
+
+--  The erased item repeats the simultaneous old-and-new pool shape.
+single_slot_any_case: (escaping a: any counter, escaping b: any counter)
+                      -> (ok: bool) =
+    ok = false
+    mut words: [128]u64 = zeroed
+    base: ptr mut u8 = ptr(usize(addr words[0]))
+    mut records: [1]pool.slot = zeroed
+    item_bytes: usize = sizeof any counter
+    slot_size: usize = 16 * item_bytes
+    return when slot_size > lenof words * sizeof u64
+    mut state := pool.over(base, slot_size, slot_size, 1,
+                           alignof any counter, records[0..<1])
+      else (problem)
+        _ = problem
+        return
+    end
+    mut values := vec.new_list(item: any counter)
+
+    eight: usize = 8
+    return when not fill_erased(state, values, eight, a, b)
+    return when vec.capacity(values) <> 8 or pool.live(state) <> 1
+
+    mut exhausted: bool = false
+    vec.push(values, state, a) else (problem)
+        exhausted = problem == mem.out_of_memory
+    end
+    --  The sixteen-item block fits the slot; the old list still occupies it.
+    return when not exhausted or not erased_ok(values, eight)
+      or vec.capacity(values) <> 8 or pool.live(state) <> 1
+      or pool.allocation_count(state) <> 1 or pool.free_count(state) <> 0
+
+    vec.release(values, state)
+    return when pool.live(state) <> 0 or pool.free_count(state) <> 1
+
+    mut again := vec.new_list(item: any counter)
+    return when not fill_erased(state, again, eight, a, b)
+    reused: bool = erased_ok(again, eight)
+                   and pool.allocation_count(state) == 2
+                   and pool.live(state) == 1
+    vec.release(again, state)
+    ok = reused and pool.live(state) == 0 and pool.free_count(state) == 2
+         and pool.rejected_free_count(state) == 0
+end single_slot_any_case
+
+--  A second slot lets the same erased growth hold both blocks and succeed.
+two_slot_any_case: (escaping a: any counter, escaping b: any counter)
+                   -> (ok: bool) =
+    ok = false
+    mut words: [128]u64 = zeroed
+    base: ptr mut u8 = ptr(usize(addr words[0]))
+    mut records: [2]pool.slot = zeroed
+    item_bytes: usize = sizeof any counter
+    slot_size: usize = 16 * item_bytes
+    extent: usize = 2 * slot_size
+    return when extent > lenof words * sizeof u64
+    mut state := pool.over(base, extent, slot_size, 2,
+                           alignof any counter, records[0..<2])
+      else (problem)
+        _ = problem
+        return
+    end
+    mut values := vec.new_list(item: any counter)
+
+    nine: usize = 9
+    return when not fill_erased(state, values, nine, a, b)
+    grown: bool = erased_ok(values, nine) and vec.capacity(values) == 16
+                  and pool.allocation_count(state) == 2
+                  and pool.free_count(state) == 1 and pool.live(state) == 1
+    vec.release(values, state)
+    ok = grown and pool.live(state) == 0 and pool.free_count(state) == 2
+         and pool.rejected_free_count(state) == 0
+end two_slot_any_case
+
+public main: () -> (code: i32) =
+    code = 1
+    mut at: usize = 0
+    while at < 17 do
+        table[at].value = i32(at) + 100
+        inc at
+    end while
+    a: any counter = any(addr first_source)
+    b: any counter = any(addr second_source)
+    if arena_case() and single_slot_case() and two_slot_case()
+      and arena_any_case(a, b) and single_slot_any_case(a, b)
+      and two_slot_any_case(a, b)
+    then
+        code = 42
+    end if
+end main

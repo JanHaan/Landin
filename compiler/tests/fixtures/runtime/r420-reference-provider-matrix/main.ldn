@@ -1,0 +1,155 @@
+import core/mem
+import core/failing
+import core/pool
+import core/heap
+import core/vec
+
+counter: type = concept (t: type)
+    bump: (self: ptr mut t) -> (result: i32)
+end counter
+one: type = struct
+    value: i32
+end one
+two: type = struct
+    sentinel: i32
+    value: i32
+end two
+bump_one: (self: ptr mut one) -> (result: i32) =
+    inc self.val.value
+    result = self.val.value
+end bump_one
+bump_two: (self: ptr mut two) -> (result: i32) =
+    self.val.value += 2
+    result = self.val.value
+end bump_two
+one is counter (bump: bump_one)
+two is counter (bump: bump_two)
+mut left: one = (value: 11)
+mut right: two = (sentinel: 123, value: 23)
+mut other: one = (value: 37)
+node_ptr: type = ptr mut one
+
+exercise: (provider: type is mem.allocator, inout inner: provider,
+           escaping a: any counter, escaping b: any counter)
+          -> (okay: bool) =
+    okay = false
+    left.value = 11
+    right.value = 23
+    zero: usize = 0
+    six: usize = 6
+    two: usize = 2
+    mut allocator := failing.count_down(addr inner, zero)
+    mut pointers := vec.new_list(item: node_ptr)
+    mut erased := vec.new_list(item: any counter)
+    mut pointer_failed: bool = false
+    vec.push(pointers, allocator, addr left) else (problem)
+        pointer_failed = problem == mem.out_of_memory
+    end
+    mut erased_failed: bool = false
+    vec.push(erased, allocator, a) else (problem)
+        erased_failed = problem == mem.out_of_memory
+    end
+    return when not pointer_failed or not erased_failed
+      or vec.length(pointers) <> 0 or vec.capacity(pointers) <> 0
+      or vec.length(erased) <> 0 or vec.capacity(erased) <> 0
+      or failing.live(allocator) <> 0
+    failing.permit(allocator, six)
+    mut at: usize = 0
+    while at < 17 do
+        vec.push(pointers, allocator, addr left) else (problem)
+            _ = problem
+            return
+        end
+        added: any counter = if at % 2 == 0 then a else b end if
+        vec.push(erased, allocator, added) else (problem)
+            _ = problem
+            return
+        end
+        inc at
+    end while
+    want: usize = 64
+    pointer_failed = false
+    vec.reserve(pointers, allocator, want) else (problem)
+        pointer_failed = problem == mem.out_of_memory
+    end
+    erased_failed = false
+    vec.reserve(erased, allocator, want) else (problem)
+        erased_failed = problem == mem.out_of_memory
+    end
+    return when not pointer_failed or not erased_failed
+      or vec.length(pointers) <> 17 or vec.capacity(pointers) <> 32
+      or vec.length(erased) <> 17 or vec.capacity(erased) <> 32
+      or failing.live(allocator) <> 2 or failing.frees(allocator) <> 4
+    failing.permit(allocator, two)
+    vec.reserve(pointers, allocator, want) else (problem)
+        _ = problem
+        return
+    end
+    vec.reserve(erased, allocator, want) else (problem)
+        _ = problem
+        return
+    end
+    pointer_ok: bool = begin
+        view := vec.used(pointers)
+        mut good: bool = lenof view == 17
+        for saved in view do
+            good = good and usize(saved) == usize(addr left)
+        end for
+        view[16] = addr other
+        good and view[16].val.value == 37 and view[0].val.value == 11
+    end
+    dispatch_ok: bool = begin
+        view := vec.used(erased)
+        mut good: bool = lenof view == 17
+        for saved in view do
+            actual: i32 = saved.bump()
+            good = good and actual > 0
+        end for
+        view[0] = b
+        replaced: any counter = view[0]
+        actual: i32 = replaced.bump()
+        good and actual == 41
+    end
+    pointer_tail: node_ptr = vec.pop(pointers) else (problem)
+        _ = problem
+        return
+    end
+    erased_tail: any counter = vec.pop(erased) else (problem)
+        _ = problem
+        return
+    end
+    tail_value: i32 = erased_tail.bump()
+    tail_ok: bool = usize(pointer_tail) == usize(addr other) and tail_value == 21
+    vec.release(pointers, allocator)
+    vec.release(erased, allocator)
+    okay = pointer_ok and dispatch_ok and tail_ok and left.value == 21
+      and right.value == 41 and right.sentinel == 123 and other.value == 37
+      and vec.capacity(pointers) == 0 and vec.capacity(erased) == 0
+      and failing.attempts(allocator) == 12 and failing.successes(allocator) == 8
+      and failing.injected_failures(allocator) == 4
+      and failing.inner_failures(allocator) == 0
+      and failing.frees(allocator) == 8 and failing.live(allocator) == 0
+end exercise
+
+public main: () -> (code: i32) =
+    code = 1
+    a: any counter = any(addr left)
+    b: any counter = any(addr right)
+    mut host := heap.host()
+    heap_ok: bool = exercise(host, a, b)
+    mut arena_bytes: [8192]u8 = zeroed
+    mut arena := mem.arena_over(addr arena_bytes[0], 8192)
+    arena_ok: bool = exercise(arena, a, b)
+    mut pool_bytes: [4096]u8 = zeroed
+    mut slots: [3]pool.slot = zeroed
+    mut fixed_state := pool.over(addr pool_bytes[0], 4096, 1024, 3, 16,
+                           slots[0..<3]) else (problem)
+        _ = problem
+        return
+    end
+    fixed_ok: bool = exercise(fixed_state, a, b)
+    if heap_ok and arena_ok and fixed_ok and arena.used > 0
+      and pool.live(fixed_state) == 0 and pool.allocation_count(fixed_state) == 8
+      and pool.free_count(fixed_state) == 8 and pool.rejected_free_count(fixed_state) == 0
+    then code = 42 end if
+end main

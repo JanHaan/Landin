@@ -1,0 +1,112 @@
+import core/failing
+import core/mem
+import core/pool
+import core/tree
+
+exhaust: (provider: type is mem.allocator, inout inner: provider)
+         -> (okay: bool) =
+    okay = false
+    budget: usize = 10
+    mut state := failing.count_down(addr inner, budget)
+    mut value := tree.new_tree()
+    name: utf8 = "kept"
+    mut at: usize = 0
+    while at < 8 do
+        added: tree.node_id = tree.add_leaf(value, state, name) else (problem)
+            _ = problem
+            return
+        end
+        return when tree.ordinal(added) <> u32(at)
+        inc at
+    end while
+    mut leaf_failed: bool = false
+    leaf: tree.node_id = tree.add_leaf(value, state, name) else (problem)
+        leaf_failed = problem == mem.out_of_memory
+        tree.id(0)
+    end
+    _ = tree.ordinal(leaf)
+    mut branch_failed: bool = false
+    eight: u32 = 8
+    branch: tree.node_id = tree.add_branch(value, state, name, tree.id(0), eight)
+      else (problem)
+        branch_failed = problem == mem.out_of_memory
+        tree.id(0)
+    end
+    _ = tree.ordinal(branch)
+    return when not leaf_failed or not branch_failed or tree.length(value) <> 8
+      or failing.attempts(state) <> 3 or failing.successes(state) <> 1
+      or failing.inner_failures(state) <> 2 or failing.injected_failures(state) <> 0
+      or failing.live(state) <> 1 or failing.frees(state) <> 0
+    at = 0
+    while at < 8 do
+        saved := tree.get(value, tree.id(u32(at))) else (problem)
+            _ = problem
+            return
+        end
+        text: utf8 = tree.name(saved)
+        first: []u8 = text[0]
+        leaves: u32 = tree.count_leaves(value, tree.id(u32(at))) else (problem)
+            _ = problem
+            return
+        end
+        return when lenof text <> 4 or first[0] <> 107 or leaves <> 1
+        inc at
+    end while
+    tree.release(value, state)
+    okay = tree.length(value) == 0 and failing.frees(state) == 1
+      and failing.live(state) == 0
+end exhaust
+
+reuse: (inout state: pool.provider) -> (okay: bool) =
+    okay = false
+    mut value := tree.new_tree()
+    name: utf8 = "again"
+    mut at: u32 = 0
+    while at < 3 do
+        added: tree.node_id = tree.add_leaf(value, state, name) else (problem)
+            _ = problem
+            return
+        end
+        return when tree.ordinal(added) <> at
+        inc at
+    end while
+    three: u32 = 3
+    root: tree.node_id = tree.add_branch(value, state, name, tree.id(0), three)
+      else (problem)
+        _ = problem
+        return
+    end
+    leaves: u32 = tree.count_leaves(value, root) else (problem)
+        _ = problem
+        return
+    end
+    tree.release(value, state)
+    okay = leaves == 3 and tree.length(value) == 0
+end reuse
+
+public main: () -> (code: i32) =
+    code = 1
+    mut backing: [1024]u64 = zeroed
+    extent: usize = 8 * sizeof tree.node
+    arena_base: ptr mut u8 = ptr(usize(addr backing[0]))
+    mut arena := mem.arena_over(arena_base, extent)
+    arena_ok: bool = exhaust(arena)
+    return when not arena_ok or arena.used <> extent
+    mut words: [2048]u64 = zeroed
+    mut records: [1]pool.slot = zeroed
+    slot_size: usize = 16 * sizeof tree.node
+    pool_base: ptr mut u8 = ptr(usize(addr words[0]))
+    mut state := pool.over(pool_base, 16384,
+                           slot_size, 1, alignof tree.node, records[0..<1])
+      else (problem)
+        _ = problem
+        return
+    end
+    pool_ok: bool = exhaust(state)
+    return when not pool_ok or pool.live(state) <> 0
+      or pool.allocation_count(state) <> 1 or pool.free_count(state) <> 1
+    reuse_ok: bool = reuse(state)
+    if reuse_ok and pool.live(state) == 0 and pool.allocation_count(state) == 2
+      and pool.free_count(state) == 2 and pool.rejected_free_count(state) == 0
+    then code = 42 end if
+end main

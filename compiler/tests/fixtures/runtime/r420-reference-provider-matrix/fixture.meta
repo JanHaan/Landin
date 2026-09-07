@@ -1,0 +1,7 @@
+class: runtime
+summary: pointer and erased vectors retain contents and rollback across all allocator providers
+program: main.ldn
+root: ../../../../..
+constructs: 0510, 0550, 0770, 0790, 0830, 1220, 1290, 1350, 1370, 1380, 1390
+status: 42
+targets: linux-x86-64
