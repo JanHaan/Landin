@@ -1,0 +1,10 @@
+error[L0301]: this argument does not match its exact constant type pattern
+  --> ../tests/fixtures/negative/core-failing-needs-mutable-inner/main.ldn:10:48
+   |
+10 |         (inner_provider: heap_provider, inner: addr inner,
+   |                                                ^^^^^^^^^^
+  --> ../../core/failing/failing.ldn:22:28
+   |
+22 |                     inner: ptr mut inner_provider,
+   |                            ^^^^^^^^^^^^^^^^^^^^^^ the runtime parameter type pattern
+  = note: D138: deduction unifies the written parameter pattern with the independently synthesized argument descriptor exactly

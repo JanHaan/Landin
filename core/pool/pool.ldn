@@ -1,0 +1,196 @@
+--  A caller-backed reclaiming allocator.  Unlike core/mem's arena, every
+--  successful allocation owns one uniform slot which free can return to the
+--  lowest-index-first scan.  No operation imports or falls back to a heap.
+
+import core/mem
+
+public slot: type = struct
+    occupied: bool
+    size: usize
+end slot
+
+fixed_pool: type = struct
+    base: ptr mut u8
+    extent: usize
+    slot_size: usize
+    slot_count: usize
+    bookkeeping: []mut slot
+    slot_alignment: usize
+    first_offset: usize
+    stride: usize
+    allocations: usize
+    frees: usize
+    live_count: usize
+    rejected_frees: usize
+end fixed_pool
+
+public provider: type = fixed_pool
+
+--  This is D193's absolute-address algorithm kept local because core/mem's
+--  helper is private and the pool must remain an independent module.  Every
+--  potentially overflowing operation is preceded by its own bound.
+allocation_offset: (base: ptr mut u8, used: usize, extent: usize,
+                    size: usize, alignment: usize)
+                   -> (offset: usize) ! mem.out_of_memory =
+    maximum: usize = 0 -% 1
+    fail mem.out_of_memory when used > extent
+
+    base_address: usize = usize(base)
+    fail mem.out_of_memory when used > maximum - base_address
+    current_address: usize = base_address + used
+
+    mut padding: usize = 0
+    if alignment > 1 then
+        remainder: usize = current_address % alignment
+        if not (remainder == 0) then
+            padding = alignment - remainder
+        end if
+    end if
+
+    fail mem.out_of_memory when padding > extent - used
+    fail mem.out_of_memory when padding > maximum - current_address
+    offset = used + padding
+    aligned_address: usize = current_address + padding
+    fail mem.out_of_memory when size > extent - offset
+    fail mem.out_of_memory when size > maximum - aligned_address
+end allocation_offset
+
+slot_stride: (size: usize, alignment: usize)
+             -> (stride: usize) ! mem.out_of_memory =
+    fail mem.out_of_memory when size == 0
+    maximum: usize = 0 -% 1
+    mut padding: usize = 0
+    if alignment > 1 then
+        remainder: usize = size % alignment
+        if not (remainder == 0) then
+            padding = alignment - remainder
+        end if
+    end if
+    fail mem.out_of_memory when padding > maximum - size
+    stride = size + padding
+end slot_stride
+
+--  slot_size is positive. The initialized bookkeeping slice is supplied by
+--  the caller, its length is the finite bookkeeping capacity, and slot_count
+--  may be zero but may not exceed it. A positive pool aligns its first slot
+--  from the absolute backing address, includes that padding in extent
+--  accounting, and proves every later slot and its complete payload fit both
+--  the backing extent and target address space before publishing the provider.
+public over: (base: ptr mut u8, extent: usize, slot_size: usize,
+              slot_count: usize, slot_alignment: usize,
+              bookkeeping: []mut slot)
+             -> (state: provider from base, bookkeeping)
+                ! mem.out_of_memory =
+    fail mem.out_of_memory when slot_count > lenof bookkeeping
+
+    mut normalized_alignment: usize = slot_alignment
+    if normalized_alignment <= 1 then
+        normalized_alignment = 1
+    end if
+    step: usize = try slot_stride(slot_size, normalized_alignment)
+
+    mut offset: usize = 0
+    if slot_count > 0 then
+        offset = try allocation_offset(base, 0, extent, slot_size,
+                                       normalized_alignment)
+        remaining_slots: usize = slot_count - 1
+        after_first: usize = extent - offset - slot_size
+        fail mem.out_of_memory when remaining_slots > after_first / step
+
+        maximum: usize = 0 -% 1
+        first_address: usize = usize(base) + offset
+        address_room: usize = maximum - first_address - slot_size
+        fail mem.out_of_memory when remaining_slots > address_room / step
+    end if
+
+    mut index: usize = 0
+    while index < slot_count do
+        bookkeeping[index] = (occupied: false, size: 0)
+        inc index
+    end while
+
+    state = (base: base, extent: extent, slot_size: slot_size,
+             slot_count: slot_count,
+             bookkeeping: bookkeeping,
+             slot_alignment: normalized_alignment,
+             first_offset: offset, stride: step,
+             allocations: 0, frees: 0, live_count: 0,
+             rejected_frees: 0)
+end over
+
+pool_alloc: (inout state: fixed_pool,
+             size: usize, alignment: usize)
+            -> (block: ptr mut u8) ! mem.out_of_memory =
+    fail mem.out_of_memory when size > state.slot_size
+    if alignment > 1 then
+        fail mem.out_of_memory when state.slot_alignment % alignment <> 0
+    end if
+
+    mut index: usize = 0
+    while index < state.slot_count do
+        break when not state.bookkeeping[index].occupied
+        inc index
+    end while
+    fail mem.out_of_memory when index == state.slot_count
+    distance: usize = index * state.stride
+    address: usize = usize(state.base) + state.first_offset + distance
+    block = ptr(address)
+    state.bookkeeping[index].occupied = true
+    state.bookkeeping[index].size = size
+    inc state.allocations
+    inc state.live_count
+end pool_alloc
+
+pool_free: (inout state: fixed_pool,
+            block: ptr mut u8, size: usize) -> none =
+    mut accepted: bool = false
+    mut at: usize = 0
+    while at < state.slot_count do
+        distance: usize = at * state.stride
+        address: usize = usize(state.base) + state.first_offset + distance
+        if usize(block) == address then
+            if state.bookkeeping[at].occupied
+              and state.bookkeeping[at].size == size
+            then
+                state.bookkeeping[at].occupied = false
+                state.bookkeeping[at].size = 0
+                accepted = true
+            end if
+            break
+        end if
+        inc at
+    end while
+    if accepted then
+        inc state.frees
+        dec state.live_count
+    else
+        inc state.rejected_frees
+    end if
+end pool_free
+
+fixed_pool is mem.allocator (alloc: pool_alloc, free: pool_free)
+
+public capacity: (state: provider) -> (count: usize) =
+    count = state.slot_count
+end capacity
+
+public bookkeeping_capacity: (state: provider) -> (count: usize) =
+    bookkeeping: []mut slot = state.bookkeeping
+    count = lenof bookkeeping
+end bookkeeping_capacity
+
+public live: (state: provider) -> (count: usize) =
+    count = state.live_count
+end live
+
+public allocation_count: (state: provider) -> (count: usize) =
+    count = state.allocations
+end allocation_count
+
+public free_count: (state: provider) -> (count: usize) =
+    count = state.frees
+end free_count
+
+public rejected_free_count: (state: provider) -> (count: usize) =
+    count = state.rejected_frees
+end rejected_free_count

@@ -3784,6 +3784,16 @@ runtime audit evidence observes simultaneous vector extents and exact release.
 It adds no dependency to the freestanding `core/mem` protocol or its
 caller-backed providers.
 
+D197 supplies the finite and deterministic test lanes. `core/pool` takes
+explicit caller backing, uniform slot size/alignment/count, and a caller-owned
+initialized metadata slice whose length is the finite bookkeeping capacity;
+exact free reclaims a slot and no hidden heap can extend it.
+`core/failing.counted(A)` retains an ordinary mutable pointer to any supplied
+provider, including a local pool or hosted heap, and distinguishes injected
+failure from delegated inner failure while forwarding every free. Runtime
+evidence covers a six-live-slot map-rehash bound and pointer-vector rollback
+and retry without putting an allocator in the container.
+
 Exit evidence: containers run with heap, arena, fixed and failing allocators;
 all omission and layering choices are recorded; `[0820]`'s block is either
 enabled with the four answers above written down, or its refusal names the

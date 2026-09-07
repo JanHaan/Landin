@@ -101,7 +101,10 @@ negative/control-expression-function-signature-mismatch | linux-x86-64, macos-ar
 negative/control-result-field-name-mismatch | linux-x86-64, macos-arm64, synthetic-32
 negative/core-arena-frame-escape | linux-x86-64, macos-arm64, synthetic-32
 negative/core-diag-frame-message-escape | linux-x86-64, macos-arm64, synthetic-32
+negative/core-failing-frame-escape | linux-x86-64, macos-arm64, synthetic-32
+negative/core-failing-needs-mutable-inner | linux-x86-64, macos-arm64, synthetic-32
 negative/core-mem-private-representation | linux-x86-64, macos-arm64, synthetic-32
+negative/core-pool-frame-escape | linux-x86-64, macos-arm64, synthetic-32
 negative/core-text-frame-slice-escape | linux-x86-64, macos-arm64, synthetic-32
 negative/core-text-private-position | linux-x86-64, macos-arm64, synthetic-32
 negative/cstring-literal-write | linux-x86-64, macos-arm64
@@ -1020,7 +1023,9 @@ runtime/r230-composition | linux-x86-64
 runtime/r230-composition-trap | linux-x86-64
 runtime/r250-references | linux-x86-64
 runtime/r420-array-place-recovery | linux-x86-64
+runtime/r420-failing-providers | linux-x86-64
 runtime/r420-fixed-array-pointer-whole-copy | linux-x86-64
+runtime/r420-pool-provider | linux-x86-64
 runtime/r420-runtime-array-writes | linux-x86-64
 runtime/r420-vec-capacity-boundaries | linux-x86-64
 runtime/r420-vec-growth-boundary | linux-x86-64

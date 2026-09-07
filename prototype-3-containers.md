@@ -954,6 +954,10 @@ This is the finding of the file. Without it there is no generic
 container that can be traversed, sorted, or handed to any other
 generic code, so nothing above works at all.
 
+R4.20 executes the quantified allocator case directly:
+`failing.counted(A)` has an ordinary parameterized conformance for every
+`A is mem.allocator`, and wraps both the fixed pool and hosted heap.
+
 Z2  A type declaration needs the same parameter kinds a function
 signature has. map wants a constrained parameter,
 map: type (K: type is hashable, V: type), and small wants a fixed
@@ -1076,10 +1080,11 @@ claims more than is true between the allocation and the write.
 Either core's privilege covers this too, or there is a separate
 raw-storage type; one of the two should be said.
 
-Z9  RESOLVED by [1360] and D152. `mem.allocator` fixes `out_of_memory` as the
-concrete declared result of every provider, and the arena, failing arena and
-pointer vector execute both sides of that contract. The original finding
-follows.
+Z9  RESOLVED by [1360], D152 and D197. `mem.allocator` fixes `out_of_memory`
+as the concrete declared result of every provider. The arena, fixed pool,
+hosted heap, generic counted wrapper and pointer vector execute both sides of
+that contract; the wrapper distinguishes its own deterministic refusal from a
+delegated provider refusal. The original finding follows.
 
 A concept entry must have a concrete error set, because it is
 reached through a table and [0960] forbids an inferred set there.
@@ -1108,7 +1113,10 @@ A.alloc(c.inner.val, size, align). Ordinary and surely intended,
 never shown. RESOLVED by [0900] and D149: the target is an ordinary
 place, one provably identical binding-rooted path cannot be passed
 twice, and aliasing through distinct pointer paths remains outside
-the local guarantee.
+the local guarantee. R4.20 executes this exact shape in
+`failing.counted(A)`: the wrapper retains `ptr mut A`, dereferences it for
+allocation and free, and requires a writable actual without requiring a
+module-global provider.
 
 Z13 RESOLVED at 0.0.10. sink takes a place, and a field of a binding
 is a place, so every call in this file stands as written. The
@@ -1207,6 +1215,10 @@ way, so both corrections belong here.
 R4.20 adds the real hosted-heap pressure the original resolution was waiting
 for: `runtime/hosted-heap-provider` observes both old and replacement vector
 allocations live during growth, then observes their exact extents released.
+`runtime/r420-failing-providers` also injects the replacement failure over a
+two-slot reclaiming pool, proves the old pointer vector remains intact, then
+permits one retry and observes the old slot freed only after publication and
+the replacement freed by release.
 
 First, this finding overstated its own case. A flag and a
 conditional defer is linear, not quadratic — three lines per
