@@ -3820,6 +3820,20 @@ uses a module receiver so only its `from` argument is local;
 labels for conformance does not ignore a mismatched result-source map. Provider
 validation and dispatch identity are unchanged, and no language rule changes.
 
+The bounded generic erased-`try` repair lets [0960]'s successful call value
+use the existing local nominal-aggregate call destination even after generic
+instance setup has published that destination's concrete descriptor. The
+checker therefore reaches the ordinary `try` synthesis path and records the
+erased call's complete argument match and result type in every routine-instance
+overlay instead of silently skipping the initializer before lowering.
+`runtime/generic-erased-aggregate-try` executes two distinct generic type keys
+against heterogeneous stateful providers whose parameter and result labels
+differ from the concept entry, with named reordering, both failure paths and a
+successful retry pinned by exact call counts. Error propagation, concept-label
+matching and provider conformance remain unchanged. This adds no array-valued
+`try`, general struct pseudo-value, return-context deduction or library-name
+privilege.
+
 The initialized-prefix library represents its count with a genuine
 slice witness. `mem.admit` stores a complete value before constructing the
 first singleton view or extending the existing prefix; `mem.transfer` saves
