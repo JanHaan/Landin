@@ -2477,12 +2477,16 @@ package body Landin.Stages.Lowering is
                            return Result;
                         end if;
                         declare
+                           --  Emission assigns IR identities. Sequence it
+                           --  independently of argument evaluation order.
+                           Saved_Base : constant IR.Value_Id :=
+                             IR.Emit_Load (Unit.all, Filling, Base, Site);
+                           Saved_Length : constant IR.Value_Id :=
+                             IR.Emit_Load (Unit.all, Filling, Length, Site);
                            Address : constant IR.Value_Id :=
                              IR.Emit_Slice_Address
                                (Unit.all, Filling,
-                                IR.Emit_Load (Unit.all, Filling, Base, Site),
-                                IR.Emit_Load (Unit.all, Filling, Length, Site),
-                                Index, Index,
+                                Saved_Base, Saved_Length, Index, Index,
                                 Slice_Shape
                                   (Of_Tree, Syn.Target_Of (Of_Tree, Node)),
                                 True, Site_Of (Of_Tree, Node));
