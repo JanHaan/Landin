@@ -1,0 +1,13 @@
+byte_view: type = []u8
+from_bytes: (source: []u8, other: []u8) -> (result: utf8 from other) =
+    result = utf8(source)
+end from_bytes
+from_text: (source: utf8, other: utf8) -> (result: []u8 from other) =
+    result = byte_view(source)
+end from_text
+c_bytes: (source: cstring, other: cstring) -> (result: []u8 from other) =
+    result = byte_view(source)
+end c_bytes
+c_text: (source: cstring, other: cstring) -> (result: utf8 from other) =
+    result = utf8(source)
+end c_text

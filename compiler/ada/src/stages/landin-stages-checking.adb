@@ -19872,6 +19872,10 @@ package body Landin.Stages.Checking is
                                     Reference => Shape.Reference,
                                     others => <>)));
 
+                                       Landin.Checking
+                                         .Note_Array_Element_Nominal
+                                         (Types.all, Id, Shape.Nominal);
+
                                     when Landin.Checking.Aggregate_Field =>
                                        --  D120: the alias names the whole
                                        --  payload struct, so it carries

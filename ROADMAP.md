@@ -3739,7 +3739,8 @@ paired with wider descriptors or variant children, conflicting explicit scalar
 metadata and mismatched descriptor extents. Nested fixed-array struct fields
 retain the existing L0304 boundary pinned by
 `negative/parameterized-struct-unused-shape` and the template-order controls;
-their recursive field representation remains separate R4.20 work.
+their recursive field representation and range composition belong to R4.70.
+R4.20 retains the evidenced direct-array and typed-copy source forms.
 
 The reference-storage dispatch follow-up retains scalar destinations in an
 existing checked address slot before the RHS or old-value load. Plain
@@ -3870,12 +3871,13 @@ cases pin the same exact conflict with the literal before and after a `utf16`
 actual. This implements [0260]/[0270] for a context the signature or explicit
 static tuple already states and changes no language rule.
 
-A literal that itself deduces a type formal remains a separate generic
-reference-publication dependency: after deduction as a text view, checking the
-generic result currently reaches `Reference_Satisfies` without a published
-actual reference descriptor (its precondition at `landin-checking.ads:660`).
-That path is not needed by a concrete contextual text parameter and is not
-claimed or repaired by this bounded follow-up.
+The earlier literal-deduction reference-publication observation is superseded
+by `runtime/generic-text-literal-deduction` on the integrated checker. A text
+literal itself deduces the default `utf8` item in block and expression-bodied
+generic identity routines with an exact `from` clause; empty input preserves
+the same result identity. A separately typed `utf16` actual retains its own
+identity. The case observes exact lengths and call counts, complementing the
+contextual-literal and repeated-formal refusal controls above.
 
 The bounded runtime-text increment implements D199's four exact ordinary
 source-derived conversions between immutable byte slices, `utf8` and
@@ -4134,14 +4136,15 @@ before that call, and checks the exact source, destination neighbours and
 guard values. This is checker metadata completion, not a zero-extent skip or
 the separately owned place-evaluation repair.
 
-Two normalization edges remain outside that repair and outside the transfer
-used by `core/mem`: a range directly over an array-valued struct member is
-still refused at its slice-shape boundary, and a scalar index chained directly
-onto a reference-backed fixed-array element still reaches a lowering defect.
-The runtime case therefore uses direct array backing and materializes each
-selected nonzero array into its typed local before inspecting scalar members.
-Neither boundary is hidden by substituting a scalar or byte carrier for the
-zero-sized item; they remain bounded R4.20 follow-ups.
+The scalar index directly chained onto a pointer- or slice-backed fixed-array
+element now follows the existing addressed-storage path rather than treating
+its reference boundary as a named field. `runtime/reference-array-scalar-index`
+checks constant and computed indices, once-only selector/index effects, local
+recovery and propagated index failure. The array-valued struct-member range
+composition remains a distinct nested-array field representation dependency,
+owned by R4.70. R4.20's transfer uses genuine direct array backing and typed
+array copies, as its fixture shows; this does not claim nested-array field
+range normalization or substitute byte carriers for zero-sized items.
 
 The bounded small-vector increment implements `core/small.small(item, N)` with
 the written closed-family `item is zeroable` constraint and an initialized
@@ -4196,14 +4199,29 @@ the pool rejects any mismatched free extent. `negative/core-small-live-view`,
 `negative/core-small-frame-view` and `negative/core-small-pointer-item` pin
 borrow blocking, inline frame escape and the written zeroable boundary.
 
-The executable evidence instantiates scalar zeroable items. An ordinary-
-struct zeroable item reaches the separately owned generic slice-result
-normalization boundary: in `small.used`, the fixed-array range
-`values[0..<value.count]` has the expected initialized elements, but its
-instantiated `[]mut item` result loses agreement with the aggregate element
-nominal and is refused by D124 as L0301. This increment does not erase that
-shape or special-case `core`; the array-valued selection work must close the
-normalization boundary before aggregate-item execution is claimed.
+The aggregate zeroable domain is exercised by `runtime/r420-small-aggregate`.
+Fixed-array match payload bindings now retain their element's nominal identity
+beside length and scalar/reference shape, so `small.push`, `used` and `pop`
+agree on the ordinary struct item. The case mutates inline and spilled views,
+pops in both states, grows beyond the first spilled allocation, verifies the
+preserved prefix, releases all allocations, and reuses inline storage. This
+is ordinary match metadata completion; it grants no library privilege.
+
+Generic-only erased constructions are inventoried under each ready routine
+view before lowering maps evidence. `runtime/generic-any-construction-evidence`
+constructs a composed concept only inside a generic routine, instantiates two
+heterogeneous providers, calls parent and child entries and checks independent
+state. The base-view inventory had missed these constructions. The repair
+preserves ordinary conformance/provider selection and flattened closure order;
+lowering neither synthesizes nor instantiates additional routines.
+
+Runtime-text source obligations have explicit refusal evidence:
+`negative/text-conversion-wrong-from` pins all four ordinary conversion paths;
+`negative/text-empty-conversion-frame` retains frame origins for direct and
+checked empty conversion; `negative/core-text-adapter-wrong-from` checks the
+recoverable adapters, including an empty slice; and
+`negative/core-text-written-frame` retains the backing of an empty written
+prefix. These are L0314/L0316 controls for existing D199 source semantics.
 
 The bounded erased-argument save repair completes [0410]'s existing call
 staging for `any`. An erased actual is already passed by the address of its
@@ -4456,6 +4474,13 @@ Depends on: R4.20, R4.50, R4.60
 
 Turn prototype 3 into a complete hosted `.ldn` program and negative corpus,
 with derivation mapping and deliberately failing allocator cases.
+
+Own the remaining nested-array field range normalization observed by R4.20:
+a range over a struct field whose elements are fixed arrays must preserve the
+complete nested element descriptor. The R4.20 container protocol already uses
+direct array backing and typed whole-array selection copies; this additional
+composition must be implemented or explicitly amended before complete P3
+parity is claimed.
 
 Exit evidence: list, small vector, map and tree paths execute on Linux x86-64;
 raw-storage, evidence and origin invariants are exercised.

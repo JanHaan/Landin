@@ -150,8 +150,10 @@ negative/core-pool-frame-escape | linux-x86-64, macos-arm64, synthetic-32
 negative/core-small-frame-view | linux-x86-64, macos-arm64, synthetic-32
 negative/core-small-live-view | linux-x86-64, macos-arm64, synthetic-32
 negative/core-small-pointer-item | linux-x86-64, macos-arm64, synthetic-32
+negative/core-text-adapter-wrong-from | linux-x86-64, macos-arm64, synthetic-32
 negative/core-text-frame-slice-escape | linux-x86-64, macos-arm64, synthetic-32
 negative/core-text-private-position | linux-x86-64, macos-arm64, synthetic-32
+negative/core-text-written-frame | linux-x86-64, macos-arm64, synthetic-32
 negative/core-tree-frame-name | linux-x86-64, macos-arm64, synthetic-32
 negative/core-tree-id-out-of-range | linux-x86-64, macos-arm64, synthetic-32
 negative/core-tree-node-escape | linux-x86-64, macos-arm64, synthetic-32
@@ -634,6 +636,8 @@ negative/sunk-inout-not-restored | linux-x86-64, macos-arm64, synthetic-32
 negative/text-conversion-exact-identities | linux-x86-64, macos-arm64
 negative/text-conversion-mutable-source | linux-x86-64, macos-arm64
 negative/text-conversion-optional-cstring | linux-x86-64, macos-arm64
+negative/text-conversion-wrong-from | linux-x86-64, macos-arm64, synthetic-32
+negative/text-empty-conversion-frame | linux-x86-64, macos-arm64, synthetic-32
 negative/text-literal-codepoint-in-byte-context | linux-x86-64, macos-arm64
 negative/text-literal-malformed-codepoint-escape | linux-x86-64, macos-arm64
 negative/text-literal-needs-byte-slice | linux-x86-64, macos-arm64
@@ -1022,6 +1026,7 @@ runtime/for-iterable-evidence-traversal | linux-x86-64
 runtime/for-range-traversal | linux-x86-64
 runtime/for-value-block-statements | linux-x86-64
 runtime/function-valued-struct-fields | linux-x86-64
+runtime/generic-any-construction-evidence | linux-x86-64
 runtime/generic-any-nominal-transport | linux-x86-64
 runtime/generic-composed-evidence | linux-x86-64
 runtime/generic-contextual-text-literals | linux-x86-64
@@ -1041,6 +1046,7 @@ runtime/generic-routine-inferred-errors | linux-x86-64
 runtime/generic-same-key-recursion | linux-x86-64
 runtime/generic-scalar-result-origin | linux-x86-64
 runtime/generic-structural-deduction | linux-x86-64
+runtime/generic-text-literal-deduction | linux-x86-64
 runtime/generic-try-effective-signature | linux-x86-64
 runtime/generic-zero-nominal-array-signatures | linux-x86-64
 runtime/greatest-common-divisor | linux-x86-64
@@ -1142,6 +1148,7 @@ runtime/r420-memory-world-boundaries | linux-x86-64
 runtime/r420-pool-provider | linux-x86-64
 runtime/r420-reader-cleanup | linux-x86-64
 runtime/r420-runtime-array-writes | linux-x86-64
+runtime/r420-small-aggregate | linux-x86-64
 runtime/r420-small-vector | linux-x86-64
 runtime/r420-small-vector-providers | linux-x86-64
 runtime/r420-stateful-filter-list | linux-x86-64
@@ -1157,6 +1164,7 @@ runtime/range-subtype-update-traps | linux-x86-64
 runtime/raw-literal-bytes | linux-x86-64
 runtime/recursive-fibonacci | linux-x86-64
 runtime/recursive-module-images-are-laid-out-and-distinct | linux-x86-64
+runtime/reference-array-scalar-index | linux-x86-64
 runtime/reference-expression-bodies | linux-x86-64
 runtime/reference-place-assignment-order | linux-x86-64
 runtime/reference-place-bounds-before-rhs | linux-x86-64

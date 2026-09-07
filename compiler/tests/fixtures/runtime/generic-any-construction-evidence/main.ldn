@@ -1,0 +1,62 @@
+readable: type = concept (t: type)
+    read: (self: ptr mut t) -> (value: i32)
+end readable
+
+adjustable: type = concept (t: type) is readable
+    extra: (self: ptr mut t) -> (value: i32)
+end adjustable
+
+first: type = struct
+    value: i32
+    reads: i32
+    extras: i32
+end first
+
+second: type = struct
+    padding: [3]u64
+    extras: i32
+    value: i32
+    reads: i32
+end second
+
+read_first: (self: ptr mut first) -> (answer: i32) =
+    inc self.val.reads
+    answer = self.val.value
+end read_first
+extra_first: (self: ptr mut first) -> (answer: i32) =
+    inc self.val.extras
+    answer = 1
+end extra_first
+read_second: (self: ptr mut second) -> (answer: i32) =
+    inc self.val.reads
+    answer = self.val.value
+end read_second
+extra_second: (self: ptr mut second) -> (answer: i32) =
+    inc self.val.extras
+    answer = 2
+end extra_second
+
+first is readable (read: read_first)
+first is adjustable (extra: extra_first)
+second is readable (read: read_second)
+second is adjustable (extra: extra_second)
+
+exercise: (item: type is adjustable, inout state: item) -> (result: i32) =
+    erased: any adjustable = any(addr state)
+    result = erased.read() + erased.extra()
+end exercise
+
+public main: () -> (code: i32) =
+    mut a: first = (value: 20, reads: 0, extras: 0)
+    mut b: second = (padding: zeroed, extras: 0, value: 19, reads: 0)
+    one: i32 = exercise(a)
+    two: i32 = exercise(b)
+    three: i32 = exercise(a)
+    if one == 21 and two == 21 and three == 21
+      and a.reads == 2 and a.extras == 2
+      and b.reads == 1 and b.extras == 1 then
+        code = 42
+    else
+        code = 1
+    end if
+end main

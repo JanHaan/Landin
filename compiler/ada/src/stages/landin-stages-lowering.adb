@@ -6471,6 +6471,34 @@ package body Landin.Stages.Lowering is
                return Lower_Short_Circuit (Of_Tree, Node, Scope);
 
             when Syn.Element_Index =>
+               if Has_Reference_Storage (Of_Tree, Node)
+                 and then Type_At
+                   (Of_Tree, Syn.Target_Of (Of_Tree, Node)) = Ty.Fixed_Array
+               then
+                  declare
+                     Place : constant Stored_Place :=
+                       Lower_Stored_Place (Of_Tree, Node, Scope);
+                  begin
+                     if Current = IR.No_Block then
+                        return IR.No_Value;
+                     end if;
+                     declare
+                        Address : constant IR.Value_Id :=
+                          (if Place.Base = 0 and then Place.Steps.Is_Empty
+                           then IR.Emit_Load
+                             (Unit.all, Filling, Place.Place.Address, Site)
+                           else IR.Emit_Storage_Address
+                             (Unit.all, Filling, Place.Place, Site,
+                              Field => Place.Base,
+                              Nested => Stored_Steps (Place)));
+                     begin
+                        return IR.Emit_Load_Indirect
+                          (Unit.all, Filling, Address,
+                           Scalar_At (Of_Tree, Node), Site);
+                     end;
+                  end;
+               end if;
+
                if Type_At
                     (Of_Tree, Syn.Target_Of (Of_Tree, Node)) = Ty.Slice_Value
                then
@@ -13427,32 +13455,32 @@ package body Landin.Stages.Lowering is
             end;
          end Concept_For;
 
-         function Used_By_Any
-           (Concept : Landin.Checking.Concept_Id) return Boolean;
+         Used_Concepts : Boolean_Array
+           (1 .. Landin.Checking.Concept_Count (Types.all)) :=
+             [others => False];
 
-         function Used_By_Any
-           (Concept : Landin.Checking.Concept_Id) return Boolean
-         is
+         procedure Collect_Any_Concepts (Of_Tree : Syn.Tree);
+
+         procedure Collect_Any_Concepts (Of_Tree : Syn.Tree) is
          begin
-            for Source in 1 .. Source_Count (Context) loop
-               declare
-                  Of_Tree : constant not null access constant Syn.Tree :=
-                    Tree_For (Nth_Source (Context, Source));
-               begin
-                  for Node in Syn.Node_Id'(1) .. Syn.Last_Node (Of_Tree.all)
-                  loop
-                     if Landin.Checking.Type_Of
-                          (Types.all, Of_Tree.all, Node) = Ty.Any_Value
-                       and then Landin.Checking.Any_Concept_Of
-                         (Types.all, Of_Tree.all, Node) = Concept
-                     then
-                        return True;
+            for Node in Syn.Node_Id'(1) .. Syn.Last_Node (Of_Tree) loop
+               if Landin.Checking.Type_Of
+                 (Types.all, Of_Tree, Node) = Ty.Any_Value
+               then
+                  declare
+                     Concept : constant Landin.Checking.Concept_Id :=
+                       Landin.Checking.Any_Concept_Of
+                         (Types.all, Of_Tree, Node);
+                  begin
+                     if Concept /= Landin.Checking.No_Concept then
+                        Used_Concepts
+                          (Landin.Checking.Concept_Identities.Position
+                             (Types.all, Concept)) := True;
                      end if;
-                  end loop;
-               end;
+                  end;
+               end if;
             end loop;
-            return False;
-         end Used_By_Any;
+         end Collect_Any_Concepts;
 
          procedure Add_Provider
            (To_Evidence : IR.Evidence_Id;
@@ -13577,6 +13605,46 @@ package body Landin.Stages.Lowering is
             end;
          end Add_Closure;
       begin
+         --  Generic constructions carry their concept in the concrete
+         --  checker view. Inventory those views before mapping erased tables.
+         for Index in 1 .. Source_Count (Context) loop
+            Collect_Any_Concepts (Tree_For (Nth_Source (Context, Index)).all);
+         end loop;
+
+         for Position in
+           1 .. Landin.Checking.Routine_Instance_Count (Types.all)
+         loop
+            declare
+               Instance : constant Landin.Checking.Routine_Instance_Id :=
+                 Landin.Checking.Routine_Identities.Nth
+                   (Types.all, Position);
+            begin
+               if Landin.Checking.Routine_State_Of (Types.all, Instance)
+                 = Landin.Checking.Routine_Ready
+               then
+                  declare
+                     Template : constant Res.Declaration_Id :=
+                       Landin.Checking.Routine_Template_Of
+                         (Types.all, Instance);
+                     Previous : Landin.Checking.Routine_Instance_Id;
+                  begin
+                     Landin.Checking.Activate_Routine_View
+                       (Types.all, Instance, Previous);
+                     Collect_Any_Concepts
+                       (Tree_For
+                          (Res.Source_Of (Meanings.all, Template)).all);
+                     Landin.Checking.Restore_Routine_View
+                       (Types.all, Previous);
+                  exception
+                     when others =>
+                        Landin.Checking.Restore_Routine_View
+                          (Types.all, Previous);
+                        raise;
+                  end;
+               end if;
+            end;
+         end loop;
+
          for Position in 1 .. Landin.Checking.Conformance_Count (Types.all)
          loop
             declare
@@ -13600,8 +13668,10 @@ package body Landin.Stages.Lowering is
                     (Evidence (Position), Source, Provider_Position);
                end loop;
 
-               if Used_By_Any
-                 (Landin.Checking.Conformance_Concept (Types.all, Source))
+               if Used_Concepts
+                 (Landin.Checking.Concept_Identities.Position
+                    (Types.all,
+                     Landin.Checking.Conformance_Concept (Types.all, Source)))
                then
                   Any_Evidence (Position) :=
                     IR.Add_Evidence (Unit.all, Evidence_Shape (Actual));

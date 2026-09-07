@@ -1,0 +1,7 @@
+class: runtime
+summary: text literals deduce generic reference returns with source clauses in block and expression bodies
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0260, 0270, 0370, 0790, 1350, 1360
+targets: linux-x86-64

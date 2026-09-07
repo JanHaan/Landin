@@ -1,0 +1,12 @@
+import core/text
+
+direct: () -> (result: utf8) =
+    mut storage: [1]u8 = [65]
+    source: []u8 = storage[0..<0]
+    result = utf8(source)
+end direct
+checked: () -> (result: utf8) ! text.invalid_text =
+    mut storage: [1]u8 = [65]
+    source: []u8 = storage[0..<0]
+    result = try text.from_bytes(source)
+end checked

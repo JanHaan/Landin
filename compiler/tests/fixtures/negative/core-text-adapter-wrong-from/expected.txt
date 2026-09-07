@@ -1,0 +1,20 @@
+error[L0316]: the returned reference does not derive from exactly the parameters named by its `from` clause
+  --> ../tests/fixtures/negative/core-text-adapter-wrong-from/main.ldn:3:1
+  |
+3 | bytes: (source: []u8, other: []u8)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/core-text-adapter-wrong-from/main.ldn:4:12
+  |
+4 |        -> (result: utf8 from other) ! text.invalid_text =
+  |            ^^^^^^^^^^^^^^^^^^^^^^^ the named return and its declared sources
+  = note: [0790]: the written clause and every returning body edge agree both ways
+error[L0316]: the returned reference does not derive from exactly the parameters named by its `from` clause
+  --> ../tests/fixtures/negative/core-text-adapter-wrong-from/main.ldn:7:1
+  |
+7 | terminated: (source: cstring, other: cstring)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/core-text-adapter-wrong-from/main.ldn:8:17
+  |
+8 |             -> (result: utf8 from other) ! text.invalid_text =
+  |                 ^^^^^^^^^^^^^^^^^^^^^^^ the named return and its declared sources
+  = note: [0790]: the written clause and every returning body edge agree both ways

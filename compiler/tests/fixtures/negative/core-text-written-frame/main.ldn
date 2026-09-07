@@ -1,0 +1,8 @@
+import core/text
+
+bad: () -> (result: []u8) ! text.no_space =
+    mut storage: [4]u8 = zeroed
+    source: []u8 = storage[0..<4]
+    zero: usize = 0
+    result = try text.written(source, zero)
+end bad

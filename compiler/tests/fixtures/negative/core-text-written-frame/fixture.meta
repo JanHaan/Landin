@@ -1,0 +1,8 @@
+class: negative
+summary: a written text prefix retains caller storage even when empty
+expect: expected.txt
+targets: linux-x86-64, macos-arm64, synthetic-32
+args: --root=../.. ../tests/fixtures/negative/core-text-written-frame
+codes: L0314
+status: 1
+constructs: 0520, 0570, 0770, 0790, 1410, 1420
