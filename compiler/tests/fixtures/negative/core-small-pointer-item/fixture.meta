@@ -1,0 +1,8 @@
+class: negative
+summary: core/small rejects pointer items through its written zeroable constraint
+expect: expected.txt
+args: --root=../.. ../tests/fixtures/negative/core-small-pointer-item
+codes: L0318
+status: 1
+constructs: 0430, 0510, 0540, 0550, 1290, 1350
+targets: linux-x86-64, macos-arm64, synthetic-32

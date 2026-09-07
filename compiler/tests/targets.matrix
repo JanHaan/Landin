@@ -136,6 +136,9 @@ negative/core-mem-used-read-only | linux-x86-64, macos-arm64, synthetic-32
 negative/core-mem-used-wrong-from | linux-x86-64, macos-arm64, synthetic-32
 negative/core-pool-bookkeeping-frame-escape | linux-x86-64, macos-arm64, synthetic-32
 negative/core-pool-frame-escape | linux-x86-64, macos-arm64, synthetic-32
+negative/core-small-frame-view | linux-x86-64, macos-arm64, synthetic-32
+negative/core-small-live-view | linux-x86-64, macos-arm64, synthetic-32
+negative/core-small-pointer-item | linux-x86-64, macos-arm64, synthetic-32
 negative/core-text-frame-slice-escape | linux-x86-64, macos-arm64, synthetic-32
 negative/core-text-private-position | linux-x86-64, macos-arm64, synthetic-32
 negative/core-tree-frame-name | linux-x86-64, macos-arm64, synthetic-32
@@ -667,10 +670,12 @@ negative/variant-match-binding-count-disagrees | linux-x86-64, macos-arm64
 negative/variant-match-binding-named-twice | linux-x86-64, macos-arm64
 negative/variant-match-binding-outside-arm | linux-x86-64, macos-arm64
 negative/variant-match-case-does-not-belong | linux-x86-64, macos-arm64
+negative/variant-match-copied-array-view-escape | linux-x86-64, macos-arm64, synthetic-32
 negative/variant-match-duplicate | linux-x86-64, macos-arm64
 negative/variant-match-in-binding-is-immutable | linux-x86-64, macos-arm64
 negative/variant-match-not-exhaustive | linux-x86-64, macos-arm64
 negative/variant-match-not-on-every-path | linux-x86-64, macos-arm64
+negative/variant-match-reference-payload-live-view | linux-x86-64, macos-arm64, synthetic-32
 negative/variant-match-unassigned | linux-x86-64, macos-arm64
 negative/variant-module-array-payload-image-copy-shape-mismatch | linux-x86-64, macos-arm64
 negative/variant-module-array-payload-image-copy-source-cycle | linux-x86-64, macos-arm64
@@ -1105,6 +1110,8 @@ runtime/r420-fixed-array-pointer-whole-copy | linux-x86-64
 runtime/r420-generic-array-selection-transfer | linux-x86-64
 runtime/r420-pool-provider | linux-x86-64
 runtime/r420-runtime-array-writes | linux-x86-64
+runtime/r420-small-vector | linux-x86-64
+runtime/r420-small-vector-providers | linux-x86-64
 runtime/r420-static-nested-array-stores | linux-x86-64
 runtime/r420-vec-capacity-boundaries | linux-x86-64
 runtime/r420-vec-growth-boundary | linux-x86-64
@@ -1188,6 +1195,7 @@ runtime/utf8-slice-upper-not-boundary-traps | linux-x86-64
 runtime/variant-case-construction-runs-in-source-order | linux-x86-64
 runtime/variant-inside-an-element | linux-x86-64
 runtime/variant-match-array-payload-bindings-update-storage | linux-x86-64
+runtime/variant-match-origin-channels | linux-x86-64
 runtime/variant-match-payload-bindings-update-storage | linux-x86-64
 runtime/variant-match-selects-tag | linux-x86-64
 runtime/variant-module-array-payload-image-copy-is-distinct | linux-x86-64

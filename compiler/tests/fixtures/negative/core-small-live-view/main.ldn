@@ -1,0 +1,17 @@
+import core/mem
+import core/small
+
+bad_spill: (inout state: mem.arena,
+            inout value: small.small(i32, 1))
+           -> (result: i32) ! mem.out_of_memory =
+    view := small.used(value)
+    try small.push(value, state, 2)
+    result = view[0]
+end bad_spill
+
+bad_release: (inout state: mem.arena,
+              inout value: small.small(i32, 1)) -> (result: i32) =
+    view := small.used(value)
+    small.release(value, state)
+    result = view[0]
+end bad_release

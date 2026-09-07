@@ -1,0 +1,8 @@
+class: negative
+summary: a live core/small initialized-prefix view blocks spill and release
+expect: expected.txt
+args: --root=../.. ../tests/fixtures/negative/core-small-live-view
+codes: L0315, L0315
+status: 1
+constructs: 0510, 0550, 0790, 0830, 0860, 0900, 1220, 1290, 1350, 1360
+targets: linux-x86-64, macos-arm64, synthetic-32

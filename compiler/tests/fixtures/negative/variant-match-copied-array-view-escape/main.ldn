@@ -1,0 +1,40 @@
+packet: type = struct
+    kind: variant
+        empty |
+        row: (values: [2]u32)
+    end kind
+end packet
+
+pointer_backed: (source: ptr mut packet)
+                -> (result: []mut u32 from source) =
+    match source.val.kind
+        empty: result = []
+        row(inout values): result = values[0..<2]
+    end match
+end pointer_backed
+
+slice_backed: (source: []mut packet)
+              -> (result: []mut u32 from source) =
+    match source[0].kind
+        empty: result = []
+        row(inout values): result = values[0..<2]
+    end match
+end slice_backed
+
+local_backed: () -> (result: []mut u32) =
+    mut source: packet = packet(
+        kind: row(values: [1, 2]),
+        of zeroed
+    )
+    match source.kind
+        empty: result = []
+        row(inout values): result = values[0..<2]
+    end match
+end local_backed
+
+value_backed: (source: packet) -> (result: []mut u32 from source) =
+    match source.kind
+        empty: result = []
+        row(inout values): result = values[0..<2]
+    end match
+end value_backed

@@ -6131,9 +6131,19 @@ package body Landin.Stages.Lowering is
                            when IR.Runtime_Address =>
                               declare
                                  Address : constant IR.Value_Id :=
-                                   IR.Emit_Storage_Address
-                                     (Unit.all, Filling, Alias.Source, Site,
-                                      Index => Index);
+                                   (if Alias.Which = 0 then
+                                       IR.Emit_Storage_Address
+                                         (Unit.all, Filling, Alias.Source,
+                                          Site, Index => Index)
+                                    else
+                                       IR.Emit_Storage_Address
+                                         (Unit.all, Filling, Alias.Source,
+                                          Site, Field => Alias.Field,
+                                          Nested => Payload_Steps
+                                            (Alias_Steps (Of_Tree, Alias),
+                                             Positive (Alias.Which),
+                                             Positive (Alias.Payload_Field)),
+                                          Index => Index));
                               begin
                                  return IR.Emit_Load_Indirect
                                    (Unit.all, Filling, Address,
@@ -8794,9 +8804,20 @@ package body Landin.Stages.Lowering is
                                           (From_Field, From_Steps),
                                       Signature => Signature);
                               when IR.Runtime_Address =>
-                                 raise Landin.Compiler_Defect with
-                                   "a runtime address bypassed whole-copy"
-                                   & " lowering";
+                                 if Signature /= IR.No_Signature then
+                                    raise Landin.Compiler_Defect with
+                                      "a function field used runtime copy"
+                                      & " storage";
+                                 end if;
+                                 Taken := IR.Emit_Load_Indirect
+                                   (Unit.all, Filling,
+                                    IR.Emit_Place_Address
+                                      (Unit.all, Filling, Source, Site,
+                                       Field => Natural (Leaf_Base
+                                         (From_Field, From_Steps)),
+                                       Nested => Leaf_Steps
+                                         (From_Field, From_Steps)),
+                                    Held, Site);
                            end case;
 
                            case Destination.Kind is
@@ -8815,9 +8836,15 @@ package body Landin.Stages.Lowering is
                                     Nested =>
                                       Leaf_Steps (Into_Field, Into_Steps));
                               when IR.Runtime_Address =>
-                                 raise Landin.Compiler_Defect with
-                                   "a runtime address bypassed whole-copy"
-                                   & " lowering";
+                                 IR.Emit_Store_Indirect
+                                   (Unit.all, Filling,
+                                    IR.Emit_Place_Address
+                                      (Unit.all, Filling, Destination, Site,
+                                       Field => Natural (Leaf_Base
+                                         (Into_Field, Into_Steps)),
+                                       Nested => Leaf_Steps
+                                         (Into_Field, Into_Steps)),
+                                    Taken, Site);
                            end case;
                         end;
 
@@ -8862,7 +8889,15 @@ package body Landin.Stages.Lowering is
                                           Nested => Leaf_Steps
                                             (From_Field, From_Steps));
                                     when IR.Runtime_Address =>
-                                       raise Landin.Compiler_Defect;
+                                       Taken := IR.Emit_Load_Indirect
+                                         (Unit.all, Filling,
+                                          IR.Emit_Place_Address
+                                            (Unit.all, Filling, Source, Site,
+                                             Field => Natural (Leaf_Base
+                                               (From_Field, From_Steps)),
+                                             Nested => Leaf_Steps
+                                               (From_Field, From_Steps)),
+                                          Ty.Usize, Site);
                                  end case;
                                  case Destination.Kind is
                                     when IR.Module_Datum =>
@@ -8884,7 +8919,16 @@ package body Landin.Stages.Lowering is
                                           Nested => Leaf_Steps
                                             (Into_Field, Into_Steps));
                                     when IR.Runtime_Address =>
-                                       raise Landin.Compiler_Defect;
+                                       IR.Emit_Store_Indirect
+                                         (Unit.all, Filling,
+                                          IR.Emit_Place_Address
+                                            (Unit.all, Filling, Destination,
+                                             Site,
+                                             Field => Natural (Leaf_Base
+                                               (Into_Field, Into_Steps)),
+                                             Nested => Leaf_Steps
+                                               (Into_Field, Into_Steps)),
+                                          Taken, Site);
                                  end case;
                               end;
                            end if;
@@ -10106,8 +10150,22 @@ package body Landin.Stages.Lowering is
                                     Variant_Payload_Field =>
                                       Alias.Payload_Field);
                               when IR.Runtime_Address =>
-                                 raise Landin.Compiler_Defect with
-                                   "a runtime alias reached scalar write";
+                                 declare
+                                    Address : constant IR.Value_Id :=
+                                      IR.Emit_Storage_Address
+                                        (Unit.all, Filling, Alias.Source,
+                                         Site, Field => Alias.Field,
+                                         Nested => Payload_Steps
+                                           (Alias_Steps (Of_Tree, Alias),
+                                            Positive (Alias.Which),
+                                            Positive
+                                              (Alias.Payload_Field)),
+                                         Index => Index);
+                                 begin
+                                    IR.Emit_Store_Indirect
+                                      (Unit.all, Filling, Address, Value,
+                                       Site);
+                                 end;
                            end case;
                         else
                            IR.Emit_Variant_Field_Store

@@ -1,0 +1,7 @@
+import core/small
+
+node: type = struct
+    value: i32
+end node
+
+bad: type = small.small(ptr node, 4)

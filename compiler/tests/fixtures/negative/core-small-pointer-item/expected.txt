@@ -1,0 +1,10 @@
+error[L0318]: this concrete type has no conformance to `zeroable`
+  --> ../tests/fixtures/negative/core-small-pointer-item/main.ldn:7:13
+  |
+7 | bad: type = small.small(ptr node, 4)
+  |             ^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../../core/small/small.ldn:10:35
+   |
+10 | public small: type (item: type is zeroable, fixed inline_slots: u32) = struct
+   |                                   ^^^^^^^^ the constraint declared here
+  = note: [1290]: every constrained type actual must have one whole-program conformance

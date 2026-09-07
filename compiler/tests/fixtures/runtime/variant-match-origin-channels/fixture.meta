@@ -1,0 +1,6 @@
+class: runtime
+summary: match bindings separate scalar and reference value origins from actual payload storage
+program: main.ldn
+status: 42
+constructs: 0430, 0470, 0510, 0520, 0550, 0570, 0770, 0790, 0830, 0940, 1100, 1810
+targets: linux-x86-64

@@ -1,0 +1,6 @@
+import core/small
+
+bad: () -> (result: []mut i32) =
+    mut value := small.new(item: i32, inline_slots: 2)
+    result = small.used(value)
+end bad

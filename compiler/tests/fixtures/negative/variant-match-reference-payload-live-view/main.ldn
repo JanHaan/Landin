@@ -1,0 +1,21 @@
+choice: type = struct
+    kind: variant
+        empty |
+        present: (value: ptr mut i32)
+    end kind
+end choice
+
+clear: (inout value: choice) -> none =
+    value.kind = empty
+end clear
+
+bad: (inout source: choice) -> (result: i32) =
+    match source.kind
+        empty: result = 0
+        present(value): begin
+            saved: ptr mut i32 = value
+            clear(source)
+            result = saved.val
+        end
+    end match
+end bad

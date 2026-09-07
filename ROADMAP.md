@@ -3684,9 +3684,8 @@ expression as a name. Compound writeback likewise retains that path,
 materializing only its already-constant leaf index when no runtime index was
 saved. `runtime/nested-scalar-array-stores` pins module and frame arrays,
 neighboring values, compound updates and RHS call counts.
-Fixed providers, initialized views, iterable/sort integration and
-small-vector, map and tree expansion remain later increments of this active
-item.
+Iterable/sort integration and map and tree expansion remain later increments
+of this active item.
 
 The growth error translation follows [1820]'s existing disambiguation rule:
 a call-site `else` yields to an enclosing `then` or `elsif` arm, and
@@ -4031,6 +4030,68 @@ The runtime case therefore uses direct array backing and materializes each
 selected nonzero array into its typed local before inspecting scalar members.
 Neither boundary is hidden by substituting a scalar or byte carrier for the
 zero-sized item; they remain bounded R4.20 follow-ups.
+
+The bounded small-vector increment implements `core/small.small(item, N)` with
+the written closed-family `item is zeroable` constraint and an initialized
+inline `[N]item`. Its variant's spilled arm owns a `core/vec.list(item)`, so
+the first spill reserves, copies the inline prefix and admits the new item in a
+private list before publishing the arm, while every later growth uses D194's
+checked vector protocol. Zero inline capacity grows first to eight; a nonzero
+capacity is doubled only after the `usize` bound. `used` returns only the
+initialized mutable prefix `from` the inout container, `pop` removes one tail,
+and `release` frees a spilled extent before restoring the empty inline arm.
+The constraint deliberately continues to reject pointer items: D151 solved
+general raw storage for `vec`, not the honest initialized image required by
+the inline array.
+
+Three finite compiler composition repairs were required by that ordinary
+source. Match payload bindings keep separate value and storage facts. A
+reference-carrying payload value retains the matched subject's value origin,
+while a scalar payload copy carries none. Storage selected below a payload
+alias follows the actual lowering place: named local and by-value storage is
+frame-origin, named `inout` storage retains its parameter source, and a
+computed or pointer/slice-backed match follows lowering's independent frame
+copy. A result source whose formal is `inout` derives from the argument place
+rather than only from references already carried in its value; this is what
+makes an inline returned slice frame-origin and live against a later mutation.
+Finally,
+runtime-address array aliases distinguish an ordinary traversal binding from
+a variant payload before forming indexed loads/stores, and ordinary
+scalar/reference fields copied while publishing an aggregate payload form
+addresses through the existing neutral field/case path. Variant matching's
+subject policy is unchanged: computed and pointer/slice-backed subjects retain
+their independent one-time copy. No source pointer, target offset, `core`
+privilege or deep alias propagation is added. The existing
+`runtime/derived-parser` and `runtime/for-aggregate-element-traversal` cases
+pin those two boundaries alongside the new small-vector execution.
+
+`negative/variant-match-copied-array-view-escape` refuses returned array
+payload views for pointer-backed, slice-backed, local and by-value matches;
+`negative/variant-match-reference-payload-live-view` retains the corresponding
+reference-value borrow across mutation. `runtime/variant-match-origin-channels`
+accepts a scalar payload saved across mutation, a returned view into genuine
+named `inout` match storage, and actual reference payloads copied out of both
+pointer-backed and slice-backed match temporaries. This is the shallow split
+[0860] requires: it neither treats scalar copies as views nor makes temporary
+payload storage outlive its match frame.
+
+`runtime/r420-small-vector` covers N=0, N=1 and N=3, no provider call below
+the inline bound, writable initialized views, first-spill and later-growth
+failure with retry, exact freeing extents, pop and release.
+`runtime/r420-small-vector-providers` runs spilled and growth paths through the
+host heap, monotonic arena, reclaiming fixed pool and counted failing wrapper;
+the pool rejects any mismatched free extent. `negative/core-small-live-view`,
+`negative/core-small-frame-view` and `negative/core-small-pointer-item` pin
+borrow blocking, inline frame escape and the written zeroable boundary.
+
+The executable evidence instantiates scalar zeroable items. An ordinary-
+struct zeroable item reaches the separately owned generic slice-result
+normalization boundary: in `small.used`, the fixed-array range
+`values[0..<value.count]` has the expected initialized elements, but its
+instantiated `[]mut item` result loses agreement with the aggregate element
+nominal and is refused by D124 as L0301. This increment does not erase that
+shape or special-case `core`; the array-valued selection work must close the
+normalization boundary before aggregate-item execution is claimed.
 
 D196 settles D191's inherited construct rows. [0500]'s `mem.offset` and
 `mem.base_of` are unneeded conveniences for this slice: existing [0470]

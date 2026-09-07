@@ -1,0 +1,109 @@
+missing: atom
+
+numbers: type = struct
+    kind: variant
+        no_number |
+        number: (value: i32)
+    end kind
+end numbers
+
+arrays: type = struct
+    kind: variant
+        no_array |
+        array: (values: [2]u32)
+    end kind
+end arrays
+
+references: type = struct
+    kind: variant
+        no_reference |
+        reference: (value: ptr mut i32)
+    end kind
+end references
+
+clear_numbers: (inout value: numbers) -> none =
+    value.kind = no_number
+end clear_numbers
+
+copied_scalar_survives: (inout source: numbers) -> (result: i32) =
+    match source.kind
+        no_number: result = 0
+        number(value): begin
+            saved: i32 = value
+            clear_numbers(source)
+            result = saved
+        end
+    end match
+end copied_scalar_survives
+
+inout_view: (inout source: arrays)
+            -> (result: []mut u32 from source) ! missing =
+    match source.kind
+        no_array: fail missing
+        array(inout values): result = values[0..<2]
+    end match
+end inout_view
+
+pointer_payload: (source: ptr mut references)
+                 -> (result: ptr mut i32 from source) ! missing =
+    match source.val.kind
+        no_reference: fail missing
+        reference(value): result = value
+    end match
+end pointer_payload
+
+slice_payload: (source: []mut references)
+               -> (result: ptr mut i32 from source) ! missing =
+    match source[0].kind
+        no_reference: fail missing
+        reference(value): result = value
+    end match
+end slice_payload
+
+public main: () -> (code: i32) =
+    mut number_value: numbers = zeroed
+    number_value.kind = number(value: 37)
+    mut row: arrays = zeroed
+    row.kind = array(values: [11, 13])
+    begin
+        view := inout_view(row) else (problem)
+            _ = problem
+            code = 1
+            return
+        end
+        view[1] = 17
+    end
+
+    mut first: i32 = 19
+    mut second: i32 = 23
+    mut one: references = zeroed
+    one.kind = reference(value: addr first)
+    mut many: [1]references = zeroed
+    many[0].kind = reference(value: addr second)
+    reached_first := pointer_payload(addr one) else (problem)
+        _ = problem
+        code = 1
+        return
+    end
+    all: []mut references = many[0..<1]
+    reached_second := slice_payload(all) else (problem)
+        _ = problem
+        code = 1
+        return
+    end
+    reached_first.val = 29
+    reached_second.val = 31
+
+    mut row_ok: bool = false
+    match row.kind
+        no_array: row_ok = false
+        array(values): row_ok = values[0] == 11 and values[1] == 17
+    end match
+    if copied_scalar_survives(number_value) == 37
+      and first == 29 and second == 31 and row_ok
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

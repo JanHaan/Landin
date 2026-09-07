@@ -401,6 +401,7 @@ list_next:   (T: type, s: list(T), c: usize) -> (c2: usize) = c + 1 end
 
 ```landin
 import core/mem
+import core/vec
 
 ```
 
@@ -410,100 +411,90 @@ ordinary shape that wants both. [Z2]
 Restricted to a T with a zero image, and that restriction is the
 honest form of [Z8]: the inline slots have to hold something and
 [0540] gives no honest value for a T without one. So
-small(ptr node, 4) does not exist until a raw-storage type does
-[0510]. The current R2.40 resolution now gives an unconstrained fully applied
+small(ptr node, 4) does not exist in this inline shape [0510]. Raw storage now
+lets `vec(ptr node)` exist, but it does not give `[N]T` an initialized image
+and therefore does not remove this constraint. The current R2.40 resolution
+gives an unconstrained fully applied
 struct instance the nominal identity `(template, normalized actual tuple)` and
 substitutes fixed bounds, nested ordinary structs and existing variants without
 runtime formals or a synthetic declaration. R2.60 now checks the `is zeroable`
 constraint through its closed compiler conformance family. R3.20's executable
-pointer-vector pressure case has now derived the raw storage transitions needed
-for `small(ptr node, 4)`: capacity is distinct from the initialized prefix,
-which grows and shrinks one tail slot at a time and must be empty before the
-allocation is freed. R3.30 owns that representation boundary and its spelling;
-nominal parameterization and constraint lookup are no longer what this sketch
-waits on.
+pointer-vector pressure case derived the raw storage transitions used by the
+spilled list: capacity is distinct from the initialized prefix, which grows and
+shrinks one tail slot at a time and must be empty before the allocation is
+freed. R4.20 composes that list behind the variant rather than exposing a
+capacity slice; nominal parameterization and constraint lookup are no longer
+what this sketch waits on.
 
 ```landin
 public small: type (T: type is zeroable, fixed N: u32) = struct
     len: usize
     store: variant
         inline:  (buf: [N]T) |
-        spilled: (heap: []mut T)
+        spilled: (items: vec.list(T))
     end store
 end small
 
-public new_small: (T: type is zeroable, fixed N: u32) -> (s: small(T, N)) =
+public new: (T: type is zeroable, fixed N: u32) -> (s: small(T, N)) =
     s = (len: 0, store: inline(buf: zeroed))
-end new_small
+end new
 ```
 
 zeroed is honest now, because T is constrained to have a zero
 image. What that costs is that the shape does not exist for the T
 which wanted it most. [Z8]
 
-The match bindings are inout, which is invented. [1210] shows
-bindings being read, and whether a binding aliases the payload or
-copies it is nowhere stated. For a [N]T payload the difference is
-a whole array copy. The mechanism to reuse is obvious, since in,
-inout and sink are already the parameter conventions, which is
-[1710]'s "an existing mechanism expresses it" exactly. [Z7]
+The match bindings use D85/D121's resolved alias rule. `inout` names the
+selected payload storage rather than a whole-array copy, so the final arm
+change occurs only after the private list no longer reads `buf`. [Z7]
 
 ```landin
-public push_small: (T: type is zeroable, fixed N: u32, A: type is allocator,
-                    inout s: small(T, N), inout a: A, escaping v: T)
-                   -> none ! out_of_memory =
+public push: (T: type is zeroable, fixed N: u32, A: type is mem.allocator,
+              inout s: small(T, N), inout a: A, escaping v: T)
+             -> none ! mem.out_of_memory =
     match s.store
-        inline (buf):
+        inline (inout buf):
             if s.len < usize(N) then
                 buf[s.len] = v
                 inc s.len
                 return
             end if
-            fresh := try mem.new_slice(T: T, a: a, n: usize(N) * 2)
+            fresh := vec.new_list(item: T)
+            try vec.reserve(fresh, a, first_capacity(N))
             for k in 0..<s.len do
-                fresh[k] = buf[k]
+                try vec.push(fresh, a, buf[k])
             end for
-            fresh[s.len] = v
+            try vec.push(fresh, a, v)
+            s.store = spilled(items: fresh)
             inc s.len
-            s.store = spilled(heap: fresh)
 
-        spilled (heap):
-            if s.len == lenof heap then
-                bigger := try mem.new_slice(T: T, a: a, n: s.len * 2)
-                for k in 0..<s.len do
-                    bigger[k] = heap[k]
-                end for
-                mem.drop_slice(a, heap)
-                heap = bigger
-            end if
-            heap[s.len] = v
+        spilled (inout items):
+            try vec.push(items, a, v)
             inc s.len
     end match
-end push_small
+end push
 ```
 
-The inline arm assigns to s.store while buf is still bound out of
-it. That is the borrow rule of [0830] at point blank range: the
-write invalidates the binding. Here it happens to be the last use,
-but the rule is written about locals and a match binding is not
-obviously one. [Z7]
+The inline arm assigns to `s.store` only after the last read through `buf`.
+D85/D121 make the binding an alias and [0830]'s liveness rule permits that
+final publication while refusing a caller's spill when a `used` view remains
+live. [Z7]
 
 ```landin
-public small_used: (T: type is zeroable, fixed N: u32,
-                   s: small(T, N)) -> (v: []mut T from s) =
+public used: (T: type is zeroable, fixed N: u32,
+             inout s: small(T, N)) -> (v: []mut T from s) =
     v = match s.store
-            inline  (buf):  buf[0..<s.len]
-            spilled (heap): heap[0..<s.len]
+            inline  (inout buf): buf[0..<s.len]
+            spilled (items): mem.used(items.values)
         end match
-end small_used
+end used
 ```
 
 A match as an expression, from [1080]. Both arms yield []T, and the
 inline arm yields a slice into the small vector itself — which is
 exactly what the from clause has to say, or the caller could spill
-the vector while holding the view. The other half of the question
-stays with [Z7]: if an in binding copies the payload rather than
-aliasing it, this slice points into a copy that is already gone.
+the vector while holding the view. The `inout` source and payload alias keep
+that origin exact; no copy or integer conversion erases it. [Z7]
 
 ## core/map  —  open addressing, without null
 
