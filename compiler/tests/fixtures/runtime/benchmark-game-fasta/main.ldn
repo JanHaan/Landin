@@ -1,0 +1,132 @@
+--  The official correctness input is 1000.  The probability search remains
+--  linear and the naïve LCG advances once for every random nucleotide.
+import core/io
+
+alu: []u8 = "GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTGGGAGGCCGAGGCGGGCGGATCACCTGAGGTCAGGAGTTCGAGACCAGCCTGGCCAACATGGTGAAACCCCGTCTCTACTAAAAATACAAAAATTAGCCGGGCGTGGTGGCGCGCGCCTGTAATCCCAGCTACTCGGGAGGCTGAGGCAGGAGAATCGCTTGAACCCGGGAGGCGGAGGTTGCAGTGAGCCGAGATCGCGCCACTGCACTCCAGCCTGGGCGACAGAGCGAGACTCCGTCTCAAAAA"
+iub_symbols: []u8 = "acgtBDHKMNRSVWY"
+iub_probabilities: [15]f64 = [
+    0.27, 0.12, 0.12, 0.27, 0.02,
+    0.02, 0.02, 0.02, 0.02, 0.02,
+    0.02, 0.02, 0.02, 0.02, 0.02
+]
+human_symbols: []u8 = "acgt"
+human_probabilities: [4]f64 = [
+    0.3029549426680, 0.1979883004921,
+    0.1975473066391, 0.3015094502008
+]
+
+width_for: (remaining: usize) -> (width: usize) =
+    if remaining < 60 then
+        width = remaining
+    else
+        width = 60
+    end if
+end width_for
+
+make_cumulative: (probabilities: []mut f64) -> none =
+    mut total: f64 = 0.0
+    first: usize = 0
+    for index in first..<lenof probabilities do
+        total += probabilities[index]
+        probabilities[index] = total
+    end for
+end make_cumulative
+
+next_random: (inout seed: u32) -> (value: f64) =
+    seed = (seed * 3877 + 29573) % 139968
+    value = f64(seed) / 139968.0
+end next_random
+
+select_symbol: (symbols: []u8, cumulative: []f64, random: f64)
+               -> (selected: u8) =
+    selected = symbols[lenof symbols - 1]
+    first: usize = 0
+    for index in first..<lenof cumulative do
+        if random < cumulative[index] then
+            selected = symbols[index]
+            return
+        end if
+    end for
+end select_symbol
+
+write_repeated: (inout host: io.system, stream: io.file,
+                 source: []u8, count: usize) -> none ! io.io_failed =
+    mut line: [60]u8 = zeroed
+    mut emitted: usize = 0
+    mut source_at: usize = 0
+    first: usize = 0
+
+    while emitted < count do
+        width: usize = width_for(count - emitted)
+        for at in first..<width do
+            line[at] = source[source_at]
+            inc source_at
+            if source_at == lenof source then
+                source_at = 0
+            end if
+        end for
+        output: []u8 = line[0..<width]
+        try io.write(host, stream, output)
+        try io.write(host, stream, "\n")
+        emitted += width
+    end while
+end write_repeated
+
+write_random: (inout host: io.system, stream: io.file, symbols: []u8,
+               cumulative: []f64, inout seed: u32, count: usize)
+              -> none ! io.io_failed =
+    mut line: [60]u8 = zeroed
+    mut emitted: usize = 0
+    first: usize = 0
+
+    while emitted < count do
+        width: usize = width_for(count - emitted)
+        for at in first..<width do
+            random: f64 = next_random(seed)
+            line[at] = select_symbol(symbols, cumulative, random)
+        end for
+        output: []u8 = line[0..<width]
+        try io.write(host, stream, output)
+        try io.write(host, stream, "\n")
+        emitted += width
+    end while
+end write_random
+
+run: (inout host: io.system) -> (final_seed: u32) ! io.io_failed =
+    sample_size: usize = 1000
+    stream: io.file = io.out(host)
+    mut seed: u32 = 42
+    mut iub: [15]f64 = iub_probabilities
+    mut human: [4]f64 = human_probabilities
+    iub_write: []mut f64 = iub[0..<lenof iub]
+    human_write: []mut f64 = human[0..<lenof human]
+    make_cumulative(iub_write)
+    make_cumulative(human_write)
+    iub_read: []f64 = iub[0..<lenof iub]
+    human_read: []f64 = human[0..<lenof human]
+
+    try io.write(host, stream, ">ONE Homo sapiens alu\n")
+    try write_repeated(host, stream, alu, sample_size * 2)
+    try io.write(host, stream, ">TWO IUB ambiguity codes\n")
+    try write_random(host, stream, iub_symbols, iub_read,
+                     seed, sample_size * 3)
+    try io.write(host, stream, ">THREE Homo sapiens frequency\n")
+    try write_random(host, stream, human_symbols, human_read,
+                     seed, sample_size * 5)
+    final_seed = seed
+end run
+
+public main: () -> (code: i32) =
+    mut host := io.host()
+    final_seed := run(host) else (problem)
+        _ = problem
+        code = 1
+        return
+    end
+
+    if final_seed == 111466 then
+        code = 42
+    else
+        code = 1
+    end if
+end main

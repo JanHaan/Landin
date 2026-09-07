@@ -5,23 +5,17 @@ run: type = struct
     count: usize
 end run
 
-encode_from: (input: []i32, output: []mut run,
-              read_at: usize, write_at: usize) -> (used: usize) =
-    if read_at >= lenof input then
-        used = write_at
-    elsif write_at > 0
-      and output[write_at - 1].value == input[read_at]
-    then
-        output[write_at - 1].count = output[write_at - 1].count + 1
-        used = encode_from(input, output, read_at + 1, write_at)
-    else
-        output[write_at] = run(value: input[read_at], count: 1)
-        used = encode_from(input, output, read_at + 1, write_at + 1)
-    end if
-end encode_from
-
 encode: (input: []i32, output: []mut run) -> (used: usize) =
-    used = encode_from(input, output, 0, 0)
+    used = 0
+    first: usize = 0
+    for read_at in first..<lenof input do
+        if used > 0 and output[used - 1].value == input[read_at] then
+            output[used - 1].count += 1
+        else
+            output[used] = run(value: input[read_at], count: 1)
+            used += 1
+        end if
+    end for
 end encode
 
 public main: () -> (code: i32) =

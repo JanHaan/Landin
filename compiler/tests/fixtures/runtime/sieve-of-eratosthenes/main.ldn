@@ -1,36 +1,29 @@
---  The sieve mutates caller-owned storage through a writable slice.  Computed
---  indexing marks composites, while recursion supplies the two traversals.
-mark_multiples: (composite: []mut bool,
-                 multiple: usize, step: usize) -> none =
-    return when multiple >= lenof composite
-    composite[multiple] = true
-    mark_multiples(composite, multiple + step, step)
-end mark_multiples
+--  The sieve mutates caller-owned storage through a writable slice.  Its
+--  nested traversals visit candidates and mark their composite multiples.
 
-sieve_from: (composite: []mut bool, candidate: usize) -> none =
-    return when candidate >= lenof composite
-
-    if not composite[candidate] then
-        mark_multiples(composite, candidate + candidate, candidate)
-    end if
-    sieve_from(composite, candidate + 1)
-end sieve_from
-
-count_primes: (values: []bool, index: usize) -> (result: u32) =
-    if index >= lenof values then
-        result = 0
-    elsif values[index] then
-        result = count_primes(values, index + 1)
-    else
-        result = 1 + count_primes(values, index + 1)
-    end if
+count_primes: (values: []bool) -> (result: u32) =
+    result = 0
+    for composite in values do
+        if not composite then
+            result += 1
+        end if
+    end for
 end count_primes
 
 sieve: (inout composite: [101]bool) -> none =
     view: []mut bool = composite[0..<lenof composite]
     view[0] = true
     view[1] = true
-    sieve_from(view, 2)
+    first_candidate: usize = 2
+    for candidate in first_candidate..<lenof view do
+        if not view[candidate] then
+            mut multiple: usize = candidate + candidate
+            while multiple < lenof view do
+                view[multiple] = true
+                multiple += candidate
+            end while
+        end if
+    end for
 end sieve
 
 public main: () -> (code: i32) =
@@ -38,7 +31,7 @@ public main: () -> (code: i32) =
     sieve(composite)
     view: []bool = composite[0..<lenof composite]
 
-    if count_primes(view, 0) == 25
+    if count_primes(view) == 25
       and not composite[2]
       and not composite[3]
       and composite[4]

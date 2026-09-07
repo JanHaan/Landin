@@ -1,6 +1,6 @@
 class: runtime
-summary: recursive insertion sort orders a caller-owned fixed array through an inout writable slice
-constructs: 0040, 0290, 0520, 0570, 0900, 1800, 1810, 1820, 1920, 1970
+summary: nested-loop insertion sort orders a caller-owned fixed array through an inout writable slice
+constructs: 0040, 0290, 0400, 0520, 0570, 0900, 1130, 1150, 1800, 1810, 1820, 1920, 1970
 program: main.ldn
 status: 42
 targets: linux-x86-64

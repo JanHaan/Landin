@@ -936,8 +936,9 @@ def render_sample(lines, hl, links):
 GUIDES = [
     dict(key="examples", src="examples.md", out="examples.html",
          nav="running examples", group="the language",
-         blurb="Seven complete programs the compiler emits and the Linux gate "
-               "runs, from FizzBuzz and Euclid to searching and encoding."),
+         blurb="Ten complete programs the compiler emits and the Linux gate "
+               "runs, from FizzBuzz and Euclid to three Benchmark Game "
+               "correctness workloads."),
     dict(key="readme", src="README.md", out="readme.html",
          nav="the project", group="the project",
          blurb="What Landin is, what is in the repository, and how to build "
@@ -1083,7 +1084,9 @@ section.landing p.more{
 FENCE = re.compile(r"^```([\w-]*)\s*$")
 HEADING = re.compile(r"^(#{1,6})\s+(.*)$")
 BULLET = re.compile(r"^[-*]\s+(.*)$")
-NUMBER = re.compile(r"^(\d+)\.\s+(.*)$")
+#  CommonMark limits ordered markers to nine digits.  R4.20's prose wraps
+#  before 4294967295, which must remain a number in the paragraph, not a list.
+NUMBER = re.compile(r"^([0-9]{1,9})\.\s+(.*)$")
 ROW = re.compile(r"^\|(.*)\|\s*$")
 TABLE_RULE = re.compile(r"^\|[\s:|-]+\|\s*$")
 QUOTE = re.compile(r"^>\s?(.*)$")
@@ -1765,7 +1768,8 @@ def index_page(docs, counts, intro, status, progress, samples, symbols):
          "decisions must not be quietly reversed."),
         ("examples.html", "run real programs",
          "FizzBuzz, Euclid, searching, a prime sieve, run-length encoding and "
-         "sorting: complete sources the Linux gate builds and executes."),
+         "sorting, plus fannkuch-redux, Mandelbrot and FASTA: complete sources "
+         "the Linux gate builds and executes."),
     ]
     cards = "".join(
         f'<a class="route" href="{href}"><strong>{esc(head)}</strong>'

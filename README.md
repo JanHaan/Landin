@@ -16,10 +16,12 @@ at the other.
 **Status: specification 0.1.0. The compiler can build and run Landin programs
 for 64-bit Linux. It handles functions, user-defined data types, generic
 routines, pointers, errors, control flow, modules, evidence-table dispatch and
-`any`. A small `core` library and a complete recovering configuration parser
-now run alongside the automatically tested FizzBuzz, number-theory, searching
-and sorting programs. Support for macOS, microcontrollers and the broader
-standard library is still to come.**
+`any`. Hosted containers, allocators, text and I/O in `core` and a complete
+recovering configuration parser now run alongside the automatically tested
+FizzBuzz, number-theory, searching
+and sorting programs, plus correctness-scale fannkuch-redux, Mandelbrot and
+FASTA workloads. Support for macOS, microcontrollers and the broader standard
+library is still to come.**
 
 ## What is here
 
@@ -28,7 +30,7 @@ standard library is still to come.**
 | `handoff.md` | start here. The design in one page, the principles behind it, how the work is done, and which decisions must not be quietly reversed. |
 | `spec.md` | the normative specification: the grammar of the enabled kernel, the rules the tour left unsaid, and the register of decisions taken while implementing them. |
 | `tour.md` | the language explained, as a numbered "learn X in Y minutes". Teaches; does not decide. |
-| `examples.md` | seven complete programs the compiler emits and the Linux gate runs today: FizzBuzz, greatest common divisor, insertion sort, binary search, a prime sieve, run-length encoding and merge sort. |
+| `examples.md` | ten complete programs the compiler emits and the Linux gate runs today: seven small algorithms plus correctness-scale fannkuch-redux, Mandelbrot and FASTA workloads. |
 | `ROADMAP.md` | the sole durable authority for open work, implementation dependencies, phase gates, and dispositions. Read it before proposing or scheduling work. |
 | `AGENTS.md` | how to work in this repository: the authority order, the commands, and the rules the chassis already keeps. |
 | `check.py` | mechanical checks over the live documents, grammar and fixture corpus. Run it after touching any of them. |
@@ -190,6 +192,13 @@ condition declarations, caller parameters, `unchecked` regions, range subtypes
 and the atom-or-pointer union. Every hosted construct row now carries fixture
 evidence or a refusal that names the item enabling it, and `check.py` audits
 that whenever the item is not active.
+
+R4.20 completes the hosted `core` library slice: explicit heap, arena, pool
+and failing allocators; initialized storage, vectors, small vectors, maps,
+trees and sorting; checked runtime text helpers; and interchangeable system
+and memory I/O worlds. Compiled clients exercise their bounded composition,
+allocation failures and rollback. The complete container and hosted
+application programs remain R4.70 and R4.80 work.
 
 **Current roadmap work: R4.30 — Complete hosted modules and toolchain directives.**
 

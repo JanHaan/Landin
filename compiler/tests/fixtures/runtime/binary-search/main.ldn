@@ -7,24 +7,22 @@ search_result: type = struct
     end kind
 end search_result
 
-search_range: (values: []i32, needle: i32,
-               left: usize, right: usize) -> (result: search_result) =
-    if left >= right then
-        result = (kind: missing)
-    else
-        middle: usize = left + (right - left) / 2
-        if values[middle] == needle then
-            result = (kind: found(index: middle))
-        elsif values[middle] < needle then
-            result = search_range(values, needle, middle + 1, right)
-        else
-            result = search_range(values, needle, left, middle)
-        end if
-    end if
-end search_range
-
 search: (values: []i32, needle: i32) -> (result: search_result) =
-    result = search_range(values, needle, 0, lenof values)
+    mut left: usize = 0
+    mut right: usize = lenof values
+    result = while left < right do
+        middle: usize = left + (right - left) / 2
+        candidate: i32 = values[middle]
+        break with search_result(kind: found(index: middle))
+          when candidate == needle
+        if candidate < needle then
+            left = middle + 1
+        else
+            right = middle
+        end if
+    complete
+        break with search_result(kind: missing)
+    end while
 end search
 
 found_at: (candidate: search_result,

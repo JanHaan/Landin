@@ -1,6 +1,6 @@
 class: runtime
-summary: recursive merge sort orders a literal-initialized fixed array through a second fixed-array work area
-constructs: 0040, 0290, 0370, 0520, 0570, 1800, 1810, 1920, 1940, 1950, 1970
+summary: merge sort recurses only for partitioning and loops over caller-owned input and work storage
+constructs: 0040, 0290, 0370, 0520, 0570, 0900, 1140, 1150, 1800, 1810, 1920, 1950, 1970
 program: main.ldn
 status: 42
 targets: linux-x86-64

@@ -1,5 +1,7 @@
---  The current hosted kernel cannot print the traditional words yet, so this
---  program computes and checks the same classification for one through 100.
+--  The classifier stays independent of presentation; the hosted entry prints
+--  the traditional lines and checks the complete tally for one through 100.
+import core/io
+
 fizz, buzz, fizz_buzz, number: atom
 fizzbuzz_kind: type = fizz | buzz | fizz_buzz | number
 
@@ -22,21 +24,60 @@ classify: (n: u32) -> (kind: fizzbuzz_kind) =
     end if
 end classify
 
-tally: (inout result: counts, n: u32) -> none =
-    return when n > 100
-
-    match classify(n)
-        fizz: result.fizz_only = result.fizz_only + 1
-        buzz: result.buzz_only = result.buzz_only + 1
-        fizz_buzz: result.both = result.both + 1
-        number: result.ordinary = result.ordinary + 1
+tally: (inout result: counts, kind: fizzbuzz_kind) -> none =
+    match kind
+        fizz: result.fizz_only += 1
+        buzz: result.buzz_only += 1
+        fizz_buzz: result.both += 1
+        number: result.ordinary += 1
     end match
-    tally(result, n + 1)
 end tally
 
+write_number: (inout host: io.system, stream: io.file, value: u32)
+              -> none ! io.io_failed =
+    mut digits: [3]u8 = zeroed
+    mut start: usize = lenof digits
+    mut remaining: u32 = value
+    loop do
+        dec start
+        digits[start] = u8(remaining % 10) + 48
+        remaining = remaining / 10
+        break when remaining == 0
+    end loop
+    output: []u8 = digits[start..<lenof digits]
+    try io.write(host, stream, output)
+    try io.write(host, stream, "\n")
+end write_number
+
+write_line: (inout host: io.system, stream: io.file,
+             kind: fizzbuzz_kind, value: u32) -> none ! io.io_failed =
+    match kind
+        fizz: try io.write(host, stream, "Fizz\n")
+        buzz: try io.write(host, stream, "Buzz\n")
+        fizz_buzz: try io.write(host, stream, "FizzBuzz\n")
+        number: try write_number(host, stream, value)
+    end match
+end write_line
+
+run: (inout host: io.system) -> (result: counts) ! io.io_failed =
+    result = zeroed
+    stream: io.file = io.out(host)
+    first: u32 = 1
+    last: u32 = 100
+    for value in first..last do
+        kind: fizzbuzz_kind = classify(value)
+        tally(result, kind)
+        try write_line(host, stream, kind, value)
+    end for
+end run
+
 public main: () -> (code: i32) =
-    mut result: counts = zeroed
-    tally(result, 1)
+    mut host := io.host()
+    result := run(host) else (problem)
+        _ = problem
+        code = 1
+        return
+    end
 
     if classify(1) == number
       and classify(3) == fizz

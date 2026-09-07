@@ -1,0 +1,9 @@
+class: runtime
+summary: the Benchmark Game fannkuch-redux correctness workload enumerates every permutation of seven values and emits its checksum and maximum flip count
+constructs: 0260, 0290, 0310, 0350, 0390, 0400, 0520, 0570, 0710, 0900, 1030, 1130, 1140, 1580, 1650, 1660, 1680, 1800, 1810, 1820, 1920, 1970, 1975
+program: main.ldn
+root: ../../../../..
+run_expect: output.txt
+status: 42
+stream: output
+targets: linux-x86-64
