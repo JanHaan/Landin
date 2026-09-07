@@ -1,0 +1,13 @@
+import core/io
+bad: () -> (value: io.argument) ! io.no_argument =
+    mut bytes: [1]u8 = [65]
+    one: io.argument = (data: addr bytes[0], length: 1)
+    mut args: [1]io.argument
+    args[0] = one
+    files: []mut io.memory_file = []
+    output: []mut u8 = []
+    errors: []mut u8 = []
+    mut state := io.memory_world(files, args[0..<1], output, errors)
+    world: any io.world = any(addr state)
+    value = try world.argument(0)
+end bad

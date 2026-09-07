@@ -1,0 +1,10 @@
+error[L0314]: this returned reference still has frame origin
+  --> ../tests/fixtures/negative/core-memory-argument-frame/main.ldn:2:1
+  |
+2 | bad: () -> (value: io.argument) ! io.no_argument =
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/core-memory-argument-frame/main.ldn:10:5
+   |
+10 |     mut state := io.memory_world(files, args[0..<1], output, errors)
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the shorter-lived reference source
+  = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`

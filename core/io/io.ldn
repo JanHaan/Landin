@@ -22,6 +22,7 @@ public not_found: atom
 public no_access: atom
 public io_failed: atom
 public no_argument: atom
+public argument_too_long: atom
 public empty_path: atom
 public path_contains_nul: atom
 public path_too_long: atom
@@ -101,6 +102,24 @@ public argument_at: (provider: type is world, state: ptr provider,
                     -> (value: argument from state) ! no_argument =
     value = try provider.argument(state, index)
 end argument_at
+
+--  An argument is a foreign-shaped pointer and length, not a slice.  Copy it
+--  into genuine caller-owned initialized storage before passing its bytes to
+--  ordinary slice APIs.  Exact capacity is sufficient and failure precedes
+--  every write.  The caller keeps the source extent readable and disjoint
+--  from scratch, with representable address arithmetic, for the duration of
+--  the copy.
+public copy_argument: (source: argument, scratch: []mut u8)
+                      -> (bytes: []u8 from scratch) ! argument_too_long =
+    fail argument_too_long when source.length > lenof scratch
+    mut copied: usize = 0
+    while copied < source.length do
+        current: ptr u8 = ptr(usize(source.data) + copied)
+        scratch[copied] = current.val
+        inc copied
+    end while
+    bytes = scratch[0..<source.length]
+end copy_argument
 
 --  A world entry receives one already terminated pointer. Dynamic callers
 --  make that precondition explicit with caller-owned scratch: empty input,

@@ -1,0 +1,203 @@
+import core/io
+import core/diag
+import core/text
+
+delivery: type = concept (implementation: type)
+    emit: (self: ptr mut implementation, world: any io.world, bytes: []u8)
+          -> none ! io.io_failed
+    finish: (self: ptr mut implementation, world: any io.world)
+            -> none ! io.io_failed
+end delivery
+
+file_delivery: type = struct
+    opened: io.file
+    attempts: usize
+    completed: usize
+    completed_bytes: usize
+    failures: usize
+    finish_calls: usize
+    finish_failures: usize
+    closed: bool
+end file_delivery
+
+count_delivery: type = struct
+    opened: io.file
+    messages: usize
+    bytes: usize
+    finish_calls: usize
+    closed: bool
+end count_delivery
+
+file_emit: (self: ptr mut file_delivery, world: any io.world,
+            bytes: []u8) -> none ! io.io_failed =
+    inc self.val.attempts
+    if self.val.closed then
+        inc self.val.failures
+        fail io.io_failed
+    end if
+    world.write(self.val.opened, bytes) else (problem)
+        inc self.val.failures
+        fail problem
+    end
+    inc self.val.completed
+    self.val.completed_bytes += lenof bytes
+end file_emit
+
+file_finish: (self: ptr mut file_delivery, world: any io.world)
+             -> none ! io.io_failed =
+    inc self.val.finish_calls
+    fail io.io_failed when self.val.closed
+    opened: io.file = self.val.opened
+    world.close(opened) else (problem)
+        self.val.closed = true
+        inc self.val.finish_failures
+        fail problem
+    end
+    self.val.closed = true
+end file_finish
+
+count_emit: (self: ptr mut count_delivery, world: any io.world,
+             bytes: []u8) -> none ! io.io_failed =
+    fail io.io_failed when self.val.closed
+    inc self.val.messages
+    self.val.bytes += lenof bytes
+end count_emit
+
+count_finish: (self: ptr mut count_delivery, world: any io.world)
+              -> none ! io.io_failed =
+    inc self.val.finish_calls
+    fail io.io_failed when self.val.closed
+    summary: []u8 = if self.val.messages == 2 and self.val.bytes == 7
+                    then "2:7" else "bad" end if
+    try world.write(self.val.opened, summary)
+    opened: io.file = self.val.opened
+    world.close(opened) else (problem)
+        self.val.closed = true
+        fail problem
+    end
+    self.val.closed = true
+end count_finish
+
+file_delivery is delivery (emit: file_emit, finish: file_finish)
+count_delivery is delivery (emit: count_emit, finish: count_finish)
+
+mut delivered_bytes: [12]u8 = zeroed
+mut output_bytes: [8]u8 = zeroed
+mut error_bytes: [8]u8 = zeroed
+delivery_path: [9]u8 = [100, 101, 108, 105, 118, 101, 114, 121, 0]
+
+public main: () -> (code: i32) =
+    code = 1
+    name: []u8 = "delivery"
+    configured: io.memory_file =
+      (name: name, contents: delivered_bytes[0..<12], length: 0, cursor: 0,
+       readable: true, writable: true, opened: false, writing: false)
+    mut files: [1]io.memory_file
+    files[0] = configured
+    no_arguments: []io.argument = []
+    mut memory := io.memory_world(
+        files[0..<1], no_arguments, output_bytes[0..<8], error_bytes[0..<8])
+    memory.write_limit = 2
+    world: any io.world = any(addr memory)
+
+    file_handle: io.file = world.open_write(addr delivery_path[0])
+      else (problem)
+        _ = problem
+        return
+    end
+    output_handle: io.file = world.out()
+    mut file_state: file_delivery =
+      (opened: file_handle, attempts: 0, completed: 0, completed_bytes: 0,
+       failures: 0, finish_calls: 0, finish_failures: 0, closed: false)
+    mut count_state: count_delivery =
+      (opened: output_handle, messages: 0, bytes: 0,
+       finish_calls: 0, closed: false)
+    file_target: any delivery = any(addr file_state)
+    count_target: any delivery = any(addr count_state)
+    mut selected: any delivery = file_target
+
+    first: []u8 = "ABCDE"
+    memory.fail_write_at = 2
+    mut partial_failed: bool = false
+    selected.emit(world, first) else (problem)
+        partial_failed = problem == io.io_failed
+    end
+    return when not partial_failed or files[0].length <> 2
+      or delivered_bytes[0] <> 65 or delivered_bytes[1] <> 66
+      or delivered_bytes[2] <> 0
+
+    memory.fail_write_at = 0
+    selected = count_target
+    first_counted: []u8 = "cat"
+    selected.emit(world, first_counted) else (problem)
+        _ = problem
+        return
+    end
+    selected = file_target
+    remainder: []u8 = "CDE"
+    selected.emit(world, remainder) else (problem)
+        _ = problem
+        return
+    end
+    selected = count_target
+    second_counted: []u8 = "door"
+    selected.emit(world, second_counted) else (problem)
+        _ = problem
+        return
+    end
+
+    memory.fail_close_at = 2
+    selected.finish(world) else (problem)
+        _ = problem
+        return
+    end
+    selected = file_target
+    mut close_failed: bool = false
+    selected.finish(world) else (problem)
+        close_failed = problem == io.io_failed
+    end
+    return when not close_failed
+
+    diagnostic_stream: io.file = world.err()
+    mut streaming := diag.to(addr world, addr diagnostic_stream)
+    mut logger: any diag.log = any(addr streaming)
+    message: []u8 = "bad"
+    where: text.position = text.at(message, 7)
+    logger.note(where, diag.error, message) else (problem)
+        _ = problem
+        return
+    end
+    return when not logger.failed()
+
+    mut closed_emit_failed: bool = false
+    selected.emit(world, remainder) else (problem)
+        closed_emit_failed = problem == io.io_failed
+    end
+
+    written: []u8 = io.written(memory)
+    if closed_emit_failed and lenof written == 3
+      and written[0] == 50 and written[1] == 58 and written[2] == 55
+      and files[0].length == 5 and files[0].cursor == 5
+      and not files[0].opened and files[0].writing
+      and delivered_bytes[0] == 65 and delivered_bytes[1] == 66
+      and delivered_bytes[2] == 67 and delivered_bytes[3] == 68
+      and delivered_bytes[4] == 69 and delivered_bytes[5] == 0
+      and file_state.attempts == 3 and file_state.completed == 1
+      and file_state.completed_bytes == 3 and file_state.failures == 2
+      and file_state.finish_calls == 1 and file_state.finish_failures == 1
+      and file_state.closed
+      and count_state.messages == 2 and count_state.bytes == 7
+      and count_state.finish_calls == 1 and count_state.closed
+      and memory.open_calls == 1 and memory.write_calls == 11
+      and memory.close_calls == 2 and memory.output_used == 3
+      and memory.errors_used == 7
+      and error_bytes[0] == 69 and error_bytes[1] == 58
+      and error_bytes[2] == 55 and error_bytes[3] == 58
+      and error_bytes[4] == 98 and error_bytes[5] == 97
+      and error_bytes[6] == 100 and error_bytes[7] == 0
+      and not memory.output_open
+      and memory.errors_open
+    then
+        code = 42
+    end if
+end main

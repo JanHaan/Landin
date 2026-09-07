@@ -1,0 +1,8 @@
+class: negative
+summary: an argument copy view cannot escape its caller-owned frame scratch
+expect: expected.txt
+args: --root=../.. ../tests/fixtures/negative/core-io-argument-copy-frame
+status: 1
+codes: L0314
+constructs: 0430, 0570, 0790, 0940, 1660
+targets: linux-x86-64, macos-arm64, synthetic-32

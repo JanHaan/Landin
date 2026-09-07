@@ -1,0 +1,7 @@
+class: runtime
+summary: erased deliveries and core diagnostic streaming share one caller-backed memory world with partial output and explicit cleanup
+program: main.ldn
+root: ../../../../..
+constructs: 0410, 0430, 0570, 0600, 0670, 0770, 0790, 0830, 0910, 0940, 0960, 1230, 1240, 1370, 1380, 1390, 1650, 1660, 1680
+status: 42
+targets: linux-x86-64

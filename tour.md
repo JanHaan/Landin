@@ -3347,6 +3347,34 @@ in front of a system call costs nothing, where an allocator
 is threaded generically because it sits in hot loops. Same
 machinery, [1690], chosen per case.
 
+The bounded library provider is `core/io.memory`, constructed with
+`memory_world(files, arguments, output, errors)`. Its caller supplies every
+file name, content buffer, descriptor and output extent. Files must already
+exist in the table; opening for writing truncates after checks. Reads stop at
+the initialized length, and writes either finish or report a failure while
+preserving the completed prefix. Configurable chunk limits and one-based
+failure counts make short reads, partial writes and cleanup reproducible.
+A zero read limit with unread data reports an error; it does not signal EOF.
+Empty transfers are no-ops. A close error still leaves a valid handle closed.
+
+The argument table omits the executable name. `written` and `written_errors`
+return source-derived views of the two output prefixes. The provider retains
+its supplied slices and performs no allocation or host call. Its public
+representation and copied handles remain subject to manual invariants:
+backing must remain valid, transfer ranges must not overlap, counters need
+headroom, and stale handles can address a reopened slot. D153 records these
+bounds. The larger application and its command-line policy remain R4.80.
+
+Both providers expose each user argument as a pointer and byte length, never as
+a guessed C string or forged slice. `copy_argument(argument, scratch)` checks
+the exact capacity before writing, copies into caller-owned initialized
+storage, and returns that genuine scratch prefix. Source backing must stay
+readable with representable addresses and must not overlap the destination.
+Passing the result to
+`text.from_bytes` is the checked route from world arguments to UTF-8. The
+system and memory sequences both begin at the first user argument; neither
+contains `argv[0]`.
+
 ### [1670] A failed check calls a fixed, never-returning symbol
 
 A failed check calls a fixed, never-returning symbol.

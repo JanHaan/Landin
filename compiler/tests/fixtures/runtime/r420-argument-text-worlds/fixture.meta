@@ -1,0 +1,8 @@
+class: runtime
+summary: system and memory user arguments copy through exact caller scratch into checked UTF-8 without forged slices
+program: main.ldn
+root: ../../../../..
+run_args: alpha 4294967295
+status: 42
+constructs: 0430, 0570, 0600, 0790, 0940, 0960, 1370, 1390, 1660, 1975
+targets: linux-x86-64

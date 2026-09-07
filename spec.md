@@ -9085,6 +9085,49 @@ path that failure is observable; when close is a reached `undo` while another
 declared failure is already propagating, D133 preserves the primary atom and
 cleanup cannot replace it.
 
+The bounded `core/io.memory` provider implements the same capability from
+caller-supplied file descriptors, content buffers, argument descriptors and
+standard-output/error buffers. It makes no host calls and allocates no storage.
+`memory_world` retains those four supplied slices through its result's `from`
+clause. Files are existing-only, selected by the first matching name; opening
+resets the cursor, and opening for writing truncates only after permission,
+open-state and capacity checks. Construction preserves the supplied file
+state. A file-table index is a provider-local handle, with no generation or
+ownership identity: a copied stale handle can address a reopened slot.
+
+A positive `read_limit` bounds each read. Zero progress with unread data and a
+nonempty destination reports `io_failed`, so it cannot masquerade as EOF.
+`write_limit` bounds each internal write chunk; zero reports `io_failed` for a
+nonempty write. A later failed chunk preserves the exact completed prefix.
+Empty reads and writes are unconditional no-ops, even for closed handles,
+and do not advance failure counters. Other operations validate the handle.
+Failure schedules name one-based read, write-chunk and close counts; zero
+disables injection. A valid close clears the open state before its injected
+failure, allowing ordinary manual cleanup to consume the handle once.
+
+The memory representation is public composition. Clients preserve initialized
+lengths and capacities, leave headroom for checked operation-counter increments,
+and keep both descriptor tables and all nested file-name, content and argument
+backing valid. Transfer source and destination ranges must not overlap. These
+are caller obligations, not ownership or transitive alias guarantees. Argument
+lists exclude the executable name; `argument` returns a view `from self`.
+`written` and `written_errors` take the memory provider `inout` and return only
+the initialized output prefix `from` that provider, retaining the ordinary
+local frame-escape and live-view checks.
+
+An `argument` deliberately remains the foreign-shaped `ptr u8` plus byte
+length used by both providers; it is neither a `cstring` nor a fabricated
+slice. Ordinary `core/io.copy_argument` first checks that caller-owned scratch
+has at least the exact argument length, then copies the bytes and returns the
+genuine initialized prefix `from scratch`. Insufficient capacity changes no
+byte, and an empty argument returns an empty scratch-derived slice. The caller
+keeps the complete source extent readable during the copy, ensures that its
+addresses are representable, and does not overlap scratch. The copied view may
+then be validated by
+`core/text.from_bytes`; no pointer-to-cstring conversion, hidden allocation or
+pointer-to-slice operation is introduced. Both provider argument sequences
+contain only user arguments and exclude `argv[0]`.
+
 The backend's calls to `strlen`, `open`, `read`, `write`, `close` and
 `__errno_location` are private runtime dependencies, not names reserved from
 Landin source. A non-external Landin declaration with one of those spellings is

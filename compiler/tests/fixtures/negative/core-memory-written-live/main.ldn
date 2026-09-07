@@ -1,0 +1,9 @@
+import core/io
+refill: (inout state: io.memory) -> none =
+    state.output_used = 0
+end refill
+bad: (inout state: io.memory) -> (first: u8) =
+    view := io.written(state)
+    refill(state)
+    first = view[0]
+end bad

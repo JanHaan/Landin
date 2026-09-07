@@ -1,0 +1,12 @@
+import core/io
+reader: type = struct
+    opened: io.file
+    buffer: ptr mut [2]u8
+end reader
+finish: (sink value: reader) -> none =
+    _ = usize(value.buffer)
+end finish
+bad: (value: reader) -> (address: usize) =
+    finish(value)
+    address = usize(value.buffer)
+end bad

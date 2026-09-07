@@ -1,0 +1,231 @@
+--  Finite caller-backed world. Handles are indexes, not ownership tokens.
+--  Clients preserve length <= capacity and supply all retained backing.
+public memory_file: type = struct
+    name: []u8
+    contents: []mut u8
+    length: usize
+    cursor: usize
+    readable: bool
+    writable: bool
+    opened: bool
+    writing: bool
+end memory_file
+
+public memory: type = struct
+    files: []mut memory_file
+    arguments: []argument
+    output: []mut u8
+    errors: []mut u8
+    output_used: usize
+    errors_used: usize
+    output_open: bool
+    errors_open: bool
+    read_limit: usize
+    write_limit: usize
+    fail_read_at: usize
+    fail_write_at: usize
+    fail_close_at: usize
+    read_calls: usize
+    write_calls: usize
+    close_calls: usize
+    open_calls: usize
+end memory
+
+public memory_world: (files: []mut memory_file,
+                      arguments: []argument,
+                      output: []mut u8, errors: []mut u8)
+                     -> (state: memory from files, arguments, output, errors) =
+    state = (files: files, arguments: arguments, output: output, errors: errors,
+             output_used: 0, errors_used: 0,
+             output_open: true, errors_open: true,
+             read_limit: 0 -% 1, write_limit: 0 -% 1,
+             fail_read_at: 0, fail_write_at: 0, fail_close_at: 0,
+             read_calls: 0, write_calls: 0, close_calls: 0, open_calls: 0)
+end memory_world
+
+memory_name_matches: (path: ptr u8, name: []u8) -> (yes: bool) =
+    yes = false
+    mut at: usize = 0
+    while at < lenof name do
+        current: ptr u8 = ptr(usize(path) + at)
+        return when current.val == 0 or current.val <> name[at]
+        inc at
+    end while
+    final: ptr u8 = ptr(usize(path) + at)
+    yes = final.val == 0
+end memory_name_matches
+
+memory_open: (self: ptr mut memory, path: ptr u8, writing: bool)
+             -> (opened: file) ! not_found | no_access | io_failed =
+    inc self.val.open_calls
+    mut at: usize = 0
+    while at < memory_file_count(self.val.files) do
+        current: ptr mut memory_file = addr self.val.files[at]
+        if memory_name_matches(path, current.val.name) then
+            fail no_access when writing and not current.val.writable
+            fail no_access when not writing and not current.val.readable
+            fail io_failed when current.val.opened
+              or current.val.length > memory_bytes_count(current.val.contents)
+              or at > 2147483644
+            current.val.cursor = 0
+            current.val.opened = true
+            current.val.writing = writing
+            if writing then current.val.length = 0 end if
+            opened = (descriptor: i32(at) + 3)
+            return
+        end if
+        inc at
+    end while
+    fail not_found
+end memory_open
+
+memory_open_read: (self: ptr mut memory, path: ptr u8)
+                  -> (opened: file) ! not_found | no_access | io_failed =
+    opened = try memory_open(self, path, false)
+end memory_open_read
+
+memory_open_write: (self: ptr mut memory, path: ptr u8)
+                   -> (opened: file) ! not_found | no_access | io_failed =
+    opened = try memory_open(self, path, true)
+end memory_open_write
+
+memory_close: (self: ptr mut memory, sink opened: file) -> none ! io_failed =
+    inc self.val.close_calls
+    if opened.descriptor == 1 then
+        fail io_failed when not self.val.output_open
+        self.val.output_open = false
+    elsif opened.descriptor == 2 then
+        fail io_failed when not self.val.errors_open
+        self.val.errors_open = false
+    else
+        fail io_failed when opened.descriptor < 3
+        index: usize = usize(opened.descriptor - 3)
+        fail io_failed when index >= memory_file_count(self.val.files)
+        current: ptr mut memory_file = addr self.val.files[index]
+        fail io_failed when not current.val.opened
+        current.val.opened = false
+    end if
+    fail io_failed when self.val.close_calls == self.val.fail_close_at
+end memory_close
+
+memory_read: (self: ptr mut memory, opened: file, into: []mut u8)
+             -> (count: usize) ! io_failed =
+    if lenof into == 0 then
+        count = 0
+        return
+    end if
+    inc self.val.read_calls
+    fail io_failed when self.val.read_calls == self.val.fail_read_at
+      or opened.descriptor < 3
+    index: usize = usize(opened.descriptor - 3)
+    fail io_failed when index >= memory_file_count(self.val.files)
+    current: ptr mut memory_file = addr self.val.files[index]
+    fail io_failed when not current.val.opened or current.val.writing
+      or current.val.length > memory_bytes_count(current.val.contents)
+      or current.val.cursor > current.val.length
+    count = current.val.length - current.val.cursor
+    fail io_failed when count > 0 and self.val.read_limit == 0
+    if count > lenof into then count = lenof into end if
+    if count > self.val.read_limit then count = self.val.read_limit end if
+    mut at: usize = 0
+    while at < count do
+        into[at] = current.val.contents[current.val.cursor + at]
+        inc at
+    end while
+    current.val.cursor += count
+end memory_read
+
+memory_write: (self: ptr mut memory, opened: file, bytes: []u8)
+              -> none ! io_failed =
+    mut at: usize = 0
+    while at < lenof bytes do
+        inc self.val.write_calls
+        fail io_failed when self.val.write_calls == self.val.fail_write_at
+          or self.val.write_limit == 0
+        mut count: usize = lenof bytes - at
+        if count > self.val.write_limit then count = self.val.write_limit end if
+        if opened.descriptor == 1 then
+            fail io_failed when not self.val.output_open
+              or self.val.output_used > memory_bytes_count(self.val.output)
+            available: usize = memory_bytes_count(self.val.output) - self.val.output_used
+            fail io_failed when available == 0
+            if count > available then count = available end if
+            mut n: usize = 0
+            while n < count do
+                self.val.output[self.val.output_used + n] = bytes[at + n]
+                inc n
+            end while
+            self.val.output_used += count
+        elsif opened.descriptor == 2 then
+            fail io_failed when not self.val.errors_open
+              or self.val.errors_used > memory_bytes_count(self.val.errors)
+            available: usize = memory_bytes_count(self.val.errors) - self.val.errors_used
+            fail io_failed when available == 0
+            if count > available then count = available end if
+            mut n: usize = 0
+            while n < count do
+                self.val.errors[self.val.errors_used + n] = bytes[at + n]
+                inc n
+            end while
+            self.val.errors_used += count
+        else
+            fail io_failed when opened.descriptor < 3
+            index: usize = usize(opened.descriptor - 3)
+            fail io_failed when index >= memory_file_count(self.val.files)
+            current: ptr mut memory_file = addr self.val.files[index]
+            fail io_failed when not current.val.opened or not current.val.writing
+              or current.val.length > memory_bytes_count(current.val.contents)
+            available: usize = memory_bytes_count(current.val.contents) - current.val.length
+            fail io_failed when available == 0
+            if count > available then count = available end if
+            mut n: usize = 0
+            while n < count do
+                current.val.contents[current.val.length + n] = bytes[at + n]
+                inc n
+            end while
+            current.val.length += count
+            current.val.cursor = current.val.length
+        end if
+        at += count
+    end while
+end memory_write
+
+memory_out: (self: ptr memory) -> (stream: file) =
+    _ = self.val.output_used
+    stream = (descriptor: 1)
+end memory_out
+memory_err: (self: ptr memory) -> (stream: file) =
+    _ = self.val.errors_used
+    stream = (descriptor: 2)
+end memory_err
+memory_argument_count: (self: ptr memory) -> (count: usize) =
+    count = memory_args_count(self.val.arguments)
+end memory_argument_count
+memory_argument: (self: ptr memory, index: usize)
+                 -> (value: argument from self) ! no_argument =
+    fail no_argument when index >= memory_args_count(self.val.arguments)
+    value = self.val.arguments[index]
+end memory_argument
+
+memory is world
+    (open_read: memory_open_read, open_write: memory_open_write,
+     close: memory_close, read: memory_read, write: memory_write,
+     out: memory_out, err: memory_err,
+     argument_count: memory_argument_count, argument: memory_argument)
+
+public written: (inout state: memory) -> (bytes: []u8 from state) =
+    bytes = state.output[0..<state.output_used]
+end written
+public written_errors: (inout state: memory) -> (bytes: []u8 from state) =
+    bytes = state.errors[0..<state.errors_used]
+end written_errors
+
+memory_file_count: (values: []memory_file) -> (count: usize) =
+    count = lenof values
+end memory_file_count
+memory_args_count: (values: []argument) -> (count: usize) =
+    count = lenof values
+end memory_args_count
+memory_bytes_count: (values: []u8) -> (count: usize) =
+    count = lenof values
+end memory_bytes_count
