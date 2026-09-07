@@ -1,0 +1,119 @@
+import core/text
+
+public main: () -> (code: i32) =
+    mut valid_storage: [5]u8 = [65, 226, 152, 131, 0]
+    mut valid_view: []mut u8 =
+        valid_storage[0..<lenof valid_storage]
+    valid: utf8 = text.from_bytes(valid_view) else (problem)
+        _ = problem
+        code = 2
+        return
+    end
+    valid_bytes: []u8 = text.bytes(valid)
+    empty: utf8 = text.from_bytes(valid_view[0..<0]) else (problem)
+        _ = problem
+        code = 3
+        return
+    end
+    from_c: utf8 = text.from_c("C text") else (problem)
+        _ = problem
+        code = 4
+        return
+    end
+
+    mut stray_storage: [1]u8 = [128]
+    stray: []u8 = stray_storage[0..<1]
+    mut rejected_stray: bool = false
+    _ = text.from_bytes(stray) else (problem)
+        rejected_stray = problem == text.invalid_text
+        ""
+    end
+
+    mut truncated_storage: [1]u8 = [194]
+    truncated: []u8 = truncated_storage[0..<1]
+    mut rejected_truncated: bool = false
+    _ = text.from_bytes(truncated) else (problem)
+        rejected_truncated = problem == text.invalid_text
+        ""
+    end
+
+    mut overlong_storage: [2]u8 = [192, 128]
+    overlong: []u8 = overlong_storage[0..<2]
+    mut rejected_overlong: bool = false
+    _ = text.from_bytes(overlong) else (problem)
+        rejected_overlong = problem == text.invalid_text
+        ""
+    end
+
+    mut surrogate_storage: [3]u8 = [237, 160, 128]
+    surrogate: []u8 = surrogate_storage[0..<3]
+    mut rejected_surrogate: bool = false
+    _ = text.from_bytes(surrogate) else (problem)
+        rejected_surrogate = problem == text.invalid_text
+        ""
+    end
+
+    mut high_storage: [4]u8 = [244, 144, 128, 128]
+    high: []u8 = high_storage[0..<4]
+    mut rejected_high: bool = false
+    _ = text.from_bytes(high) else (problem)
+        rejected_high = problem == text.invalid_text
+        ""
+    end
+
+    zero: u32 = text.to_u32("0") else 99
+    maximum: u32 = text.to_u32("4294967295") else 99
+    mut rejected_empty_number: bool = false
+    _ = text.to_u32("") else (problem)
+        rejected_empty_number = problem == text.invalid_number
+        0
+    end
+    mut rejected_nondigit: bool = false
+    _ = text.to_u32("12x") else (problem)
+        rejected_nondigit = problem == text.invalid_number
+        0
+    end
+    mut rejected_overflow: bool = false
+    _ = text.to_u32("4294967296") else (problem)
+        rejected_overflow = problem == text.number_overflow
+        0
+    end
+
+    mut output_storage: [11]u8 = [of 0]
+    mut output: []mut u8 = output_storage[0..<lenof output_storage]
+    mut used: usize = text.write_byte(output, 0, 65) else 99
+    used = text.write_u32(output, used, 4294967295) else 99
+    output_bytes: []u8 = text.written(output, used) else []
+
+    mut small_storage: [3]u8 = [7, 8, 9]
+    mut small: []mut u8 = small_storage[0..<lenof small_storage]
+    mut refused_write: bool = false
+    _ = text.write_u32(small, 1, 999) else (problem)
+        refused_write = problem == text.no_space
+        0
+    end
+
+    if lenof valid == 5 and lenof valid_bytes == 5
+      and valid_bytes[0] == 65 and valid_bytes[4] == 0
+      and lenof empty == 0 and text.eq(from_c, "C text")
+      and text.eq("same", "same") and not text.eq("same", "other")
+      and text.contains("", "") and text.contains("abc", "")
+      and text.contains("banana", "ana")
+      and not text.contains("banana", "apple")
+      and text.contains("A\u{2603}B", "\u{2603}")
+      and rejected_stray and rejected_truncated and rejected_overlong
+      and rejected_surrogate and rejected_high
+      and zero == 0 and maximum == 4294967295
+      and rejected_empty_number and rejected_nondigit
+      and rejected_overflow
+      and used == 11 and lenof output_bytes == 11
+      and output_bytes[0] == 65 and output_bytes[1] == 52
+      and output_bytes[10] == 53
+      and refused_write and small[0] == 7 and small[1] == 8
+      and small[2] == 9
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

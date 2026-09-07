@@ -859,12 +859,26 @@ keeps its source origin.
 
 The hosted views themselves accept quoted and raw literals. `utf8` stores
 shortest-form UTF-8 bytes, `utf16` stores UTF-16 code units, and `cstring`
-stores UTF-8 bytes behind a read-only pointer. `lenof` on `utf8` and `utf16`
-counts those code units. Every literal datum has one trailing zero code unit;
-slice lengths exclude it, and `cstring` carries no length. Equal decoded
-content at the same element width may share its read-only static datum.
-The three view identities remain distinct from one another and from their
-backing pointer or slice types through calls, aggregates and generics.
+stores encoded bytes behind a read-only pointer. A literal `cstring` contains
+valid UTF-8, but a value published by a foreign boundary promises only
+accessible backing through its first NUL byte; its encoding is not prevalidated.
+`lenof` on `utf8` and `utf16` counts their code units. Every literal datum has
+one trailing zero code unit; slice lengths exclude it, and `cstring` carries no
+length. Equal decoded content at the same element width may share its read-only
+static datum. The three view identities remain distinct from one another and
+from their backing pointer or slice types through calls, aggregates and
+generics.
+
+Ordinary explicit conversion admits the exact source-derived representation
+views needed at runtime: immutable `[]u8` to `utf8` validates and may trap;
+`utf8` to immutable `[]u8` preserves its base and length; and `cstring` to
+either form scans only to the first NUL, validating when the destination is
+`utf8`. Empty results keep the actual source carrier and origin. There is no
+pointer-to-`cstring` conversion, mutable result or `utf16` representation
+conversion. `core/text.from_bytes` and `from_c` perform the same validation in
+ordinary source and report `invalid_text`; its exact byte equality,
+byte-substring, decimal parsing and bounded caller-buffer writing helpers add
+no normalization, allocation or hidden truncation.
 
 Range slicing is an operation on `utf8` and `utf16`, not an exposure of their
 backing slices. Its exact `usize` bounds count the view's bytes or UTF-16 code
@@ -887,7 +901,8 @@ codepoint and is a linear scan by codepoint ordinal. Indexing by the opaque
 The position must be in bounds and at a codepoint boundary. An ordinal outside
 the text, or a position at the end or on a continuation byte, traps. Both
 conformances exist; the argument type decides without an implicit integer
-conversion.
+conversion. Converting the complete `utf8` to its ordinary byte view does not
+inherit this codepoint-index operation; it has the ordinary slice operations.
 
 ### [0620] DEFERRED to a later version, kept here as a design record
 

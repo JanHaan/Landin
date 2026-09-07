@@ -611,16 +611,21 @@ package body Landin.Stages.Resolution is
                declare
                   Callee : constant Syn.Node_Id :=
                     Syn.Callee_Of (Of_Tree, Node);
-                  Is_Scalar_Conversion : Boolean := False;
+                  Is_Type_Conversion : Boolean := False;
                begin
                   if Syn.Kind (Of_Tree, Callee) = Syn.Name_Reference then
                      for Scalar in Landin.Types.Scalar_Name loop
-                        Is_Scalar_Conversion := Is_Scalar_Conversion
+                        Is_Type_Conversion := Is_Type_Conversion
                           or else Landin.Types.Spelling (Scalar)
                             = Spelled (Syn.Name (Of_Tree, Callee));
                      end loop;
+                     for View in Landin.Types.Text_View loop
+                        Is_Type_Conversion := Is_Type_Conversion
+                          or else Landin.Types.Spelling (View)
+                            = Spelled (Syn.Name (Of_Tree, Callee));
+                     end loop;
                   end if;
-                  if Is_Scalar_Conversion then
+                  if Is_Type_Conversion then
                      Resolve_Type_View (Of_Tree, Callee, Inside);
                   else
                      Resolve (Of_Tree, Callee, Inside);

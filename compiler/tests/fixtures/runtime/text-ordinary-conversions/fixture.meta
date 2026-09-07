@@ -1,0 +1,6 @@
+class: runtime
+summary: exact ordinary text conversions preserve bytes, first-NUL extent and source origins
+constructs: 0310, 0600, 0610, 0660, 1050, 1880, 1950
+program: main.ldn
+status: 42
+targets: linux-x86-64

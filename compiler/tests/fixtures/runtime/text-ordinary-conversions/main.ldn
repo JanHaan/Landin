@@ -1,0 +1,65 @@
+byte_view: type = []u8
+
+absent: atom
+c_alias: type = cstring
+maybe_c: type = absent | c_alias
+
+as_text: (source: []u8) -> (result: utf8 from source) =
+    result = utf8(source)
+end as_text
+
+as_bytes: (source: utf8) -> (result: []u8 from source) =
+    result = byte_view(source)
+end as_bytes
+
+c_bytes: (source: cstring) -> (result: []u8 from source) =
+    result = byte_view(source)
+end c_bytes
+
+c_text: (source: cstring) -> (result: utf8 from source) =
+    result = utf8(source)
+end c_text
+
+extracted_length: (source: maybe_c) -> (result: usize) =
+    match source
+        absent: result = 0
+        ptr (present): begin
+            bytes: []u8 = byte_view(present)
+            text: utf8 = utf8(present)
+            result = lenof bytes + lenof text
+        end
+    end match
+end extracted_length
+
+public main: () -> (code: i32) =
+    mut storage: [10]u8 =
+        [65, 194, 162, 226, 152, 131, 240, 159, 152, 128]
+    source: []u8 = storage[0..<lenof storage]
+    text: utf8 = as_text(source)
+    round_trip: []u8 = as_bytes(text)
+    terminated: cstring = "A\u{0}ignored"
+    prefix: []u8 = c_bytes(terminated)
+    prefix_text: utf8 = c_text(terminated)
+    empty_c: cstring = ""
+    empty_bytes: []u8 = c_bytes(empty_c)
+    empty_text: utf8 = c_text(empty_c)
+
+    if lenof text == 10
+      and lenof round_trip == 10
+      and round_trip[0] == 65
+      and round_trip[1] == 194
+      and round_trip[3] == 226
+      and round_trip[6] == 240
+      and round_trip[9] == 128
+      and lenof prefix == 1
+      and prefix[0] == 65
+      and lenof prefix_text == 1
+      and lenof empty_bytes == 0
+      and lenof empty_text == 0
+      and extracted_length("ok") == 4
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

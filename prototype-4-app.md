@@ -253,7 +253,12 @@ public match_filter: type = struct
 end match_filter
 
 match_keep: (self: ptr mut match_filter, line: []u8) -> (yes: bool) =
-    yes = text.contains(utf8(line), self.val.needle)
+    candidate: utf8 = text.from_bytes(line) else (encoding)
+        _ = encoding
+        yes = false
+        return
+    end
+    yes = text.contains(candidate, self.val.needle)
 end match_keep
 
 match_filter is filter (keep: match_keep)
@@ -389,20 +394,31 @@ public build: (A: type is allocator, inout h: any io.world, inout a: A,
 
     mut k: usize = 1
     while k < lenof args do
-        arg := text.from_c(args[k])
+        arg := text.from_c(args[k]) else (encoding)
+            _ = encoding
+            fail bad_argument
+        end
 
         if text.eq(arg, "--level") then
             k = k + 1
             fail bad_argument when k >= lenof args
+            level_text := text.from_c(args[k]) else (encoding)
+                _ = encoding
+                fail bad_argument
+            end
             initial: filter.level_filter =
-                (least: try level_named(text.from_c(args[k])))
+                (least: try level_named(level_text))
             f := try mem.new(state: a, value: initial)
             try vec.push(chain, a, any(f))
 
         elsif text.eq(arg, "--match") then
             k = k + 1
             fail bad_argument when k >= lenof args
-            initial: filter.match_filter = (needle: text.from_c(args[k]))
+            needle := text.from_c(args[k]) else (encoding)
+                _ = encoding
+                fail bad_argument
+            end
+            initial: filter.match_filter = (needle: needle)
             f := try mem.new(state: a, value: initial)
             try vec.push(chain, a, any(f))
 
@@ -417,7 +433,13 @@ worked around rather than routed through the channel.
 The else arm yields the value, and nobody had to
 invent a placeholder.
 ```landin
-            mut n := text.to_u32(text.from_c(args[k])) else (e)
+            number_text := text.from_c(args[k]) else (encoding)
+                _ = encoding
+                d.note(text.nowhere, diag.error,
+                       "--every argument is not UTF-8, using 1")
+                "1"
+            end
+            mut n := text.to_u32(number_text) else (e)
                 d.note(text.nowhere, diag.error,
                        "--every wants a number, using 1")
                 1
@@ -439,7 +461,10 @@ hold, so [0950] says check it here.
         elsif text.eq(arg, "--out") then
             k = k + 1
             fail bad_argument when k >= lenof args
-            to_file = text.from_c(args[k])
+            to_file = text.from_c(args[k]) else (encoding)
+                _ = encoding
+                fail bad_argument
+            end
 
         else
             input = arg
@@ -449,6 +474,10 @@ hold, so [0950] says check it here.
     end while
 
 ```
+Every successful adapter above retains the selected argument's origin. That is
+why `args` remains `escaping` and `config` remains `from args`; error recovery
+does not erase either promise. The `--every` encoding diagnostic is distinct
+from the following valid-UTF-8 decimal recovery.
 The only place the two destinations are chosen between, and
 the only place their concrete types appear. Everything
 downstream sees 'any dest'.

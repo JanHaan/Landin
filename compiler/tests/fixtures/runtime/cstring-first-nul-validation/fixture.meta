@@ -1,0 +1,8 @@
+class: runtime
+summary: a foreign C2 NUL prefix scans as one byte, ignores later bytes and is recoverably invalid UTF-8
+constructs: 0310, 0430, 0470, 0600, 0660, 0790, 0940, 1050, 1650
+program: main.ldn
+root: ../../../../..
+run_args: abcd
+status: 42
+targets: linux-x86-64

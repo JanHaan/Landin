@@ -975,6 +975,7 @@ package body Landin.Checking is
                Into.Node_Atom_Sets.Append (No_Atom_Set);
                Into.Node_Signatures.Append (No_Signature);
                Into.Node_References.Append (No_Reference);
+               Into.Node_Text_Conversions.Append (No_Text_Conversion);
                Into.Node_Constraints.Append (No_Constraint);
                Into.Node_Owed_Checks.Append (No_Constraint);
                Into.Node_Concepts.Append (No_Concept);
@@ -1829,6 +1830,48 @@ package body Landin.Checking is
       end if;
       return Of_Table.Node_References (Where);
    end Reference_Of;
+
+   function Text_Conversion_Of
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id) return Text_Conversion_Kind
+   is
+      Where : constant Positive := Slot (Of_Table, Of_Tree, Node);
+      Overlay : constant Natural := Node_Overlay_Position (Of_Table, Where);
+   begin
+      if Overlay /= 0
+        and then Of_Table.Node_Overlays (Overlay).Has_Text_Conversion
+      then
+         return Of_Table.Node_Overlays (Overlay).Text_Conversion;
+      end if;
+      return Of_Table.Node_Text_Conversions (Where);
+   end Text_Conversion_Of;
+
+   procedure Note_Text_Conversion
+     (Into       : in out Table;
+      Of_Tree    : Landin.Syntax.Tree;
+      Node       : Landin.Syntax.Node_Id;
+      Conversion : Text_Conversion_Kind)
+   is
+      Where : constant Positive := Slot (Into, Of_Tree, Node);
+      Prior : constant Text_Conversion_Kind :=
+        Text_Conversion_Of (Into, Of_Tree, Node);
+   begin
+      if Prior /= No_Text_Conversion and then Prior /= Conversion then
+         raise Landin.Compiler_Defect with
+           "one node was assigned two text conversions";
+      end if;
+      if Into.Current_Routine = No_Routine_Instance then
+         Into.Node_Text_Conversions (Where) := Conversion;
+      else
+         declare
+            Overlay : constant Positive := Ensure_Node_Overlay (Into, Where);
+         begin
+            Into.Node_Overlays (Overlay).Has_Text_Conversion := True;
+            Into.Node_Overlays (Overlay).Text_Conversion := Conversion;
+         end;
+      end if;
+   end Note_Text_Conversion;
 
    function Reference_Of
      (Of_Table : Table; Id : Declaration_Id) return Reference_Id

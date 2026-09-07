@@ -1,0 +1,6 @@
+class: negative
+summary: ordinary conversion does not invent a C-string extent from a pointer
+constructs: 0310, 0600, 0660
+program: program.ldn
+codes: L0301
+targets: linux-x86-64, macos-arm64

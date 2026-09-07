@@ -1,0 +1,4 @@
+bad: (source: ptr u8) -> none =
+    result: cstring = cstring(source)
+    _ = result
+end bad

@@ -485,6 +485,7 @@ negative/parameterized-struct-unused-unknown | linux-x86-64, macos-arm64
 negative/parameterized-struct-used-actual-overflow | linux-x86-64, macos-arm64
 negative/parameterized-struct-used-array-actual-overflow | linux-x86-64, macos-arm64
 negative/pointer-case-arm-is-not-an-atom | linux-x86-64, macos-arm64, synthetic-32
+negative/pointer-to-cstring-conversion | linux-x86-64, macos-arm64
 negative/pointer-union-address-of-referent | linux-x86-64, macos-arm64, synthetic-32
 negative/pointer-union-any-construction | linux-x86-64, macos-arm64, synthetic-32
 negative/pointer-union-assignment-target | linux-x86-64, macos-arm64, synthetic-32
@@ -622,6 +623,9 @@ negative/struct-with-an-array-field | linux-x86-64, macos-arm64
 negative/struct-zeroed-assignment-nested-not-enabled | linux-x86-64, macos-arm64
 negative/struct-zeroed-assignment-not-on-every-path | linux-x86-64, macos-arm64
 negative/sunk-inout-not-restored | linux-x86-64, macos-arm64, synthetic-32
+negative/text-conversion-exact-identities | linux-x86-64, macos-arm64
+negative/text-conversion-mutable-source | linux-x86-64, macos-arm64
+negative/text-conversion-optional-cstring | linux-x86-64, macos-arm64
 negative/text-literal-codepoint-in-byte-context | linux-x86-64, macos-arm64
 negative/text-literal-malformed-codepoint-escape | linux-x86-64, macos-arm64
 negative/text-literal-needs-byte-slice | linux-x86-64, macos-arm64
@@ -960,12 +964,15 @@ runtime/core-mem-raw-storage | linux-x86-64
 runtime/core-mem-reference-prefix | linux-x86-64
 runtime/core-mem-zero-prefix | linux-x86-64
 runtime/core-text-byte-positions | linux-x86-64
+runtime/core-text-runtime-helpers | linux-x86-64
 runtime/core-tree-count-overflow | linux-x86-64
 runtime/core-tree-indices | linux-x86-64
 runtime/core-tree-provider-failures | linux-x86-64
 runtime/core-vec-pointer-storage | linux-x86-64
 runtime/core-vec-used-references | linux-x86-64
 runtime/core-vec-used-sort | linux-x86-64
+runtime/cstring-first-nul-validation | linux-x86-64
+runtime/cstring-traversal-invalid-traps | linux-x86-64
 runtime/declared-errors-direct-and-inferred | linux-x86-64
 runtime/declared-errors-indirect-abi | linux-x86-64
 runtime/deep-nested-struct-children | linux-x86-64
@@ -1175,7 +1182,13 @@ runtime/struct-locals-hold-their-fields | linux-x86-64
 runtime/struct-returns-cross-calls | linux-x86-64
 runtime/struct-zeroed-assignment-clears-storage | linux-x86-64
 runtime/structs-copy-whole | linux-x86-64
+runtime/text-conversion-invalid-traps | linux-x86-64
+runtime/text-conversion-operand-exit | linux-x86-64
+runtime/text-conversion-out-of-range-traps | linux-x86-64
+runtime/text-conversion-overlong-traps | linux-x86-64
+runtime/text-conversion-truncated-traps | linux-x86-64
 runtime/text-literal-bytes | linux-x86-64
+runtime/text-ordinary-conversions | linux-x86-64
 runtime/text-range-slicing | linux-x86-64
 runtime/try-nominal-inference | linux-x86-64
 runtime/unary-and-bitwise-exit-with-their-results | linux-x86-64

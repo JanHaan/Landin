@@ -57,6 +57,7 @@ package body Landin.Stages.Checking is
    use type Landin.Checking.Routine_Instance_Id;
    use type Landin.Checking.Routine_Instance_State;
    use type Landin.Checking.Signature_Id;
+   use type Landin.Checking.Text_Conversion_Kind;
    use type Landin.Checking.Reference_Id;
    use type Res.Verdict;
    use type Res.Application_Class;
@@ -486,6 +487,9 @@ package body Landin.Stages.Checking is
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind;
       function Conversion_Target
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind;
+
+      function Text_Conversion_Target
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Type_Descriptor;
       --  D188: which range subtype [0700]'s conversion names, if any.
       function Conversion_Constraint
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
@@ -9063,6 +9067,71 @@ package body Landin.Stages.Checking is
          return Ty.Ill_Typed;
       end Conversion_Target;
 
+      function Text_Conversion_Target
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Type_Descriptor
+      is
+         function Invalid return Type_Descriptor
+           is ((Kind => Ty.Ill_Typed, others => <>));
+      begin
+         if Syn.Kind (Of_Tree, Node) /= Syn.Call
+           or else Syn.Argument_Count (Of_Tree, Node) /= 1
+           or else Syn.Kind
+             (Of_Tree, Syn.Callee_Of (Of_Tree, Node)) /= Syn.Name_Reference
+         then
+            return Invalid;
+         end if;
+
+         declare
+            Callee : constant Syn.Node_Id := Syn.Callee_Of (Of_Tree, Node);
+            Name : constant Landin.Source.Names.Name_Id :=
+              Syn.Name (Of_Tree, Callee);
+         begin
+            if Landin.Checking.Is_Text_Name (Types.all, Name) then
+               return Text_Descriptor
+                 (Landin.Checking.Named_Text_View (Types.all, Name));
+            end if;
+
+            if Res.Verdict_Of (Meanings.all, Of_Tree, Callee) = Res.Bound
+              and then Res.Sort_Of
+                (Meanings.all,
+                 Res.Bound_To (Meanings.all, Of_Tree, Callee))
+                  = Res.Module_Type
+            then
+               declare
+                  Id : constant Res.Declaration_Id :=
+                    Res.Bound_To (Meanings.all, Of_Tree, Callee);
+                  Held : constant Ty.Type_Kind := Settled_Type (Id);
+                  Reference : constant Landin.Checking.Reference_Id :=
+                    Landin.Checking.Reference_Of (Types.all, Id);
+               begin
+                  if Held in Ty.Pointer_Value | Ty.Slice_Value
+                    and then Reference /= Landin.Checking.No_Reference
+                  then
+                     declare
+                        Descriptor : constant
+                          Landin.Checking.Reference_Descriptor :=
+                            Landin.Checking.Descriptor_Of
+                              (Types.all, Reference);
+                     begin
+                        if Descriptor.View in Ty.Text_View
+                          or else
+                            (Descriptor.Kind = Ty.Slice_Value
+                             and then Descriptor.View = Ty.Ordinary_View
+                             and then Descriptor.Referent = Ty.U8)
+                        then
+                           return
+                             (Kind => Held, Reference => Reference,
+                              others => <>);
+                        end if;
+                     end;
+                  end if;
+               end;
+            end if;
+         end;
+
+         return Invalid;
+      end Text_Conversion_Target;
+
       function Conversion_Constraint
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
          return Landin.Checking.Constraint_Id is
@@ -16258,8 +16327,12 @@ package body Landin.Stages.Checking is
                      else Res.No_Declaration);
                   Conversion : constant Ty.Type_Kind :=
                     Conversion_Target (Of_Tree, Node);
+                  Text_Target : constant Type_Descriptor :=
+                    Text_Conversion_Target (Of_Tree, Node);
                   Is_Scalar_Conversion : constant Boolean :=
                     Conversion in Ty.Scalar_Name;
+                  Is_Text_Conversion : constant Boolean :=
+                    Text_Target.Kind in Ty.Pointer_Value | Ty.Slice_Value;
                   Is_Integer_Conversion : constant Boolean :=
                     Conversion in Ty.Integer_Name;
                   Is_Float_Conversion : constant Boolean :=
@@ -16274,7 +16347,8 @@ package body Landin.Stages.Checking is
                       (Tree_For (Res.Source_Of (Meanings.all, Means)).all,
                        Res.Node_Of (Meanings.all, Means)) /= 0;
                   Held : constant Ty.Type_Kind :=
-                    (if Is_Scalar_Conversion or else Is_Generic
+                    (if Is_Scalar_Conversion or else Is_Text_Conversion
+                       or else Is_Generic
                      then Ty.Function_Value
                      elsif Named then Settled_Type (Means)
                      else Synthesise (Of_Tree, Callee));
@@ -16608,6 +16682,123 @@ package body Landin.Stages.Checking is
                            return Kept (Ty.Ill_Typed);
                         end if;
                         return Kept (Ty.Bool);
+                     end;
+                  end if;
+
+                  if Is_Text_Conversion then
+                     declare
+                        Value : constant Syn.Node_Id :=
+                          Syn.Nth_Argument (Of_Tree, Node, 1);
+                        Got : constant Ty.Type_Kind :=
+                          Synthesise (Of_Tree, Value);
+                        Source_Id : constant Landin.Checking.Reference_Id :=
+                          (if Got in Ty.Pointer_Value | Ty.Slice_Value
+                           then Landin.Checking.Reference_Of
+                             (Types.all, Of_Tree, Value)
+                           else Landin.Checking.No_Reference);
+                        Source : Landin.Checking.Reference_Descriptor;
+                        Target : constant
+                          Landin.Checking.Reference_Descriptor :=
+                            Landin.Checking.Descriptor_Of
+                              (Types.all, Text_Target.Reference);
+                        Text_Conversion :
+                          Landin.Checking.Text_Conversion_Kind :=
+                            Landin.Checking.No_Text_Conversion;
+                     begin
+                        if Got = Ty.Ill_Typed then
+                           return Kept (Ty.Ill_Typed);
+                        elsif Source_Id = Landin.Checking.No_Reference then
+                           Bad.Report
+                             (Item    => Bad.Type_Mismatch,
+                              Source  => Syn.Source_Of (Of_Tree),
+                              Where   => Syn.Where (Of_Tree, Value),
+                              Message => "this text conversion requires an"
+                                         & " exact byte or text view",
+                              Note    => "[0310]/[0600]: text conversion is"
+                                         & " explicit and preserves its"
+                                         & " source storage",
+                              Related => Syn.Origin (Of_Tree, Callee),
+                              Because => "the text type applied here",
+                              Into    => Found);
+                           Landin.Checking.Refuse
+                             (Types.all, Of_Tree, Node);
+                           return Kept (Ty.Ill_Typed);
+                        end if;
+
+                        Source := Landin.Checking.Descriptor_Of
+                          (Types.all, Source_Id);
+
+                        if Target.Kind = Ty.Slice_Value
+                          and then Target.View = Ty.Utf8_View
+                          and then not Target.Mutable
+                          and then Target.Referent = Ty.U8
+                          and then Source.Kind = Ty.Slice_Value
+                          and then Source.View = Ty.Ordinary_View
+                          and then not Source.Mutable
+                          and then Source.Referent = Ty.U8
+                        then
+                           Text_Conversion := Landin.Checking.Bytes_To_Utf8;
+                        elsif Target.Kind = Ty.Slice_Value
+                          and then Target.View = Ty.Ordinary_View
+                          and then not Target.Mutable
+                          and then Target.Referent = Ty.U8
+                          and then Source.Kind = Ty.Slice_Value
+                          and then Source.View = Ty.Utf8_View
+                          and then not Source.Mutable
+                          and then Source.Referent = Ty.U8
+                        then
+                           Text_Conversion := Landin.Checking.Utf8_To_Bytes;
+                        elsif Target.Kind = Ty.Slice_Value
+                          and then Target.View = Ty.Ordinary_View
+                          and then not Target.Mutable
+                          and then Target.Referent = Ty.U8
+                          and then Source.Kind = Ty.Pointer_Value
+                          and then Source.View = Ty.C_String_View
+                          and then not Source.Mutable
+                          and then Source.Referent = Ty.U8
+                          and then Source.Empty_Atom = Res.No_Declaration
+                        then
+                           Text_Conversion :=
+                             Landin.Checking.C_String_To_Bytes;
+                        elsif Target.Kind = Ty.Slice_Value
+                          and then Target.View = Ty.Utf8_View
+                          and then not Target.Mutable
+                          and then Target.Referent = Ty.U8
+                          and then Source.Kind = Ty.Pointer_Value
+                          and then Source.View = Ty.C_String_View
+                          and then not Source.Mutable
+                          and then Source.Referent = Ty.U8
+                          and then Source.Empty_Atom = Res.No_Declaration
+                        then
+                           Text_Conversion :=
+                             Landin.Checking.C_String_To_Utf8;
+                        end if;
+
+                        if Text_Conversion
+                          = Landin.Checking.No_Text_Conversion
+                        then
+                           Bad.Report
+                             (Item    => Bad.Type_Mismatch,
+                              Source  => Syn.Source_Of (Of_Tree),
+                              Where   => Syn.Where (Of_Tree, Value),
+                              Message => "these exact reference identities"
+                                         & " do not have a text conversion",
+                              Note    => "[0310]/[0600]: only the explicit"
+                                         & " byte, utf8 and C-text"
+                                         & " boundaries are enabled",
+                              Related => Syn.Origin (Of_Tree, Callee),
+                              Because => "the destination type applied here",
+                              Into    => Found);
+                           Landin.Checking.Refuse
+                             (Types.all, Of_Tree, Node);
+                           return Kept (Ty.Ill_Typed);
+                        end if;
+
+                        Landin.Checking.Note_Reference
+                          (Types.all, Of_Tree, Node, Text_Target.Reference);
+                        Landin.Checking.Note_Text_Conversion
+                          (Types.all, Of_Tree, Node, Text_Conversion);
+                        return Kept (Text_Target.Kind);
                      end;
                   end if;
 

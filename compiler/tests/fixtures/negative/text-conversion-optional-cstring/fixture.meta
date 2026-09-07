@@ -1,0 +1,6 @@
+class: negative
+summary: an optional C string must be matched before either exact text conversion
+constructs: 0310, 0430, 0480, 0600, 1210
+program: program.ldn
+codes: L0301, L0301
+targets: linux-x86-64, macos-arm64

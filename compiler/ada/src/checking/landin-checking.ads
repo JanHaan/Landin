@@ -698,6 +698,36 @@ package Landin.Checking is
      (Of_Table : Table; Actual, Expected : Reference_Id) return Boolean
      with Pre => Holds (Of_Table, Actual) and then Holds (Of_Table, Expected);
 
+   --  D199: reference conversions remain ordinary type applications, but
+   --  their complete checked source/target identities decide which runtime
+   --  representation operation lowering owes.  Recording that decision on
+   --  the call keeps lowering and origin checking out of name resolution.
+   type Text_Conversion_Kind is
+     (No_Text_Conversion,
+      Bytes_To_Utf8,
+      Utf8_To_Bytes,
+      C_String_To_Bytes,
+      C_String_To_Utf8);
+
+   function Text_Conversion_Of
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id) return Text_Conversion_Kind
+     with Pre => Is_Prepared (Of_Table)
+                 and then Covers (Of_Table, Of_Tree)
+                 and then Landin.Syntax.Contains (Of_Tree, Node);
+
+   procedure Note_Text_Conversion
+     (Into       : in out Table;
+      Of_Tree    : Landin.Syntax.Tree;
+      Node       : Landin.Syntax.Node_Id;
+      Conversion : Text_Conversion_Kind)
+     with Pre  => Is_Prepared (Into)
+                  and then Covers (Into, Of_Tree)
+                  and then Landin.Syntax.Contains (Of_Tree, Node)
+                  and then Conversion /= No_Text_Conversion,
+          Post => Text_Conversion_Of (Into, Of_Tree, Node) = Conversion;
+
    function Reference_Of
      (Of_Table : Table;
       Of_Tree  : Landin.Syntax.Tree;
@@ -2242,6 +2272,9 @@ private
    package Reference_Descriptor_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Reference_Descriptor);
 
+   package Text_Conversion_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Text_Conversion_Kind);
+
    package Signature_Part_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Signature_Part);
 
@@ -2320,6 +2353,8 @@ private
       Signature : Signature_Id := No_Signature;
       Has_Reference : Boolean := False;
       Reference : Reference_Id := No_Reference;
+      Has_Text_Conversion : Boolean := False;
+      Text_Conversion : Text_Conversion_Kind := No_Text_Conversion;
       Has_Concept : Boolean := False;
       Concept : Concept_Id := No_Concept;
       Has_Result_Shape : Boolean := False;
@@ -2375,6 +2410,7 @@ private
       Node_Atom_Sets : Atom_Set_Id_Vectors.Vector;
       Node_Signatures : Signature_Id_Vectors.Vector;
       Node_References : Reference_Id_Vectors.Vector;
+      Node_Text_Conversions : Text_Conversion_Vectors.Vector;
       Node_Constraints : Constraint_Id_Vectors.Vector;
       Node_Owed_Checks : Constraint_Id_Vectors.Vector;
       Node_Concepts : Concept_Id_Vectors.Vector;

@@ -1,0 +1,16 @@
+mutable_bytes: type = []mut u8
+
+mutable_result: (source: utf8) -> none =
+    result: mutable_bytes = mutable_bytes(source)
+    _ = result
+end mutable_result
+
+wide_result: (source: []u8) -> none =
+    result: utf16 = utf16(source)
+    _ = result
+end wide_result
+
+c_result: (source: []u8) -> none =
+    result: cstring = cstring(source)
+    _ = result
+end c_result

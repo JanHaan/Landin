@@ -1,0 +1,51 @@
+byte_view: type = []u8
+
+mut byte_calls: u32 = 0
+mut c_calls: u32 = 0
+mut exits: u32 = 0
+mut continued: u32 = 0
+
+pass_bytes: (source: []u8) -> (result: []u8 from source) =
+    inc byte_calls
+    result = source
+end pass_bytes
+
+pass_c: (source: cstring) -> (result: cstring from source) =
+    inc c_calls
+    result = source
+end pass_c
+
+exit_slice: () -> none =
+    ignored: utf8 = utf8(pass_bytes(begin
+        inc exits
+        return
+    end))
+    _ = ignored
+    inc continued
+end exit_slice
+
+exit_c: () -> none =
+    ignored: []u8 = byte_view(pass_c(begin
+        inc exits
+        return
+    end))
+    _ = ignored
+    inc continued
+end exit_c
+
+public main: () -> (code: i32) =
+    storage: [2]u8 = [79, 75]
+    source: []u8 = storage[0..<2]
+    text: utf8 = utf8(pass_bytes(source))
+    bytes: []u8 = byte_view(pass_c("OK"))
+    exit_slice()
+    exit_c()
+    if byte_calls == 1 and c_calls == 1 and exits == 2 and continued == 0
+      and lenof text == 2 and lenof bytes == 2
+      and bytes[0] == 79 and bytes[1] == 75
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

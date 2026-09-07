@@ -1,0 +1,27 @@
+import core/text
+
+extern(c) _landin_host_argument_at: (index: usize) -> (value: cstring)
+
+byte_view: type = []u8
+
+public main: () -> (code: i32) =
+    source: cstring = _landin_host_argument_at(0)
+    mut first: ptr mut u8 = ptr(usize(source))
+    mut terminator: ptr mut u8 = ptr(usize(source) + 1)
+    mut ignored: ptr mut u8 = ptr(usize(source) + 2)
+    first.val = 194
+    terminator.val = 0
+    ignored.val = 255
+
+    scanned: []u8 = byte_view(source)
+    mut rejected: bool = false
+    _ = text.from_c(source) else (problem)
+        rejected = problem == text.invalid_text
+        ""
+    end
+    if lenof scanned == 1 and scanned[0] == 194 and rejected then
+        code = 42
+    else
+        code = 1
+    end if
+end main
