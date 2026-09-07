@@ -1,0 +1,63 @@
+unavailable: atom
+display: type = concept (t: type)
+    code: (self: ptr t) -> (value: i32) ! unavailable
+end display
+
+consumer: (erased: any display) -> (answer: i32) ! ... =
+    result: i32 = erased.code() else (problem)
+        fail problem
+    end
+    answer = result
+end consumer
+
+box: type (t: type) = struct
+    value: t
+    broken: bool
+end box
+mut constructions: i32 = 0
+mut dispatches: i32 = 0
+box_code: (t: type, self: ptr box(t)) -> (answer: i32) ! unavailable =
+    inc dispatches
+    fail unavailable when self.val.broken
+    answer = 42
+end box_code
+(t: type) box(t) is display (code: box_code)
+
+locate: (t: type, inout value: box(t))
+        -> (result: ptr mut box(t) from value) =
+    inc constructions
+    result = addr value
+end locate
+run: (t: type, seed: t, broken: bool) -> (answer: i32) ! unavailable =
+    mut item: box(t) = (value: seed, broken: broken)
+    erased: any display = any(locate(item))
+    answer = try consumer(erased)
+    result: i32 = erased.code() else (problem)
+        fail problem
+    end
+    answer = result
+end run
+
+public main: () -> (code: i32) =
+    code = 1
+    first: i32 = 7
+    second: u8 = 9
+    a: i32 = run(first, false) else (problem)
+        _ = problem
+        return
+    end
+    b: i32 = run(second, false) else (problem)
+        _ = problem
+        return
+    end
+    mut caught: bool = false
+    c: i32 = run(second, true) else (problem)
+        caught = problem == unavailable
+        0
+    end
+    if a == 42 and b == 42 and c == 0 and caught
+      and constructions == 3 and dispatches == 5
+    then
+        code = 42
+    end if
+end main

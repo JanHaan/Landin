@@ -139,6 +139,9 @@ package body Landin.Tests.Checking_Suite is
    procedure Generic_Instances_Infer_Errors_Per_Key
      (Item : in out Landin.Testing.Context);
 
+   procedure Erased_Recovery_Bindings_Have_Exact_Errors
+     (Item : in out Landin.Testing.Context);
+
    procedure Inferred_Erased_Results_Use_Exact_Entry_Shapes
      (Item : in out Landin.Testing.Context);
 
@@ -7269,6 +7272,93 @@ package body Landin.Tests.Checking_Suite is
          "each literal retains its exact view, permission and referent");
    end Contextual_Generic_Text_Literals_Keep_Exact_Views;
 
+   procedure Erased_Recovery_Bindings_Have_Exact_Errors
+     (Item : in out Landin.Testing.Context)
+   is
+      Source_Text : constant String :=
+        "oops: atom" & LF
+        & "service: type = concept (item: type)" & LF
+        & "    get: (self: ptr mut item) -> (value: i32) ! oops" & LF
+        & "end service" & LF
+        & "state: type = struct value: i32 end state" & LF
+        & "get_value: (self: ptr mut state) -> (answer: i32) ! oops ="
+        & LF & "    fail oops when self.val.value == 0" & LF
+        & "    answer = self.val.value" & LF & "end get_value" & LF
+        & "state is service (get: get_value)" & LF
+        & "public main: () -> (code: i32) =" & LF
+        & "    code = 42" & LF
+        & "    mut data: state = (value: 0)" & LF
+        & "    value: any service = any(addr data)" & LF
+        & "    first: i32 = value.get() else (typed_error)" & LF
+        & "        _ = typed_error" & LF & "        return" & LF
+        & "    end" & LF
+        & "    second := value.get() else (inferred_error)" & LF
+        & "        _ = inferred_error" & LF & "        return" & LF
+        & "    end" & LF
+        & "    code = first + second" & LF & "end main" & LF;
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Ran : Natural;
+      Src : Landin.Source.Source_Id;
+   begin
+      Src := Landin.Stages.Add_Source
+        (Work, "erased-recovery.ldn", Source_Text);
+      pragma Unreferenced (Src);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Configurer'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Landin.Stages.Append (Order, Checker'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+      Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work), "both calls are accepted");
+      declare
+         Meanings : constant not null access Landin.Resolution.Table :=
+           Landin.Stages.Meanings (Work);
+         Types : constant not null access Landin.Checking.Table :=
+           Landin.Stages.Types (Work);
+         Seen : Natural := 0;
+         Expected : Landin.Checking.Atom_Set_Id :=
+           Landin.Checking.No_Atom_Set;
+      begin
+         for Id in Landin.Provenance.Declaration_Id'(1)
+           .. Landin.Provenance.Declaration_Id
+             (Landin.Resolution.Declaration_Count (Meanings.all))
+         loop
+            if Landin.Resolution.Sort_Of (Meanings.all, Id)
+              = Landin.Resolution.Error_Binding
+            then
+               Seen := Seen + 1;
+               declare
+                  Errors : constant Landin.Checking.Atom_Set_Id :=
+                    Landin.Checking.Atom_Set_Of (Types.all, Id);
+               begin
+                  Landin.Testing.Check
+                    (Item, Landin.Checking.Type_Of (Types.all, Id)
+                       = Landin.Types.Atom_Value,
+                     "recovery binding has a storable atom type");
+                  Landin.Testing.Check
+                    (Item, Errors /= Landin.Checking.No_Atom_Set,
+                     "recovery retains the declared error set");
+                  if Seen = 1 then
+                     Expected := Errors;
+                  else
+                     Landin.Testing.Check
+                       (Item, Errors /= Landin.Checking.No_Atom_Set
+                          and then Expected /= Landin.Checking.No_Atom_Set
+                          and then Landin.Checking.Atom_Sets_Agree
+                            (Types.all, Errors, Expected),
+                        "typed and inferred calls retain identical errors");
+                  end if;
+               end;
+            end if;
+         end loop;
+         Landin.Testing.Check_Equal
+           (Item, Seen, 2, "both named recoveries were inspected");
+      end;
+   end Erased_Recovery_Bindings_Have_Exact_Errors;
+
    procedure Inferred_Erased_Results_Use_Exact_Entry_Shapes
      (Item : in out Landin.Testing.Context)
    is
@@ -7387,6 +7477,9 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Register
         (Into, "checking", "erased calls keep concept labels across staging",
          Inferred_Erased_Results_Use_Exact_Entry_Shapes'Access);
+      Landin.Testing.Register
+        (Into, "checking", "erased recovery bindings retain exact errors",
+         Erased_Recovery_Bindings_Have_Exact_Errors'Access);
       Landin.Testing.Register
         (Into, "checking", "contextual generic text literals keep exact views",
          Contextual_Generic_Text_Literals_Keep_Exact_Views'Access);

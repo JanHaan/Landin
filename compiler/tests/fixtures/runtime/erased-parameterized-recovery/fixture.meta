@@ -1,0 +1,6 @@
+class: runtime
+summary: contextual parameterized providers precede queued erased error interfaces in two generic overlays
+program: main.ldn
+constructs: 0940, 0960, 1320, 1370, 1380, 1390, 1410, 1420
+status: 42
+targets: linux-x86-64

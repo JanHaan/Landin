@@ -1,0 +1,26 @@
+unavailable: atom
+service: type = concept (item: type)
+    read: (self: ptr mut item) -> (value: i32) ! unavailable
+    touch: (self: ptr mut item) -> none ! unavailable
+end service
+state: type = struct
+    value: i32
+    calls: i32
+end state
+read_value: (self: ptr mut state) -> (answer: i32) ! unavailable =
+    self.val.calls = self.val.calls + 1
+    fail unavailable when self.val.value == 0
+    answer = self.val.value
+end read_value
+touch_value: (self: ptr mut state) -> none ! unavailable =
+    self.val.calls = self.val.calls + 1
+    fail unavailable when self.val.value == 0
+end touch_value
+state is service (read: read_value, touch: touch_value)
+
+public main: () -> (code: i32) =
+    mut backing: state = (value: 0, calls: 0)
+    value: any service = any(addr backing)
+    result: i32 = value.read()
+    code = result
+end main
