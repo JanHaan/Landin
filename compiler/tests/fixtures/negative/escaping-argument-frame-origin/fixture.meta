@@ -1,0 +1,6 @@
+class: negative
+summary: a frame address handed to an escaping parameter is refused where the call is a statement
+program: program.ldn
+codes: L0314
+constructs: 0430, 0770, 0780, 1800, 1810
+targets: linux-x86-64, macos-arm64

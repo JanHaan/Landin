@@ -1,0 +1,6 @@
+class: negative
+summary: a sunk scalar place is dead until it is assigned again
+program: program.ldn
+codes: L0302
+constructs: 0430, 0900, 0910, 1800, 1810
+targets: linux-x86-64, macos-arm64

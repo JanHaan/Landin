@@ -60,7 +60,12 @@ package body Landin.Stages.Checking.Flow is
         Landin.Stages.Meanings (Context);
       Types     : constant not null access Landin.Checking.Table :=
         Landin.Stages.Types (Context);
-      Found : Landin.Diagnostics.Diagnostic_List renames Into;
+      --  Where a diagnostic goes.  A loop body is analysed repeatedly
+      --  until its facts stop changing, and only the pass made from the
+      --  converged facts reports; the earlier passes point Sink at a
+      --  scratch list that is thrown away.
+      Sink : not null access Landin.Diagnostics.Diagnostic_List :=
+        Into'Unchecked_Access;
 
       function Tree_For (Id : Landin.Source.Source_Id)
         return not null access constant Syn.Tree
@@ -352,10 +357,18 @@ package body Landin.Stages.Checking.Flow is
 
       Cleanup_Stack : Cleanup_Entries.Vector;
 
+      --  One loop being analysed.  Its `break` edges are joined into
+      --  Exit_State and its `continue` edges into Back_State; the loop
+      --  handler joins the latter with the body's fallthrough to form the
+      --  back edge.
       type Loop_Cleanup_Entry is record
          Label        : Landin.Source.Names.Name_Id :=
            Landin.Source.Names.No_Name;
          Cleanup_Base : Natural := 0;
+         Exits        : Boolean := False;
+         Exit_State   : Assigned_Set := Nothing_Assigned;
+         Continues    : Boolean := False;
+         Back_State   : Assigned_Set := Nothing_Assigned;
       end record;
 
       package Loop_Cleanup_Entries is new Ada.Containers.Vectors
@@ -367,25 +380,20 @@ package body Landin.Stages.Checking.Flow is
       Loop_Cleanup_Stack : Loop_Cleanup_Entries.Vector;
 
       function Transfer_Loop
-        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Loop_Cleanup_Entry;
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Positive;
 
       function Transfer_Loop
-        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Loop_Cleanup_Entry
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Positive
       is
          Target : constant Landin.Source.Names.Name_Id :=
            Syn.Name (Of_Tree, Node);
       begin
-         for Index in reverse 1 .. Natural (Loop_Cleanup_Stack.Length) loop
-            declare
-               Candidate : constant Loop_Cleanup_Entry :=
-                 Loop_Cleanup_Stack (Index);
-            begin
-               if Target = Landin.Source.Names.No_Name
-                 or else Candidate.Label = Target
-               then
-                  return Candidate;
-               end if;
-            end;
+         for Index in reverse 1 .. Loop_Cleanup_Stack.Last_Index loop
+            if Target = Landin.Source.Names.No_Name
+              or else Loop_Cleanup_Stack (Index).Label = Target
+            then
+               return Index;
+            end if;
          end loop;
          raise Landin.Compiler_Defect with "a loop transfer has no target";
       end Transfer_Loop;
@@ -742,7 +750,7 @@ package body Landin.Stages.Checking.Flow is
                  (Source => Res.Source_Of (Meanings.all, Id),
                   Where  => Syn.Anchor (Their_Tree.all, Their_Node)),
                Because => "declared here with no value",
-               Into    => Found);
+               Into    => Sink.all);
          end Report_Unassigned;
       begin
          --  D16 assigns a struct a field at a time, so reading the whole
@@ -871,7 +879,7 @@ package body Landin.Stages.Checking.Flow is
                                    & " be assigned again before return",
                         Related => Syn.Origin (Of_Tree, Parameter),
                         Because => "the `inout` parameter",
-                        Into    => Found);
+                        Into    => Sink.all);
                      return;
                   end if;
                end if;
@@ -1076,7 +1084,7 @@ package body Landin.Stages.Checking.Flow is
                              Where  => Syn.Anchor
                                          (Their_Tree.all, Their_Node)),
                Because => "declared here with no value",
-               Into    => Found);
+               Into    => Sink.all);
          end;
       end Require_Array;
 
@@ -1121,7 +1129,7 @@ package body Landin.Stages.Checking.Flow is
                              Where  => Syn.Anchor
                                          (Their_Tree.all, Their_Node)),
                Because => "declared here with no value",
-               Into    => Found);
+               Into    => Sink.all);
          end;
       end Require_Computed_Element;
 
@@ -1168,7 +1176,7 @@ package body Landin.Stages.Checking.Flow is
                              Where  => Syn.Anchor
                                          (Their_Tree.all, Their_Node)),
                Because => "declared here with no value",
-               Into    => Found);
+               Into    => Sink.all);
          end;
       end Require_Element;
 
@@ -1317,7 +1325,7 @@ package body Landin.Stages.Checking.Flow is
                Note    => "[0910]: a sunk place is dead until assignment",
                Related => Syn.Origin (Their_Tree.all, Their_Node),
                Because => "the binding containing the consumed place",
-               Into    => Found);
+               Into    => Sink.all);
          end;
          return False;
       end Require_Live;
@@ -1762,26 +1770,6 @@ package body Landin.Stages.Checking.Flow is
                      end if;
                   end Mark_Iteration;
                begin
-                  if Is_While then
-                     declare
-                        Condition : constant Syn.Node_Id :=
-                          Syn.Condition_Of (Of_Tree, Node);
-                        Test_Edges : Edge_Facts;
-                     begin
-                        Flow_Expression
-                          (Of_Tree,
-                           (if Syn.Kind (Of_Tree, Condition) = Syn.Binding
-                            then Syn.Value_Of (Of_Tree, Condition)
-                            else Condition),
-                           Result, State, Test_Edges);
-                        Returned := Test_Edges.Returns;
-                        if not Test_Edges.Falls_Through then
-                           Edges := Test_Edges;
-                           return;
-                        end if;
-                     end;
-                  end if;
-
                   if Is_For then
                      declare
                         Bound_Edges : Edge_Facts;
@@ -1809,74 +1797,208 @@ package body Landin.Stages.Checking.Flow is
                      end;
                   end if;
 
+                  --  The facts at the loop head are the join of the entry
+                  --  facts with every back edge: the body's fallthrough and
+                  --  its `continue` transfers.  Assigned facts only shrink
+                  --  and dead facts only grow at the head, both over finite
+                  --  sets, so the passes converge; the last one is repeated
+                  --  with reporting on, because the earlier passes reported
+                  --  from facts that were not yet complete.  The exit is
+                  --  the join of the edges that actually leave: a while's
+                  --  false test and a for's exhaustion, through `complete`
+                  --  when there is one, and every `break`.  An unconditional
+                  --  loop without a break has no exit.
                   declare
-                     Body_State : Assigned_Set := State;
-                     Body_Edges : Edge_Facts;
-                  begin
-                     if Is_For then
-                        Mark_Iteration
-                          (Syn.Traversal_Element (Of_Tree, Node), Body_State);
-                        if Syn.Traversal_Index (Of_Tree, Node) /= Syn.No_Node
-                        then
+                     Entry_State : constant Assigned_Set := State;
+                     Head : Assigned_Set := State;
+                     Tested : Assigned_Set := State;
+                     Frame : Loop_Cleanup_Entry;
+                     Scratch : aliased Landin.Diagnostics.Diagnostic_List;
+                     Outer_Sink : constant
+                       not null access Landin.Diagnostics.Diagnostic_List :=
+                         Sink;
+                     Passes : Natural := 0;
+                     Converged : Boolean := False;
+                     Test_Stops : Boolean := False;
+                     Test_Edges : Edge_Facts := Fallthrough_Edge;
+                     Exit_State : Assigned_Set := Nothing_Assigned;
+                     Exits : Boolean := False;
+
+                     --  Every pass that has not converged removes an
+                     --  assigned fact or adds a dead one; the tracked
+                     --  fields alone bound the first, and no program has
+                     --  come near this many element facts.
+                     Pass_Limit : constant Positive := 65_536;
+
+                     procedure Pass (Reporting : Boolean);
+
+                     procedure Pass (Reporting : Boolean) is
+                        Body_State : Assigned_Set := Head;
+                        Body_Edges : Edge_Facts;
+                        Next : Assigned_Set := Entry_State;
+                     begin
+                        Sink := (if Reporting
+                                 then Outer_Sink
+                                 else Scratch'Unchecked_Access);
+                        Test_Stops := False;
+
+                        if Is_While then
+                           declare
+                              Condition : constant Syn.Node_Id :=
+                                Syn.Condition_Of (Of_Tree, Node);
+                           begin
+                              Flow_Expression
+                                (Of_Tree,
+                                 (if Syn.Kind (Of_Tree, Condition)
+                                       = Syn.Binding
+                                  then Syn.Value_Of (Of_Tree, Condition)
+                                  else Condition),
+                                 Result, Body_State, Test_Edges);
+                              Returned := Returned or Test_Edges.Returns;
+                              Tested := Body_State;
+                              if not Test_Edges.Falls_Through then
+                                 Test_Stops := True;
+                                 Converged := True;
+                                 Sink := Outer_Sink;
+                                 return;
+                              end if;
+                           end;
+                        else
+                           Tested := Head;
+                        end if;
+
+                        if Is_For then
                            Mark_Iteration
-                             (Syn.Traversal_Index (Of_Tree, Node), Body_State);
+                             (Syn.Traversal_Element (Of_Tree, Node),
+                              Body_State);
+                           if Syn.Traversal_Index (Of_Tree, Node)
+                                /= Syn.No_Node
+                           then
+                              Mark_Iteration
+                                (Syn.Traversal_Index (Of_Tree, Node),
+                                 Body_State);
+                           end if;
+                        end if;
+
+                        Loop_Cleanup_Stack.Append
+                          (Loop_Cleanup_Entry'
+                             (Label        => Syn.Name (Of_Tree, Node),
+                              Cleanup_Base =>
+                                Natural (Cleanup_Stack.Length),
+                              others       => <>));
+                        Flow_Block
+                          (Of_Tree, Syn.Loop_Body (Of_Tree, Node), Result,
+                           Syn.Origin (Of_Tree, Node), Body_State,
+                           Body_Edges);
+                        Returned := Returned or Body_Edges.Returns;
+                        Frame := Loop_Cleanup_Stack.Last_Element;
+                        Loop_Cleanup_Stack.Delete_Last;
+
+                        if Body_Edges.Falls_Through then
+                           Merge (Next, First => False, Branch => Body_State);
+                        end if;
+                        if Frame.Continues then
+                           Merge
+                             (Next, First => False,
+                              Branch => Frame.Back_State);
+                        end if;
+                        Converged := Next = Head;
+                        Head := Next;
+                        Sink := Outer_Sink;
+                     end Pass;
+                  begin
+                     loop
+                        Passes := Passes + 1;
+                        if Passes > Pass_Limit then
+                           raise Landin.Compiler_Defect
+                             with "assignment facts of a loop did not"
+                               & " converge";
+                        end if;
+                        Pass (Reporting => False);
+                        exit when Converged;
+                     end loop;
+                     Pass (Reporting => True);
+
+                     if Test_Stops then
+                        --  The test never falls through, so neither does
+                        --  the loop: the body was never entered.
+                        Edges := Test_Edges;
+                        return;
+                     end if;
+
+                     if Is_While or else Is_For then
+                        Exit_State := Tested;
+                        Exits := True;
+                        if Syn.Complete_Body (Of_Tree, Node) /= Syn.No_Node
+                        then
+                           --  `complete` runs on the exhausted edge and may
+                           --  itself leave through `break with`: those are
+                           --  exits of this loop too.
+                           declare
+                              Complete_Edges : Edge_Facts;
+                              Completion : Loop_Cleanup_Entry;
+                           begin
+                              Loop_Cleanup_Stack.Append
+                                (Loop_Cleanup_Entry'
+                                   (Label        => Syn.Name (Of_Tree, Node),
+                                    Cleanup_Base =>
+                                      Natural (Cleanup_Stack.Length),
+                                    others       => <>));
+                              Flow_Block
+                                (Of_Tree, Syn.Complete_Body (Of_Tree, Node),
+                                 Result, Syn.Origin (Of_Tree, Node),
+                                 Exit_State, Complete_Edges);
+                              Completion := Loop_Cleanup_Stack.Last_Element;
+                              Loop_Cleanup_Stack.Delete_Last;
+                              Returned := Returned or Complete_Edges.Returns;
+                              Completion_Falls_Through :=
+                                Complete_Edges.Falls_Through;
+                              Exits := Complete_Edges.Falls_Through;
+                              if Completion.Exits then
+                                 Merge
+                                   (Exit_State, First => not Exits,
+                                    Branch => Completion.Exit_State);
+                                 Exits := True;
+                              end if;
+                           end;
                         end if;
                      end if;
-                     Loop_Cleanup_Stack.Append
-                       (Loop_Cleanup_Entry'
-                          (Label        => Syn.Name (Of_Tree, Node),
-                           Cleanup_Base => Natural (Cleanup_Stack.Length)));
-                     Flow_Block
-                       (Of_Tree, Syn.Loop_Body (Of_Tree, Node), Result,
-                        Syn.Origin (Of_Tree, Node), Body_State, Body_Edges);
-                     Returned := Returned or Body_Edges.Returns;
-
-                     if Syn.Complete_Body (Of_Tree, Node) /= Syn.No_Node then
-                        declare
-                           Complete_State : Assigned_Set := State;
-                           Complete_Edges : Edge_Facts;
-                        begin
-                           Flow_Block
-                             (Of_Tree, Syn.Complete_Body (Of_Tree, Node),
-                              Result, Syn.Origin (Of_Tree, Node),
-                              Complete_State, Complete_Edges);
-                           Returned := Returned or Complete_Edges.Returns;
-                           Completion_Falls_Through :=
-                             Complete_Edges.Falls_Through;
-                        end;
+                     if Frame.Exits then
+                        Merge
+                          (Exit_State, First => not Exits,
+                           Branch => Frame.Exit_State);
+                        Exits := True;
                      end if;
-                     Loop_Cleanup_Stack.Delete_Last;
+
+                     if Needs_Value and then (Is_While or else Is_For)
+                       and then
+                         (Syn.Complete_Body (Of_Tree, Node) = Syn.No_Node
+                          or else Completion_Falls_Through)
+                     then
+                        Bad.Report
+                          (Item    => Bad.Type_Mismatch,
+                           Source  => Syn.Source_Of (Of_Tree),
+                           Where   => Syn.Where
+                             (Of_Tree,
+                              (if Syn.Complete_Body (Of_Tree, Node)
+                                    = Syn.No_Node
+                               then Node
+                               else Syn.Complete_Body (Of_Tree, Node))),
+                           Message => "this value-producing loop can finish"
+                             & " without a value",
+                           Note    => "[1190]: `complete` must leave through"
+                             & " `break with` when a finite loop is an"
+                             & " expression",
+                           Related => Syn.Origin (Of_Tree, Node),
+                           Because => "this value-producing loop",
+                           Into    => Sink.all);
+                     end if;
+
+                     if Exits then
+                        State := Exit_State;
+                     end if;
+                     Edges := (Falls_Through => Exits, Returns => Returned);
                   end;
-
-                  if Needs_Value and then (Is_While or else Is_For)
-                    and then
-                      (Syn.Complete_Body (Of_Tree, Node) = Syn.No_Node
-                       or else Completion_Falls_Through)
-                  then
-                     Bad.Report
-                       (Item    => Bad.Type_Mismatch,
-                        Source  => Syn.Source_Of (Of_Tree),
-                        Where   => Syn.Where
-                          (Of_Tree,
-                           (if Syn.Complete_Body (Of_Tree, Node) = Syn.No_Node
-                            then Node
-                            else Syn.Complete_Body (Of_Tree, Node))),
-                        Message => "this value-producing loop can finish"
-                          & " without a value",
-                        Note    => "[1190]: `complete` must leave through"
-                          & " `break with` when a finite loop is an"
-                          & " expression",
-                        Related => Syn.Origin (Of_Tree, Node),
-                        Because => "this value-producing loop",
-                        Into    => Found);
-                  end if;
-
-                  --  A while's false test and an unconditional loop's
-                  --  break edges are the only exits.  This first increment
-                  --  deliberately retains only facts present before an
-                  --  iteration; a later fixed-point refinement may prove
-                  --  more without weakening definite assignment.
-                  Edges := (Falls_Through => True, Returns => Returned);
                end;
 
             when Syn.If_Statement =>
@@ -1958,7 +2080,7 @@ package body Landin.Stages.Checking.Flow is
                                     Syn.Nth_Arm (Of_Tree, Node, 1))),
                               Because => "this condition has an untaken"
                                          & " edge",
-                              Into    => Found);
+                              Into    => Sink.all);
                         end if;
                         Merge (Merged, not Any_Path, Remaining);
                         Any_Path := True;
@@ -2740,10 +2862,10 @@ package body Landin.Stages.Checking.Flow is
                            Value_Edges : Edge_Facts := Fallthrough_Edge;
                            Guarded : constant Boolean :=
                              Syn.Condition_Of (Of_Tree, Item) /= Syn.No_Node;
-                           Target : constant Loop_Cleanup_Entry :=
+                           Target : constant Positive :=
                              Transfer_Loop (Of_Tree, Item);
                            First : constant Natural :=
-                             Target.Cleanup_Base + 1;
+                             Loop_Cleanup_Stack (Target).Cleanup_Base + 1;
                         begin
                            if Syn.Kind (Of_Tree, Item) = Syn.Break_Statement
                              and then Syn.Transfer_Value (Of_Tree, Item)
@@ -2762,6 +2884,30 @@ package body Landin.Stages.Checking.Flow is
                                  Result, Transfer_State, Cleanup_Edges);
                               Step.Returns := Step.Returns
                                 or Cleanup_Edges.Returns;
+                              if Cleanup_Edges.Falls_Through then
+                                 declare
+                                    Frame : Loop_Cleanup_Entry :=
+                                      Loop_Cleanup_Stack (Target);
+                                 begin
+                                    if Syn.Kind (Of_Tree, Item)
+                                      = Syn.Break_Statement
+                                    then
+                                       Merge
+                                         (Frame.Exit_State,
+                                          First  => not Frame.Exits,
+                                          Branch => Transfer_State);
+                                       Frame.Exits := True;
+                                    else
+                                       Merge
+                                         (Frame.Back_State,
+                                          First  => not Frame.Continues,
+                                          Branch => Transfer_State);
+                                       Frame.Continues := True;
+                                    end if;
+                                    Loop_Cleanup_Stack.Replace_Element
+                                      (Target, Frame);
+                                 end;
+                              end if;
                            end if;
                            Step.Falls_Through := Guarded;
                         end;
@@ -2902,7 +3048,7 @@ package body Landin.Stages.Checking.Flow is
                           & " every fallthrough edge does",
                Related => Owner,
                Because => "this control expression needs a value",
-               Into    => Found);
+               Into    => Sink.all);
          end if;
 
          --  The optional final value has already been evaluated and, in

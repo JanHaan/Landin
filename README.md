@@ -200,7 +200,7 @@ and memory I/O worlds. Compiled clients exercise their bounded composition,
 allocation failures and rollback. The complete container and hosted
 application programs remain R4.70 and R4.80 work.
 
-**Current roadmap work: R4.30 — Complete hosted modules and toolchain directives.**
+**Current roadmap work: R4.21 — Repair review-found soundness and correctness defects.**
 
 Language and architecture questions are resolved when the first vertical
 slice needs them.

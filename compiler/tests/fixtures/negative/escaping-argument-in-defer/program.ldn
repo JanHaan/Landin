@@ -1,0 +1,11 @@
+anchor: i32 = 0
+mut saved: ptr i32 = addr anchor
+
+retain: (escaping value: ptr i32) -> none =
+    saved = value
+end retain
+
+bad: () -> none =
+    local: i32 = 42
+    defer retain(addr local)
+end bad

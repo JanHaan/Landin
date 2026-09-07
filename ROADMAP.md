@@ -77,7 +77,9 @@ version solving, publishing and the broader ecosystem remain outside scope.
 ## Roadmap mechanics
 
 Capability phases use stable IDs `R0` through `R7`. Executable work uses
-stable IDs such as `R2.30`, spaced in increments of ten. Work IDs are never
+stable IDs such as `R2.30`, spaced in increments of ten so that work found
+necessary between two existing items can be inserted with a unit ID such as
+`R4.21`, which sits after `R4.20` and before `R4.30`. Work IDs are never
 reused or renumbered when work moves. Every work section has exactly one
 status and dependency line in this form:
 
@@ -4491,9 +4493,81 @@ all omission and layering choices are recorded; `[0820]`'s block is either
 enabled with the four answers above written down, or its refusal names the
 item that inherits it.
 
-### R4.30 — Complete hosted modules and toolchain directives
+### R4.21 — Repair review-found soundness and correctness defects
 
 Status: active
+Depends on: R2.50, R4.10, R4.20
+
+Two independent reviews of `da42169` (kept as `.scratch/comp-review-1.md`
+and `.scratch/comp-review-2.md` while the work runs; their durable content
+is this section) reproduced defects in slices already marked complete. This
+item repairs them before R4.30 widens the language further. The work is
+ordered by consequence: the language's own safety claims first, then silent
+miscompiles and compiler crashes, then the gates that let them through.
+
+1. Loop and traversal soundness in the flow and reference analyses. Escape
+   checks did not traverse `if` and `while` conditions, nested call
+   arguments, or `defer`; loop bodies were checked on a discarded copy so
+   consumption facts vanished at the exit and no back edge was revisited;
+   origin analysis assumed one body pass joined with entry was a fixed
+   point; borrow liveness compared source offsets, so an assignment that
+   never executed ended a borrow and a read above the mutating call in a
+   loop body was invisible. R2.50's "facts only grow" reasoning is
+   superseded: both lattices are finite and the analyses iterate to
+   convergence over the actual execution edges, with no iteration cutoff.
+   Repairing this exposed two further gaps and settled two readings. A
+   binding made inside an expression-position block had no origin at
+   all, and `break with` inside `complete` had no loop to leave;
+   `runtime/core-mem-raw-storage` had read values out of frame-backed raw
+   storage into `admit`'s escaping parameter, which [0840] refuses, and
+   now backs its storage with module arrays. A borrower is a
+   reference-bearing binding: a scalar computed from a view carries
+   derivation facts for [0790] but is not [0830]'s "view derived from a
+   local", which `positive/scalar-from-view-is-not-a-borrow` pins. The
+   function-end return check runs only when the body falls through.
+2. Checker correctness: `sizeof` of a nominal-element array folded to the
+   element count; slice and `any` comparison reached lowering and raised an
+   internal defect; pointers to different referents compared as equal types;
+   a negative bitwise operand in a module-level range-subtype binding was an
+   internal defect.
+3. Lowering: an aggregate `in` argument was passed by saved address and
+   copied when the callee started, so a later argument's side effect was
+   visible to the callee, against [0410] and D94/D95. Narrow `extern(c)`
+   scalars the checker already admits were passed without the 32-bit
+   extension C callees rely on; new C ABI shapes remain R4.40.
+4. Literals and lexer: decimal `f32` literals delegated to the host float
+   conversion and missed a rounding midpoint, against D162; decoding
+   stopped at the first `\u{}` so a later malformed escape was an internal
+   defect; iteratively parsed postfix chains escaped the nesting limit.
+5. Gates: `check.py`'s code-rule pass selected a fence kind no document
+   produces and so ran on nothing, including the untagged-fence rule; the
+   tree-sitter grammar had no loop statement and its integration pass
+   failed on 127 sources, so R3.80's all-source claim did not hold;
+   `scripts/build.sh` compared the manifest only when one existed and had
+   no lock, so a failed build was eligible for timestamp reuse and two
+   same-tag runs corrupted each other.
+
+Document drift (thirteen scalar names, phase status, the macOS `test.sh`
+verdict, tour and README inconsistencies) is exit evidence rather than a
+numbered increment. Every fixture this item touches must fail on the defect
+it pins; a negative whose code a wrong refusal could also raise carries its
+expected text. Fixtures land with their repair; the suite is never pushed
+red.
+
+Recorded elsewhere from the same reviews: `core/map` tombstone compaction and
+entry enumeration (R4.70), `core/io` `errno` fidelity and `EINTR` (R4.40),
+codegen-scale items such as the verifier's unreachable-island pass and the
+stack probe (R4.50).
+
+Exit evidence: every reproducer in `.scratch/project-review/` is a fixture
+with its documented verdict; complete pinned Linux debug and release suites
+pass; `highlight/test.sh --integration` passes on every compiler and core
+source; `check.py`'s code rules run on the tagged fences and refuse an
+untagged one; the authoritative native gate is green on the closing commit.
+
+### R4.30 — Complete hosted modules and toolchain directives
+
+Status: planned
 Depends on: R3.10, R4.10
 
 Implement the remaining ordered-root, fixed option, `landin/compiler`,

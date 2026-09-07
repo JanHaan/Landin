@@ -1,0 +1,6 @@
+class: negative
+summary: an origin that reaches a binding only on the second iteration is found by the loop fixed point
+program: program.ldn
+codes: L0314
+constructs: 0430, 0770, 0790, 1140
+targets: linux-x86-64, macos-arm64

@@ -1,0 +1,17 @@
+increment: (inout value: u32) -> none =
+    value = value + 1
+end increment
+
+good: () -> none =
+    mut value: u32 = 1
+    mut view: ptr u32 = addr value
+    mut i: usize = 0
+    loop do
+        _ = view.val
+        increment(value)
+        view = addr value
+        inc i
+        break when i == 2
+    end loop
+    _ = view.val
+end good

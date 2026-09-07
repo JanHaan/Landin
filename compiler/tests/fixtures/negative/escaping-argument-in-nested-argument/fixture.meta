@@ -1,0 +1,6 @@
+class: negative
+summary: an escaping call nested inside another call's ordinary argument is still a call that ran
+program: program.ldn
+codes: L0314
+constructs: 0430, 0770, 0780, 1800, 1810
+targets: linux-x86-64, macos-arm64

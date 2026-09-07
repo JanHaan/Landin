@@ -1,0 +1,16 @@
+anchor: i32 = 0
+
+leak: () -> (result: ptr i32) =
+    local: i32 = 42
+    mut p1: ptr i32 = addr anchor
+    mut p2: ptr i32 = addr anchor
+    mut p3: ptr i32 = addr anchor
+    mut round: usize = 0
+    while round < 3 do
+        p1 = p2
+        p2 = p3
+        p3 = addr local
+        inc round
+    end while
+    result = p1
+end leak

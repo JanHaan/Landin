@@ -1,0 +1,17 @@
+consume: (sink value: u32) -> none =
+    _ = value
+end consume
+
+bad: (skip: bool) -> (result: u32) =
+    mut value: u32 = 42
+    mut i: usize = 0
+    loop do
+        inc i
+        if skip then
+            continue
+        end if
+        consume(value)
+        break when i == 2
+    end loop
+    result = value
+end bad

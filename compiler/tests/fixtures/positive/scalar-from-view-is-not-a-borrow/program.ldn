@@ -1,0 +1,11 @@
+increment: (inout value: u32) -> none =
+    value = value + 1
+end increment
+
+good: () -> (ok: bool) =
+    mut value: u32 = 1
+    view: ptr u32 = addr value
+    ok = view.val == 1
+    increment(value)
+    ok = ok and value == 2
+end good

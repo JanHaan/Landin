@@ -1,0 +1,16 @@
+anchor: i32 = 0
+mut saved: ptr i32 = addr anchor
+
+retain: (escaping value: ptr i32) -> (yes: bool) =
+    saved = value
+    yes = true
+end retain
+
+identity: (value: bool) -> (result: bool) =
+    result = value
+end identity
+
+bad: () -> none =
+    local: i32 = 42
+    _ = identity(retain(addr local))
+end bad

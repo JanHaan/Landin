@@ -1,0 +1,6 @@
+class: negative
+summary: a continue edge joins the loop head with the sink still dead on the other path
+program: program.ldn
+codes: L0302, L0302
+constructs: 0430, 0900, 0910, 1130, 1180
+targets: linux-x86-64, macos-arm64
