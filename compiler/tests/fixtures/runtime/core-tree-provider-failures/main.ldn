@@ -1,0 +1,101 @@
+import core/failing
+import core/heap
+import core/mem
+import core/pool
+import core/tree
+
+leaf_name: utf8 = "retained"
+branch_name: utf8 = "branch"
+
+exercise: (provider: type is mem.allocator, inout backing: provider)
+          -> (okay: bool) =
+    okay = false
+    zero: usize = 0
+    one: usize = 1
+    eight: u32 = 8
+    mut value := tree.new_tree()
+    mut state := failing.count_down(addr backing, zero)
+    mut empty_refused: bool = false
+    _ = tree.add_leaf(value, state, leaf_name) else (problem)
+        _ = problem
+        empty_refused = true
+        tree.id(0)
+    end
+    return when not empty_refused or tree.length(value) <> 0
+    failing.permit(state, one)
+    mut at: usize = 0
+    while at < 8 do
+        added: tree.node_id = tree.add_leaf(value, state, leaf_name)
+            else (problem)
+                _ = problem
+                return
+            end
+        return when tree.ordinal(added) <> u32(at)
+        inc at
+    end while
+    mut leaf_refused: bool = false
+    _ = tree.add_leaf(value, state, leaf_name) else (problem)
+        _ = problem
+        leaf_refused = true
+        tree.id(0)
+    end
+    mut branch_refused: bool = false
+    _ = tree.add_branch(value, state, branch_name, tree.id(0), eight)
+        else (problem)
+            _ = problem
+            branch_refused = true
+            tree.id(0)
+        end
+    return when not leaf_refused or not branch_refused
+    return when tree.length(value) <> 8 or failing.live(state) <> 1
+    at = 0
+    while at < 8 do
+        selected := tree.get(value, tree.id(u32(at))) else (problem)
+            _ = problem
+            return
+        end
+        text: utf8 = tree.name(selected)
+        byte: []u8 = text[0]
+        return when lenof text <> 8 or byte[0] <> 114
+        inc at
+    end while
+    failing.permit(state, one)
+    root: tree.node_id = tree.add_branch(value, state, branch_name,
+                                         tree.id(0), eight) else (problem)
+        _ = problem
+        return
+    end
+    leaves: u32 = tree.count_leaves(value, root) else (problem)
+        _ = problem
+        return
+    end
+    tree.release(value, state)
+    okay = tree.ordinal(root) == 8 and leaves == 8
+        and tree.length(value) == 0 and failing.attempts(state) == 5
+        and failing.injected_failures(state) == 3
+        and failing.successes(state) == 2 and failing.frees(state) == 2
+        and failing.live(state) == 0
+end exercise
+
+public main: () -> (code: i32) =
+    code = 1
+    mut host := heap.host()
+    heap_ok: bool = exercise(host)
+    mut arena_bytes: [8192]u8 = zeroed
+    mut arena := mem.arena_over(addr arena_bytes[0], 8192)
+    arena_ok: bool = exercise(arena)
+    mut pool_bytes: [8192]u8 = zeroed
+    mut slots: [2]pool.slot = zeroed
+    mut pool_state := pool.over(addr pool_bytes[0], 8192, 2048, 2, 16,
+                           slots[0..<2]) else (problem)
+        _ = problem
+        return
+    end
+    pool_ok: bool = exercise(pool_state)
+    if heap_ok and arena_ok and pool_ok and pool.live(pool_state) == 0
+       and pool.allocation_count(pool_state) == 2 and pool.free_count(pool_state) == 2
+       and pool.rejected_free_count(pool_state) == 0
+    then
+        code = 42
+    end if
+end main

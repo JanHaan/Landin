@@ -138,6 +138,9 @@ negative/core-pool-bookkeeping-frame-escape | linux-x86-64, macos-arm64, synthet
 negative/core-pool-frame-escape | linux-x86-64, macos-arm64, synthetic-32
 negative/core-text-frame-slice-escape | linux-x86-64, macos-arm64, synthetic-32
 negative/core-text-private-position | linux-x86-64, macos-arm64, synthetic-32
+negative/core-tree-frame-name | linux-x86-64, macos-arm64, synthetic-32
+negative/core-tree-id-out-of-range | linux-x86-64, macos-arm64, synthetic-32
+negative/core-tree-node-escape | linux-x86-64, macos-arm64, synthetic-32
 negative/core-vec-used-frame | linux-x86-64, macos-arm64, synthetic-32
 negative/core-vec-used-live-growth | linux-x86-64, macos-arm64, synthetic-32
 negative/core-vec-used-live-release | linux-x86-64, macos-arm64, synthetic-32
@@ -947,6 +950,9 @@ runtime/core-mem-raw-storage | linux-x86-64
 runtime/core-mem-reference-prefix | linux-x86-64
 runtime/core-mem-zero-prefix | linux-x86-64
 runtime/core-text-byte-positions | linux-x86-64
+runtime/core-tree-count-overflow | linux-x86-64
+runtime/core-tree-indices | linux-x86-64
+runtime/core-tree-provider-failures | linux-x86-64
 runtime/core-vec-pointer-storage | linux-x86-64
 runtime/core-vec-used-references | linux-x86-64
 runtime/core-vec-used-sort | linux-x86-64

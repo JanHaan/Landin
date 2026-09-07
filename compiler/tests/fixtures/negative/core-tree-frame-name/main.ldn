@@ -1,0 +1,11 @@
+import core/heap
+import core/tree
+
+retain: (inout value: tree.tree,
+         inout state: heap.system, text: utf8) -> none =
+    _ = tree.add_leaf(value, state, text) else (problem)
+        _ = problem
+        return
+    end
+end retain
+public main: () -> (code: i32) = code = 0 end main

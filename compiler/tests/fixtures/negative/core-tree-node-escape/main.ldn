@@ -1,0 +1,14 @@
+import core/tree
+
+take: (escaping node: tree.node) -> none =
+    text: utf8 = tree.name(node)
+    _ = lenof text
+end take
+leak: (value: tree.tree) -> none =
+    selected := tree.get(value, tree.id(0)) else (problem)
+        _ = problem
+        return
+    end
+    take(selected)
+end leak
+public main: () -> (code: i32) = code = 0 end main

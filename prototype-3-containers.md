@@ -752,13 +752,22 @@ end node
 
 ```
 
-The whole tree is one list. Every edge is an index into it, so no
-node refers to another node and the structure has exactly one
-origin: whatever backs the list. It can be moved, copied, written
-to flash and read back, and [0860]'s complaint about pointers
-travelling through struct fields does not apply, because there are
-none. This is the first time the idiom the language keeps
-recommending has been written out, and it holds up.
+The whole tree is one list. Its edges are indices, but each node's `utf8`
+name still retains text backing. Retained names therefore require `escaping`
+inputs, and a borrowed node result derives `from` the tree. Index edges do not
+make the node representation serializable: copying a text descriptor does not
+copy or relocate its backing. [0860]'s shallow reference-field limits still
+apply to the retained names.
+
+R4.20's library uses a private one-`u32` nominal wrapper for `node_id`, with
+explicit `id` and `ordinal` functions. This preserves handle identity through
+already enabled structs; it does not enable the general `distinct` syntax
+shown above. New branches may name only existing contiguous children. Empty
+branches are allowed, and shared children are counted once per incoming path.
+Each immutable node stores its checked `u32` leaf total, so queries use bounded
+stack space even for deep structures. Overflow is a declared refusal before
+publication. The recursive code below remains the equivalent counting sketch,
+not the library's execution strategy.
 
 ```landin
 public tree: type = struct
@@ -769,7 +778,7 @@ public new_tree: () -> (t: tree) =
     t = (nodes: vec.new_list(T: node))
 end new_tree
 
-public add_leaf: (A: type is allocator, inout t: tree, inout a: A, name: utf8)
+public add_leaf: (A: type is allocator, inout t: tree, inout a: A, escaping name: utf8)
                  -> (id: node_id) ! out_of_memory =
     id = node_id(u32(t.nodes.len))
     try vec.push(t.nodes, a, (name: name, kind: leaf))
@@ -784,22 +793,23 @@ than discovered.
 
 ```landin
 public add_branch: (A: type is allocator, inout t: tree, inout a: A,
-                    name: utf8, first: node_id, count: u32)
+                    escaping name: utf8, first: node_id, count: u32)
                    -> (id: node_id) ! out_of_memory =
     id = node_id(u32(t.nodes.len))
     try vec.push(t.nodes, a,
                  (name: name, kind: branch(first: first, count: count)))
 end add_branch
 
-public get: (t: tree, id: node_id) -> (n: node) ! no_such_node =
+public get: (t: tree, id: node_id) -> (n: node from t) ! no_such_node =
     fail no_such_node when usize(u32(id)) >= t.nodes.len
     n = t.nodes.items[usize(u32(id))]
 end get
 
 ```
 
-Recursion over indices. No pointer is ever formed, so nothing here
-can dangle and nothing needs an origin.
+The original counting sketch recurses over indices. Its numeric result carries
+no origin; a node or name read along the way still carries the stored text's
+lifetime. The append-only library caches this same total when adding a branch.
 
 ```landin
 public count_leaves: (t: tree, id: node_id) -> (n: u32) ! no_such_node =

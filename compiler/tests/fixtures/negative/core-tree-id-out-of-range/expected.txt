@@ -1,0 +1,6 @@
+error[L0300]: no `u32` holds this value
+  --> ../tests/fixtures/negative/core-tree-id-out-of-range/main.ldn:4:35
+  |
+4 |     wrong: tree.node_id = tree.id(4294967296)
+  |                                   ^^^^^^^^^^
+  = note: [1880]: a literal takes the type of its context and is checked there

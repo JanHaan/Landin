@@ -1,0 +1,115 @@
+import core/mem
+import core/vec
+
+identifier: type = struct
+    ordinal: u32
+end identifier
+public node_id: type = identifier
+
+public id: (ordinal: u32) -> (value: identifier) =
+    value = (ordinal: ordinal)
+end id
+
+public ordinal: (value: identifier) -> (number: u32) =
+    number = value.ordinal
+end ordinal
+public no_such_node: atom
+public invalid_children: atom
+public too_many_nodes: atom
+public too_many_leaves: atom
+
+node_value: type = struct
+    name: utf8
+    leaves: u32
+    kind: variant
+        leaf |
+        branch: (first: node_id, count: u32)
+    end kind
+end node_value
+public node: type = node_value
+
+tree_value: type = struct
+    nodes: vec.list(node_value)
+end tree_value
+public tree: type = tree_value
+
+public new_tree: () -> (result: tree_value) =
+    result = (nodes: vec.new_list(item: node_value))
+end new_tree
+
+public length: (value: tree_value) -> (count: usize) =
+    count = vec.length(value.nodes)
+end length
+
+next_id: (count: usize) -> (id: node_id) ! too_many_nodes =
+    maximum: u64 = 4294967295
+    fail too_many_nodes when u64(count) > maximum
+    id = (ordinal: u32(count))
+end next_id
+
+public add_leaf: (provider: type is mem.allocator, inout value: tree_value,
+                  inout state: provider, escaping name: utf8)
+                 -> (id: node_id) ! mem.out_of_memory | too_many_nodes =
+    id = try next_id(length(value))
+    added: node_value = (name: name, leaves: 1, kind: leaf)
+    try vec.push(value.nodes, state, added)
+end add_leaf
+
+--  Edges name only previously published nodes. Their leaf totals are fixed,
+--  so summing direct children gives bounded-stack queries at any depth.
+--  Shared children count once for each incoming path, as recursive counting
+--  would. An empty child interval has total zero.
+public add_branch: (provider: type is mem.allocator, inout value: tree_value,
+                    inout state: provider, escaping name: utf8,
+                    first: node_id, count: u32)
+                   -> (id: node_id)
+                   ! mem.out_of_memory | too_many_nodes
+                     | invalid_children | too_many_leaves =
+    id = try next_id(length(value))
+    begins: usize = usize(first.ordinal)
+    amount: usize = usize(count)
+    available: usize = length(value)
+    fail invalid_children when begins > available
+    fail invalid_children when amount > available - begins
+    maximum: u32 = 0 -% 1
+    mut total: u32 = 0
+    mut at: usize = 0
+    while at < amount do
+        child: node_value = vec.get(value.nodes, begins + at) else (problem)
+            _ = problem
+            fail invalid_children
+        end
+        fail too_many_leaves when child.leaves > maximum - total
+        total += child.leaves
+        inc at
+    end while
+    added: node_value =
+        (name: name, leaves: total, kind: branch(first: first, count: count))
+    try vec.push(value.nodes, state, added)
+end add_branch
+
+public get: (value: tree_value, id: node_id)
+            -> (result: node_value from value) ! no_such_node =
+    result = vec.get(value.nodes, usize(id.ordinal)) else (problem)
+        _ = problem
+        fail no_such_node
+    end
+end get
+
+public name: (value: node_value) -> (text: utf8 from value) =
+    text = value.name
+end name
+
+public count_leaves: (value: tree_value, id: node_id)
+                     -> (count: u32) ! no_such_node =
+    selected: node_value = get(value, id) else (problem)
+        _ = problem
+        fail no_such_node
+    end
+    count = selected.leaves
+end count_leaves
+
+public release: (provider: type is mem.allocator, inout value: tree_value,
+                 inout state: provider) -> none =
+    vec.release(value.nodes, state)
+end release

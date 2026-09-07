@@ -133,7 +133,7 @@
 1170   tour        accepted emitted executed refused  complete runs when the loop finished without break
 1180   tour        accepted emitted executed refused  Labels use the ordinary name form
 1190   tour        accepted emitted executed refused  break carries a value with 'with'
-1200   tour        accepted emitted executed          Because entries are registered where control reaches
+1200   tour        accepted emitted executed refused  Because entries are registered where control reaches
 1210   tour        accepted emitted executed refused  Pattern matching
 1220   tour        accepted emitted executed refused  A pattern binding carries a parameter convention
 1230   tour        accepted emitted executed refused  A concept names a bundle of requirements on a type

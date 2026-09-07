@@ -1,0 +1,7 @@
+class: runtime
+summary: shared index-tree edges count paths and reject u32 leaf-count overflow before publication
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0790, 0800, 1200, 1250, 1280, 1290
+targets: linux-x86-64

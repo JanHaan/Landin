@@ -1,0 +1,10 @@
+error[L0314]: this parameter is non-escaping, so its reference cannot be retained by the called function
+  --> ../tests/fixtures/negative/core-tree-node-escape/main.ldn:12:10
+   |
+12 |     take(selected)
+   |          ^^^^^^^^
+  --> ../tests/fixtures/negative/core-tree-node-escape/main.ldn:7:8
+  |
+7 | leak: (value: tree.tree) -> none =
+  |        ^^^^^^^^^^^^^^^^ the shorter-lived reference source
+  = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`
