@@ -1,0 +1,6 @@
+class: runtime
+summary: pointer-array assignment evaluates and retains its destination before a branching RHS
+program: main.ldn
+status: 42
+constructs: 0410, 0430, 0520, 0790, 1810, 1820, 1920
+targets: linux-x86-64

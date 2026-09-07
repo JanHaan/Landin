@@ -1,0 +1,6 @@
+class: runtime
+summary: pointer-array destination bounds trap before an RHS that would return from the routine
+program: main.ldn
+traps: yes
+constructs: 0410, 0430, 0520, 0790, 1810, 1820, 1920
+targets: linux-x86-64

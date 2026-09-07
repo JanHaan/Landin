@@ -8645,21 +8645,27 @@ package body Landin.Stages.Lowering is
                  Site_Of (Of_Tree, Stmt);
 
                --  [0410] evaluates a destination place before its value.
-               --  A computed index is the enabled place operation that can
-               --  do work, so lower it once and carry that same IR value
-               --  through a read-modify-write.
+               --  Reference storage retains the complete checked address;
+               --  other computed places carry their index through the
+               --  read-modify-write without evaluating it again.
+               function Reference_Address_For
+                 (Place : Syn.Node_Id) return IR.Slot_Id;
+
                function Index_For (Place : Syn.Node_Id) return IR.Value_Id;
 
                function Read_Place
-                 (Place : Syn.Node_Id; Index : IR.Value_Id)
+                 (Place : Syn.Node_Id;
+                  Index : IR.Value_Id;
+                  Address_Slot : IR.Slot_Id := IR.No_Slot)
                   return IR.Value_Id;
 
-               --  [1900]: a place is a name, and which of the two kinds
-               --  it is decides whether a Store or a Store_Datum says it.
+               --  [1900]: reference writeback uses its retained address;
+               --  named storage keeps its ordinary slot or datum operation.
                procedure Write
                  (Place : Syn.Node_Id;
                   Value : IR.Value_Id;
-                  Index : IR.Value_Id := IR.No_Value);
+                  Index : IR.Value_Id := IR.No_Value;
+                  Address_Slot : IR.Slot_Id := IR.No_Slot);
 
                --  One field of [0710]'s copy, read from storage on the right
                --  and written to storage on the left.  D55 also supplies a
@@ -9819,6 +9825,48 @@ package body Landin.Stages.Lowering is
                   end if;
                end Write_Struct_Literal;
 
+               function Reference_Address_For
+                 (Place : Syn.Node_Id) return IR.Slot_Id is
+               begin
+                  if Current = IR.No_Block
+                    or else not Has_Reference_Storage (Of_Tree, Place)
+                  then
+                     return IR.No_Slot;
+                  end if;
+                  declare
+                     Reached : constant Stored_Place :=
+                       Lower_Stored_Place (Of_Tree, Place, Scope);
+                  begin
+                     if Current = IR.No_Block then
+                        return IR.No_Slot;
+                     end if;
+                     --  Resolve and check the complete destination before
+                     --  its RHS or old value. The address slot survives
+                     --  recovery and control-flow joins without a replay.
+                     if Reached.Place.Kind = IR.Runtime_Address
+                       and then Reached.Base = 0
+                       and then Reached.Steps.Is_Empty
+                     then
+                        return Reached.Place.Address;
+                     end if;
+                     declare
+                        Address : constant IR.Value_Id := IR.Emit_Place_Address
+                          (Unit.all, Filling, Reached.Place, Site,
+                           Field => Reached.Base,
+                           Nested => Stored_Steps (Reached));
+                        Slot : constant IR.Slot_Id := IR.Add_Address_Slot
+                          (Unit.all, Filling,
+                           (Kind => IR.Scalar_Field_Shape,
+                            Element => Scalar_At (Of_Tree, Place),
+                            Length => 1, others => <>), Site);
+                     begin
+                        IR.Emit_Store
+                          (Unit.all, Filling, Slot, Address, Site);
+                        return Slot;
+                     end;
+                  end;
+               end Reference_Address_For;
+
                function Index_For (Place : Syn.Node_Id) return IR.Value_Id is
                begin
                   --  Only a directly named flat array has a scalar-field
@@ -9844,7 +9892,9 @@ package body Landin.Stages.Lowering is
                end Index_For;
 
                function Read_Place
-                 (Place : Syn.Node_Id; Index : IR.Value_Id)
+                 (Place : Syn.Node_Id;
+                  Index : IR.Value_Id;
+                  Address_Slot : IR.Slot_Id := IR.No_Slot)
                   return IR.Value_Id
                is
                   From : constant Syn.Node_Id :=
@@ -9862,6 +9912,12 @@ package body Landin.Stages.Lowering is
                        (Of_Tree, Chain_Above (Of_Tree, From)));
                   Means : Res.Declaration_Id;
                begin
+                  if Address_Slot /= IR.No_Slot then
+                     return IR.Emit_Load_Indirect
+                       (Unit.all, Filling,
+                        IR.Emit_Load (Unit.all, Filling, Address_Slot, Site),
+                        Scalar_At (Of_Tree, Place), Site);
+                  end if;
                   if Index = IR.No_Value then
                      return Lower_Expression (Of_Tree, Place, Scope);
                   end if;
@@ -9920,7 +9976,8 @@ package body Landin.Stages.Lowering is
                procedure Write
                  (Place : Syn.Node_Id;
                   Value : IR.Value_Id;
-                  Index : IR.Value_Id := IR.No_Value)
+                  Index : IR.Value_Id := IR.No_Value;
+                  Address_Slot : IR.Slot_Id := IR.No_Slot)
                is
                   --  [1810]'s place is [1820]'s selection, so a field is
                   --  written where the binding holding it is named.
@@ -9931,111 +9988,23 @@ package body Landin.Stages.Lowering is
                   --  D121: the chain may pass through an index, and the
                   --  name it started from is above that.
                   Named : constant Syn.Node_Id :=
-                    Chain_Root (Of_Tree, Chain_Above (Of_Tree, Selected));
+                    (if Address_Slot /= IR.No_Slot
+                         or else Current = IR.No_Block
+                     then Syn.No_Node
+                     else Chain_Root
+                       (Of_Tree, Chain_Above (Of_Tree, Selected)));
                   Means : constant Res.Declaration_Id :=
-                    Res.Bound_To (Meanings.all, Of_Tree, Named);
+                    (if Named = Syn.No_Node then Res.No_Declaration
+                     else Res.Bound_To (Meanings.all, Of_Tree, Named));
                begin
-                  if Syn.Kind (Of_Tree, Place) = Syn.Element_Index
-                    and then Has_Reference_Storage (Of_Tree, Place)
-                  then
-                     declare
-                        Reached : constant Stored_Place :=
-                          Lower_Stored_Place (Of_Tree, Place, Scope);
-                        Storage : constant IR.Storage := Addressed_Storage
-                          (Reached,
-                           (Kind => IR.Scalar_Field_Shape,
-                            Element => Scalar_At (Of_Tree, Place),
-                            Length => 1, others => <>), Site);
-                        Address : constant IR.Value_Id := IR.Emit_Load
-                          (Unit.all, Filling, Storage.Address, Site);
-                     begin
-                        IR.Emit_Store_Indirect
-                          (Unit.all, Filling, Address, Value, Site);
-                        return;
-                     end;
-                  end if;
-
-                  if Syn.Kind (Of_Tree, Place) = Syn.Element_Index
-                    and then Type_At
-                      (Of_Tree, Syn.Target_Of (Of_Tree, Place))
-                        = Ty.Slice_Value
-                  then
-                     declare
-                        Reached : constant Stored_Place :=
-                          Lower_Stored_Place (Of_Tree, Place, Scope);
-                        Address : constant IR.Value_Id := IR.Emit_Load
-                          (Unit.all, Filling, Reached.Place.Address, Site);
-                     begin
-                        IR.Emit_Store_Indirect
-                          (Unit.all, Filling, Address, Value, Site);
-                        return;
-                     end;
-                  end if;
-
-                  if Syn.Kind (Of_Tree, Place) = Syn.Member_Selection then
-                     declare
-                        Cursor : Syn.Node_Id := Place;
-                        Through_Pointer : Boolean := False;
-                     begin
-                        while Syn.Kind (Of_Tree, Cursor)
-                          in Syn.Member_Selection | Syn.Element_Index
-                        loop
-                           if (Syn.Kind (Of_Tree, Cursor)
-                                 = Syn.Member_Selection
-                               and then Landin.Checking.Field_Index
-                                 (Types.all, Of_Tree, Cursor) = 0
-                               and then Type_At
-                                 (Of_Tree, Syn.Target_Of (Of_Tree, Cursor))
-                                   = Ty.Pointer_Value)
-                             or else
-                               (Syn.Kind (Of_Tree, Cursor) = Syn.Element_Index
-                                and then Type_At
-                                  (Of_Tree,
-                                   Syn.Target_Of (Of_Tree, Cursor))
-                                    = Ty.Slice_Value)
-                           then
-                              Through_Pointer := True;
-                              exit;
-                           end if;
-                           Cursor := Syn.Target_Of (Of_Tree, Cursor);
-                        end loop;
-                        if Through_Pointer
-                          and then not
-                            (Type_At
-                               (Of_Tree, Syn.Target_Of (Of_Tree, Place))
-                                 = Ty.Pointer_Value
-                             and then Landin.Checking.Field_Index
-                               (Types.all, Of_Tree, Place) = 0)
-                        then
-                           declare
-                              Reached : constant Stored_Place :=
-                                Lower_Stored_Place (Of_Tree, Place, Scope);
-                           begin
-                              IR.Emit_Store_Slot_Field
-                                (Unit.all, Filling, Reached.Place.Address,
-                                 IR.Part_Position (Reached.Base), Value, Site,
-                                 Nested => Stored_Steps (Reached));
-                              return;
-                           end;
-                        end if;
-                     end;
-                  end if;
-
-                  if Syn.Kind (Of_Tree, Place) = Syn.Member_Selection
-                    and then Type_At
-                      (Of_Tree, Syn.Target_Of (Of_Tree, Place))
-                        = Ty.Pointer_Value
-                    and then Landin.Checking.Field_Index
-                      (Types.all, Of_Tree, Place) = 0
-                  then
-                     declare
-                        Address : constant IR.Value_Id := Lower_Expression
-                          (Of_Tree, Syn.Target_Of (Of_Tree, Place), Scope);
-                     begin
-                        IR.Emit_Store_Indirect
-                          (Unit.all, Filling, Address, Value, Site);
-                        return;
-                     end;
+                  if Current = IR.No_Block then
+                     return;
+                  elsif Address_Slot /= IR.No_Slot then
+                     IR.Emit_Store_Indirect
+                       (Unit.all, Filling,
+                        IR.Emit_Load (Unit.all, Filling, Address_Slot, Site),
+                        Value, Site);
+                     return;
                   end if;
 
                   --  D120: an alias for an ordinary-struct payload is not
@@ -10919,27 +10888,31 @@ package body Landin.Stages.Lowering is
                                          Stored_Steps (Reached);
                                        Was : IR.Value_Id;
                                     begin
-                                       pragma Assert
-                                         (Reached.Place.Kind
-                                            = IR.Runtime_Address);
-                                       if Reached.Base = 0 then
-                                          pragma Assert (Steps'Length = 0);
-                                          Was := IR.Emit_Load_Indirect
-                                            (Unit.all, Filling,
-                                             IR.Emit_Load
+                                       if Current /= IR.No_Block then
+                                          pragma Assert
+                                            (Reached.Place.Kind
+                                               = IR.Runtime_Address);
+                                          if Reached.Base = 0 then
+                                             pragma Assert (Steps'Length = 0);
+                                             Was := IR.Emit_Load_Indirect
                                                (Unit.all, Filling,
-                                                Reached.Place.Address, Site),
-                                             Held, Site);
-                                       else
-                                          Was := IR.Emit_Load_Slot_Field
-                                            (Unit.all, Filling,
-                                             Reached.Place.Address,
-                                             IR.Part_Position (Reached.Base),
-                                             Held, Site, Nested => Steps);
+                                                IR.Emit_Load
+                                                  (Unit.all, Filling,
+                                                   Reached.Place.Address,
+                                                   Site),
+                                                Held, Site);
+                                          else
+                                             Was := IR.Emit_Load_Slot_Field
+                                               (Unit.all, Filling,
+                                                Reached.Place.Address,
+                                                IR.Part_Position
+                                                  (Reached.Base),
+                                                Held, Site, Nested => Steps);
+                                          end if;
+                                          Finish_Update
+                                            (Was, Reached.Place.Address,
+                                             Reached.Base, Steps);
                                        end if;
-                                       Finish_Update
-                                         (Was, Reached.Place.Address,
-                                          Reached.Base, Steps);
                                     end;
                                  else
                                     Finish_Update
@@ -11595,7 +11568,12 @@ package body Landin.Stages.Lowering is
                         declare
                            Place : constant Syn.Node_Id :=
                              Syn.Target_Of (Of_Tree, Stmt);
-                           Index : constant IR.Value_Id := Index_For (Place);
+                           Address_Slot : constant IR.Slot_Id :=
+                             Reference_Address_For (Place);
+                           Index : constant IR.Value_Id :=
+                             (if Current = IR.No_Block
+                                 or else Address_Slot /= IR.No_Slot
+                              then IR.No_Value else Index_For (Place));
                            Saved_Index : IR.Slot_Id := IR.No_Slot;
                         begin
                            --  The right-hand side can cross blocks through a
@@ -11629,7 +11607,9 @@ package body Landin.Stages.Lowering is
                                                  (Unit.all, Filling,
                                                   Saved_Index, Site));
                                     begin
-                                       Write (Place, Value, Carried_Index);
+                                       Write
+                                         (Place, Value, Carried_Index,
+                                          Address_Slot);
                                     end;
                                  end if;
                               end;
@@ -11645,7 +11625,12 @@ package body Landin.Stages.Lowering is
                           Syn.Target_Of (Of_Tree, Stmt);
                         Held : constant Ty.Scalar_Name :=
                           Scalar_At (Of_Tree, Place);
-                        Index : constant IR.Value_Id := Index_For (Place);
+                        Address_Slot : constant IR.Slot_Id :=
+                          Reference_Address_For (Place);
+                        Index : constant IR.Value_Id :=
+                          (if Current = IR.No_Block
+                              or else Address_Slot /= IR.No_Slot
+                           then IR.No_Value else Index_For (Place));
                         Op : constant IR.Opcode :=
                           (if Syn.Kind (Of_Tree, Stmt) = Syn.Increment
                            then IR.Add else IR.Subtract);
@@ -11653,19 +11638,25 @@ package body Landin.Stages.Lowering is
                         if Current /= IR.No_Block then
                            declare
                               Was : constant IR.Value_Id :=
-                                Read_Place (Place, Index);
-                              One : constant IR.Value_Id :=
-                                IR.Emit_Number
-                                  (Unit.all, Filling, Held, 1, False, Site);
+                                Read_Place (Place, Index, Address_Slot);
                            begin
-                              Write
-                                (Place,
-                                 Checked_Update
-                                   (Of_Tree, Stmt,
-                                    IR.Emit_Binary
-                                      (Unit.all, Filling, Op, Was, One, Held,
-                                       Site)),
-                                 Index);
+                              if Current /= IR.No_Block then
+                                 declare
+                                    One : constant IR.Value_Id :=
+                                      IR.Emit_Number
+                                        (Unit.all, Filling, Held, 1, False,
+                                         Site);
+                                    Updated : constant IR.Value_Id :=
+                                      Checked_Update
+                                        (Of_Tree, Stmt,
+                                         IR.Emit_Binary
+                                           (Unit.all, Filling, Op, Was, One,
+                                            Held, Site));
+                                 begin
+                                    Write
+                                      (Place, Updated, Index, Address_Slot);
+                                 end;
+                              end if;
                            end;
                         end if;
                      end;

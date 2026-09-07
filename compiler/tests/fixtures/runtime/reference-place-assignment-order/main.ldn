@@ -1,0 +1,31 @@
+node: type = struct value: i32 end node
+left: node = (value: 17)
+right: node = (value: 25)
+mut index_calls: usize = 0
+mut rhs_calls: usize = 0
+mut order: usize = 0
+next: () -> (index: usize) =
+    inc index_calls
+    order = order * 10 + 1
+    index = 1
+end next
+replacement: () -> (value: ptr node) =
+    inc rhs_calls
+    order = order * 10 + 2
+    value = addr right
+end replacement
+public main: () -> (code: i32) =
+    mut values: [3]ptr node
+    values[0] = addr left
+    values[1] = addr left
+    values[2] = addr left
+    whole := addr values
+    whole.val[next()] = if true then replacement() else addr left end if
+    first := values[0]
+    changed := values[1]
+    last := values[2]
+    code = if index_calls == 1 and rhs_calls == 1 and order == 12
+              and first.val.value == 17 and changed.val.value == 25
+              and last.val.value == 17
+           then 42 else 1 end if
+end main
