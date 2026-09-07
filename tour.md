@@ -2649,13 +2649,29 @@ both. Threading keeps the type parameterised by T alone,
 and costs one argument at every call that can allocate.
 
 The parser-support modules use this exact interface. `core/mem.arena` is a
-monotonic provider over an explicit extent and `core/mem.failing` adds a count
-of allocations allowed before `out_of_memory`. The separately imported hosted
-`core/heap` provider reaches libc through [1975]'s fixed scalar/pointer bridge,
-returns independent aligned blocks, and really releases each block. It accepts
-every `usize` alignment, treats zero and one as byte alignment, gives a
-successful zero-byte request a distinct non-null freeable token, and reports
-an unrepresentable request or host refusal as `out_of_memory`.
+monotonic provider over an explicit extent. The separately imported
+`core/pool` provider divides caller backing into uniform aligned slots and
+uses a caller-supplied initialized metadata slice as its explicit finite
+bookkeeping capacity. Exact frees reclaim slots for lowest-index-first reuse;
+there is no hidden heap or fallback. A caller sizes the slots for its largest
+allocation and supplies enough metadata for its maximum simultaneous live
+set, including the six extents a transactional map rehash may need.
+
+`core/failing.counted(A)` retains a mutable pointer to any supplied allocator
+and gives it a deterministic allocation-attempt budget. Calls within the
+budget are delegated, including failures from the inner allocator; later
+calls report `out_of_memory` without delegation. Attempts, delegations,
+successes, both kinds of failure, frees and live allocations remain observable
+across a reset budget. Because `free` has no result, its live count is exact
+under valid-free use and cannot discover an inner provider's rejection of a
+malformed free.
+
+The separately imported hosted `core/heap` provider reaches libc through
+[1975]'s fixed scalar/pointer bridge, returns independent aligned blocks, and
+really releases each block. It accepts every `usize` alignment, treats zero
+and one as byte alignment, gives a successful zero-byte request a distinct
+non-null freeable token, and reports an unrepresentable request or host refusal
+as `out_of_memory`.
 `core/vec.list(T)` stores an
 honest `mem.storage(T)`: reserve copies its initialized prefix into a private
 replacement, rolls that replacement back on failure, drains and frees the old

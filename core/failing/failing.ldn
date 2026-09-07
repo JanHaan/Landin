@@ -1,0 +1,118 @@
+--  Generic deterministic failure injection.  The wrapper retains a mutable
+--  pointer to its supplied provider and delegates every successful free.
+
+import core/mem
+
+public counted: type (inner_provider: type) = struct
+    inner: ptr mut inner_provider
+    remaining: usize
+    attempts: usize
+    delegated: usize
+    successes: usize
+    injected_failures: usize
+    inner_failures: usize
+    frees: usize
+    live: usize
+end counted
+
+--  allowed_attempts is the number of future allocation calls allowed to
+--  reach inner.alloc. An inner failure consumes one such attempt. Injected
+--  failures increment attempts/injected_failures only and never call inner.
+public count_down: (inner_provider: type is mem.allocator,
+                    inner: ptr mut inner_provider,
+                    allowed_attempts: usize)
+                   -> (state: counted(inner_provider) from inner) =
+    state = (inner: inner, remaining: allowed_attempts,
+             attempts: 0, delegated: 0, successes: 0,
+             injected_failures: 0, inner_failures: 0,
+             frees: 0, live: 0)
+end count_down
+
+--  Replace only the future delegation budget. Evidence counters accumulate
+--  across retries so the failed and successful calls remain distinguishable.
+public permit: (inner_provider: type,
+                inout state: counted(inner_provider),
+                allowed_attempts: usize) -> none =
+    state.remaining = allowed_attempts
+end permit
+
+counted_alloc: (inner_provider: type,
+                inout state: counted(inner_provider),
+                size: usize, alignment: usize)
+               -> (block: ptr mut u8) ! mem.out_of_memory =
+    inc state.attempts
+    if state.remaining == 0 then
+        inc state.injected_failures
+        fail mem.out_of_memory
+    end if
+
+    dec state.remaining
+    inc state.delegated
+    block = mem.allocate(state.inner.val, size, alignment)
+        else (problem)
+        _ = problem
+        inc state.inner_failures
+        fail mem.out_of_memory
+    end
+    inc state.successes
+    inc state.live
+end counted_alloc
+
+counted_free: (inner_provider: type,
+               inout state: counted(inner_provider),
+               block: ptr mut u8, size: usize) -> none =
+    mem.free(state.inner.val, block, size)
+    --  Allocator free has no result. These two counters are therefore exact
+    --  under the allocator contract: the caller frees each successful block
+    --  once with its original extent. A malformed or duplicate free is still
+    --  delegated, but an inner rejection cannot be reflected in live.
+    inc state.frees
+    if state.live > 0 then
+        dec state.live
+    end if
+end counted_free
+
+(inner_provider: type is mem.allocator) counted(inner_provider)
+    is mem.allocator (alloc: counted_alloc, free: counted_free)
+
+public remaining: (inner_provider: type,
+                   state: counted(inner_provider)) -> (count: usize) =
+    count = state.remaining
+end remaining
+
+public attempts: (inner_provider: type,
+                  state: counted(inner_provider)) -> (count: usize) =
+    count = state.attempts
+end attempts
+
+public delegated: (inner_provider: type,
+                   state: counted(inner_provider)) -> (count: usize) =
+    count = state.delegated
+end delegated
+
+public successes: (inner_provider: type,
+                   state: counted(inner_provider)) -> (count: usize) =
+    count = state.successes
+end successes
+
+public injected_failures: (inner_provider: type,
+                           state: counted(inner_provider))
+                          -> (count: usize) =
+    count = state.injected_failures
+end injected_failures
+
+public inner_failures: (inner_provider: type,
+                        state: counted(inner_provider)) -> (count: usize) =
+    count = state.inner_failures
+end inner_failures
+
+public frees: (inner_provider: type,
+               state: counted(inner_provider)) -> (count: usize) =
+    count = state.frees
+end frees
+
+public live: (inner_provider: type,
+              state: counted(inner_provider)) -> (count: usize) =
+    --  Successful allocations less delegated frees under valid-free use.
+    count = state.live
+end live

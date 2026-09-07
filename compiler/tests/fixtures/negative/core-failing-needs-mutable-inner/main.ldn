@@ -1,0 +1,17 @@
+import core/failing
+import core/heap
+
+heap_provider: type = heap.system
+
+bad: () -> (state: failing.counted(heap_provider)) =
+    inner := heap.host()
+    attempts: usize = 1
+    state = failing.count_down
+        (inner_provider: heap_provider, inner: addr inner,
+         allowed_attempts: attempts)
+end bad
+
+public main: () -> (code: i32) =
+    state: failing.counted(heap_provider) = bad()
+    code = i32(failing.remaining(state))
+end main

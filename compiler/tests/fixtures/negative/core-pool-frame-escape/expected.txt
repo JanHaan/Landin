@@ -1,0 +1,10 @@
+error[L0314]: this returned reference still has frame origin
+  --> ../tests/fixtures/negative/core-pool-frame-escape/main.ldn:4:1
+  |
+4 | bad: () -> (state: pool.provider) ! mem.out_of_memory =
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/core-pool-frame-escape/main.ldn:5:5
+  |
+5 |     mut words: [128]u8 = zeroed
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^ the shorter-lived reference source
+  = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`

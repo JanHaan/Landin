@@ -1,0 +1,277 @@
+import core/failing
+import core/heap
+import core/mem
+import core/pool
+import core/vec
+
+heap_provider: type = heap.system
+pool_provider: type = pool.provider
+
+heap_budgets: () -> (ok: bool) =
+    mut inner := heap.host()
+    zero: usize = 0
+    mut state := failing.count_down
+        (inner_provider: heap_provider, inner: addr inner,
+         allowed_attempts: zero)
+    size_1: usize = 17
+    alignment_1: usize = 24
+    mut failed_zero: bool = false
+    _ = mem.allocate(state, size_1, alignment_1) else (problem)
+        _ = problem
+        failed_zero = true
+    end
+
+    one: usize = 1
+    failing.permit(state, one)
+    first: ptr mut u8 = mem.allocate(state, size_1, alignment_1) else ptr(0)
+    first_last: ptr mut u8 = ptr(usize(first) + size_1 - 1)
+    first.val = 11
+    first_last.val = 13
+    mem.free(state, first, size_1)
+
+    two: usize = 2
+    failing.permit(state, two)
+    size_2: usize = 31
+    alignment_2: usize = 64
+    second: ptr mut u8 = mem.allocate(state, size_1, alignment_1) else ptr(0)
+    third: ptr mut u8 = mem.allocate(state, size_2, alignment_2) else ptr(0)
+    mut failed_after_two: bool = false
+    _ = mem.allocate(state, one, one) else (problem)
+        _ = problem
+        failed_after_two = true
+    end
+    mem.free(state, second, size_1)
+    mem.free(state, third, size_2)
+
+    ok = failed_zero and failed_after_two
+         and usize(first) % alignment_1 == 0
+         and usize(third) % alignment_2 == 0
+         and first.val == 11 and first_last.val == 13
+         and failing.attempts(state) == 5
+         and failing.delegated(state) == 3
+         and failing.successes(state) == 3
+         and failing.injected_failures(state) == 2
+         and failing.inner_failures(state) == 0
+         and failing.frees(state) == 3 and failing.live(state) == 0
+end heap_budgets
+
+pool_budgets_and_inner_failure: () -> (ok: bool) =
+    mut words: [40]u64 = zeroed
+    base: ptr mut u8 = ptr(usize(addr words[0]) + 1)
+    extent: usize = 319
+    slot_size: usize = 64
+    slots: usize = 2
+    alignment: usize = 8
+    mut records: [2]pool.slot = zeroed
+    bookkeeping: []mut pool.slot = records[0..<lenof records]
+    mut inner := pool.over
+        (base, extent, slot_size, slots, alignment, bookkeeping)
+        else (problem)
+        _ = problem
+        ok = false
+        return
+    end
+
+    zero: usize = 0
+    one: usize = 1
+    two: usize = 2
+    mut state := failing.count_down
+        (inner_provider: pool_provider, inner: addr inner,
+         allowed_attempts: zero)
+    mut failed_zero: bool = false
+    _ = mem.allocate(state, one, one) else (problem)
+        _ = problem
+        failed_zero = true
+    end
+    failing.permit(state, one)
+    first: ptr mut u8 = mem.allocate(state, slot_size, alignment) else ptr(0)
+    mem.free(state, first, slot_size)
+    failing.permit(state, two)
+    second: ptr mut u8 = mem.allocate(state, slot_size, alignment) else ptr(0)
+    third: ptr mut u8 = mem.allocate(state, slot_size, alignment) else ptr(0)
+    mut failed_after_two: bool = false
+    _ = mem.allocate(state, one, one) else (problem)
+        _ = problem
+        failed_after_two = true
+    end
+    mem.free(state, second, slot_size)
+    mem.free(state, third, slot_size)
+
+    mut empty_records: [1]pool.slot = zeroed
+    empty_bookkeeping: []mut pool.slot =
+        empty_records[0..<lenof empty_records]
+    mut empty := pool.over
+        (base, zero, slot_size, zero, alignment, empty_bookkeeping)
+        else (problem)
+        _ = problem
+        ok = false
+        return
+    end
+    mut inner_failure := failing.count_down
+        (inner_provider: pool_provider, inner: addr empty,
+         allowed_attempts: one)
+    mut failed_inner: bool = false
+    _ = mem.allocate(inner_failure, one, one) else (problem)
+        _ = problem
+        failed_inner = true
+    end
+    mut then_injected: bool = false
+    _ = mem.allocate(inner_failure, one, one) else (problem)
+        _ = problem
+        then_injected = true
+    end
+
+    ok = failed_zero and failed_after_two
+         and failing.attempts(state) == 5
+         and failing.delegated(state) == 3
+         and failing.successes(state) == 3
+         and failing.injected_failures(state) == 2
+         and failing.inner_failures(state) == 0
+         and failing.frees(state) == 3 and failing.live(state) == 0
+         and pool.allocation_count(inner) == 3
+         and pool.free_count(inner) == 3 and pool.live(inner) == 0
+         and pool.rejected_free_count(inner) == 0
+         and failed_inner and then_injected
+         and failing.attempts(inner_failure) == 2
+         and failing.delegated(inner_failure) == 1
+         and failing.successes(inner_failure) == 0
+         and failing.inner_failures(inner_failure) == 1
+         and failing.injected_failures(inner_failure) == 1
+end pool_budgets_and_inner_failure
+
+node: type = struct
+    value: i32
+end node
+
+node_1: node = (value: 1)
+node_2: node = (value: 2)
+node_3: node = (value: 3)
+node_4: node = (value: 4)
+node_5: node = (value: 5)
+node_6: node = (value: 6)
+node_7: node = (value: 7)
+node_8: node = (value: 8)
+node_9: node = (value: 9)
+
+vec_initial_failure: () -> (ok: bool) =
+    mut words: [20]u64 = zeroed
+    base: ptr mut u8 = ptr(usize(addr words[0]) + 1)
+    extent: usize = 159
+    slot_size: usize = 128
+    slots: usize = 1
+    alignment: usize = 8
+    mut records: [1]pool.slot = zeroed
+    bookkeeping: []mut pool.slot = records[0..<lenof records]
+    mut inner := pool.over
+        (base, extent, slot_size, slots, alignment, bookkeeping)
+        else (problem)
+        _ = problem
+        ok = false
+        return
+    end
+    zero: usize = 0
+    mut state := failing.count_down
+        (inner_provider: pool_provider, inner: addr inner,
+         allowed_attempts: zero)
+    mut values := vec.new_list(item: ptr node)
+    mut failed: bool = false
+    vec.push(values, state, addr node_1) else (problem)
+        _ = problem
+        failed = true
+    end
+    ok = failed and vec.length(values) == 0 and vec.capacity(values) == 0
+         and failing.attempts(state) == 1
+         and failing.delegated(state) == 0
+         and failing.successes(state) == 0
+         and failing.injected_failures(state) == 1
+         and failing.frees(state) == 0 and failing.live(state) == 0
+         and pool.allocation_count(inner) == 0
+         and pool.free_count(inner) == 0 and pool.live(inner) == 0
+end vec_initial_failure
+
+vec_growth_retry: () -> (ok: bool) =
+    mut words: [40]u64 = zeroed
+    base: ptr mut u8 = ptr(usize(addr words[0]) + 1)
+    extent: usize = 319
+    slot_size: usize = 128
+    slots: usize = 2
+    alignment: usize = 8
+    mut records: [2]pool.slot = zeroed
+    bookkeeping: []mut pool.slot = records[0..<lenof records]
+    mut inner := pool.over
+        (base, extent, slot_size, slots, alignment, bookkeeping)
+        else (problem)
+        _ = problem
+        ok = false
+        return
+    end
+    one: usize = 1
+    mut state := failing.count_down
+        (inner_provider: pool_provider, inner: addr inner,
+         allowed_attempts: one)
+    mut values := vec.new_list(item: ptr node)
+    vec.push(values, state, addr node_1) else (problem) _ = problem end
+    vec.push(values, state, addr node_2) else (problem) _ = problem end
+    vec.push(values, state, addr node_3) else (problem) _ = problem end
+    vec.push(values, state, addr node_4) else (problem) _ = problem end
+    vec.push(values, state, addr node_5) else (problem) _ = problem end
+    vec.push(values, state, addr node_6) else (problem) _ = problem end
+    vec.push(values, state, addr node_7) else (problem) _ = problem end
+    vec.push(values, state, addr node_8) else (problem) _ = problem end
+
+    mut growth_failed: bool = false
+    vec.push(values, state, addr node_9) else (problem)
+        _ = problem
+        growth_failed = true
+    end
+    at_first: usize = 0
+    at_eighth: usize = 7
+    mut preserved: bool = false
+    begin
+        kept_first: ptr node = vec.get(values, at_first) else addr node_9
+        kept_eighth: ptr node = vec.get(values, at_eighth) else addr node_9
+        if growth_failed and vec.length(values) == 8
+          and vec.capacity(values) == 8
+          and kept_first.val.value == 1 and kept_eighth.val.value == 8
+          and failing.attempts(state) == 2
+          and failing.successes(state) == 1
+          and failing.injected_failures(state) == 1
+          and failing.frees(state) == 0 and failing.live(state) == 1
+          and pool.live(inner) == 1
+        then
+            preserved = true
+        end if
+    end
+
+    failing.permit(state, one)
+    vec.push(values, state, addr node_9) else (problem)
+        _ = problem
+        preserved = false
+    end
+    at_ninth: usize = 8
+    kept_ninth: ptr node = vec.get(values, at_ninth) else addr node_1
+    ok = preserved and vec.length(values) == 9 and vec.capacity(values) == 16
+         and kept_ninth.val.value == 9
+         and failing.attempts(state) == 3
+         and failing.delegated(state) == 2
+         and failing.successes(state) == 2
+         and failing.frees(state) == 1 and failing.live(state) == 1
+         and pool.allocation_count(inner) == 2
+         and pool.free_count(inner) == 1 and pool.live(inner) == 1
+         and pool.rejected_free_count(inner) == 0
+    vec.release(values, state)
+    ok = ok and vec.length(values) == 0 and vec.capacity(values) == 0
+         and failing.frees(state) == 2 and failing.live(state) == 0
+         and pool.free_count(inner) == 2 and pool.live(inner) == 0
+         and pool.rejected_free_count(inner) == 0
+end vec_growth_retry
+
+public main: () -> (code: i32) =
+    if heap_budgets() and pool_budgets_and_inner_failure()
+      and vec_initial_failure() and vec_growth_retry()
+    then
+        code = 42
+    else
+        code = 0
+    end if
+end main

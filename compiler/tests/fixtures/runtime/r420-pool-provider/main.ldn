@@ -1,0 +1,235 @@
+import core/mem
+import core/pool
+
+zero_slots_exhaust: () -> (ok: bool) =
+    mut words: [2]u64 = zeroed
+    base: ptr mut u8 = ptr(usize(addr words[0]) + 1)
+    extent: usize = 0
+    size: usize = 8
+    count: usize = 0
+    alignment: usize = 8
+    mut records: [1]pool.slot = zeroed
+    bookkeeping: []mut pool.slot = records[0..<lenof records]
+    mut state := pool.over(base, extent, size, count, alignment, bookkeeping)
+        else (problem)
+        _ = problem
+        ok = false
+        return
+    end
+
+    one: usize = 1
+    mut refused: bool = false
+    _ = mem.allocate(state, one, one) else (problem)
+        _ = problem
+        refused = true
+    end
+    ok = refused and pool.capacity(state) == 0
+         and pool.bookkeeping_capacity(state) == lenof bookkeeping
+         and pool.allocation_count(state) == 0 and pool.live(state) == 0
+end zero_slots_exhaust
+
+one_slot_reuses: () -> (ok: bool) =
+    mut words: [12]u64 = zeroed
+    base: ptr mut u8 = ptr(usize(addr words[0]) + 1)
+    extent: usize = 95
+    size: usize = 64
+    count: usize = 1
+    alignment: usize = 24
+    mut records: [1]pool.slot = zeroed
+    bookkeeping: []mut pool.slot = records[0..<lenof records]
+    mut state := pool.over(base, extent, size, count, alignment, bookkeeping)
+        else (problem)
+        _ = problem
+        ok = false
+        return
+    end
+
+    first_size: usize = 17
+    first: ptr mut u8 = mem.allocate(state, first_size, alignment) else ptr(0)
+    first.val = 11
+    mut exhausted: bool = false
+    one: usize = 1
+    _ = mem.allocate(state, one, one) else (problem)
+        _ = problem
+        exhausted = true
+    end
+    mem.free(state, first, first_size)
+    second_size: usize = 31
+    second: ptr mut u8 = mem.allocate(state, second_size, alignment)
+        else ptr(0)
+    second_last: ptr mut u8 = ptr(usize(second) + second_size - 1)
+    second.val = 13
+    second_last.val = 17
+    ok = exhausted and usize(first) == usize(second)
+         and usize(second) % alignment == 0
+         and second.val == 13 and second_last.val == 17
+         and pool.allocation_count(state) == 2
+         and pool.free_count(state) == 1 and pool.live(state) == 1
+    mem.free(state, second, second_size)
+    ok = ok and pool.free_count(state) == 2 and pool.live(state) == 0
+end one_slot_reuses
+
+multiple_live_and_bounds: () -> (ok: bool) =
+    mut words: [80]u64 = zeroed
+    aligned: ptr mut u8 = ptr(usize(addr words[0]))
+    base: ptr mut u8 = ptr(usize(aligned) + 1)
+    extent: usize = 639
+    slot_size: usize = 128
+    count: usize = 3
+    alignment: usize = 8
+    mut records: [3]pool.slot = zeroed
+    bookkeeping: []mut pool.slot = records[0..<lenof records]
+    mut state := pool.over
+        (base, extent, slot_size, count, alignment, bookkeeping)
+        else (problem)
+        _ = problem
+        ok = false
+        return
+    end
+
+    first_size: usize = 16
+    second_size: usize = 128
+    third_size: usize = 1
+    first: ptr mut u8 = mem.allocate(state, first_size, alignment) else ptr(0)
+    second: ptr mut u8 = mem.allocate(state, second_size, alignment)
+        else ptr(0)
+    third: ptr mut u8 = mem.allocate(state, third_size, alignment) else ptr(0)
+    second_last: ptr mut u8 = ptr(usize(second) + second_size - 1)
+    first.val = 19
+    second.val = 29
+    second_last.val = 31
+
+    mut exhausted: bool = false
+    _ = mem.allocate(state, third_size, alignment) else (problem)
+        _ = problem
+        exhausted = true
+    end
+    mem.free(state, first, first_size)
+    replacement_size: usize = 64
+    replacement: ptr mut u8 = mem.allocate
+        (state, replacement_size, alignment) else ptr(0)
+
+    wrong_size: usize = 63
+    mem.free(state, replacement, wrong_size)
+    mut wrong_free_kept_live: bool = false
+    _ = mem.allocate(state, third_size, alignment) else (problem)
+        _ = problem
+        wrong_free_kept_live = true
+    end
+
+    too_large_size: usize = 129
+    mut too_large: bool = false
+    _ = mem.allocate(state, too_large_size, alignment) else (problem)
+        _ = problem
+        too_large = true
+    end
+    unsupported_alignment: usize = 3
+    mut unsupported: bool = false
+    _ = mem.allocate(state, third_size, unsupported_alignment) else (problem)
+        _ = problem
+        unsupported = true
+    end
+
+    ok = usize(aligned) % alignment == 0 and usize(base) % alignment == 1
+         and exhausted and usize(replacement) == usize(first)
+         and second.val == 29 and second_last.val == 31
+         and wrong_free_kept_live and too_large and unsupported
+         and pool.allocation_count(state) == 4
+         and pool.free_count(state) == 1 and pool.live(state) == 3
+         and pool.rejected_free_count(state) == 1
+
+    mem.free(state, replacement, replacement_size)
+    mem.free(state, second, second_size)
+    mem.free(state, third, third_size)
+    ok = ok and pool.free_count(state) == 4 and pool.live(state) == 0
+end multiple_live_and_bounds
+
+six_live_slots: () -> (ok: bool) =
+    --  Map rehash may keep three old extents live while acquiring three
+    --  replacements.  The capacity is the caller's metadata length rather
+    --  than an implementation ceiling.
+    mut words: [32]u64 = zeroed
+    base: ptr mut u8 = ptr(usize(addr words[0]) + 1)
+    extent: usize = 255
+    slot_size: usize = 32
+    count: usize = 6
+    alignment: usize = 8
+    mut records: [6]pool.slot = zeroed
+    bookkeeping: []mut pool.slot = records[0..<lenof records]
+    mut state := pool.over
+        (base, extent, slot_size, count, alignment, bookkeeping)
+        else (problem)
+        _ = problem
+        ok = false
+        return
+    end
+
+    first: ptr mut u8 = mem.allocate
+        (state, slot_size, alignment) else ptr(0)
+    second: ptr mut u8 = mem.allocate
+        (state, slot_size, alignment) else ptr(0)
+    third: ptr mut u8 = mem.allocate
+        (state, slot_size, alignment) else ptr(0)
+    fourth: ptr mut u8 = mem.allocate
+        (state, slot_size, alignment) else ptr(0)
+    fifth: ptr mut u8 = mem.allocate
+        (state, slot_size, alignment) else ptr(0)
+    sixth: ptr mut u8 = mem.allocate
+        (state, slot_size, alignment) else ptr(0)
+    mut exhausted: bool = false
+    _ = mem.allocate(state, slot_size, alignment) else (problem)
+        _ = problem
+        exhausted = true
+    end
+
+    ok = exhausted and pool.capacity(state) == lenof records
+         and pool.bookkeeping_capacity(state) == lenof records
+         and pool.live(state) == 6
+         and usize(second) - usize(first) == slot_size
+         and usize(sixth) - usize(fifth) == slot_size
+    mem.free(state, first, slot_size)
+    mem.free(state, second, slot_size)
+    mem.free(state, third, slot_size)
+    mem.free(state, fourth, slot_size)
+    mem.free(state, fifth, slot_size)
+    mem.free(state, sixth, slot_size)
+    ok = ok and pool.live(state) == 0 and pool.free_count(state) == 6
+end six_live_slots
+
+bad_configuration_is_refused: () -> (ok: bool) =
+    mut words: [20]u64 = zeroed
+    base: ptr mut u8 = ptr(usize(addr words[0]) + 1)
+    extent: usize = 128
+    size: usize = 128
+    one: usize = 1
+    two: usize = 2
+    alignment: usize = 8
+    mut records: [1]pool.slot = zeroed
+    bookkeeping: []mut pool.slot = records[0..<lenof records]
+
+    mut capacity_refused: bool = false
+    _ = pool.over(base, 159, 64, two, alignment, bookkeeping)
+        else (problem)
+        _ = problem
+        capacity_refused = true
+    end
+
+    mut extent_refused: bool = false
+    _ = pool.over(base, extent, size, one, alignment, bookkeeping)
+        else (problem)
+        _ = problem
+        extent_refused = true
+    end
+    ok = capacity_refused and extent_refused
+end bad_configuration_is_refused
+
+public main: () -> (code: i32) =
+    if zero_slots_exhaust() and one_slot_reuses()
+      and multiple_live_and_bounds() and six_live_slots()
+      and bad_configuration_is_refused()
+    then
+        code = 42
+    else
+        code = 0
+    end if
+end main
