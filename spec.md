@@ -8999,14 +8999,14 @@ slice of a by-value fixed-array parameter from a retained slice parameter or
 `inout` storage. These are general language rules rather than privileges for
 `core/*`.
 
-Maps and trees are absent because the R3 parser does not need them. R4.20 adds
-the typed initialized-prefix slice witness and `core/small.small(item, N)`:
-its honest initialized inline array keeps the written `zeroable` constraint,
+The R3 parser did not require maps and trees. R4.20 supplies those libraries,
+the typed initialized-prefix slice witness and `core/small.small(item, N)`.
+Its honest initialized inline array keeps the written `zeroable` constraint,
 while its spilled arm owns a `core/vec.list(item)` and reuses that list's
-transactional growth. Iterable integration and the broader container surface
-remain R4.20. Allocator acquisition and ownership also remain outside the
-compiler; the current modules only thread an allocator supplied by their
-caller.
+transactional growth. Ordinary traversal and sorting use `vec.used`;
+D180's source-free iterable item does not replace that retained-origin view.
+Allocator acquisition and ownership remain outside the compiler; the modules
+thread an allocator supplied by their caller on allocating/freeing operations.
 
 **The alternatives:** expose vector capacity as `[]mut item`, require
 `zeroable`, publish a partially copied replacement, store an allocator in each
