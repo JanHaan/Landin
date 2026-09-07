@@ -1,0 +1,8 @@
+class: negative
+summary: initialized allocation retains escaping-value and consumed-binding checks (core-mem-new-frame-pointer)
+expect: expected.txt
+args: --root=../.. ../tests/fixtures/negative/core-mem-new-frame-pointer
+codes: L0314
+status: 1
+constructs: 0430, 0780, 0830, 0910, 1360
+targets: linux-x86-64, macos-arm64, synthetic-32

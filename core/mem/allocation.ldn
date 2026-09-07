@@ -1,0 +1,17 @@
+--  Allocated objects are published only after their complete initial value
+--  has been stored. Reference-containing initial values must be retainable.
+public new: (item: type, provider: type is allocator,
+             inout state: provider, escaping value: item)
+            -> (object: ptr mut item) ! out_of_memory =
+    block: ptr mut u8 = try provider.alloc(state, sizeof item, alignof item)
+    object = ptr(usize(block))
+    object.val = value
+end new
+
+--  Consumption ends this binding only. Copies and outstanding aliases remain
+--  the caller's manual-lifetime responsibility, as for the allocator itself.
+public delete: (item: type, provider: type is allocator,
+                inout state: provider, sink object: ptr mut item) -> none =
+    block: ptr mut u8 = ptr(usize(object))
+    provider.free(state, block, sizeof item)
+end delete

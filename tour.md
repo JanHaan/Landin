@@ -616,8 +616,8 @@ the representation. `capacity` and `initialized` report the two counts,
 `admit` initializes exactly the next slot, `get` reads only the initialized
 prefix, `replace` writes an existing initialized slot, and `used` exposes that
 prefix as a mutable slice `from storage`. `release` removes only its tail, and
-`dispose` returns the backing byte pointer only when the prefix is empty. `transfer` copies one initialized
-source
+`dispose` returns the backing byte pointer only when the prefix is empty.
+`transfer` copies one initialized source
 slot directly into the next slot of a private replacement, without exposing a
 reference-valued item between the two states. The four invalid requests are
 foreseeable and therefore declared outcomes: `raw_full`, `uninitialized`,
@@ -643,6 +643,16 @@ boundary enforces the state transitions without a `raw` keyword, a new built-in
 type kind, or the dishonest `slice_from` operation.
 
 ## ARRAYS, SLICES AND TEXT
+
+The initialized allocation helper `mem.new(state, value)` stores the complete
+initial value before returning `ptr mut T`; reference-containing values must
+satisfy its `escaping` parameter. `mem.delete` consumes one pointer binding
+and releases the original object extent through the supplied allocator.
+`mem.new_bytes(state, count)` instead returns a private `byte_buffer` owner:
+every byte is initialized to zero, `mem.bytes(owner)` borrows its mutable
+slice, and `mem.drop_bytes(state, owner)` releases the original allocation and
+clears the owner. A zero count makes no allocation. A copied view or owner is
+still subject to manual lifetime discipline; consumption is not ownership.
 
 ### [0520] Array: a value
 

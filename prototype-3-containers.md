@@ -213,6 +213,18 @@ binder, which is invented. [Z1]
 
 ## core/mem  —  slices from an allocator
 
+The `new_slice`/`drop_slice` sketch below preserves the original pressure, not
+the R4.20 allocation API. Spare capacity has no typed slice image: the private
+raw state and `used` expose only initialized items. `mem.new(state, value)`
+stores a complete value before returning its pointer; `mem.delete` releases
+that object through the same allocator. The byte-specific `mem.new_bytes`
+returns a `byte_buffer` holding the complete allocation extent, initializes
+all requested bytes, and exposes a borrowed slice through `mem.bytes`.
+`mem.drop_bytes` clears that owner and releases its original backing, rather
+than accepting a possibly shortened slice as allocation identity. No generic
+uninitialized `new_slice` is supplied. Copied aliases remain the caller's
+manual-lifetime responsibility.
+
 sizeof and alignof applied to a type parameter. Specialised they
 are constants; compiled once against a table they are not, so the
 evidence has to carry the size and the alignment of the type as

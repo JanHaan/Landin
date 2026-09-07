@@ -1,0 +1,8 @@
+class: negative
+summary: allocating a filter cannot retain text from a non-escaping parameter
+expect: expected.txt
+args: --root=../.. ../tests/fixtures/negative/core-mem-new-borrowed-text
+constructs: 0590, 0770, 0780, 0830, 1360
+codes: L0314
+status: 1
+targets: linux-x86-64, macos-arm64, synthetic-32

@@ -1,0 +1,10 @@
+error[L0316]: the returned reference does not derive from exactly the parameters named by its `from` clause
+  --> ../tests/fixtures/negative/core-mem-bytes-wrong-from/main.ldn:2:1
+  |
+2 | bad: (left: mem.byte_buffer, right: mem.byte_buffer)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/core-mem-bytes-wrong-from/main.ldn:3:10
+  |
+3 |      -> (view: []u8 from right) =
+  |          ^^^^^^^^^^^^^^^^^^^^^ the named return and its declared sources
+  = note: [0790]: the written clause and every returning body edge agree both ways

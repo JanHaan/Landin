@@ -1,0 +1,7 @@
+import core/heap
+import core/mem
+bad: (object: ptr mut u32) -> (value: u32) =
+    mut state := heap.host()
+    mem.delete(state, object)
+    value = object.val
+end bad

@@ -3864,6 +3864,23 @@ actual reference descriptor (its precondition at `landin-checking.ads:660`).
 That path is not needed by a concrete contextual text parameter and is not
 claimed or repaired by this bounded follow-up.
 
+The initialized-allocation library adds ordinary `mem.new`/`delete`: allocation
+is followed by a complete typed store of the supplied escaping value, including
+reference-containing and zero-sized objects. It promises no generic zero image.
+The byte-buffer owner stores its initialized witness and allocation extent
+privately; `new_bytes` initializes every byte before publication, while an empty
+request makes no provider call. `drop_bytes` clears the owner before freeing the
+saved original base and extent. Unexpected admission refusal rolls back with
+the saved allocation rather than inferred or fabricated storage metadata.
+Focused heap/failing-provider evidence covers initialization, failure, exact
+free identity, surviving neighbors, repeated empty disposal and borrowed-view
+refusals. The P4 construction contract marks retained argv backing escaping;
+a borrowed-text aggregate refusal pins that requirement. The finalized
+initialized-prefix prerequisite is integrated. Complete pinned Linux debug and
+release suites each pass 403 cases and 10,842 checks, and the font-aware
+repository check is clean. The authoritative native integration gate remains
+required after publication; full P4 application cleanup is not claimed here.
+
 The initialized-view implementation must also retain [0860]'s shallow alias
 limit: a reference inserted through an alias is not generally propagated back
 to every other view of that storage, so writable views do not establish

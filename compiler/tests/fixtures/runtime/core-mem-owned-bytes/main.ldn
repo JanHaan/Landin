@@ -1,0 +1,135 @@
+import core/failing
+import core/heap
+import core/mem
+
+audit: type = struct
+    inner: heap.system
+    first: ptr mut u8
+    second: ptr mut u8
+    third: ptr mut u8
+    allocated: usize
+    freed: usize
+    exact: bool
+end audit
+checked_host: () -> (result: audit) =
+    null: ptr mut u8 = ptr(0)
+    result = (inner: heap.host(), first: null, second: null, third: null,
+              allocated: 0, freed: 0, exact: true)
+end checked_host
+checked_alloc: (inout state: audit, size: usize, alignment: usize)
+               -> (block: ptr mut u8) ! mem.out_of_memory =
+    block = try mem.allocate(state.inner, size, alignment)
+    if state.allocated == 0 then
+        state.first = block
+        state.exact = state.exact and size == 1
+    elsif state.allocated == 1 then
+        state.second = block
+        state.exact = state.exact and size == 4096
+    else
+        state.third = block
+        state.exact = state.exact and size == 1
+    end if
+    inc state.allocated
+end checked_alloc
+checked_free: (inout state: audit, block: ptr mut u8, size: usize) -> none =
+    if state.freed == 0 then
+        state.exact = state.exact and usize(block) == usize(state.second)
+                      and size == 4096
+    elsif state.freed == 1 then
+        state.exact = state.exact and usize(block) == usize(state.first)
+                      and size == 1
+    else
+        state.exact = state.exact and usize(block) == usize(state.third)
+                      and size == 1
+    end if
+    inc state.freed
+    mem.free(state.inner, block, size)
+end checked_free
+audit is mem.allocator (alloc: checked_alloc, free: checked_free)
+
+public main: () -> (code: i32) =
+    code = 1
+    mut heap_state := checked_host()
+    zero: usize = 0
+    one: usize = 1
+    large: usize = 4096
+    four: usize = 4
+    maximum: usize = 18_446_744_073_709_551_615
+    mut state := failing.count_down(addr heap_state, zero)
+    mut empty := mem.new_bytes(state, zero) else (problem)
+        _ = problem
+        return
+    end
+    mut refused: bool = false
+    mut failed := mem.new_bytes(state, one) else (problem)
+        _ = problem
+        refused = true
+        empty
+    end
+    mem.drop_bytes(state, failed)
+    mem.drop_bytes(state, empty)
+    failing.permit(state, four)
+    mut small := mem.new_bytes(state, one) else (problem)
+        _ = problem
+        return
+    end
+    mut bigger := mem.new_bytes(state, large) else (problem)
+        _ = problem
+        return
+    end
+    mut other := mem.new_bytes(state, one) else (problem)
+        _ = problem
+        return
+    end
+    initialized: bool = begin
+        a := mem.bytes(small)
+        b := mem.bytes(bigger)
+        c := mem.bytes(other)
+        mut good: bool = lenof a == 1 and lenof b == 4096
+                          and lenof c == 1
+        mut i: usize = 0
+        while i < lenof b do
+            good = good and b[i] == 0
+            inc i
+        end while
+        good = good and a[0] == 0 and c[0] == 0
+        a[0] = 17
+        b[0] = 23
+        b[4095] = 31
+        c[0] = 37
+        good and a[0] == 17 and b[0] == 23 and b[4095] == 31
+          and c[0] == 37
+    end
+    mut overflow: bool = false
+    mut huge := mem.new_bytes(state, maximum) else (problem)
+        _ = problem
+        overflow = true
+        empty
+    end
+    mem.drop_bytes(state, huge)
+    mem.drop_bytes(state, bigger)
+    survivors: bool = begin
+        a := mem.bytes(small)
+        c := mem.bytes(other)
+        a[0] == 17 and c[0] == 37
+    end
+    mem.drop_bytes(state, small)
+    mem.drop_bytes(state, other)
+    cleared: bool = begin
+        a := mem.bytes(small)
+        b := mem.bytes(bigger)
+        c := mem.bytes(other)
+        lenof a == 0 and lenof b == 0 and lenof c == 0
+    end
+    mem.drop_bytes(state, small)
+    if refused and initialized and overflow and survivors and cleared
+      and failing.attempts(state) == 5 and failing.successes(state) == 3
+      and failing.injected_failures(state) == 1
+      and failing.inner_failures(state) == 1
+      and failing.frees(state) == 3 and failing.live(state) == 0
+      and heap_state.exact and heap_state.allocated == 3
+      and heap_state.freed == 3
+    then
+        code = 42
+    end if
+end main

@@ -1,0 +1,10 @@
+error[L0314]: this parameter is non-escaping, so its reference cannot be retained by the called function
+  --> ../tests/fixtures/negative/core-mem-new-borrowed-text/main.ldn:9:33
+  |
+9 |     result = try mem.new(state, initial)
+  |                                 ^^^^^^^
+  --> ../tests/fixtures/negative/core-mem-new-borrowed-text/main.ldn:6:33
+  |
+6 | bad: (inout state: heap.system, source: utf8)
+  |                                 ^^^^^^^^^^^^ the shorter-lived reference source
+  = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`

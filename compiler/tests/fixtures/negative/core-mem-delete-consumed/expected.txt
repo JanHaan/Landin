@@ -1,0 +1,10 @@
+error[L0302]: this place was consumed by `sink` and has not been assigned again
+  --> ../tests/fixtures/negative/core-mem-delete-consumed/main.ldn:6:13
+  |
+6 |     value = object.val
+  |             ^^^^^^
+  --> ../tests/fixtures/negative/core-mem-delete-consumed/main.ldn:3:7
+  |
+3 | bad: (object: ptr mut u32) -> (value: u32) =
+  |       ^^^^^^^^^^^^^^^^^^^ the binding containing the consumed place
+  = note: [0910]: a sunk place is dead until assignment

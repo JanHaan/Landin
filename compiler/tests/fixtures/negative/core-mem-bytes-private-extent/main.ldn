@@ -1,0 +1,4 @@
+import core/mem
+bad: (source: mem.byte_buffer) -> (count: usize) =
+    count = source.extent
+end bad
