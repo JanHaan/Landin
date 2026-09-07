@@ -1,0 +1,104 @@
+unavailable: atom
+
+receipt: type = struct
+    value: i32
+    serial: i32
+end receipt
+
+opener: type = concept (t: type)
+    open: (self: ptr mut t, request: i32) -> (result: receipt) ! unavailable
+end opener
+
+left_state: type = struct
+    base: i32
+    calls: i32
+    reject: bool
+end left_state
+
+right_state: type = struct
+    prefix: u64
+    base: i32
+    calls: i32
+    reject: bool
+end right_state
+
+open_left: (receiver: ptr mut left_state, wanted: i32)
+      -> (answer: receipt) ! unavailable =
+    inc receiver.val.calls
+    fail unavailable when receiver.val.reject
+    answer = (value: receiver.val.base + wanted,
+              serial: receiver.val.calls)
+end open_left
+
+open_right: (provider: ptr mut right_state, amount: i32)
+      -> (opened: receipt) ! unavailable =
+    inc provider.val.calls
+    fail unavailable when provider.val.reject
+    opened = (value: provider.val.base + amount * 2,
+              serial: provider.val.calls)
+end open_right
+
+left_state is opener (open: open_left)
+right_state is opener (open: open_right)
+
+acquire: (tag: type, marker: tag, world: any opener, request: i32)
+      -> (answer: i32) ! unavailable =
+    _ = marker
+    opened: receipt = try world.open(request: request)
+    answer = opened.value * 10 + opened.serial
+end acquire
+
+public main: () -> (code: i32) =
+    code = 1
+    mut left: left_state = (base: 10, calls: 0, reject: false)
+    mut right: right_state =
+        (prefix: 99, base: 20, calls: 0, reject: false)
+    left_world: any opener = any(addr left)
+    right_world: any opener = any(addr right)
+    left_tag: i32 = 7
+    right_tag: u8 = 9
+
+    first: i32 = acquire(
+        marker: left_tag, world: left_world, request: 3) else (problem)
+        _ = problem
+        return
+    end
+    second: i32 = acquire(
+        request: 4, marker: right_tag, world: right_world) else (problem)
+        _ = problem
+        return
+    end
+    if first <> 131 or second <> 281
+    then
+        return
+    end if
+
+    left.reject = true
+    mut left_failed: bool = false
+    _ = acquire(left_tag, left_world, 30) else (problem)
+        left_failed = problem == unavailable
+        0
+    end
+    right.reject = true
+    mut right_failed: bool = false
+    _ = acquire(right_tag, right_world, 40) else (problem)
+        right_failed = problem == unavailable
+        0
+    end
+    if not left_failed or not right_failed
+      or left.calls <> 2 or right.calls <> 2
+    then
+        return
+    end if
+
+    left.reject = false
+    retried: i32 = acquire(left_tag, left_world, 5) else (problem)
+        _ = problem
+        return
+    end
+    if retried == 153
+      and left.calls == 3 and right.calls == 2
+    then
+        code = 42
+    end if
+end main

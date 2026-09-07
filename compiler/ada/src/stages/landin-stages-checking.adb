@@ -5885,12 +5885,24 @@ package body Landin.Stages.Checking is
               and then Syn.Value_Of (Of_Tree, Node) /= Syn.No_Node
               and then Syn.Kind (Of_Tree, Syn.Value_Of (Of_Tree, Node))
                        = Syn.Call;
+            --  [0960]'s `try` has exactly one call operand and produces that
+            --  call's successful value.  Admit it through the same local
+            --  struct destination as the bare call; Synthesise still checks
+            --  the operand, error set and exact erased-entry signature.
             Is_Struct_Call_Init : constant Boolean :=
               Held = Ty.Aggregate
               and then Is_Local_Binding (Of_Tree, Node)
               and then Syn.Value_Of (Of_Tree, Node) /= Syn.No_Node
-              and then Syn.Kind (Of_Tree, Syn.Value_Of (Of_Tree, Node))
-                       = Syn.Call
+              and then
+                (Syn.Kind (Of_Tree, Syn.Value_Of (Of_Tree, Node)) = Syn.Call
+                 or else
+                   (Syn.Kind (Of_Tree, Syn.Value_Of (Of_Tree, Node))
+                      = Syn.Try_Expression
+                    and then Syn.Kind
+                      (Of_Tree,
+                       Syn.Operand_Of
+                         (Of_Tree, Syn.Value_Of (Of_Tree, Node)))
+                        in Syn.Call | Syn.Labeled_Application))
               and then Landin.Checking.Nominal_Of
                 (Types.all, Of_Tree, Written)
                   /= Landin.Checking.No_Nominal_Type;

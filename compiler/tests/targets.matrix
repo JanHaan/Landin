@@ -1018,6 +1018,7 @@ runtime/generic-composed-evidence | linux-x86-64
 runtime/generic-contextual-text-literals | linux-x86-64
 runtime/generic-declared-errors | linux-x86-64
 runtime/generic-direct-descriptor-deduction | linux-x86-64
+runtime/generic-erased-aggregate-try | linux-x86-64
 runtime/generic-evidence-indirect | linux-x86-64
 runtime/generic-explicit-parameterized-actuals | linux-x86-64
 runtime/generic-explicit-static | linux-x86-64
