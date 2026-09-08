@@ -210,6 +210,14 @@ reported `cannot find Scrt1.o` and the reason any of this was looked at.
 That is a result for this shell and for nothing else: the table above is
 still what the three environments say.
 
+R4.30's static-library fixture also needs nixpkgs' separate static glibc
+output. The Linux shell includes it as a library input so an explicit
+`linker.library("m")` request can find `libm.a`. The shared glibc output
+precedes the archive output so the driver's own `-lc` stays dynamic; the
+shell check verifies that dependency on the static-library fixture.
+[Job 1883411](https://builds.sr.ht/~sinnfrei/job/1883411) passes the complete
+418-case suite with 12,425 checks and verifies the dynamic libc dependency.
+
 It is a convenience for editing on a nix machine and carries no authority of
 its own: the table above is unchanged by it, and a result produced in it is
 not evidence for any of the three environments. `flake.lock` pins the nixpkgs

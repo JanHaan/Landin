@@ -201,6 +201,15 @@
               pkgs.hut #  scripts/site.sh --publish
             ];
 
+            #  R4.30's explicit archive requests need the separate static
+            #  glibc output: the ordinary libc output does not hold libm.a.
+            #  Keep the shared output first so the driver's own -lc remains
+            #  dynamic while -l:libm.a can reach the requested archive.
+            buildInputs = lib.optionals pkgs.stdenv.hostPlatform.isLinux [
+              (lib.getLib pkgs.glibc)
+              pkgs.glibc.static
+            ];
+
             #  The Ada project asks GNAT for its stack checking.  GCC disables
             #  that option, with a warning, if the wrapper also adds its
             #  conflicting stack-clash protection.
