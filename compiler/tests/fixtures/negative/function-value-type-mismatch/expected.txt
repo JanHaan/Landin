@@ -1,0 +1,10 @@
+error[L0301]: this is something unknown and `u32` belongs here
+  --> ../tests/fixtures/negative/function-value-type-mismatch/program.ldn:2:21
+  |
+2 | f: () -> (r: u32) = g end f
+  |                     ^
+  --> ../tests/fixtures/negative/function-value-type-mismatch/program.ldn:2:10
+  |
+2 | f: () -> (r: u32) = g end f
+  |          ^^^^^^^^ the returns this fills
+  = note: [1890]: two types that must agree, and [0310] converts nothing between them

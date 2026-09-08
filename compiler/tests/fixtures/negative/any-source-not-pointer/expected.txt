@@ -1,0 +1,10 @@
+error[L0301]: `any` erases a pointer to the represented value
+  --> ../tests/fixtures/negative/any-source-not-pointer/main.ldn:17:31
+   |
+17 |     erased: any display = any(item)
+   |                               ^^^^
+  --> ../tests/fixtures/negative/any-source-not-pointer/main.ldn:17:13
+   |
+17 |     erased: any display = any(item)
+   |             ^^^^^^^^^^^ the runtime-dispatch type written here
+  = note: [1370]/[1380]: the pair retains the pointee; it never copies an unknown-sized value

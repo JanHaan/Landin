@@ -1,0 +1,10 @@
+error[L0301]: this is `bool` and `u8` belongs here
+  --> ../tests/fixtures/negative/array-repetition-element-mismatch/program.ldn:2:24
+  |
+2 |     row: [3]u8 = [3 of true]
+  |                        ^^^^
+  --> ../tests/fixtures/negative/array-repetition-element-mismatch/program.ldn:2:5
+  |
+2 |     row: [3]u8 = [3 of true]
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^ the array element type
+  = note: [1890]: two types that must agree, and [0310] converts nothing between them

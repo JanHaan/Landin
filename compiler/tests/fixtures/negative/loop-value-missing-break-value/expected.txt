@@ -1,0 +1,10 @@
+error[L0301]: this break leaves a value-producing loop without a value
+  --> ../tests/fixtures/negative/loop-value-missing-break-value/program.ldn:3:9
+  |
+3 |         break when true
+  |         ^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/loop-value-missing-break-value/program.ldn:2:12
+  |
+2 |     code = loop do
+  |            ^^^^^^^ this value-producing loop
+  = note: [1190]: every break from a loop used as an expression carries `with`

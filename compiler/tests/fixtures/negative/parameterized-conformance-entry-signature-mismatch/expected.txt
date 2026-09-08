@@ -1,0 +1,10 @@
+error[L0301]: this selected generic conformance function does not have the concept entry's signature
+  --> ../tests/fixtures/negative/parameterized-conformance-entry-signature-mismatch/main.ldn:13:1
+   |
+13 | (t: type) box(t) is equatable (equal: wrong)
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/parameterized-conformance-entry-signature-mismatch/main.ldn:2:5
+  |
+2 |     equal: (left: t, right: t) -> (yes: bool)
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the required entry
+  = note: D144 validates a generic provider after substituting its retained binder tuple

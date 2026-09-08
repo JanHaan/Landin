@@ -1,3 +1,4 @@
+with Ada.Exceptions;
 with Ada.Containers.Vectors;
 
 with Landin.Backend.Entry_Point;
@@ -773,12 +774,29 @@ package body Landin.Driver is
                      Result    => Ran,
                      Capture   => Landin.Platform.Merged);
                exception
-                  when Landin.External_Tool_Failed =>
-                     Note_No_Toolchain
-                       ("cannot run " & Driver & " for target "
-                        & Landin.Targets.Name (Facts),
-                        "install a toolchain named " & Driver
-                        & ", or name another with --toolchain=NAME");
+                  when Failure : Landin.External_Tool_Failed =>
+                     --  The adapter says why.  Only a tool that is not
+                     --  there is the reader's to install; a capture file
+                     --  that could not be removed is a host fault after
+                     --  the tool ran, and naming it a missing toolchain
+                     --  sent the reader to install one they had (R4.21).
+                     declare
+                        Why : constant String :=
+                          Ada.Exceptions.Exception_Message (Failure);
+                     begin
+                        if Starts_With (Why, "tool not found") then
+                           Note_No_Toolchain
+                             ("cannot run " & Driver & " for target "
+                              & Landin.Targets.Name (Facts),
+                              "install a toolchain named " & Driver
+                              & ", or name another with --toolchain=NAME");
+                        else
+                           Note_Failure
+                             (Code_Toolchain_Failed,
+                              Driver & " could not be run to completion: "
+                              & Why);
+                        end if;
+                     end;
                      return;
                end;
 

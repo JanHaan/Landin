@@ -1,0 +1,10 @@
+error[L0301]: this is not an atom admitted by the set required here
+  --> ../tests/fixtures/negative/atom-assignment-not-subset/program.ldn:8:14
+  |
+8 |     narrow = wide
+  |              ^^^^
+  --> ../tests/fixtures/negative/atom-assignment-not-subset/program.ldn:8:5
+  |
+8 |     narrow = wide
+  |     ^^^^^^ the atom place written here
+  = note: [0640]: an atom value may widen only into a union that contains its identity

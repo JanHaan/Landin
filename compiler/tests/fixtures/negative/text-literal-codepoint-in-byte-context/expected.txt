@@ -1,0 +1,10 @@
+error[L0301]: `\\u{...}` spells a codepoint, and this `[]u8` context means bytes
+  --> ../tests/fixtures/negative/text-literal-codepoint-in-byte-context/program.ldn:1:18
+  |
+1 | name: []u8 = "bad\u{41}"
+  |                  ^^^^^^
+  --> ../tests/fixtures/negative/text-literal-codepoint-in-byte-context/program.ldn:1:7
+  |
+1 | name: []u8 = "bad\u{41}"
+  |       ^^^^ the reference type written here
+  = note: [0270]: `\\u{...}` is only valid where text is meant

@@ -1,0 +1,10 @@
+error[L0301]: this is `f64` and `f32` belongs here
+  --> ../tests/fixtures/negative/float-special-width-mismatch/program.ldn:1:14
+  |
+1 | wrong: f32 = f64.infinity
+  |              ^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/float-special-width-mismatch/program.ldn:1:1
+  |
+1 | wrong: f32 = f64.infinity
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^ the type declared here
+  = note: [1890]: two types that must agree, and [0310] converts nothing between them

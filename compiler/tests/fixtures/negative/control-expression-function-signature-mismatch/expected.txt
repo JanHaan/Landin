@@ -1,0 +1,10 @@
+error[L0301]: this does not have the something unknown shape required here
+  --> ../tests/fixtures/negative/control-expression-function-signature-mismatch/program.ldn:7:28
+  |
+7 |     if left then good else wrong end if
+  |                            ^^^^^
+  --> ../tests/fixtures/negative/control-expression-function-signature-mismatch/program.ldn:6:25
+  |
+6 | choose: (left: bool) -> (result: unary) =
+  |                         ^^^^^^^^^^^^^^^ the returns this fills
+  = note: D124: every fallthrough answer of a control expression has one complete type and shape

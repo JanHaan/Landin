@@ -1,0 +1,10 @@
+error[L0301]: a text literal cannot take the `i32` context required here
+  --> ../tests/fixtures/negative/text-literal-needs-byte-slice/program.ldn:1:13
+  |
+1 | name: i32 = "landin"
+  |             ^^^^^^^^
+  --> ../tests/fixtures/negative/text-literal-needs-byte-slice/program.ldn:1:1
+  |
+1 | name: i32 = "landin"
+  | ^^^^^^^^^^^^^^^^^^^^ the type declared here
+  = note: [0260]: a text literal takes one of the text views, including `[]u8`

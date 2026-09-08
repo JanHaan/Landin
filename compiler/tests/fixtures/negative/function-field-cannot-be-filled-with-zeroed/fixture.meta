@@ -4,3 +4,6 @@ constructs: 0540, 0670, 0710, 0720, 1000, 1790
 program: program.ldn
 codes: L0301
 targets: linux-x86-64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/function-field-cannot-be-filled-with-zeroed/program.ldn
+status: 1

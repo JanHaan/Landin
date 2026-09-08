@@ -4,3 +4,6 @@ constructs: 0630, 0640
 program: program.ldn
 codes: L0301
 targets: linux-x86-64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/atom-union-member-not-atom/program.ldn
+status: 1

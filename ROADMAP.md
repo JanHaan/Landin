@@ -4581,7 +4581,8 @@ the prototype accounting, the R4.20 closure's scope over `da42169`, and
 the highlighter vocabulary against the grammar's productions are held the
 same way. Every fixture this item touches must fail on the defect
 it pins; a negative whose code a wrong refusal could also raise carries its
-expected text. Fixtures land with their repair; the suite is never pushed
+expected text, and the 194 negatives that pinned bare `L0301` now carry
+theirs and are executed. Fixtures land with their repair; the suite is never pushed
 red.
 
 Recorded elsewhere from the same reviews: `core/map` tombstone compaction and

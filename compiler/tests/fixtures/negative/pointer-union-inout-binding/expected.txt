@@ -1,0 +1,10 @@
+error[L0301]: a `ptr` arm binding is read-only
+  --> ../tests/fixtures/negative/pointer-union-inout-binding/program.ldn:7:20
+  |
+7 |         ptr (inout p): value = p.val
+  |                    ^
+  --> ../tests/fixtures/negative/pointer-union-inout-binding/program.ldn:5:11
+  |
+5 |     match m
+  |           ^ this matched pointer union
+  = note: [1220]: `inout` aliases a payload field, and the present case is the union's own carrier

@@ -4,3 +4,6 @@ program: program.ldn
 codes: L0301
 constructs: 0670, 0670, 1040, 1800, 1920
 targets: linux-x86-64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/caller-parameter-forward-copy/program.ldn
+status: 1

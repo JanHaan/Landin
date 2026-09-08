@@ -1,0 +1,10 @@
+error[L0301]: this function has a different signature
+  --> ../tests/fixtures/negative/multiple-result-function-signature-mismatch/program.ldn:4:25
+  |
+4 |     operation: wanted = wrong
+  |                         ^^^^^
+  --> ../tests/fixtures/negative/multiple-result-function-signature-mismatch/program.ldn:4:16
+  |
+4 |     operation: wanted = wrong
+  |                ^^^^^^ the function type written here
+  = note: [1000]: function values have the signature written by their type

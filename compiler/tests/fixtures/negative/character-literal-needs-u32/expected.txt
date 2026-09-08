@@ -1,0 +1,10 @@
+error[L0301]: this is `u32` and `u8` belongs here
+  --> ../tests/fixtures/negative/character-literal-needs-u32/program.ldn:1:11
+  |
+1 | bad: u8 = 'a'
+  |           ^^^
+  --> ../tests/fixtures/negative/character-literal-needs-u32/program.ldn:1:1
+  |
+1 | bad: u8 = 'a'
+  | ^^^^^^^^^^^^^ the type declared here
+  = note: [1890]: two types that must agree, and [0310] converts nothing between them

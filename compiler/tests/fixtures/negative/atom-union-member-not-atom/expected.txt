@@ -1,0 +1,10 @@
+error[L0301]: this union member is not an atom type
+  --> ../tests/fixtures/negative/atom-union-member-not-atom/program.ldn:3:21
+  |
+3 | bad: type = north | number
+  |                     ^^^^^^
+  --> ../tests/fixtures/negative/atom-union-member-not-atom/program.ldn:3:13
+  |
+3 | bad: type = north | number
+  |             ^^^^^^^^^^^^^^ the union declared here
+  = note: [0640]: an atom union contains only atom identities, and D189 admits one pointer type beside them

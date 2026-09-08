@@ -1,0 +1,10 @@
+error[L0301]: this repetition count does not match the array context
+  --> ../tests/fixtures/negative/struct-array-field-repetition-count-mismatch/program.ldn:8:18
+  |
+8 |     state.row = [2 of 1]
+  |                  ^
+  --> ../tests/fixtures/negative/struct-array-field-repetition-count-mismatch/program.ldn:8:5
+  |
+8 |     state.row = [2 of 1]
+  |     ^^^^^^^^^ the array context here
+  = note: D32: a written repetition count is exactly the destination array's length

@@ -1,0 +1,10 @@
+error[L0301]: this is `bool` and `i32` belongs here
+  --> ../tests/fixtures/negative/struct-literal-field-type-mismatch/program.ldn:6:24
+  |
+6 |     local: point = (x: true)
+  |                        ^^^^
+  --> ../tests/fixtures/negative/struct-literal-field-type-mismatch/program.ldn:6:21
+  |
+6 |     local: point = (x: true)
+  |                     ^^^^^^^ the struct field named here
+  = note: [1890]: two types that must agree, and [0310] converts nothing between them

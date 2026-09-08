@@ -1,0 +1,10 @@
+error[L0301]: this type has more than one iterable Cur and Item pair
+  --> ../tests/fixtures/negative/for-iterable-ambiguous-evidence/main.ldn:31:17
+   |
+31 |     for item in source do
+   |                 ^^^^^^
+  --> ../tests/fixtures/negative/for-iterable-ambiguous-evidence/main.ldn:31:17
+   |
+31 |     for item in source do
+   |                 ^^^^^^ this traversal source
+  = note: D180: a traversal source selects one exact iterable conformance without declaration-order precedence

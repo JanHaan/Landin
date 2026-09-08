@@ -4,3 +4,6 @@ constructs: 0260, 0440, 0570, 1880
 program: program.ldn
 codes: L0301
 targets: linux-x86-64, macos-arm64
+expect: expected.txt
+args: ../tests/fixtures/negative/text-literal-needs-read-only-slice/program.ldn
+status: 1

@@ -1,0 +1,10 @@
+error[L0301]: this argument deduces a different type descriptor for repeated formal `t`
+  --> ../tests/fixtures/negative/generic-reference-array-extent/program.ldn:4:16
+  |
+4 |     same(left, right)
+  |                ^^^^^
+  --> ../tests/fixtures/negative/generic-reference-array-extent/program.ldn:4:10
+  |
+4 |     same(left, right)
+  |          ^^^^ the first argument relation for this formal
+  = note: D138: repeated exact structural deductions must agree; this call has no routine target

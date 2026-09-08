@@ -4,3 +4,6 @@ program: main.ldn
 codes: L0301
 constructs: 0900, 0980, 1920
 targets: linux-x86-64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/inout-same-place-twice/main.ldn
+status: 1

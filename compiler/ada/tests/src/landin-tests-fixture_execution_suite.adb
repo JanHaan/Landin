@@ -1,3 +1,4 @@
+with Ada.Strings;
 --  Fixtures that are run, not merely parsed.
 --
 --  A recorded expectation nobody compares to anything is not a test, it is
@@ -102,6 +103,34 @@ package body Landin.Tests.Fixture_Execution_Suite is
      (Class_Directory (Class (Item)) & "/" & Name (Item));
 
    function Codes_In (Text : String) return String;
+
+   --  A fixture may write `L0010,L0020` or `L0010, L0020`; the comparison
+   --  is on the codes, not the spaces (R4.21).
+   function Normalised (Codes : String) return String;
+
+   function Normalised (Codes : String) return String is
+      Found : Unbounded.Unbounded_String;
+      Start : Positive := Codes'First;
+   begin
+      for Index in Codes'First .. Codes'Last + 1 loop
+         if Index > Codes'Last or else Codes (Index) = ',' then
+            declare
+               Piece : constant String :=
+                 Ada.Strings.Fixed.Trim
+                   (Codes (Start .. Index - 1), Ada.Strings.Both);
+            begin
+               if Piece'Length > 0 then
+                  if Unbounded.Length (Found) > 0 then
+                     Unbounded.Append (Found, ", ");
+                  end if;
+                  Unbounded.Append (Found, Piece);
+               end if;
+            end;
+            Start := Index + 1;
+         end if;
+      end loop;
+      return Unbounded.To_String (Found);
+   end Normalised;
 
    function Codes_In (Text : String) return String is
       Found : Unbounded.Unbounded_String;
@@ -277,7 +306,8 @@ package body Landin.Tests.Fixture_Execution_Suite is
         (Item, Outcome.Exit_Code, 1, Label & ": the program was refused");
       Landin.Testing.Check_Equal
         (Item, Codes_In (Unbounded.To_String (Outcome.Output)),
-         Codes (Case_Item), Label & ": the report carries its pinned codes");
+         Normalised (Codes (Case_Item)),
+         Label & ": the report carries its pinned codes");
    end Run_Negative;
 
    procedure Recorded_Expectations_Hold

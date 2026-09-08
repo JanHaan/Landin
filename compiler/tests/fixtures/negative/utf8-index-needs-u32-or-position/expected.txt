@@ -1,0 +1,10 @@
+error[L0301]: utf8 indexing takes u32 or core/text.position, not `usize`
+  --> ../tests/fixtures/negative/utf8-index-needs-u32-or-position/program.ldn:2:21
+  |
+2 |     result = source[index]
+  |                     ^^^^^
+  --> ../tests/fixtures/negative/utf8-index-needs-u32-or-position/program.ldn:2:14
+  |
+2 |     result = source[index]
+  |              ^^^^^^ the utf8 value indexed here
+  = note: [0610]: the argument type selects the linear ordinal or O(1) position operation

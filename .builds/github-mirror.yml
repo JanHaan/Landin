@@ -38,6 +38,9 @@ tasks:
       #  branch and tag, not only the ref builds.sr.ht checked out for it.
       git clone --bare https://git.sr.ht/~sinnfrei/landin ~/landin-mirror.git
       cd ~/landin-mirror.git
+      #  A mirror is a copy, not a second home: every branch and tag is
+      #  forced to what git.sr.ht has, and one that git.sr.ht no longer
+      #  has is pruned.  Nothing pushed to GitHub directly survives this.
       git push --prune git@github.com:JanHaan/Landin.git \
         '+refs/heads/*:refs/heads/*' \
         '+refs/tags/*:refs/tags/*'

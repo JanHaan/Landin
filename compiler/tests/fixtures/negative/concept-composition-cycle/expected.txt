@@ -1,0 +1,10 @@
+error[L0301]: this concept composition returns to a concept already being composed
+  --> ../tests/fixtures/negative/concept-composition-cycle/main.ldn:4:36
+  |
+4 | right: type = concept (t: type) is left
+  |                                    ^^^^
+  --> ../tests/fixtures/negative/concept-composition-cycle/main.ldn:1:1
+  |
+1 | left: type = concept (t: type) is right
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the active parent concept
+  = note: [1340]: composition is a finite named requirement graph

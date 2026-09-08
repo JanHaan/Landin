@@ -1,0 +1,10 @@
+error[L0301]: this call cannot fail, so it has no error for `else` to handle
+  --> ../tests/fixtures/negative/recover-infallible-call/program.ldn:6:20
+  |
+6 |     value = leaf() else 2
+  |                    ^^^^^^
+  --> ../tests/fixtures/negative/recover-infallible-call/program.ldn:1:1
+  |
+1 | leaf: () -> (value: i32) =
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^ this infallible signature
+  = note: [1030]: call-site `else` handles only the declared error channel

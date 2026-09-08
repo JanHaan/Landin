@@ -1,0 +1,10 @@
+error[L0301]: this call cannot deduce fixed formal `count`
+  --> ../tests/fixtures/negative/generic-computed-pattern-undeduced/program.ldn:6:5
+  |
+6 |     computed(values)
+  |     ^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/generic-computed-pattern-undeduced/program.ldn:1:12
+  |
+1 | computed: (fixed count: u32, value: [count * 2]i32) -> none =
+  |            ^^^^^^^^^^^^^^^^ the undeduced fixed formal
+  = note: D138: a direct structural fixed occurrence binds; a computed occurrence is checked only after another occurrence binds it

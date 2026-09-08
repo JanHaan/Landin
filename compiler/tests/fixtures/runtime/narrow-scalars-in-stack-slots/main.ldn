@@ -1,0 +1,20 @@
+gather: (a: i32, b: i32, c: i32, d: i32, e: i32, f: i32,
+         g: i8, h: u16, i: bool, j: i16, k: u8) -> (sum: i32) =
+    sum = a + b + c + d + e + f + i32(g) + i32(h) + i32(j) + i32(k)
+    if i then
+        sum = sum + 1
+    end if
+end gather
+
+public main: () -> (code: i32) =
+    code = 0
+    small: i8 = -7
+    wide: u16 = 300
+    flag: bool = true
+    signed: i16 = -250
+    byte: u8 = 200
+    --  1+2+3+4+5+6 - 7 + 300 - 250 + 200 + 1 = 265; 265 - 223 = 42
+    if gather(1, 2, 3, 4, 5, 6, small, wide, flag, signed, byte) - 223 == 42 then
+        code = 42
+    end if
+end main

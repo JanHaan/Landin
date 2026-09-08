@@ -1,0 +1,10 @@
+error[L0301]: a `caller` parameter needs a struct of exactly file_id, line and column, each u32, in order
+  --> ../tests/fixtures/negative/caller-parameter-needs-site/program.ldn:1:7
+  |
+1 | bad: (caller where: u32) -> none =
+  |       ^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/caller-parameter-needs-site/program.ldn:1:21
+  |
+1 | bad: (caller where: u32) -> none =
+  |                     ^^^ this written type
+  = note: D192: source filenames live in a separate table

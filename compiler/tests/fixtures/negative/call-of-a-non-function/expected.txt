@@ -1,0 +1,10 @@
+error[L0301]: this value is not a function, so this is not a call
+  --> ../tests/fixtures/negative/call-of-a-non-function/program.ldn:3:5
+  |
+3 |     value()
+  |     ^^^^^
+  --> ../tests/fixtures/negative/call-of-a-non-function/program.ldn:3:5
+  |
+3 |     value()
+  |     ^^^^^^^ this call
+  = note: [1920]: a callee has a function type

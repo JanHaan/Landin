@@ -1,0 +1,10 @@
+error[L0301]: a module `any` binding has no implicit null pair
+  --> ../tests/fixtures/negative/any-module-null-pair/main.ldn:5:1
+  |
+5 | saved: any display
+  | ^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/any-module-null-pair/main.ldn:5:8
+  |
+5 | saved: any display
+  |        ^^^^^^^^^^^ this erased binding
+  = note: D145/D147: runtime construction supplies a non-null data pointer and compatible table

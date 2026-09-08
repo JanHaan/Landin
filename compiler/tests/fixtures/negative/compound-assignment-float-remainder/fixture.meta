@@ -4,3 +4,6 @@ constructs: 0170, 0290, 0390, 1890
 program: program.ldn
 targets: linux-x86-64, macos-arm64
 codes: L0301
+expect: expected.txt
+args: ../tests/fixtures/negative/compound-assignment-float-remainder/program.ldn
+status: 1

@@ -1,0 +1,10 @@
+error[L0301]: this external signature is outside the hosted scalar C boundary
+  --> ../tests/fixtures/negative/external-aggregate-boundary/program.ldn:6:1
+  |
+6 | extern(c) host_pair: (value: pair) -> none
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/external-aggregate-boundary/program.ldn:6:1
+  |
+6 | extern(c) host_pair: (value: pair) -> none
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this external declaration
+  = note: [1580]: R3.50 admits fixed scalar and pointer parameters and at most one such result; the general C ABI matrix belongs to R4.40

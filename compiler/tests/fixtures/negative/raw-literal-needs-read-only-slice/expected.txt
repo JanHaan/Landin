@@ -1,0 +1,10 @@
+error[L0301]: a text literal lives in read-only storage, and this context wants `[]mut u8`
+  --> ../tests/fixtures/negative/raw-literal-needs-read-only-slice/program.ldn:1:18
+  |
+1 | name: []mut u8 = """landin"""
+  |                  ^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/raw-literal-needs-read-only-slice/program.ldn:1:7
+  |
+1 | name: []mut u8 = """landin"""
+  |       ^^^^^^^^ the reference type written here
+  = note: [0260]: writable text is a copy into storage you asked for

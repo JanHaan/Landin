@@ -1,0 +1,10 @@
+error[L0301]: these exact reference identities do not have a text conversion
+  --> ../tests/fixtures/negative/pointer-to-cstring-conversion/program.ldn:2:31
+  |
+2 |     result: cstring = cstring(source)
+  |                               ^^^^^^
+  --> ../tests/fixtures/negative/pointer-to-cstring-conversion/program.ldn:2:23
+  |
+2 |     result: cstring = cstring(source)
+  |                       ^^^^^^^ the destination type applied here
+  = note: [0310]/[0600]: only the explicit byte, utf8 and C-text boundaries are enabled

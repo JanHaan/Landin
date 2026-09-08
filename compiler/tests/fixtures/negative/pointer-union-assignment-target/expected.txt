@@ -1,0 +1,10 @@
+error[L0301]: `.val` wants a pointer and this is a union of an atom and one
+  --> ../tests/fixtures/negative/pointer-union-assignment-target/program.ldn:5:5
+  |
+5 |     m.val = 7
+  |     ^
+  --> ../tests/fixtures/negative/pointer-union-assignment-target/program.ldn:1:1
+  |
+1 | none_found: atom
+  | ^^^^^^^^^^^^^^^^ the empty case this union reserves zero for
+  = note: [0480]: a pointer union is matched before it is read

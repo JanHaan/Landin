@@ -1,4 +1,5 @@
 with Ada.Directories;
+with Ada.Environment_Variables;
 with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 
@@ -16,7 +17,14 @@ package body Landin.Tests.Platform_Suite is
    use type Landin.Platform.Termination;
    use type Landin.Platform.Write_Status;
 
-   Scratch : constant String := "build/test-scratch";
+   --  Inside this host's own build tree, so two tags or modes running at
+   --  once do not write over each other's scratch files (R4.21).
+   Scratch : constant String :=
+     "build/"
+     & Ada.Environment_Variables.Value ("LANDIN_BUILD_TAG", "host")
+     & "/"
+     & Ada.Environment_Variables.Value ("LANDIN_BUILD_MODE", "debug")
+     & "/test-scratch";
 
    procedure Fake_Reads_Report_Their_Reason
      (Item : in out Landin.Testing.Context);

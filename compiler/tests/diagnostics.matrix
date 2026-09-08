@@ -51,7 +51,7 @@ L0317  Live     true  nonempty    1..1 1     landin-diagnostics-checking.ads    
 L0318  Live     true  nonempty    1..1 1     landin-diagnostics-checking.ads     negative/composed-conformance-missing-parent,negative/constraint-not-satisfied,negative/core-map-missing-parent-conformance,negative/core-small-pointer-item,negative/nonzeroable-constraint,negative/nonzeroable-zero-length-constraint
 L0319  Live     true  nonempty    0..0 1     landin-diagnostics-checking.ads     negative/compiler-concept-reserved,negative/compiler-conformance-reserved
 L0320  Live     true  nonempty    0..0 1     landin-diagnostics-lexical.adb      negative/text-literal-malformed-codepoint-escape,negative/text-literal-short-byte-escape,negative/text-literal-unknown-escape
-L0321  Live     true  nonempty    0..0 1     landin-diagnostics-lexical.adb      negative/malformed-float-exponent,negative/malformed-hex-float-exponent
+L0321  Live     true  nonempty    0..0 1     landin-diagnostics-lexical.adb      negative/float-literal-without-fraction,negative/malformed-float-exponent,negative/malformed-hex-float-exponent
 L0322  Live     true  nonempty    0..0 1     landin-diagnostics-lexical.adb      negative/character-literal-byte-escape,negative/character-literal-empty,negative/character-literal-invalid-codepoint,negative/character-literal-multiple
 L0323  Live     true  nonempty    0..0 1     landin-diagnostics-lexical.adb      negative/raw-literal-inconsistent-indentation
 L0500  Live     false empty-ok    0..0 1     landin-driver.adb                   test:landin-tests-driver_suite.adb

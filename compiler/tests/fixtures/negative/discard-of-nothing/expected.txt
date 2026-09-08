@@ -1,0 +1,10 @@
+error[L0301]: this hands back nothing, so there is no result to discard
+  --> ../tests/fixtures/negative/discard-of-nothing/program.ldn:3:9
+  |
+3 |     _ = quiet()
+  |         ^^^^^^^
+  --> ../tests/fixtures/negative/discard-of-nothing/program.ldn:3:5
+  |
+3 |     _ = quiet()
+  |     ^^^^^^^^^^^ the discard
+  = note: [1930]: discarding is for a result, and that call has none

@@ -1,0 +1,10 @@
+error[L0301]: this literal has 3 elements, and its array context has a different length
+  --> ../tests/fixtures/negative/array-literal-argument-shape-mismatch/program.ldn:5:13
+  |
+5 |     consume([1, 2, 3])
+  |             ^^^^^^^^^
+  --> ../tests/fixtures/negative/array-literal-argument-shape-mismatch/program.ldn:1:11
+  |
+1 | consume: (value: [2]i32) -> none =
+  |           ^^^^^^^^^^^^^ the array context here
+  = note: D23/D24/D26/D29: an array literal supplies exactly the number of elements its context names

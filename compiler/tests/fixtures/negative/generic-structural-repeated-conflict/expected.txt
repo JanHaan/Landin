@@ -1,0 +1,10 @@
+error[L0301]: this argument deduces a different fixed value for repeated formal `count`
+  --> ../tests/fixtures/negative/generic-structural-repeated-conflict/program.ldn:13:16
+   |
+13 |     same(left, right)
+   |                ^^^^^
+  --> ../tests/fixtures/negative/generic-structural-repeated-conflict/program.ldn:13:10
+   |
+13 |     same(left, right)
+   |          ^^^^ the first argument relation for this formal
+  = note: D138: repeated exact structural deductions must agree; this call has no routine target

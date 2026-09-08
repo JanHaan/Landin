@@ -1,0 +1,10 @@
+error[L0301]: this argument deduces a different fixed value for repeated formal `n`
+  --> ../tests/fixtures/negative/generic-routine-repeated-fixed-deduction-conflict/program.ldn:6:24
+  |
+6 |     code = first(left, right)
+  |                        ^^^^^
+  --> ../tests/fixtures/negative/generic-routine-repeated-fixed-deduction-conflict/program.ldn:6:18
+  |
+6 |     code = first(left, right)
+  |                  ^^^^ the first argument relation for this formal
+  = note: D138: repeated exact structural deductions must agree; this call has no routine target

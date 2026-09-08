@@ -1,0 +1,10 @@
+error[L0301]: this argument is not an instance of the same nominal source template as its pattern
+  --> ../tests/fixtures/negative/generic-wrong-nominal-template/program.ldn:13:12
+   |
+13 |     accept(wrong)
+   |            ^^^^^
+  --> ../tests/fixtures/negative/generic-wrong-nominal-template/program.ldn:8:45
+  |
+8 | accept: (item: type, fixed tag: u32, value: box(item, tag)) -> none =
+  |                                             ^^^^^^^^^^^^^^ the runtime parameter type pattern
+  = note: D138: deduction unifies the written parameter pattern with the independently synthesized argument descriptor exactly

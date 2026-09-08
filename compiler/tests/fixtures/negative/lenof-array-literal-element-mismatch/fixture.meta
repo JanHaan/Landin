@@ -4,3 +4,6 @@ constructs: 0160, 0200, 0370, 0520, 1800, 1950
 program: program.ldn
 codes: L0301
 targets: linux-x86-64, macos-arm64
+expect: expected.txt
+args: ../tests/fixtures/negative/lenof-array-literal-element-mismatch/program.ldn
+status: 1

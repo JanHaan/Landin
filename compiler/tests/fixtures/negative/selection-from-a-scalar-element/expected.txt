@@ -1,0 +1,10 @@
+error[L0301]: this is not a struct, so it has no field to select
+  --> ../tests/fixtures/negative/selection-from-a-scalar-element/program.ldn:7:9
+  |
+7 |     r = words[0].x
+  |         ^^^^^^^^
+  --> ../tests/fixtures/negative/selection-from-a-scalar-element/program.ldn:7:9
+  |
+7 |     r = words[0].x
+  |         ^^^^^^^^ what it names
+  = note: [1820]: the kernel selects a field of a struct [0670] and nothing else

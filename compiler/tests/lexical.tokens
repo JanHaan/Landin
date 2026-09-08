@@ -27706,6 +27706,7 @@ file negative/float-literal-overflows-context/program.ldn tokens 5
   11 14 f32
   15 16 =
   17 23 3.5e38
+file negative/float-literal-without-fraction/program.ldn refused '1e' is not an integer the rules spell
 file negative/float-remainder-is-integer-only/program.ldn tokens 24
   0 6 public
   7 11 main

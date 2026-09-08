@@ -1,0 +1,10 @@
+error[L0301]: this is `bool` and `i32` belongs here
+  --> ../tests/fixtures/negative/lenof-array-literal-element-mismatch/program.ldn:2:25
+  |
+2 |     length = lenof ([1, true])
+  |                         ^^^^
+  --> ../tests/fixtures/negative/lenof-array-literal-element-mismatch/program.ldn:2:21
+  |
+2 |     length = lenof ([1, true])
+  |                     ^^^^^^^^^ the first literal element measured by `lenof`
+  = note: [1890]: two types that must agree, and [0310] converts nothing between them

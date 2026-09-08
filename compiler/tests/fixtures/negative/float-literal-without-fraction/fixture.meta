@@ -1,0 +1,6 @@
+class: negative
+summary: [0210] a float has digits on both sides of its dot; an exponent on a bare integer is a float that forgot its fraction, not an integer in the wrong base
+program: program.ldn
+codes: L0321
+constructs: 0210, 1770
+targets: linux-x86-64, macos-arm64

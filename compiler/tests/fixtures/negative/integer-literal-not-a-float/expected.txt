@@ -1,0 +1,10 @@
+error[L0301]: this integer literal cannot take the `f32` context required here
+  --> ../tests/fixtures/negative/integer-literal-not-a-float/program.ldn:1:14
+  |
+1 | ratio: f32 = 1
+  |              ^
+  --> ../tests/fixtures/negative/integer-literal-not-a-float/program.ldn:1:14
+  |
+1 | ratio: f32 = 1
+  |              ^ written here
+  = note: [0210]: integer and float literals never slide silently between classes

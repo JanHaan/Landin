@@ -1,0 +1,10 @@
+error[L0301]: this conformance is not usable behind `any`: every entry needs a compatible first `self` pointer
+  --> ../tests/fixtures/negative/any-self-convention/main.ldn:17:24
+   |
+17 |     erased: any view = any(addr item)
+   |                        ^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/any-self-convention/main.ldn:17:13
+   |
+17 |     erased: any view = any(addr item)
+   |             ^^^^^^^^ the runtime-dispatch type written here
+  = note: [1370]/[1390]: dispatch inserts the erased data pointer as the first argument

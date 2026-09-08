@@ -1,0 +1,10 @@
+error[L0301]: this is `bool` and `i32` belongs here
+  --> ../tests/fixtures/negative/local-array-literal-inferred-element-mismatch/program.ldn:2:16
+  |
+2 |     row := [1, true, 3]
+  |                ^^^^
+  --> ../tests/fixtures/negative/local-array-literal-inferred-element-mismatch/program.ldn:2:5
+  |
+2 |     row := [1, true, 3]
+  |     ^^^^^^^^^^^^^^^^^^^ the first inferred array element
+  = note: [1890]: two types that must agree, and [0310] converts nothing between them

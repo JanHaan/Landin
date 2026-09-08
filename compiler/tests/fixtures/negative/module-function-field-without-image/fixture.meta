@@ -4,3 +4,6 @@ constructs: 0060, 0670, 1000, 1460, 1790, 1940
 program: program.ldn
 codes: L0301
 targets: linux-x86-64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/module-function-field-without-image/program.ldn
+status: 1

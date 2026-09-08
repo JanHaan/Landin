@@ -1,0 +1,10 @@
+error[L0301]: this is not an array, so it has no element to index
+  --> ../tests/fixtures/negative/scalar-struct-field-is-not-indexable/program.ldn:7:9
+  |
+7 |     r = local.tag[0]
+  |         ^^^^^^^^^
+  --> ../tests/fixtures/negative/scalar-struct-field-is-not-indexable/program.ldn:7:9
+  |
+7 |     r = local.tag[0]
+  |         ^^^^^^^^^ what it names
+  = note: [1820]: the kernel indexes an array [0520] and nothing else

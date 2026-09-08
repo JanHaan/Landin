@@ -4,3 +4,6 @@ constructs: 0870, 1000, 1790, 1795, 1900
 program: program.ldn
 codes: L0301
 targets: linux-x86-64, macos-arm64
+expect: expected.txt
+args: ../tests/fixtures/negative/written-function-signature-mismatch/program.ldn
+status: 1

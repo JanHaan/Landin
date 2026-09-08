@@ -1,0 +1,10 @@
+error[L0301]: this conformance is not usable behind `any`: every entry needs a compatible first `self` pointer
+  --> ../tests/fixtures/negative/any-readonly-source-for-mutable-entry/main.ldn:38:22
+   |
+38 |     a: any counter = any(addr left)
+   |                      ^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/any-readonly-source-for-mutable-entry/main.ldn:38:8
+   |
+38 |     a: any counter = any(addr left)
+   |        ^^^^^^^^^^^ the runtime-dispatch type written here
+  = note: [1370]/[1390]: dispatch inserts the erased data pointer as the first argument

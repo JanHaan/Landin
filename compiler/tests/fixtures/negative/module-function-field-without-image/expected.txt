@@ -1,0 +1,10 @@
+error[L0301]: this module struct needs an explicit initial value
+  --> ../tests/fixtures/negative/module-function-field-without-image/program.ldn:6:1
+  |
+6 | mut state: box
+  | ^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/module-function-field-without-image/program.ldn:6:12
+  |
+6 | mut state: box
+  |            ^^^ the struct type written here
+  = note: [0540]: a function address has no zero image, so omitted storage cannot initialize it

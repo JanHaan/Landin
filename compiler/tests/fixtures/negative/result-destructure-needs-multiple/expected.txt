@@ -1,0 +1,10 @@
+error[L0301]: this does not produce multiple named returns to bind
+  --> ../tests/fixtures/negative/result-destructure-needs-multiple/program.ldn:3:16
+  |
+3 |     (value) := one()
+  |                ^^^^^
+  --> ../tests/fixtures/negative/result-destructure-needs-multiple/program.ldn:3:5
+  |
+3 |     (value) := one()
+  |     ^^^^^^^^^^^^^^^^ this result binding
+  = note: [0990]: destructuring binds an anonymous result aggregate by field name

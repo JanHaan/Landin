@@ -1,0 +1,10 @@
+error[L0301]: this traverses a pointer, and only the exact `cstring` view has text traversal
+  --> ../tests/fixtures/negative/text-traversal-ordinary-pointer-is-not-cstring/program.ldn:4:19
+  |
+4 |     for scalar in source do
+  |                   ^^^^^^
+  --> ../tests/fixtures/negative/text-traversal-ordinary-pointer-is-not-cstring/program.ldn:4:5
+  |
+4 |     for scalar in source do
+  |     ^^^^^^^^^^^^^^^^^^^^^^^ this for loop
+  = note: D184: an ordinary pointer does not inherit [0600]'s iterable conformance

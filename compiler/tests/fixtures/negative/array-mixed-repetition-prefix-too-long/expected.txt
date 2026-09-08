@@ -1,0 +1,10 @@
+error[L0301]: this mixed repetition leaves no array suffix to fill
+  --> ../tests/fixtures/negative/array-mixed-repetition-prefix-too-long/program.ldn:2:18
+  |
+2 |     row: [2]u8 = [1, 2, of 3]
+  |                  ^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/array-mixed-repetition-prefix-too-long/program.ldn:2:5
+  |
+2 |     row: [2]u8 = [1, 2, of 3]
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^ the array context here
+  = note: D36/D37: a prefix requires 1 <= k < N

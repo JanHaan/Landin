@@ -1,0 +1,10 @@
+error[L0301]: this function has a different signature
+  --> ../tests/fixtures/negative/function-variant-payload-signature-mismatch/program.ldn:10:39
+   |
+10 | state: choice = (kind: some(callback: wrong))
+   |                                       ^^^^^
+  --> ../tests/fixtures/negative/function-variant-payload-signature-mismatch/program.ldn:10:29
+   |
+10 | state: choice = (kind: some(callback: wrong))
+   |                             ^^^^^^^^^^^^^^^ the variant payload field named here
+  = note: [1000]: a function payload keeps its complete structural signature

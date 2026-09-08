@@ -4,3 +4,6 @@ program: main.ldn
 codes: L0301
 constructs: 0050, 1230, 1240, 1370, 1380
 targets: linux-x86-64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/any-construction-needs-context/main.ldn
+status: 1

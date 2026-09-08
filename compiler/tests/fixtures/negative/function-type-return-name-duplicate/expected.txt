@@ -1,0 +1,10 @@
+error[L0301]: this function type gives two results the same field name
+  --> ../tests/fixtures/negative/function-type-return-name-duplicate/program.ldn:1:39
+  |
+1 | duplicated: type = () -> (value: i32, value: bool)
+  |                                       ^^^^^
+  --> ../tests/fixtures/negative/function-type-return-name-duplicate/program.ldn:1:27
+  |
+1 | duplicated: type = () -> (value: i32, value: bool)
+  |                           ^^^^^^^^^^ the first result with that name
+  = note: [0990]: a multiple result is selected by its unique return names

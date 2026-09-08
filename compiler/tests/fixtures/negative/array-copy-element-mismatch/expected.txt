@@ -1,0 +1,10 @@
+error[L0301]: this is not an array of the type written here
+  --> ../tests/fixtures/negative/array-copy-element-mismatch/program.ldn:4:13
+  |
+4 |     words = bytes
+  |             ^^^^^
+  --> ../tests/fixtures/negative/array-copy-element-mismatch/program.ldn:4:5
+  |
+4 |     words = bytes
+  |     ^^^^^ the place written here
+  = note: D17: an array's length and element type are its identity

@@ -1,0 +1,10 @@
+error[L0301]: a caller site can only be forwarded by name from another `caller` parameter
+  --> ../tests/fixtures/negative/caller-parameter-forward-copy/program.ldn:12:13
+   |
+12 |     observe(where: copy)
+   |             ^^^^^^^^^^^
+  --> ../tests/fixtures/negative/caller-parameter-forward-copy/program.ldn:7:11
+  |
+7 | observe: (caller where: site) -> none =
+  |           ^^^^^^^^^^^^^^^^^^ this `caller` parameter
+  = note: D186: otherwise the compiler fills this parameter from the present call site

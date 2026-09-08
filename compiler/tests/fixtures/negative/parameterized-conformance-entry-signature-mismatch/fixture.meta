@@ -4,3 +4,6 @@ program: main.ldn
 codes: L0301
 constructs: 1230, 1240, 1250, 1260, 1290, 1310
 targets: linux-x86-64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/parameterized-conformance-entry-signature-mismatch/main.ldn
+status: 1

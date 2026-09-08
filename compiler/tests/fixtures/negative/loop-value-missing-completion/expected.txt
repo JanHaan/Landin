@@ -1,0 +1,10 @@
+error[L0301]: this value-producing loop can finish without a value
+  --> ../tests/fixtures/negative/loop-value-missing-completion/program.ldn:2:12
+  |
+2 |     code = while false do
+  |            ^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/loop-value-missing-completion/program.ldn:2:12
+  |
+2 |     code = while false do
+  |            ^^^^^^^^^^^^^^ this value-producing loop
+  = note: [1190]: `complete` must leave through `break with` when a finite loop is an expression

@@ -1,0 +1,10 @@
+error[L0301]: this does not have the something unknown shape required here
+  --> ../tests/fixtures/negative/result-aggregate-assignment-name-mismatch/program.ldn:11:13
+   |
+11 |     value = second()
+   |             ^^^^^^^^
+  --> ../tests/fixtures/negative/result-aggregate-assignment-name-mismatch/program.ldn:11:5
+   |
+11 |     value = second()
+   |     ^^^^^ the result aggregate written here
+  = note: D124: every fallthrough answer of a control expression has one complete type and shape

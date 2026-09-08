@@ -4,3 +4,6 @@ constructs: 0310, 0430, 0570, 0600
 program: program.ldn
 codes: L0301
 targets: linux-x86-64, macos-arm64
+expect: expected.txt
+args: ../tests/fixtures/negative/text-slice-result-keeps-identity/program.ldn
+status: 1

@@ -4,3 +4,6 @@ constructs: 0260, 0430, 0570, 0600, 1050, 1880
 program: program.ldn
 codes: L0301
 targets: linux-x86-64, macos-arm64
+expect: expected.txt
+args: ../tests/fixtures/negative/text-view-identities-are-distinct/program.ldn
+status: 1

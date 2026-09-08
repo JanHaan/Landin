@@ -1,0 +1,10 @@
+error[L0301]: `ptr` converts an integer into a pointer, and this position wants a union of an atom and one
+  --> ../tests/fixtures/negative/pointer-union-from-an-integer/program.ldn:5:9
+  |
+5 |     m = ptr(0)
+  |         ^^^^^^
+  --> ../tests/fixtures/negative/pointer-union-from-an-integer/program.ldn:5:5
+  |
+5 |     m = ptr(0)
+  |     ^ the reference place written here
+  = note: [0480]: the empty case is written as the atom the union reserves zero for

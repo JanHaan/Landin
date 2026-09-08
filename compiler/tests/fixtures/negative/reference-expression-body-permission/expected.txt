@@ -1,0 +1,10 @@
+error[L0301]: this does not have the a pointer shape required here
+  --> ../tests/fixtures/negative/reference-expression-body-permission/main.ldn:2:5
+  |
+2 |     source
+  |     ^^^^^^
+  --> ../tests/fixtures/negative/reference-expression-body-permission/main.ldn:1:27
+  |
+1 | bad: (source: ptr u32) -> (result: ptr mut u32 from source) =
+  |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the returns this fills
+  = note: D124: every fallthrough answer of a control expression has one complete type and shape

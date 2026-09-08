@@ -1,0 +1,10 @@
+error[L0301]: this indexes with `bool`, and an index is a usize
+  --> ../tests/fixtures/negative/index-is-not-a-number/program.ldn:5:15
+  |
+5 |     r = words[true]
+  |               ^^^^
+  --> ../tests/fixtures/negative/index-is-not-a-number/program.ldn:5:9
+  |
+5 |     r = words[true]
+  |         ^^^^^ the array indexed here
+  = note: D18: indexing accepts exactly usize and performs no implicit conversion

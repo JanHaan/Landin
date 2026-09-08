@@ -1,0 +1,10 @@
+error[L0301]: these exact reference identities do not have a text conversion
+  --> ../tests/fixtures/negative/text-conversion-mutable-source/program.ldn:2:25
+  |
+2 |     result: utf8 = utf8(source)
+  |                         ^^^^^^
+  --> ../tests/fixtures/negative/text-conversion-mutable-source/program.ldn:2:20
+  |
+2 |     result: utf8 = utf8(source)
+  |                    ^^^^ the destination type applied here
+  = note: [0310]/[0600]: only the explicit byte, utf8 and C-text boundaries are enabled

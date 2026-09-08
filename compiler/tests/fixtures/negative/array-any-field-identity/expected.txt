@@ -1,0 +1,10 @@
+error[L0301]: this is not an array of the type named by the struct field
+  --> ../tests/fixtures/negative/array-any-field-identity/main.ldn:5:30
+  |
+5 |     wrong: holder = (values: source)
+  |                              ^^^^^^
+  --> ../tests/fixtures/negative/array-any-field-identity/main.ldn:5:22
+  |
+5 |     wrong: holder = (values: source)
+  |                      ^^^^^^^^^^^^^^ the field named here
+  = note: D17: an array's length and element type are its identity

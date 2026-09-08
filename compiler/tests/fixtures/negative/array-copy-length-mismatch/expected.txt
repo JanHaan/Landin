@@ -1,0 +1,10 @@
+error[L0301]: this is not an array of the type written here
+  --> ../tests/fixtures/negative/array-copy-length-mismatch/program.ldn:5:12
+  |
+5 |     long = short
+  |            ^^^^^
+  --> ../tests/fixtures/negative/array-copy-length-mismatch/program.ldn:5:5
+  |
+5 |     long = short
+  |     ^^^^ the place written here
+  = note: D17: an array's length and element type are its identity

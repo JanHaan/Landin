@@ -1,0 +1,10 @@
+error[L0301]: a range subtype constrains an integer type, and this is not one
+  --> ../tests/fixtures/negative/range-subtype-base-is-not-an-integer/program.ldn:1:18
+  |
+1 | fraction: type = f32 range 0..1
+  |                  ^^^
+  --> ../tests/fixtures/negative/range-subtype-base-is-not-an-integer/program.ldn:1:18
+  |
+1 | fraction: type = f32 range 0..1
+  |                  ^^^^^^^^^^^^^^ the range written here
+  = note: [0660]: a range subtype is its base type restricted to a run of that type's own values

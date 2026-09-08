@@ -1,0 +1,10 @@
+error[L0301]: this is `u8` and `i32` belongs here
+  --> ../tests/fixtures/negative/for-range-endpoints-disagree/program.ldn:5:25
+  |
+5 |     for item in first..<last do
+  |                         ^^^^
+  --> ../tests/fixtures/negative/for-range-endpoints-disagree/program.ldn:5:17
+  |
+5 |     for item in first..<last do
+  |                 ^^^^^ the other endpoint of this range
+  = note: [1890]: two types that must agree, and [0310] converts nothing between them

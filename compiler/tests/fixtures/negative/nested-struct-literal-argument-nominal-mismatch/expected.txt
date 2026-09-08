@@ -1,0 +1,10 @@
+error[L0301]: this constructs a different struct type
+  --> ../tests/fixtures/negative/nested-struct-literal-argument-nominal-mismatch/program.ldn:17:22
+   |
+17 |     consume((nested: right(value: 1)))
+   |                      ^^^^^
+  --> ../tests/fixtures/negative/nested-struct-literal-argument-nominal-mismatch/program.ldn:17:14
+   |
+17 |     consume((nested: right(value: 1)))
+   |              ^^^^^^^^^^^^^^^^^^^^^^^ this ordinary-child field
+  = note: [0710]: two structs are one type when one declaration wrote both, and never otherwise

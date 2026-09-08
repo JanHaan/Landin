@@ -4,3 +4,6 @@ constructs: 0160, 0570
 program: program.ldn
 codes: L0301
 targets: linux-x86-64, macos-arm64
+expect: expected.txt
+args: ../tests/fixtures/negative/index-is-not-a-number/program.ldn
+status: 1

@@ -1,0 +1,10 @@
+error[L0301]: this struct has no all-bits-zero value
+  --> ../tests/fixtures/negative/function-field-has-no-zero-image/program.ldn:8:13
+  |
+8 |     local = zeroed
+  |             ^^^^^^
+  --> ../tests/fixtures/negative/function-field-has-no-zero-image/program.ldn:8:5
+  |
+8 |     local = zeroed
+  |     ^^^^^ the struct place written here
+  = note: [0540]: a function address has no zero image, so neither does a value that contains one

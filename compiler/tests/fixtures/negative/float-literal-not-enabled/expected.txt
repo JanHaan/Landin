@@ -1,0 +1,10 @@
+error[L0301]: this is a floating-point number, and `i32` belongs here
+  --> ../tests/fixtures/negative/float-literal-not-enabled/program.ldn:1:14
+  |
+1 | ratio: i32 = 1.5
+  |              ^^^
+  --> ../tests/fixtures/negative/float-literal-not-enabled/program.ldn:1:14
+  |
+1 | ratio: i32 = 1.5
+  |              ^^^ written here
+  = note: [0210]: integer and float literals never slide silently between classes

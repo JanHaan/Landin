@@ -1,0 +1,10 @@
+error[L0301]: this does not have the something unknown shape required here
+  --> ../tests/fixtures/negative/any-concept-identity-mismatch/main.ldn:24:13
+   |
+24 |     right = left
+   |             ^^^^
+  --> ../tests/fixtures/negative/any-concept-identity-mismatch/main.ldn:24:5
+   |
+24 |     right = left
+   |     ^^^^^ the runtime-dispatch place written here
+  = note: D124: every fallthrough answer of a control expression has one complete type and shape

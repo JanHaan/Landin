@@ -1,0 +1,10 @@
+error[L0301]: this function has a different signature
+  --> ../tests/fixtures/negative/function-field-construction-signature-mismatch/program.ldn:10:25
+   |
+10 | state: box = (callback: wrong)
+   |                         ^^^^^
+  --> ../tests/fixtures/negative/function-field-construction-signature-mismatch/program.ldn:10:15
+   |
+10 | state: box = (callback: wrong)
+   |               ^^^^^^^^^^^^^^^ the struct field named here
+  = note: [1000]: a function-valued field keeps its complete structural signature

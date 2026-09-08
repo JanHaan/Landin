@@ -1,0 +1,10 @@
+error[L0301]: this argument has a different struct type
+  --> ../tests/fixtures/negative/generic-reference-field-permission-distinct/program.ldn:21:27
+   |
+21 |     needs_mutable_pointer(held)
+   |                           ^^^^
+  --> ../tests/fixtures/negative/generic-reference-field-permission-distinct/program.ldn:13:25
+   |
+13 | needs_mutable_pointer: (value: holder(ptr mut node)) -> none =
+   |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^ this parameter
+  = note: [0710]: ordinary structs are nominal

@@ -4,3 +4,6 @@ program: program.ldn
 codes: L0301
 constructs: 0310, 1130, 1190, 1890
 targets: linux-x86-64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/loop-value-type-mismatch/program.ldn
+status: 1

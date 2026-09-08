@@ -1,0 +1,10 @@
+error[L0301]: this call gives 1 argument and the function takes 2 arguments
+  --> ../tests/fixtures/negative/call-with-too-few-arguments/program.ldn:2:21
+  |
+2 | f: () -> (r: i32) = add(1) end f
+  |                     ^^^^^^
+  --> ../tests/fixtures/negative/call-with-too-few-arguments/program.ldn:1:1
+  |
+1 | add: (a: i32, b: i32) -> (r: i32) = a + b end add
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the signature written here
+  = note: [1920]: a call names every parameter exactly once

@@ -1,0 +1,10 @@
+error[L0301]: this is `bool` and `u16` belongs here
+  --> ../tests/fixtures/negative/module-array-from-struct-field-source-refused/program.ldn:5:27
+  |
+5 | state: holder = (row: [1, true])
+  |                           ^^^^
+  --> ../tests/fixtures/negative/module-array-from-struct-field-source-refused/program.ldn:5:18
+  |
+5 | state: holder = (row: [1, true])
+  |                  ^^^^^^^^^^^^^^ the array element type
+  = note: [1890]: two types that must agree, and [0310] converts nothing between them

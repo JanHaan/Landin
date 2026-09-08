@@ -1,0 +1,10 @@
+error[L0301]: this is not the nominal struct type named by the payload field
+  --> ../tests/fixtures/negative/variant-struct-payload-mismatch/program.ldn:22:27
+   |
+22 |     state.kind = spot(at: other)
+   |                           ^^^^^
+  --> ../tests/fixtures/negative/variant-struct-payload-mismatch/program.ldn:22:23
+   |
+22 |     state.kind = spot(at: other)
+   |                       ^^^^^^^^^ the payload field named here
+  = note: [0710]: ordinary struct identity is nominal

@@ -1,0 +1,10 @@
+error[L0301]: a union holds at most one pointer type
+  --> ../tests/fixtures/negative/pointer-union-two-pointers/program.ldn:2:46
+  |
+2 | maybe_ptr: type = none_found | ptr mut u32 | ptr u8
+  |                                              ^^^^^^
+  --> ../tests/fixtures/negative/pointer-union-two-pointers/program.ldn:2:32
+  |
+2 | maybe_ptr: type = none_found | ptr mut u32 | ptr u8
+  |                                ^^^^^^^^^^^ the pointer member already given
+  = note: [0480]: `maybe a pointer` is an atom beside one pointer type
