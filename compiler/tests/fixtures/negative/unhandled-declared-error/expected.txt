@@ -1,0 +1,10 @@
+error[L0301]: this failing call is neither tried nor recovered with `else`
+  --> ../tests/fixtures/negative/unhandled-declared-error/program.ldn:9:13
+  |
+9 |     value = leaf()
+  |             ^^^^^^
+  --> ../tests/fixtures/negative/unhandled-declared-error/program.ldn:4:1
+  |
+4 | leaf: () -> (value: i32) ! problem =
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this failing signature
+  = note: [0960]/[1030]: write `try` to propagate or `else` to handle the declared error

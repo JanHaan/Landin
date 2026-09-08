@@ -4,3 +4,6 @@ constructs: 0080, 0110, 0520, 1810
 program: program.ldn
 codes: L0301
 targets: linux-x86-64, macos-arm64
+expect: expected.txt
+args: ../tests/fixtures/negative/array-initializer-length-mismatch/program.ldn
+status: 1

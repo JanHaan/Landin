@@ -1,0 +1,10 @@
+error[L0301]: this integer literal cannot take the `bool` context required here
+  --> ../tests/fixtures/negative/loop-condition-not-bool/program.ldn:2:11
+  |
+2 |     while 1 do
+  |           ^
+  --> ../tests/fixtures/negative/loop-condition-not-bool/program.ldn:2:11
+  |
+2 |     while 1 do
+  |           ^ written here
+  = note: [1890]: a bool has no arithmetic and no bitwise set

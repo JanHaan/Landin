@@ -216,6 +216,7 @@ negative/fixed-conditional-evaluator | linux-x86-64, macos-arm64, synthetic-32
 negative/fixed-conditional-inactive-parser-error | linux-x86-64, macos-arm64, synthetic-32
 negative/float-literal-not-enabled | linux-x86-64, macos-arm64
 negative/float-literal-overflows-context | linux-x86-64, macos-arm64
+negative/float-literal-without-fraction | linux-x86-64, macos-arm64
 negative/float-remainder-is-integer-only | linux-x86-64, macos-arm64
 negative/float-special-name-unknown | linux-x86-64, macos-arm64
 negative/float-special-on-integer-type | linux-x86-64, macos-arm64
@@ -1152,6 +1153,7 @@ runtime/named-call-statements | linux-x86-64
 runtime/named-return-zeroed-reads-zero | linux-x86-64
 runtime/named-runtime-call-order | linux-x86-64
 runtime/narrow-extern-argument-is-extended | linux-x86-64
+runtime/narrow-scalars-in-stack-slots | linux-x86-64
 runtime/negative-left-shift-traps | linux-x86-64
 runtime/negative-right-shift-traps | linux-x86-64
 runtime/nested-scalar-array-stores | linux-x86-64

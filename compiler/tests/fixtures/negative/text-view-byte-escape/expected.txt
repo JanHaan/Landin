@@ -1,0 +1,10 @@
+error[L0301]: `\\xNN` spells a byte, and this text context requires Unicode scalar values
+  --> ../tests/fixtures/negative/text-view-byte-escape/program.ldn:1:18
+  |
+1 | name: utf8 = "bad\x41"
+  |                  ^^^^
+  --> ../tests/fixtures/negative/text-view-byte-escape/program.ldn:1:7
+  |
+1 | name: utf8 = "bad\x41"
+  |       ^^^^ the reference type written here
+  = note: [0270]: `\\xNN` is only valid where bytes are meant

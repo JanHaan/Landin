@@ -1,0 +1,10 @@
+error[L0301]: this repetition count does not match the array context
+  --> ../tests/fixtures/negative/array-repetition-argument-shape-mismatch/program.ldn:5:14
+  |
+5 |     consume([3 of 1])
+  |              ^
+  --> ../tests/fixtures/negative/array-repetition-argument-shape-mismatch/program.ldn:1:11
+  |
+1 | consume: (value: [2]i32) -> none =
+  |           ^^^^^^^^^^^^^ the array context here
+  = note: D32: a written repetition count is exactly the destination array's length

@@ -1,0 +1,10 @@
+error[L0301]: this mixed repetition leaves no array suffix to fill
+  --> ../tests/fixtures/negative/struct-array-field-mixed-prefix-too-long/program.ldn:8:17
+  |
+8 |     state.row = [1, 2, of 3]
+  |                 ^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/struct-array-field-mixed-prefix-too-long/program.ldn:8:5
+  |
+8 |     state.row = [1, 2, of 3]
+  |     ^^^^^^^^^ the array context here
+  = note: D36/D37: a prefix requires 1 <= k < N

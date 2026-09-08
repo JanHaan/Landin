@@ -1,0 +1,10 @@
+error[L0301]: this value-producing `if` has a fallthrough path with no value
+  --> ../tests/fixtures/negative/if-expression-missing-else/program.ldn:2:5
+  |
+2 |     if condition then
+  |     ^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/if-expression-missing-else/program.ldn:2:8
+  |
+2 |     if condition then
+  |        ^^^^^^^^^ this condition has an untaken edge
+  = note: D124: every fallthrough edge of a control expression produces its joined value

@@ -1,0 +1,10 @@
+error[L0301]: a `sink` argument must be a place rooted in a binding, without a dereference or computed index
+  --> ../tests/fixtures/negative/sink-through-dereference/program.ldn:6:13
+  |
+6 |     consume(pointer.val)
+  |             ^^^^^^^^^^^
+  --> ../tests/fixtures/negative/sink-through-dereference/program.ldn:1:11
+  |
+1 | consume: (sink value: u32) -> none =
+  |           ^^^^^^^^^^^^^^^ this `sink` parameter
+  = note: [0910]: this is the boundary at which one consumed place remains provable

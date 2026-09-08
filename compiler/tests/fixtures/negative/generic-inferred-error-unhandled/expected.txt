@@ -1,0 +1,10 @@
+error[L0301]: this failing call is neither tried nor recovered with `else`
+  --> ../tests/fixtures/negative/generic-inferred-error-unhandled/program.ldn:9:14
+  |
+9 |     result = stop(42)
+  |              ^^^^^^^^
+  --> ../tests/fixtures/negative/generic-inferred-error-unhandled/program.ldn:3:1
+  |
+3 | stop: (t: type, value: t) -> (result: t) ! ... =
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this failing signature
+  = note: [0960]/[1030]: write `try` to propagate or `else` to handle the declared error

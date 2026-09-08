@@ -1,0 +1,10 @@
+error[L0301]: this does not have the a slice shape required here
+  --> ../tests/fixtures/negative/text-slice-result-keeps-identity/program.ldn:2:14
+  |
+2 |     result = source[0..<lenof source]
+  |              ^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/text-slice-result-keeps-identity/program.ldn:2:5
+  |
+2 |     result = source[0..<lenof source]
+  |     ^^^^^^ the reference place written here
+  = note: D124: every fallthrough answer of a control expression has one complete type and shape

@@ -1,0 +1,10 @@
+error[L0301]: an erased entry is called immediately; it is not a bound function value
+  --> ../tests/fixtures/negative/any-entry-not-bound-value/main.ldn:22:15
+   |
+22 |     stored := erased.code
+   |               ^^^^^^^^^^^
+  --> ../tests/fixtures/negative/any-entry-not-bound-value/main.ldn:22:15
+   |
+22 |     stored := erased.code
+   |               ^^^^^^ the erased receiver
+  = note: D146/D147: the two-word pair has no third receiver word for a stored method

@@ -1,0 +1,10 @@
+error[L0301]: this place is already passed as an `inout` argument
+  --> ../tests/fixtures/negative/inout-same-place-twice/main.ldn:8:20
+  |
+8 |     replace(value, value)
+  |                    ^^^^^
+  --> ../tests/fixtures/negative/inout-same-place-twice/main.ldn:8:13
+  |
+8 |     replace(value, value)
+  |             ^^^^^ the first `inout` use
+  = note: [0900]: a provably identical place is not exclusive

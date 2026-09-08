@@ -1,0 +1,10 @@
+error[L0301]: this call gives 1 argument and the function takes 0 arguments
+  --> ../tests/fixtures/negative/caller-parameter-positional/program.ldn:12:5
+   |
+12 |     observe(zeroed)
+   |     ^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/caller-parameter-positional/program.ldn:7:1
+  |
+7 | observe: (caller where: site) -> none =
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the signature written here
+  = note: [1920]: a call names every parameter exactly once

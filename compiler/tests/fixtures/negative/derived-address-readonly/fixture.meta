@@ -5,3 +5,5 @@ constructs: 0430, 0520, 0770, 0790, 0800, 0830, 1910
 codes: L0301
 status: 1
 targets: linux-x86-64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/derived-address-readonly/main.ldn

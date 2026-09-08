@@ -4,3 +4,6 @@ constructs: 0520, 0670, 0700, 1920
 program: program.ldn
 codes: L0301
 targets: linux-x86-64, macos-arm64
+expect: expected.txt
+args: ../tests/fixtures/negative/struct-literal-argument-array-shape-mismatch/program.ldn
+status: 1

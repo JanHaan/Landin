@@ -24,6 +24,14 @@ package body Landin.Source is
    --  that a diagnostic never points at the wrong line.
    ---------------------------------------------------------------------
 
+   function Rebased (Text : String) return Text_Access;
+
+   function Rebased (Text : String) return Text_Access is
+      Copy : constant String (1 .. Text'Length) := Text;
+   begin
+      return new String'(Copy);
+   end Rebased;
+
    function Create
      (Id : Source_Id; Name : String; Text : String) return Snapshot
    is
@@ -59,7 +67,9 @@ package body Landin.Source is
          return
            (Id          => Id,
             Name        => ASU.To_Unbounded_String (Name),
-            Bytes       => new String'(Text),
+            --  Copied to a 1-based string: Slice and Line_Text index from
+            --  one, and a caller's slice keeps its own lower bound (R4.21).
+            Bytes       => Rebased (Text),
             Line_Starts => Offsets_Access (Map));
       end;
    end Create;

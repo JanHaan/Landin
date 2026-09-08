@@ -4,3 +4,6 @@ constructs: 1890, 0310
 program: program.ldn
 targets: linux-x86-64, macos-arm64
 codes: L0301
+expect: expected.txt
+args: ../tests/fixtures/negative/operands-of-two-types/program.ldn
+status: 1

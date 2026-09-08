@@ -1,0 +1,10 @@
+error[L0301]: this literal has 2 elements, and its array context has a different length
+  --> ../tests/fixtures/negative/struct-array-field-literal-length-mismatch/program.ldn:8:17
+  |
+8 |     state.row = [1, 2]
+  |                 ^^^^^^
+  --> ../tests/fixtures/negative/struct-array-field-literal-length-mismatch/program.ldn:8:5
+  |
+8 |     state.row = [1, 2]
+  |     ^^^^^^^^^ the array context here
+  = note: D23/D24/D26/D29: an array literal supplies exactly the number of elements its context names

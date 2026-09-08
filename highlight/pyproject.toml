@@ -8,7 +8,7 @@ name = "landin-pygments"
 #  version to claim; until then the number says only that it is unreleased.
 version = "0.0.0"
 description = "A Pygments lexer for the Landin language"
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 dependencies = ["Pygments>=2.14"]
 
 #  landin_highlight is shipped alongside the lexer rather than vendored

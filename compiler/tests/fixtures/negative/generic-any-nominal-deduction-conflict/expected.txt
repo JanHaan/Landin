@@ -1,0 +1,10 @@
+error[L0301]: this argument deduces a different type descriptor for repeated formal `t`
+  --> ../tests/fixtures/negative/generic-any-nominal-deduction-conflict/program.ldn:14:18
+   |
+14 |     same(source, value)
+   |                  ^^^^^
+  --> ../tests/fixtures/negative/generic-any-nominal-deduction-conflict/program.ldn:14:10
+   |
+14 |     same(source, value)
+   |          ^^^^^^ the first argument relation for this formal
+  = note: D138: repeated exact structural deductions must agree; this call has no routine target

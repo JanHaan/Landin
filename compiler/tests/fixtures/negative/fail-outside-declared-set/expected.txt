@@ -1,0 +1,10 @@
+error[L0301]: this body can fail with an atom outside its declared error set
+  --> ../tests/fixtures/negative/fail-outside-declared-set/program.ldn:3:1
+  |
+3 | f: () -> none ! missing =
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/fail-outside-declared-set/program.ldn:3:1
+  |
+3 | f: () -> none ! missing =
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^ this declared signature
+  = note: [0940]: every failing path belongs to the function's `!` set

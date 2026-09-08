@@ -1,0 +1,10 @@
+error[L0301]: this indexes with `u32`, and an index is a usize
+  --> ../tests/fixtures/negative/struct-array-field-index-not-usize/program.ldn:8:19
+  |
+8 |     r = state.row[i]
+  |                   ^
+  --> ../tests/fixtures/negative/struct-array-field-index-not-usize/program.ldn:8:9
+  |
+8 |     r = state.row[i]
+  |         ^^^^^^^^^ the array indexed here
+  = note: D18: indexing accepts exactly usize and performs no implicit conversion

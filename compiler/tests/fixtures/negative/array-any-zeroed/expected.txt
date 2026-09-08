@@ -1,0 +1,10 @@
+error[L0301]: this array has no all-bits-zero value
+  --> ../tests/fixtures/negative/array-any-zeroed/main.ldn:8:23
+  |
+8 |     value: [1]any a = zeroed
+  |                       ^^^^^^
+  --> ../tests/fixtures/negative/array-any-zeroed/main.ldn:8:12
+  |
+8 |     value: [1]any a = zeroed
+  |            ^^^^^^^^ the array type written here
+  = note: [0540]: the complete element type must have a zero image

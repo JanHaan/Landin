@@ -1,0 +1,10 @@
+error[L0301]: this is not a value of the struct type written here
+  --> ../tests/fixtures/negative/module-struct-initializer-nominal-mismatch/program.ldn:10:14
+   |
+10 | copy: left = source
+   |              ^^^^^^
+  --> ../tests/fixtures/negative/module-struct-initializer-nominal-mismatch/program.ldn:10:1
+   |
+10 | copy: left = source
+   | ^^^^^^^^^^^^^^^^^^^ the type declared here
+  = note: [0710]: two structs are one type when one declaration wrote both, and never otherwise

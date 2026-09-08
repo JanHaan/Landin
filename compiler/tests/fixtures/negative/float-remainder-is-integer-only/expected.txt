@@ -1,0 +1,10 @@
+error[L0301]: this operator admits integers only
+  --> ../tests/fixtures/negative/float-remainder-is-integer-only/program.ldn:2:22
+  |
+2 |     value: f32 = 3.0 % 2.0
+  |                      ^
+  --> ../tests/fixtures/negative/float-remainder-is-integer-only/program.ldn:2:18
+  |
+2 |     value: f32 = 3.0 % 2.0
+  |                  ^^^ the floating-point operand
+  = note: [1890]: remainder, wrapping, shifts and bitwise operators do not admit floats

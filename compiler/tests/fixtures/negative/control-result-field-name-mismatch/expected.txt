@@ -1,0 +1,10 @@
+error[L0301]: this does not have the something unknown shape required here
+  --> ../tests/fixtures/negative/control-result-field-name-mismatch/program.ldn:13:9
+   |
+13 |         second()
+   |         ^^^^^^^^
+  --> ../tests/fixtures/negative/control-result-field-name-mismatch/program.ldn:10:14
+   |
+10 |     value := if choose then
+   |              ^^^^^^^^^^^^^^ the first value-producing edge
+  = note: D124: every fallthrough answer of a control expression has one complete type and shape

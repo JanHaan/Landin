@@ -1,0 +1,10 @@
+error[L0301]: this returned field is bound twice
+  --> ../tests/fixtures/negative/result-destructure-duplicate-field/program.ldn:6:19
+  |
+6 |     (left: first, left: second) := pair()
+  |                   ^^^^
+  --> ../tests/fixtures/negative/result-destructure-duplicate-field/program.ldn:6:5
+  |
+6 |     (left: first, left: second) := pair()
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this result binding
+  = note: [0990]: each selected field has one local

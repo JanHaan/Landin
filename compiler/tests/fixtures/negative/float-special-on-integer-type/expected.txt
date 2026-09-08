@@ -1,0 +1,10 @@
+error[L0301]: `u32` has no named value `nan`
+  --> ../tests/fixtures/negative/float-special-on-integer-type/program.ldn:1:18
+  |
+1 | wrong: u32 = u32.nan
+  |                  ^^^
+  --> ../tests/fixtures/negative/float-special-on-integer-type/program.ldn:1:14
+  |
+1 | wrong: u32 = u32.nan
+  |              ^^^ the type selected here
+  = note: [0240]: f32 and f64 name only `infinity` and `nan`

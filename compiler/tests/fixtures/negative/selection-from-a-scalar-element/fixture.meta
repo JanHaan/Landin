@@ -4,3 +4,6 @@ constructs: 0520, 0670, 1820
 program: program.ldn
 codes: L0301
 targets: linux-x86-64, macos-arm64
+expect: expected.txt
+args: ../tests/fixtures/negative/selection-from-a-scalar-element/program.ldn
+status: 1

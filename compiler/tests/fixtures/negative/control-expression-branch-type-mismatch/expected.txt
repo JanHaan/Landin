@@ -1,0 +1,10 @@
+error[L0301]: this is `bool` and `i32` belongs here
+  --> ../tests/fixtures/negative/control-expression-branch-type-mismatch/program.ldn:5:9
+  |
+5 |         false
+  |         ^^^^^
+  --> ../tests/fixtures/negative/control-expression-branch-type-mismatch/program.ldn:1:25
+  |
+1 | f: (condition: bool) -> (result: i32) =
+  |                         ^^^^^^^^^^^^^ the returns this fills
+  = note: [1890]: two types that must agree, and [0310] converts nothing between them

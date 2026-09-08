@@ -1,0 +1,10 @@
+error[L0301]: `of zeroed` cannot fill field `callback`, which has no zero image
+  --> ../tests/fixtures/negative/function-field-cannot-be-filled-with-zeroed/program.ldn:8:32
+  |
+8 |     local: box = (count: 1, of zeroed)
+  |                                ^^^^^^
+  --> ../tests/fixtures/negative/function-field-cannot-be-filled-with-zeroed/program.ldn:8:18
+  |
+8 |     local: box = (count: 1, of zeroed)
+  |                  ^^^^^^^^^^^^^^^^^^^^^ the struct literal
+  = note: [0540]: a function address has no all-bits-zero value

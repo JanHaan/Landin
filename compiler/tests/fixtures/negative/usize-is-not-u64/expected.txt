@@ -1,0 +1,10 @@
+error[L0301]: this is `usize` and `u64` belongs here
+  --> ../tests/fixtures/negative/usize-is-not-u64/program.ldn:2:13
+  |
+2 |     r = a + b
+  |             ^
+  --> ../tests/fixtures/negative/usize-is-not-u64/program.ldn:2:9
+  |
+2 |     r = a + b
+  |         ^^^^^ required by this operator
+  = note: [1890]: two types that must agree, and [0310] converts nothing between them

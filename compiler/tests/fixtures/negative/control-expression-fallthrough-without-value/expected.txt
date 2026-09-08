@@ -1,0 +1,10 @@
+error[L0301]: this control block can fall through without producing a value
+  --> ../tests/fixtures/negative/control-expression-fallthrough-without-value/program.ldn:3:9
+  |
+3 |         _ = 42
+  |         ^^^^^^
+  --> ../tests/fixtures/negative/control-expression-fallthrough-without-value/program.ldn:2:5
+  |
+2 |     if condition then
+  |     ^^^^^^^^^^^^^^^^^ this control expression needs a value
+  = note: D124: an early return needs no joined value, but every fallthrough edge does

@@ -1,0 +1,10 @@
+error[L0301]: this does not have the a pointer shape required here
+  --> ../tests/fixtures/negative/derived-address-readonly/main.ldn:2:14
+  |
+2 |     result = addr source[0]
+  |              ^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/derived-address-readonly/main.ldn:2:5
+  |
+2 |     result = addr source[0]
+  |     ^^^^^^ the reference place written here
+  = note: D124: every fallthrough answer of a control expression has one complete type and shape

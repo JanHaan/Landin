@@ -4,3 +4,6 @@ constructs: 0940, 1000
 program: program.ldn
 codes: L0301
 targets: linux-x86-64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/failing-function-signature-mismatch/program.ldn
+status: 1

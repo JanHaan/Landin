@@ -1,0 +1,10 @@
+error[L0301]: a generic routine template has no standalone function value
+  --> ../tests/fixtures/negative/generic-inferred-template-not-function-value/program.ldn:10:17
+   |
+10 | use: callback = generic
+   |                 ^^^^^^^
+  --> ../tests/fixtures/negative/generic-inferred-template-not-function-value/program.ldn:5:1
+  |
+5 | generic: (t: type, value: t) -> (result: t) ! ... =
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this generic template
+  = note: D138: a direct call selects a concrete routine instance and signature

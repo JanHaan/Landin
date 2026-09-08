@@ -4,3 +4,6 @@ program: main.ldn
 codes: L0301
 constructs: 0790, 1240, 1320
 targets: linux-x86-64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/iterable-retained-item-source/main.ldn
+status: 1

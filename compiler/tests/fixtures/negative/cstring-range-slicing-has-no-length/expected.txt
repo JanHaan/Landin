@@ -1,0 +1,10 @@
+error[L0301]: a cstring has no length, so it cannot be range sliced
+  --> ../tests/fixtures/negative/cstring-range-slicing-has-no-length/program.ldn:2:14
+  |
+2 |     result = source[0..<1]
+  |              ^^^^^^
+  --> ../tests/fixtures/negative/cstring-range-slicing-has-no-length/program.ldn:2:14
+  |
+2 |     result = source[0..<1]
+  |              ^^^^^^ the text value sliced here
+  = note: [0600]: cstring carries only a pointer; utf8 and utf16 carry code-unit lengths

@@ -1,0 +1,10 @@
+error[L0301]: this function has a different signature
+  --> ../tests/fixtures/negative/failing-function-signature-mismatch/program.ldn:12:31
+   |
+12 |     callback: wants_missing = fails_denied
+   |                               ^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/failing-function-signature-mismatch/program.ldn:12:15
+   |
+12 |     callback: wants_missing = fails_denied
+   |               ^^^^^^^^^^^^^ the function type written here
+  = note: [1000]: function values have the signature written by their type

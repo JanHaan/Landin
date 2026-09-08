@@ -1,0 +1,10 @@
+error[L0301]: this conformance function does not have the concept entry's signature
+  --> ../tests/fixtures/negative/any-provider-result-source-mismatch/main.ldn:20:1
+   |
+20 | receiver is lender (take: take_receiver)
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/any-provider-result-source-mismatch/main.ldn:6:5
+  |
+6 |     take: (self: ptr mut t, source: ptr mut cell)
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the required entry
+  = note: [1240]: each supplied function has exactly the requirement's concrete shape

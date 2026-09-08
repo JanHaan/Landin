@@ -1,0 +1,10 @@
+error[L0301]: this external signature is outside the hosted scalar C boundary
+  --> ../tests/fixtures/negative/range-subtype-external-signature/program.ldn:3:1
+  |
+3 | extern (c) clamp: (v: percent) -> (r: percent)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/range-subtype-external-signature/program.ldn:3:1
+  |
+3 | extern (c) clamp: (v: percent) -> (r: percent)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this external declaration
+  = note: [1580]: R3.50 admits fixed scalar and pointer parameters and at most one such result; the general C ABI matrix belongs to R4.40

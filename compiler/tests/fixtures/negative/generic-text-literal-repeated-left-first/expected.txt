@@ -1,0 +1,10 @@
+error[L0301]: this argument deduces a different type descriptor for repeated formal `item`
+  --> ../tests/fixtures/negative/generic-text-literal-repeated-left-first/main.ldn:8:22
+  |
+8 |     bad := same("x", text)
+  |                      ^^^^
+  --> ../tests/fixtures/negative/generic-text-literal-repeated-left-first/main.ldn:8:17
+  |
+8 |     bad := same("x", text)
+  |                 ^^^ the first argument relation for this formal
+  = note: D138: repeated exact structural deductions must agree; this call has no routine target

@@ -1,0 +1,10 @@
+error[L0301]: a `ptr` arm matches a pointer union, not an atom set
+  --> ../tests/fixtures/negative/pointer-case-arm-is-not-an-atom/program.ldn:9:9
+  |
+9 |         ptr: value = 2
+  |         ^^^
+  --> ../tests/fixtures/negative/pointer-case-arm-is-not-an-atom/program.ldn:6:11
+  |
+6 |     match h
+  |           ^ this matched atom set
+  = note: [0480]: `ptr` is the present case of a union of an atom and a pointer

@@ -1,0 +1,10 @@
+error[L0301]: this is `u32` and `usize` belongs here
+  --> ../tests/fixtures/negative/text-slice-needs-usize-bounds/program.ldn:2:21
+  |
+2 |     result = source[lower..<lenof source]
+  |                     ^^^^^
+  --> ../tests/fixtures/negative/text-slice-needs-usize-bounds/program.ldn:2:14
+  |
+2 |     result = source[lower..<lenof source]
+  |              ^^^^^^ the sliced storage
+  = note: [1890]: two types that must agree, and [0310] converts nothing between them

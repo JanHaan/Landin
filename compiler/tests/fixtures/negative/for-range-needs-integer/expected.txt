@@ -1,0 +1,10 @@
+error[L0301]: a range traversal starts with an integer
+  --> ../tests/fixtures/negative/for-range-needs-integer/program.ldn:3:17
+  |
+3 |     for item in false..true do
+  |                 ^^^^^
+  --> ../tests/fixtures/negative/for-range-needs-integer/program.ldn:3:5
+  |
+3 |     for item in false..true do
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^ this for loop
+  = note: [1150]: `a..<b` and `a..b` are integer ranges

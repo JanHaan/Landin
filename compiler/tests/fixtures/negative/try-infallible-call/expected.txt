@@ -1,0 +1,10 @@
+error[L0301]: this call cannot fail, so `try` has no error to propagate
+  --> ../tests/fixtures/negative/try-infallible-call/program.ldn:6:13
+  |
+6 |     value = try leaf()
+  |             ^^^^^^^^^^
+  --> ../tests/fixtures/negative/try-infallible-call/program.ldn:1:1
+  |
+1 | leaf: () -> (value: i32) =
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^ this infallible signature
+  = note: [0960]: `try` is for the declared error outcome of a call

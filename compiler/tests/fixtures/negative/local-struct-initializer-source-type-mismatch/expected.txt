@@ -1,0 +1,10 @@
+error[L0301]: this is not a value of the struct type written here
+  --> ../tests/fixtures/negative/local-struct-initializer-source-type-mismatch/program.ldn:8:21
+  |
+8 |     local: holder = number
+  |                     ^^^^^^
+  --> ../tests/fixtures/negative/local-struct-initializer-source-type-mismatch/program.ldn:8:5
+  |
+8 |     local: holder = number
+  |     ^^^^^^^^^^^^^^^^^^^^^^ the type declared here
+  = note: [0710]: two structs are one type when one declaration wrote both, and never otherwise

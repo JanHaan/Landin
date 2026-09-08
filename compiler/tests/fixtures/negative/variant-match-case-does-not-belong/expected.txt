@@ -1,0 +1,10 @@
+error[L0301]: this case does not belong to the variant part matched here
+  --> ../tests/fixtures/negative/variant-match-case-does-not-belong/program.ldn:18:9
+   |
+18 |         other: _ = 3
+   |         ^^^^^
+  --> ../tests/fixtures/negative/variant-match-case-does-not-belong/program.ldn:15:11
+   |
+15 |     match state.first
+   |           ^^^^^^^^^^^ the matched variant part
+  = note: D77: every arm names one case of the selected variant part

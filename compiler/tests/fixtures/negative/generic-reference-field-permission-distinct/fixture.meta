@@ -5,3 +5,5 @@ codes: L0301
 status: 1
 constructs: 0430, 0470, 0520, 0540, 0670, 0770, 0790, 1230, 1290, 1300, 1810, 1920
 targets: linux-x86-64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/generic-reference-field-permission-distinct/program.ldn

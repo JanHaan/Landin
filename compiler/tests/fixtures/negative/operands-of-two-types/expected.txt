@@ -1,0 +1,10 @@
+error[L0301]: this is `u64` and `u32` belongs here
+  --> ../tests/fixtures/negative/operands-of-two-types/program.ldn:1:39
+  |
+1 | f: (a: u32, b: u64) -> (r: u32) = a + b end f
+  |                                       ^
+  --> ../tests/fixtures/negative/operands-of-two-types/program.ldn:1:35
+  |
+1 | f: (a: u32, b: u64) -> (r: u32) = a + b end f
+  |                                   ^^^^^ required by this operator
+  = note: [1890]: two types that must agree, and [0310] converts nothing between them

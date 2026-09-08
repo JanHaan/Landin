@@ -1,0 +1,10 @@
+error[L0301]: this indexes with `u32`, and an index is a usize
+  --> ../tests/fixtures/negative/index-is-not-usize/program.ldn:6:15
+  |
+6 |     r = words[i]
+  |               ^
+  --> ../tests/fixtures/negative/index-is-not-usize/program.ldn:6:9
+  |
+6 |     r = words[i]
+  |         ^^^^^ the array indexed here
+  = note: D18: indexing accepts exactly usize and performs no implicit conversion

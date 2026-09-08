@@ -1,0 +1,10 @@
+error[L0301]: utf8 indexing takes u32 or core/text.position, not something unknown
+  --> ../tests/fixtures/negative/utf8-index-position-identity-is-exact/program.ldn:6:21
+  |
+6 |     result = source[cursor]
+  |                     ^^^^^^
+  --> ../tests/fixtures/negative/utf8-index-position-identity-is-exact/program.ldn:6:14
+  |
+6 |     result = source[cursor]
+  |              ^^^^^^ the utf8 value indexed here
+  = note: [0610]: the argument type selects the linear ordinal or O(1) position operation

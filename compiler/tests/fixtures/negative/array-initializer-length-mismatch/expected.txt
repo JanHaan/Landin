@@ -1,0 +1,10 @@
+error[L0301]: this is not an array of the type written here
+  --> ../tests/fixtures/negative/array-initializer-length-mismatch/program.ldn:4:31
+  |
+4 |     mut destination: [2]u32 = source
+  |                               ^^^^^^
+  --> ../tests/fixtures/negative/array-initializer-length-mismatch/program.ldn:4:5
+  |
+4 |     mut destination: [2]u32 = source
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the type declared here
+  = note: D17: an array's length and element type are its identity

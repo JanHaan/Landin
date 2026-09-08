@@ -4,3 +4,6 @@ constructs: 0410, 0520
 program: program.ldn
 codes: L0301
 targets: linux-x86-64, macos-arm64
+expect: expected.txt
+args: ../tests/fixtures/negative/array-copy-length-mismatch/program.ldn
+status: 1

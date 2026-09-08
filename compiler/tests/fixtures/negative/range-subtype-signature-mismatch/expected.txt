@@ -1,0 +1,10 @@
+error[L0301]: this function has a different signature
+  --> ../tests/fixtures/negative/range-subtype-signature-mismatch/program.ldn:9:34
+  |
+9 |     slot: (v: percent) -> none = take_any
+  |                                  ^^^^^^^^
+  --> ../tests/fixtures/negative/range-subtype-signature-mismatch/program.ldn:9:11
+  |
+9 |     slot: (v: percent) -> none = take_any
+  |           ^^^^^^^^^^^^^^^^^^^^ the function type written here
+  = note: [1000]: function values have the signature written by their type

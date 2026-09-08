@@ -1,0 +1,10 @@
+error[L0301]: this failing call is neither tried nor recovered with `else`
+  --> ../tests/fixtures/negative/erased-typed-call-unhandled/main.ldn:24:19
+   |
+24 |     result: i32 = value.read()
+   |                   ^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/erased-typed-call-unhandled/main.ldn:3:5
+  |
+3 |     read: (self: ptr mut item) -> (value: i32) ! unavailable
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this failing signature
+  = note: [0960]/[1030]: write `try` to propagate or `else` to handle the declared error

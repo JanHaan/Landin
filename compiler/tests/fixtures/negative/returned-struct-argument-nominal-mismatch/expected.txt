@@ -1,0 +1,10 @@
+error[L0301]: this argument has a different struct type
+  --> ../tests/fixtures/negative/returned-struct-argument-nominal-mismatch/program.ldn:17:13
+   |
+17 |     consume(make())
+   |             ^^^^^^
+  --> ../tests/fixtures/negative/returned-struct-argument-nominal-mismatch/program.ldn:13:11
+   |
+13 | consume: (value: left) -> none =
+   |           ^^^^^^^^^^^ this parameter
+  = note: [0710]: ordinary structs are nominal

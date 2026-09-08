@@ -1,0 +1,10 @@
+error[L0301]: this is `bool` and `i32` belongs here
+  --> ../tests/fixtures/negative/loop-value-type-mismatch/program.ldn:3:20
+  |
+3 |         break with true
+  |                    ^^^^
+  --> ../tests/fixtures/negative/loop-value-type-mismatch/program.ldn:2:12
+  |
+2 |     code = loop do
+  |            ^^^^^^^ the value produced by this loop
+  = note: [1890]: two types that must agree, and [0310] converts nothing between them

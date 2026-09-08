@@ -1,0 +1,10 @@
+error[L0301]: this literal has 1 element, and its array context has a different length
+  --> ../tests/fixtures/negative/module-struct-literal-empty-array-field-image/program.ldn:5:23
+  |
+5 | state: holder = (row: [1])
+  |                       ^^^
+  --> ../tests/fixtures/negative/module-struct-literal-empty-array-field-image/program.ldn:5:18
+  |
+5 | state: holder = (row: [1])
+  |                  ^^^^^^^^ the array context here
+  = note: D23/D24/D26/D29: an array literal supplies exactly the number of elements its context names

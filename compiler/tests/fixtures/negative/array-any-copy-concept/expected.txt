@@ -1,0 +1,10 @@
+error[L0301]: this is not an array of the type written here
+  --> ../tests/fixtures/negative/array-any-copy-concept/main.ldn:8:23
+  |
+8 |     wrong: [3]any b = source
+  |                       ^^^^^^
+  --> ../tests/fixtures/negative/array-any-copy-concept/main.ldn:8:5
+  |
+8 |     wrong: [3]any b = source
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^ the type declared here
+  = note: D17: an array's length and element type are its identity

@@ -1,0 +1,10 @@
+error[L0301]: this does not have the a slice shape required here
+  --> ../tests/fixtures/negative/generic-slice-field-permission/program.ldn:5:21
+  |
+5 |     target.prefix = source
+  |                     ^^^^^^
+  --> ../tests/fixtures/negative/generic-slice-field-permission/program.ldn:5:5
+  |
+5 |     target.prefix = source
+  |     ^^^^^^^^^^^^^ the reference place written here
+  = note: D124: every fallthrough answer of a control expression has one complete type and shape

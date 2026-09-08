@@ -1,0 +1,10 @@
+error[L0301]: this function argument has a different signature
+  --> ../tests/fixtures/negative/function-parameter-signature-mismatch/program.ldn:8:12
+  |
+8 |     accept(pair)
+  |            ^^^^
+  --> ../tests/fixtures/negative/function-parameter-signature-mismatch/program.ldn:5:10
+  |
+5 | accept: (callback: unary) -> none = end accept
+  |          ^^^^^^^^^^^^^^^ this function-valued parameter
+  = note: [1000]: a function value's complete signature is its type

@@ -1,0 +1,10 @@
+error[L0301]: this literal has 1 element, and its array context has a different length
+  --> ../tests/fixtures/negative/struct-literal-argument-array-shape-mismatch/program.ldn:10:27
+   |
+10 |     consume((tag: 1, row: [2]))
+   |                           ^^^
+  --> ../tests/fixtures/negative/struct-literal-argument-array-shape-mismatch/program.ldn:10:22
+   |
+10 |     consume((tag: 1, row: [2]))
+   |                      ^^^^^^^^ the array context here
+  = note: D23/D24/D26/D29: an array literal supplies exactly the number of elements its context names

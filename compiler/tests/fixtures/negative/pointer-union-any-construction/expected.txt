@@ -1,0 +1,10 @@
+error[L0301]: `any` construction wants a pointer and this is a union of an atom and one
+  --> ../tests/fixtures/negative/pointer-union-any-construction/program.ldn:19:31
+   |
+19 |     erased: any display = any(m)
+   |                               ^
+  --> ../tests/fixtures/negative/pointer-union-any-construction/program.ldn:15:1
+   |
+15 | none_found: atom
+   | ^^^^^^^^^^^^^^^^ the empty case this union reserves zero for
+  = note: [0480]: a pointer union is matched before it is read

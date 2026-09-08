@@ -56,9 +56,9 @@ replaced.
 | `Landin.Resolution` | declarations, scopes, and which declaration each name means | hold a diagnostic, or decide what a name may be called |
 | `Landin.Types` | the scalar names and value categories, their widths, and ordinary scalar storage size against a target | hold a machine fact of its own, or ask the host for one |
 | `Landin.Evidence` | target-neutral semantic evidence-table positions: size, alignment, then direct concept functions in declaration order | know machine bytes, target offsets, or physical layout |
-| `Landin.Checking` | what type every runtime node and declaration has, including concrete parameterized-alias application shapes and D136's canonical folded array counts but no template/formal syntax metadata; D142's closed compiler/source concept identities and concrete whole-program conformance register keyed by normalized represented type, concept and input tuple, retaining selected parameterized binders plus R2.70's declaration-ordered provider runs, constrained-routine evidence runs and per-view evidence selections, and D145/D146's exact any-concept, construction and flattened-dispatch positions without physical layout; opaque checker-owned nominal and routine instances interned by source template and an ordered normalized scalar, structural atom-set, exact fixed-array, nominal, structural function-signature or mathematical fixed-value actual tuple, with descriptor keys bound to their limited compilation table and bounded typed traversal of each stored tuple; routine-instance state publishes its substituted signature before graph discovery and owns a complete source-node/declaration fact overlay with global fallback plus caller-view generic-call targets, while checker-owned per-instance signatures finalize inferred errors before body checking; every enabled nonparameterized struct is its template's canonical empty tuple, while D137's structs separate identity-only function/type-actual mentions from by-value field/payload/array edges for both parameterized instances and canonical empty-actual ordinary structs, following ordinary nominal aliases without forcing layout; retain transient nonconcrete nominal obligations for unused-template recursion checks, reconstruct interned concrete bindings to promote nested nominal and nominal-array descriptors lazily at value uses, and build one selected-target layout per canonical instance without mutating their template; per-instance unseen/building/ready/invalid layout state, with bounded invalid-layout replay for each application-local diagnostic; structural atom/error sets, fixed-array and anonymous result shapes, aggregate element identity, recursive first-class target-neutral function signatures on values and aggregate fields, ordered result runs, and target-dependent scalar/fixed-array/unfolded-variant/recursively nested ordinary runtime layout kept outside target-independent nominal keys; D188's range-subtype identities, interned on the written range and carried beside a node's or declaration's base integer kind rather than becoming one, with the check each value still owes its destination | decide a rule, execute user code, synthesize a source declaration, mutate a template, or ask the host for a width |
+| `Landin.Checking` | the type of every runtime node and declaration, the concept and conformance register, interned nominal and routine instances with their per-instance facts and layouts, and D188's range-subtype identities; the full list is under "The four long rows, in full" below | decide a rule, execute user code, synthesize a source declaration, mutate a template, or ask the host for a width |
 | `Landin.Cleanup` | target-neutral exit kinds and the defer/undo applicability policy | parse a cleanup, track definite assignment, emit a call, or name a target |
-| `Landin.IR` | the target-neutral instructions: items, slots, blocks and values, including signature-only external routine items, D161's read-only anonymous fixed-array datums and D177's canonical static bool images; R2.70 evidence descriptors with represented shapes, ordered routine/signature entries, static table addresses and signed function-word loads, including D147's direct and flattened erased table descriptors plus opaque-at-source two-cell shaped any transport; a deterministic IR-owned nominal identity map retaining each checker instance's source template without making an item; atom-set descriptors, atom identities, orthogonal call-failure slots and failure exits; recursive callable signature descriptors with ordered result runs on declared or anonymous routines, static function datums, code addresses, function-value slots, nominal aggregate storage, aggregate fields and calls; scalar, compact fixed-array, unfolded variant, anonymous result and recursively nested ordinary shapes carrying nominal child and element identity; recursively indexed folded aggregate images, routine relocations and compact child/payload segments; arbitrary-depth neutral paths through contextual, variant and indexed-element operations; and checked internal addresses for whole aggregate elements at computed indexes; D187's per-item region depth and the one instruction flag it sets, which the verifier holds to the opcodes carrying a removable edge; and D188's second checked integer operation, whose operand and result types are identical and whose two folded bounds the verifier holds to values that type holds | hold a scope tree, name a machine, ask a width, synthesize a declaration, or hold an offset, register or padding byte |
+| `Landin.IR` | the target-neutral instructions, shapes, descriptors, images and paths; the full list is under "The four long rows, in full" below | hold a scope tree, name a machine, ask a width, synthesize a declaration, or hold an offset, register or padding byte |
 | `Landin.IR.Verifier` | release-build well-formedness of a completed Unit, including atom/error set membership, descriptor/carrier, multiple-result slot and static function-image agreement, call-failure slots and exits, valid neutral subobject paths and recursive image descriptors, plus target-aware fit of every static fold | diagnose source, repair malformed IR, or choose backend policy |
 | `Landin.IR.Dump` | canonical human-readable text for a Unit | be a stable interface, a reader, or a serialisation |
 | `Landin.Backend` | where a routine's cells live, the recursive target extent of one neutral field shape, where a scalar or fixed-array leaf at any path depth sits inside an aggregate datum or slot, how wide one element of an array of either is, and the target-byte replay of scalar, fixed-array and unfolded variant runs | name a machine, choose a register, or ask the host a width |
@@ -82,11 +82,11 @@ replaced.
 | `Landin.Stages.Syntax` | running the scan and the parse over a compilation | keep anything of its own, or decide reporting policy |
 | `Landin.Stages.Configuration` | validate and select D139 fixed declaration arms before resolution | execute code, mutate syntax, or add a runtime declaration |
 | `Landin.Stages.Resolution` | the order the trees are walked in through the D139 activity view, including D185's condition-initializer outer scope and guarded-body binding scope and D186's caller-skipping positional call map | own the resolution table, or a code |
-| `Landin.Stages.Checking` | the three type passes, D142 concept/conformance collection, constrained concrete lookup, family collision checking, D143's closed compiler `zeroable` predicate, R2.70 provider finalization and `T.entry` evidence selection, D145--D147 any identity/construction/object-safety/permission/dynamic-selection checking, D161's contextual read-only byte-literal view, D181's canonical immutable hosted-text identities, D182's exact `u32`/`core/text.position` utf8-index selection, D183's identity-preserving utf8/utf16 range selection, D184's exact immutable `u32` text-traversal Item, D185's ordinary binding check followed by its exact-bool condition requirement, D178/D179's complete collection traversal-element shapes and erased concept identity, D180's exact named-`iterable` selection and copied Item identity for struct and `any C` sources, compile-time-only positional substitution, D136's closed target-independent fixed-expression evaluator, scalar/fixed-array/nominal-aggregate normalization of parameterized aliases, symbolic validation of unused nominal and routine templates, canonical `(template, normalized actual tuple)` struct and routine interning, D138 context-free recursive structural direct-call deduction with deferred exact computed-bound checks, per-instance substituted signatures/bodies and fact views, per-instance inferred-error fixed-point nodes, one active-view effective-call-signature lookup for inference/`try`/recovery, eager concrete recovery-binding materialization before a recovery body is checked, same-key recursion and finite-expansion refusal, identity-only versus value-layout requirements for generic and ordinary signature recursion, ordinary alias-chain identity lookup, transient symbolic nominal obligations across used-formal wrappers, lazy recursive promotion from interned concrete actual tuples, substituted per-instance layout, bounded repeated-invalid replay, D137/L0313 by-value recursion separation, and checking-stage diagnostic order | own a table, a code, execute user code, synthesize a declaration, or choose a target-dependent operator width |
+| `Landin.Stages.Checking` | the type passes, concept and conformance collection, generic interning and instantiation, fixed-expression evaluation, inferred-error fixed points and checking-stage diagnostic order; the full list is under "The four long rows, in full" below | own a table, a code, execute user code, synthesize a declaration, or choose a target-dependent operator width |
 
 | `Landin.Stages.Checking.Flow` | definite assignment, including D185's initialized condition binding, D178's complete fixed-array traversal element, D180's copied iterable Item and D182's whole-view utf8 index read, use-after-`sink`, restoration of consumed `inout` parts, explicit fallthrough/return-compatible edge facts, and lexical cleanup execution states | decide a type, believe a condition, or lower a value |
 | `Landin.Stages.Checking.References` | function-local origin and derivation flow, exact `from` agreement, `escaping` obligations and live-view mutation checks; D146 maps an erased construction and implicit self to its pointee fact, D180 gives [1320]'s source-free Item result no source alias, and D182 keeps an indexed codepoint view derived from its utf8 source; integer-created pointers deliberately terminate its evidence | infer a signature across calls, claim ownership, or make an aliasing assumption about volatile storage |
-| `Landin.Stages.Lowering` | the walk that eagerly maps checker nominal, conformance and ready routine-instance identities into deterministic IR order, registers D161/D181's width-keyed content-pooled read-only text datums and static slice or cstring relocations, lowers D182's utf8 ordinal scan and checked direct position access, D183's retained-source UTF-8/UTF-16 boundary-checked ranges, D184's retained-source UTF-8/UTF-16/cstring scalar traversal, and D185's stored condition bindings through ordinary target-neutral CFG and scalar operations, passes hidden evidence tables, builds direct plus used flattened erased tables, lowers selected generic and any concept entries through ordinary indirect calls with injected data, then builds and verifies the IR without creating items for templates or static formals; including caller-owned scalar and shaped control joins, temporary-first aggregate call/control results copied into nested or runtime-addressed destinations, D178/D179's fixed-array, slice and `any` element aliases, D180's one-time stored struct/`any C` sources and declaration-ordered iterable calls with exact cursor and copied Item carriers, one-time computed collection sources, checked computed-element address slots, plus reverse-order cleanup calls on selected exits, D187's region depth around a marked bare block and the required flag on every text boundary slice address, and refusing to run on a refused program | own the Unit, work out a scope, derive target layout, synthesize a declaration, or raise a diagnostic |
+| `Landin.Stages.Lowering` | the walk from checker identities to verified IR, text datums and traversals, evidence tables, aggregate results, cleanups and regions; the full list is under "The four long rows, in full" below | own the Unit, work out a scope, derive target layout, synthesize a declaration, or raise a diagnostic |
 | `Landin.Driver` | argument and `--emit` classification, R3.10's private ordered-root graph discovery through `Landin.Platform`, pipeline orchestration, output/toolchain selection and the result | implement a language rule, acquire a package or expose a public orchestration protocol |
 | `Refine` | printing and the exit status | contain a decision |
 
@@ -161,6 +161,122 @@ parent's *body* may, so `landin-stages.adb` growing a `with
 Landin.Stages.Syntax` to build a default pipeline is how the rule would
 actually be broken. Nothing but the rule stops it, and `Landin.Driver` is
 what owns the pipeline.
+
+## The four long rows, in full
+
+Four packages own an order of magnitude more than any other, and a table
+cell is the wrong place to read a list that long.  Each is spelled out
+here, one paragraph per package, in the words the table used to hold.
+
+**`Landin.Checking`** owns what type every runtime node and declaration has,
+including concrete parameterized-alias application shapes and D136's canonical
+folded array counts but no template/formal syntax metadata; D142's closed
+compiler/source concept identities and concrete whole-program conformance
+register keyed by normalized represented type, concept and input tuple,
+retaining selected parameterized binders plus R2.70's declaration-ordered
+provider runs, constrained-routine evidence runs and per-view evidence
+selections, and D145/D146's exact any-concept, construction and
+flattened-dispatch positions without physical layout; opaque checker-owned
+nominal and routine instances interned by source template and an ordered
+normalized scalar, structural atom-set, exact fixed-array, nominal, structural
+function-signature or mathematical fixed-value actual tuple, with descriptor
+keys bound to their limited compilation table and bounded typed traversal of
+each stored tuple; routine-instance state publishes its substituted signature
+before graph discovery and owns a complete source-node/declaration fact
+overlay with global fallback plus caller-view generic-call targets, while
+checker-owned per-instance signatures finalize inferred errors before body
+checking; every enabled nonparameterized struct is its template's canonical
+empty tuple, while D137's structs separate identity-only function/type-actual
+mentions from by-value field/payload/array edges for both parameterized
+instances and canonical empty-actual ordinary structs, following ordinary
+nominal aliases without forcing layout; retain transient nonconcrete nominal
+obligations for unused-template recursion checks, reconstruct interned
+concrete bindings to promote nested nominal and nominal-array descriptors
+lazily at value uses, and build one selected-target layout per canonical
+instance without mutating their template; per-instance
+unseen/building/ready/invalid layout state, with bounded invalid-layout replay
+for each application-local diagnostic; structural atom/error sets, fixed-array
+and anonymous result shapes, aggregate element identity, recursive first-class
+target-neutral function signatures on values and aggregate fields, ordered
+result runs, and target-dependent
+scalar/fixed-array/unfolded-variant/recursively nested ordinary runtime layout
+kept outside target-independent nominal keys; D188's range-subtype identities,
+interned on the written range and carried beside a node's or declaration's
+base integer kind rather than becoming one, with the check each value still
+owes its destination.
+
+**`Landin.IR`** owns the target-neutral instructions: items, slots, blocks and
+values, including signature-only external routine items, D161's read-only
+anonymous fixed-array datums and D177's canonical static bool images; R2.70
+evidence descriptors with represented shapes, ordered routine/signature
+entries, static table addresses and signed function-word loads, including
+D147's direct and flattened erased table descriptors plus opaque-at-source
+two-cell shaped any transport; a deterministic IR-owned nominal identity map
+retaining each checker instance's source template without making an item;
+atom-set descriptors, atom identities, orthogonal call-failure slots and
+failure exits; recursive callable signature descriptors with ordered result
+runs on declared or anonymous routines, static function datums, code
+addresses, function-value slots, nominal aggregate storage, aggregate fields
+and calls; scalar, compact fixed-array, unfolded variant, anonymous result and
+recursively nested ordinary shapes carrying nominal child and element
+identity; recursively indexed folded aggregate images, routine relocations and
+compact child/payload segments; arbitrary-depth neutral paths through
+contextual, variant and indexed-element operations; and checked internal
+addresses for whole aggregate elements at computed indexes; D187's per-item
+region depth and the one instruction flag it sets, which the verifier holds to
+the opcodes carrying a removable edge; and D188's second checked integer
+operation, whose operand and result types are identical and whose two folded
+bounds the verifier holds to values that type holds.
+
+**`Landin.Stages.Checking`** owns the three type passes, D142
+concept/conformance collection, constrained concrete lookup, family collision
+checking, D143's closed compiler `zeroable` predicate, R2.70 provider
+finalization and `T.entry` evidence selection, D145--D147 any
+identity/construction/object-safety/permission/dynamic-selection checking,
+D161's contextual read-only byte-literal view, D181's canonical immutable
+hosted-text identities, D182's exact `u32`/`core/text.position` utf8-index
+selection, D183's identity-preserving utf8/utf16 range selection, D184's exact
+immutable `u32` text-traversal Item, D185's ordinary binding check followed by
+its exact-bool condition requirement, D178/D179's complete collection
+traversal-element shapes and erased concept identity, D180's exact
+named-`iterable` selection and copied Item identity for struct and `any C`
+sources, compile-time-only positional substitution, D136's closed
+target-independent fixed-expression evaluator,
+scalar/fixed-array/nominal-aggregate normalization of parameterized aliases,
+symbolic validation of unused nominal and routine templates, canonical
+`(template, normalized actual tuple)` struct and routine interning, D138
+context-free recursive structural direct-call deduction with deferred exact
+computed-bound checks, per-instance substituted signatures/bodies and fact
+views, per-instance inferred-error fixed-point nodes, one active-view
+effective-call-signature lookup for inference/`try`/recovery, eager concrete
+recovery-binding materialization before a recovery body is checked, same-key
+recursion and finite-expansion refusal, identity-only versus value-layout
+requirements for generic and ordinary signature recursion, ordinary
+alias-chain identity lookup, transient symbolic nominal obligations across
+used-formal wrappers, lazy recursive promotion from interned concrete actual
+tuples, substituted per-instance layout, bounded repeated-invalid replay,
+D137/L0313 by-value recursion separation, and checking-stage diagnostic order.
+
+**`Landin.Stages.Lowering`** owns the walk that eagerly maps checker nominal,
+conformance and ready routine-instance identities into deterministic IR order,
+registers D161/D181's width-keyed content-pooled read-only text datums and
+static slice or cstring relocations, lowers D182's utf8 ordinal scan and
+checked direct position access, D183's retained-source UTF-8/UTF-16
+boundary-checked ranges, D184's retained-source UTF-8/UTF-16/cstring scalar
+traversal, and D185's stored condition bindings through ordinary
+target-neutral CFG and scalar operations, passes hidden evidence tables,
+builds direct plus used flattened erased tables, lowers selected generic and
+any concept entries through ordinary indirect calls with injected data, then
+builds and verifies the IR without creating items for templates or static
+formals; including caller-owned scalar and shaped control joins,
+temporary-first aggregate call/control results copied into nested or
+runtime-addressed destinations, D178/D179's fixed-array, slice and `any`
+element aliases, D180's one-time stored struct/`any C` sources and
+declaration-ordered iterable calls with exact cursor and copied Item carriers,
+one-time computed collection sources, checked computed-element address slots,
+plus reverse-order cleanup calls on selected exits, D187's region depth around
+a marked bare block and the required flag on every text boundary slice
+address, and refusing to run on a refused program.
 
 ## What is deliberately absent
 

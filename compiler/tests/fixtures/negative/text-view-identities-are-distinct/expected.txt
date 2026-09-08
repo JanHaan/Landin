@@ -1,0 +1,10 @@
+error[L0301]: this reference argument has a different type or insufficient permission
+  --> ../tests/fixtures/negative/text-view-identities-are-distinct/program.ldn:6:16
+  |
+6 |     take_bytes(text)
+  |                ^^^^
+  --> ../tests/fixtures/negative/text-view-identities-are-distinct/program.ldn:1:14
+  |
+1 | take_bytes: (text: []u8) -> none =
+  |              ^^^^^^^^^^ this reference parameter
+  = note: [0430]/[0440]/[0570]: reference permission relaxes only from `mut` to read-only

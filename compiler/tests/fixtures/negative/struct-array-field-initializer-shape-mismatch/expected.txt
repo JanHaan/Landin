@@ -1,0 +1,10 @@
+error[L0301]: this is not an array of the type written here
+  --> ../tests/fixtures/negative/struct-array-field-initializer-shape-mismatch/program.ldn:8:26
+  |
+8 |     destination: [3]u8 = state.row
+  |                          ^^^^^^^^^
+  --> ../tests/fixtures/negative/struct-array-field-initializer-shape-mismatch/program.ldn:8:5
+  |
+8 |     destination: [3]u8 = state.row
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the type declared here
+  = note: D17: an array's length and element type are its identity

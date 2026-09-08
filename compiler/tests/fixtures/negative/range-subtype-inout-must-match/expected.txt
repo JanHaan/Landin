@@ -1,0 +1,10 @@
+error[L0301]: this place does not have the range subtype this parameter is written back through
+  --> ../tests/fixtures/negative/range-subtype-inout-must-match/program.ldn:9:11
+  |
+9 |     reset(raw)
+  |           ^^^
+  --> ../tests/fixtures/negative/range-subtype-inout-must-match/program.ldn:3:9
+  |
+3 | reset: (inout p: percent) -> none =
+  |         ^^^^^^^^^^^^^^^^ this parameter
+  = note: [0660]: the callee may write any value the subtype holds, and [0900] replaces the place with it

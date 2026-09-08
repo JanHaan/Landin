@@ -1,0 +1,10 @@
+error[L0301]: `f64` has no named value `forever`
+  --> ../tests/fixtures/negative/float-special-name-unknown/program.ldn:1:18
+  |
+1 | wrong: f64 = f64.forever
+  |                  ^^^^^^^
+  --> ../tests/fixtures/negative/float-special-name-unknown/program.ldn:1:14
+  |
+1 | wrong: f64 = f64.forever
+  |              ^^^ the type selected here
+  = note: [0240]: f32 and f64 name only `infinity` and `nan`

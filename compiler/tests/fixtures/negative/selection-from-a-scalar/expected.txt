@@ -1,0 +1,10 @@
+error[L0301]: this is not a struct, so it has no field to select
+  --> ../tests/fixtures/negative/selection-from-a-scalar/program.ldn:4:14
+  |
+4 |     n: u32 = count.hits
+  |              ^^^^^
+  --> ../tests/fixtures/negative/selection-from-a-scalar/program.ldn:1:1
+  |
+1 | mut count: u32
+  | ^^^^^^^^^^^^^^ what it names
+  = note: [1820]: the kernel selects a field of a struct [0670] and nothing else

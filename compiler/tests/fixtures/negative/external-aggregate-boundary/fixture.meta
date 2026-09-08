@@ -4,3 +4,6 @@ program: program.ldn
 codes: L0301
 constructs: 0670, 1570, 1580, 1740, 1800, 1975
 targets: linux-x86-64
+expect: expected.txt
+args: ../tests/fixtures/negative/external-aggregate-boundary/program.ldn
+status: 1

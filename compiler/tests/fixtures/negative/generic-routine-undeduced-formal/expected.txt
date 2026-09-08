@@ -1,0 +1,10 @@
+error[L0301]: this call cannot deduce type formal `t`
+  --> ../tests/fixtures/negative/generic-routine-undeduced-formal/program.ldn:3:34
+  |
+3 | public main: () -> (code: i32) = phantom(7) end main
+  |                                  ^^^^^^^^^^
+  --> ../tests/fixtures/negative/generic-routine-undeduced-formal/program.ldn:1:11
+  |
+1 | phantom: (t: type, value: i32) -> (result: i32) = value end phantom
+  |           ^^^^^^^ the undeduced type formal
+  = note: D138: structural deduction uses runtime parameter patterns, never return context, conversions or constraints

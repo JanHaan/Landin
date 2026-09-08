@@ -1,0 +1,10 @@
+error[L0301]: this alias application has 1 argument, but `box` needs 2 arguments
+  --> ../tests/fixtures/negative/parameterized-struct-arity/program.ldn:5:6
+  |
+5 | bad: box(u8)
+  |      ^^^^^^^
+  --> ../tests/fixtures/negative/parameterized-struct-arity/program.ldn:1:1
+  |
+1 | box: type (item: type, fixed count: u8) = struct
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the alias declares this positional run
+  = note: [1350]: type alias arguments are positional

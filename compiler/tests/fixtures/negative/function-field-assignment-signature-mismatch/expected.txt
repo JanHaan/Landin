@@ -1,0 +1,10 @@
+error[L0301]: this function has a different signature
+  --> ../tests/fixtures/negative/function-field-assignment-signature-mismatch/program.ldn:11:22
+   |
+11 |     local.callback = wrong
+   |                      ^^^^^
+  --> ../tests/fixtures/negative/function-field-assignment-signature-mismatch/program.ldn:11:5
+   |
+11 |     local.callback = wrong
+   |     ^^^^^^^^^^^^^^ the function place written here
+  = note: [1000]: function values have the signature written by their type

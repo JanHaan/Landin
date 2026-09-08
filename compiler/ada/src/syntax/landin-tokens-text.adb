@@ -74,7 +74,7 @@ package body Landin.Tokens.Text is
                       + (Byte (1) - 16#80#) * 4_096
                       + (Byte (2) - 16#80#) * 64
                       + Byte (3) - 16#80#,
-            when others => raise Program_Error);
+            when others => raise Landin.Compiler_Defect);
    end UTF8_Value;
 
    procedure Decode
@@ -369,7 +369,8 @@ package body Landin.Tokens.Text is
       end loop;
 
       if Opening_Quotes < 3 then
-         raise Program_Error with "a non-raw token reached raw decoding";
+         raise Landin.Compiler_Defect
+           with "a non-raw token reached raw decoding";
       end if;
 
       declare
@@ -546,7 +547,7 @@ package body Landin.Tokens.Text is
                     UTF8_Length (Bytes, At_Byte, Byte_Length);
                begin
                   if Count = 0 then
-                     raise Program_Error with
+                     raise Landin.Compiler_Defect with
                        "raw text changed after UTF-8 validation";
                   elsif Encoding = UTF16_Units then
                      Keep_Codepoint (UTF8_Value (Bytes, At_Byte, Count));

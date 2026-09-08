@@ -1,0 +1,10 @@
+error[L0301]: this argument does not match the exact fixed value in its parameter pattern
+  --> ../tests/fixtures/negative/generic-explicit-computed-pattern-mismatch/program.ldn:7:42
+  |
+7 |     computed(count: 2, item: i32, value: wrong)
+  |                                          ^^^^^
+  --> ../tests/fixtures/negative/generic-explicit-computed-pattern-mismatch/program.ldn:2:20
+  |
+2 |            value: [count * 2]item) -> none =
+  |                    ^^^^^^^^^ the runtime parameter type pattern
+  = note: D138: deduction unifies the written parameter pattern with the independently synthesized argument descriptor exactly

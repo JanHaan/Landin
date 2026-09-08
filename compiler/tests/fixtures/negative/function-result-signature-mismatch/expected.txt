@@ -1,0 +1,10 @@
+error[L0301]: this does not have the something unknown shape required here
+  --> ../tests/fixtures/negative/function-result-signature-mismatch/program.ldn:5:32
+  |
+5 | wrong: () -> (result: unary) = pair end wrong
+  |                                ^^^^
+  --> ../tests/fixtures/negative/function-result-signature-mismatch/program.ldn:5:14
+  |
+5 | wrong: () -> (result: unary) = pair end wrong
+  |              ^^^^^^^^^^^^^^^ the returns this fills
+  = note: D124: every fallthrough answer of a control expression has one complete type and shape

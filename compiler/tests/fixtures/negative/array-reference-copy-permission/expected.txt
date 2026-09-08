@@ -1,0 +1,10 @@
+error[L0301]: this is not an array of the type written here
+  --> ../tests/fixtures/negative/array-reference-copy-permission/main.ldn:5:26
+  |
+5 |     wrong: [1]ptr node = source
+  |                          ^^^^^^
+  --> ../tests/fixtures/negative/array-reference-copy-permission/main.ldn:5:5
+  |
+5 |     wrong: [1]ptr node = source
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^ the type declared here
+  = note: D17: an array's length and element type are its identity

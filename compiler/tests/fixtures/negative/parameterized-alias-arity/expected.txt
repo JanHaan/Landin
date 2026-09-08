@@ -1,0 +1,10 @@
+error[L0301]: this alias application has 1 argument, but `bytes` needs 2 arguments
+  --> ../tests/fixtures/negative/parameterized-alias-arity/program.ldn:2:13
+  |
+2 | bad: type = bytes(u8)
+  |             ^^^^^^^^^
+  --> ../tests/fixtures/negative/parameterized-alias-arity/program.ldn:1:1
+  |
+1 | bytes: type (t: type, fixed n: u32) = [n]t
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the alias declares this positional run
+  = note: [1350]: type alias arguments are positional

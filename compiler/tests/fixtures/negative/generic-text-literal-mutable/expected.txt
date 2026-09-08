@@ -1,0 +1,10 @@
+error[L0301]: a text literal lives in read-only storage, and this context wants `[]mut u8`
+  --> ../tests/fixtures/negative/generic-text-literal-mutable/main.ldn:8:25
+  |
+8 |     bad := identity(42, "hello")
+  |                         ^^^^^^^
+  --> ../tests/fixtures/negative/generic-text-literal-mutable/main.ldn:1:37
+  |
+1 | identity: (item: type, value: item, text: []mut u8) -> (answer: item) =
+  |                                     ^^^^^^^^^^^^^^ this generic parameter pattern
+  = note: [0260]: writable text is a copy into storage you asked for

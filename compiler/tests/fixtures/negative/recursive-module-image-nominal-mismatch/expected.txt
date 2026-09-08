@@ -1,0 +1,10 @@
+error[L0301]: this is not the nominal struct type named by the ordinary-child field
+  --> ../tests/fixtures/negative/recursive-module-image-nominal-mismatch/program.ldn:14:31
+   |
+14 | image: holder = holder(child: wrong)
+   |                               ^^^^^
+  --> ../tests/fixtures/negative/recursive-module-image-nominal-mismatch/program.ldn:14:24
+   |
+14 | image: holder = holder(child: wrong)
+   |                        ^^^^^^^^^^^^ the child field named here
+  = note: [0710]: ordinary struct identity is nominal

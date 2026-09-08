@@ -1,0 +1,10 @@
+error[L0301]: this arm binds 1 payload fields, but the case has 2
+  --> ../tests/fixtures/negative/variant-match-binding-count-disagrees/program.ldn:13:9
+   |
+13 |         pair(first): _ = first
+   |         ^^^^
+  --> ../tests/fixtures/negative/variant-match-binding-count-disagrees/program.ldn:11:11
+   |
+11 |     match state.kind
+   |           ^^^^^^^^^^ the matched variant part
+  = note: D78: parenthesized payload names are positional and complete

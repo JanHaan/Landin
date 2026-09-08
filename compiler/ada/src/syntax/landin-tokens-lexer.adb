@@ -355,6 +355,31 @@ package body Landin.Tokens.Lexer is
             return;
          end if;
 
+         --  `1e10` is a float that forgot its fraction, not an integer in
+         --  the wrong base: read the exponent run and say so (R4.21).
+         if not Prefixed
+           and then Position + 1 <= Last
+           and then Text (Position) in 'e' | 'E'
+           and then (Is_Digit (Text (Position + 1))
+                     or else (Text (Position + 1) in '+' | '-'
+                              and then Position + 2 <= Last
+                              and then Is_Digit (Text (Position + 2))))
+         then
+            Position := Position + 1;
+            if Text (Position) in '+' | '-' then
+               Position := Position + 1;
+            end if;
+            while Position <= Last
+              and then (Is_Digit (Text (Position))
+                        or else Text (Position) = '_')
+            loop
+               Position := Position + 1;
+            end loop;
+            Emit (Malformed_Float, First, Position - 1);
+            Complain (Malformed_Float_Literal_Run, First, Position - 1);
+            return;
+         end if;
+
          --  Preserve the original one-run diagnosis for a decimal digit
          --  followed by a base-only digit: `12a` is not `12` and a name.
          if not Prefixed

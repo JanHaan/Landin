@@ -1,0 +1,10 @@
+error[L0301]: `any(pointer)` has more than one exact runtime concept
+  --> ../tests/fixtures/negative/any-construction-needs-context/main.ldn:22:15
+   |
+22 |     erased := any(addr item)
+   |               ^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/any-construction-needs-context/main.ldn:22:19
+   |
+22 |     erased := any(addr item)
+   |                   ^^^^^^^^^ the erased pointer
+  = note: [1380]: write an `any C` context when the concrete pointer does not select exactly one conformance

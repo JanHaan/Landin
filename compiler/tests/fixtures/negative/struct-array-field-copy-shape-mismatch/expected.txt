@@ -1,0 +1,10 @@
+error[L0301]: this is not an array of the type written here
+  --> ../tests/fixtures/negative/struct-array-field-copy-shape-mismatch/program.ldn:9:17
+  |
+9 |     state.row = words
+  |                 ^^^^^
+  --> ../tests/fixtures/negative/struct-array-field-copy-shape-mismatch/program.ldn:9:5
+  |
+9 |     state.row = words
+  |     ^^^^^^^^^ the place written here
+  = note: D17: an array's length and element type are its identity

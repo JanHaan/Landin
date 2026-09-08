@@ -1,0 +1,10 @@
+error[L0301]: this operator wants numbers and was given `f32`
+  --> ../tests/fixtures/negative/compound-assignment-float-remainder/program.ldn:3:11
+  |
+3 |     value %= 2.0
+  |           ^^
+  --> ../tests/fixtures/negative/compound-assignment-float-remainder/program.ldn:3:5
+  |
+3 |     value %= 2.0
+  |     ^^^^^^^^^^^^ here
+  = note: [1890]: ordinary arithmetic admits integers and floats; width and bit operators admit integers

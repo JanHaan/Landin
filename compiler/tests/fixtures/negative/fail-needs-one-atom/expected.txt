@@ -1,0 +1,10 @@
+error[L0301]: `fail` carries one atom identity
+  --> ../tests/fixtures/negative/fail-needs-one-atom/program.ldn:9:10
+  |
+9 |     fail pair()
+  |          ^^^^^^
+  --> ../tests/fixtures/negative/fail-needs-one-atom/program.ldn:9:5
+  |
+9 |     fail pair()
+  |     ^^^^^^^^^^^ this failing exit
+  = note: [0940]: errors are payload-free atoms

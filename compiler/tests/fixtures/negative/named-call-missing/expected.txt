@@ -1,0 +1,10 @@
+error[L0301]: this call does not fill parameter `b`
+  --> ../tests/fixtures/negative/named-call-missing/program.ldn:2:21
+  |
+2 | f: () -> (r: i32) = add(a: 1) end f
+  |                     ^^^^^^^^^
+  --> ../tests/fixtures/negative/named-call-missing/program.ldn:1:15
+  |
+1 | add: (a: i32, b: i32) -> (r: i32) = a + b end add
+  |               ^^^^^^ the missing formal parameter
+  = note: [1920]: every runtime parameter is filled exactly once

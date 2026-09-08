@@ -1,0 +1,10 @@
+error[L0301]: this constructs a different struct type
+  --> ../tests/fixtures/negative/struct-literal-argument-nominal-mismatch/program.ldn:13:13
+   |
+13 |     consume(other(x: 1))
+   |             ^^^^^
+  --> ../tests/fixtures/negative/struct-literal-argument-nominal-mismatch/program.ldn:9:11
+  |
+9 | consume: (value: point) -> none =
+  |           ^^^^^^^^^^^^ this parameter
+  = note: [0710]: two structs are one type when one declaration wrote both, and never otherwise

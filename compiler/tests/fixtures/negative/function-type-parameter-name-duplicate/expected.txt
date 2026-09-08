@@ -1,0 +1,10 @@
+error[L0301]: this function type gives two parameters the same call label
+  --> ../tests/fixtures/negative/function-type-parameter-name-duplicate/program.ldn:1:33
+  |
+1 | duplicated: type = (value: i32, value: bool) -> none
+  |                                 ^^^^^
+  --> ../tests/fixtures/negative/function-type-parameter-name-duplicate/program.ldn:1:21
+  |
+1 | duplicated: type = (value: i32, value: bool) -> none
+  |                     ^^^^^^^^^^ the first parameter with that label
+  = note: [0980]: a named argument must identify one formal parameter

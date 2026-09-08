@@ -4,3 +4,6 @@ program: main.ldn
 codes: L0301
 constructs: 0260, 0270, 0570, 1290, 1920
 targets: linux-x86-64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/generic-text-literal-repeated-right-first/main.ldn
+status: 1

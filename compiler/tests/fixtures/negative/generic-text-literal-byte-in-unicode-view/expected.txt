@@ -1,0 +1,10 @@
+error[L0301]: `\\xNN` spells a byte, and this text context requires Unicode scalar values
+  --> ../tests/fixtures/negative/generic-text-literal-byte-in-unicode-view/main.ldn:8:29
+  |
+8 |     bad := identity(42, "bad\x41")
+  |                             ^^^^
+  --> ../tests/fixtures/negative/generic-text-literal-byte-in-unicode-view/main.ldn:1:37
+  |
+1 | identity: (item: type, value: item, text: utf16) -> (answer: item) =
+  |                                     ^^^^^^^^^^^ this generic parameter pattern
+  = note: [0270]: `\\xNN` is only valid where bytes are meant

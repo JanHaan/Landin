@@ -1,0 +1,10 @@
+error[L0301]: this argument has a different reference permission or view from its parameter pattern
+  --> ../tests/fixtures/negative/generic-reference-pattern-permission/program.ldn:5:24
+  |
+5 |     result := identity(source)
+  |                        ^^^^^^
+  --> ../tests/fixtures/negative/generic-reference-pattern-permission/program.ldn:1:24
+  |
+1 | identity: (t: type, p: ptr mut t) -> (q: ptr mut t from p) =
+  |                        ^^^^^^^^^ the runtime parameter type pattern
+  = note: D138: deduction unifies the written parameter pattern with the independently synthesized argument descriptor exactly

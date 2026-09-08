@@ -1,0 +1,10 @@
+error[L0301]: only utf8 has an indexing operation
+  --> ../tests/fixtures/negative/utf16-indexing-is-not-utf8-indexing/program.ldn:2:14
+  |
+2 |     result = source[0]
+  |              ^^^^^^
+  --> ../tests/fixtures/negative/utf16-indexing-is-not-utf8-indexing/program.ldn:2:14
+  |
+2 |     result = source[0]
+  |              ^^^^^^ the non-utf8 value indexed here
+  = note: [0610]: integer and position indexing are operations on utf8

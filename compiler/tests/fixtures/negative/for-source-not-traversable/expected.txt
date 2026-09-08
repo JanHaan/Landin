@@ -1,0 +1,10 @@
+error[L0301]: this traverses `bool`, and a traversal source is a slice, a fixed array or an integer range
+  --> ../tests/fixtures/negative/for-source-not-traversable/program.ldn:3:17
+  |
+3 |     for item in flag do
+  |                 ^^^^
+  --> ../tests/fixtures/negative/for-source-not-traversable/program.ldn:3:5
+  |
+3 |     for item in flag do
+  |     ^^^^^^^^^^^^^^^^^^^ this for loop
+  = note: [1150]: `for item in items` walks the elements of `items`
