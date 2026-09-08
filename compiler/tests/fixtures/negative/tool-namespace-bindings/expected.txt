@@ -1,0 +1,18 @@
+error[L0203]: `compiler` is reserved for the toolchain namespace
+  --> ../tests/fixtures/negative/tool-namespace-bindings/program.ldn:1:1
+  |
+1 | compiler: i32 = 1
+  | ^^^^^^^^
+  = note: [1480] [1560]: bare tool namespaces cannot be rebound
+error[L0203]: `assembler` is reserved for the toolchain namespace
+  --> ../tests/fixtures/negative/tool-namespace-bindings/program.ldn:2:5
+  |
+2 | f: (assembler: i32) -> (value: i32) =
+  |     ^^^^^^^^^
+  = note: [1480] [1560]: bare tool namespaces cannot be rebound
+error[L0203]: `linker` is reserved for the toolchain namespace
+  --> ../tests/fixtures/negative/tool-namespace-bindings/program.ldn:3:5
+  |
+3 |     linker: i32 = assembler
+  |     ^^^^^^
+  = note: [1480] [1560]: bare tool namespaces cannot be rebound

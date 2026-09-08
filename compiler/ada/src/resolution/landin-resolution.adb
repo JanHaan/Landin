@@ -174,6 +174,18 @@ package body Landin.Resolution is
       --  Outward, one scope at a time, and the first answer wins.  That is
       --  [0140]: an inner scope may shadow an outer name.
       while Where /= No_Scope loop
+         if Sort_Of (Of_Table, Where) = File_Imports then
+            declare
+               Found : constant Import_Maps.Cursor :=
+                 Of_Table.Imports.Find (Key'(Scope => Where, Name => Name));
+            begin
+               if Import_Maps.Has_Element (Found)
+                 and then Import_Maps.Element (Found).Member /= No_Declaration
+               then
+                  return Import_Maps.Element (Found).Member;
+               end if;
+            end;
+         end if;
          declare
             Found : constant Declaration_Id :=
               Declared_Here (Of_Table, Where, Name);
@@ -208,28 +220,43 @@ package body Landin.Resolution is
       Name     : Landin.Source.Names.Name_Id)
       return Landin.Modules.Module_Id
    is
+      Found : constant Import_Maps.Cursor := Of_Table.Imports.Find
+        (Key'(Scope => File_Scope_Of (Of_Table, Source), Name => Name));
    begin
-      for Item of Of_Table.Imports loop
-         if Item.Source = Source and then Item.Name = Name then
-            return Item.Target;
-         end if;
-      end loop;
-      return Landin.Modules.No_Module;
+      return (if Import_Maps.Has_Element (Found)
+              then Import_Maps.Element (Found).Target
+              else Landin.Modules.No_Module);
    end Imported_Module_Of;
+
+   function Has_Import
+     (Of_Table : Table;
+      Source   : Landin.Source.Source_Id;
+      Name     : Landin.Source.Names.Name_Id) return Boolean
+     is (Of_Table.Imports.Contains
+           (Key'(Scope => File_Scope_Of (Of_Table, Source), Name => Name)));
+
+   procedure Bind_Imported_Declaration
+     (Into   : in out Table;
+      Source : Landin.Source.Source_Id;
+      Name   : Landin.Source.Names.Name_Id;
+      Target : Declaration_Id;
+      Origin : Landin.Provenance.Origin) is
+   begin
+      Into.Imports.Insert
+        (Key'(Scope => File_Scope_Of (Into, Source), Name => Name),
+         Import_Binding'
+           (Source => Source, Name => Name,
+            Target => Landin.Modules.No_Module,
+            Member => Target, Origin => Origin));
+   end Bind_Imported_Declaration;
 
    function Import_Origin
      (Of_Table : Table;
       Source   : Landin.Source.Source_Id;
       Name     : Landin.Source.Names.Name_Id) return Landin.Provenance.Origin
-   is
-   begin
-      for Item of Of_Table.Imports loop
-         if Item.Source = Source and then Item.Name = Name then
-            return Item.Origin;
-         end if;
-      end loop;
-      return Landin.Provenance.No_Origin;
-   end Import_Origin;
+     is (Of_Table.Imports.Element
+           (Key'(Scope => File_Scope_Of (Of_Table, Source), Name => Name))
+             .Origin);
 
    procedure Bind_Imported_Module
      (Into  : in out Table;
@@ -238,10 +265,11 @@ package body Landin.Resolution is
       Target : Landin.Modules.Module_Id;
       Origin : Landin.Provenance.Origin) is
    begin
-      Into.Imports.Append
-        (Import_Binding'
+      Into.Imports.Insert
+        (Key'(Scope => File_Scope_Of (Into, Source), Name => Name),
+         Import_Binding'
            (Source => Source, Name => Name,
-            Target => Target, Origin => Origin));
+            Target => Target, Member => No_Declaration, Origin => Origin));
    end Bind_Imported_Module;
 
    --  What a declaration declares, from the node and the scope it is in.

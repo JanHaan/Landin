@@ -1,0 +1,15 @@
+option next: u32 = count + 1
+option count: u32 = 41
+option enabled: bool = true
+compiler.assert(next == 42)
+compiler.assert(compiler.word_size == 8 * sizeof usize)
+compiler.assert(compiler.byte_order == little)
+compiler.assert(compiler.build_mode == debug)
+fixed if enabled and next == 42 then
+    answer: i32 = 42
+else
+    answer: missing = user_code()
+end if
+option small: u8 = 255
+option wide: u32 = small + 1
+compiler.assert(wide == 256)

@@ -1,0 +1,32 @@
+public number: type = i32
+public cell: type (item: type) = struct
+    value: item
+end cell
+public marked: type = concept (item: type)
+end marked
+i32 is marked ()
+public absent, denied: atom
+public problems: type = absent | denied
+public choice: type = struct
+    kind: variant
+        empty |
+        full: (value: i32)
+    end kind
+end choice
+public mut counter: i32 = 1
+public answer: i32 = 40
+public identity: (item: type is marked, value: item) -> (result: item) =
+    result = value
+end identity
+public work: (value: number) -> (result: number) ! problems =
+    fail absent when value < 0
+    result = value
+end work
+hidden: type = struct
+    secret: i32
+end hidden
+public opaque: type = hidden
+public reveal: () -> (value: opaque) =
+    value = (secret: 7)
+end reveal
+private_value: i32 = 7

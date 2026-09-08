@@ -1,0 +1,6 @@
+error[L0305]: this is not a portable static library name
+  --> ../tests/fixtures/negative/r430-library-injection/main.ldn:1:16
+  |
+1 | linker.library("-Wl,--whole-archive")
+  |                ^^^^^^^^^^^^^^^^^^^^^
+  = note: [1590]/D202: use ASCII letters, digits, _, - and .; the name must be nonempty, must not start with -, and must not consist only of dots

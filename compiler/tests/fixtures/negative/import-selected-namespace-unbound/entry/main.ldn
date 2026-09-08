@@ -1,0 +1,2 @@
+import lib (answer)
+f: () -> (value: i32) = lib.answer end f

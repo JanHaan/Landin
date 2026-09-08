@@ -1,0 +1,1 @@
+linker.library("-Wl,--whole-archive")

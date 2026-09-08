@@ -1,0 +1,5 @@
+f: () -> none =
+    assembler.block()
+    compiler.atomic_add()
+    compiler.assert(true)
+end f

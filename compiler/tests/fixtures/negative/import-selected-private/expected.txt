@@ -1,0 +1,10 @@
+error[L0202]: `private_value` is module-internal
+  --> ../tests/fixtures/negative/import-selected-private/entry/main.ldn:1:13
+  |
+1 | import lib (private_value)
+  |             ^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/import-selected-private/root/lib/library.ldn:1:1
+  |
+1 | private_value: i32 = 7
+  | ^^^^^^^^^^^^^ declared without `public` here
+  = note: [1410]: only a public declaration is visible across a module boundary

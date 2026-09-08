@@ -8,13 +8,11 @@
 --  leaves, and the stage that found the fault therefore contains no code at
 --  all.
 --
---  Two rules and not more, and the tour states each in its own paragraph
---  because neither could be read out of [0130]: [1850] says one scope gives
---  one name to one thing, and [1860] says a name that names nothing is
---  refused.  Everything else the kernel can get wrong about a name is
---  either a syntax fault R1.40 already reports or a type fault R1.60 will.
---  [1840] is the third of the three and is not a failure: it is the list of
---  scopes the other two are about.
+--  Four resolution rules: duplicate declarations [1850], unresolved
+--  names [1860], inaccessible module members [1410], and reserved tool
+--  namespace bindings or unavailable tool references [1480] [1560].
+--  [1840] owns their source scopes; D201 extends the per-file import scope
+--  and D202 separates configuration names from ordinary declarations.
 --
 --  One thing here is new in the compiler and it is the reason Related is an
 --  Origin rather than a span.  Until now both places a diagnostic points at
@@ -34,7 +32,8 @@ package Landin.Diagnostics.Resolution is
    --  catalogue's, so a reader comparing the two files compares names
    --  rather than numbers.
    type Failure is
-     (Duplicate_Declaration, Unresolved_Name, Inaccessible_Name);
+     (Duplicate_Declaration, Unresolved_Name, Inaccessible_Name,
+      Reserved_Tool_Name);
 
    function Code_For (Item : Failure)
      return Landin.Diagnostics.Catalogue.Code_Name
@@ -44,7 +43,9 @@ package Landin.Diagnostics.Resolution is
             when Unresolved_Name       =>
                Catalogue.Unresolved_Name,
             when Inaccessible_Name     =>
-               Catalogue.Inaccessible_Name);
+               Catalogue.Inaccessible_Name,
+            when Reserved_Tool_Name    =>
+               Catalogue.Reserved_Tool_Name);
 
    --  What the resolver hands over: a rule, the name it was looking at, and
    --  the sentence a user reads.  Related is the earlier declaration and is

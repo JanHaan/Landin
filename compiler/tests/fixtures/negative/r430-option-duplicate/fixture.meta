@@ -1,0 +1,9 @@
+class: negative
+summary: An option is globally declared exactly once
+program: main.ldn
+codes: L0200
+constructs: 1530
+targets: linux-x86-64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/r430-option-duplicate/main.ldn
+status: 1

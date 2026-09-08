@@ -1,0 +1,8 @@
+class: end-to-end
+summary: D202 range override error names the full request and anchors its declaration
+program: main.ldn
+constructs: 1530
+targets: linux-x86-64, synthetic-32
+expect: expected.txt
+args: --option=count=256 ../tests/fixtures/end-to-end/r430-option-override-range/main.ldn
+status: 1

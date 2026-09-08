@@ -17,6 +17,8 @@
 (concept_declaration name: (identifier) @type.definition)
 (atom_declaration name: (identifier_list (identifier) @constant))
 (binding name: (identifier) @variable)
+(option_declaration name: (identifier) @constant)
+(tool_directive module: _ @module.builtin member: (identifier) @function.builtin)
 (parameter name: (identifier) @variable.parameter)
 (named_return name: (identifier) @variable.parameter)
 (type_formal name: (identifier) @type.parameter)
@@ -37,10 +39,10 @@
 
 ; Keywords
 [
-  "addr" "alignof" "any" "atom" "begin" "break" "complete" "concept"
+  "addr" "alignof" "any" "as" "atom" "begin" "break" "complete" "concept"
   "continue" "dec" "defer" "do" "else" "elsif" "end" "escaping" "fail"
   "fixed" "for" "from" "if" "import" "in" "inc" "inout" "is" "loop"
-  "match" "mut" "none" "ptr" "public" "return" "sink" "sizeof" "struct"
+  "match" "mut" "none" "option" "ptr" "public" "return" "sink" "sizeof" "struct"
   "then" "try" "type" "unchecked" "undo" "variant" "when" "while" "with"
 ] @keyword
 

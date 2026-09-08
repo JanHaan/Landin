@@ -1,0 +1,2 @@
+option wrong: bool = false and 123
+compiler.assert(true or (1 + false == 2))

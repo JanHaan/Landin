@@ -1,0 +1,5 @@
+compiler: i32 = 1
+f: (assembler: i32) -> (value: i32) =
+    linker: i32 = assembler
+    value = linker + compiler
+end f

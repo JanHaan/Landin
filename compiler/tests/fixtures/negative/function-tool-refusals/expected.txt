@@ -1,0 +1,18 @@
+error[L0203]: unavailable tool reference: assembler.block
+  --> ../tests/fixtures/negative/function-tool-refusals/program.ldn:2:15
+  |
+2 |     assembler.block()
+  |               ^^^^^
+  = note: [1630]: assembler.block is enabled by R6.60
+error[L0203]: unavailable tool reference: compiler.atomic_add
+  --> ../tests/fixtures/negative/function-tool-refusals/program.ldn:3:14
+  |
+3 |     compiler.atomic_add()
+  |              ^^^^^^^^^^
+  = note: [1620]: compiler.atomic_add is enabled by R6.30
+error[L0203]: unavailable tool reference: compiler.assert
+  --> ../tests/fixtures/negative/function-tool-refusals/program.ldn:4:14
+  |
+4 |     compiler.assert(true)
+  |              ^^^^^^
+  = note: D202: compiler.assert is a module-only fixed directive

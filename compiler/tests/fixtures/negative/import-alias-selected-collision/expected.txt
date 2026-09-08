@@ -1,0 +1,10 @@
+error[L0200]: `answer` is imported twice in one file
+  --> ../tests/fixtures/negative/import-alias-selected-collision/entry/main.ldn:2:13
+  |
+2 | import lib (answer)
+  |             ^^^^^^
+  --> ../tests/fixtures/negative/import-alias-selected-collision/entry/main.ldn:1:15
+  |
+1 | import lib as answer
+  |               ^^^^^^ the import that keeps the name
+  = note: [1450] [1850]: a file import scope gives one name to one thing

@@ -1392,8 +1392,280 @@ package body Landin.Tests.Driver_Suite is
       end;
    end An_Unwritable_Output_Is_Reported;
 
+   procedure Fixed_Options_Are_Deterministic
+     (Item : in out Landin.Testing.Context);
+
+   procedure Fixed_Options_Are_Deterministic
+     (Item : in out Landin.Testing.Context)
+   is
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Args : Landin.Platform.Path_List;
+   begin
+      Host.Add_File
+        ("a.ldn", "option next: u32 = count + 1" & LF
+         & "compiler.assert(next == 6)" & LF
+         & "compiler.assert(compiler.build_mode == release)" & LF
+         & "fixed if enabled and next == 6 then" & LF
+         & "answer: i32 = 42" & LF
+         & "else" & LF & "answer: missing = nope()" & LF & "end if" & LF);
+      Host.Add_File
+        ("b.ldn", "option count: u32 = 2" & LF
+         & "option enabled: bool = false" & LF);
+      Args.Append ("--option=count=5");
+      Args.Append ("--build-mode=release");
+      Args.Append ("--option=enabled=true");
+      Args.Append ("a.ldn");
+      Args.Append ("b.ldn");
+      for Pass in 1 .. 2 loop
+         declare
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Driver.Execute (Args, Host, Tools);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Result.Status, Landin.Driver.Status_Success,
+               "forward defaults use effective overrides: "
+               & Unbounded.To_String (Result.Report));
+         end;
+         Args.Replace_Element (1, "--option=enabled=true");
+         Args.Replace_Element (3, "--option=count=5");
+         Args.Replace_Element (4, "b.ldn");
+         Args.Replace_Element (5, "a.ldn");
+      end loop;
+   end Fixed_Options_Are_Deterministic;
+
+   procedure Fixed_Facts_Come_From_The_Target
+     (Item : in out Landin.Testing.Context);
+
+   procedure Fixed_Facts_Come_From_The_Target
+     (Item : in out Landin.Testing.Context)
+   is
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+   begin
+      Host.Add_File
+        ("facts.ldn",
+         "compiler.assert(compiler.word_size == 8 * sizeof usize)" & LF
+         & "compiler.assert(compiler.byte_order == little)" & LF
+         & "compiler.assert(true or (1 / 0 == 0))" & LF
+         & "compiler.assert(not (false and (1 / 0 == 0)))" & LF
+         & "compiler.assert(compiler.build_mode == debug)" & LF
+         & "fixed if compiler.arch == synthetic_32 then" & LF
+         & "compiler.assert(sizeof usize == 4)" & LF
+         & "compiler.assert(alignof usize == 4)" & LF
+         & "else" & LF
+         & "compiler.assert(sizeof usize == 8)" & LF
+         & "compiler.assert(alignof usize == 8)" & LF
+         & "end if" & LF);
+      for Target in 1 .. 2 loop
+         declare
+            Args : constant Landin.Platform.Path_List := Both
+              ((if Target = 1 then "--target=linux-x86-64"
+                else "--target=synthetic-32"), "facts.ldn");
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Driver.Execute (Args, Host, Tools);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Result.Status, Landin.Driver.Status_Success,
+               "width and alignment come from target: "
+               & Unbounded.To_String (Result.Report));
+         end;
+      end loop;
+   end Fixed_Facts_Come_From_The_Target;
+
+   procedure Invalid_Options_Are_Refused
+     (Item : in out Landin.Testing.Context);
+
+   procedure Invalid_Options_Are_Refused
+     (Item : in out Landin.Testing.Context) is
+      procedure Refuse
+        (Source, Option, Needle : String; Extra : String := "");
+      procedure Refuse
+        (Source, Option, Needle : String; Extra : String := "")
+      is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : Landin.Platform.Path_List;
+      begin
+         Host.Add_File ("bad.ldn", Source & LF);
+         if Option /= "" then
+            Args.Append (Option);
+         end if;
+         if Extra /= "" then
+            Args.Append (Extra);
+         end if;
+         Args.Append ("bad.ldn");
+         declare
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Driver.Execute (Args, Host, Tools);
+         begin
+            Landin.Testing.Check
+              (Item, Result.Status in Landin.Driver.Status_Reported
+                   | Landin.Driver.Status_Misuse
+               and then Contains
+                 (Unbounded.To_String (Result.Report), Needle),
+               "refused " & Needle & ": "
+               & Unbounded.To_String (Result.Report));
+            Landin.Testing.Check_Equal
+              (Item, Tools.Run_Count, 0, "invalid options never invoke tools");
+         end;
+      end Refuse;
+   begin
+      Refuse ("", "--option=unknown=1", "unknown build option");
+      Refuse ("option n: u8 = 1", "--option=n=256", "outside its type range");
+      Refuse ("option n: u32 = 1", "--option=n=-1", "outside its type range");
+      Refuse ("option n: usize = 1", "--option=n=4294967296",
+              "outside its type range", "--target=synthetic-32");
+      Refuse ("option n: bool = true", "--option=n=1", "not a typed literal");
+      Refuse ("option n: i32 = 1", "--option=n=true", "not a typed literal");
+      Refuse ("option n: i32 = 1", "--option=n=1+2", "not a typed literal");
+      Refuse ("option n: u64 = 1", "--option=n=18446744073709551616",
+              "not a typed literal");
+      Refuse ("option n: u32 = 1", "--option=n=1",
+              "repeated build option", "--option=n=2");
+      Refuse ("", "--option==1", "invalid or repeated build option");
+      Refuse ("", "--option=x=", "invalid or repeated build option");
+      Refuse ("", "--build-mode=fast", "one debug or release value");
+      Refuse ("", "--build-mode=debug", "one debug or release value",
+              "--build-mode=release");
+      Refuse ("option n: u32 = missing", "--option=n=1",
+              "not a compiler-owned fixed value");
+      Refuse ("option n: u8 = 256", "--option=n=1", "outside its type range");
+      Refuse ("option a: u32 = b" & LF & "option b: u32 = a",
+              "--option=a=1", "cyclic option defaults");
+      Refuse ("option a: bool = true or a", "", "cyclic option defaults");
+      Refuse ("option a: u32 = 1" & LF & "option a: u32 = 2", "",
+              "option `a` is declared twice");
+      Refuse ("fixed if false then" & LF & "option n: u32 = 1" & LF
+              & "end if", "", "outside every fixed arm");
+      Refuse ("option n: f32 = 1", "", "bool or an integer scalar");
+      Refuse ("option n: bool = false and 123", "",
+              "incompatible types");
+      Refuse ("compiler.assert(true or (1 + false == 2))", "",
+              "incompatible types");
+      Refuse ("", "--option=LogLevel=1", "invalid or repeated build option");
+      Refuse ("compiler.assert(false)", "", "assertion is false");
+      Refuse ("compiler.assert(1)", "", "compiler.assert needs bool");
+      Refuse ("compiler.assert(true or f())", "", "closed fixed");
+      Refuse ("compiler.assert(sizeof thing == 8)", "", "scalar name");
+   end Invalid_Options_Are_Refused;
+
+   procedure Libraries_Keep_Their_Written_Order
+     (Item : in out Landin.Testing.Context);
+
+   procedure Libraries_Keep_Their_Written_Order
+     (Item : in out Landin.Testing.Context)
+   is
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Args : Landin.Platform.Path_List;
+   begin
+      Host.Add_Directory ("entry");
+      Host.Add_Directory ("root");
+      Host.Add_Directory ("root/support");
+      Host.Add_File
+        ("entry/z.ldn", "linker.library(""third"")" & LF);
+      Host.Add_File
+        ("entry/a.ldn", "import support" & LF
+         & "linker.library(""first"")" & LF
+         & "fixed if false then" & LF
+         & "linker.library(runtime())" & LF
+         & "compiler.assert(false)" & LF
+         & "else" & LF & "linker.library(""second"")" & LF & "end if" & LF
+         & "public main: () -> (code: i32) = code = 42 end main" & LF);
+      Host.Add_File
+        ("root/support/a.ldn", "linker.library(""first"")" & LF);
+      Args.Append ("--root=root");
+      Args.Append ("--emit=exe");
+      Args.Append ("entry");
+      Tools.Set_Result (0, "");
+      declare
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute (Args, Host, Tools);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Landin.Driver.Status_Success,
+            "active directives reach the tool: "
+            & Unbounded.To_String (Result.Report));
+         if Tools.Run_Count = 1 then
+            declare
+               Call : constant Landin.Testing.Fakes.Tool_Call :=
+                 Tools.Call_At (1);
+            begin
+               Landin.Testing.Check_Equal
+                 (Item, Call.Arguments.Element (2), "-l:libfirst.a",
+                  "entry first file precedes other modules");
+               Landin.Testing.Check_Equal
+                 (Item, Call.Arguments.Element (3), "-l:libsecond.a",
+                  "active arm keeps declaration order");
+               Landin.Testing.Check_Equal
+                 (Item, Call.Arguments.Element (4), "-l:libthird.a",
+                  "directory files are canonical sorted");
+               Landin.Testing.Check_Equal
+                 (Item, Call.Arguments.Element (5), "-l:libfirst.a",
+                  "reached module repeats are preserved");
+            end;
+         else
+            Landin.Testing.Check (Item, False, "one tool invocation expected");
+         end if;
+      end;
+   end Libraries_Keep_Their_Written_Order;
+
+   procedure Builtin_Imports_Never_Search_Roots
+     (Item : in out Landin.Testing.Context);
+
+   procedure Builtin_Imports_Never_Search_Roots
+     (Item : in out Landin.Testing.Context)
+   is
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+   begin
+      Host.Add_Directory ("entry");
+      Host.Add_Directory ("root");
+      Host.Add_Directory ("root/landin");
+      Host.Add_Directory ("root/landin/compiler");
+      Host.Add_File
+        ("root/landin/compiler/bad.ldn", "this must never parse !" & LF);
+      for Which in 1 .. 3 loop
+         Host.Add_File
+           ("entry/main.ldn", "import landin/compiler"
+            & (case Which is
+                 when 1 => "", when 2 => " as c", when others => " (arch)")
+            & LF);
+         declare
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Driver.Execute (Both ("--root=root", "entry"),
+                                     Host, Tools);
+            Error : constant String :=
+              Unbounded.To_String (Result.Report);
+         begin
+            Landin.Testing.Check
+              (Item, Result.Status = Landin.Driver.Status_Reported
+               and then Contains (Error, "L0203")
+               and then Contains (Error, "explicitly imported")
+               and then not Contains (Error, "root/landin/compiler"),
+               "builtin import suffix cannot reach source: " & Error);
+         end;
+      end loop;
+   end Builtin_Imports_Never_Search_Roots;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "driver", "fixed options are deterministic",
+         Fixed_Options_Are_Deterministic'Access);
+      Landin.Testing.Register
+        (Into, "driver", "fixed facts come from the target",
+         Fixed_Facts_Come_From_The_Target'Access);
+      Landin.Testing.Register
+        (Into, "driver", "invalid options are refused",
+         Invalid_Options_Are_Refused'Access);
+      Landin.Testing.Register
+        (Into, "driver", "libraries keep their written order",
+         Libraries_Keep_Their_Written_Order'Access);
+      Landin.Testing.Register
+        (Into, "driver", "builtin imports never search roots",
+         Builtin_Imports_Never_Search_Roots'Access);
       Landin.Testing.Register
         (Into, "driver", "no arguments is misuse",
          No_Arguments_Is_Misuse'Access);

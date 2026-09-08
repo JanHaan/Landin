@@ -4728,6 +4728,18 @@ item 1 ROUTINE f result i32 signature 1 params 0 slots 3 blocks 1 values 12
     10 STORE slot 1 <- 9
     11 LOAD i32 slot 1
     12 LEAVE <- 11
+file positive/r430-fixed-options/main.ldn
+unit signatures 0 items 1
+item 1 DATUM answer result i32 params 0 slots 0 blocks 1 values 2
+  block 1 scope 1 PROGRAM length 2
+    1 NUMBER i32 42
+    2 LEAVE <- 1
+file positive/r430-inactive-tools/main.ldn
+unit signatures 0 items 1
+item 1 DATUM value result i32 params 0 slots 0 blocks 1 values 2
+  block 1 scope 1 PROGRAM length 2
+    1 NUMBER i32 42
+    2 LEAVE <- 1
 file positive/range-subtype-exit-before-the-check/program.ldn
 unit signatures 9 items 9
 signature 1 (in u8) -> i32

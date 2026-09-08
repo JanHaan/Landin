@@ -60,6 +60,24 @@ package body Landin.Stages.Resolution is
       function Spelled (Of_Name : Landin.Source.Names.Name_Id) return String
         is (Landin.Source.Names.Spelling (Spellings.all, Of_Name));
 
+      function Reserved_Tool_Name
+        (Named : Landin.Source.Names.Name_Id) return Boolean
+        is (Spelled (Named) in "compiler" | "assembler" | "linker");
+
+      procedure Report_Reserved (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
+
+      procedure Report_Reserved (Of_Tree : Syn.Tree; Node : Syn.Node_Id) is
+      begin
+         Names.Report
+           (Item => Names.Reserved_Tool_Name,
+            Source => Syn.Source_Of (Of_Tree),
+            Where => Syn.Anchor (Of_Tree, Node),
+            Message => "`" & Spelled (Syn.Name (Of_Tree, Node))
+                       & "` is reserved for the toolchain namespace",
+            Note => "[1480] [1560]: bare tool namespaces cannot be rebound",
+            Into => Found);
+      end Report_Reserved;
+
       function File_Base (Of_Tree : Syn.Tree)
         return Landin.Resolution.Scope_Id
         is (Landin.Resolution.File_Scope_Of
@@ -127,6 +145,25 @@ package body Landin.Stages.Resolution is
          --  A declaration whose name position the parser refused has no
          --  identity, and there is nothing to declare or to collide with.
          if Named = Landin.Source.Names.No_Name then
+            return;
+         elsif Reserved_Tool_Name (Named) then
+            Report_Reserved (Of_Tree, Node);
+         elsif Res.Sort_Of (Meanings.all, Inside) = Res.Module_Scope
+           and then Landin.Provenance.Is_Known
+             (Landin.Configuration.Option_Origin (Activity.all, Named))
+         then
+            Names.Report
+              (Item => Names.Duplicate_Declaration,
+               Source => Syn.Source_Of (Of_Tree),
+               Where => Syn.Anchor (Of_Tree, Node),
+               Message => "`" & Spelled (Named)
+                          & "` is already a program option",
+               Note => "[1530]: options and module bindings cannot share"
+                       & " a name",
+               Related => Landin.Configuration.Option_Origin
+                 (Activity.all, Named),
+               Because => "the option that keeps the name",
+               Into => Found);
             return;
          end if;
 
@@ -824,6 +861,30 @@ package body Landin.Stages.Resolution is
                null;
          end case;
 
+         if Syn.Kind (Of_Tree, Node) = Syn.Member_Selection
+           and then Syn.Kind (Of_Tree, Syn.Target_Of (Of_Tree, Node))
+             in Syn.Name_Reference | Syn.Type_Reference
+                  | Syn.Concept_Reference
+           and then Reserved_Tool_Name
+             (Syn.Name (Of_Tree, Syn.Target_Of (Of_Tree, Node)))
+         then
+            declare
+               Base : constant String := Spelled
+                 (Syn.Name (Of_Tree, Syn.Target_Of (Of_Tree, Node)));
+               Member : constant String := Spelled (Syn.Name (Of_Tree, Node));
+            begin
+               Names.Report
+                 (Item => Names.Reserved_Tool_Name,
+                  Source => Syn.Source_Of (Of_Tree),
+                  Where => Syn.Anchor (Of_Tree, Node),
+                  Message => "unavailable tool reference: " & Base
+                             & "." & Member,
+                  Note => Landin.Configuration.Tool_Advice (Base, Member),
+                  Into => Found);
+            end;
+            return;
+         end if;
+
          --  A leading name bound by this file's import prelude is a module
          --  namespace only in a qualified selection.  Locals and signature
          --  names shadow it; the import in turn shadows a declaration in the
@@ -917,6 +978,21 @@ package body Landin.Stages.Resolution is
                          (Meanings.all, Inside, Named));
             begin
                if Meant = Landin.Resolution.No_Declaration then
+                  if Landin.Provenance.Is_Known
+                    (Landin.Configuration.Option_Origin (Activity.all, Named))
+                  then
+                     Names.Report
+                       (Item => Names.Unresolved_Name,
+                        Source => Syn.Source_Of (Of_Tree),
+                        Where => Syn.Anchor (Of_Tree, Node),
+                        Message => "option `" & Spelled (Named)
+                                   & "` is configuration-only",
+                        Note => "D202 [1530]: an option is available only in"
+                                & " fixed conditions, option defaults and"
+                                & " compiler assertions",
+                        Into => Found);
+                     return;
+                  end if;
                   --  A type name that resolved to nothing is left to the
                   --  checker, which is the stage that can tell a type the
                   --  tour writes and [1790] omits from a name nobody
@@ -1386,60 +1462,6 @@ package body Landin.Stages.Resolution is
    begin
       Landin.Resolution.Prepare (Meanings.all, Trees.all, Graph.all);
 
-      --  Each source owns its import bindings.  The final path segment is
-      --  the bound namespace name, and two such names in one prelude are the
-      --  same-scope duplicate [1420] [1450] [1850].
-      for Index in 1 .. Source_Count (Context) loop
-         declare
-            Source_Id : constant Landin.Source.Source_Id :=
-              Nth_Source (Context, Index);
-            Of_Tree : constant not null access constant Syn.Tree :=
-              Landin.Syntax.Forest.Tree_Of (Trees.all, Source_Id);
-         begin
-            for Import_Index in 1 .. Syn.Import_Count (Of_Tree.all) loop
-               declare
-                  Import_Node : constant Syn.Node_Id :=
-                    Syn.Nth_Import (Of_Tree.all, Import_Index);
-                  Last : constant Syn.Node_Id :=
-                    Syn.Nth_Import_Segment
-                      (Of_Tree.all, Import_Node,
-                       Syn.Import_Segment_Count (Of_Tree.all, Import_Node));
-                  Named : constant Landin.Source.Names.Name_Id :=
-                    Syn.Name (Of_Tree.all, Last);
-                  Target : constant Landin.Modules.Module_Id :=
-                    Landin.Modules.Imported_Module
-                      (Graph.all, Source_Id, Import_Node);
-                  Earlier : constant Landin.Modules.Module_Id :=
-                    Res.Imported_Module_Of
-                      (Meanings.all, Source_Id, Named);
-               begin
-                  if Target = Landin.Modules.No_Module
-                    or else Named = Landin.Source.Names.No_Name
-                  then
-                     null;
-                  elsif Earlier /= Landin.Modules.No_Module then
-                     Names.Report
-                       (Item    => Names.Duplicate_Declaration,
-                        Source  => Source_Id,
-                        Where   => Syn.Anchor (Of_Tree.all, Last),
-                        Message => "`" & Spelled (Named)
-                                   & "` is imported twice in one file",
-                        Note    => "[1450] [1850]: a file import scope gives"
-                                   & " one name to one module",
-                        Related => Res.Import_Origin
-                          (Meanings.all, Source_Id, Named),
-                        Because => "the import that keeps the name",
-                        Into    => Found);
-                  else
-                     Res.Bind_Imported_Module
-                       (Meanings.all, Source_Id, Named, Target,
-                        Syn.Origin (Of_Tree.all, Last));
-                  end if;
-               end;
-            end loop;
-         end;
-      end loop;
-
       --  Pass one: every module declaration of every file, before any body
       --  is walked.  [1840]'s module is a set, so this is what lets a name
       --  be used above the line that introduces it -- and across a file
@@ -1538,6 +1560,134 @@ package body Landin.Stages.Resolution is
             end;
          end loop;
       end;
+
+      --  D201: bind imports after all active module declarations and
+      --  variant cases exist, including names reached through cycles.
+      for Index in 1 .. Source_Count (Context) loop
+         declare
+            Source_Id : constant Landin.Source.Source_Id :=
+              Nth_Source (Context, Index);
+            Of_Tree : constant not null access constant Syn.Tree :=
+              Landin.Syntax.Forest.Tree_Of (Trees.all, Source_Id);
+
+            procedure Bind_Import
+              (Node : Syn.Node_Id; Target : Landin.Modules.Module_Id;
+               Selected : Boolean);
+
+            procedure Bind_Import
+              (Node : Syn.Node_Id; Target : Landin.Modules.Module_Id;
+               Selected : Boolean)
+            is
+               Named : constant Landin.Source.Names.Name_Id :=
+                 Syn.Name (Of_Tree.all, Node);
+            begin
+               if Target = Landin.Modules.No_Module
+                 or else Named = Landin.Source.Names.No_Name
+               then
+                  return;
+               elsif Reserved_Tool_Name (Named) then
+                  Report_Reserved (Of_Tree.all, Node);
+               elsif Landin.Provenance.Is_Known
+                 (Landin.Configuration.Option_Origin (Activity.all, Named))
+               then
+                  Names.Report
+                    (Item => Names.Duplicate_Declaration,
+                     Source => Source_Id,
+                     Where => Syn.Anchor (Of_Tree.all, Node),
+                     Message => "`" & Spelled (Named)
+                                & "` is already a program option",
+                     Note => "[1530]: options and import bindings cannot"
+                             & " share a name",
+                     Related => Landin.Configuration.Option_Origin
+                       (Activity.all, Named),
+                     Because => "the option that keeps the name",
+                     Into => Found);
+               elsif Res.Has_Import (Meanings.all, Source_Id, Named) then
+                  Names.Report
+                    (Item => Names.Duplicate_Declaration,
+                     Source => Source_Id,
+                     Where => Syn.Anchor (Of_Tree.all, Node),
+                     Message => "`" & Spelled (Named)
+                                & "` is imported twice in one file",
+                     Note => "[1450] [1850]: a file import scope gives"
+                             & " one name to one thing",
+                     Related => Res.Import_Origin
+                       (Meanings.all, Source_Id, Named),
+                     Because => "the import that keeps the name",
+                     Into => Found);
+               elsif not Selected then
+                  Res.Bind_Imported_Module
+                    (Meanings.all, Source_Id, Named, Target,
+                     Syn.Origin (Of_Tree.all, Node));
+               else
+                  declare
+                     Member : constant Res.Declaration_Id :=
+                       Res.Declared_Here
+                         (Meanings.all,
+                          Res.Module_Scope_Of (Meanings.all, Target), Named);
+                  begin
+                     if Member = Res.No_Declaration then
+                        Names.Report
+                          (Item => Names.Unresolved_Name,
+                           Source => Source_Id,
+                           Where => Syn.Anchor (Of_Tree.all, Node),
+                           Message => "the imported module has no member `"
+                                      & Spelled (Named) & "`",
+                           Note => "[1440]: selected imports name public"
+                                   & " declarations in the selected module",
+                           Into => Found);
+                     elsif not Res.Is_Public (Meanings.all, Member) then
+                        Names.Report
+                          (Item => Names.Inaccessible_Name,
+                           Source => Source_Id,
+                           Where => Syn.Anchor (Of_Tree.all, Node),
+                           Message => "`" & Spelled (Named)
+                                      & "` is module-internal",
+                           Note => "[1410]: only a public declaration is"
+                                   & " visible across a module boundary",
+                           Related => Landin.Provenance.Site
+                             (Written.all, Member),
+                           Because => "declared without `public` here",
+                           Into => Found);
+                     else
+                        Res.Bind_Imported_Declaration
+                          (Meanings.all, Source_Id, Named, Member,
+                           Syn.Origin (Of_Tree.all, Node));
+                     end if;
+                  end;
+               end if;
+            end Bind_Import;
+         begin
+            for Which in 1 .. Syn.Import_Count (Of_Tree.all) loop
+               declare
+                  Node : constant Syn.Node_Id :=
+                    Syn.Nth_Import (Of_Tree.all, Which);
+                  Target : constant Landin.Modules.Module_Id :=
+                    Landin.Modules.Imported_Module
+                      (Graph.all, Source_Id, Node);
+                  Alias_Node : constant Syn.Node_Id :=
+                    Syn.Import_Alias_Of (Of_Tree.all, Node);
+               begin
+                  if Syn.Import_Selection_Count (Of_Tree.all, Node) > 0 then
+                     for Selected in
+                       1 .. Syn.Import_Selection_Count (Of_Tree.all, Node)
+                     loop
+                        Bind_Import
+                          (Syn.Nth_Import_Selection
+                             (Of_Tree.all, Node, Selected), Target, True);
+                     end loop;
+                  else
+                     Bind_Import
+                       ((if Alias_Node /= Syn.No_Node then Alias_Node
+                         else Syn.Nth_Import_Segment
+                           (Of_Tree.all, Node,
+                            Syn.Import_Segment_Count (Of_Tree.all, Node))),
+                        Target, False);
+                  end if;
+               end;
+            end loop;
+         end;
+      end loop;
 
       --  Pass two: bodies in source order through D139's single active
       --  declaration traversal.

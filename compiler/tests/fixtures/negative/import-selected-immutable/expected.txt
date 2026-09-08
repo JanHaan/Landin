@@ -1,0 +1,10 @@
+error[L0303]: `answer` is not mutable, so it may not be written
+  --> ../tests/fixtures/negative/import-selected-immutable/entry/main.ldn:2:17
+  |
+2 | f: () -> none = answer = 2 end f
+  |                 ^^^^^^
+  --> ../tests/fixtures/negative/import-selected-immutable/root/lib/library.ldn:1:8
+  |
+1 | public answer: i32 = 40
+  |        ^^^^^^ declared here
+  = note: [1900]: a mutable binding and a named return may be written, and nothing else may

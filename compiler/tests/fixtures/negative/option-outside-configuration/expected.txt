@@ -1,0 +1,6 @@
+error[L0201]: option `count` is configuration-only
+  --> ../tests/fixtures/negative/option-outside-configuration/program.ldn:2:25
+  |
+2 | f: () -> (value: i32) = count end f
+  |                         ^^^^^
+  = note: D202 [1530]: an option is available only in fixed conditions, option defaults and compiler assertions

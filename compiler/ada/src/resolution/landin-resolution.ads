@@ -306,13 +306,33 @@ package Landin.Resolution is
      with Pre => Is_Prepared (Of_Table)
                  and then Source /= Landin.Source.No_Source;
 
+   function Has_Import
+     (Of_Table : Table;
+      Source   : Landin.Source.Source_Id;
+      Name     : Landin.Source.Names.Name_Id) return Boolean
+     with Pre => Is_Prepared (Of_Table)
+                 and then Source /= Landin.Source.No_Source;
+
+   --  D201: a selected binding keeps the exported declaration's identity,
+   --  including its original declaring scope and provenance.
+   procedure Bind_Imported_Declaration
+     (Into   : in out Table;
+      Source : Landin.Source.Source_Id;
+      Name   : Landin.Source.Names.Name_Id;
+      Target : Declaration_Id;
+      Origin : Landin.Provenance.Origin)
+     with Pre => Is_Prepared (Into)
+                 and then Source /= Landin.Source.No_Source
+                 and then Contains (Into, Target)
+                 and then Name_Of (Into, Target) = Name
+                 and then not Has_Import (Into, Source, Name);
+
    function Import_Origin
      (Of_Table : Table;
       Source   : Landin.Source.Source_Id;
       Name     : Landin.Source.Names.Name_Id) return Landin.Provenance.Origin
      with Pre => Is_Prepared (Of_Table)
-                 and then Imported_Module_Of (Of_Table, Source, Name)
-                            /= Landin.Modules.No_Module;
+                 and then Has_Import (Of_Table, Source, Name);
 
    procedure Bind_Imported_Module
      (Into  : in out Table;
@@ -324,8 +344,7 @@ package Landin.Resolution is
                   and then Source /= Landin.Source.No_Source
                   and then Name /= Landin.Source.Names.No_Name
                   and then Target /= Landin.Modules.No_Module
-                  and then Imported_Module_Of (Into, Source, Name)
-                             = Landin.Modules.No_Module,
+                  and then not Has_Import (Into, Source, Name),
           Post => Imported_Module_Of (Into, Source, Name) = Target;
 
    --  Records one declaration and returns its identity.  It takes the node
@@ -678,11 +697,9 @@ private
       Source : Landin.Source.Source_Id := Landin.Source.No_Source;
       Name   : Landin.Source.Names.Name_Id := Landin.Source.Names.No_Name;
       Target : Landin.Modules.Module_Id := Landin.Modules.No_Module;
+      Member : Declaration_Id := No_Declaration;
       Origin : Landin.Provenance.Origin := Landin.Provenance.No_Origin;
    end record;
-
-   package Import_Binding_Vectors is new Ada.Containers.Vectors
-     (Index_Type => Positive, Element_Type => Import_Binding);
 
    type Application_Fact is record
       Class    : Application_Class := Unclassified_Application;
@@ -713,13 +730,19 @@ private
       Hash            => Hash,
       Equivalent_Keys => "=");
 
+   package Import_Maps is new Ada.Containers.Hashed_Maps
+     (Key_Type        => Key,
+      Element_Type    => Import_Binding,
+      Hash            => Hash,
+      Equivalent_Keys => "=");
+
    type Table is tagged limited record
       Ready        : Boolean := False;
       Declarations : Declaration_Vectors.Vector;
       Scopes       : Scope_Vectors.Vector;
       Module_Scopes : Scope_Id_Vectors.Vector;
       File_Scopes   : Scope_Id_Vectors.Vector;
-      Imports       : Import_Binding_Vectors.Vector;
+      Imports       : Import_Maps.Map;
       Runs         : Run_Vectors.Vector;
       Bound        : Binding_Vectors.Vector;
       Opened       : Opened_Vectors.Vector;

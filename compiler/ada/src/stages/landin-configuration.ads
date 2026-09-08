@@ -1,14 +1,52 @@
---  D139's immutable selected-declaration view.  Syntax remains complete;
---  this compilation-owned table only records nodes beneath inactive arms.
+--  D139/D202 configuration metadata. Syntax remains complete; this table
+--  retains request overrides and mode, and records option provenance,
+--  inactive declarations and ordered library requests for one compilation.
 
 private with Ada.Containers.Vectors;
+private with Ada.Containers.Indefinite_Vectors;
+private with Ada.Strings.Unbounded;
 
 with Landin.Source;
+with Landin.Source.Names;
+with Landin.Provenance;
 with Landin.Syntax;
 
 package Landin.Configuration is
 
    type Table is private;
+
+   type Build_Mode is (Debug, Release);
+   procedure Set_Mode (Into : in out Table; Mode : Build_Mode);
+   function Mode (In_Table : Table) return Build_Mode;
+
+   --  Shared explanation for a tool member outside its enabled context.
+   function Tool_Advice (Namespace, Member : String) return String;
+
+   function Is_Builtin_Import
+     (Names : Landin.Source.Names.Table;
+      Of_Tree : Landin.Syntax.Tree; Node : Landin.Syntax.Node_Id)
+      return Boolean;
+
+   procedure Record_Option
+     (Into : in out Table; Name : Landin.Source.Names.Name_Id;
+      Origin : Landin.Provenance.Origin);
+   function Option_Origin
+     (In_Table : Table; Name : Landin.Source.Names.Name_Id)
+      return Landin.Provenance.Origin;
+
+   --  Request inputs survive Prepare; outputs are rebuilt for each run.
+   procedure Add_Override
+     (Into : in out Table; Name : String; Value : String);
+   function Override_Count (In_Table : Table) return Natural;
+   function Override_Name
+     (In_Table : Table; Index : Positive) return String;
+   function Override_Value
+     (In_Table : Table; Index : Positive) return String;
+
+   procedure Add_Library (Into : in out Table; Name : String);
+   function Library_Count (In_Table : Table) return Natural;
+   function Library_Name
+     (In_Table : Table; Index : Positive) return String;
 
    procedure Prepare (Into : in out Table);
 
@@ -41,8 +79,26 @@ private
    package Entries is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Inactive_Node);
 
+   type Override_Entry is record
+      Name, Value : Ada.Strings.Unbounded.Unbounded_String;
+   end record;
+   package Overrides is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Override_Entry);
+   package Libraries is new Ada.Containers.Indefinite_Vectors
+     (Index_Type => Positive, Element_Type => String);
+   type Option_Site is record
+      Name : Landin.Source.Names.Name_Id;
+      Origin : Landin.Provenance.Origin;
+   end record;
+   package Option_Sites is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Option_Site);
+
    type Table is record
       Inactive : Entries.Vector;
+      Settings : Overrides.Vector;
+      Linked   : Libraries.Vector;
+      Declared : Option_Sites.Vector;
+      Selected_Mode : Build_Mode := Debug;
    end record;
 
 end Landin.Configuration;

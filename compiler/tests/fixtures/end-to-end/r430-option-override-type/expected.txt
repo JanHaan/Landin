@@ -1,0 +1,10 @@
+error[L0301]: option `count`: --option=count=abc is not a typed literal for u8
+  --> ../tests/fixtures/end-to-end/r430-option-override-type/main.ldn:1:8
+  |
+1 | option count: u8 = 1
+  |        ^^^^^
+  --> ../tests/fixtures/end-to-end/r430-option-override-type/main.ldn:1:15
+  |
+1 | option count: u8 = 1
+  |               ^^ the declared option type
+  = note: [1530]/D202: overrides use true or false for bool, or optional minus and decimal digits for an integer

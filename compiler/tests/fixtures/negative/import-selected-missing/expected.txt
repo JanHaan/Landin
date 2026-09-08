@@ -1,0 +1,6 @@
+error[L0201]: the imported module has no member `missing`
+  --> ../tests/fixtures/negative/import-selected-missing/entry/main.ldn:1:13
+  |
+1 | import lib (missing)
+  |             ^^^^^^^
+  = note: [1440]: selected imports name public declarations in the selected module

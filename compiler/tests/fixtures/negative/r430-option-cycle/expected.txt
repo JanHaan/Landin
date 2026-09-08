@@ -1,0 +1,6 @@
+error[L0305]: cyclic option defaults have no fixed value
+  --> ../tests/fixtures/negative/r430-option-cycle/main.ldn:1:1
+  |
+1 | option flag: bool = true or flag
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: [1530]/D202: option default dependencies must be acyclic, even when overridden

@@ -2943,8 +2943,9 @@ import net/http as h
 
 ```
 
-The R3.10 compiler recognizes this spelling and refuses it by name. Import
-aliases are enabled by R4.30; the minimum module slice has plain imports only.
+The alias replaces the last segment as this file's namespace name: this
+import binds `h`, and does not also bind `http`. `as` is contextual, so it
+remains an ordinary identifier outside this suffix.
 
 ### [1440] Pull selected names into scope, by name
 
@@ -2955,9 +2956,11 @@ import net/http (get, post)
 
 ```
 
-The R3.10 compiler likewise recognizes and names this deferred form. Selected
-imports are enabled by R4.30; there is no wildcard and a plain import never
-injects unqualified members.
+This import binds only `get` and `post`, not the `http` namespace. Every
+selected name must be public and must exist, even if the file never uses it.
+Each keeps its original declaration's identity, type and mutability. The list
+is nonempty, with no trailing comma, wildcard or renaming; selection and an
+alias are alternative import forms and cannot be combined.
 
 ### [1450] Imports are per file, so every file reads on its own
 
@@ -2965,9 +2968,12 @@ Imports are per file, so every file reads on its own.
 
 They form a prelude before every declaration. One file's imports are neither
 visible in a sibling nor re-exported. A repeated import name, including the
-same import twice, is an error in that file. A parameter or local may shadow
+same import twice or a collision between a selection and an alias, is an
+error in that file. A parameter or local may shadow
 an import; the import in turn shadows a same-named declaration from the shared
-module scope for qualified lookup. Selecting a private member is diagnosed
+module scope for qualified lookup. A namespace import leaves the module's
+unqualified value visible; a selected name shadows that value too.
+Selecting a private member is diagnosed
 separately from selecting a member that does not exist, and points back to the
 private declaration.
 
@@ -3014,11 +3020,11 @@ worth more than one that can download things. Arranging
 the roots so that only one version of anything is
 reachable is that tool's job, which is what makes [1470]'s
 one-version rule keepable.
-core and landin are reserved, and both are used. In the enabled R2.40
-slice `compiler` is reserved only as the intrinsic root of an active `fixed
-if` condition; it is not yet an imported module, a callable namespace or a
-way to ask target width, byte order or build mode. R4.30 completes the
-ordinary builtin-module reservation and directives. core is
+core and landin are reserved, and both are used. The bare tool namespace
+names `compiler`, `assembler` and `linker` cannot be declared or bound by an
+import. Their built-in paths are implicitly available; an explicit import
+of `landin/compiler`, `landin/assembler` or `landin/linker` is refused by
+name before searching roots. core is
 the standard library: core/mem, core/text, core/vec. landin
 holds the toolchain modules of [1560] — landin/compiler,
 landin/assembler, landin/linker — which are available
@@ -3026,13 +3032,15 @@ without an import, and that is why the bare names
 compiler, assembler and linker are taken.
 Naming authority remains deliberately deferred to the companion
 tool and ecosystem successor in ROADMAP.md. The search path is
-project-first, so any collision can be overridden locally and
-no dispute is fatal.
+project-first, so ordinary source-module naming collisions can be overridden
+locally. The three compiler-owned modules retain their reserved identities.
 
 The bootstrap request spells that narrow seam as repeated `--root=DIR`
 options followed by one entry-module directory. With no root option it retains
 the earlier explicit-file compatibility mode as one synthetic module. Root
-defaults and environment policy remain the companion tool's work.
+defaults and environment policy remain the companion tool's work. R4.30
+keeps that explicit contract: the compiler neither consults a user's home
+nor inserts a system root, and the supplied order alone decides precedence.
 
 ## COMPILE TIME
 
@@ -3056,12 +3064,19 @@ end if
 
 ```
 
-The first slice exposes only `compiler.arch`, whose compiler-owned values are
-`x86_64`, `arm64`, `cortex_m0` and `synthetic_32`. Its conditions use a closed
+The compiler exposes `compiler.arch`, whose compiler-owned values are
+`x86_64`, `arm64`, `cortex_m0` and `synthetic_32`, `compiler.word_size` in
+bits, `compiler.byte_order` (`little` or `big`), and `compiler.build_mode`
+(`debug` or `release`). Build mode is an explicit request value, defaulting
+to debug; it does not change runtime checks or optimization policy.
+Conditions also see the program's declared options [1530]. They use a closed
 no-execution fold: literals, parentheses, unary `-`, mathematical integer
-`+ - * / %`, integer comparisons, equality, `not`, `and` and `or`. Calls,
-runtime names, measurements and target-width or aggregate operations remain
-outside it, including in a short-circuited operand. The selected target's
+`+ - * / %`, integer comparisons, equality, `not`, `and` and `or`, plus
+`sizeof` and `alignof` of the enabled scalar types. Measurements count target
+bytes; `compiler.word_size == 8 * sizeof usize` holds on both 32-bit and
+64-bit targets. User calls, runtime names, nominal-type measurements and
+aggregate operations remain outside it, including in a short-circuited
+operand. The selected target's
 constructor, not its label text, supplies the architecture. `public fixed if`,
 a trailing name and fixed conditionals in blocks, structs, signatures and
 templates are not forms of this construct.
@@ -3077,6 +3092,10 @@ library function at [1040] where it belongs.
 compiler.assert(sizeof usize == 8)
 
 ```
+
+An assertion is a module directive, also permitted in a selected `fixed if`
+arm. It uses the same closed fixed expressions as [1500], requires bool,
+and rejects false at the source site. Inactive assertions have no effect.
 
 ### [1520] A compile-time value parameter
 
@@ -3098,6 +3117,25 @@ each is declared exactly once.
 option log_level: u32 = 0
 
 ```
+
+Options inhabit a program-wide configuration namespace, visible by bare name
+in fixed conditions, option defaults and compiler assertions. Their supported
+types are bool and the enabled integer scalars, with `usize` and `isize`
+bounded by the selected target. An option is declared unconditionally at
+module level; placing it in any fixed arm is refused because switch discovery
+precedes arm selection. Its name cannot collide with an active module
+declaration or import binding.
+The compiler-owned configuration atoms (`x86_64`, `arm64`, `cortex_m0`,
+`synthetic_32`, `little`, `big`, `debug` and `release`) also keep their names.
+
+All reached options are collected before defaults are evaluated. Defaults may
+refer forward to other options, whose effective overridden values are used;
+cycles are refused. An override still requires a valid declared default.
+The compiler accepts repeated `--option=NAME=VALUE` arguments, with `true` or
+`false` for bool and signed decimal integer text for integer options. Unknown
+or repeated names, malformed values and values outside the declared type are
+errors. `--build-mode=debug` or `--build-mode=release` supplies the separate
+built-in mode value.
 
 ### [1540] There are no compile-time loops and no compile-time
 
@@ -3148,6 +3186,9 @@ else.
 
 Their calls are builtin, take only fixed arguments, and
 cannot be written by hand.
+The hosted slice enables the compiler facts and assertions above and
+`linker.library` below. Other tool operations receive named refusals:
+atomics belong to R6.30, and inline assembly and machine placement to R6.60.
 Where the line runs: something is builtin when the compiler
 has to know it. Atomics are, because opaque assembly in a
 hot loop wrecks the register allocation around it. Masking
@@ -3205,6 +3246,14 @@ need it rather than in a separate build file.
 linker.library("m")
 
 ```
+
+The module directive takes a fixed text literal naming an archive. Names use
+ASCII letters, digits, underscore, hyphen and dot, are nonempty, do not begin
+with a hyphen, and cannot consist only of dots. Active directives reach the
+platform driver after the program assembly in canonical source/declaration
+order, including repetitions. The Linux adapter selects archives for these
+libraries while leaving the hosted runtime's linkage to the driver. An
+inactive directive adds nothing.
 
 ### [1600] Exporting to C
 

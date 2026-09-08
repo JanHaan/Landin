@@ -1,0 +1,9 @@
+class: negative
+summary: An inactive conditional cannot control option existence
+program: main.ldn
+codes: L0305
+constructs: 1500, 1530
+targets: linux-x86-64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/r430-option-conditional/main.ldn
+status: 1

@@ -22,11 +22,18 @@ package body Landin.Backend.Toolchain is
      (Assembly : String;
       Output   : String;
       Linker   : String;
-      Build_Id : String := "") return Landin.Platform.Path_List
+      Build_Id : String := "";
+      Libraries : Landin.Platform.Path_List :=
+        Landin.Platform.No_Arguments) return Landin.Platform.Path_List
    is
       List : Landin.Platform.Path_List;
    begin
       Landin.Platform.Add (List, Assembly);
+      --  [1590] selects archives, while the hosted driver retains control
+      --  of libc and startup linkage. Repeats matter to archive resolution.
+      for Library of Libraries loop
+         Landin.Platform.Add (List, "-l:lib" & Library & ".a");
+      end loop;
       Landin.Platform.Add (List, "-o");
       Landin.Platform.Add (List, Output);
 

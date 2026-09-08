@@ -1,0 +1,9 @@
+class: negative
+summary: D202 tool namespace bindings receives a precise configuration namespace diagnostic
+program: program.ldn
+expect: expected.txt
+args: ../tests/fixtures/negative/tool-namespace-bindings/program.ldn
+codes: L0203, L0203, L0203
+status: 1
+constructs: 1480, 1560
+targets: linux-x86-64, macos-arm64, synthetic-32

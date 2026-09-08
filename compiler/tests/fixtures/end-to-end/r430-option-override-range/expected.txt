@@ -1,0 +1,6 @@
+error[L0300]: option `count`: --option=count=256 is outside its type range (u8)
+  --> ../tests/fixtures/end-to-end/r430-option-override-range/main.ldn:1:1
+  |
+1 | option count: u8 = 1
+  | ^^^^^^^^^^^^^^^^^^^^
+  = note: [1530]/D202: the option value must fit its declared scalar type on the selected target

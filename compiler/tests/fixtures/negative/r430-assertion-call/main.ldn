@@ -1,0 +1,1 @@
+compiler.assert(true or user_code())

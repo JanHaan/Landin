@@ -1,0 +1,9 @@
+class: negative
+summary: D202 option outside configuration receives a precise configuration namespace diagnostic
+program: program.ldn
+expect: expected.txt
+args: ../tests/fixtures/negative/option-outside-configuration/program.ldn
+codes: L0201
+status: 1
+constructs: 1530
+targets: linux-x86-64, macos-arm64, synthetic-32

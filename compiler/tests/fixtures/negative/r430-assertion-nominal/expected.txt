@@ -1,0 +1,6 @@
+error[L0305]: D202: fixed measurements need a scalar name, not a declared type
+  --> ../tests/fixtures/negative/r430-assertion-nominal/main.ldn:4:17
+  |
+4 | compiler.assert(sizeof thing == 4)
+  |                 ^^^^^^^^^^^^
+  = note: D202: configuration expressions use only closed fixed forms; no user routine runs

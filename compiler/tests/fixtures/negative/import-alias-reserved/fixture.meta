@@ -1,0 +1,8 @@
+class: negative
+summary: D201 import alias reserved is refused at the source binding or use
+expect: expected.txt
+args: --root=../tests/fixtures/negative/import-alias-reserved/root ../tests/fixtures/negative/import-alias-reserved/entry
+codes: L0203
+status: 1
+constructs: 1430, 1450, 1480, 1560
+targets: linux-x86-64, macos-arm64, synthetic-32

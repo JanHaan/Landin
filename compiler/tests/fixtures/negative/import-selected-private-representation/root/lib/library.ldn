@@ -1,0 +1,7 @@
+hidden: type = struct
+    secret: i32
+end hidden
+public opaque: type = hidden
+public reveal: () -> (value: opaque) =
+    value = (secret: 7)
+end reveal

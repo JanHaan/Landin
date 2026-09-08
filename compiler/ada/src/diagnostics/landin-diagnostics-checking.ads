@@ -71,6 +71,7 @@ package Landin.Diagnostics.Checking is
       Unsupported_Use,
       Not_Known_At_Compile_Time,
       Impossible_Operand,
+      Compile_Time_Assertion_Failed,
       Cyclic_Type_Alias,
       Unresolved_Field,
       Field_Named_Twice,
@@ -102,6 +103,8 @@ package Landin.Diagnostics.Checking is
                Catalogue.Not_Known_At_Compile_Time,
             when Impossible_Operand   =>
                Catalogue.Impossible_Operand,
+            when Compile_Time_Assertion_Failed =>
+               Catalogue.Compile_Time_Assertion_Failed,
             when Cyclic_Type_Alias    =>
                Catalogue.Cyclic_Type_Alias,
             when Unresolved_Field     =>

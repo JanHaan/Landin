@@ -1,0 +1,33 @@
+import lib as qualified
+import lib (number, cell, marked, absent, problems, choice, empty, full,
+            counter, answer, identity, work)
+as: i32 = 0
+qualified: i32 = 2
+answer: i32 = 99
+forward: (item: type is marked, value: item) -> (result: item) =
+    result = identity(value)
+end forward
+fallible: (value: number) -> (result: number) ! problems =
+    result = try work(value)
+end fallible
+shadow: (answer: i32) -> (result: i32) = answer end shadow
+public main: () -> (code: i32) =
+    original: cell(number) = (value: forward(answer))
+    selected: choice = choice(kind: full(value: original.value))
+    counter = counter + 1
+    caught := fallible(-1) else (problem)
+        match problem
+            absent: 0
+            _: 1
+        end match
+    end
+    if qualified.counter <> 2 or qualified <> 2
+       or sibling() <> 99 or shadow(3) <> 3 or caught <> 0 then
+        code = 1
+    else
+        code = match selected.kind
+            empty: 0
+            full: original.value + counter
+        end match
+    end if
+end main

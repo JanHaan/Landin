@@ -74,11 +74,12 @@ package Landin.Diagnostics.Catalogue is
       Stray_Token,
       Nesting_Too_Deep,
       Positional_After_Named,
-      --  The resolver, assigned at R1.50.  Two rules and not more: a name
-      --  declared twice in one scope, and a name used and never declared.
+      --  Resolution owns duplicate, unknown and inaccessible names, plus
+      --  D202's reserved tool namespaces and unavailable tool references.
       Duplicate_Declaration,
       Unresolved_Name,
       Inaccessible_Name,
+      Reserved_Tool_Name,
       --  The checker, assigned at R1.60.  Its rows cover type agreement,
       --  definite assignment, references, layouts and the other semantic
       --  rules the kernel can find.  Impossible_Operand joined them at
@@ -92,6 +93,7 @@ package Landin.Diagnostics.Catalogue is
       Unsupported_Use,
       Not_Known_At_Compile_Time,
       Impossible_Operand,
+      Compile_Time_Assertion_Failed,
       Cyclic_Type_Alias,
       Unresolved_Field,
       Field_Named_Twice,
@@ -165,6 +167,7 @@ package Landin.Diagnostics.Catalogue is
             when Duplicate_Declaration    => "L0200",
             when Unresolved_Name          => "L0201",
             when Inaccessible_Name        => "L0202",
+            when Reserved_Tool_Name       => "L0203",
             when Literal_Out_Of_Range     => "L0300",
             when Type_Mismatch            => "L0301",
             when Not_Definitely_Assigned  => "L0302",
@@ -172,6 +175,7 @@ package Landin.Diagnostics.Catalogue is
             when Unsupported_Use          => "L0304",
             when Not_Known_At_Compile_Time => "L0305",
             when Impossible_Operand        => "L0306",
+            when Compile_Time_Assertion_Failed => "L0324",
             when Cyclic_Type_Alias         => "L0307",
             when Unresolved_Field          => "L0308",
             when Field_Named_Twice         => "L0309",
@@ -213,6 +217,7 @@ package Landin.Diagnostics.Catalogue is
             when Duplicate_Declaration => Error,
             when Unresolved_Name       => Error,
             when Inaccessible_Name     => Error,
+            when Reserved_Tool_Name    => Error,
             when Literal_Out_Of_Range
                .. Malformed_Raw_Literal => Error,
             when No_Toolchain .. Frame_Not_Addressable => Error);
@@ -242,6 +247,7 @@ package Landin.Diagnostics.Catalogue is
             when Duplicate_Declaration => Live,
             when Unresolved_Name       => Live,
             when Inaccessible_Name     => Live,
+            when Reserved_Tool_Name    => Live,
             when Literal_Out_Of_Range
                .. Malformed_Raw_Literal => Live,
             when No_Toolchain .. Entry_Point_Missing => Live,
@@ -308,6 +314,9 @@ package Landin.Diagnostics.Catalogue is
                "[1850]: one scope gives one name to one thing",
             when Unresolved_Name       =>
                "[1860]: a name used and declared in no visible scope",
+            when Reserved_Tool_Name    =>
+               "[1560]: a builtin tool namespace binding or use is"
+               & " unavailable",
             when Inaccessible_Name     =>
                "[1410]: a module-internal declaration used across modules",
             when Literal_Out_Of_Range  =>
@@ -327,6 +336,8 @@ package Landin.Diagnostics.Catalogue is
             when Impossible_Operand    =>
                "[1950]: an operand the operation cannot take, where the"
                & " compiler knows it",
+            when Compile_Time_Assertion_Failed =>
+               "[1510]: a compile-time assertion is false",
             when Cyclic_Type_Alias     =>
                "[1795]: a chain of aliases that reaches no type",
             when Unresolved_Field      =>
@@ -409,6 +420,7 @@ package Landin.Diagnostics.Catalogue is
             when Duplicate_Declaration => True,
             when Unresolved_Name       => True,
             when Inaccessible_Name     => True,
+            when Reserved_Tool_Name    => True,
             when Literal_Out_Of_Range
                .. Malformed_Raw_Literal => True,
             --  None of the backend codes is about a place in a file: they
@@ -440,6 +452,7 @@ package Landin.Diagnostics.Catalogue is
             when Duplicate_Declaration => True,
             when Unresolved_Name       => True,
             when Inaccessible_Name     => True,
+            when Reserved_Tool_Name    => True,
             --  Every one of these points at something a program wrote.
             when Literal_Out_Of_Range
                .. Malformed_Raw_Literal =>
@@ -473,6 +486,7 @@ package Landin.Diagnostics.Catalogue is
             when Duplicate_Declaration => 1,
             when Unresolved_Name       => 0,
             when Inaccessible_Name     => 1,
+            when Reserved_Tool_Name    => 0,
             --  A mismatch is only readable next to the place that stated
             --  the requirement, and an unwritable place next to its
             --  declaration. A direct literal or fold out of range has no
@@ -525,6 +539,7 @@ package Landin.Diagnostics.Catalogue is
             when Duplicate_Declaration => 1,
             when Unresolved_Name       => 1,
             when Inaccessible_Name     => 1,
+            when Reserved_Tool_Name    => 1,
             when Literal_Out_Of_Range  => 1,
             when Type_Mismatch         => 1,
             when Not_Definitely_Assigned => 1,
@@ -534,6 +549,7 @@ package Landin.Diagnostics.Catalogue is
             when Unsupported_Use       => 2,
             when Not_Known_At_Compile_Time => 1,
             when Impossible_Operand    => 1,
+            when Compile_Time_Assertion_Failed => 1,
             when Cyclic_Type_Alias     => 1,
             when Unresolved_Field      => 1,
             when Field_Named_Twice     => 1,

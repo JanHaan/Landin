@@ -1,0 +1,9 @@
+class: negative
+summary: D202 function tool refusals receives a precise configuration namespace diagnostic
+program: program.ldn
+expect: expected.txt
+args: ../tests/fixtures/negative/function-tool-refusals/program.ldn
+codes: L0203, L0203, L0203
+status: 1
+constructs: 1560, 1620, 1630
+targets: linux-x86-64, macos-arm64, synthetic-32

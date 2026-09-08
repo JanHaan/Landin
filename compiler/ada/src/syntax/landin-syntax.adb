@@ -6,9 +6,12 @@ package body Landin.Syntax is
    function Fixed (Of_Kind : Node_Kind) return Natural
      is (case Of_Kind is
             when Program | Import_Declaration => 0,
-            when Import_Segment           => 0,
+            when Import_Segment | Import_Alias_Name
+               | Import_Selected_Name     => 0,
             when Error_Declaration        => 0,
             when Fixed_Conditional        => 0,
+            when Option_Declaration       => 2,
+            when Tool_Directive           => 1,
             when Function_Declaration     => 3,
             when Atom_Declaration         => 0,
             --  The first slot is the type it names [1795]; D135's
@@ -208,11 +211,42 @@ package body Landin.Syntax is
 
    function Import_Segment_Count
      (Of_Tree : Tree; Id : Node_Id) return Natural
-     is (Run_Length (Of_Tree, Id));
+   is
+      Count : Natural := 0;
+   begin
+      for Index in 1 .. Run_Length (Of_Tree, Id) loop
+         exit when Kind (Of_Tree, Nth_Item (Of_Tree, Id, Index))
+           /= Import_Segment;
+         Count := Count + 1;
+      end loop;
+      return Count;
+   end Import_Segment_Count;
 
    function Nth_Import_Segment
      (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
      is (Nth_Item (Of_Tree, Id, Index));
+
+   function Import_Alias_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
+   is
+      Last : constant Node_Id :=
+        Nth_Item (Of_Tree, Id, Run_Length (Of_Tree, Id));
+   begin
+      return (if Kind (Of_Tree, Last) = Import_Alias_Name
+              then Last else No_Node);
+   end Import_Alias_Of;
+
+   function Import_Selection_Count (Of_Tree : Tree; Id : Node_Id)
+     return Natural
+     is (if Import_Alias_Of (Of_Tree, Id) /= No_Node then 0
+         else Run_Length (Of_Tree, Id) - Import_Segment_Count (Of_Tree, Id));
+
+   function Nth_Import_Selection
+     (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
+     is (Nth_Item
+           (Of_Tree, Id, Import_Segment_Count (Of_Tree, Id) + Index));
+
+   function Directive_Call (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     is (Slot (Of_Tree, Id, 1));
 
    function Nth_Declaration (Of_Tree : Tree; Index : Positive)
      return Node_Id
@@ -391,7 +425,8 @@ package body Landin.Syntax is
 
    function Value_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
      is (case Kind (Of_Tree, Id) is
-            when Binding | Assignment => Slot (Of_Tree, Id, 2),
+            when Binding | Option_Declaration | Assignment =>
+               Slot (Of_Tree, Id, 2),
             when others               => Slot (Of_Tree, Id, 1));
 
    function Target_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id

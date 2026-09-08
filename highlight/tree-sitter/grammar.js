@@ -32,6 +32,7 @@ module.exports = grammar({
   name: 'landin',
 
   word: $ => $.identifier,
+  inline: $ => [$._declaration_name],
 
   reserved: {
     global: $ => [
@@ -65,6 +66,7 @@ module.exports = grammar({
   ],
 
   conflicts: $ => [
+    [$.import_declaration],
     [$.declaration_reference, $.indexed_expression],
     [$._type, $.type_application],
     [$.routine_formals, $.parameters],
@@ -106,7 +108,13 @@ module.exports = grammar({
     ),
 
 
-    import_declaration: $ => seq('import', $.import_path),
+    import_declaration: $ => seq(
+      'import', $.import_path,
+      optional(choice(
+        seq('as', field('alias', $.identifier)),
+        seq('(', $.identifier_list, ')'),
+      )),
+    ),
     import_path: $ => seq($.identifier, repeat(seq('/', $.identifier))),
 
     _declaration: $ => choice(
@@ -114,6 +122,18 @@ module.exports = grammar({
       $.extern_declaration,
       $.conformance_declaration,
       $.fixed_conditional,
+      $.option_declaration,
+      $.tool_directive,
+    ),
+
+    option_declaration: $ => seq(
+      'option', field('name', $._declaration_name), ':', field('type', $._type),
+      '=', field('value', $._expression),
+    ),
+
+    tool_directive: $ => seq(
+      field('module', choice('compiler', 'assembler', 'linker')),
+      '.', field('member', $.identifier), '(', optional($.arguments), ')',
     ),
 
     public_declaration: $ => seq(
@@ -129,7 +149,7 @@ module.exports = grammar({
 
     extern_declaration: $ => seq(
       'extern', '(', field('convention', $.identifier), ')',
-      field('name', $.identifier), ':', $.declared_signature,
+      field('name', $._declaration_name), ':', $.declared_signature,
     ),
 
     fixed_conditional: $ => seq(
@@ -141,19 +161,24 @@ module.exports = grammar({
     ),
 
     atom_declaration: $ => seq(field('name', $.identifier_list), ':', 'atom'),
-    identifier_list: $ => seq($.identifier, repeat(seq(',', $.identifier))),
+    identifier_list: $ => seq($._declaration_name, repeat(seq(',', $.identifier))),
+    // At a declaration start the lexer may also admit contextual import or
+    // option syntax. Keep the ordinary name until the next token decides.
+    _declaration_name: $ => choice(
+      $.identifier, alias('option', $.identifier), alias('as', $.identifier),
+    ),
 
     binding: $ => choice(
       seq(
         optional('mut'),
-        field('name', $.identifier),
+        field('name', $._declaration_name),
         ':',
         field('type', $._type),
         optional(seq('=', field('value', $._expression))),
       ),
       seq(
         optional('mut'),
-        field('name', $.identifier),
+        field('name', $._declaration_name),
         ':=',
         field('value', $._expression),
       ),
@@ -189,7 +214,7 @@ module.exports = grammar({
     ),
 
     type_declaration: $ => seq(
-      field('name', $.identifier), ':', 'type',
+      field('name', $._declaration_name), ':', 'type',
       choice(
         seq('=', choice($.atom_union, $.range_subtype, $._type, $.struct_body)),
         seq($.type_formals, '=', choice($._type, $.struct_body)),
@@ -203,7 +228,7 @@ module.exports = grammar({
     ),
 
     concept_declaration: $ => seq(
-      field('name', $.identifier), ':', 'type', '=', $.concept_body,
+      field('name', $._declaration_name), ':', 'type', '=', $.concept_body,
     ),
     concept_body: $ => seq(
       'concept', $.type_formals,
@@ -211,7 +236,7 @@ module.exports = grammar({
       repeat($.concept_entry),
       'end', optional($.identifier),
     ),
-    concept_entry: $ => seq(field('name', $.identifier), ':', $.signature),
+    concept_entry: $ => seq(field('name', $._declaration_name), ':', $.signature),
 
     conformance_declaration: $ => seq(
       optional($.type_formals),
@@ -229,16 +254,16 @@ module.exports = grammar({
       $.declaration_reference,
     ),
     conformance_argument: $ => seq(
-      field('name', $.identifier), ':', field('value', $.argument_rhs),
+      field('name', $._declaration_name), ':', field('value', $.argument_rhs),
     ),
 
     type_formals: $ => seq('(', commaSep1($.type_formal), ')'),
     type_formal: $ => choice(
       seq(
-        field('name', $.identifier), ':', 'type',
+        field('name', $._declaration_name), ':', 'type',
         optional(seq('is', field('constraint', $.declaration_reference))),
       ),
-      seq('fixed', field('name', $.identifier), ':', field('type', $._type)),
+      seq('fixed', field('name', $._declaration_name), ':', field('type', $._type)),
     ),
 
     // An atom set, or [0480]'s pointer union of atoms and one pointer.
@@ -253,19 +278,19 @@ module.exports = grammar({
     struct_body: $ => seq(
       'struct', repeat1(choice($.field, $.variant_part)), 'end', optional($.identifier),
     ),
-    field: $ => seq(field('name', $.identifier), ':', field('type', $._type)),
+    field: $ => seq(field('name', $._declaration_name), ':', field('type', $._type)),
     variant_part: $ => seq(
-      field('name', $.identifier), ':', 'variant',
+      field('name', $._declaration_name), ':', 'variant',
       $.variant_case, repeat(seq('|', $.variant_case)),
       'end', optional($.identifier),
     ),
     variant_case: $ => seq(
-      field('name', $.identifier),
+      field('name', $._declaration_name),
       optional(seq(':', '(', commaSep1($.field), ')')),
     ),
 
     function_declaration: $ => seq(
-      field('name', $.identifier), ':',
+      field('name', $._declaration_name), ':',
       $.declared_signature, '=',
       optional(field('body', $.block)),
       'end', optional(field('end_name', $.identifier)),
@@ -284,12 +309,12 @@ module.exports = grammar({
     // `caller` marks D192's site parameter and is not reserved, so a
     // parameter may also be named caller.
     parameter: $ => choice(
-      seq('caller', field('name', $.identifier), ':', field('type', $._type)),
+      seq('caller', field('name', $._declaration_name), ':', field('type', $._type)),
       seq(field('name', alias('caller', $.identifier)), ':', field('type', $._type)),
       seq(
         optional('escaping'),
         optional($.parameter_convention),
-        field('name', $.identifier), ':', field('type', $._type),
+        field('name', $._declaration_name), ':', field('type', $._type),
       ),
     ),
     parameter_convention: _ => choice('in', 'inout', 'sink'),
@@ -298,7 +323,7 @@ module.exports = grammar({
       'none',
     ),
     named_return: $ => seq(
-      field('name', $.identifier), ':', field('type', $._type),
+      field('name', $._declaration_name), ':', field('type', $._type),
       optional(seq('from', commaSep1($.identifier))),
     ),
     errors: $ => prec.right(seq(
@@ -386,8 +411,8 @@ module.exports = grammar({
     // [1140]'s condition may declare the value it tests.
     _condition: $ => choice($._expression, $.condition_declaration),
     condition_declaration: $ => choice(
-      seq(optional('mut'), field('name', $.identifier), ':=', field('value', $._expression)),
-      seq(optional('mut'), field('name', $.identifier), ':', field('type', $._type),
+      seq(optional('mut'), field('name', $._declaration_name), ':=', field('value', $._expression)),
+      seq(optional('mut'), field('name', $._declaration_name), ':', field('type', $._type),
           '=', field('value', $._expression)),
     ),
 
@@ -396,7 +421,7 @@ module.exports = grammar({
     ),
     destructured_field: $ => choice(
       '_',
-      seq(field('name', $.identifier), optional(seq(':', choice($.identifier, '_')))),
+      seq(field('name', $._declaration_name), optional(seq(':', choice($.identifier, '_')))),
     ),
     assignment_statement: $ => prec.right(100, seq(
       field('left', $.place),
@@ -427,7 +452,7 @@ module.exports = grammar({
       optional(seq('(', commaSep1($.match_binding), ')')),
       ':', field('body', choice($._statement, $._expression)),
     ),
-    match_binding: $ => seq(optional('inout'), field('name', $.identifier)),
+    match_binding: $ => seq(optional('inout'), field('name', $._declaration_name)),
     bare_block: $ => prec.dynamic(4, seq('begin', optional($.block), 'end')),
 
     place: $ => $.indexed_expression,
@@ -515,7 +540,7 @@ module.exports = grammar({
     struct_literal: $ => prec(50, seq(
       '(', commaSep1($.field_value), optional(seq(',', $.of_keyword, $._expression)), ')',
     )),
-    field_value: $ => seq(field('name', $.identifier), ':', field('value', $._expression)),
+    field_value: $ => seq(field('name', $._declaration_name), ':', field('value', $._expression)),
 
     labeled_application: $ => choice(
       prec(PREC.call, seq(
@@ -531,7 +556,7 @@ module.exports = grammar({
       commaSep1($.labeled_argument),
       optional(seq(',', $.of_keyword, $._expression)),
     ),
-    labeled_argument: $ => seq(field('name', $.identifier), ':', field('value', $.argument_rhs)),
+    labeled_argument: $ => seq(field('name', $._declaration_name), ':', field('value', $.argument_rhs)),
     argument_rhs: $ => choice($._expression, $._type),
 
     // A scalar type name heads an expression as a conversion (`u32(n)`)

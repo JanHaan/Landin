@@ -1,0 +1,9 @@
+class: negative
+summary: Short-circuiting never hides forbidden user execution
+program: main.ldn
+codes: L0305
+constructs: 1510, 1540
+targets: linux-x86-64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/r430-assertion-call/main.ldn
+status: 1

@@ -1,0 +1,8 @@
+class: negative
+summary: D201 import option collision is refused at the source binding or use
+expect: expected.txt
+args: --root=../tests/fixtures/negative/import-option-collision/root ../tests/fixtures/negative/import-option-collision/entry
+codes: L0200
+status: 1
+constructs: 1430, 1450, 1850
+targets: linux-x86-64, macos-arm64, synthetic-32
