@@ -4501,7 +4501,7 @@ item that inherits it.
 
 ### R4.21 — Repair review-found soundness and correctness defects
 
-Status: active
+Status: complete
 Depends on: R2.50, R4.10, R4.20
 
 Two independent reviews of `da42169`, kept as local scratch notes while
@@ -4590,6 +4590,21 @@ entry enumeration (R4.70), `core/io` `errno` fidelity and `EINTR` (R4.40),
 codegen-scale items such as the verifier's unreachable-island pass and the
 stack probe (R4.50).
 
+The last increment folds constants once: `Landin.Stages.Folding` is the
+one walk both stages instantiate, the checker's `Fold` and `Fold_Float` and
+lowering's `Fold_Constant` are wrappers over it, and the recorded IR corpus
+was byte-identical before and after, which is the equivalence proof the
+merge needed. The 194 negatives that pinned bare `L0301` are executed with
+their exact reports, and the low rows of the second review are closed.
+
+Closure evidence: twelve commits from `5580220` to `7814476`, each green on
+the authoritative native gate, the last as
+[job 1883339](https://builds.sr.ht/~sinnfrei/job/1883339). Complete pinned
+Linux debug and release suites pass 410/410 cases with 11,856 checks on the
+closing tree; the Mac suite is 409/410 with fixture execution red by
+design; `check.py` and the full-font site render are clean;
+`highlight/test.sh --integration` parses every compiler and core source.
+
 Exit evidence: every reproducer the reviews shipped is a fixture with its
 documented verdict; complete pinned Linux debug and release suites
 pass; `highlight/test.sh --integration` passes on every compiler and core
@@ -4598,7 +4613,7 @@ untagged one; the authoritative native gate is green on the closing commit.
 
 ### R4.30 — Complete hosted modules and toolchain directives
 
-Status: planned
+Status: active
 Depends on: R3.10, R4.10
 
 Implement the remaining ordered-root, fixed option, `landin/compiler`,
