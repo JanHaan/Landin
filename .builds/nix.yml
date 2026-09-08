@@ -78,3 +78,5 @@ tasks:
       if [ -e ~/skip ]; then exit 0; fi
       cd landin
       nix develop --command ./scripts/test.sh
+      #  An explicit libm archive must not make the driver's libc static.
+      nix develop --command sh -c 'readelf -d compiler/ada/build/nix/debug/bin/runtime-r430-static-library | grep -F "Shared library: [libc.so.6]"'
