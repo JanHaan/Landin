@@ -1,0 +1,6 @@
+class: runtime
+summary: D202 links the fegetround routine from the platform libm archive beside its extern declaration
+program: main.ldn
+constructs: 1560, 1580, 1590
+targets: linux-x86-64
+status: 42

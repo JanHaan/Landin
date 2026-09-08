@@ -86,6 +86,8 @@ package Landin.Syntax is
       --  its ordered path segment nodes and is never a module declaration.
       Import_Declaration,
       Import_Segment,
+      Import_Alias_Name,
+      Import_Selected_Name,
       --  Above: the file [1740] itself and its imports, none declarations.
       --  Below: declarations [1740].
       Error_Declaration,
@@ -93,6 +95,8 @@ package Landin.Syntax is
       --  Fixed_Arm nodes; an arm has a condition (or No_Node for `else`)
       --  followed by its declaration run and opens no lexical scope.
       Fixed_Conditional,
+      Option_Declaration,
+      Tool_Directive,
       Function_Declaration,
       --  [0630].  One declaration introduces the atom's value and its
       --  singleton type together; it has no initializer or storage.
@@ -420,7 +424,8 @@ package Landin.Syntax is
                     | Destructured_Field
                     | Destructured_Name | Recovery_Clause | Match_Binding
                     | Return_Source | Member_Selection | Field_Value
-                    | Import_Segment
+                    | Import_Segment | Import_Alias_Name
+                    | Import_Selected_Name | Option_Declaration
                     | Call_Argument | Break_Statement | Continue_Statement
                     | Loop_Statement | While_Statement | For_Statement);
 
@@ -536,7 +541,7 @@ package Landin.Syntax is
      with Pre => Contains (Of_Tree, Id)
                  and then Kind (Of_Tree, Id)
                           in Function_Declaration | Atom_Declaration
-                             | Binding | Type_Declaration
+                             | Binding | Option_Declaration | Type_Declaration
                              | Concept_Declaration
                              | Conformance_Declaration;
 
@@ -658,6 +663,29 @@ package Landin.Syntax is
 
    function Declaration_Count (Of_Tree : Tree) return Natural;
 
+   --  D201: suffix names are retained separately from the module path.
+   function Import_Alias_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id) = Import_Declaration;
+
+   function Import_Selection_Count (Of_Tree : Tree; Id : Node_Id)
+     return Natural
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id) = Import_Declaration;
+
+   function Nth_Import_Selection
+     (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id) = Import_Declaration
+                 and then Index <= Import_Selection_Count (Of_Tree, Id),
+          Post => Kind (Of_Tree, Nth_Import_Selection'Result)
+                    = Import_Selected_Name;
+
+   --  D202: configuration consumes these module-only declarations.
+   function Directive_Call (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id) = Tool_Directive;
+
    function Nth_Declaration (Of_Tree : Tree; Index : Positive)
      return Node_Id
      with Pre  => Index <= Declaration_Count (Of_Tree),
@@ -669,7 +697,8 @@ package Landin.Syntax is
    function Declared_Type (Of_Tree : Tree; Id : Node_Id) return Node_Id
      with Pre => Contains (Of_Tree, Id)
                  and then Kind (Of_Tree, Id)
-                          in Binding | Parameter | Named_Return
+                          in Binding | Option_Declaration
+                             | Parameter | Named_Return
                              | Type_Declaration | Fixed_Formal | Field;
 
    --  [1230]'s direct type-formal constraint.  No_Node is the unconstrained
@@ -752,7 +781,8 @@ package Landin.Syntax is
    function Value_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
      with Pre => Contains (Of_Tree, Id)
                  and then Kind (Of_Tree, Id)
-                          in Binding | Destructuring_Binding | Assignment
+                          in Binding | Option_Declaration
+                             | Destructuring_Binding | Assignment
                              | Discard | Field_Value | Fail_Statement;
 
    --  [1100]/[1110]'s registered call.  This is deliberately not Value_Of:

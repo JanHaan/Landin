@@ -42,8 +42,10 @@ keyword rule omits it, the token is an identifier whose spelling the
 enclosing production recognises. Thus 'of', 'lenof', 'variant', 'begin',
 'match', 'defer', 'undo', 'unchecked', 'caller', 'range', 'arena', 'loop',
 'while', 'for', 'do', 'break', 'continue', 'complete', 'with', 'concept',
-'is' and 'c' remain
-ordinary names everywhere their contextual productions do not meet them.
+'is', 'as', 'option', 'compiler', 'assembler', 'linker' and 'c' remain
+identifier tokens everywhere their contextual productions do not meet them.
+D202 separately reserves the three tool names as declaration/import bindings;
+that semantic reservation does not turn their tokens into keywords.
 A token is as long as it can be, comments excepted, whose
 opener decides [1780]: 'inc' followed by 'x' with nothing between them is
 the one name 'incx', which is why [1750] says what separates two tokens.
@@ -61,12 +63,18 @@ where the module is written, never inside a body.
 ```landin-grammar
 program     ::= import_declaration* declaration*
 import_declaration ::= "import" import_path
+                       ("as" identifier | "(" identifiers ")")?
 import_path ::= identifier ("/" identifier)*
 declaration ::= "public"? (atom_declaration | binding | function
                             | external_function | type_declaration
                             | concept_declaration)
                 | conformance_declaration
                 | fixed_conditional
+                | option_declaration
+                | tool_directive
+option_declaration ::= "option" identifier ":" type "=" expression
+tool_directive ::= tool_namespace "." identifier "(" arguments? ")"
+tool_namespace ::= "compiler" | "assembler" | "linker"
 fixed_conditional ::= "fixed" "if" expression "then" declaration*
                       ("elsif" expression "then" declaration*)*
                       ("else" declaration*)? "end" "if"
@@ -723,8 +731,8 @@ names the construct and says which work enables it, so a program
 written against the whole tour fails with a list rather than with a
 parse error. The roadmap owns that list; this grammar owns what is
 already true.
-R3.10 recognizes [1430]'s import alias and [1440]'s selected import shapes and
-refuses each by name; R4.30 owns enabling them.
+R4.30 enables [1430]'s import alias and [1440]'s selected import forms;
+D201 states their binding and visibility rules.
 R4.10 recognizes [0820]'s lexical `arena` block at a statement position and
 refuses it by name, and the checker refuses the built-in `arena` type name
 [0780] writes a parameter with; D196 assigns both to R4.80. `arena` is not a
@@ -742,8 +750,9 @@ an inner scope means nothing until the inner ones are named.
 | scope | what it holds |
 | --- | --- |
 | program | every module reachable from the entry directory after [1420]'s ordered-root selection. This is the outer identity and the one whole-program conformance register; it is not a source namespace. |
+| configuration | D202's global options and implicit tool namespaces, used by the closed configuration fold before ordinary resolution. It has no runtime declarations or storage. |
 | module | every direct `.ldn` file in one directory [1410]. Its unordered declarations are shared by those files, module-internal by default and public only when written so. |
-| file imports | the final segment of each import in this file's prelude [1420] [1450]. Each binding is a module namespace, not a declaration or value; this scope encloses the module scope for lookups performed from that file. |
+| file imports | the final segment of a plain import, the written alias, or the public declarations named by a selected import in this file's prelude [1420]-[1450]. A namespace binding is not a declaration or value; a selected binding retains the imported declaration's identity. This scope encloses the module scope for lookups performed from that file. |
 | type declaration | D135's complete ordered formal list. The scope encloses the declaring file's imports and is visible in every fixed formal's declared type, direct concept constraint and in the alias or struct body, regardless of formal order. It closes with that declaration: its names do not enter the module or another type declaration. A type declaration without formals opens no scope. |
 | concept declaration | D142's complete ordered type-formal list. It encloses the declaring file's imports and is visible in every direct constraint, parent name and entry signature. Entry parameter and result labels describe signature positions and declare nothing in this scope. |
 | conformance declaration | D142's optional complete type/fixed binder. It encloses the declaring file's imports and is visible in every binder constraint, the target type and every labelled input or function RHS. The conformance itself declares no module name. |
@@ -760,7 +769,10 @@ before its name exists [0110].
 Lookup proceeds through body and signature scopes, then this source file's
 imports, then its module. An import may therefore shadow a same-named module
 declaration for qualified lookup, and a parameter or local may shadow the
-import. Imports do not enter sibling files and are not re-exported.
+import. A namespace import leaves an unqualified same-named module value
+visible; a selected declaration shadows the module declaration for ordinary
+unqualified lookup too. Imports do not enter sibling files and are not
+re-exported.
 
 ### [1850] One scope gives one name to one thing
 
@@ -8339,7 +8351,7 @@ semantic diagnostic or declaration identity, while an active use of it is
 unresolved normally. Nested conditionals in an inactive arm are parsed but
 not evaluated.
 
-The fixed expression is closed. It admits bool and mathematical D136 integers,
+The original fixed expression is closed. It admits bool and mathematical D136 integers,
 the compiler-owned architecture values `x86_64`, `arm64`, `cortex_m0` and
 `synthetic_32`, literals, parentheses, unary `-`, D136 arithmetic, integer
 comparisons, bool or architecture equality, and `not`, `and`, `or`.
@@ -8357,6 +8369,11 @@ condition would introduce a compiler module and runtime execution before
 R4.30. A selected immutable view preserves the whole-program declaration set
 without pulling options, build modes, widths, byte order or general builtin
 modules forward.
+
+D202 extends this same configuration stage with global typed options, target
+scalar measurements, compiler facts and module tool directives. Its explicit
+rules supersede this first slice's exclusions of those forms; user execution
+and runtime-name lookup remain excluded.
 
 **Pinned by** the target-description constructor and configuration-stage
 public-seam cases; `positive/fixed-conditional-selects-declarations`,
@@ -8828,13 +8845,13 @@ classified failure boundary before the repository gate can pass.
 | `concepts.conformance` | static | 1230, 1240, 1250, 1260, 1340 | L0301 or L0317--L0319 | `negative/conformance-collision`, `negative/constraint-not-satisfied`, `negative/compiler-concept-reserved` |
 | `any.construction` | static | 1370, 1380 | L0301, L0314 or L0318 | `negative/any-source-not-pointer`, `negative/any-readonly-source-for-mutable-entry` |
 | `any.dispatch` | static | 1390 | malformed table positions cannot be produced by accepted source; verifier failure is a compiler defect | `negative/any-entry-not-object-safe`, `runtime/any-heterogeneous-dispatch` |
-| `modules.visibility` | static | 1410, 1420, 1450, 1480 | L0006 or L0007 for an unresolved root; L0202 for a private member or representation | `negative/module-not-found`, `negative/imported-private-name`, `negative/core-mem-private-representation`, `negative/core-text-private-position`, `runtime/core-mem-raw-storage` |
+| `modules.visibility` | static | 1410, 1420, 1430, 1440, 1450, 1480 | L0006 or L0007 for an unresolved root; L0200 for duplicate import bindings, L0201 for missing selected names, L0202 for private members or representations and L0203 for reserved tool names | `negative/module-not-found`, `negative/imported-private-name`, `negative/core-mem-private-representation`, `negative/core-text-private-position`, `runtime/core-mem-raw-storage`, `negative/import-selected-private`, `negative/import-selected-missing`, `negative/import-selected-duplicate`, `runtime/import-alias-selected-identities`, `runtime/import-contextual-as` |
 | `entry.point` | static | 1650, 1970 | L0502 before executable emission | `runtime/constant-return-exits-with-its-code` |
 | `module.images` | static | 0180, 0340, 0350, 0410, 1460, 1890, 1930, 1940 | L0300, L0304 or L0305; module-known bool `not`, `and` and `or` fold left to right into scalar and aggregate images, short-circuit `and`/`or`, and execute no initializer CFG | `negative/module-value-from-a-call`, `runtime/module-known-short-circuit-bools`, `runtime/recursive-module-images-are-laid-out-and-distinct` |
 | `unchecked.region` | outside | 0290, 0300, 0310, 0320, 0430, 0470, 0570, 0580, 0700, 1100, 1110, 1120, 1950, 1960 | non-guarantee: inside [1120]'s region the compiler emits no integer overflow edge for `+`, `-`, `*` and unary `-`, no element-index or slice-range edge, and no destination-range edge for an integer-to-integer or pointer-to-integer conversion; the results are [0320]'s wrapping value, [0430]'s pointer non-guarantee at the computed address, and the low-order bits of the source; every static refusal, every division, shift, bool and float conversion edge and every text boundary edge stays, and a [1100] `defer` or [1110] `undo` call keeps the edges of the place its registration is written rather than those of the exit that runs it | `positive/unchecked-regions`, `positive/unchecked-marks-only-the-edges-it-removes`, `runtime/unchecked-arithmetic-wraps`, `runtime/unchecked-integer-conversion-truncates`, `runtime/unchecked-slice-index-passes-the-length`, `runtime/checks-return-after-the-region`, `runtime/unchecked-does-not-cross-a-call`, `runtime/unchecked-does-not-reach-an-anonymous-body`, `runtime/unchecked-keeps-the-divisor-check`, `runtime/unchecked-keeps-the-shift-check`, `runtime/unchecked-keeps-text-boundary-traps`, `runtime/unchecked-keeps-bool-conversion-traps`, `runtime/unchecked-keeps-float-conversion-traps`, `runtime/unchecked-pointer-conversion-truncates`, `runtime/unchecked-does-not-reach-an-outer-cleanup`, `runtime/unchecked-reaches-a-cleanup-written-inside`, `negative/unchecked-keeps-a-known-index`, `negative/unchecked-keeps-permissions`, `negative/unchecked-keeps-definite-assignment`, `negative/unchecked-region-end-name-mismatch` |
 | `subtype.range` | trap | 0540, 0660, 0700, 1730, 1795, 1880, 1940, 1950, 1960 | storing into a place whose declared type is [0660]'s range subtype, and applying the subtype name to a value, check the value against both folded bounds; L0300 rejects a known value outside them, a runtime value outside them traps, and a value whose own subtype's bounds lie inside them is not checked again; [1120]'s region does not remove this edge | `positive/range-subtypes`, `runtime/range-subtype-checks`, `runtime/range-subtype-store-traps`, `runtime/range-subtype-conversion-traps`, `runtime/range-subtype-update-traps`, `negative/range-subtype-literal-out-of-range`, `negative/range-subtype-known-value-out-of-range`, `negative/range-subtype-zeroed-excluded`, `negative/range-subtype-bounds-inverted`, `negative/range-subtype-in-a-slice` |
 | `pointer.optional` | static | 0430, 0440, 0470, 0480, 0630, 0640, 1210, 1870 | L0301 for every use that would read the empty case as an address — `.val` in a read, in an assignment target and under `addr`, an integer conversion, `any` construction, a comparison, a `ptr T` position, `ptr(n)` into one, and an `inout` arm binding — and for a union of two pointer types; L0304 for `zeroed` and for a union of several atoms and a pointer; L0311 for either case named twice and L0312 for a case no arm and no `_` names; the bound pointer carries the subject's origin and the empty case carries none | `positive/pointer-unions`, `runtime/pointer-unions`, `negative/pointer-union-dereference`, `negative/pointer-union-assignment-target`, `negative/pointer-union-address-of-referent`, `negative/pointer-union-any-construction`, `negative/pointer-union-case-named-twice`, `negative/pointer-union-present-arm-named-twice`, `negative/pointer-union-is-not-a-pointer`, `negative/pointer-union-match-not-exhaustive`, `negative/pointer-union-frame-escape`, `negative/pointer-union-comparison`, `negative/pointer-union-integer-conversion`, `negative/pointer-union-from-an-integer`, `negative/pointer-union-inout-binding`, `negative/pointer-union-zeroed`, `negative/pointer-union-several-atoms`, `negative/pointer-union-two-pointers`, `negative/pointer-case-arm-is-not-an-atom` |
-| `configuration.fixed` | static | 1980 | L0300, L0301, L0305 or L0306 in the selected declaration view | `negative/fixed-conditional-evaluator`, `runtime/fixed-conditional-generic-runtime` |
+| `configuration.fixed` | static | 1480, 1500, 1510, 1530, 1540, 1560, 1590, 1980 | L0200 for duplicate option names; L0203 for reserved tool names; L0300, L0301, L0305 or L0306 for invalid fixed configuration; L0324 for a false compiler assertion | `negative/fixed-conditional-evaluator`, `negative/r430-assertion-false`, `negative/r430-option-cycle`, `negative/r430-option-duplicate`, `negative/r430-option-reserved`, `negative/r430-library-injection`, `positive/r430-fixed-options`, `runtime/r430-fixed-tools`, `runtime/r430-static-library` |
 
 This is a coverage register, not an optimizer contract. D187 adds
 `unchecked.region` for [1120], which weakens the four trapping rows it names
@@ -8915,8 +8932,8 @@ or what “whole program” means to the conformance register.
 
 **Chosen:** `import` is reserved and every source file begins with zero or more
 plain `import a/b` declarations before its module declarations. Each path is a
-nonempty slash-separated identifier tuple. Aliases [1430] and selected imports
-[1440] are recognized refusals owned by R4.30. A plain import binds only the
+nonempty slash-separated identifier tuple. D201 extends this original slice
+with aliases [1430] and selected imports [1440]. A plain import binds only the
 last segment in this file's import scope. Locals and signature declarations
 shadow that binding; it shadows the same spelling in the module scope for
 qualified lookup. Duplicate final-segment bindings are refused. Imports do not
@@ -12012,3 +12029,154 @@ without changing what the compiler accepts today.
 `negative/any-comparison-refused`,
 `negative/pointer-comparison-referent-mismatch` and
 `positive/pointer-comparison-same-referent`.
+
+### D201 — Import suffixes bind file-local names without new identities
+
+**The tour said** at [1430] that an alias resolves namespace collisions,
+[1440] that an import may select names without a wildcard, and [1450] that
+imports belong to one file. It did not settle whether either suffix also
+binds the original namespace, how selections collide, or when an unused
+selection is checked.
+
+**Chosen:** an import has at most one suffix: contextual `as` and one alias,
+or a nonempty parenthesized list of identifiers. A selection has no trailing
+comma, wildcard or member renaming. An alias binds only the written alias;
+a selection binds only the named public declarations. A plain import keeps
+D150's final-segment namespace binding.
+
+All three forms share the file import scope. Repeating a bound spelling,
+including within one selected list or across different forms, is a duplicate
+with both sites reported. Parameters and locals may shadow these bindings.
+A namespace binding shadows a module declaration only for qualified lookup;
+a selected declaration also shadows it for unqualified lookup. No import enters a
+sibling file or re-exports a declaration. Selected members are resolved after
+the reached modules' active declarations have been collected, so declaration
+order and import cycles introduce no forward-reference exception. A private
+or missing selected member is refused at its import even if unused; the
+private-member diagnostic relates its declaration.
+
+A selected binding refers to the original declaration rather than copying
+it. Its nominal identity, generic formals, mutability, error atoms and private
+representation restrictions therefore remain those of its defining module.
+The same binding is available in every declaration-reference position.
+
+**The alternatives:** also binding the original namespace would make aliases
+retain the collision they are meant to solve. Copying selected declarations
+would create new nominal or conformance identities. Checking only used names
+would let a misspelled import remain latent. Combining aliases and selections,
+member renaming, trailing commas and wildcards would add syntax the tour does
+not promise. All were declined.
+
+**Pinned by** `runtime/import-alias-selected-identities`,
+`runtime/import-contextual-as`, `negative/import-selected-private`,
+`negative/import-selected-missing`, `negative/import-selected-duplicate`,
+`negative/import-selected-immutable`,
+`negative/import-selected-private-representation`,
+`negative/import-selected-reserved`,
+`negative/import-selected-namespace-unbound`,
+`negative/import-alias-selected-collision`,
+`negative/import-selected-alias-collision`,
+`negative/import-alias-original-unbound`, `negative/import-alias-reserved`,
+`negative/import-option-collision`, and the parser/resolution import cases.
+
+### D202 — Hosted tool configuration is fixed before ordinary resolution
+
+**The tour said** at [1480] that the compiler receives ordered roots, at
+[1500]-[1530] that targets, assertions and declared typed build switches
+configure compilation, and at [1540]/[1560] that tool directives execute no
+user code. [1590] places a static-library directive beside its declarations.
+It did not settle switch discovery, override precedence, configuration
+namespaces, target-fact units, the assertion fold or library argument order.
+
+**Chosen:** the driver preserves the explicit ordered roots of D150, with
+no implicit environment roots. It completes the reached graph before
+configuration, resolution and checking. Every source remains part of one
+whole program; this introduces neither a cache format nor a stable interface.
+
+Contextual `option name: type = expression` declares one globally unique
+configuration value. An option is unconditional at module level, without
+`public`; an option in any fixed arm is refused even if that arm is inactive.
+The complete option set must exist before selecting arms. Its declared type
+is bool or an enabled integer scalar, with target bounds for usize/isize.
+Within a closed configuration expression, integer option values participate
+as D139's mathematical integers; the declared scalar bounds apply when an
+option's value is established, rather than at each arithmetic intermediate.
+An option cannot reuse a compiler-owned configuration atom name: `x86_64`,
+`arm64`, `cortex_m0`, `synthetic_32`, `little`, `big`, `debug` or `release`.
+That collision is L0305; a reserved tool namespace name is L0203.
+All options are collected before evaluating their defaults. Defaults may
+refer forward to options in any reached source; cycles and invalid defaults
+are refused even when the request overrides the option. A dependent default
+uses the referenced option's effective overridden value.
+
+An option's bare name is available in fixed conditions, option defaults and
+compiler assertions. It has no runtime storage or module export. An active
+use outside those configuration positions receives L0201 explaining that
+boundary, rather than claiming the option was never declared. An active
+module declaration or import binding cannot reuse an option's name; local
+bindings may use it because configuration directives do not occur in bodies.
+The three bare tool namespace names are unavailable as declaration or import
+bindings, including parameters and locals, without becoming lexical keywords.
+Fields and member labels do not declare a tool namespace. Explicit imports of
+exactly `landin/compiler`, `landin/assembler` or `landin/linker`, including
+alias and selected forms, receive a named refusal before filesystem lookup:
+these built-ins already inhabit the configuration scope. No root can replace
+one of them with source.
+
+`--option=NAME=VALUE` supplies a bool literal or signed decimal integer text.
+Unknown or duplicate override names, malformed values, wrong types and target
+range violations are errors. `--build-mode=debug|release` supplies a separate
+request fact, default debug; it does not change runtime checks or optimization.
+`compiler.arch` retains D139's constructor-selected architecture;
+`compiler.word_size` counts bits and `compiler.byte_order` is `little` or `big`.
+These facts are fixed configuration values. Word size is eight times
+`sizeof usize`, including on a synthetic 32-bit target hosted by a 64-bit
+compiler.
+
+The existing closed configuration fold gains those facts, options, and
+`sizeof`/`alignof` of the enabled scalar types, measured in target bytes.
+It retains D139's mathematical integer arithmetic, typed equality and bool
+operations, structural validation of both short-circuit operands, and absence
+of user calls. Both operands are type-checked even when evaluation will skip
+one; dead arithmetic is not evaluated. Nominal or aggregate measurements and runtime/module-name
+lookup are outside this fold and receive a precise refusal. A module-only
+`compiler.assert(expression)` requires bool and diagnoses false at its source.
+All active assertions use that same fold; inactive assertions have no effect.
+
+A tool directive is a direct `compiler`, `assembler` or `linker` member call
+with positional arguments, without recovery. `linker.library` takes one
+fixed text literal, decoded by the ordinary text decoder. Its nonempty name
+contains only ASCII letters, digits, underscore, hyphen and dot, cannot begin
+with a hyphen and cannot consist only of dots. Active library directives
+produce separate tool arguments after the program assembly in canonical
+source/declaration order. Repeated requests are preserved: archive resolution
+may need a library more than once. The Linux adapter selects archives for
+this run while leaving hosted runtime linkage to the platform driver.
+Inactive directives add no arguments. Atomic operations retain R6.30 and
+inline assembly, sections and machine entry retain R6.60 as named refusals.
+
+**The alternatives:** conditional switch declarations make switch discovery
+depend on their own values. Last-override-wins hides repeated configuration;
+ignoring an overridden default hides misspellings and cycles. Reusing option
+names for module declarations gives fixed and ordinary lookup different
+meanings for one spelling. General compile-time evaluation would reverse
+[1540]; moving scalar target queries through host layout would reverse the
+target-facts boundary. Searching for built-ins on disk would let root order
+replace compiler meaning. Deduplicating or sorting libraries changes archive
+resolution, while whole-executable static linkage takes hosted-runtime policy
+from the driver. All were declined.
+
+**Pinned by** `positive/r430-fixed-options`, `positive/r430-inactive-tools`,
+`runtime/r430-fixed-tools`, `runtime/r430-static-library`,
+`negative/r430-assertion-false`, `negative/r430-assertion-type`,
+`negative/r430-assertion-call`, `negative/r430-assertion-nominal`,
+`negative/r430-option-cycle`, `negative/r430-option-duplicate`,
+`negative/r430-option-conditional`, `negative/r430-option-type`,
+`negative/r430-option-range`, `negative/r430-option-reserved`,
+`negative/r430-fixed-dead-types`,
+`negative/r430-library-injection`, `negative/r430-library-runtime`,
+`negative/r430-library-arity`, `negative/r430-tool-member`,
+`negative/r430-builtin-import`, and the driver's option permutation,
+target-fact, ordered-library and pre-root builtin-import cases, plus
+`negative/option-outside-configuration`, `negative/tool-namespace-bindings`
+and `negative/function-tool-refusals` for the ordinary-resolution boundary.

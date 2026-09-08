@@ -1,0 +1,12 @@
+error[L0300]: option `count` value is outside its type range (u8)
+  --> ../tests/fixtures/negative/r430-option-range/main.ldn:1:20
+  |
+1 | option count: u8 = 256
+  |                    ^^^
+  = note: [1530]/D202: the option value must fit its declared scalar type on the selected target
+error[L0300]: option `next` value is outside its type range (u8)
+  --> ../tests/fixtures/negative/r430-option-range/main.ldn:3:19
+  |
+3 | option next: u8 = small + 1
+  |                   ^^^^^^^^^
+  = note: [1530]/D202: the option value must fit its declared scalar type on the selected target

@@ -1,0 +1,10 @@
+error[L0202]: this type's representation is module-internal
+  --> ../tests/fixtures/negative/import-selected-private-representation/entry/main.ldn:4:20
+  |
+4 |     value = hidden.secret
+  |                    ^^^^^^
+  --> ../tests/fixtures/negative/import-selected-private-representation/root/lib/library.ldn:1:1
+  |
+1 | hidden: type = struct
+  | ^^^^^^^^^^^^^^^^^^^^^ declared without `public` here
+  = note: D150: a private identity may cross a public signature without exposing its fields

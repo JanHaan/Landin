@@ -16,7 +16,15 @@
         "named": true
       },
       {
+        "type": "option_declaration",
+        "named": true
+      },
+      {
         "type": "public_declaration",
+        "named": true
+      },
+      {
+        "type": "tool_directive",
         "named": true
       }
     ]
@@ -1455,11 +1463,26 @@
   {
     "type": "import_declaration",
     "named": true,
-    "fields": {},
+    "fields": {
+      "alias": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      }
+    },
     "children": {
-      "multiple": false,
+      "multiple": true,
       "required": true,
       "types": [
+        {
+          "type": "identifier_list",
+          "named": true
+        },
         {
           "type": "import_path",
           "named": true
@@ -1980,6 +2003,42 @@
     }
   },
   {
+    "type": "option_declaration",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      },
+      "type": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "_type",
+            "named": true
+          }
+        ]
+      },
+      "value": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "_expression",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "parameter",
     "named": true,
     "fields": {
@@ -2456,6 +2515,50 @@
       "types": [
         {
           "type": "product_expression",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "tool_directive",
+    "named": true,
+    "fields": {
+      "member": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      },
+      "module": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "assembler",
+            "named": false
+          },
+          {
+            "type": "compiler",
+            "named": false
+          },
+          {
+            "type": "linker",
+            "named": false
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": false,
+      "required": false,
+      "types": [
+        {
+          "type": "arguments",
           "named": true
         }
       ]
@@ -3059,6 +3162,14 @@
     "named": true
   },
   {
+    "type": "as",
+    "named": false
+  },
+  {
+    "type": "assembler",
+    "named": false
+  },
+  {
     "type": "atom",
     "named": false
   },
@@ -3086,6 +3197,10 @@
     "type": "comment",
     "named": true,
     "extra": true
+  },
+  {
+    "type": "compiler",
+    "named": false
   },
   {
     "type": "complete",
@@ -3216,6 +3331,10 @@
     "named": false
   },
   {
+    "type": "linker",
+    "named": false
+  },
+  {
     "type": "loop",
     "named": false
   },
@@ -3249,6 +3368,10 @@
   },
   {
     "type": "not",
+    "named": false
+  },
+  {
+    "type": "option",
     "named": false
   },
   {

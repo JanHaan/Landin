@@ -64,6 +64,8 @@ package Landin.Backend.Toolchain is
      (Assembly : String;
       Output   : String;
       Linker   : String;
-      Build_Id : String := "") return Landin.Platform.Path_List;
+      Build_Id : String := "";
+      Libraries : Landin.Platform.Path_List :=
+        Landin.Platform.No_Arguments) return Landin.Platform.Path_List;
 
 end Landin.Backend.Toolchain;

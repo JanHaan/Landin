@@ -1,0 +1,6 @@
+error[L0305]: an option must be declared outside every fixed arm
+  --> ../tests/fixtures/negative/r430-option-conditional/main.ldn:2:5
+  |
+2 |     option count: u32 = 1
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  = note: [1530]/D202: all options must be declared unconditionally before arm selection

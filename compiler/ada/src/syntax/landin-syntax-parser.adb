@@ -258,6 +258,15 @@ package body Landin.Syntax.Parser is
             As_Id : constant Landin.Source.Names.Name_Id :=
               Landin.Source.Names.Intern (Names, "as");
 
+            Option_Id : constant Landin.Source.Names.Name_Id :=
+              Landin.Source.Names.Intern (Names, "option");
+
+            Linker_Id : constant Landin.Source.Names.Name_Id :=
+              Landin.Source.Names.Intern (Names, "linker");
+
+            Assembler_Id : constant Landin.Source.Names.Name_Id :=
+              Landin.Source.Names.Intern (Names, "assembler");
+
             Caller_Id : constant Landin.Source.Names.Name_Id :=
               Landin.Source.Names.Intern (Names, "caller");
 
@@ -273,8 +282,8 @@ package body Landin.Syntax.Parser is
             Unchecked_Id : constant Landin.Source.Names.Name_Id :=
               Landin.Source.Names.Intern (Names, "unchecked");
 
-            --  [1480] takes this bare toolchain root.  D139 recognizes it
-            --  only as the fixed-condition intrinsic, not as a declaration.
+            --  D202 recognizes these implicit namespaces in module tool
+            --  directives; resolution owns their binding reservation.
             Compiler_Id : constant Landin.Source.Names.Name_Id :=
               Landin.Source.Names.Intern (Names, "compiler");
 
@@ -475,7 +484,8 @@ package body Landin.Syntax.Parser is
                Named   : Landin.Source.Names.Name_Id) return Node_Id;
             function Parse_Call
               (Callee : Node_Id;
-               Starts : Landin.Source.Span) return Node_Id;
+               Starts : Landin.Source.Span;
+               Allow_Recovery : Boolean := True) return Node_Id;
             function Previous return Landin.Source.Span;
 
             ------------------------------------------------------------
@@ -1123,8 +1133,8 @@ package body Landin.Syntax.Parser is
                   Children => To_List (Items));
             end Parse_Program;
 
-            --  import_declaration ::= "import" import_path       [1740]
-            --  import_path ::= identifier ("/" identifier)*      [1740]
+            --  D201 retains the path separately from either the contextual
+            --  `as name` suffix or the nonempty selected-name list.
             function Parse_Import (Late : Boolean := False) return Node_Id is
                At_Import : constant Landin.Source.Span := Here;
                Segments  : Slot_Vectors.Vector;
@@ -1137,7 +1147,9 @@ package body Landin.Syntax.Parser is
                     (Item    => Syn.Token_Expected,
                      Where   => At_Import,
                      Message => "an import belongs before every declaration",
-                     Note    => "[1450]: imports are a per-file prelude");
+                     Note    => "[1450]: imports are a per-file prelude",
+                     Related => Tok.Where (From, 1),
+                     Because => "the source prelude starts here");
                end if;
 
                loop
@@ -1154,26 +1166,47 @@ package body Landin.Syntax.Parser is
                   Advance;
                end loop;
 
-               --  [1430] and [1440] are deliberately still deferred.  Both
-               --  shapes are recognized here so [1830] names the construct
-               --  instead of reporting unrelated trailing tokens.
-               if Peek = Tok.Identifier
-                 and then Named_Here = As_Id
+               if Peek = Tok.Identifier and then Named_Here = As_Id
                  and then Ahead (1) = Tok.Identifier
                then
-                  Refuse
-                    (Item    => Syn.Import_Alias,
-                     Where   => Here,
-                     Message => "import aliases are not enabled yet");
                   Advance;
-                  Advance;
+                  declare
+                     Named : Landin.Source.Names.Name_Id;
+                     At_Name : constant Landin.Source.Span :=
+                       Parse_Declared_Name (Named);
+                  begin
+                     Segments.Append
+                       (Add (Import_Alias_Name, At_Name, Named => Named));
+                  end;
                elsif Peek = Tok.Left_Paren then
-                  Refuse
-                    (Item    => Syn.Selected_Import,
-                     Where   => Here,
-                     Message => "selected imports are not enabled yet");
-                  Advance;
-                  Resync_Parentheses;
+                  declare
+                     Opened : constant Landin.Source.Span := Here;
+                  begin
+                     Advance;
+                     loop
+                        declare
+                           Named : Landin.Source.Names.Name_Id;
+                           At_Name : constant Landin.Source.Span :=
+                             Parse_Declared_Name (Named);
+                        begin
+                           Segments.Append
+                             (Add (Import_Selected_Name, At_Name,
+                                   Named => Named));
+                        end;
+                        exit when Peek /= Tok.Comma;
+                        Advance;
+                     end loop;
+                     declare
+                        Closed : constant Boolean := Expect
+                          (Wanted => Tok.Right_Paren,
+                           Message => "the selected import list is not"
+                                      & " closed",
+                           Note => "[1440]: import path (name, name)",
+                           Related => Opened, Because => "opened here");
+                     begin
+                        pragma Unreferenced (Closed);
+                     end;
+                  end;
                end if;
 
                if Late then
@@ -1211,6 +1244,90 @@ package body Landin.Syntax.Parser is
                       Note    => "[1450]: an import is a per-file prelude,"
                                  & " not a declaration");
                   return Parse_Import (Late => True);
+               end if;
+
+               if Peek = Tok.Identifier and then Named_Here = Option_Id
+                 and then Ahead (1) = Tok.Identifier
+               then
+                  declare
+                     Opened : constant Landin.Source.Span := Here;
+                     Named : Landin.Source.Names.Name_Id;
+                     At_Name : Landin.Source.Span;
+                     Declared, Value : Node_Id := No_Node;
+                  begin
+                     Advance;
+                     At_Name := Parse_Declared_Name (Named);
+                     if Exported then
+                        Complain
+                          (Item => Syn.Token_Expected, Where => Public_At,
+                           Message => "an option cannot be public",
+                           Note => "[1530]: options configure the program",
+                           Related => Opened, Because => "this option");
+                     end if;
+                     if Expect
+                       (Wanted => Tok.Colon,
+                        Message => "an option needs an explicit type",
+                        Note => "[1530]: option name: type = expression",
+                        Related => Opened, Because => "this option")
+                     then
+                        Declared := Parse_Type (False, At_Name);
+                     end if;
+                     if Expect
+                       (Wanted => Tok.Equal,
+                        Message => "an option needs a default value",
+                        Note => "[1530]: option name: type = expression",
+                        Related => Opened, Because => "this option")
+                     then
+                        Value := Parse_Expression;
+                     end if;
+                     return Add
+                       (Option_Declaration, At_Name,
+                        Extent => Join (Opened, After_Previous),
+                        Children => [Declared, Value], Named => Named);
+                  end;
+               end if;
+
+               if Peek = Tok.Identifier
+                 and then Named_Here in Compiler_Id | Assembler_Id | Linker_Id
+                 and then Ahead (1) = Tok.Dot
+               then
+                  declare
+                     Opened : constant Landin.Source.Span := Here;
+                     Base : constant Node_Id :=
+                       Add (Name_Reference, Opened, Named => Named_Here);
+                     Member : Landin.Source.Names.Name_Id;
+                     At_Member : Landin.Source.Span;
+                     Callee, Called : Node_Id;
+                  begin
+                     Advance;
+                     Advance;
+                     At_Member := Parse_Declared_Name (Member);
+                     Callee := Add
+                       (Member_Selection, At_Member,
+                        Extent => Join (Opened, At_Member),
+                        Children => [Base], Named => Member);
+                     Called := Parse_Call
+                       (Callee, Opened, Allow_Recovery => False);
+                     if Kind (Result, Called) = Labeled_Application then
+                        Complain
+                          (Item => Syn.Token_Expected, Where => Opened,
+                           Message => "tool directive arguments are"
+                                      & " positional",
+                           Note => "[1560]: tool.member(expression)",
+                           Related => Opened, Because => "this directive");
+                     end if;
+                     if Exported then
+                        Complain
+                          (Item => Syn.Token_Expected, Where => Public_At,
+                           Message => "a tool directive cannot be public",
+                           Note => "[1560]: a directive configures tools",
+                           Related => Opened, Because => "this directive");
+                     end if;
+                     return Add
+                       (Tool_Directive, Opened,
+                        Extent => Join (Opened, After_Previous),
+                        Children => [Called]);
+                  end;
                end if;
 
                --  D139 is deliberately module-declaration syntax.  `fixed`
@@ -1518,16 +1635,6 @@ package body Landin.Syntax.Parser is
                if Peek = Tok.Identifier then
                   Named := Named_Here;
                   Advance;
-                  if Named = Compiler_Id then
-                     Complain
-                       (Item    => Syn.Name_Expected,
-                        Where   => At_Name,
-                        Message => "`compiler` is reserved for the"
-                                   & " toolchain intrinsic root",
-                        Note    => "[1480]: bare toolchain module names are"
-                                   & " not available to declarations");
-                     Named := Landin.Source.Names.No_Name;
-                  end if;
                   return At_Name;
                end if;
 
@@ -6741,7 +6848,8 @@ package body Landin.Syntax.Parser is
 
             function Parse_Call
               (Callee : Node_Id;
-               Starts : Landin.Source.Span) return Node_Id
+               Starts : Landin.Source.Span;
+               Allow_Recovery : Boolean := True) return Node_Id
             is
                Recovery         : Node_Id := No_Node;
                Args             : Slot_Vectors.Vector;
@@ -6906,7 +7014,9 @@ package body Landin.Syntax.Parser is
                   end if;
                end if;
 
-               if Peek = Tok.Kw_Else and then not Else_Closes_Arm then
+               if Allow_Recovery and then Peek = Tok.Kw_Else
+                 and then not Else_Closes_Arm
+               then
                   declare
                      At_Else : constant Landin.Source.Span := Here;
                      Error_Name : Landin.Source.Names.Name_Id :=

@@ -1,0 +1,10 @@
+error[L0200]: option `count` is declared twice
+  --> ../tests/fixtures/negative/r430-option-duplicate/main.ldn:2:8
+  |
+2 | option count: u32 = 2
+  |        ^^^^^
+  --> ../tests/fixtures/negative/r430-option-duplicate/main.ldn:1:1
+  |
+1 | option count: u32 = 1
+  | ^^^^^^^^^^^^^^^^^^^^^ the option that keeps the name
+  = note: [1530]: each option is declared exactly once in the whole program

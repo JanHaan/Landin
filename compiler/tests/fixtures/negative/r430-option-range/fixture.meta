@@ -1,0 +1,9 @@
+class: negative
+summary: Declared option defaults must fit their scalar type
+program: main.ldn
+codes: L0300, L0300
+constructs: 1530
+targets: linux-x86-64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/r430-option-range/main.ldn
+status: 1

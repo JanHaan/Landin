@@ -1,0 +1,5 @@
+import lib (reveal)
+f: () -> (value: i32) =
+    hidden := reveal()
+    value = hidden.secret
+end f

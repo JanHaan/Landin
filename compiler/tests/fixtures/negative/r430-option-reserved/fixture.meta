@@ -1,0 +1,9 @@
+class: negative
+summary: An option cannot replace a builtin tool namespace
+program: main.ldn
+codes: L0203
+constructs: 1530, 1560
+targets: linux-x86-64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/r430-option-reserved/main.ldn
+status: 1

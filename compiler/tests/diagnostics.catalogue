@@ -32,6 +32,7 @@ L0112  Live     [0980]: a positional call argument precedes every named argument
 L0200  Live     [1850]: one scope gives one name to one thing
 L0201  Live     [1860]: a name used and declared in no visible scope
 L0202  Live     [1410]: a module-internal declaration used across modules
+L0203  Live     [1560]: a builtin tool namespace binding or use is unavailable
 L0300  Live     a compile-time magnitude its context or target does not hold
 L0301  Live     [1890]: two types that must agree and do not
 L0302  Live     [1910]: a name read on a path that does not assign it
@@ -39,6 +40,7 @@ L0303  Live     [1900]: a place that may not be written
 L0304  Live     [1920]: a name used in a way the kernel does not enable
 L0305  Live     [1940]/D136: a value required before runtime that the compiler's closed fold cannot produce
 L0306  Live     [1950]: an operand the operation cannot take, where the compiler knows it
+L0324  Live     [1510]: a compile-time assertion is false
 L0307  Live     [1795]: a chain of aliases that reaches no type
 L0308  Live     [0750]: a field a struct was not declared with
 L0309  Live     [0710]: a struct literal names a field at most once

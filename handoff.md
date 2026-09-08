@@ -242,7 +242,7 @@ container transition, allocation rollback and unsafe obligation is written
 down, and the ten running examples exercise the slice with exact output
 oracles.
 
-**Current roadmap work: R4.30 — Complete hosted modules and toolchain directives.**
+**Current roadmap work: R4.40 — Implement the narrow complete C ABI and bindings.**
 
 `refine` runs the frontend, lowers and
 verifies target-neutral IR, emits Linux x86-64 assembly, and can assemble and

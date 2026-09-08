@@ -1,0 +1,9 @@
+class: negative
+summary: Builtin tool modules are implicit and never loaded from files
+program: main.ldn
+codes: L0203
+constructs: 1430, 1480, 1560
+targets: linux-x86-64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/r430-builtin-import/main.ldn
+status: 1

@@ -63,7 +63,7 @@ replaced.
 | `Landin.IR.Dump` | canonical human-readable text for a Unit | be a stable interface, a reader, or a serialisation |
 | `Landin.Backend` | where a routine's cells live, the recursive target extent of one neutral field shape, where a scalar or fixed-array leaf at any path depth sits inside an aggregate datum or slot, how wide one element of an array of either is, and the target-byte replay of scalar, fixed-array and unfolded variant runs | name a machine, choose a register, or ask the host a width |
 | `Landin.Backend.X86_64` | the assembly text for one target, every register in it, collision-safe whole-program symbols, the hosted entry argument/libc bridge, D161's read-only literal data, the target-width scalar, finite-array, compact repetition, nested-child and selected-variant directives and padding for recursively written aggregate images, and D187's omission of exactly the overflow, element-index, slice-range and integer-conversion edges an instruction is marked for | decide a language error mapping, write a file, or run a tool |
-| `Landin.Backend.Toolchain` | the one command line that finishes a compilation, and the triplet it is found by | know what ELF is, invoke a linker directly, or search a PATH |
+| `Landin.Backend.Toolchain` | the one command line that finishes a compilation, the triplet it is found by, and D202's ordered archive arguments | know what ELF is, invoke a linker directly, or search a PATH |
 | `Landin.Backend.Entry_Point` | [1970]'s one hosted entry shape, asked of the IR | raise a defect for a module that simply has no `main` |
 | `Landin.Diagnostics` | codes, severities, labels, notes, ordering | render, or own the catalogue of codes |
 | `Landin.Diagnostics.Text` | deterministic rendering | decide severity or ordering policy |
@@ -77,19 +77,34 @@ replaced.
 | `Landin.Platform.Native.Tools` | the only process spawning, and the only GNAT-specific unit that touches the host; `Landin.Source_Maps` uses `GNAT.SHA256` as pure computation | grow a second host concern |
 | `Landin.Targets` | target facts, typed architecture identity, layout arithmetic, physical evidence-cell offsets/extents and D147 any data/table offsets, extent and alignment derived from pointer facts | ask the host how wide a pointer is |
 | `Landin.Targets.Capabilities` | which described targets have a backend and the triplet selected to finish their output | infer capability from width, invoke a tool, or canonicalise a triplet |
-| `Landin.Configuration` | D139's immutable active-declaration view after target selection | mutate syntax, resolve a source name, or expose a general compiler module |
+| `Landin.Configuration` | D139's immutable active-declaration view after target selection and D202's request mode/overrides, option origins and ordered library requests | mutate syntax, resolve an ordinary source name, or expose a general compiler module |
 | `Landin.Stages` | the compilation context, the stage interface, pipelines, and everything a stage builds that outlives it | know which stages exist, or which order they run in |
 | `Landin.Stages.Syntax` | running the scan and the parse over a compilation | keep anything of its own, or decide reporting policy |
-| `Landin.Stages.Configuration` | validate and select D139 fixed declaration arms before resolution | execute code, mutate syntax, or add a runtime declaration |
+| `Landin.Stages.Configuration` | validate and select D139 fixed declaration arms, collect and evaluate D202's global typed options, fixed compiler facts, scalar target measurements, assertions and library directives before resolution | execute user code, mutate syntax, resolve ordinary declarations or add a runtime declaration |
 | `Landin.Stages.Resolution` | the order the trees are walked in through the D139 activity view, including D185's condition-initializer outer scope and guarded-body binding scope and D186's caller-skipping positional call map | own the resolution table, or a code |
 | `Landin.Stages.Checking` | the type passes, concept and conformance collection, generic interning and instantiation, fixed-expression evaluation, inferred-error fixed points and checking-stage diagnostic order; the full list is under "The four long rows, in full" below | own a table, a code, execute user code, synthesize a declaration, or choose a target-dependent operator width |
-
-| `Landin.Stages.Folding` | the one constant folder, a generic both stages instantiate with their tables and the few answers only each stage has: how a name reaches its tree, which scalar a conversion targets, a character's value, a float special's bits, and what to do when a module value is worked out from itself; integers and bools fold to their value, floats to their IEEE bit pattern, and an overflow is a distinct outcome from an unknown | report a diagnostic, hold a cycle set of its own, or fold anything the checker has not typed |
+| `Landin.Stages.Folding` | the shared constant folder for checked ordinary expressions in checking and lowering, a generic both stages instantiate with their tables and the few answers only each stage has: how a name reaches its tree, which scalar a conversion targets, a character's value, a float special's bits, and what to do when a module value is worked out from itself; integers and bools fold to their value, floats to their IEEE bit pattern, and an overflow is a distinct outcome from an unknown | report a diagnostic, hold a cycle set of its own, or fold anything the checker has not typed |
 | `Landin.Stages.Checking.Flow` | definite assignment, including D185's initialized condition binding, D178's complete fixed-array traversal element, D180's copied iterable Item and D182's whole-view utf8 index read, use-after-`sink`, restoration of consumed `inout` parts, explicit fallthrough/return-compatible edge facts, and lexical cleanup execution states | decide a type, believe a condition, or lower a value |
 | `Landin.Stages.Checking.References` | function-local origin and derivation flow, exact `from` agreement, `escaping` obligations and live-view mutation checks; D146 maps an erased construction and implicit self to its pointee fact, D180 gives [1320]'s source-free Item result no source alias, and D182 keeps an indexed codepoint view derived from its utf8 source; integer-created pointers deliberately terminate its evidence | infer a signature across calls, claim ownership, or make an aliasing assumption about volatile storage |
 | `Landin.Stages.Lowering` | the walk from checker identities to verified IR, text datums and traversals, evidence tables, aggregate results, cleanups and regions; the full list is under "The four long rows, in full" below | own the Unit, work out a scope, derive target layout, synthesize a declaration, or raise a diagnostic |
 | `Landin.Driver` | argument and `--emit` classification, R3.10's private ordered-root graph discovery through `Landin.Platform`, pipeline orchestration, output/toolchain selection and the result | implement a language rule, acquire a package or expose a public orchestration protocol |
 | `Refine` | printing and the exit status | contain a decision |
+
+D201 keeps aliases and selected imports in the source file's import scope.
+Resolution retains each selected declaration's original identity and diagnoses
+private, missing, duplicate and reserved bindings at their import sites.
+D202 adds configuration declarations to immutable syntax but gives them no
+runtime identities or storage. The configuration stage consumes them before
+ordinary declaration traversal; its option origins let resolution diagnose
+collisions with active module and file-import bindings.
+
+The driver accepts `--option=NAME=VALUE` and
+`--build-mode=debug|release` as explicit request configuration. The latter
+controls `compiler.build_mode`, independently of the Ada build's
+`LANDIN_BUILD_MODE`; it changes neither emitted checks nor optimization.
+`linker.library` requests a static archive through the platform driver,
+preserving source order and repetitions. It does not change that driver's
+hosted-runtime linkage policy.
 
 D187 follows them too, and adds no stage: the parser recognises the region,
 `Landin.IR` records it on the instructions it is emitting, and the backend is

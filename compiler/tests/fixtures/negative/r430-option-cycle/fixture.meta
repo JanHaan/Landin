@@ -1,0 +1,9 @@
+class: negative
+summary: Cycles are rejected even behind a short-circuit operand
+program: main.ldn
+codes: L0305
+constructs: 1530, 1540
+targets: linux-x86-64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/r430-option-cycle/main.ldn
+status: 1

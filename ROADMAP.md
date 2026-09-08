@@ -2893,23 +2893,23 @@ that has no implementation owner.
 | `[1400]` | hosted-now | R2.80 | enforced absence; fixture attribution in this increment |
 | `[1410]` | hosted-now | R3.10 | matrix evidence |
 | `[1420]` | hosted-now | R3.10 | matrix evidence |
-| `[1430]` | later-r4 | R4.30 | named refusal |
-| `[1440]` | later-r4 | R4.30 | named refusal |
+| `[1430]` | hosted-now | R4.30 | D201 aliases retain file-local namespace lookup |
+| `[1440]` | hosted-now | R4.30 | D201 selected imports retain original public declaration identities |
 | `[1450]` | hosted-now | R3.10 | implemented; fixture attribution in this increment |
 | `[1460]` | hosted-now | R1.60 | matrix evidence |
 | `[1470]` | deferred | R7.20 | companion-tool package policy remains deferred |
-| `[1480]` | later-r4 | R4.30 | ordered roots exist; project root policy remains scheduled |
+| `[1480]` | hosted-now | R4.30 | explicit ordered roots; arranging project/user/system defaults belongs to the companion tool |
 | `[1490]` | hosted-now | R2.40 | implemented; fixture attribution in this increment |
 | `[1500]` | hosted-now | R2.40 | matrix evidence |
-| `[1510]` | later-r4 | R4.30 | scheduled compiler assertion builtin |
+| `[1510]` | hosted-now | R4.30 | D202 and fixed assertion fixtures |
 | `[1520]` | hosted-now | R2.40 | implemented; fixture attribution in this increment |
-| `[1530]` | later-r4 | R4.30 | scheduled build-option work |
+| `[1530]` | hosted-now | R4.30 | D202 and deterministic typed option cases |
 | `[1540]` | hosted-now | R2.40 | matrix evidence |
 | `[1550]` | principle | none | native-backend policy; implementations have target owners |
-| `[1560]` | later-r4 | R4.30 | scheduled builtin tool modules |
+| `[1560]` | hosted-now | R4.30 | D202 hosted tool facts/directives; machine operations have named owners |
 | `[1570]` | hosted-now | R3.50 | matrix evidence |
 | `[1580]` | hosted-now | R4.40 | narrow matrix has evidence; remaining C ABI has a named refusal |
-| `[1590]` | later-r4 | R4.30 | scheduled static-library directive |
+| `[1590]` | hosted-now | R4.30 | D202 and runtime/r430-static-library archive execution |
 | `[1600]` | later-r4 | R4.40 | scheduled C export work |
 | `[1610]` | later-r4 | R4.40 | scheduled foreign symbol-name work |
 | `[1620]` | freestanding | R6.30 | scheduled atomics work |
@@ -4613,7 +4613,7 @@ untagged one; the authoritative native gate is green on the closing commit.
 
 ### R4.30 — Complete hosted modules and toolchain directives
 
-Status: active
+Status: complete
 Depends on: R3.10, R4.10
 
 Implement the remaining ordered-root, fixed option, `landin/compiler`,
@@ -4621,14 +4621,46 @@ Implement the remaining ordered-root, fixed option, `landin/compiler`,
 Enable import aliases [1430] and selected imports [1440], and preserve
 whole-program compilation.
 
-Sources: `[1430]`, `[1440]`, `[1480]`, `[1500]`, `[1530]`, `[1560]`.
+The hosted scope retains D150's explicit ordered-root request. The companion
+tool arranges project, user and system roots; this compiler does not invent
+environment defaults. D201 extends the source-file import scope with aliases
+and selected public declarations while retaining their original identities.
+`runtime/import-alias-selected-identities` executes generic, type, concept,
+error, variant and mutable-value references through both import forms;
+`runtime/import-contextual-as` pins contextual spelling and qualified-only
+namespace shadowing. Rooted negatives distinguish private/missing members,
+duplicate bindings, immutable writes and private representations.
+D202 adds unconditional global typed options, effective override defaults,
+compiler target facts and assertions, and ordered static-library requests.
+The new positive and negative configuration corpus pins invalid defaults,
+cycles, inactive directives and exact builtin import refusals;
+`runtime/r430-fixed-tools` executes the selected program and
+`runtime/r430-static-library` calls `fegetround` from the platform archive.
+The built-in module scope names deferred machine operations precisely:
+inline assembly and section/entry placement remain R6.60, atomics R6.30.
+
+Sources: `[1430]`, `[1440]`, `[1480]`, `[1500]`, `[1510]`, `[1530]`,
+`[1540]`, `[1560]`, `[1590]`.
+
+Closure evidence: the exact implementation source tree
+`22f74589f212f64f6c08da810e35daf208826bb6`, based on `a9c44eba`, passes
+the authoritative native Linux gate as
+[job 1883395](https://builds.sr.ht/~sinnfrei/job/1883395). The job verifies
+the source snapshot before running the ordinary clean build, complete debug
+and release suites, document checks and compiler identity check. Both suites
+pass 418/418 cases with 12,425 checks. The Mac suite passes 417/418 with
+12,109 checks; only Linux fixture execution is red by design. Coverage,
+catalogue, grammar, lexical and IR records are synchronized; `check.py`,
+`highlight/test.sh --integration` and the full-font site render pass.
+The independent review's remaining selected-import diagnostic continuation
+refinement is recorded under R7.40.
 
 Exit evidence: deterministic root and option cases pass; private caches expose
 no stable interface.
 
 ### R4.40 — Implement the narrow complete C ABI and bindings
 
-Status: planned
+Status: active
 Depends on: R2.30, R4.30
 
 Cover `c_int` and related types, `char` signedness, aggregate arguments and
@@ -5062,6 +5094,13 @@ Depends on: R2.90, R7.20, R7.30
 
 Close construct, grammar, guarantee, diagnostic, conformance/evidence,
 prototype-derivation and target-applicability matrices.
+
+The R4.30 review leaves one diagnostic-recovery refinement here: a private or
+missing selected import is correctly refused at its import, but later uses
+can repeat unresolved-name errors because the refused binding has no
+continuation identity. Suppress those follow-on reports while retaining the
+original visibility verdict and exact source report; this changes diagnostic
+recovery, not which programs are accepted.
 
 Exit evidence: `spec.md` contains lexical, precedence, statement and expression
 grammar for every construct the tour still describes; no matrix contains a gap, stale

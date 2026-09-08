@@ -1,0 +1,2 @@
+import lib as switch
+option switch: i32 = 0

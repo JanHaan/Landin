@@ -6,6 +6,8 @@ prototype-1 | cortex-m
 prototype-2 | linux-x86-64, macos-arm64
 prototype-3 | linux-x86-64, macos-arm64, cortex-m, synthetic-32
 prototype-4 | linux-x86-64, macos-arm64
+end-to-end/r430-option-override-range | linux-x86-64, synthetic-32
+end-to-end/r430-option-override-type | linux-x86-64, synthetic-32
 end-to-end/refine-identity | linux-x86-64, macos-arm64
 negative/a-fold-deeper-than-any-limit | linux-x86-64, macos-arm64
 negative/aggregate-call-result-missing-at-early-exit | linux-x86-64, macos-arm64
@@ -248,6 +250,7 @@ negative/function-field-unassigned | linux-x86-64, macos-arm64, synthetic-32
 negative/function-parameter-signature-mismatch | linux-x86-64, macos-arm64, synthetic-32
 negative/function-result-signature-mismatch | linux-x86-64, macos-arm64, synthetic-32
 negative/function-result-unassigned | linux-x86-64, macos-arm64, synthetic-32
+negative/function-tool-refusals | linux-x86-64, macos-arm64, synthetic-32
 negative/function-type-parameter-name-duplicate | linux-x86-64, macos-arm64, synthetic-32
 negative/function-type-return-name-duplicate | linux-x86-64, macos-arm64, synthetic-32
 negative/function-value-signature-mismatch | linux-x86-64, macos-arm64
@@ -305,6 +308,18 @@ negative/immutable-struct-literal-assignment | linux-x86-64, macos-arm64
 negative/immutable-struct-zeroed-assignment | linux-x86-64, macos-arm64
 negative/immutable-variant-case-assignment | linux-x86-64, macos-arm64
 negative/immutable-variant-runtime-array-payload | linux-x86-64, macos-arm64, synthetic-32
+negative/import-alias-original-unbound | linux-x86-64, macos-arm64, synthetic-32
+negative/import-alias-reserved | linux-x86-64, macos-arm64, synthetic-32
+negative/import-alias-selected-collision | linux-x86-64, macos-arm64, synthetic-32
+negative/import-option-collision | linux-x86-64, macos-arm64, synthetic-32
+negative/import-selected-alias-collision | linux-x86-64, macos-arm64, synthetic-32
+negative/import-selected-duplicate | linux-x86-64, macos-arm64, synthetic-32
+negative/import-selected-immutable | linux-x86-64, macos-arm64, synthetic-32
+negative/import-selected-missing | linux-x86-64, macos-arm64, synthetic-32
+negative/import-selected-namespace-unbound | linux-x86-64, macos-arm64, synthetic-32
+negative/import-selected-private | linux-x86-64, macos-arm64, synthetic-32
+negative/import-selected-private-representation | linux-x86-64, macos-arm64, synthetic-32
+negative/import-selected-reserved | linux-x86-64, macos-arm64, synthetic-32
 negative/imported-private-name | linux-x86-64, macos-arm64, synthetic-32
 negative/increment-unassigned-local-array-element | linux-x86-64, macos-arm64
 negative/index-a-scalar | linux-x86-64, macos-arm64
@@ -467,6 +482,7 @@ negative/non-ascii-outside-comment | linux-x86-64, macos-arm64
 negative/nonzeroable-constraint | linux-x86-64, macos-arm64, synthetic-32
 negative/nonzeroable-zero-length-constraint | linux-x86-64, macos-arm64, synthetic-32
 negative/operands-of-two-types | linux-x86-64, macos-arm64
+negative/option-outside-configuration | linux-x86-64, macos-arm64, synthetic-32
 negative/packed-field-width-is-not-a-scalar-name | linux-x86-64, macos-arm64
 negative/parameterized-alias-arity | linux-x86-64, macos-arm64
 negative/parameterized-alias-cycle | linux-x86-64, macos-arm64
@@ -529,6 +545,22 @@ negative/pointer-union-several-atoms | linux-x86-64, macos-arm64, synthetic-32
 negative/pointer-union-two-pointers | linux-x86-64, macos-arm64, synthetic-32
 negative/pointer-union-zeroed | linux-x86-64, macos-arm64, synthetic-32
 negative/public-on-statement | linux-x86-64, macos-arm64
+negative/r430-assertion-call | linux-x86-64, synthetic-32
+negative/r430-assertion-false | linux-x86-64, synthetic-32
+negative/r430-assertion-nominal | linux-x86-64, synthetic-32
+negative/r430-assertion-type | linux-x86-64, synthetic-32
+negative/r430-builtin-import | linux-x86-64, synthetic-32
+negative/r430-fixed-dead-types | linux-x86-64, synthetic-32
+negative/r430-library-arity | linux-x86-64, synthetic-32
+negative/r430-library-injection | linux-x86-64, synthetic-32
+negative/r430-library-runtime | linux-x86-64, synthetic-32
+negative/r430-option-conditional | linux-x86-64, synthetic-32
+negative/r430-option-cycle | linux-x86-64, synthetic-32
+negative/r430-option-duplicate | linux-x86-64, synthetic-32
+negative/r430-option-range | linux-x86-64, synthetic-32
+negative/r430-option-reserved | linux-x86-64, synthetic-32
+negative/r430-option-type | linux-x86-64, synthetic-32
+negative/r430-tool-member | linux-x86-64, synthetic-32
 negative/range-subtype-address | linux-x86-64, macos-arm64
 negative/range-subtype-base-is-not-an-integer | linux-x86-64, macos-arm64
 negative/range-subtype-bound-outside-base | linux-x86-64, macos-arm64
@@ -674,6 +706,7 @@ negative/text-traversal-item-is-read-only | linux-x86-64, macos-arm64, synthetic
 negative/text-traversal-ordinary-pointer-is-not-cstring | linux-x86-64, macos-arm64, synthetic-32
 negative/text-view-byte-escape | linux-x86-64, macos-arm64
 negative/text-view-identities-are-distinct | linux-x86-64, macos-arm64
+negative/tool-namespace-bindings | linux-x86-64, macos-arm64, synthetic-32
 negative/try-infallible-call | linux-x86-64, synthetic-32
 negative/type-alias-cycle | linux-x86-64, macos-arm64, synthetic-32
 negative/type-name-is-not-a-type | linux-x86-64, macos-arm64
@@ -890,6 +923,8 @@ positive/precedence-exclusion-over-alternation | linux-x86-64, macos-arm64
 positive/precedence-product-over-sum | linux-x86-64, macos-arm64
 positive/precedence-shift-over-conjunction | linux-x86-64, macos-arm64
 positive/precedence-sum-over-shift | linux-x86-64, macos-arm64
+positive/r430-fixed-options | linux-x86-64, synthetic-32
+positive/r430-inactive-tools | linux-x86-64, synthetic-32
 positive/range-subtype-exit-before-the-check | linux-x86-64, macos-arm64
 positive/range-subtypes | linux-x86-64, macos-arm64
 positive/recursive-module-images | linux-x86-64, synthetic-32
@@ -1090,6 +1125,8 @@ runtime/hosted-heap-provider | linux-x86-64
 runtime/hosted-io-reads-parser-input | linux-x86-64
 runtime/hosted-text-traversal | linux-x86-64
 runtime/hosted-text-views | linux-x86-64
+runtime/import-alias-selected-identities | linux-x86-64
+runtime/import-contextual-as | linux-x86-64
 runtime/in-array-argument-precedes-later-argument | linux-x86-64
 runtime/in-struct-argument-precedes-later-argument | linux-x86-64
 runtime/indirect-function-abi | linux-x86-64
@@ -1205,6 +1242,8 @@ runtime/r420-vec-capacity-boundaries | linux-x86-64
 runtime/r420-vec-growth-boundary | linux-x86-64
 runtime/r420-vec-growth-transaction | linux-x86-64
 runtime/r420-vec-large-list | linux-x86-64
+runtime/r430-fixed-tools | linux-x86-64
+runtime/r430-static-library | linux-x86-64
 runtime/range-subtype-checks | linux-x86-64
 runtime/range-subtype-conversion-traps | linux-x86-64
 runtime/range-subtype-store-traps | linux-x86-64

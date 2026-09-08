@@ -1,0 +1,5 @@
+class: positive
+summary: D202 inactive directives have no assertion or library-name effects
+program: main.ldn
+constructs: 1500, 1510, 1540, 1560, 1590
+targets: linux-x86-64, synthetic-32

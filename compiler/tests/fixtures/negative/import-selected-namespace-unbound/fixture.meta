@@ -1,0 +1,8 @@
+class: negative
+summary: D201 import selected namespace unbound is refused at the source binding or use
+expect: expected.txt
+args: --root=../tests/fixtures/negative/import-selected-namespace-unbound/root ../tests/fixtures/negative/import-selected-namespace-unbound/entry
+codes: L0201
+status: 1
+constructs: 1440, 1450
+targets: linux-x86-64, macos-arm64, synthetic-32

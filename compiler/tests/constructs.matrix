@@ -11,7 +11,7 @@
 #
 #  A construct with no evidence and no refusal is this
 #  item's to answer for; see ROADMAP.md R1.90.
-#  200 constructs, 181 with evidence, 19 with neither.
+#  200 constructs, 188 with evidence, 12 with neither.
 #
 #  id    defined in  evidence
 0010   tour        accepted emitted                   Line comment, to end of line
@@ -156,27 +156,27 @@
 1400   tour        refused                            This is what generics cannot do
 1410   tour        accepted emitted executed refused  A module is a directory
 1420   tour        accepted emitted executed refused  An import path is a directory path, and nothing cleverer
-1430   tour        refused-by-name                    Alias, for collisions
-1440   tour        refused-by-name                    Pull selected names into scope, by name
-1450   tour        accepted emitted executed          Imports are per file, so every file reads on its own
+1430   tour        accepted emitted executed refused  Alias, for collisions
+1440   tour        accepted emitted executed refused  Pull selected names into scope, by name
+1450   tour        accepted emitted executed refused  Imports are per file, so every file reads on its own
 1460   tour        accepted emitted executed refused  Values at module level must be known at compile time
 1470   tour        -                                  A package is a named collection of modules with a version
-1480   tour        -                                  The roots are the project
+1480   tour        accepted emitted executed refused  The roots are the project
 1490   tour        accepted emitted executed          'fixed' marks what is known at compile time
 1500   tour        accepted emitted executed refused  Conditional compilation
-1510   tour        -                                  Compile-time assertion
+1510   tour        accepted emitted executed refused  Compile-time assertion
 1520   tour        accepted emitted executed          A compile-time value parameter
-1530   tour        -                                  Your own build switches
-1540   tour        accepted emitted refused           There are no compile-time loops and no compile-time
+1530   tour        accepted emitted executed refused  Your own build switches
+1540   tour        accepted emitted executed refused  There are no compile-time loops and no compile-time
 1550   tour        -                                  Landin has its own native backends
-1560   tour        -                                  Three builtin modules are the way to the tools
+1560   tour        accepted emitted executed refused  Three builtin modules are the way to the tools
 1570   tour        accepted emitted executed refused  Calling conventions are a growing set of atoms behind one
 1580   tour        accepted emitted executed refused refused-by-name Importing from C
-1590   tour        -                                  Linking a static library
+1590   tour        accepted emitted executed refused  Linking a static library
 1600   tour        -                                  Exporting to C
 1610   tour        -                                  A symbol name the language's identifiers cannot spell
-1620   tour        -                                  Atomics are builtins
-1630   tour        -                                  Inline assembly, for what has no builtin
+1620   tour        refused                            Atomics are builtins
+1630   tour        refused                            Inline assembly, for what has no builtin
 1640   tour        -                                  Kept against section garbage collection, and placed
 1650   tour        accepted emitted executed          Entry point
 1660   tour        accepted emitted executed refused  And this is where capabilities come from
@@ -199,7 +199,7 @@
 1820   spec        accepted emitted executed refused  Precedence, tightest first, and comparison does not chain
 1830   spec        accepted emitted executed refused  What is not enabled is refused, and named
 1840   spec        accepted emitted executed refused  The kernel's scopes, outermost first
-1850   spec        accepted emitted refused           One scope gives one name to one thing
+1850   spec        accepted emitted executed refused  One scope gives one name to one thing
 1860   spec        refused                            A name that names nothing is refused
 1870   spec        accepted emitted executed refused  The kernel's types, and what each of them holds
 1880   spec        accepted emitted executed refused  Where a literal's type comes from, and what a context is

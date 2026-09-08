@@ -104,8 +104,6 @@ package Landin.Diagnostics.Syntactic is
       --  construction.  [0720]'s all-`of` spelling remains outside [1810]'s
       --  enabled expression grammar.
       Struct_All_Of,
-      Import_Alias,
-      Selected_Import,
       --  D191 recognises [0820]'s lexical arena block by its shape.  The
       --  word is not reserved and names a library type today, so only a
       --  statement-position `arena name do` is this construct.
@@ -125,8 +123,6 @@ package Landin.Diagnostics.Syntactic is
             when Array_Repetition     => "[0560]",
             when Indexing             => "[0570]",
             when Struct_All_Of         => "[0720]",
-            when Import_Alias          => "[1430]",
-            when Selected_Import       => "[1440]",
             when Arena_Block           => "[0820]")
      with Post => Landin.Tokens.Is_Valid_Construct (Construct'Result);
 
@@ -166,8 +162,6 @@ private
                | Array_Repetition
                | Indexing
                | Struct_All_Of         => "R2.20",
-            when Import_Alias
-               | Selected_Import       => "R4.30",
             --  D196 transfers D191's complete region questions to the
             --  derived hosted application, before the hosted parity gate.
             when Arena_Block           => "R4.80",

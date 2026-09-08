@@ -2026,6 +2026,8 @@ package body Landin.Tests.Parser_Suite is
           ("imports.ldn",
            "import core/map" & ASCII.LF
            & "import io" & ASCII.LF
+           & "import core/map as maps" & ASCII.LF
+           & "import core/map (get, put)" & ASCII.LF
            & "value: u8 = 1" & ASCII.LF);
    begin
       Landin.Tokens.Lexer.Lex (Sources.Get (Id), Names, Stream);
@@ -2041,7 +2043,7 @@ package body Landin.Tests.Parser_Suite is
            (Item, Landin.Diagnostics.Count (Found), 0,
             "plain imports are accepted");
          Landin.Testing.Check_Equal
-           (Item, Landin.Syntax.Import_Count (Parsed), 2,
+           (Item, Landin.Syntax.Import_Count (Parsed), 4,
             "imports are retained apart from declarations");
          Landin.Testing.Check_Equal
            (Item, Landin.Syntax.Declaration_Count (Parsed), 1,
@@ -2064,6 +2066,31 @@ package body Landin.Tests.Parser_Suite is
                   Landin.Syntax.Nth_Import_Segment (Parsed, First, 2)))
               = "map",
             "the logical path spelling is stable");
+         declare
+            Alias_Node : constant Landin.Syntax.Node_Id :=
+              Landin.Syntax.Nth_Import (Parsed, 3);
+            Selected : constant Landin.Syntax.Node_Id :=
+              Landin.Syntax.Nth_Import (Parsed, 4);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Landin.Syntax.Import_Segment_Count (Parsed, Alias_Node),
+               2, "alias suffix does not enter the module path");
+            Landin.Testing.Check
+              (Item, Landin.Source.Names.Spelling
+                 (Names, Landin.Syntax.Name
+                    (Parsed, Landin.Syntax.Import_Alias_Of
+                       (Parsed, Alias_Node))) = "maps",
+               "the written alias has its own node");
+            Landin.Testing.Check_Equal
+              (Item, Landin.Syntax.Import_Selection_Count (Parsed, Selected),
+               2, "the selected list retains every member");
+            Landin.Testing.Check
+              (Item, Landin.Source.Names.Spelling
+                 (Names, Landin.Syntax.Name
+                    (Parsed, Landin.Syntax.Nth_Import_Selection
+                       (Parsed, Selected, 2))) = "put",
+               "selected names preserve source order");
+         end;
       end;
 
       declare
@@ -2076,22 +2103,65 @@ package body Landin.Tests.Parser_Suite is
            ("import core/map as maps" & ASCII.LF,
             Codes, Total, Nodes, Held);
          Landin.Testing.Check
-           (Item, Held and then Total = 1
-             and then Unbounded.To_String (Codes) = "L0010",
-            "an import alias is one named deferred construct");
+           (Item, Held and then Total = 0,
+            "an import alias is accepted");
 
          Read_And_Parse
            ("import core/map (get)" & ASCII.LF,
             Codes, Total, Nodes, Held);
          Landin.Testing.Check
-           (Item, Held and then Total = 1
-             and then Unbounded.To_String (Codes) = "L0010",
-            "a selected import is one named deferred construct");
+           (Item, Held and then Total = 0,
+            "a selected import is accepted");
       end;
    end Imports_Are_A_File_Prelude;
 
+   procedure Import_And_Directive_Syntax_Boundaries
+     (Item : in out Landin.Testing.Context);
+
+   procedure Import_And_Directive_Syntax_Boundaries
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check (Text : String; Accepted : Boolean);
+      procedure Check (Text : String; Accepted : Boolean) is
+         Codes : Unbounded.Unbounded_String;
+         Total, Nodes : Natural;
+         Held : Boolean;
+      begin
+         Read_And_Parse (Text & ASCII.LF, Codes, Total, Nodes, Held);
+         Landin.Testing.Check
+           (Item, Held and then (Total = 0) = Accepted,
+            "syntax boundary: " & Text & " reports "
+            & Unbounded.To_String (Codes));
+      end Check;
+   begin
+      Check ("import lib" & ASCII.LF & "as: i32 = 1", True);
+      Check ("import lib ()", False);
+      Check ("import lib (*)", False);
+      Check ("import lib (a,)", False);
+      Check ("import lib as x (a)", False);
+      Check ("import lib (a as x)", False);
+      Check ("import lib (a) as x", False);
+      Check ("f: () -> none = end f" & ASCII.LF & "import lib", False);
+      Check ("option count: u32 = 2", True);
+      Check ("option: u32 = 2", True);
+      Check ("option count := 2", False);
+      Check ("option count: u32", False);
+      Check ("public option count: u32 = 2", False);
+      Check ("compiler.assert(true)", True);
+      Check ("compiler.assert(value: true)", False);
+      Check ("compiler.assert(true) + 1", False);
+      Check ("compiler.nested.assert(true)", False);
+      Check ("compiler.assert(true) else false", False);
+      Check ("public compiler.assert(true)", False);
+      Check ("fixed if true then compiler.assert(true)"
+             & ASCII.LF & "else compiler.assert(false) end if", True);
+   end Import_And_Directive_Syntax_Boundaries;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "parser", "import and directive syntax boundaries",
+         Import_And_Directive_Syntax_Boundaries'Access);
       Landin.Testing.Register
         (Into, "parser", "agrees with the corpus",
          Agrees_With_The_Corpus'Access);

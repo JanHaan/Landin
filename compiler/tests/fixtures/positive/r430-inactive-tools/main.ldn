@@ -1,0 +1,11 @@
+fixed if false then
+    compiler.assert(false)
+    linker.library(user_code())
+    assembler.block("unavailable")
+else
+    compiler.assert(sizeof u8 == 1)
+    compiler.assert(alignof usize == sizeof usize)
+end if
+value: i32 = 42
+compiler.assert(true or (1 / 0 == 0))
+compiler.assert(not (false and (1 / 0 == 0)))

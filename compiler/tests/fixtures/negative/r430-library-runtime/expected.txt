@@ -1,0 +1,6 @@
+error[L0305]: linker.library needs a fixed text literal
+  --> ../tests/fixtures/negative/r430-library-runtime/main.ldn:1:16
+  |
+1 | linker.library(user_code())
+  |                ^^^^^^^^^^^
+  = note: [1590]/D202: linker.library takes one quoted library name

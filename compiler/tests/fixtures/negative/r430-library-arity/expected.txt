@@ -1,0 +1,6 @@
+error[L0305]: this tool directive needs one fixed argument
+  --> ../tests/fixtures/negative/r430-library-arity/main.ldn:1:1
+  |
+1 | linker.library("m", "other")
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: D202: linker.library takes exactly one positional argument

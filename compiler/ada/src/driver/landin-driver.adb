@@ -1,12 +1,15 @@
 with Ada.Exceptions;
 with Ada.Containers.Vectors;
+with Ada.Strings.Fixed;
 
 with Landin.Backend.Entry_Point;
 with Landin.Backend.Toolchain;
 with Landin.Backend.X86_64;
+with Landin.Configuration;
 with Landin.Diagnostics;
 with Landin.Diagnostics.Catalogue;
 with Landin.Diagnostics.Modules;
+with Landin.Diagnostics.Resolution;
 with Landin.IR;
 with Landin.Modules;
 with Landin.Resolution;
@@ -98,6 +101,8 @@ package body Landin.Driver is
       & "  --help              print this text" & LF
       & "  --identify          print tool identity" & LF
       & "  --target=NAME       select a described target" & LF
+      & "  --option=NAME=VALUE set a declared fixed build option" & LF
+      & "  --build-mode=NAME   debug (default) or release" & LF
       & "  --root=DIR          append an ordered module import root" & LF
       & "  --emit=asm|exe      write assembly, or assemble and link" & LF
       & "  -o PATH             where to write it" & LF
@@ -140,6 +145,8 @@ package body Landin.Driver is
       Facts    : Landin.Targets.Target_Facts := Landin.Targets.Linux_X86_64;
       Inputs   : Landin.Platform.Path_List;
       Roots    : Landin.Platform.Path_List;
+      Options  : Landin.Platform.Path_List;
+      Modes    : Landin.Platform.Path_List;
       Result   : Outcome;
       Bad_Use  : Boolean := False;
       Unknowns : Landin.Platform.Path_List;
@@ -180,6 +187,12 @@ package body Landin.Driver is
 
             elsif Starts_With (Argument, "--target=") then
                Targets.Append (After (Argument, "--target="));
+
+            elsif Starts_With (Argument, "--option=") then
+               Options.Append (After (Argument, "--option="));
+
+            elsif Starts_With (Argument, "--build-mode=") then
+               Modes.Append (After (Argument, "--build-mode="));
 
             elsif Starts_With (Argument, "--root=") then
                Roots.Append (After (Argument, "--root="));
@@ -538,7 +551,32 @@ package body Landin.Driver is
                                 Landin.Modules.Find_Logical
                                   (Graph.all, Logical);
                            begin
-                              if Target = Landin.Modules.No_Module then
+                              --  Rooted discovery refuses builtins before
+                              --  any host lookup. Configuration shares this
+                              --  predicate for explicit-file requests.
+                              if Landin.Configuration.Is_Builtin_Import
+                                (Landin.Stages.Identities (Context).all,
+                                 Tree.all, Import_Node)
+                              then
+                                 declare
+                                    Found : Landin.Diagnostics.Diagnostic_List;
+                                 begin
+                                    Landin.Diagnostics.Resolution.Report
+                                      (Item => Landin.Diagnostics.Resolution
+                                         .Reserved_Tool_Name,
+                                       Source => Source_Id,
+                                       Where => Landin.Syntax.Where
+                                         (Tree.all, Import_Node),
+                                       Message => "builtin module cannot be"
+                                         & " explicitly imported: " & Logical,
+                                       Note => "[1560]: compiler, assembler"
+                                         & " and linker are in scope"
+                                         & " without imports",
+                                       Into => Found);
+                                    Landin.Stages.Report (Context,
+                                      Landin.Diagnostics.Get (Found, 1));
+                                 end;
+                              elsif Target = Landin.Modules.No_Module then
                                  declare
                                     Selected_Root : Natural;
                                     Directory_Path : constant String :=
@@ -747,6 +785,7 @@ package body Landin.Driver is
                   then Unbounded.To_String (Output)
                   else Default_Executable);
                Ran : Landin.Platform.Tool_Result;
+               Libraries : Landin.Platform.Path_List;
             begin
                if Driver = "" then
                   Note_No_Toolchain
@@ -755,6 +794,13 @@ package body Landin.Driver is
                      "name one with --toolchain=NAME");
                   return;
                end if;
+
+               for Index in 1 .. Landin.Configuration.Library_Count
+                 (Landin.Stages.Configurations (Context).all)
+               loop
+                  Libraries.Append (Landin.Configuration.Library_Name
+                    (Landin.Stages.Configurations (Context).all, Index));
+               end loop;
 
                --  A tool that cannot be started at all is the platform
                --  interface's own distinction, and it is exactly the one a
@@ -770,7 +816,8 @@ package body Landin.Driver is
                          (Assembly => Assembly_Path,
                           Output   => Target_Path,
                           Linker   => Unbounded.To_String (Linker),
-                          Build_Id => Unbounded.To_String (Map_Id)),
+                          Build_Id => Unbounded.To_String (Map_Id),
+                          Libraries => Libraries),
                      Result    => Ran,
                      Capture   => Landin.Platform.Merged);
                exception
@@ -820,6 +867,63 @@ package body Landin.Driver is
          end Emit_Requested;
 
       begin
+         for Mode of Modes loop
+            if Natural (Modes.Length) /= 1
+              or else Mode not in "debug" | "release"
+            then
+               Bad_Use := True;
+               Note_Failure
+                 (Code_Unknown_Option,
+                  "--build-mode needs one debug or release value");
+               exit;
+            end if;
+            Landin.Configuration.Set_Mode
+              (Landin.Stages.Configurations (Context).all,
+               (if Mode = "debug" then Landin.Configuration.Debug
+                else Landin.Configuration.Release));
+         end loop;
+         for Option of Options loop
+            declare
+               Separator : constant Natural :=
+                 Ada.Strings.Fixed.Index (Option, "=");
+               Valid : Boolean := Separator > Option'First
+                 and then Separator < Option'Last;
+               Config : constant not null access Landin.Configuration.Table :=
+                 Landin.Stages.Configurations (Context);
+            begin
+               if Valid then
+                  for Index in Option'First .. Separator - 1 loop
+                     if Option (Index) not in 'a' .. 'z' | '_'
+                       and then (Index = Option'First
+                                 or else Option (Index) not in '0' .. '9')
+                     then
+                        Valid := False;
+                     end if;
+                  end loop;
+                  for Index in 1 .. Landin.Configuration.Override_Count
+                    (Config.all)
+                  loop
+                     if Landin.Configuration.Override_Name
+                       (Config.all, Index) = Option
+                         (Option'First .. Separator - 1)
+                     then
+                        Valid := False;
+                     end if;
+                  end loop;
+               end if;
+               if Valid then
+                  Landin.Configuration.Add_Override
+                    (Config.all, Option (Option'First .. Separator - 1),
+                     Option (Separator + 1 .. Option'Last));
+               else
+                  Bad_Use := True;
+                  Note_Failure
+                    (Code_Unknown_Option,
+                     "invalid or repeated build option: " & Option);
+               end if;
+            end;
+         end loop;
+
          for Name of Rejected loop
             Note_Failure (Code_Unknown_Target, "unknown target: " & Name);
          end loop;

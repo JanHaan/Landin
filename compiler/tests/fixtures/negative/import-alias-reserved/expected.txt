@@ -1,0 +1,6 @@
+error[L0203]: `linker` is reserved for the toolchain namespace
+  --> ../tests/fixtures/negative/import-alias-reserved/entry/main.ldn:1:15
+  |
+1 | import lib as linker
+  |               ^^^^^^
+  = note: [1480] [1560]: bare tool namespaces cannot be rebound

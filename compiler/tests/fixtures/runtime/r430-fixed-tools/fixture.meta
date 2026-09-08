@@ -1,0 +1,6 @@
+class: runtime
+summary: D202 selected tool configuration emits only the accepted whole-program declarations
+program: main.ldn
+constructs: 1500, 1510, 1530, 1540, 1560
+targets: linux-x86-64
+status: 42

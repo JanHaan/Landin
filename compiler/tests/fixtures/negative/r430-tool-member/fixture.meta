@@ -1,0 +1,9 @@
+class: negative
+summary: An unknown directive names the actual member
+program: main.ldn
+codes: L0203
+constructs: 1560
+targets: linux-x86-64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/r430-tool-member/main.ldn
+status: 1

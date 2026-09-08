@@ -4498,7 +4498,8 @@ def check_highlight_vocabulary(full_run):
     keyword of the `keyword` production or a scalar of `scalar_name` that
     a highlighter does not know is a word the pages show in the wrong
     face.  The tree-sitter `reserved` list is a transcription of the
-    keyword production and is held to it exactly (R4.21).
+    keyword production and is held to it exactly (R4.21). R4.30's tool
+    namespaces agree with the shared vocabulary and structural grammar.
     """
     if not full_run:
         return []
@@ -4518,7 +4519,7 @@ def check_highlight_vocabulary(full_run):
     shared_text = io.open(shared, encoding="utf-8").read()
 
     def block(name):
-        found = re.search(r"^%s = \{(.*?)^\}" % name, shared_text,
+        found = re.search(r"^%s = \{(.*?)\}" % name, shared_text,
                           re.S | re.M)
         return set(re.findall(r'"([a-z0-9]+)"', found.group(1))) if found \
             else set()
@@ -4536,6 +4537,18 @@ def check_highlight_vocabulary(full_run):
                     " not colour: %s" % " ".join(lost)))
 
     grammar_text = io.open(grammar, encoding="utf-8").read()
+    tools = set(re.findall(r'"([a-z]+)"', rules.get("tool_namespace", "")))
+    if tools != block("BUILTIN_MODULES"):
+        out.append((shared, 1,
+                    "builtin modules differ from the tool_namespace"
+                    " grammar production"))
+    tool_rule = re.search(r"field\('module', choice\((.*?)\)\)",
+                          grammar_text, re.S)
+    if not tool_rule or tools != set(re.findall(r"'([a-z]+)'",
+                                                tool_rule.group(1))):
+        out.append((grammar, 1,
+                    "tool directive namespaces differ from the"
+                    " tool_namespace grammar production"))
     reserved = re.search(r"reserved:\s*\{\s*global:\s*\$\s*=>\s*\[(.*?)\]",
                          grammar_text, re.S)
     if not reserved:

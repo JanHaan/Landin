@@ -1,0 +1,6 @@
+error[L0203]: `compiler` is reserved for the toolchain namespace
+  --> ../tests/fixtures/negative/import-selected-reserved/entry/main.ldn:1:13
+  |
+1 | import lib (compiler)
+  |             ^^^^^^^^
+  = note: [1480] [1560]: bare tool namespaces cannot be rebound

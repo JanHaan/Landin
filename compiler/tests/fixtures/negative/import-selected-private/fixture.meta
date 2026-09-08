@@ -1,0 +1,8 @@
+class: negative
+summary: D201 import selected private is refused at the source binding or use
+expect: expected.txt
+args: --root=../tests/fixtures/negative/import-selected-private/root ../tests/fixtures/negative/import-selected-private/entry
+codes: L0202
+status: 1
+constructs: 1440, 1450, 1410
+targets: linux-x86-64, macos-arm64, synthetic-32

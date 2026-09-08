@@ -1,0 +1,7 @@
+class: runtime
+summary: aliases and selected imports preserve declaration identities across generic types, concepts, errors, cases and mutable storage in a rooted whole program
+program: main.ldn
+root: root
+status: 42
+constructs: 1430, 1440, 1450, 1480, 1840, 1850
+targets: linux-x86-64

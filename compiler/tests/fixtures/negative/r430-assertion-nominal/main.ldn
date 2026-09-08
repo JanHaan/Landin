@@ -1,0 +1,4 @@
+thing: type = struct
+    value: i32
+end thing
+compiler.assert(sizeof thing == 4)

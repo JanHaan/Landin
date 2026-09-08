@@ -1,0 +1,4 @@
+import lib
+as: i32 = 2
+lib: i32 = 2
+public main: () -> (code: i32) = lib.answer + lib + as - 2 end main

@@ -1,0 +1,2 @@
+option count: i32 = 1
+f: () -> (value: i32) = count end f

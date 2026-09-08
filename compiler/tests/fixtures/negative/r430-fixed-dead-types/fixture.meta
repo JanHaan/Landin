@@ -1,0 +1,9 @@
+class: negative
+summary: D202 checks dead operand types without executing their arithmetic
+program: main.ldn
+codes: L0301, L0301
+constructs: 1500, 1510, 1530, 1540
+targets: linux-x86-64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/r430-fixed-dead-types/main.ldn
+status: 1

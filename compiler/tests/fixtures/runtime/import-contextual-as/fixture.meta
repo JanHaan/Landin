@@ -1,0 +1,7 @@
+class: runtime
+summary: contextual as remains a declaration after an import and namespace qualification shadows only qualified module lookup
+program: main.ldn
+root: root
+status: 42
+constructs: 1420, 1430, 1450, 1840
+targets: linux-x86-64

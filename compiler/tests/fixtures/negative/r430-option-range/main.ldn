@@ -1,0 +1,3 @@
+option count: u8 = 256
+option small: u8 = 255
+option next: u8 = small + 1

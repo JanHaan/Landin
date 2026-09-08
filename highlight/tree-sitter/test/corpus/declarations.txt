@@ -3,6 +3,8 @@ Declarations
 ==================
 
 import core/io
+import net/http as h
+import core/sort (sort, ordered)
 
 ready, stopped : atom
 public count : u32 = 1
@@ -20,6 +22,18 @@ end add
 (source_file
   (import_declaration
     (import_path
+      (identifier)
+      (identifier)))
+  (import_declaration
+    (import_path
+      (identifier)
+      (identifier))
+    alias: (identifier))
+  (import_declaration
+    (import_path
+      (identifier)
+      (identifier))
+    (identifier_list
       (identifier)
       (identifier)))
   (public_declaration
@@ -92,3 +106,149 @@ end add
                               (indexed_expression
                                 (identifier))))))))))))))
       end_name: (identifier))))
+
+==================
+Hosted tool configuration
+==================
+
+option logging: bool = true
+compiler.assert(sizeof usize == 8)
+fixed if logging then
+    linker.library("m")
+end if
+as: u32 = 1
+option: u32 = 2
+
+---
+
+(source_file
+  (option_declaration
+    (identifier)
+    (scalar_type)
+    (logical_or_expression
+      (logical_and_expression
+        (comparison_expression
+          (alternation_expression
+            (exclusion_expression
+              (conjunction_expression
+                (shift_expression
+                  (sum_expression
+                    (product_expression
+                      (unary_expression
+                        (literal
+                          (boolean_literal)))))))))))))
+  (tool_directive
+    (identifier)
+    (arguments
+      (logical_or_expression
+        (logical_and_expression
+          (comparison_expression
+            (alternation_expression
+              (exclusion_expression
+                (conjunction_expression
+                  (shift_expression
+                    (sum_expression
+                      (product_expression
+                        (unary_expression
+                          (measurement_expression
+                            (scalar_type)))))))))
+            (alternation_expression
+              (exclusion_expression
+                (conjunction_expression
+                  (shift_expression
+                    (sum_expression
+                      (product_expression
+                        (unary_expression
+                          (literal
+                            (integer_literal))))))))))))))
+  (fixed_conditional
+    (logical_or_expression
+      (logical_and_expression
+        (comparison_expression
+          (alternation_expression
+            (exclusion_expression
+              (conjunction_expression
+                (shift_expression
+                  (sum_expression
+                    (product_expression
+                      (unary_expression
+                        (indexed_expression
+                          (identifier))))))))))))
+    (tool_directive
+      (identifier)
+      (arguments
+        (logical_or_expression
+          (logical_and_expression
+            (comparison_expression
+              (alternation_expression
+                (exclusion_expression
+                  (conjunction_expression
+                    (shift_expression
+                      (sum_expression
+                        (product_expression
+                          (unary_expression
+                            (literal
+                              (text_literal)))))))))))))))
+  (public_declaration
+    (binding
+      (identifier)
+      (scalar_type)
+      (logical_or_expression
+        (logical_and_expression
+          (comparison_expression
+            (alternation_expression
+              (exclusion_expression
+                (conjunction_expression
+                  (shift_expression
+                    (sum_expression
+                      (product_expression
+                        (unary_expression
+                          (literal
+                            (integer_literal))))))))))))))
+  (public_declaration
+    (binding
+      (identifier)
+      (scalar_type)
+      (logical_or_expression
+        (logical_and_expression
+          (comparison_expression
+            (alternation_expression
+              (exclusion_expression
+                (conjunction_expression
+                  (shift_expression
+                    (sum_expression
+                      (product_expression
+                        (unary_expression
+                          (literal
+                            (integer_literal)))))))))))))))
+
+==================
+Contextual alias word after plain import
+==================
+
+import core/text
+as: u32 = 0
+
+---
+
+(source_file
+  (import_declaration
+    (import_path
+      (identifier)
+      (identifier)))
+  (public_declaration
+    (binding
+      (identifier)
+      (scalar_type)
+      (logical_or_expression
+        (logical_and_expression
+          (comparison_expression
+            (alternation_expression
+              (exclusion_expression
+                (conjunction_expression
+                  (shift_expression
+                    (sum_expression
+                      (product_expression
+                        (unary_expression
+                          (literal
+                            (integer_literal)))))))))))))))

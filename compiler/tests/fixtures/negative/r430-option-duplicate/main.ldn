@@ -1,0 +1,2 @@
+option count: u32 = 1
+option count: u32 = 2

@@ -1,0 +1,14 @@
+option count: u32 = 41
+option next: u32 = count + 1
+compiler.assert(next == 42)
+compiler.assert(compiler.arch == x86_64)
+compiler.assert(compiler.word_size == 8 * sizeof usize)
+fixed if next == 42 then
+    public main: () -> (code: i32) =
+        code = 42
+    end main
+else
+    public main: () -> (code: i32) =
+        code = 1
+    end main
+end if

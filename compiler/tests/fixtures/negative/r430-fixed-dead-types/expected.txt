@@ -1,0 +1,20 @@
+error[L0301]: fixed expression operands have incompatible types
+  --> ../tests/fixtures/negative/r430-fixed-dead-types/main.ldn:1:32
+  |
+1 | option wrong: bool = false and 123
+  |                                ^^^
+  --> ../tests/fixtures/negative/r430-fixed-dead-types/main.ldn:1:22
+  |
+1 | option wrong: bool = false and 123
+  |                      ^^^^^ the other operand of this fixed operator
+  = note: D202: fixed operands must have the types required by their operator or declaration
+error[L0301]: fixed expression operands have incompatible types
+  --> ../tests/fixtures/negative/r430-fixed-dead-types/main.ldn:2:30
+  |
+2 | compiler.assert(true or (1 + false == 2))
+  |                              ^^^^^
+  --> ../tests/fixtures/negative/r430-fixed-dead-types/main.ldn:2:26
+  |
+2 | compiler.assert(true or (1 + false == 2))
+  |                          ^ the other operand of this fixed operator
+  = note: D202: fixed operands must have the types required by their operator or declaration

@@ -8,6 +8,12 @@
 --  and still puts the instructions in the wrong scope, and only R4.60 would
 --  ever notice.
 
+with Ada.Strings.Fixed;
+with Ada.Strings.Unbounded;
+
+with Landin.Driver;
+with Landin.Platform;
+with Landin.Testing.Fakes;
 with Landin.Resolution;
 with Landin.Source;
 with Landin.Stages.Checking;
@@ -748,8 +754,212 @@ package body Landin.Tests.Resolution_Suite is
       Landin.Testing.Check_Equal (Item, Cases, 1, "one case construction");
    end Labeled_Applications_Are_Classified_Callee_First;
 
+   --  D201 end-to-end cases use the fake host; source membership, roots,
+   --  checking, lowering and emission follow the actual driver path.
+   procedure Import_Bindings_Preserve_Identity
+     (Item : in out Landin.Testing.Context);
+
+   procedure Import_Bindings_Preserve_Identity
+     (Item : in out Landin.Testing.Context)
+   is
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Args : Landin.Platform.Path_List;
+   begin
+      Host.Add_Directory ("entry");
+      Host.Add_Directory ("root");
+      Host.Add_Directory ("root/lib");
+      Host.Add_Directory ("later");
+      Host.Add_Directory ("later/lib");
+      Host.Add_File ("later/lib/wrong.ldn", "invalid later root");
+      Host.Add_File
+        ("root/lib/library.ldn",
+         "public number: type = i32" & LF
+         & "public cell: type (item: type) = struct" & LF
+         & "    value: item" & LF
+         & "end cell" & LF
+         & "public marked: type = concept (item: type)" & LF
+         & "end marked" & LF
+         & "i32 is marked ()" & LF
+         & "public absent, denied: atom" & LF
+         & "public problems: type = absent | denied" & LF
+         & "public choice: type = struct" & LF
+         & "    kind: variant" & LF
+         & "        empty |" & LF
+         & "        full: (value: i32)" & LF
+         & "    end kind" & LF
+         & "end choice" & LF
+         & "public mut counter: i32 = 1" & LF
+         & "public answer: i32 = 40" & LF
+         & "public identity: (item: type is marked, value: item)"
+         & " -> (result: item) =" & LF
+         & "    result = value" & LF
+         & "end identity" & LF
+         & "public work: (value: number) -> (result: number) ! problems =" & LF
+         & "    fail absent when value < 0" & LF
+         & "    result = value" & LF
+         & "end work" & LF
+         & "hidden: type = struct" & LF
+         & "    secret: i32" & LF
+         & "end hidden" & LF
+         & "public opaque: type = hidden" & LF
+         & "public reveal: () -> (value: opaque) =" & LF
+         & "    value = (secret: 7)" & LF
+         & "end reveal" & LF
+         & "private_value: i32 = 7" & LF);
+      Host.Add_File
+        ("entry/main.ldn",
+         "import lib as qualified" & LF
+         & "import lib (number, cell, marked, absent, problems,"
+         & " choice, empty, full," & LF
+         & "            counter, answer, identity, work)" & LF
+         & "as: i32 = 0" & LF
+         & "qualified: i32 = 2" & LF
+         & "answer: i32 = 99" & LF
+         & "forward: (item: type is marked, value: item) ->"
+         & " (result: item) =" & LF
+         & "    result = identity(value)" & LF
+         & "end forward" & LF
+         & "fallible: (value: number) -> (result: number) ! problems =" & LF
+         & "    result = try work(value)" & LF
+         & "end fallible" & LF
+         & "shadow: (answer: i32) -> (result: i32) = answer end shadow" & LF
+         & "public main: () -> (code: i32) =" & LF
+         & "    original: cell(number) = (value: forward(answer))" & LF
+         & "    selected: choice = choice(kind: full(value:"
+         & " original.value))" & LF
+         & "    counter = counter + 1" & LF
+         & "    caught := fallible(-1) else (problem)" & LF
+         & "        match problem" & LF
+         & "            absent: 0" & LF
+         & "            _: 1" & LF
+         & "        end match" & LF
+         & "    end" & LF
+         & "    if qualified.counter <> 2 or qualified <> 2" & LF
+         & "       or sibling() <> 99 or shadow(3) <> 3 or"
+         & " caught <> 0 then" & LF
+         & "        code = 1" & LF
+         & "    else" & LF
+         & "        code = match selected.kind" & LF
+         & "            empty: 0" & LF
+         & "            full: original.value + counter" & LF
+         & "        end match" & LF
+         & "    end if" & LF
+         & "end main" & LF);
+      Host.Add_File
+        ("entry/sibling.ldn",
+         "sibling: () -> (value: i32) = answer end sibling" & LF);
+      Args.Append ("--root=root");
+      Args.Append ("--root=later");
+      Args.Append ("--emit=asm");
+      Args.Append ("entry");
+      declare
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute (Args, Host, Tools);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Landin.Driver.Status_Success,
+            "all selected declaration positions emit: "
+            & Ada.Strings.Unbounded.To_String (Result.Report));
+         Landin.Testing.Check_Equal
+           (Item, Tools.Run_Count, 0, "emission invokes no host tool");
+      end;
+   end Import_Bindings_Preserve_Identity;
+
+   procedure Import_Scopes_And_Refusals
+     (Item : in out Landin.Testing.Context);
+
+   procedure Import_Scopes_And_Refusals
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check
+        (Source, Expected : String; Sibling : String := "";
+         Library : String := "public answer: i32 = 42" & LF);
+
+      procedure Check
+        (Source, Expected : String; Sibling : String := "";
+         Library : String := "public answer: i32 = 42" & LF)
+      is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : Landin.Platform.Path_List;
+      begin
+         Host.Add_Directory ("entry");
+         Host.Add_Directory ("root");
+         Host.Add_Directory ("root/lib");
+         Host.Add_Directory ("root/other");
+         Host.Add_File
+           ("root/other/other.ldn", "public borrowed: i32 = 1" & LF);
+         Host.Add_File ("entry/main.ldn", Source & LF);
+         Host.Add_File ("entry/sibling.ldn", Sibling & LF);
+         Host.Add_File ("root/lib/library.ldn", Library & LF);
+         Args.Append ("--root=root");
+         Args.Append ("entry");
+         declare
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Driver.Execute (Args, Host, Tools);
+            Report : constant String :=
+              Ada.Strings.Unbounded.To_String (Result.Report);
+         begin
+            Landin.Testing.Check
+              (Item,
+               (if Expected = "" then Result.Status = 0
+                else Result.Status = 1 and then
+                  Ada.Strings.Fixed.Index (Report, Expected) > 0),
+               "import scope verdict " & Expected & ": " & Report);
+         end;
+      end Check;
+   begin
+      Check
+        ("import lib" & LF & "as: i32 = 2" & LF & "lib: i32 = 3" & LF
+         & "f: () -> (v: i32) = lib.answer + lib + as end f", "");
+      Check ("import lib (answer, answer)", "L0200");
+      Check ("import lib as answer" & LF & "import lib (answer)", "L0200");
+      Check ("import lib (answer)" & LF & "import lib as answer", "L0200");
+      Check ("import lib (answer)", "",
+             Library => "import lib as self" & LF
+                        & "public answer: i32 = 42");
+      Check ("import lib (borrowed)", "L0201",
+             Library => "import other (borrowed)" & LF
+                        & "public answer: i32 = 42");
+      Check ("import lib (missing)", "L0201");
+      Check ("import lib (answer)", "L0202", Library => "answer: i32 = 2");
+      Check ("import lib (answer)", "L0201",
+             Sibling => "f: () -> (v: i32) = answer end f");
+      Check ("import lib as renamed", "L0201",
+             Sibling => "f: () -> (v: i32) = renamed.answer end f");
+      Check ("import lib (answer)" & LF
+             & "f: () -> (v: i32) = lib.answer end f", "L0201");
+      Check ("import lib as renamed" & LF
+             & "f: () -> (v: i32) = lib.answer end f", "L0201");
+      Check ("import lib (answer)" & LF
+             & "f: () -> none = answer = 1 end f", "L0303");
+      Check ("import lib as compiler", "L0203");
+      Check ("import lib (compiler)", "L0203");
+      Check ("compiler: i32 = 2", "L0203");
+      Check ("f: (assembler: i32) -> none = _ = assembler end f", "L0203");
+      Check ("f: () -> none = linker: i32 = 2 _ = linker end f", "L0203");
+      Check ("f: (compiler: type) -> none = end f", "L0203");
+      Check ("x: type = struct compiler: i32 end x", "");
+      Check ("option answer: i32 = 1" & LF & "answer: i32 = 2", "L0200");
+      Check ("import lib (answer)" & LF & "option answer: i32 = 1", "L0200");
+      Check ("option answer: i32 = 1" & LF
+             & "f: () -> (v: i32) = answer end f", "configuration-only");
+      Check ("option answer: i32 = 1" & LF
+             & "f: (answer: i32) -> (v: i32) = answer end f", "");
+      Check ("f: () -> none = assembler.block() end f", "R6.60");
+      Check ("f: () -> none = compiler.atomic_add() end f", "R6.30");
+      Check ("f: () -> none = compiler.assert(true) end f", "module");
+   end Import_Scopes_And_Refusals;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "resolution", "import bindings preserve identity",
+         Import_Bindings_Preserve_Identity'Access);
+      Landin.Testing.Register
+        (Into, "resolution", "import scopes and refusals",
+         Import_Scopes_And_Refusals'Access);
       Landin.Testing.Register
         (Into, "resolution", "every scope names the node that opened it",
          Every_Scope_Names_The_Node_That_Opened_It'Access);

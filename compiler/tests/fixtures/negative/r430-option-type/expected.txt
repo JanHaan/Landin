@@ -1,0 +1,6 @@
+error[L0305]: an option needs bool or an integer scalar
+  --> ../tests/fixtures/negative/r430-option-type/main.ldn:1:1
+  |
+1 | option amount: f32 = 1
+  | ^^^^^^^^^^^^^^^^^^^^^^
+  = note: [1530]/D202: only bool and enabled integer scalar names are option types
