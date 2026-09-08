@@ -12,6 +12,7 @@ with Landin.Resolution;
 with Landin.Source.Names;
 with Landin.Source;
 with Landin.Stages.Checking.Flow;
+with Landin.Stages.Folding;
 with Landin.Stages.Checking.References;
 with Landin.Syntax.Forest;
 with Landin.Syntax;
@@ -34,7 +35,6 @@ package body Landin.Stages.Checking is
    use type Landin.Syntax.Node_Kind;
    use type Landin.Tokens.Text.Problem;
    use type Landin.Tokens.Assignment_Operator;
-   use type Landin.Targets.Bit_Width;
    use type Landin.Targets.Byte_Count;
    use type Landin.Types.Type_Kind;
    use type Landin.Types.Reference_View;
@@ -25006,6 +25006,67 @@ package body Landin.Stages.Checking is
                             (Res.Declaration_Count (Meanings.all)))
                   of Boolean := [others => False];
 
+      --  R4.21: one folder for both stages.  What this stage adds is
+      --  the report when a module value is worked out from itself, which
+      --  [1940] says names nothing at all; the walk itself lives in
+      --  Landin.Stages.Folding.
+      function Snapshot_For
+        (Id : Landin.Source.Source_Id) return Landin.Source.Snapshot
+        is (Source (Context, Id));
+
+      function Float_Special_Bits_At
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Magnitude
+        is (Ty.Float_Special_Bits
+              (Ty.Float_Name (Float_Special_Type (Of_Tree, Node)),
+               (if Spelled (Syn.Name (Of_Tree, Node)) = "infinity"
+                then Ty.Infinity else Ty.Quiet_NaN)));
+
+      function Enter_Fold (Means : Res.Declaration_Id) return Boolean;
+      procedure Leave_Fold (Means : Res.Declaration_Id);
+
+      function Enter_Fold (Means : Res.Declaration_Id) return Boolean is
+         Their_Tree : constant not null access constant Syn.Tree :=
+           Tree_For (Res.Source_Of (Meanings.all, Means));
+         Theirs : constant Syn.Node_Id := Res.Node_Of (Meanings.all, Means);
+      begin
+         if Folding (Means) then
+            --  [1940]: the report names the declaration the chain came
+            --  back to, because that is the one place in it the reader
+            --  is standing.
+            Bad.Report
+              (Item    => Bad.Not_Known_At_Compile_Time,
+               Source  => Res.Source_Of (Meanings.all, Means),
+               Where   => Syn.Anchor (Their_Tree.all, Theirs),
+               Message => "the value of `"
+                          & Spelled (Syn.Name (Their_Tree.all, Theirs))
+                          & "` is worked out from itself",
+               Note    => "[1940]: a chain that comes back to where it"
+                          & " began names nothing at all",
+               Into    => Found);
+            return False;
+         end if;
+         Folding (Means) := True;
+         return True;
+      end Enter_Fold;
+
+      procedure Leave_Fold (Means : Res.Declaration_Id) is
+      begin
+         Folding (Means) := False;
+      end Leave_Fold;
+
+      package Folder is new Landin.Stages.Folding
+        (Types              => Types,
+         Meanings           => Meanings,
+         Facts              => Facts,
+         Snapshot_Of        => Snapshot_For,
+         Tree_For           => Tree_For,
+         Conversion_Target  => Conversion_Target,
+         Character_Value    => Character_Value,
+         Float_Special_Type => Float_Special_Type,
+         Float_Special_Bits => Float_Special_Bits_At,
+         Enter              => Enter_Fold,
+         Leave              => Leave_Fold);
+
       procedure Fold_Float
         (Of_Tree    : Syn.Tree;
          Node       : Syn.Node_Id;
@@ -25014,202 +25075,16 @@ package body Landin.Stages.Checking is
          Known      : out Boolean;
          Overflowed : out Boolean)
       is
+         Value : Ty.Folded;
       begin
          Bits := 0;
-         Kind := Ty.Undecided;
-         Known := False;
-         Overflowed := False;
-
-         if Node = Syn.No_Node
-           or else not Syn.Is_Sound (Of_Tree, Node)
-         then
-            return;
-         end if;
-
          Kind := Landin.Checking.Type_Of (Types.all, Of_Tree, Node);
-         case Syn.Kind (Of_Tree, Node) is
-            when Syn.Float_Literal =>
-               if Kind in Ty.Float_Name then
-                  declare
-                     Snap : constant Landin.Source.Snapshot :=
-                       Source (Context, Syn.Source_Of (Of_Tree));
-                     Text : constant String :=
-                       Landin.Source.Slice
-                         (Snap, Syn.Anchor (Of_Tree, Node));
-                  begin
-                     Ty.Evaluate_Float
-                       (Text, Ty.Float_Name (Kind), Bits, Overflowed);
-                     Known := not Overflowed;
-                  end;
-               end if;
-
-            when Syn.Member_Selection =>
-               if Float_Special_Type (Of_Tree, Node) in Ty.Float_Name then
-                  declare
-                     Special : constant Ty.Float_Special :=
-                       (if Spelled (Syn.Name (Of_Tree, Node)) = "infinity"
-                        then Ty.Infinity else Ty.Quiet_NaN);
-                  begin
-                     Kind := Float_Special_Type (Of_Tree, Node);
-                     Bits := Ty.Float_Special_Bits
-                       (Ty.Float_Name (Kind), Special);
-                     Known := True;
-                  end;
-               end if;
-
-            when Syn.Zeroed_Literal =>
-               if Kind in Ty.Float_Name then
-                  Bits := 0;
-                  Known := True;
-               end if;
-
-            when Syn.Negation =>
-               declare
-                  Under_Kind : Ty.Type_Kind;
-               begin
-                  Fold_Float
-                    (Of_Tree, Syn.Operand_Of (Of_Tree, Node), Bits,
-                     Under_Kind, Known, Overflowed);
-                  if Known and then Under_Kind in Ty.Float_Name then
-                     Bits := Ty.Negated_Float
-                       (Bits, Ty.Float_Name (Under_Kind));
-                     Kind := Under_Kind;
-                  end if;
-               end;
-
-            when Syn.Add | Syn.Subtract | Syn.Multiply | Syn.Divide =>
-               declare
-                  Left_Bits, Right_Bits : Ty.Magnitude;
-                  Left_Kind, Right_Kind : Ty.Type_Kind;
-                  Left_Known, Right_Known : Boolean;
-                  Left_Overflowed, Right_Overflowed : Boolean;
-                  Operation : constant Ty.Float_Arithmetic_Operation :=
-                    (case Syn.Kind (Of_Tree, Node) is
-                        when Syn.Add => Ty.Float_Add,
-                        when Syn.Subtract => Ty.Float_Subtract,
-                        when Syn.Multiply => Ty.Float_Multiply,
-                        when others => Ty.Float_Divide);
-               begin
-                  Fold_Float
-                    (Of_Tree, Syn.Left_Of (Of_Tree, Node), Left_Bits,
-                     Left_Kind, Left_Known, Left_Overflowed);
-                  Fold_Float
-                    (Of_Tree, Syn.Right_Of (Of_Tree, Node), Right_Bits,
-                     Right_Kind, Right_Known, Right_Overflowed);
-                  Overflowed := Left_Overflowed or else Right_Overflowed;
-                  if not Overflowed
-                    and then Left_Known and then Right_Known
-                    and then Left_Kind = Right_Kind
-                    and then Left_Kind in Ty.Float_Name
-                  then
-                     Kind := Left_Kind;
-                     Bits := Ty.Float_Arithmetic_Result
-                       (Left_Bits, Right_Bits, Ty.Float_Name (Kind),
-                        Operation);
-                     Known := True;
-                  end if;
-               end;
-
-            when Syn.Call =>
-               if Conversion_Target (Of_Tree, Node) in Ty.Float_Name then
-                  declare
-                     Under      : Ty.Magnitude;
-                     Under_Kind : Ty.Type_Kind;
-                  begin
-                     Under_Kind := Landin.Checking.Type_Of
-                       (Types.all, Of_Tree,
-                        Syn.Nth_Argument (Of_Tree, Node, 1));
-                     if Under_Kind in Ty.Integer_Name then
-                        declare
-                           Integer_Value : Ty.Folded;
-                        begin
-                           Fold
-                             (Of_Tree,
-                              Syn.Nth_Argument (Of_Tree, Node, 1), 0,
-                              Integer_Value, Known, Overflowed);
-                           if Known and then not Overflowed then
-                              Kind := Conversion_Target (Of_Tree, Node);
-                              Bits := Ty.Convert_Integer_To_Float
-                                (Integer_Value, Ty.Float_Name (Kind));
-                           end if;
-                        end;
-                     else
-                        Fold_Float
-                          (Of_Tree, Syn.Nth_Argument (Of_Tree, Node, 1),
-                           Under, Under_Kind, Known, Overflowed);
-                     end if;
-                     if Known and then not Overflowed
-                       and then Under_Kind in Ty.Float_Name
-                     then
-                        Kind := Conversion_Target (Of_Tree, Node);
-                        Ty.Convert_Float_Width
-                          (Under, Ty.Float_Name (Under_Kind),
-                           Ty.Float_Name (Kind), Bits, Overflowed);
-                        Known := not Overflowed;
-                     end if;
-                  end;
-               end if;
-
-            when Syn.Name_Reference =>
-               if Res.Verdict_Of (Meanings.all, Of_Tree, Node) = Res.Bound
-               then
-                  declare
-                     Means : constant Res.Declaration_Id :=
-                       Res.Bound_To (Meanings.all, Of_Tree, Node);
-                  begin
-                     if Res.Sort_Of (Meanings.all, Means)
-                          = Res.Module_Binding
-                     then
-                        declare
-                           Their_Tree : constant
-                             not null access constant Syn.Tree :=
-                               Tree_For
-                                 (Res.Source_Of (Meanings.all, Means));
-                           Their_Node : constant Syn.Node_Id :=
-                             Res.Node_Of (Meanings.all, Means);
-                           Their_Value : constant Syn.Node_Id :=
-                             Syn.Value_Of (Their_Tree.all, Their_Node);
-                        begin
-                           if Folding (Means) then
-                              Bad.Report
-                                (Item    => Bad.Not_Known_At_Compile_Time,
-                                 Source  =>
-                                   Res.Source_Of (Meanings.all, Means),
-                                 Where   =>
-                                   Syn.Anchor (Their_Tree.all, Their_Node),
-                                 Message => "the value of `"
-                                            & Spelled
-                                                (Syn.Name
-                                                   (Their_Tree.all,
-                                                    Their_Node))
-                                            & "` is worked out from itself",
-                                 Note    => "[1940]: a chain that comes"
-                                            & " back to where it began"
-                                            & " names nothing at all",
-                                 Into    => Found);
-                              return;
-                           end if;
-
-                           Kind := Landin.Checking.Type_Of
-                             (Types.all, Means);
-                           if Their_Value = Syn.No_Node then
-                              Bits := 0;
-                              Known := Kind in Ty.Float_Name;
-                           else
-                              Folding (Means) := True;
-                              Fold_Float
-                                (Their_Tree.all, Their_Value, Bits, Kind,
-                                 Known, Overflowed);
-                              Folding (Means) := False;
-                           end if;
-                        end;
-                     end if;
-                  end;
-               end if;
-
-            when others =>
-               null;
-         end case;
+         Folder.Fold (Of_Tree, Node, 0, Value, Known, Overflowed);
+         if Known and then Kind in Ty.Float_Name then
+            Bits := Ty.Magnitude (Value);
+         else
+            Known := False;
+         end if;
       end Fold_Float;
 
       procedure Fold
@@ -25220,715 +25095,8 @@ package body Landin.Stages.Checking is
          Known      : out Boolean;
          Overflowed : out Boolean)
       is
-         --  Guarded rather than caught, which is the rule
-         --  Landin.Types.Evaluate already keeps: a sum too wide is
-         --  entirely in the bytes being looked at.  Overflow is a
-         --  distinct outcome from "undecided": an impossible operand
-         --  arrives with Known=False and Overflowed=False for [1950], while
-         --  an Add whose sum walks past Folded arrives with Known=False and
-         --  Overflowed=True.
-         --  The two demand different diagnostics at Check_Module_Fold.
-         --
-         --  [0300]'s wrapping arithmetic answers at the target type's
-         --  own width: `u8 = 255 +% 1` is 0, and every other unsigned or
-         --  signed size wraps the same way.  So the checker asks the
-         --  node its result type and applies pattern arithmetic exactly
-         --  as the lowering and the backend's folder do -- one semantic
-         --  source for the answer bytes, three fold walks that see it.
-         type Pattern is mod 2 ** 64;
-
-         function Mask
-           (V : Pattern; Bits : Landin.Targets.Bit_Width) return Pattern
-           is (if Bits >= 64 then V
-               else V and (2 ** Natural (Bits) - 1));
-
-         function Is_Neg_Pattern
-           (V : Pattern; Bits : Landin.Targets.Bit_Width) return Boolean
-           is ((V and 2 ** (Natural (Bits) - 1)) /= 0);
-
-         function To_Pattern
-           (V : Ty.Folded; Bits : Landin.Targets.Bit_Width) return Pattern
-           is (if V < 0
-               then Mask (0 - Pattern (-V), Bits)
-               else Mask (Pattern (V), Bits));
-
-         function As_Number
-           (V : Pattern; Bits : Landin.Targets.Bit_Width;
-            Signed : Boolean) return Ty.Folded
-           is (if Signed and then Is_Neg_Pattern (V, Bits)
-               then -Ty.Folded (Mask (0 - V, Bits))
-               else Ty.Folded (V));
-
-         function Fold_Width
-           (Kind : Ty.Scalar_Name) return Landin.Targets.Bit_Width
-           is (if Kind in Ty.Integer_Name
-               then Ty.Width (Ty.Integer_Name (Kind), Facts)
-               else 8);
-
-         function Is_Signed_Type (Kind : Ty.Scalar_Name) return Boolean
-           is (Kind in Ty.Integer_Name
-               and then Ty.Is_Signed (Ty.Integer_Name (Kind)));
-
-         --  The wrapping form of an [1820] operator turned into an
-         --  answer at the argument's own width.  Wrapping never
-         --  overflows Ty.Folded because the mask bounds every pattern
-         --  before it is read back.
-         procedure Wrap_Combine
-           (Left, Right : Ty.Folded;
-            Of_Kind     : Syn.Node_Kind;
-            Bits        : Landin.Targets.Bit_Width;
-            Signed      : Boolean;
-            Answer      : out Ty.Folded);
-
-         procedure Wrap_Combine
-           (Left, Right : Ty.Folded;
-            Of_Kind     : Syn.Node_Kind;
-            Bits        : Landin.Targets.Bit_Width;
-            Signed      : Boolean;
-            Answer      : out Ty.Folded)
-         is
-            L : constant Pattern := To_Pattern (Left, Bits);
-            R : constant Pattern := To_Pattern (Right, Bits);
-         begin
-            case Of_Kind is
-               when Syn.Wrapping_Add =>
-                  Answer := As_Number (Mask (L + R, Bits), Bits, Signed);
-               when Syn.Wrapping_Subtract =>
-                  Answer := As_Number (Mask (L - R, Bits), Bits, Signed);
-               when Syn.Wrapping_Multiply =>
-                  Answer := As_Number (Mask (L * R, Bits), Bits, Signed);
-               when others =>
-                  raise Landin.Compiler_Defect with
-                    "Wrap_Combine reached with a non-wrapping opcode";
-            end case;
-         end Wrap_Combine;
-
-         procedure Combine
-           (Left, Right : Ty.Folded;
-            Of_Kind     : Syn.Node_Kind;
-            Answer      : out Ty.Folded;
-            Fits        : out Boolean;
-            Overflows   : out Boolean);
-
-         procedure Combine
-           (Left, Right : Ty.Folded;
-            Of_Kind     : Syn.Node_Kind;
-            Answer      : out Ty.Folded;
-            Fits        : out Boolean;
-            Overflows   : out Boolean) is
-         begin
-            Answer     := 0;
-            Fits       := True;
-            Overflows  := False;
-
-            case Of_Kind is
-               when Syn.Add =>
-                  Fits := (if Right > 0
-                           then Left <= Ty.Folded'Last - Right
-                           else Left >= Ty.Folded'First - Right);
-                  Overflows := not Fits;
-
-               when Syn.Subtract =>
-                  Fits := (if Right > 0
-                           then Left >= Ty.Folded'First + Right
-                           else Left <= Ty.Folded'Last + Right);
-                  Overflows := not Fits;
-
-               when Syn.Multiply =>
-                  Fits := Left = 0
-                          or else abs Right
-                                  <= Ty.Folded'Last / abs Left;
-                  Overflows := not Fits;
-
-               when Syn.Divide | Syn.Remainder =>
-                  --  Declining rather than dividing, because there is
-                  --  nothing to divide by.  Check_Operands is what turns
-                  --  this into a diagnostic: [1950] refuses a divisor the
-                  --  compiler knows is zero, and at module level [1940]'s
-                  --  whole fold is what knowing means.  Before that rule
-                  --  existed the decline was silent, and `d: u32 = 7 / 0`
-                  --  was accepted.  Divide-by-zero is not overflow --
-                  --  [1950] owns it -- so Overflows stays False.
-                  Fits := Right /= 0;
-
-               when others =>
-                  Fits := True;
-            end case;
-
-            if not Fits then
-               return;
-            end if;
-
-            case Of_Kind is
-               when Syn.Add =>
-                  Answer := Left + Right;
-
-               when Syn.Subtract =>
-                  Answer := Left - Right;
-
-               when Syn.Multiply =>
-                  Answer := Left * Right;
-
-               when Syn.Divide =>
-                  Answer := Left / Right;
-
-               when Syn.Remainder =>
-                  Answer := Left rem Right;
-
-               when others =>
-                  --  Width-dependent operators are handled by their own
-                  --  target-aware branch below rather than by this arithmetic
-                  --  helper.
-                  Fits := False;
-            end case;
-         end Combine;
       begin
-         Value      := 0;
-         Known      := False;
-         Overflowed := False;
-
-         if Node = Syn.No_Node then
-            return;
-         end if;
-
-         if not Syn.Is_Sound (Of_Tree, Node) then
-            return;
-         end if;
-
-         case Syn.Kind (Of_Tree, Node) is
-            when Syn.Integer_Literal =>
-               declare
-                  Snap : constant Landin.Source.Snapshot :=
-                    Source (Context, Syn.Source_Of (Of_Tree));
-                  Text : constant String :=
-                    Landin.Source.Slice
-                      (Snap, Syn.Digit_Span (Of_Tree, Node));
-                  Held        : Ty.Magnitude;
-                  Overflow    : Boolean;
-               begin
-                  Ty.Evaluate
-                    (Text, Syn.Base (Of_Tree, Node), Held, Overflow);
-
-                  if not Overflow then
-                     Value := Ty.Folded (Held);
-                     Known := True;
-                  else
-                     Overflowed := True;
-                  end if;
-               end;
-
-            when Syn.Character_Literal =>
-               Value := Ty.Folded (Character_Value (Of_Tree, Node));
-               Known := True;
-
-            when Syn.True_Literal =>
-               Value := 1;
-               Known := True;
-
-            when Syn.False_Literal =>
-               Value := 0;
-               Known := True;
-
-            when Syn.Negation =>
-               declare
-                  Under : Ty.Folded;
-                  Under_Overflowed : Boolean;
-               begin
-                  Fold (Of_Tree, Syn.Operand_Of (Of_Tree, Node),
-                        Depth + 1, Under, Known, Under_Overflowed);
-                  Overflowed := Under_Overflowed;
-
-                  if Known then
-                     Value := -Under;
-                  end if;
-               end;
-
-            when Syn.Call =>
-               if Conversion_Target (Of_Tree, Node) = Ty.Bool then
-                  declare
-                     Operand : constant Syn.Node_Id :=
-                       Syn.Nth_Argument (Of_Tree, Node, 1);
-                     Got : constant Ty.Type_Kind :=
-                       Landin.Checking.Type_Of
-                         (Types.all, Of_Tree, Operand);
-                  begin
-                     if Got in Ty.Float_Name then
-                        declare
-                           Bits : Ty.Magnitude;
-                           Kind : Ty.Type_Kind;
-                        begin
-                           Fold_Float
-                             (Of_Tree, Operand, Bits, Kind, Known,
-                              Overflowed);
-                           if Known then
-                              Ty.Convert_Float_To_Bool
-                                (Bits, Ty.Float_Name (Kind), Value,
-                                 Overflowed);
-                           end if;
-                        end;
-                     else
-                        Fold
-                          (Of_Tree, Operand, Depth + 1, Value, Known,
-                           Overflowed);
-                     end if;
-                  end;
-               elsif Conversion_Target (Of_Tree, Node) in Ty.Integer_Name then
-                  declare
-                     Operand : constant Syn.Node_Id :=
-                       Syn.Nth_Argument (Of_Tree, Node, 1);
-                     Target : constant Ty.Integer_Name :=
-                       Ty.Integer_Name (Conversion_Target (Of_Tree, Node));
-                  begin
-                     if Landin.Checking.Type_Of
-                          (Types.all, Of_Tree, Operand) in Ty.Float_Name
-                     then
-                        declare
-                           Bits : Ty.Magnitude;
-                           Kind : Ty.Type_Kind;
-                        begin
-                           Fold_Float
-                             (Of_Tree, Operand, Bits, Kind, Known,
-                              Overflowed);
-                           if Known then
-                              Ty.Convert_Float_To_Integer
-                                (Bits, Ty.Float_Name (Kind), Target, Facts,
-                                 Value, Overflowed);
-                           end if;
-                        end;
-                     else
-                        Fold
-                          (Of_Tree, Operand, Depth + 1, Value, Known,
-                           Overflowed);
-                     end if;
-                  end;
-               end if;
-
-            when Syn.Name_Reference =>
-               --  [1940]: a name bound to a module binding whose value is
-               --  known is itself known.
-               if Res.Verdict_Of (Meanings.all, Of_Tree, Node) = Res.Bound
-               then
-                  declare
-                     Means : constant Res.Declaration_Id :=
-                       Res.Bound_To (Meanings.all, Of_Tree, Node);
-                  begin
-                     if Res.Sort_Of (Meanings.all, Means)
-                        = Res.Module_Binding
-                     then
-                        declare
-                           Their_Tree : constant
-                             not null access constant Syn.Tree :=
-                               Tree_For
-                                 (Res.Source_Of (Meanings.all, Means));
-                           Theirs : constant Syn.Node_Id :=
-                             Res.Node_Of (Meanings.all, Means);
-                           Their_Value : constant Syn.Node_Id :=
-                             Syn.Value_Of (Their_Tree.all, Theirs);
-                        begin
-                           --  D10 gives an omitted module scalar its zero
-                           --  image.  It is as compile-time-known here as it
-                           --  is in lowering and in the backend.
-                           if Their_Value = Syn.No_Node then
-                              Value := 0;
-                              Known := True;
-                              return;
-                           end if;
-
-                           if Folding (Means) then
-                              --  [1940]: the report names the declaration
-                              --  the chain came back to, because that is
-                              --  the one place in it the reader is
-                              --  standing.
-                              Bad.Report
-                                (Item    =>
-                                   Bad.Not_Known_At_Compile_Time,
-                                 Source  =>
-                                   Res.Source_Of (Meanings.all, Means),
-                                 Where   =>
-                                   Syn.Anchor (Their_Tree.all, Theirs),
-                                 Message => "the value of `"
-                                            & Spelled
-                                                (Syn.Name
-                                                   (Their_Tree.all,
-                                                    Theirs))
-                                            & "` is worked out from"
-                                            & " itself",
-                                 Note    => "[1940]: a chain that comes"
-                                            & " back to where it began"
-                                            & " names nothing at all",
-                                 Into    => Found);
-                              Known := False;
-                              return;
-                           end if;
-
-                           Folding (Means) := True;
-                           Fold
-                             (Their_Tree.all, Their_Value, Depth + 1,
-                              Value, Known, Overflowed);
-                           Folding (Means) := False;
-                        end;
-                     end if;
-                  end;
-               end if;
-
-            when Syn.Add | Syn.Subtract | Syn.Multiply | Syn.Divide
-               | Syn.Remainder | Syn.Wrapping_Add | Syn.Wrapping_Subtract
-               | Syn.Wrapping_Multiply =>
-               declare
-                  Op : constant Syn.Node_Kind := Syn.Kind (Of_Tree, Node);
-                  Left, Right : Ty.Folded;
-                  Left_Known, Right_Known : Boolean;
-                  Left_Overflowed, Right_Overflowed : Boolean;
-                  Fits, Overflows : Boolean;
-                  Result_Type : constant Ty.Type_Kind :=
-                    Landin.Checking.Type_Of (Types.all, Of_Tree, Node);
-               begin
-                  Fold (Of_Tree, Syn.Left_Of (Of_Tree, Node), Depth + 1,
-                        Left, Left_Known, Left_Overflowed);
-                  Fold (Of_Tree, Syn.Right_Of (Of_Tree, Node), Depth + 1,
-                        Right, Right_Known, Right_Overflowed);
-
-                  --  An overflow in either operand still counts as an
-                  --  overflow of the enclosing fold: the answer cannot be
-                  --  produced without walking through the overflowing
-                  --  subtree.  Report once at the outermost place a
-                  --  caller decides to speak, which is Check_Module_Fold.
-                  if Left_Overflowed or else Right_Overflowed then
-                     Overflowed := True;
-                  elsif Left_Known and then Right_Known then
-                     if Op in Syn.Wrapping_Add | Syn.Wrapping_Subtract
-                                | Syn.Wrapping_Multiply
-                       and then Result_Type in Ty.Integer_Name
-                     then
-                        --  [0300]: wrapping arithmetic answers at the
-                        --  operand type's own width, so 255 +% 1 on u8
-                        --  is 0 and every unsigned or signed size wraps
-                        --  the same way.  The pattern helpers keep the
-                        --  answer inside the type's range.
-                        Wrap_Combine
-                          (Left, Right, Op,
-                           Ty.Width
-                             (Ty.Integer_Name (Result_Type), Facts),
-                           Ty.Is_Signed (Ty.Integer_Name (Result_Type)),
-                           Value);
-                        Known := True;
-                     else
-                        Combine (Left, Right, Op, Value, Fits, Overflows);
-                        Known := Fits;
-                        Overflowed := Overflows;
-                     end if;
-                  end if;
-               end;
-
-            when Syn.Bitwise_And | Syn.Bitwise_Xor | Syn.Bitwise_Or
-               | Syn.Shift_Left | Syn.Shift_Right =>
-               declare
-                  Op : constant Syn.Node_Kind := Syn.Kind (Of_Tree, Node);
-                  Left, Right : Ty.Folded;
-                  Left_Known, Right_Known : Boolean;
-                  Left_Overflowed, Right_Overflowed : Boolean;
-                  Kind : constant Ty.Type_Kind :=
-                    Landin.Checking.Type_Of (Types.all, Of_Tree, Node);
-               begin
-                  Fold (Of_Tree, Syn.Left_Of (Of_Tree, Node), Depth + 1,
-                        Left, Left_Known, Left_Overflowed);
-                  Fold (Of_Tree, Syn.Right_Of (Of_Tree, Node), Depth + 1,
-                        Right, Right_Known, Right_Overflowed);
-
-                  if Left_Overflowed or else Right_Overflowed then
-                     Overflowed := True;
-                  elsif Left_Known and then Right_Known
-                    and then (Right >= 0
-                              or else Op not in Syn.Shift_Left
-                                                  | Syn.Shift_Right)
-                    and then Kind in Ty.Scalar_Name
-                  then
-                     --  A negative shift amount is [0320]'s refusal and is
-                     --  left unknown here; a negative mask operand is an
-                     --  ordinary two's-complement pattern.
-                     declare
-                        Bits : constant Landin.Targets.Bit_Width :=
-                          Fold_Width (Ty.Scalar_Name (Kind));
-                        Signed : constant Boolean :=
-                          Is_Signed_Type (Ty.Scalar_Name (Kind));
-                        LP : constant Pattern := To_Pattern (Left, Bits);
-                        RP : constant Pattern := To_Pattern (Right, Bits);
-                        Answer : Pattern := 0;
-                        Exhausted : constant Boolean :=
-                          Op in Syn.Shift_Left | Syn.Shift_Right
-                            and then Right >= Ty.Folded (Bits);
-                     begin
-                        case Op is
-                           when Syn.Bitwise_And =>
-                              Answer := Mask (LP and RP, Bits);
-                           when Syn.Bitwise_Xor =>
-                              Answer := Mask (LP xor RP, Bits);
-                           when Syn.Bitwise_Or =>
-                              Answer := Mask (LP or RP, Bits);
-                           when Syn.Shift_Left =>
-                              Answer :=
-                                (if Exhausted then 0
-                                 else Mask
-                                        (LP * 2 ** Natural (Right), Bits));
-                           when Syn.Shift_Right =>
-                              Answer :=
-                                (if Exhausted then 0
-                                 elsif Signed and then Left < 0
-                                 then Mask
-                                        (not
-                                           (Mask (not LP, Bits)
-                                            / 2 ** Natural (Right)),
-                                         Bits)
-                                 else Mask
-                                        (LP / 2 ** Natural (Right), Bits));
-                           when others =>
-                              raise Landin.Compiler_Defect with
-                                "unreachable width-op fold";
-                        end case;
-                        Value := As_Number (Answer, Bits, Signed);
-                        Known := True;
-                     end;
-                  end if;
-               end;
-
-            when Syn.Complement =>
-               declare
-                  Under : Ty.Folded;
-                  Under_Known, Under_Overflowed : Boolean;
-                  Kind : constant Ty.Type_Kind :=
-                    Landin.Checking.Type_Of (Types.all, Of_Tree, Node);
-               begin
-                  Fold (Of_Tree, Syn.Operand_Of (Of_Tree, Node), Depth + 1,
-                        Under, Under_Known, Under_Overflowed);
-                  if Under_Overflowed then
-                     Overflowed := True;
-                  elsif Under_Known and then Kind in Ty.Scalar_Name then
-                     declare
-                        Bits : constant Landin.Targets.Bit_Width :=
-                          Fold_Width (Ty.Scalar_Name (Kind));
-                        Signed : constant Boolean :=
-                          Is_Signed_Type (Ty.Scalar_Name (Kind));
-                     begin
-                        Value :=
-                          As_Number
-                            (Mask (not To_Pattern (Under, Bits), Bits),
-                             Bits, Signed);
-                        Known := True;
-                     end;
-                  end if;
-               end;
-
-            when Syn.Logical_Not =>
-               declare
-                  Under : Ty.Folded;
-                  Under_Known, Under_Overflowed : Boolean;
-               begin
-                  Fold (Of_Tree, Syn.Operand_Of (Of_Tree, Node), Depth + 1,
-                        Under, Under_Known, Under_Overflowed);
-                  Overflowed := Under_Overflowed;
-                  if Under_Known then
-                     Value := 1 - Under;
-                     Known := True;
-                  end if;
-               end;
-
-            when Syn.Logical_And | Syn.Logical_Or =>
-               declare
-                  Op : constant Syn.Node_Kind := Syn.Kind (Of_Tree, Node);
-                  Left, Right : Ty.Folded;
-                  Left_Known, Right_Known : Boolean;
-                  Left_Overflowed, Right_Overflowed : Boolean;
-               begin
-                  Fold (Of_Tree, Syn.Left_Of (Of_Tree, Node), Depth + 1,
-                        Left, Left_Known, Left_Overflowed);
-                  if Left_Overflowed then
-                     Overflowed := True;
-                  elsif Left_Known
-                    and then ((Op = Syn.Logical_And and then Left = 0)
-                              or else
-                                (Op = Syn.Logical_Or and then Left = 1))
-                  then
-                     Value := Left;
-                     Known := True;
-                  elsif Left_Known then
-                     Fold (Of_Tree, Syn.Right_Of (Of_Tree, Node), Depth + 1,
-                           Right, Right_Known, Right_Overflowed);
-                     Overflowed := Right_Overflowed;
-                     if Right_Known then
-                        Value := Right;
-                        Known := True;
-                     end if;
-                  end if;
-               end;
-
-            when Syn.Equal_To | Syn.Not_Equal_To
-               | Syn.Less_Than | Syn.Less_Or_Equal
-               | Syn.Greater_Than | Syn.Greater_Or_Equal =>
-               declare
-                  Op : constant Syn.Node_Kind := Syn.Kind (Of_Tree, Node);
-                  Left, Right : Ty.Folded;
-                  Left_Known, Right_Known : Boolean;
-                  Left_Overflowed, Right_Overflowed : Boolean;
-               begin
-                  if Landin.Checking.Type_Of
-                       (Types.all, Of_Tree, Syn.Left_Of (Of_Tree, Node))
-                         in Ty.Float_Name
-                  then
-                     declare
-                        Left_Bits, Right_Bits : Ty.Magnitude;
-                        Left_Kind, Right_Kind : Ty.Type_Kind;
-                        Result : Boolean;
-                        Comparison : constant Ty.Float_Comparison_Operation :=
-                          (case Op is
-                              when Syn.Equal_To => Ty.Float_Equal,
-                              when Syn.Not_Equal_To => Ty.Float_Not_Equal,
-                              when Syn.Less_Than => Ty.Float_Less,
-                              when Syn.Less_Or_Equal =>
-                                Ty.Float_Less_Or_Equal,
-                              when Syn.Greater_Than => Ty.Float_Greater,
-                              when others => Ty.Float_Greater_Or_Equal);
-                     begin
-                        Fold_Float
-                          (Of_Tree, Syn.Left_Of (Of_Tree, Node), Left_Bits,
-                           Left_Kind, Left_Known, Left_Overflowed);
-                        Fold_Float
-                          (Of_Tree, Syn.Right_Of (Of_Tree, Node), Right_Bits,
-                           Right_Kind, Right_Known, Right_Overflowed);
-                        if Left_Known and then Right_Known
-                          and then Left_Kind = Right_Kind
-                        then
-                           Result := Ty.Float_Comparison_Result
-                             (Left_Bits, Right_Bits,
-                              Ty.Float_Name (Left_Kind), Comparison);
-                           Value := Ty.Folded (Boolean'Pos (Result));
-                        end if;
-                     end;
-                  else
-                     Fold
-                       (Of_Tree, Syn.Left_Of (Of_Tree, Node), Depth + 1,
-                        Left, Left_Known, Left_Overflowed);
-                     Fold
-                       (Of_Tree, Syn.Right_Of (Of_Tree, Node), Depth + 1,
-                        Right, Right_Known, Right_Overflowed);
-                  end if;
-                  if Left_Overflowed or else Right_Overflowed then
-                     Overflowed := True;
-                  elsif Left_Known and then Right_Known then
-                     if Landin.Checking.Type_Of
-                          (Types.all, Of_Tree, Syn.Left_Of (Of_Tree, Node))
-                            not in Ty.Float_Name
-                     then
-                        Value :=
-                          (case Op is
-                              when Syn.Equal_To =>
-                                (if Left = Right then 1 else 0),
-                              when Syn.Not_Equal_To =>
-                                (if Left /= Right then 1 else 0),
-                              when Syn.Less_Than =>
-                                (if Left < Right then 1 else 0),
-                              when Syn.Less_Or_Equal =>
-                                (if Left <= Right then 1 else 0),
-                              when Syn.Greater_Than =>
-                                (if Left > Right then 1 else 0),
-                              when others =>
-                                (if Left >= Right then 1 else 0));
-                     end if;
-                     Known := True;
-                  end if;
-               end;
-
-            when Syn.Size_Of | Syn.Align_Of =>
-               declare
-                  Asked : constant Syn.Node_Id :=
-                    Syn.Measured_Type (Of_Tree, Node);
-                  Held : constant Ty.Type_Kind :=
-                    Landin.Checking.Type_Of (Types.all, Of_Tree, Asked);
-               begin
-                  if Held in Ty.Scalar_Name then
-                     declare
-                        Size : constant Landin.Targets.Scalar_Size :=
-                          Ty.Storage_Size (Ty.Scalar_Name (Held), Facts);
-                     begin
-                        Value :=
-                          (if Syn.Kind (Of_Tree, Node) = Syn.Size_Of
-                           then Ty.Folded (Landin.Targets.Bytes (Size))
-                           else Ty.Folded
-                                  (Landin.Targets.Alignment_Of
-                                     (Facts, Size)));
-                        Known := True;
-                     end;
-                  elsif Held = Ty.Fixed_Array then
-                     --  [0520]: an array is its element repeated, whatever
-                     --  the element is; the scalar query alone answered a
-                     --  struct element with its default and folded
-                     --  `sizeof [4]point` to 4.
-                     declare
-                        Size : Landin.Targets.Byte_Count;
-                        Alignment : Landin.Targets.Byte_Alignment;
-                     begin
-                        Landin.Checking.Array_Type_Extent
-                          (Types.all, Of_Tree, Asked, Facts, Size, Alignment);
-                        Value :=
-                          (if Syn.Kind (Of_Tree, Node) = Syn.Align_Of
-                           then Ty.Folded (Alignment)
-                           else Ty.Folded (Size));
-                        Known := True;
-                     end;
-                  elsif Held = Ty.Aggregate then
-                     declare
-                        Declared : constant Landin.Checking.Nominal_Type_Id :=
-                          Landin.Checking.Nominal_Of
-                            (Types.all, Of_Tree, Asked);
-                     begin
-                        if Declared /= Landin.Checking.No_Nominal_Type
-                          and then Landin.Checking.Has_Layout
-                            (Types.all, Declared)
-                        then
-                           Value :=
-                             Ty.Folded
-                               (if Syn.Kind (Of_Tree, Node) = Syn.Size_Of
-                                then Landin.Checking.Layout_Size
-                                       (Types.all, Declared)
-                                else Landin.Checking.Layout_Alignment
-                                       (Types.all, Declared));
-                           Known := True;
-                        end if;
-                     end;
-                  end if;
-               end;
-
-            when Syn.Len_Of =>
-               declare
-                  Asked : constant Syn.Node_Id :=
-                    Syn.Operand_Of (Of_Tree, Node);
-               begin
-                  if Syn.Kind (Of_Tree, Asked) = Syn.Array_Literal then
-                     Value := Ty.Folded (Syn.Element_Count (Of_Tree, Asked));
-                     Known := True;
-                  elsif Syn.Kind (Of_Tree, Asked) = Syn.Name_Reference
-                    and then Res.Verdict_Of (Meanings.all, Of_Tree, Asked)
-                             = Res.Bound
-                  then
-                     declare
-                        Named : constant Res.Declaration_Id :=
-                          Res.Bound_To (Meanings.all, Of_Tree, Asked);
-                     begin
-                        if Landin.Checking.Type_Of (Types.all, Named)
-                             = Ty.Fixed_Array
-                        then
-                           Value :=
-                             Ty.Folded
-                               (Landin.Checking.Array_Length
-                                  (Types.all, Named));
-                           Known := True;
-                        end if;
-                     end;
-                  end if;
-               end;
-
-            when others =>
-               null;
-         end case;
+         Folder.Fold (Of_Tree, Node, Depth, Value, Known, Overflowed);
       end Fold;
 
       --  [1940]'s refusal, applied to one module binding.
