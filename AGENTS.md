@@ -202,17 +202,3 @@ Before reviving a previously rejected idea, read `ROADMAP.md`'s inherited review
 When implementation requires a semantic change, update `tour.md`, the affected prototype-derived tests, and `ROADMAP.md` together. Trace the construct's citations, reread all affected prototypes including cross-prototype interactions, and then run `python3 check.py`. Per-file reasoning has previously missed contradictions found only by comparing prototypes.
 
 Do not modernize obsolete syntax inside prototype finding sections (`Xn`, `Yn`, `Zn`, `Wn`) or the tour's `WHAT WAS TRIED AND DROPPED` section. Those passages intentionally preserve rejected wording next to its resolution, and `check.py` deliberately excludes them from some retired-spelling checks.
-
-## Agent skills
-
-### Issue tracker
-
-Disposable execution detail is tracked in local Markdown files under `.scratch/`; durable discoveries, dependencies, and dispositions must be returned to `ROADMAP.md`. See `docs/agents/issue-tracker.md`.
-
-### Triage labels
-
-Triage uses the five default canonical role names. See `docs/agents/triage-labels.md`.
-
-### Domain docs
-
-This repository uses a single-context domain-doc layout. See `docs/agents/domain.md`.

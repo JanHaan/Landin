@@ -57,9 +57,6 @@ ROADMAP = "ROADMAP.md"
 FILES = LANGUAGE_FILES + [ROADMAP]
 LIVE_DOCS = FILES + ["AGENTS.md", "README.md", "handoff.md", "examples.md",
                      "docs/environments.md",
-                     "docs/agents/issue-tracker.md",
-                     "docs/agents/triage-labels.md",
-                     "docs/agents/domain.md",
                      "compiler/ada/README.md",
                      "compiler/ada/TOOLCHAIN.md",
                      "compiler/tests/README.md",
@@ -203,13 +200,7 @@ PROTOTYPE_FINDINGS = {
 #  path inside a container, or a file a reader is told to create.
 NAMED_FILE_ALLOWLIST = frozenset((
     "BACKLOG.md",              # the retired work authority, named to refuse it
-    "CONTEXT.md",              # a file docs/agents/domain.md tells you to write
     "unit/stray.txt",          # a harness case named relative to its own tree
-    #  Names docs/agents/domain.md uses as examples of what to write.
-    "CONTEXT-MAP.md",
-    "map.md",
-    "0001-event-sourced-orders.md",
-    "0002-postgres-for-write-model.md",
     #  The external design archive, named to contrast it with the current
     #  handoff.md in the same sentence.  AGENTS.md already says the tracked
     #  repository does not depend on that archive.
