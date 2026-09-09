@@ -61,21 +61,47 @@ package body Landin.Stages.Checking.References is
         array (Positive range 1 .. Declarations) of Boolean
         with Pack;
 
-      --  Untracked *suppresses* the frame-escape refusal below, so it is
-      --  set only by [0470]'s integer-to-pointer conversion, where there is
-      --  genuinely nothing to know.  D189's empty case contributes
-      --  No_Origin instead: an atom name reaches Fact_Of through no arm and
-      --  gets all four fields false, which is the answer this increment
-      --  wants.  Setting Untracked there would launder every frame pointer
-      --  joined with it.
-      type Origin_Fact is record
+      --  Absence is a value proof, not an origin.  In this finite chain,
+      --  No_Edge is the join identity, Empty_Optional proves absence, and
+      --  Unknown_Value includes present pointers with no tracked sources.
+      --  Only control-value accumulators start at No_Edge; No_Origin alone
+      --  never proves emptiness.  Untracked still belongs exclusively to
+      --  [0470]'s address conversion: an empty sibling must not launder a
+      --  present sibling's frame or parameter origins.
+      type Value_Fact is (No_Edge, Empty_Optional, Unknown_Value);
+
+      type Reference_Fact is record
          Frame      : Boolean := False;
          Untracked  : Boolean := False;
          From       : Parameter_Bits := [others => False];
          Derives    : Declaration_Bits := [others => False];
+         Presence   : Value_Fact := Unknown_Value;
+      end record;
+
+      No_Reference : constant Reference_Fact := (others => <>);
+
+      package Result_Facts is new Ada.Containers.Vectors
+        (Index_Type => Positive, Element_Type => Reference_Fact);
+
+      --  Keep a place's evaluated backing separately from its value: an
+      --  index may mutate the descriptor after its address was captured.
+      --  Anonymous multiple results additionally retain each position's
+      --  sources; their union alone cannot validate distinct `from` clauses.
+      type Origin_Fact is record
+         Value   : Reference_Fact := No_Reference;
+         Storage : Reference_Fact := No_Reference;
+         Results : Result_Facts.Vector;
       end record;
 
       No_Origin : constant Origin_Fact := (others => <>);
+      No_Value_Edge : constant Origin_Fact :=
+        (Value => (Presence => No_Edge, others => <>), others => <>);
+      Empty_Origin : constant Origin_Fact :=
+        (Value => (Presence => Empty_Optional, others => <>), others => <>);
+      --  This pass tracks values, not writes through aliases.  Never reuse
+      --  an empty-value proof for storage whose address can be exposed in
+      --  this body, or for module state which another call can change.
+      Exposed : Declaration_Bits := [others => False];
       type Origin_Table is
         array (Res.Declaration_Id range <>) of Origin_Fact;
       Origins : Origin_Table
@@ -83,10 +109,12 @@ package body Landin.Stages.Checking.References is
          .. Res.Declaration_Id (Res.Declaration_Count (Meanings.all))) :=
            [others => No_Origin];
       --  A pattern binding's value and its backing storage can have distinct
-      --  origins.  Pointer/slice-backed and computed match subjects are
-      --  copied into a frame temporary by lowering, while a reference value
-      --  carried in their payload still points where the subject said.
-      Pattern_Storage : Origin_Table (Origins'Range) := [others => No_Origin];
+      --  origins.  Computed value subjects are copied into a frame temporary;
+      --  referenced subjects retain their actual storage.  A reference value
+      --  carried in either payload still points where the subject said.
+      Pattern_Storage : array (Origins'Range) of Reference_Fact :=
+        [others => No_Reference];
+      Falls_Through : Boolean := True;
       Parameter_Of : array (Origins'Range) of Natural := [others => 0];
       Parameter_Escapes : array (1 .. Parameters) of Boolean :=
         [others => False];
@@ -131,7 +159,7 @@ package body Landin.Stages.Checking.References is
          Exit_State   : Function_Table := [others => No_Origin];
          Continues    : Boolean := False;
          Back_State   : Function_Table := [others => No_Origin];
-         Value        : Origin_Fact := No_Origin;
+         Value        : Origin_Fact := No_Value_Edge;
       end record;
 
       package Loop_Frames is new Ada.Containers.Vectors
@@ -179,8 +207,8 @@ package body Landin.Stages.Checking.References is
       function Match_Subject_Is_Copied
         (Tree : Syn.Tree; Subject : Syn.Node_Id) return Boolean;
 
-      function Storage_Fact
-        (Tree : Syn.Tree; Place : Syn.Node_Id) return Origin_Fact;
+      function Named_Storage_Fact
+        (Tree : Syn.Tree; Place : Syn.Node_Id) return Reference_Fact;
 
       function Fact_Of
         (Tree : Syn.Tree; Node : Syn.Node_Id) return Origin_Fact;
@@ -194,13 +222,15 @@ package body Landin.Stages.Checking.References is
          Call : Syn.Node_Id;
          Formal : Positive) return Syn.Node_Id;
 
+      procedure Note_Exposed_Storage (Tree : Syn.Tree; Node : Syn.Node_Id);
+
       function First_Derivation
-        (Fact : Origin_Fact) return Res.Declaration_Id;
+        (Fact : Reference_Fact) return Res.Declaration_Id;
 
       procedure Report_Escape
         (Tree : Syn.Tree;
          Node : Syn.Node_Id;
-         Fact : Origin_Fact;
+         Fact : Reference_Fact;
          Message : String;
          Related : Landin.Provenance.Origin);
 
@@ -245,10 +275,28 @@ package body Landin.Stages.Checking.References is
          Fell_Through : out Boolean;
          Of_Loop      : Syn.Node_Id := Syn.No_Node);
 
+      procedure Join
+        (Into_Fact : in out Reference_Fact; Other : Reference_Fact);
+
       procedure Join (Into_Fact : in out Origin_Fact; Other : Origin_Fact);
 
-      procedure Join (Into_Fact : in out Origin_Fact; Other : Origin_Fact) is
+      function Nth_Result (Fact : Origin_Fact; Position : Positive)
+        return Origin_Fact;
+
+      function Nth_Result (Fact : Origin_Fact; Position : Positive)
+        return Origin_Fact is
       begin
+         return
+           (Value => (if Position <= Fact.Results.Last_Index
+                      then Fact.Results (Position) else Fact.Value),
+            Storage => Fact.Storage, others => <>);
+      end Nth_Result;
+
+      procedure Join
+        (Into_Fact : in out Reference_Fact; Other : Reference_Fact) is
+      begin
+         Into_Fact.Presence :=
+           Value_Fact'Max (Into_Fact.Presence, Other.Presence);
          Into_Fact.Frame := Into_Fact.Frame or Other.Frame;
          Into_Fact.Untracked := Into_Fact.Untracked or Other.Untracked;
          for Position in Into_Fact.From'Range loop
@@ -259,6 +307,32 @@ package body Landin.Stages.Checking.References is
             Into_Fact.Derives (Id) :=
               Into_Fact.Derives (Id) or Other.Derives (Id);
          end loop;
+      end Join;
+
+      procedure Join (Into_Fact : in out Origin_Fact; Other : Origin_Fact) is
+      begin
+         if Into_Fact.Value.Presence = No_Edge then
+            Into_Fact := Other;
+            return;
+         elsif Other.Value.Presence = No_Edge then
+            return;
+         end if;
+         if Into_Fact.Results.Last_Index = Other.Results.Last_Index then
+            for Position in 1 .. Into_Fact.Results.Last_Index loop
+               declare
+                  Part : Reference_Fact := Into_Fact.Results (Position);
+               begin
+                  Join (Part, Other.Results (Position));
+                  Into_Fact.Results.Replace_Element (Position, Part);
+               end;
+            end loop;
+         else
+            --  A value without positional facts is conservatively described
+            --  by its union, not by whichever sibling retained more detail.
+            Into_Fact.Results.Clear;
+         end if;
+         Join (Into_Fact.Value, Other.Value);
+         Join (Into_Fact.Storage, Other.Storage);
       end Join;
 
       function Declaration_At
@@ -303,7 +377,23 @@ package body Landin.Stages.Checking.References is
             declare
                Nominal : constant Landin.Checking.Nominal_Type_Id :=
                  Landin.Checking.Nominal_Of (Types.all, Id);
+               Shape : constant Landin.Checking.Signature_Id :=
+                 Landin.Checking.Result_Shape_Of (Types.all, Id);
             begin
+               if Landin.Checking.Holds (Types.all, Shape) then
+                  for Position in
+                    1 .. Landin.Checking.Signature_Result_Count
+                      (Types.all, Shape)
+                  loop
+                     if Landin.Checking.Contains_References
+                       (Types.all, Landin.Checking.Nth_Signature_Result
+                          (Types.all, Shape, Position))
+                     then
+                        return True;
+                     end if;
+                  end loop;
+                  return False;
+               end if;
                return Nominal /= Landin.Checking.No_Nominal_Type
                  and then Landin.Checking.Has_Layout (Types.all, Nominal)
                  and then Landin.Checking.Contains_References
@@ -322,6 +412,7 @@ package body Landin.Stages.Checking.References is
         (Tree : Syn.Tree; Subject : Syn.Node_Id) return Boolean
       is
          Where : Syn.Node_Id := Subject;
+         Computed : Boolean := False;
 
          function Is_Constant_Index (Node : Syn.Node_Id) return Boolean;
 
@@ -340,22 +431,23 @@ package body Landin.Stages.Checking.References is
             return False;
          end if;
          Where := Syn.Target_Of (Tree, Subject);
-         --  Keep this predicate identical to Lower_Variant_Match's
-         --  Has_Computed_Index/Has_Reference_Storage choice.  Those subjects
-         --  are copied once; every other checked named place is matched in
-         --  its actual storage.
+         --  Match Lower_Variant_Match's storage choice: pointer/slice-backed
+         --  places and inout parameters retain their captured storage, even
+         --  below a computed index.  Only a computed value subject gets
+         --  D134's independent frame copy.
          while Syn.Kind (Tree, Where)
            in Syn.Member_Selection | Syn.Element_Index
          loop
             if Syn.Kind (Tree, Where) = Syn.Element_Index
               and then not Is_Constant_Index (Where)
             then
-               return True;
-            elsif Syn.Kind (Tree, Where) = Syn.Element_Index
+               Computed := True;
+            end if;
+            if Syn.Kind (Tree, Where) = Syn.Element_Index
               and then Landin.Checking.Type_Of
                 (Types.all, Tree, Syn.Target_Of (Tree, Where)) = Ty.Slice_Value
             then
-               return True;
+               return False;
             elsif Syn.Kind (Tree, Where) = Syn.Member_Selection
               and then Landin.Checking.Field_Index
                 (Types.all, Tree, Where) = 0
@@ -363,11 +455,27 @@ package body Landin.Stages.Checking.References is
                 (Types.all, Tree, Syn.Target_Of (Tree, Where))
                   = Ty.Pointer_Value
             then
-               return True;
+               return False;
             end if;
             Where := Syn.Target_Of (Tree, Where);
          end loop;
-         return False;
+         if Syn.Kind (Tree, Where) = Syn.Name_Reference
+           and then Res.Verdict_Of (Meanings.all, Tree, Where) = Res.Bound
+         then
+            declare
+               Id : constant Res.Declaration_Id :=
+                 Res.Bound_To (Meanings.all, Tree, Where);
+            begin
+               if Res.Sort_Of (Meanings.all, Id) = Res.Parameter
+                 and then Syn.Convention_Of
+                   (Tree_For (Res.Source_Of (Meanings.all, Id)).all,
+                    Res.Node_Of (Meanings.all, Id)) = Syn.Inout_Convention
+               then
+                  return False;
+               end if;
+            end;
+         end if;
+         return Computed;
       end Match_Subject_Is_Copied;
 
       function Call_Signature
@@ -472,7 +580,49 @@ package body Landin.Stages.Checking.References is
          return Syn.No_Node;
       end Runtime_Argument;
 
-      function First_Derivation (Fact : Origin_Fact)
+      procedure Note_Exposed_Storage (Tree : Syn.Tree; Node : Syn.Node_Id) is
+         procedure Expose (Place : Syn.Node_Id);
+
+         procedure Expose (Place : Syn.Node_Id) is
+            Id : constant Res.Declaration_Id :=
+              (if Place = Syn.No_Node then Res.No_Declaration
+               else Root_Declaration (Tree, Place));
+         begin
+            if Id /= Res.No_Declaration then
+               Exposed (Positive (Id)) := True;
+            end if;
+         end Expose;
+      begin
+         if Node = Syn.No_Node then
+            return;
+         elsif Syn.Kind (Tree, Node) = Syn.Address_Of then
+            Expose (Syn.Operand_Of (Tree, Node));
+         elsif Syn.Kind (Tree, Node) in Syn.Call | Syn.Labeled_Application then
+            declare
+               Called : constant Landin.Checking.Signature_Id :=
+                 Call_Signature (Tree, Node);
+            begin
+               if Landin.Checking.Holds (Types.all, Called) then
+                  for Position in
+                    1 .. Landin.Checking.Signature_Parameter_Count
+                      (Types.all, Called)
+                  loop
+                     if Landin.Checking.Nth_Signature_Parameter
+                       (Types.all, Called, Position).Convention
+                         in Syn.Inout_Convention | Syn.Sink_Convention
+                     then
+                        Expose (Runtime_Argument (Tree, Node, Position));
+                     end if;
+                  end loop;
+               end if;
+            end;
+         end if;
+         for Slot in 1 .. Syn.Slot_Count (Tree, Node) loop
+            Note_Exposed_Storage (Tree, Syn.Slot (Tree, Node, Slot));
+         end loop;
+      end Note_Exposed_Storage;
+
+      function First_Derivation (Fact : Reference_Fact)
         return Res.Declaration_Id
       is
       begin
@@ -487,7 +637,7 @@ package body Landin.Stages.Checking.References is
       procedure Report_Escape
         (Tree : Syn.Tree;
          Node : Syn.Node_Id;
-         Fact : Origin_Fact;
+         Fact : Reference_Fact;
          Message : String;
          Related : Landin.Provenance.Origin)
       is
@@ -548,8 +698,8 @@ package body Landin.Stages.Checking.References is
             begin
                if Part.Escaping and then Argument /= Syn.No_Node then
                   declare
-                     Fact : constant Origin_Fact :=
-                       Known_Fact (Tree, Known, Argument);
+                     Fact : constant Reference_Fact :=
+                       Known_Fact (Tree, Known, Argument).Value;
                   begin
                      if not Fact.Untracked and then Fact.Frame then
                         Report_Escape
@@ -996,7 +1146,7 @@ package body Landin.Stages.Checking.References is
                   for Borrower in Origins'Range loop
                      if Borrower /= Mutated
                        and then Has_References (Borrower)
-                       and then Origins (Borrower).Derives
+                       and then Origins (Borrower).Value.Derives
                          (Positive (Mutated))
                        and then Has_Future_Use
                          (Borrower, Syn.Where (Tree, Call).Last)
@@ -1029,42 +1179,16 @@ package body Landin.Stages.Checking.References is
          end loop;
       end Check_Borrows;
 
-      function Storage_Fact (Tree : Syn.Tree; Place : Syn.Node_Id)
-        return Origin_Fact
+      function Named_Storage_Fact (Tree : Syn.Tree; Place : Syn.Node_Id)
+        return Reference_Fact
       is
-         Result : Origin_Fact := No_Origin;
+         Result : Reference_Fact := No_Reference;
          Id : constant Res.Declaration_Id :=
            Root_Declaration (Tree, Place);
-         Selected : Syn.Node_Id := Place;
       begin
-         --  A dereference or slice index selects storage behind a
-         --  reference, not the local descriptor which holds it.
-         --  Ordinary fields and fixed-array indices keep selecting
-         --  their containing storage until such a boundary occurs.
-         while Syn.Kind (Tree, Selected)
-           in Syn.Member_Selection | Syn.Element_Index
-         loop
-            declare
-               Target : constant Syn.Node_Id :=
-                 Syn.Target_Of (Tree, Selected);
-               Kind : constant Ty.Type_Kind :=
-                 Landin.Checking.Type_Of (Types.all, Tree, Target);
-            begin
-               if (Syn.Kind (Tree, Selected) = Syn.Member_Selection
-                   and then Kind = Ty.Pointer_Value)
-                 or else
-                   (Syn.Kind (Tree, Selected) = Syn.Element_Index
-                    and then Kind = Ty.Slice_Value)
-               then
-                  Result := Fact_Of (Tree, Target);
-                  if Id /= Res.No_Declaration then
-                     Result.Derives (Positive (Id)) := True;
-                  end if;
-                  return Result;
-               end if;
-               Selected := Target;
-            end;
-         end loop;
+         --  Only a name's backing is classified here.  Computed selectors
+         --  capture their target's storage during the ordinary expression
+         --  walk, before evaluating their indexes; no syntax is replayed.
          if Id /= Res.No_Declaration then
             Result.Derives (Positive (Id)) := True;
             case Res.Sort_Of (Meanings.all, Id) is
@@ -1098,15 +1222,39 @@ package body Landin.Stages.Checking.References is
             end case;
          end if;
          return Result;
-      end Storage_Fact;
+      end Named_Storage_Fact;
 
       function Fact_Of (Tree : Syn.Tree; Node : Syn.Node_Id)
         return Origin_Fact
       is
          Result : Origin_Fact := No_Origin;
       begin
-         if Node = Syn.No_Node then
+         if not Falls_Through then
+            return No_Value_Edge;
+         elsif Node = Syn.No_Node then
             return Result;
+         end if;
+         --  The contextual checker records the union descriptor on its
+         --  empty atom, including qualified atom names.  Match that identity
+         --  rather than treating an arbitrary source-free pointer as empty.
+         if Syn.Kind (Tree, Node)
+              in Syn.Name_Reference | Syn.Member_Selection
+           and then Res.Verdict_Of (Meanings.all, Tree, Node) = Res.Bound
+         then
+            declare
+               Reference : constant Landin.Checking.Reference_Id :=
+                 Landin.Checking.Reference_Of (Types.all, Tree, Node);
+            begin
+               if Landin.Checking.Holds (Types.all, Reference)
+                 and then Landin.Checking.Is_Optional_Pointer
+                   (Types.all, Reference)
+                 and then Res.Bound_To (Meanings.all, Tree, Node)
+                   = Landin.Checking.Descriptor_Of
+                     (Types.all, Reference).Empty_Atom
+               then
+                  return Empty_Origin;
+               end if;
+            end;
          end if;
          case Syn.Kind (Tree, Node) is
             when Syn.Name_Reference =>
@@ -1116,95 +1264,129 @@ package body Landin.Stages.Checking.References is
                        Res.Bound_To (Meanings.all, Tree, Node);
                   begin
                      if Id in Origins'Range then
-                        return Origins (Id);
+                        Result := Origins (Id);
+                        Result.Storage := Named_Storage_Fact (Tree, Node);
+                        if Exposed (Positive (Id))
+                          or else Res.Sort_Of (Meanings.all, Id)
+                            = Res.Module_Binding
+                        then
+                           Result.Value.Presence := Unknown_Value;
+                           for Position in 1 .. Result.Results.Last_Index loop
+                              declare
+                                 Part : Reference_Fact :=
+                                   Result.Results (Position);
+                              begin
+                                 Part.Presence := Unknown_Value;
+                                 Result.Results.Replace_Element
+                                   (Position, Part);
+                              end;
+                           end loop;
+                        end if;
+                        return Result;
                      end if;
                   end;
                end if;
 
-            when Syn.Any_Construction =>
+            when Syn.Anonymous_Function =>
+               --  Creating a code value does not run its separately checked
+               --  body or any transfers in that body's cleanup arguments.
+               return No_Origin;
+
+            when Syn.Try_Expression =>
                return Fact_Of (Tree, Syn.Operand_Of (Tree, Node));
 
-            when Syn.Pointer_Conversion =>
-               Result.Untracked := True;
+            when Syn.Any_Construction =>
+               Result := Fact_Of (Tree, Syn.Operand_Of (Tree, Node));
+               Result.Value.Presence := Unknown_Value;
+               Result.Results.Clear;
                return Result;
 
+            when Syn.Pointer_Conversion =>
+               declare
+                  Operand : constant Origin_Fact :=
+                    Fact_Of (Tree, Syn.Operand_Of (Tree, Node));
+               begin
+                  pragma Unreferenced (Operand);
+                  Result.Value.Untracked := True;
+                  return Result;
+               end;
+
             when Syn.Address_Of =>
-               return Storage_Fact (Tree, Syn.Operand_Of (Tree, Node));
+               declare
+                  Operand : constant Origin_Fact :=
+                    Fact_Of (Tree, Syn.Operand_Of (Tree, Node));
+               begin
+                  return (Value => Operand.Storage, others => <>);
+               end;
 
             when Syn.Member_Selection | Syn.Element_Index
                | Syn.Inclusive_Slice | Syn.Half_Open_Slice =>
-               if Syn.Kind (Tree, Node)
-                    in Syn.Inclusive_Slice | Syn.Half_Open_Slice
-                 and then Landin.Checking.Type_Of
-                   (Types.all, Tree, Syn.Target_Of (Tree, Node))
-                     = Ty.Fixed_Array
-               then
-                  return Storage_Fact (Tree, Syn.Target_Of (Tree, Node));
-               end if;
-               Result := Fact_Of (Tree, Syn.Target_Of (Tree, Node));
-               for Slot in 2 .. Syn.Slot_Count (Tree, Node) loop
-                  declare
-                     Ignored : constant Origin_Fact :=
-                       Fact_Of (Tree, Syn.Slot (Tree, Node, Slot));
-                  begin
-                     pragma Unreferenced (Ignored);
-                  end;
-               end loop;
-               if Syn.Kind (Tree, Node)
-                    in Syn.Member_Selection | Syn.Element_Index
-                 and then Landin.Checking.Type_Of (Types.all, Tree, Node)
-                   in Ty.Scalar_Name
-               then
-                  return No_Origin;
-               end if;
+               declare
+                  Target : constant Syn.Node_Id := Syn.Target_Of (Tree, Node);
+                  Target_Kind : constant Ty.Type_Kind :=
+                    Landin.Checking.Type_Of (Types.all, Tree, Target);
+                  Target_Fact : constant Origin_Fact := Fact_Of (Tree, Target);
+                  Field : constant Natural :=
+                    Landin.Checking.Field_Index (Types.all, Tree, Node);
+                  Is_Slice : constant Boolean :=
+                    Syn.Kind (Tree, Node)
+                      in Syn.Inclusive_Slice | Syn.Half_Open_Slice;
+               begin
+                  Result := Target_Fact;
+                  if Syn.Kind (Tree, Node) = Syn.Member_Selection
+                    and then Field > 0
+                    and then Landin.Checking.Result_Shape_Of
+                      (Types.all, Tree, Target) /= Landin.Checking.No_Signature
+                  then
+                     Result := Nth_Result (Target_Fact, Field);
+                  else
+                     Result.Value.Presence := Unknown_Value;
+                     Result.Results.Clear;
+                  end if;
+                  if Is_Slice and then Target_Kind = Ty.Fixed_Array then
+                     Result.Value := Target_Fact.Storage;
+                  elsif (Syn.Kind (Tree, Node) = Syn.Member_Selection
+                         and then Target_Kind = Ty.Pointer_Value)
+                    or else (Syn.Kind (Tree, Node) = Syn.Element_Index
+                             and then Target_Kind = Ty.Slice_Value)
+                  then
+                     Result.Storage := Target_Fact.Value;
+                  end if;
+                  --  Capture the base before the selectors run: an index
+                  --  can replace that base while its old address is in use.
+                  for Slot in 2 .. Syn.Slot_Count (Tree, Node) loop
+                     declare
+                        Ignored : constant Origin_Fact :=
+                          Fact_Of (Tree, Syn.Slot (Tree, Node, Slot));
+                     begin
+                        pragma Unreferenced (Ignored);
+                     end;
+                  end loop;
+               end;
                declare
                   Id : constant Res.Declaration_Id :=
                     Root_Declaration (Tree, Node);
                begin
                   if Id /= Res.No_Declaration then
-                     Result.Derives (Positive (Id)) := True;
-                     if Syn.Kind (Tree, Node)
-                          in Syn.Inclusive_Slice | Syn.Half_Open_Slice
-                       and then Res.Sort_Of (Meanings.all, Id)
-                         in Res.Local_Binding | Res.Named_Return
-                       and then Landin.Checking.Type_Of (Types.all, Id)
-                         = Ty.Fixed_Array
-                     then
-                        --  A view into a local fixed array points into this
-                        --  frame even though the array value itself contains
-                        --  no references. A local slice instead carries its
-                        --  own source fact and must not acquire frame origin.
-                        Result.Frame := True;
-                     end if;
+                     Result.Storage.Derives (Positive (Id)) := True;
+                  end if;
+                  if Syn.Kind (Tree, Node)
+                       in Syn.Member_Selection | Syn.Element_Index
+                    and then Landin.Checking.Type_Of (Types.all, Tree, Node)
+                      in Ty.Scalar_Name
+                  then
+                     Result.Value := No_Reference;
+                     Result.Results.Clear;
+                  elsif Id /= Res.No_Declaration then
+                     Result.Value.Derives (Positive (Id)) := True;
                      if Parameter_Of (Id) > 0
+                       and then Syn.Kind (Tree, Node)
+                         in Syn.Member_Selection | Syn.Element_Index
                        and then Landin.Checking.Type_Of
                          (Types.all, Tree, Node)
                            in Ty.Pointer_Value | Ty.Slice_Value
                      then
-                        if Syn.Kind (Tree, Node)
-                             in Syn.Inclusive_Slice | Syn.Half_Open_Slice
-                        then
-                           declare
-                              Parameter_Tree : constant
-                                not null access constant Syn.Tree := Tree_For
-                                  (Res.Source_Of (Meanings.all, Id));
-                              Parameter_Node : constant Syn.Node_Id :=
-                                Res.Node_Of (Meanings.all, Id);
-                           begin
-                              if Landin.Checking.Type_Of (Types.all, Id)
-                                   = Ty.Slice_Value
-                                or else Syn.Convention_Of
-                                  (Parameter_Tree.all, Parameter_Node)
-                                    = Syn.Inout_Convention
-                              then
-                                 Result.From (Parameter_Of (Id)) := True;
-                              else
-                                 Result.Frame := True;
-                              end if;
-                           end;
-                        else
-                           Result.From (Parameter_Of (Id)) := True;
-                        end if;
+                        Result.Value.From (Parameter_Of (Id)) := True;
                      end if;
                   end if;
                end;
@@ -1261,61 +1443,129 @@ package body Landin.Stages.Checking.References is
                               Fact => Fact_Of (Tree, Expression));
                         end;
                      end loop;
+                     if not Falls_Through then
+                        return No_Value_Edge;
+                     end if;
                      Check_Escaping_Arguments (Tree, Node, Known);
                      Check_Borrows (Tree, Node);
-                     if Landin.Checking.Holds (Types.all, Called)
-                       and then Landin.Checking.Signature_Result_Count
-                         (Types.all, Called) = 1
-                       and then Landin.Checking.Contains_References
-                         (Types.all,
-                          Landin.Checking.Nth_Signature_Result
-                            (Types.all, Called, 1))
-                     then
-                        for Source in
-                          1 .. Landin.Checking.Signature_Return_Source_Count
-                            (Types.all, Called, 1)
+                     if Landin.Checking.Holds (Types.all, Called) then
+                        for Returned in
+                          1 .. Landin.Checking.Signature_Result_Count
+                            (Types.all, Called)
                         loop
                            declare
-                              Formal : constant Positive :=
-                                Landin.Checking.Nth_Signature_Return_Source
-                                  (Types.all, Called, 1, Source);
-                              Argument : constant Syn.Node_Id :=
-                                Runtime_Argument (Tree, Node, Formal);
+                              Part : Reference_Fact := No_Reference;
                            begin
-                              if Argument /= Syn.No_Node then
-                                 --  An inout return source names a place. A
-                                 --  returned view may point into that place
-                                 --  even when its current value contains no
-                                 --  reference (an inline fixed array is the
-                                 --  motivating case). Other conventions keep
-                                 --  describing origins carried by the value.
-                                 if Landin.Checking.Nth_Signature_Parameter
-                                   (Types.all, Called, Formal).Convention
-                                      = Syn.Inout_Convention
-                                 then
-                                    Join
-                                      (Result,
-                                       Storage_Fact (Tree, Argument));
-                                 else
-                                    Join
-                                      (Result,
-                                       Known_Fact (Tree, Known, Argument));
-                                 end if;
-                                 declare
-                                    Id : constant Res.Declaration_Id :=
-                                      Root_Declaration (Tree, Argument);
-                                 begin
-                                    if Id /= Res.No_Declaration then
-                                       Result.Derives (Positive (Id)) := True;
-                                    end if;
-                                 end;
+                              if Landin.Checking.Contains_References
+                                (Types.all,
+                                 Landin.Checking.Nth_Signature_Result
+                                   (Types.all, Called, Returned))
+                              then
+                                 for Source in 1 .. Landin.Checking
+                                   .Signature_Return_Source_Count
+                                     (Types.all, Called, Returned)
+                                 loop
+                                    declare
+                                       Formal : constant Positive :=
+                                         Landin.Checking
+                                           .Nth_Signature_Return_Source
+                                             (Types.all, Called,
+                                              Returned, Source);
+                                       Argument : constant Syn.Node_Id :=
+                                         Runtime_Argument (Tree, Node, Formal);
+                                    begin
+                                       if Argument /= Syn.No_Node then
+                                          declare
+                                             Fact : constant Origin_Fact :=
+                                               Known_Fact
+                                                 (Tree, Known, Argument);
+                                             Id : constant
+                                               Res.Declaration_Id :=
+                                                 Root_Declaration
+                                                   (Tree, Argument);
+                                          begin
+                                             --  Both the value and backing
+                                             --  were captured at this actual's
+                                             --  evaluation, not replayed after
+                                             --  later arguments ran.
+                                             Join
+                                               (Part,
+                                                (if Landin.Checking
+                                                  .Nth_Signature_Parameter
+                                                    (Types.all, Called,
+                                                     Formal).Convention
+                                                       = Syn.Inout_Convention
+                                                 then Fact.Storage
+                                                 else Fact.Value));
+                                             if Id /= Res.No_Declaration then
+                                                Part.Derives
+                                                  (Positive (Id)) := True;
+                                             end if;
+                                          end;
+                                       end if;
+                                    end;
+                                 end loop;
+                              end if;
+                              Join (Result.Value, Part);
+                              if Landin.Checking.Signature_Result_Count
+                                (Types.all, Called) > 1
+                              then
+                                 Result.Results.Append (Part);
                               end if;
                            end;
                         end loop;
                      end if;
+                     if Syn.Recovery_Of (Tree, Node) /= Syn.No_Node then
+                        declare
+                           Recovery : constant Syn.Node_Id := Syn.Else_Body
+                             (Tree, Syn.Recovery_Of (Tree, Node));
+                           Success : constant Function_Table := Origins;
+                           Fallback : Origin_Fact;
+                           Falls : Boolean := True;
+                        begin
+                           --  The fallback executes only on failure.  Its
+                           --  value and state join the successful edge, but
+                           --  its empty atom contributes no origin.  Never
+                           --  mark that atom untracked: that would launder a
+                           --  frame pointer returned on the success edge.
+                           if Syn.Kind (Tree, Recovery) = Syn.Block then
+                              Process_Block (Tree, Recovery, Falls);
+                              Fallback := Statement_Value;
+                           else
+                              Fallback := Fact_Of (Tree, Recovery);
+                              Falls := Falls_Through;
+                           end if;
+                           if Falls then
+                              Join (Result, Fallback);
+                              Join_Table (Origins, Success);
+                           else
+                              Origins := Success;
+                           end if;
+                           Falls_Through := True;
+                        end;
+                     end if;
                   end;
                   return Result;
                end if;
+
+            when Syn.Logical_And | Syn.Logical_Or =>
+               Result := Fact_Of (Tree, Syn.Left_Of (Tree, Node));
+               if Falls_Through then
+                  declare
+                     Skipped : constant Function_Table := Origins;
+                     Right : constant Origin_Fact :=
+                       Fact_Of (Tree, Syn.Right_Of (Tree, Node));
+                  begin
+                     if Falls_Through then
+                        Join (Result, Right);
+                        Join_Table (Origins, Skipped);
+                     else
+                        Origins := Skipped;
+                     end if;
+                     Falls_Through := True;
+                  end;
+               end if;
+               return Result;
 
             when Syn.If_Statement | Syn.Match_Statement | Syn.Bare_Block
                | Syn.Loop_Statement | Syn.While_Statement
@@ -1339,8 +1589,12 @@ package body Landin.Stages.Checking.References is
          end case;
 
          for Slot in 1 .. Syn.Slot_Count (Tree, Node) loop
+            exit when not Falls_Through;
             Join (Result, Fact_Of (Tree, Syn.Slot (Tree, Node, Slot)));
          end loop;
+         --  Only anonymous-result producers and their copies carry a
+         --  positional shape, never an enclosing conversion or constructor.
+         Result.Results.Clear;
          return Result;
       end Fact_Of;
 
@@ -1358,7 +1612,7 @@ package body Landin.Stages.Checking.References is
                Part : constant Landin.Checking.Signature_Part :=
                  Landin.Checking.Nth_Signature_Result
                    (Types.all, Signature, Position);
-               Fact : constant Origin_Fact := Origins (Id);
+               Fact : constant Reference_Fact := Origins (Id).Value;
                Expected : Parameter_Bits := [others => False];
                Same : Boolean := True;
             begin
@@ -1381,7 +1635,17 @@ package body Landin.Stages.Checking.References is
                     (Tree, At_Node, Fact,
                      "this returned reference still has frame origin",
                      Part.Site);
-               elsif not Fact.Untracked then
+               elsif not Fact.Untracked
+                 and then not
+                   (Fact.Presence = Empty_Optional
+                    and then not Exposed (Positive (Id))
+                    and then Landin.Checking.Holds (Types.all, Part.Reference)
+                    and then Landin.Checking.Is_Optional_Pointer
+                      (Types.all, Part.Reference))
+               then
+                  --  [0480]/D189: an empty result has no reference whose
+                  --  sources could disagree.  A present or unknown result
+                  --  still owes exact agreement, even with no origin bits.
                   for Source in Expected'Range loop
                      Same := Same
                        and then Expected (Source) = Fact.From (Source);
@@ -1411,28 +1675,32 @@ package body Landin.Stages.Checking.References is
         (Tree : Syn.Tree; Place : Syn.Node_Id; Value : Syn.Node_Id)
       is
          Id : constant Res.Declaration_Id := Root_Declaration (Tree, Place);
+         Target : constant Origin_Fact := Fact_Of (Tree, Place);
          Fact : constant Origin_Fact := Fact_Of (Tree, Value);
       begin
-         if Id = Res.No_Declaration or else Id not in Origins'Range then
+         pragma Unreferenced (Target);
+         if not Falls_Through
+           or else Id = Res.No_Declaration or else Id not in Origins'Range
+         then
             return;
          end if;
 
          if Res.Sort_Of (Meanings.all, Id) = Res.Module_Binding
-           and then not Fact.Untracked
+           and then not Fact.Value.Untracked
          then
-            if Fact.Frame then
+            if Fact.Value.Frame then
                Report_Escape
-                 (Tree, Value, Fact,
+                 (Tree, Value, Fact.Value,
                   "this frame-origin reference cannot be stored in module"
                   & " state",
                   Syn.Origin (Tree, Place));
             else
-               for Source in Fact.From'Range loop
-                  if Fact.From (Source)
+               for Source in Fact.Value.From'Range loop
+                  if Fact.Value.From (Source)
                     and then not Parameter_Escapes (Source)
                   then
                      Report_Escape
-                       (Tree, Value, Fact,
+                       (Tree, Value, Fact.Value,
                         "this non-escaping parameter cannot be retained in"
                         & " module state",
                         Syn.Origin (Tree, Place));
@@ -1445,7 +1713,10 @@ package body Landin.Stages.Checking.References is
          if Syn.Kind (Tree, Place) = Syn.Name_Reference then
             Origins (Id) := Fact;
          else
-            Join (Origins (Id), Fact);
+            Join (Origins (Id).Value, Fact.Value);
+            --  A partial write invalidates positional detail until a whole
+            --  replacement establishes it again; the union remains sound.
+            Origins (Id).Results.Clear;
          end if;
       end Assign;
 
@@ -1473,6 +1744,7 @@ package body Landin.Stages.Checking.References is
          --  of its arguments unwinds the still-pending entries without
          --  repeating it, and restored afterwards for the sibling edges.
          for Position in reverse First .. Last loop
+            exit when not Falls_Through;
             declare
                Action : Cleanup_Entry := Cleanup_Stack (Position);
             begin
@@ -1533,6 +1805,10 @@ package body Landin.Stages.Checking.References is
 
          Fell : Boolean;
       begin
+         Statement_Value := No_Value_Edge;
+         if not Falls_Through then
+            return;
+         end if;
          case Syn.Kind (Tree, Node) is
             when Syn.Binding =>
                declare
@@ -1555,6 +1831,8 @@ package body Landin.Stages.Checking.References is
                      declare
                         Field : constant Syn.Node_Id :=
                           Syn.Nth_Destructured_Field (Tree, Node, Position);
+                        Which : constant Natural :=
+                          Landin.Checking.Field_Index (Types.all, Tree, Field);
                      begin
                         for Slot in 1 .. Syn.Slot_Count (Tree, Field) loop
                            declare
@@ -1566,8 +1844,10 @@ package body Landin.Stages.Checking.References is
                                 and then Id in Origins'Range
                               then
                                  Origins (Id) :=
-                                   (if Has_References (Id)
-                                    then Value else No_Origin);
+                                   (if not Has_References (Id) then No_Origin
+                                    elsif Which > 0
+                                    then Nth_Result (Value, Which)
+                                    else Value);
                               end if;
                            end;
                         end loop;
@@ -1581,11 +1861,11 @@ package body Landin.Stages.Checking.References is
 
             when Syn.If_Statement =>
                declare
-                  Before : constant Function_Table := Origins;
+                  Remaining : Function_Table := Origins;
                   Merged : Function_Table := [others => No_Origin];
                   First  : Boolean := True;
-
-                  Value  : Origin_Fact := No_Origin;
+                  Can_Test : Boolean := True;
+                  Value  : Origin_Fact := No_Value_Edge;
 
                   procedure Merge_Branch (Reached : Boolean);
 
@@ -1604,7 +1884,9 @@ package body Landin.Stages.Checking.References is
                   end Merge_Branch;
                begin
                   for Arm in 1 .. Syn.Arm_Count (Tree, Node) loop
-                     Origins := Before;
+                     exit when not Can_Test;
+                     Origins := Remaining;
+                     Falls_Through := True;
                      declare
                         This : constant Syn.Node_Id :=
                           Syn.Nth_Arm (Tree, Node, Arm);
@@ -1616,21 +1898,34 @@ package body Landin.Stages.Checking.References is
                         else
                            Evaluate (Test);
                         end if;
-                        Process_Block (Tree, Syn.Body_Of (Tree, This), Fell);
+                        Can_Test := Falls_Through;
+                        --  Both outcomes have evaluated this condition.
+                        --  Only its true edge evaluates the arm; the false
+                        --  edge supplies the next elsif, else or join.
+                        Remaining := Origins;
+                        if Can_Test then
+                           Process_Block
+                             (Tree, Syn.Body_Of (Tree, This), Fell);
+                           Merge_Branch (Fell);
+                        end if;
                      end;
-                     Merge_Branch (Fell);
                   end loop;
-                  Origins := Before;
-                  if Syn.Else_Body (Tree, Node) /= Syn.No_Node then
-                     Process_Block (Tree, Syn.Else_Body (Tree, Node), Fell);
-                     Merge_Branch (Fell);
-                  else
-                     Statement_Value := No_Origin;
-                     Merge_Branch (True);
+                  Origins := Remaining;
+                  Falls_Through := Can_Test;
+                  if Can_Test then
+                     if Syn.Else_Body (Tree, Node) /= Syn.No_Node then
+                        Process_Block
+                          (Tree, Syn.Else_Body (Tree, Node), Fell);
+                        Merge_Branch (Fell);
+                     else
+                        Statement_Value := No_Origin;
+                        Merge_Branch (True);
+                     end if;
                   end if;
                   if not First then
                      Origins := Merged;
                   end if;
+                  Falls_Through := not First;
                   Statement_Value := Value;
                end;
 
@@ -1640,21 +1935,53 @@ package body Landin.Stages.Checking.References is
                     Syn.Match_Subject (Tree, Node);
                   Subject_Value : constant Origin_Fact :=
                     Fact_Of (Tree, Subject_Node);
-                  Subject_Storage : constant Origin_Fact :=
+                  Subject_Id : constant Res.Declaration_Id :=
+                    (if Syn.Kind (Tree, Subject_Node) = Syn.Name_Reference
+                     then Root_Declaration (Tree, Subject_Node)
+                     else Res.No_Declaration);
+                  Subject_Reference : constant Landin.Checking.Reference_Id :=
+                    Landin.Checking.Reference_Of
+                      (Types.all, Tree, Subject_Node);
+                  Subject_Storage : constant Reference_Fact :=
                     (if Match_Subject_Is_Copied (Tree, Subject_Node)
                      then (Frame => True, others => <>)
-                     else Storage_Fact (Tree, Subject_Node));
+                     else Subject_Value.Storage);
                   Before : constant Function_Table := Origins;
                   Merged : Function_Table := [others => No_Origin];
                   First  : Boolean := True;
-                  Value  : Origin_Fact := No_Origin;
+                  Value  : Origin_Fact := No_Value_Edge;
                begin
+                  if not Falls_Through then
+                     Statement_Value := No_Value_Edge;
+                     return;
+                  end if;
                   for Arm in 1 .. Syn.Match_Arm_Count (Tree, Node) loop
                      declare
                         This : constant Syn.Node_Id :=
                           Syn.Nth_Match_Arm (Tree, Node, Arm);
+                        Pattern : constant Syn.Node_Id :=
+                          Syn.Match_Pattern (Tree, This);
                      begin
                         Origins := Before;
+                        Falls_Through := True;
+                        if Subject_Id /= Res.No_Declaration
+                          and then not Exposed (Positive (Subject_Id))
+                          and then Res.Sort_Of (Meanings.all, Subject_Id)
+                            /= Res.Module_Binding
+                          and then Landin.Checking.Holds
+                            (Types.all, Subject_Reference)
+                          and then Landin.Checking.Is_Optional_Pointer
+                            (Types.all, Subject_Reference)
+                          and then Res.Verdict_Of
+                            (Meanings.all, Tree, Pattern) = Res.Bound
+                          and then Res.Bound_To (Meanings.all, Tree, Pattern)
+                            = Landin.Checking.Descriptor_Of
+                              (Types.all, Subject_Reference).Empty_Atom
+                        then
+                           --  This arm reads no reference, even when the
+                           --  subject's present sibling has tracked sources.
+                           Origins (Subject_Id) := Empty_Origin;
+                        end if;
                         --  D85/D121: a binding's value keeps subject origins
                         --  only when it can carry references. Its storage
                         --  separately follows the actual match place or the
@@ -1675,6 +2002,7 @@ package body Landin.Stages.Checking.References is
                                    (if Has_References (Id)
                                     then Subject_Value
                                     else No_Origin);
+                                 Origins (Id).Value.Presence := Unknown_Value;
                                  Pattern_Storage (Id) := Subject_Storage;
                               end if;
                            end;
@@ -1696,6 +2024,7 @@ package body Landin.Stages.Checking.References is
                   if not First then
                      Origins := Merged;
                   end if;
+                  Falls_Through := not First;
                   Statement_Value := Value;
                end;
 
@@ -1716,8 +2045,10 @@ package body Landin.Stages.Checking.References is
                     Syn.Kind (Tree, Node) = Syn.While_Statement;
                   Is_For : constant Boolean :=
                     Syn.Kind (Tree, Node) = Syn.For_Statement;
-                  Entry_State : constant Function_Table := Origins;
-                  Head : Function_Table := Origins;
+                  Entry_State : Function_Table;
+                  Head : Function_Table;
+                  Exhausted_State : Function_Table;
+                  Can_Exhaust : Boolean := False;
                   Frame : Loop_Frame;
                   Scratch : aliased Landin.Diagnostics.Diagnostic_List;
                   Outer_Sink : constant
@@ -1725,10 +2056,27 @@ package body Landin.Stages.Checking.References is
                   Passes : Natural := 0;
                   Converged : Boolean := False;
 
-                  --  One bit per fact is the least a pass that has not
-                  --  converged adds, so this many passes is impossible.
-                  Pass_Limit : constant Positive :=
-                    Origins'Length * (2 + Parameters + Declarations) + 2;
+                  function Fact_Width return Positive;
+
+                  function Fact_Width return Positive is
+                     Width : Natural := 0;
+                  begin
+                     for Id in 1 .. Landin.Checking.Signature_Count
+                       (Types.all)
+                     loop
+                        Width := Natural'Max
+                          (Width, Landin.Checking.Signature_Result_Count
+                             (Types.all, Landin.Checking.Signature_Id (Id)));
+                     end loop;
+                     --  Union, captured storage, result positions and one
+                     --  possible loss of positional detail at a join.
+                     return Width + 3;
+                  end Fact_Width;
+
+                  --  Each source bit grows once; the presence chain has two
+                  --  upward steps.  Include every tracked result position.
+                  Pass_Limit : constant Positive := Origins'Length
+                    * Fact_Width * (4 + Parameters + Declarations) + 2;
 
                   procedure Pass (Reporting : Boolean);
 
@@ -1740,6 +2088,7 @@ package body Landin.Stages.Checking.References is
                               then Outer_Sink
                               else Scratch'Unchecked_Access);
                      Origins := Head;
+                     Falls_Through := True;
                      Loop_Stack.Append
                        (Loop_Frame'
                           (Label        => Syn.Name (Tree, Node),
@@ -1757,41 +2106,10 @@ package body Landin.Stages.Checking.References is
                               Evaluate (Test);
                            end if;
                         end;
-                     elsif Is_For then
-                        declare
-                           Source_Fact : Origin_Fact :=
-                             Fact_Of (Tree, Syn.Traversal_Lower (Tree, Node));
-                           Element : constant Res.Declaration_Id :=
-                             Declaration_At
-                               (Tree, Syn.Traversal_Element (Tree, Node));
-                        begin
-                           if Syn.Traversal_Upper (Tree, Node) /= Syn.No_Node
-                           then
-                              Source_Fact := Fact_Of
-                                (Tree, Syn.Traversal_Upper (Tree, Node));
-                           elsif Element /= Res.No_Declaration
-                             and then Element in Origins'Range
-                           then
-                              if Landin.Checking.Traversal_Evidence_Of
-                                (Types.all, Tree, Node)
-                                   = Landin.Checking.No_Conformance
-                                and then Has_References (Element)
-                              then
-                                 --  D160: a reference-bearing element read
-                                 --  out of the traversed storage derives
-                                 --  from wherever that storage came from.
-                                 Origins (Element) := Source_Fact;
-                              else
-                                 --  A reference-free ordinary element
-                                 --  carries no origin into scalar
-                                 --  computations. D180's iterable.item
-                                 --  likewise returns an ordinary value with
-                                 --  [1320]'s source-free signature.
-                                 Origins (Element) := No_Origin;
-                              end if;
-                           end if;
-                        end;
                      end if;
+                     Can_Exhaust := (Is_While or else Is_For)
+                       and then Falls_Through;
+                     Exhausted_State := Origins;
 
                      Process_Block
                        (Tree, Syn.Loop_Body (Tree, Node), Body_Fell,
@@ -1810,6 +2128,36 @@ package body Landin.Stages.Checking.References is
                      Sink := Outer_Sink;
                   end Pass;
                begin
+                  if Is_For then
+                     --  Traversal sources and bounds are evaluated once,
+                     --  before the loop head, not again on its back edges.
+                     declare
+                        Source_Fact : constant Origin_Fact :=
+                          Fact_Of (Tree, Syn.Traversal_Lower (Tree, Node));
+                        Element : constant Res.Declaration_Id :=
+                          Declaration_At
+                            (Tree, Syn.Traversal_Element (Tree, Node));
+                     begin
+                        if Syn.Traversal_Upper (Tree, Node) /= Syn.No_Node then
+                           Evaluate (Syn.Traversal_Upper (Tree, Node));
+                        elsif Element /= Res.No_Declaration
+                          and then Element in Origins'Range
+                        then
+                           Origins (Element) :=
+                             (if Landin.Checking.Traversal_Evidence_Of
+                                (Types.all, Tree, Node)
+                                  = Landin.Checking.No_Conformance
+                               and then Has_References (Element)
+                              then Source_Fact else No_Origin);
+                        end if;
+                     end;
+                  end if;
+                  if not Falls_Through then
+                     Statement_Value := No_Value_Edge;
+                     return;
+                  end if;
+                  Entry_State := Origins;
+                  Head := Origins;
                   loop
                      Passes := Passes + 1;
                      if Passes > Pass_Limit then
@@ -1821,93 +2169,123 @@ package body Landin.Stages.Checking.References is
                   end loop;
                   Pass (Reporting => True);
 
-                  --  A while or for leaves when its test fails, from the
-                  --  head facts, through `complete` if there is one; any
-                  --  loop also leaves through its `break` edges.  An
-                  --  unconditional loop without one never leaves, and the
-                  --  head facts stand in for its unreachable exit.
-                  Origins := Head;
-                  if Is_While or else Is_For then
-                     if Syn.Complete_Body (Tree, Node) /= Syn.No_Node then
-                        --  `complete` runs on the exhausted edge and may
-                        --  itself leave through `break with`: those are
-                        --  exits of this loop too.
-                        Loop_Stack.Append
-                          (Loop_Frame'
-                             (Label        => Syn.Name (Tree, Node),
-                              Cleanup_Base =>
-                                Natural (Cleanup_Stack.Length),
-                              others       => <>));
-                        Process_Block
-                          (Tree, Syn.Complete_Body (Tree, Node), Fell);
-                        declare
-                           Completion : constant Loop_Frame :=
-                             Loop_Stack.Last_Element;
-                        begin
-                           Loop_Stack.Delete_Last;
-                           Join (Frame.Value, Completion.Value);
-                           if Completion.Exits then
-                              if Frame.Exits then
-                                 Join_Table
-                                   (Frame.Exit_State, Completion.Exit_State);
-                              else
-                                 Frame.Exit_State := Completion.Exit_State;
-                                 Frame.Exits := True;
-                              end if;
+                  --  Exhaustion keeps the final test's effects, not the
+                  --  pre-test head.  Completion and break edges join only
+                  --  when they actually reach the loop's continuation.
+                  Origins := Exhausted_State;
+                  Falls_Through := Can_Exhaust;
+                  if Can_Exhaust
+                    and then Syn.Complete_Body (Tree, Node) /= Syn.No_Node
+                  then
+                     Loop_Stack.Append
+                       (Loop_Frame'
+                          (Label        => Syn.Name (Tree, Node),
+                           Cleanup_Base => Natural (Cleanup_Stack.Length),
+                           others       => <>));
+                     Process_Block
+                       (Tree, Syn.Complete_Body (Tree, Node), Fell);
+                     declare
+                        Completion : constant Loop_Frame :=
+                          Loop_Stack.Last_Element;
+                     begin
+                        Loop_Stack.Delete_Last;
+                        Join (Frame.Value, Completion.Value);
+                        if Completion.Exits then
+                           if Frame.Exits then
+                              Join_Table
+                                (Frame.Exit_State, Completion.Exit_State);
+                           else
+                              Frame.Exit_State := Completion.Exit_State;
+                              Frame.Exits := True;
                            end if;
-                           if not Fell then
-                              Origins := [others => No_Origin];
-                           end if;
-                        end;
-                     end if;
-                     if Frame.Exits then
+                        end if;
+                     end;
+                  end if;
+                  if Frame.Exits then
+                     if Falls_Through then
                         Join_Table (Origins, Frame.Exit_State);
+                     else
+                        Origins := Frame.Exit_State;
                      end if;
-                  elsif Frame.Exits then
-                     Origins := Frame.Exit_State;
+                     Falls_Through := True;
                   end if;
                   Statement_Value := Frame.Value;
                end;
 
-            when Syn.Return_Statement =>
+            when Syn.Return_Statement | Syn.Fail_Statement
+               | Syn.Break_Statement | Syn.Continue_Statement =>
                Evaluate (Syn.Condition_Of (Tree, Node));
-               Run_Cleanups (Tree, 1, Landin.Cleanup.Successful_Return);
-               Check_Returns (Tree, Node);
+               if Falls_Through then
+                  declare
+                     Continuing : constant Function_Table := Origins;
+                     Guarded : constant Boolean :=
+                       Syn.Condition_Of (Tree, Node) /= Syn.No_Node;
+                  begin
+                     --  The guard has already run on both outcomes.  Only
+                     --  its taken edge evaluates a transfer value and unwinds
+                     --  cleanups; neither may modify the untaken edge.
+                     case Syn.Kind (Tree, Node) is
+                        when Syn.Return_Statement =>
+                           Run_Cleanups
+                             (Tree, 1, Landin.Cleanup.Successful_Return);
+                           if Falls_Through then
+                              Check_Returns (Tree, Node);
+                           end if;
 
-            when Syn.Fail_Statement =>
-               Evaluate (Syn.Condition_Of (Tree, Node));
-               Evaluate (Syn.Value_Of (Tree, Node));
-               Run_Cleanups (Tree, 1, Landin.Cleanup.Failure_Propagation);
+                        when Syn.Fail_Statement =>
+                           Evaluate (Syn.Value_Of (Tree, Node));
+                           Run_Cleanups
+                             (Tree, 1, Landin.Cleanup.Failure_Propagation);
 
-            when Syn.Break_Statement | Syn.Continue_Statement =>
-               Evaluate (Syn.Condition_Of (Tree, Node));
-               declare
-                  Target : constant Positive := Transfer_Loop (Tree, Node);
-                  Frame : Loop_Frame := Loop_Stack (Target);
-               begin
-                  if Syn.Kind (Tree, Node) = Syn.Break_Statement then
-                     Join
-                       (Frame.Value,
-                        Fact_Of (Tree, Syn.Transfer_Value (Tree, Node)));
-                  end if;
-                  Run_Cleanups
-                    (Tree, Frame.Cleanup_Base + 1,
-                     Landin.Cleanup.Structured_Transfer);
-                  if Syn.Kind (Tree, Node) = Syn.Break_Statement then
-                     if Frame.Exits then
-                        Join_Table (Frame.Exit_State, Origins);
-                     else
-                        Frame.Exit_State := Origins;
-                        Frame.Exits := True;
+                        when Syn.Break_Statement | Syn.Continue_Statement =>
+                           declare
+                              Target : constant Positive :=
+                                Transfer_Loop (Tree, Node);
+                              Value : Origin_Fact := No_Value_Edge;
+                           begin
+                              if Syn.Kind (Tree, Node) = Syn.Break_Statement
+                              then
+                                 Value := Fact_Of
+                                   (Tree, Syn.Transfer_Value (Tree, Node));
+                              end if;
+                              Run_Cleanups
+                                (Tree, Loop_Stack (Target).Cleanup_Base + 1,
+                                 Landin.Cleanup.Structured_Transfer);
+                              if Falls_Through then
+                                 declare
+                                    Frame : Loop_Frame := Loop_Stack (Target);
+                                 begin
+                                    if Syn.Kind (Tree, Node)
+                                      = Syn.Break_Statement
+                                    then
+                                       Join (Frame.Value, Value);
+                                       if Frame.Exits then
+                                          Join_Table
+                                            (Frame.Exit_State, Origins);
+                                       else
+                                          Frame.Exit_State := Origins;
+                                          Frame.Exits := True;
+                                       end if;
+                                    elsif Frame.Continues then
+                                       Join_Table (Frame.Back_State, Origins);
+                                    else
+                                       Frame.Back_State := Origins;
+                                       Frame.Continues := True;
+                                    end if;
+                                    Loop_Stack.Replace_Element (Target, Frame);
+                                 end;
+                              end if;
+                           end;
+
+                        when others =>
+                           null;
+                     end case;
+                     Falls_Through := Guarded;
+                     if Guarded then
+                        Origins := Continuing;
                      end if;
-                  elsif Frame.Continues then
-                     Join_Table (Frame.Back_State, Origins);
-                  else
-                     Frame.Back_State := Origins;
-                     Frame.Continues := True;
-                  end if;
-                  Loop_Stack.Replace_Element (Target, Frame);
-               end;
+                  end;
+               end if;
 
             when Syn.Defer_Statement | Syn.Undo_Statement =>
                --  Registration evaluates nothing; the call is walked on
@@ -1920,6 +2298,9 @@ package body Landin.Stages.Checking.References is
                         else Landin.Cleanup.Deferred_Call),
                      Call   => Syn.Cleanup_Call (Tree, Node),
                      Active => True));
+
+            when Syn.Increment | Syn.Decrement =>
+               Evaluate (Syn.Target_Of (Tree, Node));
 
             when Syn.Call | Syn.Labeled_Application | Syn.Try_Expression
                | Syn.Discard =>
@@ -1937,40 +2318,35 @@ package body Landin.Stages.Checking.References is
          Of_Loop      : Syn.Node_Id := Syn.No_Node)
       is
          Base : constant Natural := Natural (Cleanup_Stack.Length);
+         Value : Origin_Fact := No_Origin;
       begin
-         Fell_Through := True;
-         if Block = Syn.No_Node then
+         Fell_Through := Falls_Through;
+         Statement_Value :=
+           (if Falls_Through then No_Origin else No_Value_Edge);
+         if Block = Syn.No_Node or else not Falls_Through then
             return;
          end if;
          Positions.Append
            (Position_Frame'(Block => Block, Index => 0, Of_Loop => Of_Loop));
          for Position in 1 .. Syn.Statement_Count (Tree, Block) loop
-            declare
-               Statement : constant Syn.Node_Id :=
-                 Syn.Nth_Statement (Tree, Block, Position);
-            begin
-               Positions (Positions.Last_Index).Index := Position;
-               Process_Statement (Tree, Statement);
-               if Syn.Kind (Tree, Statement)
-                    in Syn.Return_Statement | Syn.Fail_Statement
-                       | Syn.Break_Statement | Syn.Continue_Statement
-                 and then Syn.Condition_Of (Tree, Statement) = Syn.No_Node
-               then
-                  Fell_Through := False;
-                  exit;
-               end if;
-            end;
+            Positions (Positions.Last_Index).Index := Position;
+            Process_Statement
+              (Tree, Syn.Nth_Statement (Tree, Block, Position));
+            exit when not Falls_Through;
          end loop;
-         Statement_Value := No_Origin;
-         if Fell_Through then
+         if Falls_Through then
             Positions (Positions.Last_Index).Index :=
               Syn.Statement_Count (Tree, Block) + 1;
             if Syn.Block_Value (Tree, Block) /= Syn.No_Node then
-               Statement_Value :=
-                 Fact_Of (Tree, Syn.Block_Value (Tree, Block));
+               Value := Fact_Of (Tree, Syn.Block_Value (Tree, Block));
             end if;
             Run_Cleanups (Tree, Base + 1, Landin.Cleanup.Normal_Fallthrough);
          end if;
+         --  A block value is captured before its cleanup, whereas named
+         --  function returns are checked after cleanup has updated storage.
+         Fell_Through := Falls_Through;
+         Statement_Value :=
+           (if Falls_Through then Value else No_Value_Edge);
          Cleanup_Stack.Set_Length (Ada.Containers.Count_Type (Base));
          Positions.Delete_Last;
       end Process_Block;
@@ -1980,6 +2356,7 @@ package body Landin.Stages.Checking.References is
          return;
       end if;
 
+      Note_Exposed_Storage (Of_Tree, Body_Node);
       for Position in 1 .. Syn.Parameter_Count (Of_Tree, Function_Node) loop
          declare
             Node : constant Syn.Node_Id :=
@@ -1988,10 +2365,13 @@ package body Landin.Stages.Checking.References is
          begin
             if Id /= Res.No_Declaration then
                Parameter_Of (Id) := Position;
+               Exposed (Positive (Id)) := Exposed (Positive (Id))
+                 or else Syn.Convention_Of (Of_Tree, Node)
+                   = Syn.Inout_Convention;
                Parameter_Escapes (Position) := Syn.Is_Escaping (Of_Tree, Node);
                if Has_References (Id) then
-                  Origins (Id).From (Position) := True;
-                  Origins (Id).Derives (Positive (Id)) := True;
+                  Origins (Id).Value.From (Position) := True;
+                  Origins (Id).Value.Derives (Positive (Id)) := True;
                end if;
             end if;
          end;
@@ -2021,15 +2401,31 @@ package body Landin.Stages.Checking.References is
                Check_Returns (Of_Tree, Function_Node);
             end if;
          end;
-      elsif Syn.Return_Count (Of_Tree, Function_Node) = 1 then
+      else
          declare
-            Returned : constant Syn.Node_Id :=
-              Syn.Nth_Return (Of_Tree, Function_Node, 1);
-            Id : constant Res.Declaration_Id :=
-              Declaration_At (Of_Tree, Returned);
+            Value : constant Origin_Fact := Fact_Of (Of_Tree, Body_Node);
+            Count : constant Natural :=
+              Syn.Return_Count (Of_Tree, Function_Node);
          begin
-            Origins (Id) := Fact_Of (Of_Tree, Body_Node);
-            Check_Returns (Of_Tree, Body_Node);
+            --  Evaluate the body once, including none-returning bodies.
+            --  Each position of an anonymous result fills its own named
+            --  return, rather than trusting the enclosing signature or
+            --  assigning every field the aggregate's union of sources.
+            if Falls_Through then
+               for Position in 1 .. Count loop
+                  declare
+                     Returned : constant Syn.Node_Id :=
+                       Syn.Nth_Return (Of_Tree, Function_Node, Position);
+                     Id : constant Res.Declaration_Id :=
+                       Declaration_At (Of_Tree, Returned);
+                  begin
+                     Origins (Id) :=
+                       (if Count = 1 then Value
+                        else Nth_Result (Value, Position));
+                  end;
+               end loop;
+               Check_Returns (Of_Tree, Body_Node);
+            end if;
          end;
       end if;
    end Check_Function;

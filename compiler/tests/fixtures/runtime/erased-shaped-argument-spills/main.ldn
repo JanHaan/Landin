@@ -1,0 +1,101 @@
+reader: type = concept (t: type)
+    read: (self: ptr t) -> (value: i32)
+end reader
+
+payload: type = struct
+    value: i32
+end payload
+
+collector: type = concept (t: type)
+    collect: (self: ptr t, packet: payload, numbers: [2]i32,
+              view: []i32, source: any reader, later: i32) -> (value: i32)
+end collector
+
+state: type = struct
+    value: i32
+end state
+
+read_state: (self: ptr state) -> (value: i32) =
+    value = self.val.value
+end read_state
+
+mut consume_calls: i32 = 0
+
+collect_state: (self: ptr state, packet: payload, numbers: [2]i32,
+                view: []i32, source: any reader, later: i32) -> (value: i32) =
+    inc consume_calls
+    value = self.val.value + packet.value + numbers[0] + numbers[1]
+        + view[0] + view[1] + source.read() + later
+end collect_state
+
+state is reader (read: read_state)
+state is collector (collect: collect_state)
+
+mut trace: i32 = 0
+mut original_packet: payload = (value: 10)
+mut original_numbers: [2]i32 = [3, 4]
+
+mark_receiver: (index: usize) -> (value: usize) =
+    trace = trace * 10 + 1
+    value = index
+end mark_receiver
+
+mark_packet: (packet: payload) -> (value: payload) =
+    trace = trace * 10 + 2
+    value = packet
+end mark_packet
+
+mark_numbers: (numbers: [2]i32) -> (value: [2]i32) =
+    trace = trace * 10 + 3
+    value = numbers
+end mark_numbers
+
+mark_view: (view: []i32) -> (value: []i32 from view) =
+    trace = trace * 10 + 4
+    value = view
+end mark_view
+
+mark_source: (source: any reader) -> (value: any reader from source) =
+    trace = trace * 10 + 5
+    value = source
+end mark_source
+
+finish: (inout view: []i32, replacement_view: []i32,
+         inout source: any reader, replacement_source: any reader)
+        -> (value: i32) =
+    trace = trace * 10 + 6
+    original_packet.value = 100
+    original_numbers[0] = 100
+    view = replacement_view
+    source = replacement_source
+    value = 2
+end finish
+
+public main: () -> (code: i32) =
+    concrete: state = (value: 0)
+    target: any collector = any(addr concrete)
+    receivers: [1]any collector = [target]
+    first: state = (value: 12)
+    second: state = (value: 99)
+    mut source: any reader = any(addr first)
+    replacement_source: any reader = any(addr second)
+    bytes: [2]i32 = [5, 6]
+    replacement_bytes: [2]i32 = [90, 91]
+    mut view: []i32 = bytes[0..<2]
+    replacement_view: []i32 = replacement_bytes[0..<2]
+
+    --  All four shaped arguments precede a branch and a mutating final call.
+    --  Their saved addresses must retain the shapes of the captured values.
+    total := receivers[mark_receiver(0)].collect(
+        mark_packet(original_packet), mark_numbers(original_numbers),
+        mark_view(view), mark_source(source),
+        if trace == 12345
+        then finish(view, replacement_view, source, replacement_source)
+        else 1000 end if)
+
+    --  The callee saw the old values and descriptors, not the new bindings.
+    code = if total == 42 and trace == 123456 and consume_calls == 1
+              and original_packet.value == 100 and original_numbers[0] == 100
+              and view[0] == 90 and source.read() == 99
+           then 42 else 1 end if
+end main

@@ -1,0 +1,6 @@
+class: negative
+summary: R4.40 requires positive fixed array extents in native C layout fields
+program: program.ldn
+codes: L0301
+constructs: 0520, 1580
+targets: linux-x86-64

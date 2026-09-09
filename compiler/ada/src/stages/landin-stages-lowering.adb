@@ -33,6 +33,7 @@ package body Landin.Stages.Lowering is
    use type IR.Atom_Set_Id;
    use type IR.Evidence_Id;
    use type IR.Item_Id;
+   use type IR.Item_Kind;
    use type IR.Nominal_Type_Id;
    use type IR.Slot_Id;
    use type IR.Signature_Id;
@@ -72,15 +73,6 @@ package body Landin.Stages.Lowering is
    use type Landin.Checking.Reference_Id;
    use type Ty.Type_Kind;
    use type Ty.Reference_View;
-
-   --  D118: the neutral subobject path one child identity spells.  The
-   --  contextual forms below still reach exactly one depth, so this is
-   --  where a depth-one identity becomes the run every operation carries;
-   --  zero is no step at all, which is what a direct operation has.
-   function Below (Child : Natural) return IR.Path_Step_Array
-     is (if Child = 0 then IR.No_Path_Steps
-         else [1 => (Field      => IR.Part_Position (Child),
-                     Case_Index => 0)]);
 
    --  D119: descending one field into a place.  A place is a base field
    --  and D118's run below it, with base zero meaning the storage itself;
@@ -293,11 +285,6 @@ package body Landin.Stages.Lowering is
 
       Slots : Slot_Map := No_Slots;
 
-      type Item_Map is array (Declared) of IR.Item_Id;
-      Static_Function_Targets : Item_Map := [others => IR.No_Item];
-      Finding_Static_Function : array (Declared) of Boolean :=
-        [others => False];
-
       function Total_Syntax_Nodes return Natural;
 
       function Total_Syntax_Nodes return Natural is
@@ -459,6 +446,12 @@ package body Landin.Stages.Lowering is
       end Any_Evidence_For;
 
       function Neutral_Element
+        (Part : Landin.Checking.Signature_Part) return IR.Field_Shape;
+
+      function Pointee_For
+        (Reference : Landin.Checking.Reference_Id) return IR.Pointee_Id;
+
+      function Neutral_Result_Part
         (Part : Landin.Checking.Signature_Part) return IR.Field_Shape;
 
       function Signature_For
@@ -799,6 +792,13 @@ package body Landin.Stages.Lowering is
                then Neutral_Element (Part) else (others => <>));
          begin
             return (Element_Shape => Element,
+               Pointee =>
+                 (if Part.Convention = Syn.Inout_Convention
+                  then IR.Add_Pointee
+                    (Unit.all, Neutral_Result_Part (Part))
+                  elsif Part.Kind = Ty.Pointer_Value
+                  then Pointee_For (Part.Reference)
+                  else IR.No_Pointee),
                Kind    =>
                  (if Part.Convention = Syn.Inout_Convention then Ty.Usize
                   elsif Part.Kind = Ty.Atom_Value then Ty.U32
@@ -879,7 +879,11 @@ package body Landin.Stages.Lowering is
               Atom_Set_For
                 (Landin.Checking.Signature_Errors (Types.all, Source)),
               (if Source_Count = 0 then IR.No_Return_Sources
-               else Sources (1 .. Source_Count)));
+               else Sources (1 .. Source_Count)),
+              C_ABI => Landin.Checking.Signature_Uses_C_ABI
+                (Types.all, Source),
+              Variadic => Landin.Checking.Signature_Is_Variadic
+                (Types.all, Source));
          return Signatures (Positive (Source));
       end Signature_For;
 
@@ -937,7 +941,9 @@ package body Landin.Stages.Lowering is
              (Unit.all, Parameters, Results,
               IR.Signature_Errors (Unit.all, Source),
               (if Source_Count = 0 then IR.No_Return_Sources
-               else Sources (1 .. Source_Count)));
+               else Sources (1 .. Source_Count)),
+              C_ABI => IR.Signature_Uses_C_ABI (Unit.all, Source),
+              Variadic => IR.Signature_Is_Variadic (Unit.all, Source));
          return Generic_Signatures (Position);
       end Signature_For_Instance;
 
@@ -1302,7 +1308,8 @@ package body Landin.Stages.Lowering is
          if Syn.Kind (Of_Tree, Node) /= Syn.Call
            or else Syn.Argument_Count (Of_Tree, Node) /= 1
            or else Syn.Kind
-             (Of_Tree, Syn.Callee_Of (Of_Tree, Node)) /= Syn.Name_Reference
+             (Of_Tree, Syn.Callee_Of (Of_Tree, Node))
+               not in Syn.Name_Reference | Syn.Member_Selection
          then
             return Ty.Ill_Typed;
          end if;
@@ -1310,7 +1317,10 @@ package body Landin.Stages.Lowering is
          declare
             Callee : constant Syn.Node_Id := Syn.Callee_Of (Of_Tree, Node);
             Named  : constant Ty.Type_Kind :=
-              Landin.Checking.Named (Types.all, Syn.Name (Of_Tree, Callee));
+              (if Syn.Kind (Of_Tree, Callee) = Syn.Name_Reference
+               then Landin.Checking.Named
+                 (Types.all, Syn.Name (Of_Tree, Callee))
+               else Ty.Ill_Typed);
          begin
             if Named in Ty.Scalar_Name then
                return Named;
@@ -1643,8 +1653,6 @@ package body Landin.Stages.Lowering is
 
       --  One field of D128's anonymous result aggregate.  D131 gives a
       --  nominal aggregate the same one `usize` field plus its signature.
-      function Neutral_Result_Part
-        (Part : Landin.Checking.Signature_Part) return IR.Field_Shape;
 
       procedure Add_Result_Fields
         (Signature : Landin.Checking.Signature_Id;
@@ -1691,53 +1699,23 @@ package body Landin.Stages.Lowering is
                         then IR.Scalar_Field_Shape
                         else IR.Array_Field_Shape),
                      Element => Ty.Usize,
+                     Pointee =>
+                       (if Descriptor.Kind = Ty.Pointer_Value
+                        then Pointee_For (Source.Reference)
+                        else IR.No_Pointee),
                      Length =>
                        (if Descriptor.Kind = Ty.Pointer_Value then 1 else 2),
                      others => <>);
                end;
 
             when Landin.Checking.Fixed_Array_Field =>
-               --  D121: an ordinary-struct element is one run of exactly
-               --  one shape, appended before the array shape names it.
-               if Source.Reference /= Landin.Checking.No_Reference then
-                  declare
-                     Element : constant IR.Field_Shape := Neutral_Shape
-                       ((Kind => Landin.Checking.Reference_Field,
-                         Reference => Source.Reference, others => <>));
-                     First : constant Natural :=
-                       (if Element.Kind = IR.Scalar_Field_Shape then 0
-                        else IR.Add_Shape_Run (Unit.all, [1 => Element]));
-                  begin
-                     return
-                       (Kind => IR.Array_Field_Shape,
-                        Element => Element.Element,
-                        Length => IR.Element_Total (Source.Length),
-                        Cases => (if First = 0 then 0 else 1),
-                        Payloads_First => First, others => <>);
-                  end;
-               end if;
-               if Source.Nominal /= Landin.Checking.No_Nominal_Type then
-                  declare
-                     First : constant Natural :=
-                       IR.Add_Shape_Run
-                         (Unit.all,
-                          [1 => Neutral_Body (Source.Nominal)]);
-                  begin
-                     return
-                       (Kind           => IR.Array_Field_Shape,
-                        Element        => Ty.Bool,
-                        Length         => IR.Element_Total (Source.Length),
-                        Cases          => 1,
-                        Payloads_First => First,
-                        Nominal        => Nominal_For (Source.Nominal),
-                        others         => <>);
-                  end;
-               end if;
-               return
-                 (Kind    => IR.Array_Field_Shape,
-                  Element => Source.Element,
-                  Length  => IR.Element_Total (Source.Length),
-                  others  => <>);
+               declare
+                  Element : constant IR.Field_Shape := Neutral_Shape
+                    (Landin.Checking.Array_Field_Element (Types.all, Source));
+               begin
+                  return IR.Make_Array_Shape
+                    (Unit.all, IR.Element_Total (Source.Length), Element);
+               end;
 
             when Landin.Checking.Aggregate_Field =>
                return Neutral_Body (Source.Nominal);
@@ -1775,7 +1753,9 @@ package body Landin.Stages.Lowering is
          if Part.Kind /= Ty.Fixed_Array then
             raise Landin.Compiler_Defect with
               "a non-array signature part was requested as an element";
-         elsif Part.Element_Shape.Kind /= Landin.Checking.Scalar_Field then
+         elsif Part.Element_Shape.Kind /= Landin.Checking.Scalar_Field
+           or else Part.Element_Shape.Signature /= Landin.Checking.No_Signature
+         then
             return Neutral_Shape (Part.Element_Shape);
          elsif Part.Nominal /= Landin.Checking.No_Nominal_Type then
             return Neutral_Body (Part.Nominal);
@@ -1786,6 +1766,56 @@ package body Landin.Stages.Lowering is
             Length  => 1,
             others  => <>);
       end Neutral_Element;
+
+      function Pointee_For
+        (Reference : Landin.Checking.Reference_Id) return IR.Pointee_Id
+      is
+         Descriptor : constant Landin.Checking.Reference_Descriptor :=
+           Landin.Checking.Descriptor_Of (Types.all, Reference);
+         Shape : IR.Field_Shape;
+      begin
+         case Descriptor.Referent is
+            when Ty.Scalar_Name =>
+               Shape := (Element => Descriptor.Referent, others => <>);
+            when Ty.Function_Value =>
+               Shape :=
+                 (Element => Ty.Usize,
+                  Signature => Signature_For (Descriptor.Signature),
+                  others => <>);
+            when Ty.Atom_Value =>
+               Shape :=
+                 (Element => Ty.U32, Atoms => Atom_Set_For (Descriptor.Atoms),
+                  others => <>);
+            when Ty.Pointer_Value =>
+               Shape :=
+                 (Element => Ty.Usize,
+                  Pointee => Pointee_For (Descriptor.Reference), others => <>);
+            when Ty.Aggregate =>
+               Shape :=
+                 (Kind => IR.Aggregate_Field_Shape,
+                  Nominal => Nominal_For (Descriptor.Nominal), others => <>);
+            when Ty.Fixed_Array =>
+               declare
+                  Child : constant IR.Field_Shape := Neutral_Element
+                    ((Kind => Ty.Fixed_Array,
+                      Element => Descriptor.Element,
+                      Nominal => Descriptor.Element_Nominal,
+                      Element_Shape => Descriptor.Element_Shape,
+                      others => <>));
+               begin
+                  Shape := IR.Make_Array_Shape
+                    (Unit.all, IR.Element_Total (Descriptor.Length), Child);
+               end;
+            when Ty.Slice_Value | Ty.Any_Value =>
+               Shape :=
+                 (Kind => IR.Array_Field_Shape, Element => Ty.Usize,
+                  Length => 2, others => <>);
+            when others =>
+               raise Landin.Compiler_Defect with
+                 "an incomplete pointer referent reached lowering";
+         end case;
+         return IR.Add_Pointee (Unit.all, Shape);
+      end Pointee_For;
 
       function Neutral_Value_Shape
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return IR.Field_Shape
@@ -1803,25 +1833,36 @@ package body Landin.Stages.Lowering is
             declare
                Element : constant IR.Field_Shape :=
                  Neutral_Element (Of_Tree, Node);
-               First : constant Natural :=
-                 (if Element.Kind = IR.Scalar_Field_Shape
-                  then 0
-                  else IR.Add_Shape_Run (Unit.all, [1 => Element]));
             begin
-               return
-                 (Kind           => IR.Array_Field_Shape,
-                  Element        => Element.Element,
-                  Length         => IR.Element_Total
-                    (Landin.Checking.Array_Length
-                       (Types.all, Of_Tree, Node)),
-                  Cases          => (if First = 0 then 0 else 1),
-                  Payloads_First => First,
-                  Nominal        => Element.Nominal,
-                  others         => <>);
+               return IR.Make_Array_Shape
+                 (Unit.all,
+                  IR.Element_Total
+                    (Landin.Checking.Array_Length (Types.all, Of_Tree, Node)),
+                  Element);
             end;
+         elsif Held in Ty.Scalar_Name | Ty.Function_Value | Ty.Pointer_Value
+                         | Ty.Atom_Value
+         then
+            return
+              (Kind => IR.Scalar_Field_Shape,
+               Element => Scalar_At (Of_Tree, Node),
+               Pointee =>
+                 (if Held = Ty.Pointer_Value
+                  then Pointee_For
+                    (Landin.Checking.Reference_Of (Types.all, Of_Tree, Node))
+                  else IR.No_Pointee),
+               Signature =>
+                 (if Held = Ty.Function_Value then Signature_For
+                    (Landin.Checking.Signature_Of (Types.all, Of_Tree, Node))
+                  else IR.No_Signature),
+               Atoms =>
+                 (if Held = Ty.Atom_Value then Atom_Set_For
+                    (Landin.Checking.Atom_Set_Of (Types.all, Of_Tree, Node))
+                  else IR.No_Atom_Set),
+               others => <>);
          end if;
          raise Landin.Compiler_Defect with
-           "a scalar value was asked for a stored shape";
+           "a non-value was asked for a stored shape";
       end Neutral_Value_Shape;
 
       function Neutral_Body
@@ -1884,20 +1925,11 @@ package body Landin.Stages.Lowering is
                           Element => Landin.Checking.Array_Scalar_Element_Of
                             (Types.all, Actual),
                           Length => 1, others => <>));
-                  First : constant Natural :=
-                    (if Element.Kind /= IR.Scalar_Field_Shape
-                     then IR.Add_Shape_Run (Unit.all, [1 => Element]) else 0);
                begin
-                  return
-                    (Kind => IR.Array_Field_Shape,
-                     Element => Element.Element,
-                     Length => IR.Element_Total
-                       (Landin.Checking.Array_Length_Of
-                          (Types.all, Actual)),
-                     Cases => (if First = 0 then 0 else 1),
-                     Payloads_First => First,
-                     Nominal => Element.Nominal,
-                     others => <>);
+                  return IR.Make_Array_Shape
+                    (Unit.all, IR.Element_Total
+                       (Landin.Checking.Array_Length_Of (Types.all, Actual)),
+                     Element);
                end;
             when Landin.Checking.Nominal_Actual_Type =>
                return Neutral_Body
@@ -1923,6 +1955,11 @@ package body Landin.Stages.Lowering is
                         then IR.Array_Field_Shape
                         else IR.Scalar_Field_Shape),
                      Element => Ty.Usize,
+                     Pointee =>
+                       (if Descriptor.Kind = Ty.Pointer_Value
+                        then Pointee_For
+                          (Landin.Checking.Reference_Of (Types.all, Actual))
+                        else IR.No_Pointee),
                      Length =>
                        (if Descriptor.Kind = Ty.Slice_Value then 2 else 1),
                      others => <>);
@@ -1948,7 +1985,8 @@ package body Landin.Stages.Lowering is
             when Ty.Pointer_Value =>
                return
                  (Kind => IR.Scalar_Field_Shape, Element => Ty.Usize,
-                  Length => 1, others => <>);
+                  Length => 1, Pointee => Pointee_For (Part.Reference),
+                  others => <>);
             when Ty.Slice_Value | Ty.Any_Value =>
                return
                  (Kind => IR.Array_Field_Shape, Element => Ty.Usize,
@@ -1972,17 +2010,9 @@ package body Landin.Stages.Lowering is
             when Ty.Fixed_Array =>
                declare
                   Element : constant IR.Field_Shape := Neutral_Element (Part);
-                  First : constant Natural :=
-                    (if Element.Kind /= IR.Scalar_Field_Shape
-                     then IR.Add_Shape_Run (Unit.all, [1 => Element]) else 0);
                begin
-                  return
-                    (Kind => IR.Array_Field_Shape,
-                     Element => Element.Element,
-                     Length => IR.Element_Total (Part.Length),
-                     Cases => (if First = 0 then 0 else 1),
-                     Payloads_First => First, Nominal => Element.Nominal,
-                     others => <>);
+                  return IR.Make_Array_Shape
+                    (Unit.all, IR.Element_Total (Part.Length), Element);
                end;
             when others =>
                raise Landin.Compiler_Defect with
@@ -2281,6 +2311,25 @@ package body Landin.Stages.Lowering is
               (Rooted_Base (Of_Tree, Alias.Subject),
                Rooted_Steps (Of_Tree, Alias.Subject)));
 
+      --  Element operations accept either a complete nested path or the
+      --  legacy direct variant selectors, never both.  Keep direct payloads
+      --  compact; below a child, append the payload to the existing path.
+      function Alias_Element_Steps
+        (Of_Tree : Syn.Tree; Alias : Payload_Alias)
+         return IR.Path_Step_Array;
+
+      function Alias_Element_Steps
+        (Of_Tree : Syn.Tree; Alias : Payload_Alias)
+         return IR.Path_Step_Array
+      is
+         Steps : constant IR.Path_Step_Array := Alias_Steps (Of_Tree, Alias);
+      begin
+         return
+           (if Steps'Length = 0 or else Alias.Which = 0 then Steps
+            else Payload_Steps
+              (Steps, Positive (Alias.Which), Positive (Alias.Payload_Field)));
+      end Alias_Element_Steps;
+
       function Rooted_Steps
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return IR.Path_Step_Array
       is
@@ -2345,7 +2394,8 @@ package body Landin.Stages.Lowering is
       --  storage to a runtime address.  Scalar loads already recognize that
       --  boundary directly; aggregate arguments and copies must choose the
       --  same Lower_Stored_Place path instead of encoding `.val` as field
-      --  zero.
+      --  zero. An inout parameter already starts at runtime storage, even
+      --  when its selections contain no explicit dereference or index.
       function Has_Reference_Storage
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
       is
@@ -2369,6 +2419,25 @@ package body Landin.Stages.Lowering is
             end if;
             Where := Syn.Target_Of (Of_Tree, Where);
          end loop;
+         if Syn.Kind (Of_Tree, Where) = Syn.Name_Reference
+           and then Res.Verdict_Of (Meanings.all, Of_Tree, Where) = Res.Bound
+         then
+            declare
+               Means : constant Res.Declaration_Id :=
+                 Res.Bound_To (Meanings.all, Of_Tree, Where);
+            begin
+               if Aliases (Declared (Means)).Active
+                 and then Aliases (Declared (Means)).Source.Kind
+                   = IR.Runtime_Address
+               then
+                  return True;
+               elsif Res.Sort_Of (Meanings.all, Means) = Res.Parameter then
+                  return Syn.Convention_Of
+                    (Tree_For (Res.Source_Of (Meanings.all, Means)).all,
+                     Res.Node_Of (Meanings.all, Means)) = Syn.Inout_Convention;
+               end if;
+            end;
+         end if;
          return False;
       end Has_Reference_Storage;
 
@@ -2386,10 +2455,9 @@ package body Landin.Stages.Lowering is
                     Res.Bound_To (Meanings.all, Of_Tree, Node);
                   Alias : Payload_Alias renames Aliases (Declared (Means));
                begin
-                  if Alias.Active
-                    and then Type_At (Of_Tree, Node) = Ty.Fixed_Array
-                    and then Alias.Which /= 0
-                  then
+                  --  An address names the payload leaf, not its containing
+                  --  variant part, for scalar and aggregate aliases alike.
+                  if Alias.Active and then Alias.Which /= 0 then
                      Result.Place := Alias.Source;
                      Result.Base := Alias.Field;
                      for Step of Payload_Steps
@@ -2427,17 +2495,8 @@ package body Landin.Stages.Lowering is
                           IR.Emit_Pointer_Address
                             (Unit.all, Filling, Pointer,
                              Site_Of (Of_Tree, Node));
-                        Held : constant Ty.Type_Kind :=
-                          Type_At (Of_Tree, Node);
                         Shape : constant IR.Field_Shape :=
-                          (if Held in Ty.Aggregate | Ty.Fixed_Array
-                                | Ty.Slice_Value | Ty.Any_Value
-                           then Neutral_Value_Shape (Of_Tree, Node)
-                           else
-                             (Kind => IR.Scalar_Field_Shape,
-                              Element => Scalar_At (Of_Tree, Node),
-                              Length => 1,
-                              others => <>));
+                          Neutral_Value_Shape (Of_Tree, Node);
                         Slot : constant IR.Slot_Id := IR.Add_Address_Slot
                           (Unit.all, Filling, Shape, Site_Of (Of_Tree, Node));
                      begin
@@ -2608,10 +2667,17 @@ package body Landin.Stages.Lowering is
          end if;
 
          declare
+            --  Storage_Address names a whole array or aggregate (or a
+            --  computed element). A selected scalar is a Place_Address,
+            --  with the complete path retained for its address witness.
             Address : constant IR.Value_Id :=
-              IR.Emit_Storage_Address
-                (Unit.all, Filling, Place.Place, Site,
-                 Field => Place.Base, Nested => Stored_Steps (Place));
+              (if Shape.Kind = IR.Scalar_Field_Shape
+               then IR.Emit_Place_Address
+                 (Unit.all, Filling, Place.Place, Site,
+                  Field => Place.Base, Nested => Stored_Steps (Place))
+               else IR.Emit_Storage_Address
+                 (Unit.all, Filling, Place.Place, Site,
+                  Field => Place.Base, Nested => Stored_Steps (Place)));
             Slot : constant IR.Slot_Id :=
               IR.Add_Address_Slot (Unit.all, Filling, Shape, Site);
          begin
@@ -2721,6 +2787,11 @@ package body Landin.Stages.Lowering is
                elsif Held = Ty.Atom_Value then Ty.U32
                else Ty.Scalar_Name (Held)),
               Id, Site_Of (Of_Tree, Node),
+              Pointee =>
+                (if Held = Ty.Pointer_Value
+                 then Pointee_For
+                   (Landin.Checking.Reference_Of (Types.all, Id))
+                 else IR.No_Pointee),
               Signature =>
                 (if Held = Ty.Function_Value
                  then Signature_For
@@ -2834,6 +2905,495 @@ package body Landin.Stages.Lowering is
            "a non-stored value requested a shaped temporary";
       end Add_Value_Temporary;
 
+      function Stored_At
+        (Place : IR.Storage;
+         Base  : Natural := 0;
+         Steps : IR.Path_Step_Array := IR.No_Path_Steps) return Stored_Place;
+
+      function Stored_At
+        (Place : IR.Storage;
+         Base  : Natural := 0;
+         Steps : IR.Path_Step_Array := IR.No_Path_Steps) return Stored_Place
+      is
+         Result : Stored_Place :=
+           (Place => Place, Base => Base,
+            Steps => Stored_Path_Vectors.Empty_Vector);
+      begin
+         for Step of Steps loop
+            Result.Steps.Append (Step);
+         end loop;
+         return Result;
+      end Stored_At;
+
+      function Shaped_Temporary
+        (Shape : IR.Field_Shape; Site : Landin.Provenance.Origin)
+         return IR.Slot_Id;
+
+      function Shaped_Temporary
+        (Shape : IR.Field_Shape; Site : Landin.Provenance.Origin)
+         return IR.Slot_Id
+      is
+         Result : IR.Slot_Id;
+      begin
+         case Shape.Kind is
+            when IR.Array_Field_Shape =>
+               return IR.Add_Array_Slot
+                 (Unit.all, Filling, IR.Array_Element_Shape (Unit.all, Shape),
+                  Shape.Length, Res.No_Declaration, Site);
+            when IR.Aggregate_Field_Shape =>
+               Result := IR.Add_Aggregate_Slot
+                 (Unit.all, Filling, Res.No_Declaration, Site, Shape.Nominal);
+               for Field in 1 .. IR.Aggregate_Field_Count (Unit.all, Shape)
+               loop
+                  IR.Add_Slot_Field
+                    (Unit.all, Filling, Result,
+                     IR.Nth_Aggregate_Field (Unit.all, Shape, Field));
+               end loop;
+               return Result;
+            when IR.Scalar_Field_Shape =>
+               return IR.Add_Slot
+                 (Unit.all, Filling, Shape.Element, Res.No_Declaration, Site,
+                  Signature => Shape.Signature, Atoms => Shape.Atoms,
+                  Pointee => Shape.Pointee);
+            when IR.Variant_Field_Shape =>
+               raise Landin.Compiler_Defect with
+                 "a variant part requested standalone storage";
+         end case;
+      end Shaped_Temporary;
+
+      function Child_Place
+        (Parent : Stored_Place; Field : Positive; Which : Natural := 0)
+         return Stored_Place;
+
+      function Child_Place
+        (Parent : Stored_Place; Field : Positive; Which : Natural := 0)
+         return Stored_Place
+      is
+         Result : Stored_Place := Parent;
+      begin
+         if Which = 0 and then Result.Base = 0
+           and then Result.Steps.Is_Empty
+         then
+            Result.Base := Field;
+         else
+            Result.Steps.Append
+              (IR.Path_Step'(Field => IR.Part_Position (Field),
+                             Case_Index => Which));
+         end if;
+         return Result;
+      end Child_Place;
+
+      function Array_Element_Place
+        (Parent : Stored_Place; Position : Positive) return Stored_Place;
+
+      function Array_Element_Place
+        (Parent : Stored_Place; Position : Positive) return Stored_Place
+      is
+         Result : Stored_Place := Parent;
+      begin
+         --  Aggregate fields use Base for a first selection, but an array
+         --  index is always a path step.  In particular, the first element
+         --  of root array storage keeps Base zero so Shape_Of reaches the
+         --  array before interpreting its one-based child position.
+         Result.Steps.Append
+           (IR.Path_Step'(Field => IR.Part_Position (Position),
+                          Case_Index => 0));
+         return Result;
+      end Array_Element_Place;
+
+      procedure Store_Shaped_Scalar
+        (Place : Stored_Place;
+         Shape : IR.Field_Shape;
+         Value : IR.Value_Id;
+         Site  : Landin.Provenance.Origin);
+
+      procedure Store_Shaped_Scalar
+        (Place : Stored_Place;
+         Shape : IR.Field_Shape;
+         Value : IR.Value_Id;
+         Site  : Landin.Provenance.Origin)
+      is
+         Steps : constant IR.Path_Step_Array := Stored_Steps (Place);
+      begin
+         if Place.Place.Kind = IR.Runtime_Address then
+            declare
+               Address : constant IR.Storage :=
+                 Addressed_Storage (Place, Shape, Site);
+            begin
+               IR.Emit_Store_Indirect
+                 (Unit.all, Filling, Address.Address, Value, Site);
+            end;
+         elsif Place.Base = 0 and then Steps'Length = 0 then
+            case Place.Place.Kind is
+               when IR.Frame_Slot =>
+                  IR.Emit_Store
+                    (Unit.all, Filling, Place.Place.Slot, Value, Site);
+               when IR.Module_Datum =>
+                  IR.Emit_Store_Datum
+                    (Unit.all, Filling, Place.Place.Datum, Value, Site);
+               when IR.Runtime_Address =>
+                  Impossible;
+            end case;
+         else
+            case Place.Place.Kind is
+               when IR.Frame_Slot =>
+                  IR.Emit_Store_Slot_Field
+                    (Unit.all, Filling, Place.Place.Slot,
+                     Leaf_Base (Place.Base, Steps), Value, Site,
+                     Nested => Leaf_Steps (Place.Base, Steps));
+               when IR.Module_Datum =>
+                  IR.Emit_Store_Field
+                    (Unit.all, Filling, Place.Place.Datum,
+                     Leaf_Base (Place.Base, Steps), Value, Site,
+                     Nested => Leaf_Steps (Place.Base, Steps));
+               when IR.Runtime_Address =>
+                  Impossible;
+            end case;
+         end if;
+      end Store_Shaped_Scalar;
+
+      procedure Copy_Shaped_Storage
+        (Source      : Stored_Place;
+         Destination : Stored_Place;
+         Shape       : IR.Field_Shape;
+         Site        : Landin.Provenance.Origin);
+
+      --  A whole aggregate slot is not an array-shaped root.  Preserve the
+      --  selected places and their exact shape in typed runtime-address roots
+      --  before using the common bytewise copy operation.  Actual arrays keep
+      --  their direct storage endpoints.
+      procedure Copy_Shaped_Storage
+        (Source      : Stored_Place;
+         Destination : Stored_Place;
+         Shape       : IR.Field_Shape;
+         Site        : Landin.Provenance.Origin)
+      is
+      begin
+         if Shape.Kind = IR.Aggregate_Field_Shape then
+            declare
+               From : constant IR.Storage :=
+                 Addressed_Storage (Source, Shape, Site);
+               Into : constant IR.Storage :=
+                 Addressed_Storage (Destination, Shape, Site);
+            begin
+               IR.Emit_Array_Copy
+                 (Unit.all, Filling, From, Into, Site);
+            end;
+         else
+            IR.Emit_Array_Copy
+              (Unit.all, Filling, Source.Place, Destination.Place, Site,
+               Source_Field => Source.Base,
+               Source_Nested => Stored_Steps (Source),
+               Destination_Field => Destination.Base,
+               Destination_Nested => Stored_Steps (Destination));
+         end if;
+      end Copy_Shaped_Storage;
+
+      --  One contextual writer serves array children, call temporaries and
+      --  ordinary constructors.  Counts of emitted operations follow source
+      --  structure, never a target-sized repetition count.
+      procedure Write_Shaped_Value
+        (Of_Tree     : Syn.Tree;
+         Node        : Syn.Node_Id;
+         Scope       : Res.Scope_Id;
+         Shape       : IR.Field_Shape;
+         Destination : Stored_Place);
+
+      procedure Write_Shaped_Value
+        (Of_Tree     : Syn.Tree;
+         Node        : Syn.Node_Id;
+         Scope       : Res.Scope_Id;
+         Shape       : IR.Field_Shape;
+         Destination : Stored_Place)
+      is
+         Site : constant Landin.Provenance.Origin := Site_Of (Of_Tree, Node);
+         Kind : constant Syn.Node_Kind := Syn.Kind (Of_Tree, Node);
+      begin
+         if Shape.Kind = IR.Scalar_Field_Shape then
+            declare
+               Value : constant IR.Value_Id :=
+                 Lower_Expression (Of_Tree, Node, Scope);
+            begin
+               if Current /= IR.No_Block then
+                  Store_Shaped_Scalar (Destination, Shape, Value, Site);
+               end if;
+            end;
+         elsif Kind = Syn.Zeroed_Literal then
+            IR.Emit_Array_Clear
+              (Unit.all, Filling, Destination.Place, Site,
+               Field => Destination.Base,
+               Nested => Stored_Steps (Destination));
+         elsif Shape.Kind = IR.Aggregate_Field_Shape
+           and then Is_Struct_Construction (Of_Tree, Node)
+         then
+            declare
+               Seen : array (1 .. IR.Aggregate_Field_Count (Unit.all, Shape))
+                 of Boolean := [others => False];
+            begin
+               --  D29 commits labels in source order; D64 fills omitted
+               --  fields only afterwards, never clearing a value a label
+               --  can still read from the destination.
+               for Written in 1 .. Construction_Field_Count (Of_Tree, Node)
+               loop
+                  declare
+                     Label : constant Syn.Node_Id :=
+                       Nth_Construction_Field (Of_Tree, Node, Written);
+                     Field : constant Positive := Positive
+                       (Landin.Checking.Field_Index
+                          (Types.all, Of_Tree, Label));
+                  begin
+                     Seen (Field) := True;
+                     Write_Shaped_Value
+                       (Of_Tree, Construction_Field_Value (Of_Tree, Label),
+                        Scope, IR.Nth_Aggregate_Field (Unit.all, Shape, Field),
+                        Child_Place (Destination, Field));
+                     if Current = IR.No_Block then
+                        return;
+                     end if;
+                  end;
+               end loop;
+               if Construction_Fill (Of_Tree, Node) /= Syn.No_Node then
+                  for Field in Seen'Range loop
+                     if not Seen (Field) then
+                        declare
+                           Child : constant IR.Field_Shape :=
+                             IR.Nth_Aggregate_Field (Unit.all, Shape, Field);
+                           Place : constant Stored_Place :=
+                             Child_Place (Destination, Field);
+                           Zero : IR.Value_Id;
+                        begin
+                           case Child.Kind is
+                              when IR.Scalar_Field_Shape =>
+                                 if Child.Signature /= IR.No_Signature
+                                   or else Child.Atoms /= IR.No_Atom_Set
+                                 then
+                                    raise Landin.Compiler_Defect with
+                                      "a nonzeroable scalar reached a fill";
+                                 elsif Child.Element = Ty.Bool then
+                                    Zero := IR.Emit_Truth
+                                      (Unit.all, Filling, False, Site);
+                                 else
+                                    Zero := IR.Emit_Number
+                                      (Unit.all, Filling, Child.Element,
+                                       0, False, Site);
+                                 end if;
+                                 Store_Shaped_Scalar
+                                   (Place, Child, Zero, Site);
+                              when IR.Array_Field_Shape
+                                 | IR.Aggregate_Field_Shape =>
+                                 IR.Emit_Array_Clear
+                                   (Unit.all, Filling, Place.Place, Site,
+                                    Field => Place.Base,
+                                    Nested => Stored_Steps (Place));
+                              when IR.Variant_Field_Shape =>
+                                 IR.Emit_Variant_Select
+                                   (Unit.all, Filling, Place.Place,
+                                    Positive (Place.Base), 1, Site,
+                                    Nested => Stored_Steps (Place));
+                           end case;
+                        end;
+                     end if;
+                  end loop;
+               end if;
+            end;
+         elsif Shape.Kind = IR.Variant_Field_Shape then
+            declare
+               Which : constant Positive := Positive
+                 (Landin.Checking.Field_Index (Types.all, Of_Tree, Node));
+            begin
+               IR.Emit_Variant_Select
+                 (Unit.all, Filling, Destination.Place,
+                  Positive (Destination.Base), Which, Site,
+                  Nested => Stored_Steps (Destination));
+               if Is_Case_Construction (Of_Tree, Node) then
+                  for Written in 1 .. Construction_Field_Count (Of_Tree, Node)
+                  loop
+                     declare
+                        Label : constant Syn.Node_Id :=
+                          Nth_Construction_Field (Of_Tree, Node, Written);
+                        Field : constant Positive := Positive
+                          (Landin.Checking.Field_Index
+                             (Types.all, Of_Tree, Label));
+                     begin
+                        Write_Shaped_Value
+                          (Of_Tree, Construction_Field_Value (Of_Tree, Label),
+                           Scope, IR.Nth_Variant_Case_Field
+                             (Unit.all, Shape, Which, Field),
+                           Child_Place (Destination, Field, Which));
+                        exit when Current = IR.No_Block;
+                     end;
+                  end loop;
+               end if;
+            end;
+         elsif Shape.Kind = IR.Array_Field_Shape
+           and then Kind in Syn.Array_Literal | Syn.Array_Repetition
+                           | Syn.Mixed_Array_Repetition
+         then
+            declare
+               Child : constant IR.Field_Shape :=
+                 IR.Array_Element_Shape (Unit.all, Shape);
+               Prefix : constant Natural :=
+                 (if Kind = Syn.Array_Repetition then 0
+                  else Syn.Element_Count (Of_Tree, Node));
+            begin
+               for Position in 1 .. Prefix loop
+                  Write_Shaped_Value
+                    (Of_Tree, Syn.Nth_Element (Of_Tree, Node, Position), Scope,
+                     Child, Array_Element_Place (Destination, Position));
+                  if Current = IR.No_Block then
+                     return;
+                  end if;
+               end loop;
+               if Kind in Syn.Array_Repetition | Syn.Mixed_Array_Repetition
+               then
+                  declare
+                     Repeated : constant Syn.Node_Id :=
+                       Syn.Repeated_Element (Of_Tree, Node);
+                  begin
+                     if Child.Kind = IR.Scalar_Field_Shape then
+                        declare
+                           Value : constant IR.Value_Id :=
+                             Lower_Expression (Of_Tree, Repeated, Scope);
+                        begin
+                           if Current /= IR.No_Block
+                             and then IR.Element_Total (Prefix) < Shape.Length
+                           then
+                              IR.Emit_Array_Fill
+                                (Unit.all, Filling, Destination.Place,
+                                 IR.Part_Position (Prefix + 1), Value, Site,
+                                 Field => Destination.Base,
+                                 Nested => Stored_Steps (Destination));
+                           end if;
+                        end;
+                     else
+                        declare
+                           Temporary : constant IR.Slot_Id :=
+                             Shaped_Temporary (Child, Site);
+                           Source : constant IR.Storage :=
+                             (Kind => IR.Frame_Slot, Slot => Temporary);
+                        begin
+                           --  Evaluate even an empty suffix once; only the
+                           --  copying loop is conditional on its extent.
+                           Write_Shaped_Value
+                             (Of_Tree, Repeated, Scope, Child,
+                              (Place => Source, Base => 0,
+                               Steps => Stored_Path_Vectors.Empty_Vector));
+                           if Current = IR.No_Block
+                             or else IR.Element_Total (Prefix) = Shape.Length
+                           then
+                              return;
+                           end if;
+                           declare
+                              Cursor : constant IR.Slot_Id := IR.Add_Slot
+                                (Unit.all, Filling, Ty.Usize,
+                                 Res.No_Declaration, Site);
+                              First : constant IR.Value_Id := IR.Emit_Number
+                                (Unit.all, Filling, Ty.Usize,
+                                 Ty.Magnitude (Prefix), False, Site);
+                              Test : constant IR.Block_Id :=
+                                Fresh (Of_Tree, Node, Scope);
+                              Body_Block : constant IR.Block_Id :=
+                                Fresh (Of_Tree, Node, Scope);
+                              Done : constant IR.Block_Id :=
+                                Fresh (Of_Tree, Node, Scope);
+                           begin
+                              IR.Emit_Store
+                                (Unit.all, Filling, Cursor, First, Site);
+                              Close_With_Jump (Test, Site);
+                              Open (Test);
+                              declare
+                                 Index : constant IR.Value_Id :=
+                                   IR.Emit_Load
+                                     (Unit.all, Filling, Cursor, Site);
+                                 Limit : constant IR.Value_Id := IR.Emit_Number
+                                   (Unit.all, Filling, Ty.Usize,
+                                    Ty.Magnitude (Shape.Length), False, Site);
+                                 More : constant IR.Value_Id := IR.Emit_Binary
+                                   (Unit.all, Filling, IR.Less_Than,
+                                    Index, Limit, Ty.Bool, Site);
+                              begin
+                                 IR.Emit_Branch
+                                   (Unit.all, Filling, More,
+                                    Body_Block, Done, Site);
+                                 IR.Leave_Block (Unit.all, Filling);
+                                 Current := IR.No_Block;
+                              end;
+                              Open (Body_Block);
+                              declare
+                                 Index : constant IR.Value_Id :=
+                                   IR.Emit_Load
+                                     (Unit.all, Filling, Cursor, Site);
+                                 Pointer : constant IR.Value_Id :=
+                                   IR.Emit_Storage_Address
+                                     (Unit.all, Filling,
+                                      Destination.Place, Site,
+                                      Field => Destination.Base,
+                                      Nested => Stored_Steps (Destination),
+                                      Index => Index);
+                                 Address : constant IR.Slot_Id :=
+                                   IR.Add_Address_Slot
+                                     (Unit.all, Filling, Child, Site);
+                                 One : IR.Value_Id;
+                                 Next : IR.Value_Id;
+                              begin
+                                 IR.Emit_Store
+                                   (Unit.all, Filling, Address, Pointer, Site);
+                                 Copy_Shaped_Storage
+                                   (Stored_At (Source),
+                                    (Place =>
+                                       (Kind => IR.Runtime_Address,
+                                        Address => Address),
+                                     Base => 0,
+                                     Steps =>
+                                       Stored_Path_Vectors.Empty_Vector),
+                                    Child, Site);
+                                 One := IR.Emit_Number
+                                   (Unit.all, Filling, Ty.Usize,
+                                    1, False, Site);
+                                 Next := IR.Emit_Binary
+                                   (Unit.all, Filling, IR.Add, Index, One,
+                                    Ty.Usize, Site);
+                                 IR.Emit_Store
+                                   (Unit.all, Filling, Cursor, Next, Site);
+                              end;
+                              Close_With_Jump (Test, Site);
+                              Open (Done);
+                           end;
+                        end;
+                     end if;
+                  end;
+               end if;
+            end;
+         elsif Kind in Syn.Name_Reference | Syn.Member_Selection
+                       | Syn.Element_Index
+           and then not Is_Utf8_Index (Of_Tree, Node)
+         then
+            declare
+               From : constant Stored_Place :=
+                 Lower_Stored_Place (Of_Tree, Node, Scope);
+            begin
+               if Current /= IR.No_Block then
+                  Copy_Shaped_Storage (From, Destination, Shape, Site);
+               end if;
+            end;
+         else
+            declare
+               Temporary : constant IR.Slot_Id :=
+                 Shaped_Temporary (Shape, Site);
+            begin
+               Lower_Stored_Expression (Of_Tree, Node, Scope, Temporary);
+               if Current /= IR.No_Block then
+                  Copy_Shaped_Storage
+                    ((Place =>
+                        (Kind => IR.Frame_Slot, Slot => Temporary),
+                      Base => 0,
+                      Steps => Stored_Path_Vectors.Empty_Vector),
+                     Destination, Shape, Site);
+               end if;
+            end;
+         end if;
+      end Write_Shaped_Value;
+
       ------------------------------------------------------------
       --  [0410]: `and` and `or` short-circuit, so they are blocks
       ------------------------------------------------------------
@@ -2924,6 +3484,11 @@ package body Landin.Stages.Lowering is
                 elsif Held = Ty.Pointer_Value then Ty.Usize
                 else Ty.Scalar_Name (Held)),
                Res.No_Declaration, Site,
+               Pointee =>
+                 (if Held = Ty.Pointer_Value
+                  then Pointee_For
+                    (Landin.Checking.Reference_Of (Types.all, Of_Tree, Node))
+                  else IR.No_Pointee),
                Atoms =>
                  (if Held = Ty.Atom_Value
                   then Atom_Set_For
@@ -2979,6 +3544,29 @@ package body Landin.Stages.Lowering is
          Ignored : IR.Value_Id;
          pragma Unreferenced (Ignored);
       begin
+         if Is_Struct_Construction (Of_Tree, Node)
+           or else Syn.Kind (Of_Tree, Node)
+             in Syn.Array_Literal | Syn.Array_Repetition
+                | Syn.Mixed_Array_Repetition | Syn.Zeroed_Literal
+           or else
+             (Type_At (Of_Tree, Node) in Ty.Aggregate | Ty.Fixed_Array
+              and then Syn.Kind (Of_Tree, Node)
+                in Syn.Name_Reference | Syn.Member_Selection
+                   | Syn.Element_Index
+              and then not Is_Utf8_Index (Of_Tree, Node))
+         then
+            declare
+               Shape : constant IR.Field_Shape :=
+                 Neutral_Value_Shape (Of_Tree, Node);
+            begin
+               Write_Shaped_Value
+                 (Of_Tree, Node, Scope, Shape,
+                  Stored_At
+                    ((Kind => IR.Frame_Slot, Slot => Destination),
+                     Destination_Field, Destination_Path));
+            end;
+            return;
+         end if;
          case Syn.Kind (Of_Tree, Node) is
             when Syn.Inclusive_Slice | Syn.Half_Open_Slice
                | Syn.Empty_Slice_Literal | Syn.Text_Literal
@@ -3084,8 +3672,17 @@ package body Landin.Stages.Lowering is
             then Landin.Checking.Signature_Of (Types.all, Means)
             else Landin.Checking.Signature_Of
               (Types.all, Of_Tree, Callee));
+         Dispatch_Evidence : constant IR.Evidence_Id :=
+           (if Erased_Self then Any_Evidence_For
+              (Landin.Checking.Evidence_Of (Types.all, Of_Tree, Callee))
+            else IR.No_Evidence);
+         Dispatch_Entry : constant Natural :=
+           (if Erased_Self then Landin.Checking.Evidence_Entry_Of
+              (Types.all, Of_Tree, Callee) else 0);
          Signature : constant IR.Signature_Id :=
-           (if Source_Signature = Landin.Checking.No_Signature
+           (if Erased_Self then IR.Evidence_Entry_Dispatch_Signature
+              (Unit.all, Dispatch_Evidence, Positive (Dispatch_Entry))
+            elsif Source_Signature = Landin.Checking.No_Signature
             then IR.No_Signature
             else Signature_For (Source_Signature));
          Indirect : constant Boolean := not Direct;
@@ -3104,13 +3701,19 @@ package body Landin.Stages.Lowering is
             then 0
             else Landin.Checking.Signature_Parameter_Count
               (Types.all, Source_Signature));
+         Variadic : constant Boolean :=
+           Source_Signature /= Landin.Checking.No_Signature
+           and then Landin.Checking.Signature_Is_Variadic
+             (Types.all, Source_Signature);
+         Actual_Count : constant Natural :=
+           (if Variadic then Natural'Max (Count, Written_Count) else Count);
          Returns_Stored : constant Boolean :=
            Type_At (Of_Tree, Node)
              in Ty.Aggregate | Ty.Fixed_Array | Ty.Slice_Value
                 | Ty.Any_Value;
-         Given : array (1 .. Positive'Max (1, Count)) of IR.Value_Id :=
+         Given : array (1 .. Positive'Max (1, Actual_Count)) of IR.Value_Id :=
            [others => IR.No_Value];
-         Saved : array (1 .. Positive'Max (1, Count)) of IR.Slot_Id :=
+         Saved : array (1 .. Positive'Max (1, Actual_Count)) of IR.Slot_Id :=
            [others => IR.No_Slot];
          Evidence_Count : constant Natural :=
            (if Generic_Target = Landin.Checking.No_Routine_Instance
@@ -3122,6 +3725,7 @@ package body Landin.Stages.Lowering is
              [others => IR.No_Value];
          Hidden : IR.Value_Id := IR.No_Value;
          Callee_Saved : IR.Slot_Id := IR.No_Slot;
+         Receiver_Saved : IR.Slot_Id := IR.No_Slot;
          Callee_Value : IR.Value_Id := IR.No_Value;
          Error_Set : constant IR.Atom_Set_Id :=
            (if Signature = IR.No_Signature
@@ -3166,6 +3770,9 @@ package body Landin.Stages.Lowering is
                   end if;
                end if;
             end loop;
+            if Variadic and then Index > Seen then
+               return Count + Index - Seen;
+            end if;
             raise Landin.Compiler_Defect with
               "a lowered written argument has no source parameter";
          end Nth_Written_Parameter;
@@ -3192,6 +3799,11 @@ package body Landin.Stages.Lowering is
                Success_Slot := IR.Add_Slot
                  (Unit.all, Filling, Scalar_At (Of_Tree, Node),
                   Res.No_Declaration, Site,
+                  Pointee =>
+                    (if Type_At (Of_Tree, Node) = Ty.Pointer_Value
+                     then Pointee_For (Landin.Checking.Reference_Of
+                       (Types.all, Of_Tree, Node))
+                     else IR.No_Pointee),
                   Signature =>
                     (if Type_At (Of_Tree, Node) = Ty.Function_Value
                      then Signature_For
@@ -3206,7 +3818,18 @@ package body Landin.Stages.Lowering is
                      else IR.No_Atom_Set));
             end if;
          end if;
-         if Indirect then
+         if Erased_Self then
+            --  [0410]: choose the whole receiver once, before written
+            --  arguments can replace its original binding or change blocks.
+            Receiver_Saved := IR.Add_Array_Slot
+              (Unit.all, Filling, Ty.Usize, 2, Res.No_Declaration, Site);
+            Lower_Slice_Into
+              (Of_Tree, Syn.Target_Of (Of_Tree, Callee), Scope,
+               Receiver_Saved);
+            if Current = IR.No_Block then
+               return IR.No_Value;
+            end if;
+         elsif Indirect then
             Callee_Saved := IR.Add_Slot
               (Unit.all, Filling, Ty.Usize, Res.No_Declaration, Site,
                Signature => Signature);
@@ -3220,10 +3843,6 @@ package body Landin.Stages.Lowering is
                IR.Emit_Store
                  (Unit.all, Filling, Callee_Saved, Value, Site);
             end;
-         end if;
-         if Erased_Self then
-            Given (1) := Lower_Slice
-              (Of_Tree, Syn.Target_Of (Of_Tree, Callee), Scope).Base;
          end if;
 
          --  [0410] fixes argument evaluation left to right.  Every argument
@@ -3256,9 +3875,18 @@ package body Landin.Stages.Lowering is
                   then Syn.Expression_Projection (Of_Tree, Raw_Argument)
                   else Raw_Argument);
                Parameter : constant Landin.Checking.Signature_Part :=
-                 Landin.Checking.Nth_Signature_Parameter
-                   (Types.all, Source_Signature, Formal_Position);
+                 (if Formal_Position <= Count
+                  then Landin.Checking.Nth_Signature_Parameter
+                    (Types.all, Source_Signature, Formal_Position)
+                  else (Kind => Type_At (Of_Tree, Argument), others => <>));
             begin
+               if Formal_Position > Count
+                 and then Type_At (Of_Tree, Argument)
+                   not in Ty.Scalar_Name | Ty.Pointer_Value | Ty.Function_Value
+               then
+                  raise Landin.Compiler_Defect with
+                    "a non-scalar variadic tail needs an explicit descriptor";
+               end if;
                if Parameter.Convention = Syn.Inout_Convention then
                   declare
                      Place : constant Stored_Place :=
@@ -3315,746 +3943,26 @@ package body Landin.Stages.Lowering is
                         end if;
                      end;
                   elsif Syn.Kind (Of_Tree, Argument)
-                          = Syn.Zeroed_Literal
+                          in Syn.Zeroed_Literal | Syn.Array_Literal
+                             | Syn.Array_Repetition
+                             | Syn.Mixed_Array_Repetition
+                    or else Is_Struct_Construction (Of_Tree, Argument)
                   then
                      declare
-                        Parameter : constant
-                          Landin.Checking.Signature_Part :=
-                            Landin.Checking.Nth_Signature_Parameter
-                              (Types.all, Source_Signature,
-                               Formal_Position);
-                        Temporary : IR.Slot_Id;
+                        Shape : constant IR.Field_Shape :=
+                          Neutral_Result_Part (Parameter);
+                        Temporary : constant IR.Slot_Id := Shaped_Temporary
+                          (Shape, Site_Of (Of_Tree, Argument));
+                        Place : constant IR.Storage :=
+                          (Kind => IR.Frame_Slot, Slot => Temporary);
                      begin
-                        if Type_At (Of_Tree, Argument) = Ty.Aggregate then
-                           Temporary := IR.Add_Aggregate_Slot
-                             (Unit.all, Filling, Res.No_Declaration,
-                              Site_Of (Of_Tree, Argument),
-                              Nominal_For (Parameter.Nominal));
-                           for Field in
-                             1 .. Landin.Checking.Layout_Field_Count
-                                    (Types.all, Parameter.Nominal)
-                           loop
-                              Add_Stored_Field
-                                (Parameter.Nominal, Field,
-                                 Slot => Temporary);
-                           end loop;
-                        else
-                           Temporary := IR.Add_Array_Slot
-                             (Unit.all, Filling,
-                              Parameter.Element,
-                              IR.Element_Total (Parameter.Length),
-                              Res.No_Declaration,
-                              Site_Of (Of_Tree, Argument));
-                        end if;
-
-                        IR.Emit_Array_Clear
-                          (Unit.all, Filling,
-                           (Kind => IR.Frame_Slot, Slot => Temporary),
-                           Site_Of (Of_Tree, Argument));
-                        Given (Formal_Position) := IR.Emit_Storage_Address
-                          (Unit.all, Filling,
-                           (Kind => IR.Frame_Slot, Slot => Temporary),
-                           Site_Of (Of_Tree, Argument));
-                     end;
-                  elsif Is_Struct_Construction (Of_Tree, Argument) then
-                     declare
-                        Parameter : constant
-                          Landin.Checking.Signature_Part :=
-                            Landin.Checking.Nth_Signature_Parameter
-                              (Types.all, Source_Signature,
-                               Formal_Position);
-                        Id : constant Landin.Checking.Nominal_Type_Id :=
-                          Parameter.Nominal;
-                        Count : constant Natural :=
-                          Landin.Checking.Layout_Field_Count (Types.all, Id);
-                        type Seen_Array is
-                          array (Positive range <>) of Boolean;
-                        Seen : Seen_Array (1 .. Count) := [others => False];
-                        Temporary : constant IR.Slot_Id :=
-                          IR.Add_Aggregate_Slot
-                            (Unit.all, Filling, Res.No_Declaration,
-                             Site_Of (Of_Tree, Argument), Nominal_For (Id));
-
-                        procedure Store_Child_Scalar
-                          (Field       : Positive;
-                           Child_Field : Positive;
-                           Held        : IR.Value_Id;
-                           At_Site     : Landin.Provenance.Origin);
-
-                        procedure Store_Child_Scalar
-                          (Field       : Positive;
-                           Child_Field : Positive;
-                           Held        : IR.Value_Id;
-                           At_Site     : Landin.Provenance.Origin) is
-                        begin
-                           IR.Emit_Store_Slot_Field
-                             (Unit.all, Filling, Temporary,
-                              IR.Part_Position (Field), Held, At_Site,
-                              Nested => Below (Child_Field));
-                        end Store_Child_Scalar;
-
-                        procedure Write_Array_Field
-                          (Field         : Positive;
-                           Value         : Syn.Node_Id;
-                           Path          : IR.Path_Step_Array :=
-                             IR.No_Path_Steps;
-                           Variant_Case  : Natural := 0;
-                           Payload_Field : Natural := 0);
-
-                        procedure Write_Array_Field
-                          (Field         : Positive;
-                           Value         : Syn.Node_Id;
-                           Path          : IR.Path_Step_Array :=
-                             IR.No_Path_Steps;
-                           Variant_Case  : Natural := 0;
-                           Payload_Field : Natural := 0)
-                        is
-                           Kind : constant Syn.Node_Kind :=
-                             Syn.Kind (Of_Tree, Value);
-                           Prefix : constant Natural :=
-                             (if Kind in Syn.Array_Literal
-                                          | Syn.Mixed_Array_Repetition
-                              then Syn.Element_Count (Of_Tree, Value)
-                              else 0);
-                        begin
-                           for Position in 1 .. Prefix loop
-                              declare
-                                 Element : constant Syn.Node_Id :=
-                                   Syn.Nth_Element
-                                     (Of_Tree, Value, Position);
-                                 Held : constant IR.Value_Id :=
-                                   Lower_Expression
-                                     (Of_Tree, Element, Scope);
-                              begin
-                                 if Current = IR.No_Block then
-                                    return;
-                                 end if;
-                                 declare
-                                    Index : constant IR.Value_Id :=
-                                      IR.Emit_Number
-                                        (Unit.all, Filling, Ty.Usize,
-                                         Ty.Magnitude (Position - 1), False,
-                                         Site_Of (Of_Tree, Element));
-                                 begin
-                                    IR.Emit_Store_Slot_Element
-                                      (Unit.all, Filling, Temporary, Index,
-                                       Held, Site_Of (Of_Tree, Element),
-                                       Field => Field,
-                                       Nested => Path,
-                                       Variant_Case => Variant_Case,
-                                       Variant_Payload_Field => Payload_Field);
-                                 end;
-                              end;
-                           end loop;
-
-                           if Kind in Syn.Array_Repetition
-                                      | Syn.Mixed_Array_Repetition
-                           then
-                              declare
-                                 Repeated : constant Syn.Node_Id :=
-                                   Syn.Repeated_Element (Of_Tree, Value);
-                                 Held : constant IR.Value_Id :=
-                                   Lower_Expression
-                                     (Of_Tree, Repeated, Scope);
-                              begin
-                                 if Current = IR.No_Block then
-                                    return;
-                                 end if;
-                                 IR.Emit_Array_Fill
-                                   (Unit.all, Filling,
-                                    (Kind => IR.Frame_Slot,
-                                     Slot => Temporary),
-                                    IR.Part_Position (Prefix + 1),
-                                    Held,
-                                    Site_Of (Of_Tree, Repeated),
-                                    Field => Field,
-                                    Nested => Path,
-                                    Variant_Case => Variant_Case,
-                                    Variant_Payload_Field => Payload_Field);
-                              end;
-                           elsif Kind = Syn.Zeroed_Literal then
-                              if Payload_Field = 0 then
-                                 IR.Emit_Array_Clear
-                                   (Unit.all, Filling,
-                                    (Kind => IR.Frame_Slot,
-                                     Slot => Temporary),
-                                    Site_Of (Of_Tree, Value), Field => Field,
-                                    Nested => Path);
-                              end if;
-                           elsif Kind not in Syn.Array_Literal then
-                              declare
-                                 Source_Place : constant IR.Storage :=
-                                   Rooted_Storage (Of_Tree, Value);
-                                 Source_Field : constant Natural :=
-                                   Rooted_Base (Of_Tree, Value);
-                                 Source_Steps : constant IR.Path_Step_Array :=
-                                   Rooted_Steps (Of_Tree, Value);
-                              begin
-                                 IR.Emit_Array_Copy
-                                   (Unit.all, Filling,
-                                    Source => Source_Place,
-                                    Destination =>
-                                      (Kind => IR.Frame_Slot,
-                                       Slot => Temporary),
-                                    Site => Site_Of (Of_Tree, Value),
-                                    Source_Field => Source_Field,
-                                    Source_Nested => Source_Steps,
-                                    Destination_Field => Field,
-                                    Destination_Nested => Path,
-                                    Destination_Variant_Case => Variant_Case,
-                                    Destination_Variant_Payload_Field =>
-                                      Payload_Field);
-                              end;
-                           end if;
-                        end Write_Array_Field;
-
-                        procedure Write_Variant_Field
-                          (Field : Positive; Value : Syn.Node_Id);
-
-                        procedure Write_Variant_Field
-                          (Field : Positive; Value : Syn.Node_Id)
-                        is
-                           Variant_Case : constant Positive := Positive
-                             (Landin.Checking.Field_Index
-                                (Types.all, Of_Tree, Value));
-                        begin
-                           IR.Emit_Variant_Select
-                             (Unit.all, Filling,
-                              (Kind => IR.Frame_Slot, Slot => Temporary),
-                              Field, Variant_Case,
-                              Site_Of (Of_Tree, Value));
-
-                           if not Is_Case_Construction (Of_Tree, Value) then
-                              return;
-                           end if;
-
-                           for Position in
-                             1 .. Construction_Field_Count (Of_Tree, Value)
-                           loop
-                              declare
-                                 Label : constant Syn.Node_Id :=
-                                   Nth_Construction_Field
-                                     (Of_Tree, Value, Position);
-                                 Payload_Field : constant Positive := Positive
-                                   (Landin.Checking.Field_Index
-                                      (Types.all, Of_Tree, Label));
-                                 Shape : constant
-                                   Landin.Checking.Field_Shape :=
-                                     Landin.Checking.Nth_Variant_Case_Field
-                                       (Types.all, Id, Field, Variant_Case,
-                                        Payload_Field);
-                                 Payload : constant Syn.Node_Id :=
-                                   Construction_Field_Value
-                                     (Of_Tree, Label);
-                              begin
-                                 case Shape.Kind is
-                                    when Landin.Checking.Scalar_Field =>
-                                       declare
-                                          Held : constant IR.Value_Id :=
-                                            Lower_Expression
-                                              (Of_Tree, Payload, Scope);
-                                       begin
-                                          if Current /= IR.No_Block then
-                                             IR.Emit_Variant_Field_Store
-                                               (Unit.all, Filling,
-                                                (Kind => IR.Frame_Slot,
-                                                 Slot => Temporary),
-                                                Field, Variant_Case,
-                                                Payload_Field, Held,
-                                                Site_Of (Of_Tree, Label));
-                                          end if;
-                                       end;
-                                    when Landin.Checking.Fixed_Array_Field =>
-                                       Write_Array_Field
-                                         (Field, Payload,
-                                          Variant_Case => Variant_Case,
-                                          Payload_Field => Payload_Field);
-                                    when others =>
-                                       raise Landin.Compiler_Defect;
-                                 end case;
-                                 exit when Current = IR.No_Block;
-                              end;
-                           end loop;
-                        end Write_Variant_Field;
-                     begin
-                        for Field in 1 .. Count loop
-                           Add_Stored_Field
-                             (Id, Field, Slot => Temporary);
-                        end loop;
-
-                        for Position in
-                          1 .. Construction_Field_Count (Of_Tree, Argument)
-                        loop
-                           declare
-                              Label : constant Syn.Node_Id :=
-                                Nth_Construction_Field
-                                  (Of_Tree, Argument, Position);
-                              Field : constant Positive := Positive
-                                (Landin.Checking.Field_Index
-                                   (Types.all, Of_Tree, Label));
-                              Value : constant Syn.Node_Id :=
-                                Construction_Field_Value (Of_Tree, Label);
-                           begin
-                              Seen (Field) := True;
-                              case Landin.Checking.Field_Kind_Of
-                                (Types.all, Id, Field)
-                              is
-                                 when Landin.Checking.Scalar_Field =>
-                                    declare
-                                       Held : constant IR.Value_Id :=
-                                         Lower_Expression
-                                           (Of_Tree, Value, Scope);
-                                    begin
-                                       if Current /= IR.No_Block then
-                                          IR.Emit_Store_Slot_Field
-                                            (Unit.all, Filling, Temporary,
-                                             IR.Part_Position (Field), Held,
-                                             Site_Of (Of_Tree, Label));
-                                       end if;
-                                    end;
-                                 when Landin.Checking.Reference_Field =>
-                                    declare
-                                       Shape : constant
-                                         Landin.Checking.Field_Shape :=
-                                           Landin.Checking.Field_Shape_Of
-                                             (Types.all, Id, Field);
-                                    begin
-                                       if Landin.Checking.Descriptor_Of
-                                         (Types.all, Shape.Reference).Kind
-                                           = Ty.Slice_Value
-                                       then
-                                          raise Landin.Compiler_Defect with
-                                            "slice field construction awaits"
-                                            & " stored-pair lowering";
-                                       end if;
-                                       declare
-                                          Held : constant IR.Value_Id :=
-                                            Lower_Expression
-                                              (Of_Tree, Value, Scope);
-                                       begin
-                                          if Current /= IR.No_Block then
-                                             IR.Emit_Store_Slot_Field
-                                               (Unit.all, Filling, Temporary,
-                                                IR.Part_Position (Field), Held,
-                                                Site_Of (Of_Tree, Label));
-                                          end if;
-                                       end;
-                                    end;
-                                 when Landin.Checking.Fixed_Array_Field =>
-                                    Write_Array_Field (Field, Value);
-                                 when Landin.Checking.Variant_Field =>
-                                    Write_Variant_Field (Field, Value);
-                                 when Landin.Checking.Aggregate_Field =>
-                                    declare
-                                       Child : constant
-                                         Landin.Checking.Nominal_Type_Id :=
-                                         Landin.Checking.Field_Shape_Of
-                                           (Types.all, Id, Field)
-                                             .Nominal;
-                                       Destination : constant IR.Storage :=
-                                         (Kind => IR.Frame_Slot,
-                                          Slot => Temporary);
-                                    begin
-                                       if Is_Struct_Construction
-                                         (Of_Tree, Value)
-                                       then
-                                          --  The child begins as its padded
-                                          --  zero image; labels then commit
-                                          --  in source order.
-                                          IR.Emit_Array_Clear
-                                            (Unit.all, Filling, Destination,
-                                             Site_Of (Of_Tree, Value),
-                                             Field => Field);
-                                          for Child_Position in
-                                            1 .. Construction_Field_Count
-                                                   (Of_Tree, Value)
-                                          loop
-                                             declare
-                                                Label : constant Syn.Node_Id :=
-                                                  Nth_Construction_Field
-                                                    (Of_Tree, Value,
-                                                     Child_Position);
-                                                Child_Field : constant
-                                                  Positive := Positive
-                                                    (Landin.Checking
-                                                       .Field_Index
-                                                         (Types.all, Of_Tree,
-                                                          Label));
-                                                Child_Value : constant
-                                                  Syn.Node_Id :=
-                                                    Construction_Field_Value
-                                                      (Of_Tree, Label);
-                                             begin
-                                                case Landin.Checking
-                                                  .Field_Kind_Of
-                                                    (Types.all, Child,
-                                                     Child_Field)
-                                                is
-                                                   when Landin.Checking
-                                                     .Scalar_Field =>
-                                                      declare
-                                                         Held : constant
-                                                           IR.Value_Id :=
-                                                             Lower_Expression
-                                                               (Of_Tree,
-                                                                Child_Value,
-                                                                Scope);
-                                                      begin
-                                                         if Current /=
-                                                           IR.No_Block
-                                                         then
-                                                            Store_Child_Scalar
-                                                              (Field,
-                                                               Child_Field,
-                                                               Held,
-                                                               Site_Of
-                                                                 (Of_Tree,
-                                                                  Label));
-                                                         end if;
-                                                      end;
-                                                   when Landin.Checking
-                                                     .Fixed_Array_Field =>
-                                                      Write_Array_Field
-                                                        (Field, Child_Value,
-                                                         Path =>
-                                                           Below
-                                                             (Child_Field));
-                                                   when others =>
-                                                      raise
-                                                        Landin.Compiler_Defect;
-                                                end case;
-                                                exit when
-                                                  Current = IR.No_Block;
-                                             end;
-                                          end loop;
-                                       elsif Syn.Kind (Of_Tree, Value)
-                                               = Syn.Zeroed_Literal
-                                       then
-                                          IR.Emit_Array_Clear
-                                            (Unit.all, Filling, Destination,
-                                             Site_Of (Of_Tree, Value),
-                                             Field => Field);
-                                       else
-                                          declare
-                                             Source_Child : constant Boolean :=
-                                               Syn.Kind (Of_Tree, Value)
-                                                 = Syn.Member_Selection;
-                                             Source_Named : constant
-                                               Syn.Node_Id :=
-                                                 (if Source_Child
-                                                  then Syn.Target_Of
-                                                    (Of_Tree, Value)
-                                                  else Value);
-                                             Source_Parent : constant
-                                               Natural :=
-                                                 (if Source_Child
-                                                then Landin.Checking
-                                                  .Field_Index
-                                                    (Types.all, Of_Tree,
-                                                     Value)
-                                                else 0);
-                                             Source : constant IR.Storage :=
-                                               Storage_For
-                                                 (Of_Tree, Source_Named);
-                                          begin
-                                             for Child_Field in
-                                               1 .. Landin.Checking
-                                                      .Layout_Field_Count
-                                                        (Types.all, Child)
-                                             loop
-                                                case Landin.Checking
-                                                  .Field_Kind_Of
-                                                    (Types.all, Child,
-                                                     Child_Field)
-                                                is
-                                                   when Landin.Checking
-                                                     .Scalar_Field =>
-                                                      declare
-                                                         Shape : constant
-                                                           Landin.Checking
-                                                             .Field_Shape :=
-                                                           Landin.Checking
-                                                             .Field_Shape_Of
-                                                               (Types.all,
-                                                                Child,
-                                                                Child_Field);
-                                                         Held : constant
-                                                           Ty.Scalar_Name :=
-                                                             Shape.Element;
-                                                         Signature : constant
-                                                           IR.Signature_Id :=
-                                                           (if
-                                                              Shape.Signature
-                                                                /= 0
-                                                            then Signature_For
-                                                              (Shape.Signature)
-                                                            else
-                                                              IR.No_Signature);
-                                                         Part : constant
-                                                           IR.Part_Position :=
-                                                             IR.Part_Position
-                                                               (if
-                                                                  Source_Parent
-                                                                    = 0
-                                                                then
-                                                                  Child_Field
-                                                                else
-                                                                  Source_Parent
-                                                               );
-                                                         Nested : constant
-                                                           Natural :=
-                                                             (if Source_Parent
-                                                                   = 0
-                                                              then 0
-                                                              else
-                                                                Child_Field);
-                                                         Origin : constant
-                                                           Landin.Provenance
-                                                             .Origin :=
-                                                               Site_Of
-                                                                 (Of_Tree,
-                                                                  Value);
-                                                         Taken : IR.Value_Id;
-                                                      begin
-                                                         case Source.Kind is
-                                                            when IR
-                                                              .Module_Datum =>
-                                                               Taken := IR
-                                                             .Emit_Load_Field
-                                                                   (Unit.all,
-                                                                    Filling,
-                                                                    Source
-                                                                      .Datum,
-                                                                    Part,
-                                                                    Held,
-                                                                    Origin,
-                                                             Nested =>
-                                                               Below (Nested),
-                                                             Signature =>
-                                                               Signature);
-                                                            when IR
-                                                              .Frame_Slot =>
-                                                               Taken := IR
-                                                        .Emit_Load_Slot_Field
-                                                                   (Unit.all,
-                                                                    Filling,
-                                                                    Source
-                                                                      .Slot,
-                                                                    Part,
-                                                                    Held,
-                                                                    Origin,
-                                                             Nested =>
-                                                               Below (Nested),
-                                                             Signature =>
-                                                               Signature);
-                                                            when
-                                                              Runtime_Address
-                                                            =>
-                                                               Impossible;
-                                                         end case;
-                                                         IR
-                                                       .Emit_Store_Slot_Field
-                                                         (Unit.all, Filling,
-                                                            Temporary,
-                                                            IR.Part_Position
-                                                              (Field),
-                                                            Taken, Origin,
-                                                            Nested =>
-                                                              Below
-                                                                (Child_Field));
-                                                      end;
-                                                   when Landin.Checking
-                                                     .Fixed_Array_Field =>
-                                                      declare
-                                                         Part : constant
-                                                           Natural :=
-                                                             (if Source_Parent
-                                                                   = 0
-                                                              then Child_Field
-                                                              else
-                                                                Source_Parent);
-                                                         Nested : constant
-                                                           Natural :=
-                                                             (if Source_Parent
-                                                                   = 0
-                                                              then 0
-                                                              else
-                                                                Child_Field);
-                                                      begin
-                                                         IR.Emit_Array_Copy
-                                                           (Unit.all, Filling,
-                                                            Source => Source,
-                                                            Destination =>
-                                                              Destination,
-                                                            Site => Site_Of
-                                                              (Of_Tree, Value),
-                                                            Source_Field =>
-                                                              Part,
-                                                            Source_Nested =>
-                                                              Below (Nested),
-                                                            Destination_Field
-                                                              => Field,
-                                                       Destination_Nested =>
-                                                         Below (Child_Field));
-                                                      end;
-                                                   when others =>
-                                                      raise
-                                                        Landin.Compiler_Defect;
-                                                end case;
-                                             end loop;
-                                          end;
-                                       end if;
-                                    end;
-                              end case;
-                              exit when Current = IR.No_Block;
-                           end;
-                        end loop;
-
-                        if Current /= IR.No_Block
-                          and then Construction_Fill (Of_Tree, Argument)
-                             /= Syn.No_Node
-                        then
-                           for Field in Seen'Range loop
-                              if not Seen (Field) then
-                                 case Landin.Checking.Field_Kind_Of
-                                   (Types.all, Id, Field)
-                                 is
-                                    when Landin.Checking.Scalar_Field =>
-                                       declare
-                                          Held : constant Ty.Scalar_Name :=
-                                            Landin.Checking.Field_Type
-                                              (Types.all, Id, Field);
-                                          Zero : IR.Value_Id;
-                                       begin
-                                          if Held = Ty.Bool then
-                                             Zero := IR.Emit_Truth
-                                               (Unit.all, Filling, False,
-                                                Site_Of (Of_Tree, Argument));
-                                          else
-                                             Zero := IR.Emit_Number
-                                               (Unit.all, Filling, Held, 0,
-                                                False,
-                                                Site_Of (Of_Tree, Argument));
-                                          end if;
-                                          IR.Emit_Store_Slot_Field
-                                            (Unit.all, Filling, Temporary,
-                                             IR.Part_Position (Field), Zero,
-                                             Site_Of (Of_Tree, Argument));
-                                       end;
-                                    when Landin.Checking.Reference_Field =>
-                                       raise Landin.Compiler_Defect with
-                                         "a reference field reached a zero"
-                                         & " fill despite having no image";
-                                    when Landin.Checking.Fixed_Array_Field =>
-                                       IR.Emit_Array_Clear
-                                         (Unit.all, Filling,
-                                          (Kind => IR.Frame_Slot,
-                                           Slot => Temporary),
-                                          Site_Of (Of_Tree, Argument),
-                                          Field => Field);
-                                    when Landin.Checking.Variant_Field =>
-                                       IR.Emit_Variant_Select
-                                         (Unit.all, Filling,
-                                          (Kind => IR.Frame_Slot,
-                                           Slot => Temporary),
-                                          Field, 1,
-                                          Site_Of (Of_Tree, Argument));
-                                    when Landin.Checking.Aggregate_Field =>
-                                       IR.Emit_Array_Clear
-                                         (Unit.all, Filling,
-                                          (Kind => IR.Frame_Slot,
-                                           Slot => Temporary),
-                                          Site_Of (Of_Tree, Argument),
-                                          Field => Field);
-                                 end case;
-                              end if;
-                           end loop;
-                        end if;
-
+                        Write_Shaped_Value
+                          (Of_Tree, Argument, Scope, Shape, Stored_At (Place));
                         if Current /= IR.No_Block then
                            Given (Formal_Position) := IR.Emit_Storage_Address
-                             (Unit.all, Filling,
-                              (Kind => IR.Frame_Slot, Slot => Temporary),
+                             (Unit.all, Filling, Place,
                               Site_Of (Of_Tree, Argument));
                         end if;
-                     end;
-                  elsif Syn.Kind (Of_Tree, Argument)
-                          in Syn.Array_Literal | Syn.Array_Repetition
-                             | Syn.Mixed_Array_Repetition
-                  then
-                     declare
-                        Parameter : constant
-                          Landin.Checking.Signature_Part :=
-                            Landin.Checking.Nth_Signature_Parameter
-                              (Types.all, Source_Signature,
-                               Formal_Position);
-                        Temporary : constant IR.Slot_Id :=
-                          IR.Add_Array_Slot
-                            (Unit.all, Filling,
-                             Parameter.Element,
-                             IR.Element_Total (Parameter.Length),
-                             Res.No_Declaration,
-                             Site_Of (Of_Tree, Argument));
-                        Prefix : constant Natural :=
-                          (if Syn.Kind (Of_Tree, Argument)
-                                in Syn.Array_Literal
-                                   | Syn.Mixed_Array_Repetition
-                           then Syn.Element_Count (Of_Tree, Argument)
-                           else 0);
-                     begin
-                        for Position in 1 .. Prefix loop
-                           declare
-                              Element : constant Syn.Node_Id :=
-                                Syn.Nth_Element
-                                  (Of_Tree, Argument, Position);
-                              Value : constant IR.Value_Id :=
-                                Lower_Expression (Of_Tree, Element, Scope);
-                           begin
-                              if Current = IR.No_Block then
-                                 return IR.No_Value;
-                              end if;
-                              declare
-                                 Index : constant IR.Value_Id :=
-                                   IR.Emit_Number
-                                     (Unit.all, Filling, Ty.Usize,
-                                      Ty.Magnitude (Position - 1), False,
-                                      Site_Of (Of_Tree, Element));
-                              begin
-                                 IR.Emit_Store_Slot_Element
-                                   (Unit.all, Filling, Temporary, Index,
-                                    Value, Site_Of (Of_Tree, Element));
-                              end;
-                           end;
-                        end loop;
-
-                        if Syn.Kind (Of_Tree, Argument)
-                             in Syn.Array_Repetition
-                                | Syn.Mixed_Array_Repetition
-                        then
-                           declare
-                              Repeated : constant Syn.Node_Id :=
-                                Syn.Repeated_Element (Of_Tree, Argument);
-                              Value : constant IR.Value_Id :=
-                                Lower_Expression
-                                  (Of_Tree, Repeated, Scope);
-                           begin
-                              if Current = IR.No_Block then
-                                 return IR.No_Value;
-                              end if;
-                              IR.Emit_Array_Fill
-                                (Unit.all, Filling,
-                                 (Kind => IR.Frame_Slot,
-                                  Slot => Temporary),
-                                 IR.Part_Position (Prefix + 1),
-                                 Value,
-                                 Site_Of (Of_Tree, Repeated));
-                           end;
-                        end if;
-
-                        Given (Formal_Position) := IR.Emit_Storage_Address
-                          (Unit.all, Filling,
-                           (Kind => IR.Frame_Slot, Slot => Temporary),
-                           Site_Of (Of_Tree, Argument));
                      end;
                   elsif Has_Runtime_After (Written)
                     and then Parameter.Convention /= Syn.Inout_Convention
@@ -4171,16 +4079,53 @@ package body Landin.Stages.Lowering is
                   return IR.No_Value;
                end if;
 
+               if Formal_Position > Count then
+                  --  The callee keeps its fixed prototype.  Tail operand
+                  --  kinds carry the promoted C actual types to the backend
+                  --  without inventing a different callable identity.
+                  declare
+                     Held : constant Ty.Scalar_Name :=
+                       Scalar_At (Of_Tree, Argument);
+                     Promoted : constant Ty.Scalar_Name :=
+                       (if Held in Ty.Bool | Ty.I8 | Ty.U8 | Ty.I16 | Ty.U16
+                        then Ty.I32
+                        elsif Held = Ty.F32 then Ty.F64 else Held);
+                  begin
+                     if Held /= Promoted then
+                        Given (Formal_Position) := IR.Emit_Conversion
+                          (Unit.all, Filling, Given (Formal_Position),
+                           Promoted, Site_Of (Of_Tree, Argument));
+                     end if;
+                  end;
+               end if;
+
                if Has_Runtime_After (Written) then
+                  --  Erased dispatch retains every nonself carrier shape.
+                  --  Saving just its usize address loses that proof on reload.
                   Saved (Formal_Position) :=
-                    IR.Add_Slot
+                    (if Parameter.Convention = Syn.Inout_Convention
+                     then IR.Add_Address_Slot
+                       (Unit.all, Filling, Neutral_Result_Part (Parameter),
+                        Site_Of (Of_Tree, Argument))
+                     elsif Erased_Self
+                       and then Parameter.Kind in
+                         Ty.Aggregate | Ty.Fixed_Array | Ty.Slice_Value
+                           | Ty.Any_Value
+                     then IR.Add_Address_Slot
+                       (Unit.all, Filling, Neutral_Result_Part (Parameter),
+                        Site_Of (Of_Tree, Argument))
+                     elsif IR.Signature_Uses_C_ABI (Unit.all, Signature)
+                        and then Parameter.Kind = Ty.Aggregate
+                     then IR.Add_Address_Slot
+                       (Unit.all, Filling, Neutral_Body (Parameter.Nominal),
+                        Site_Of (Of_Tree, Argument))
+                     else IR.Add_Slot
                       (Unit.all, Filling,
-                       (if Parameter.Convention = Syn.Inout_Convention
-                          or else Type_At (Of_Tree, Argument)
-                                    in Ty.Aggregate | Ty.Fixed_Array
-                                       | Ty.Slice_Value | Ty.Any_Value
-                        then Ty.Usize else Scalar_At (Of_Tree, Argument)),
+                       Ty.Scalar_Name (IR.Result_Of
+                         (Unit.all, Filling, Given (Formal_Position))),
                        Res.No_Declaration, Site_Of (Of_Tree, Argument),
+                       Pointee => IR.Pointee_Of
+                         (Unit.all, Filling, Given (Formal_Position)),
                        Signature =>
                          (if Type_At (Of_Tree, Argument) = Ty.Function_Value
                           then Signature_For
@@ -4192,7 +4137,7 @@ package body Landin.Stages.Lowering is
                           then Atom_Set_For
                             (Landin.Checking.Atom_Set_Of
                                (Types.all, Of_Tree, Argument))
-                          else IR.No_Atom_Set));
+                          else IR.No_Atom_Set)));
                   IR.Emit_Store
                     (Unit.all, Filling, Saved (Formal_Position),
                      Given (Formal_Position), Site_Of (Of_Tree, Argument));
@@ -4249,7 +4194,7 @@ package body Landin.Stages.Lowering is
 
          --  Every argument must precede the call, because Add_Argument
          --  requires the call to remain the last instruction emitted.
-         for Which in 1 .. Count loop
+         for Which in 1 .. Actual_Count loop
             if Saved (Which) /= IR.No_Slot then
                Given (Which) :=
                  IR.Emit_Load (Unit.all, Filling, Saved (Which), Site);
@@ -4257,7 +4202,10 @@ package body Landin.Stages.Lowering is
          end loop;
 
          if Returns_Stored then
-            pragma Assert (Destination /= IR.No_Slot);
+            if Destination = IR.No_Slot then
+               raise Landin.Compiler_Defect with
+                 "a stored call result has no logical destination";
+            end if;
             Hidden := IR.Emit_Storage_Address
               (Unit.all, Filling,
                (Kind => IR.Frame_Slot, Slot => Destination), Site,
@@ -4265,7 +4213,7 @@ package body Landin.Stages.Lowering is
                Nested => Destination_Steps);
          end if;
 
-         if Indirect then
+         if Indirect and then not Erased_Self then
             Callee_Value :=
               IR.Emit_Load (Unit.all, Filling, Callee_Saved, Site);
          end if;
@@ -4280,6 +4228,20 @@ package body Landin.Stages.Lowering is
                  (Unit.all, Filling, Evidence_For (Source), Site);
             end;
          end loop;
+
+         if Erased_Self then
+            declare
+               Receiver : constant IR.Value_Id := IR.Emit_Storage_Address
+                 (Unit.all, Filling,
+                  (Kind => IR.Frame_Slot, Slot => Receiver_Saved), Site);
+            begin
+               Callee_Value := IR.Emit_Erased_Evidence_Function
+                 (Unit.all, Filling, Receiver, Dispatch_Evidence,
+                  Positive (Dispatch_Entry), Site);
+               Given (1) := IR.Emit_Evidence_Self
+                 (Unit.all, Filling, Callee_Value, Site);
+            end;
+         end if;
 
          Made :=
            (if Indirect
@@ -4315,7 +4277,7 @@ package body Landin.Stages.Lowering is
               (Unit.all, Filling, Made, Evidence_Arguments (Which));
          end loop;
 
-         for Which in 1 .. Count loop
+         for Which in 1 .. Actual_Count loop
             IR.Add_Argument (Unit.all, Filling, Made, Given (Which));
          end loop;
 
@@ -4465,11 +4427,18 @@ package body Landin.Stages.Lowering is
          then
             return
               (Kind => IR.Scalar_Field_Shape, Element => Ty.Usize,
-               Length => 1, others => <>);
+               Pointee =>
+                 (if Descriptor.Referent = Ty.Pointer_Value
+                  then Pointee_For (Descriptor.Reference) else IR.No_Pointee),
+               Signature =>
+                 (if Descriptor.Referent = Ty.Function_Value
+                  then Signature_For (Descriptor.Signature)
+                  else IR.No_Signature),
+               others => <>);
          elsif Descriptor.Referent = Ty.Atom_Value then
             return
               (Kind => IR.Scalar_Field_Shape, Element => Ty.U32,
-               Length => 1, others => <>);
+               Atoms => Atom_Set_For (Descriptor.Atoms), others => <>);
          elsif Descriptor.Referent = Ty.Aggregate then
             return Neutral_Body (Descriptor.Nominal);
          elsif Descriptor.Referent = Ty.Fixed_Array then
@@ -4479,17 +4448,9 @@ package body Landin.Stages.Lowering is
                    Element => Descriptor.Element,
                    Nominal => Descriptor.Element_Nominal,
                    Element_Shape => Descriptor.Element_Shape, others => <>));
-               First : constant Natural :=
-                 (if Element.Kind /= IR.Scalar_Field_Shape
-                  then IR.Add_Shape_Run (Unit.all, [1 => Element]) else 0);
             begin
-               return
-                 (Kind => IR.Array_Field_Shape,
-                  Element => Element.Element,
-                  Length => IR.Element_Total (Descriptor.Length),
-                  Nominal => Element.Nominal,
-                  Cases => (if First = 0 then 0 else 1),
-                  Payloads_First => First, others => <>);
+               return IR.Make_Array_Shape
+                 (Unit.all, IR.Element_Total (Descriptor.Length), Element);
             end;
          elsif Descriptor.Referent
            in Ty.Slice_Value | Ty.Any_Value
@@ -5895,6 +5856,14 @@ package body Landin.Stages.Lowering is
          Owed : constant Landin.Checking.Constraint_Id :=
            Landin.Checking.Owed_Check (Types.all, Of_Tree, Node);
       begin
+         if Current /= IR.No_Block and then Made /= IR.No_Value
+           and then Type_At (Of_Tree, Node) = Ty.Pointer_Value
+         then
+            IR.Set_Pointee
+              (Unit.all, Filling, Made,
+               Pointee_For
+                 (Landin.Checking.Reference_Of (Types.all, Of_Tree, Node)));
+         end if;
          --  Lower_Unconstrained answers No_Value exactly when it
          --  terminated the flow, and every emission in this file stops
          --  there.  D188's check is no exception: an expression whose every
@@ -6052,6 +6021,42 @@ package body Landin.Stages.Lowering is
          end Fixed_Actual_Of;
 
       begin
+         if Syn.Kind (Of_Tree, Node)
+              in Syn.Element_Index | Syn.Member_Selection
+           and then
+             (Syn.Kind (Of_Tree, Node) /= Syn.Member_Selection
+              or else Landin.Checking.Field_Index
+                (Types.all, Of_Tree, Node) /= 0
+              or else Type_At
+                (Of_Tree, Syn.Target_Of (Of_Tree, Node)) = Ty.Pointer_Value)
+           and then
+             (Type_At (Of_Tree, Node)
+                in Ty.Function_Value | Ty.Pointer_Value | Ty.Atom_Value
+              or else Has_Reference_Storage (Of_Tree, Node)
+              or else Has_Computed_Index
+                (Of_Tree, Syn.Target_Of (Of_Tree, Node)))
+         then
+            --  Walk every computed dimension root-outward exactly once.
+            --  The scalar child, including a callback signature, witnesses
+            --  the indirect access rather than decorating an integer load.
+            declare
+               Reached : constant Stored_Place :=
+                 Lower_Stored_Place (Of_Tree, Node, Scope);
+            begin
+               if Current = IR.No_Block then
+                  return IR.No_Value;
+               end if;
+               declare
+                  Shape : constant IR.Field_Shape :=
+                    Neutral_Value_Shape (Of_Tree, Node);
+                  Address : constant IR.Storage :=
+                    Addressed_Storage (Reached, Shape, Site);
+               begin
+                  return IR.Emit_Load_Indirect
+                    (Unit.all, Filling, Address.Address, Site);
+               end;
+            end;
+         end if;
          case Syn.Kind (Of_Tree, Node) is
             when Syn.If_Statement | Syn.Match_Statement | Syn.Bare_Block
                | Syn.Loop_Statement | Syn.While_Statement
@@ -6082,10 +6087,10 @@ package body Landin.Stages.Lowering is
                   raise Landin.Compiler_Defect with
                     "a slice text literal reached scalar lowering";
                end if;
-               return IR.Emit_Storage_Address
+               return IR.Emit_Place_Address
                  (Unit.all, Filling,
                   (Kind => IR.Module_Datum,
-                   Datum => Text_Datum (Of_Tree, Node)), Site);
+                   Datum => Text_Datum (Of_Tree, Node)), Site, Field => 1);
 
             when Syn.True_Literal =>
                return IR.Emit_Truth (Unit.all, Filling, True, Site);
@@ -6239,15 +6244,9 @@ package body Landin.Stages.Lowering is
                                       (Types.all, Declared, Field));
 
                               when Landin.Checking.Fixed_Array_Field =>
-                                 Fields (Field) :=
-                                   (Kind    => IR.Array_Field_Shape,
-                                    Element =>
-                                      Landin.Checking.Field_Array_Element
-                                        (Types.all, Declared, Field),
-                                    Length  => IR.Element_Total
-                                      (Landin.Checking.Field_Array_Length
-                                         (Types.all, Declared, Field)),
-                                    others  => <>);
+                                 Fields (Field) := Neutral_Shape
+                                   (Landin.Checking.Field_Shape_Of
+                                      (Types.all, Declared, Field));
 
                               when Landin.Checking.Aggregate_Field =>
                                  declare
@@ -6547,9 +6546,21 @@ package body Landin.Stages.Lowering is
                declare
                   Value : constant IR.Value_Id := Lower_Expression
                     (Of_Tree, Syn.Operand_Of (Of_Tree, Node), Scope);
+                  Address : IR.Value_Id;
                begin
-                  return IR.Emit_Conversion
+                  if Current = IR.No_Block then
+                     return IR.No_Value;
+                  end if;
+                  Address := IR.Emit_Conversion
                     (Unit.all, Filling, Value, Ty.Usize, Site);
+                  --  The reserved zero is tested after target-width
+                  --  conversion.  Range_Check is deliberately never
+                  --  removable by an unchecked region.  Foreign optional
+                  --  results do not pass through pointer construction.
+                  return IR.Emit_Range_Check
+                    (Unit.all, Filling, Address, Ty.Usize, 1,
+                     Ty.Folded
+                       (Landin.Targets.Maximum_Object_Size (Facts)), Site);
                end;
 
             when Syn.Address_Of =>
@@ -6716,6 +6727,8 @@ package body Landin.Stages.Lowering is
                      declare
                         Alias : Payload_Alias renames
                           Aliases (Declared (Means));
+                        Element_Path : constant IR.Path_Step_Array :=
+                          Alias_Element_Steps (Of_Tree, Alias);
                         Index : constant IR.Value_Id :=
                           Lower_Expression
                             (Of_Tree, Syn.Index_Of (Of_Tree, Node), Scope);
@@ -6734,19 +6747,25 @@ package body Landin.Stages.Lowering is
                                 (Unit.all, Filling, Alias.Source.Datum,
                                  Index, Scalar_At (Of_Tree, Node), Site,
                                  Field => Alias.Field,
-                                 Nested => Alias_Steps (Of_Tree, Alias),
-                                 Variant_Case => Alias.Which,
+                                 Nested => Element_Path,
+                                 Variant_Case =>
+                                   (if Element_Path'Length = 0
+                                    then Alias.Which else 0),
                                  Variant_Payload_Field =>
-                                   Alias.Payload_Field);
+                                   (if Element_Path'Length = 0
+                                    then Alias.Payload_Field else 0));
                            when IR.Frame_Slot =>
                               return IR.Emit_Load_Slot_Element
                                 (Unit.all, Filling, Alias.Source.Slot,
                                  Index, Scalar_At (Of_Tree, Node), Site,
                                  Field => Alias.Field,
-                                 Nested => Alias_Steps (Of_Tree, Alias),
-                                 Variant_Case => Alias.Which,
+                                 Nested => Element_Path,
+                                 Variant_Case =>
+                                   (if Element_Path'Length = 0
+                                    then Alias.Which else 0),
                                  Variant_Payload_Field =>
-                                   Alias.Payload_Field);
+                                   (if Element_Path'Length = 0
+                                    then Alias.Payload_Field else 0));
                            when IR.Runtime_Address =>
                               declare
                                  Address : constant IR.Value_Id :=
@@ -6899,9 +6918,8 @@ package body Landin.Stages.Lowering is
                      Table : IR.Value_Id;
                   begin
                      if Dynamic then
-                        Table := Lower_Slice
-                          (Of_Tree, Syn.Target_Of (Of_Tree, Node),
-                           Scope).Length;
+                        raise Landin.Compiler_Defect with
+                          "a bound any entry escaped call lowering";
                      elsif Slot = IR.No_Slot then
                         raise Landin.Compiler_Defect with
                           "an evidence selection has no hidden parameter";
@@ -6911,8 +6929,7 @@ package body Landin.Stages.Lowering is
                      end if;
                      return IR.Emit_Evidence_Function
                        (Unit.all, Filling, Table,
-                        (if Dynamic then Any_Evidence_For (Source)
-                         else Evidence_For (Source)),
+                        Evidence_For (Source),
                         Positive
                           (Landin.Checking.Evidence_Entry_Of
                              (Types.all, Of_Tree, Node)),
@@ -7144,10 +7161,7 @@ package body Landin.Stages.Lowering is
                               end if;
                               return IR.Emit_Load_Indirect
                                 (Unit.all, Filling,
-                                 IR.Emit_Load
-                                   (Unit.all, Filling,
-                                    Alias.Source.Address, Site),
-                                 Carrier, Site);
+                                 Alias.Source.Address, Site);
                         end case;
                      end;
                   end if;
@@ -7185,15 +7199,9 @@ package body Landin.Stages.Lowering is
                         if Syn.Convention_Of (Their_Tree.all, Their_Node)
                              = Syn.Inout_Convention
                         then
-                           declare
-                              Address : constant IR.Value_Id := IR.Emit_Load
-                                (Unit.all, Filling,
-                                 Slot_For (Of_Tree, Node, Means), Site);
-                           begin
-                              return IR.Emit_Load_Indirect
-                                (Unit.all, Filling, Address,
-                                 Scalar_At (Of_Tree, Node), Site);
-                           end;
+                           return IR.Emit_Load_Indirect
+                             (Unit.all, Filling,
+                              Slot_For (Of_Tree, Node, Means), Site);
                         end if;
                      end;
                   end if;
@@ -7255,6 +7263,7 @@ package body Landin.Stages.Lowering is
                           Scalar_At (Of_Tree, Left_Node),
                           Res.No_Declaration,
                           Site_Of (Of_Tree, Left_Node),
+                          Pointee => IR.Pointee_Of (Unit.all, Filling, Left),
                           Atoms =>
                             (if Type_At (Of_Tree, Left_Node) = Ty.Atom_Value
                              then Atom_Set_For
@@ -7448,9 +7457,10 @@ package body Landin.Stages.Lowering is
            Landin.Checking.Nominal_Of (Types.all, Of_Tree, Holder);
          Field : constant Positive := Positive
            (Landin.Checking.Field_Index (Types.all, Of_Tree, Subject));
+         Referenced : constant Boolean :=
+           Has_Reference_Storage (Of_Tree, Holder);
          Computed : constant Boolean :=
-           Has_Computed_Index (Of_Tree, Holder)
-           or else Has_Reference_Storage (Of_Tree, Holder);
+           Has_Computed_Index (Of_Tree, Holder);
          Location : Stored_Place;
          Alias_Subject : Syn.Node_Id := Subject;
          Shape : constant Landin.Checking.Field_Shape :=
@@ -7501,7 +7511,21 @@ package body Landin.Stages.Lowering is
       begin
          pragma Assert (Shape.Kind = Landin.Checking.Variant_Field);
 
-         if Computed then
+         if Referenced then
+            --  An inout, pointer or slice subject names existing storage.
+            --  Capture its shaped address once, not a copy of its bytes:
+            --  payload writes and returned views must reach the caller.
+            Location := Lower_Stored_Place (Of_Tree, Holder, Scope);
+            if Current = IR.No_Block then
+               return;
+            end if;
+            Location.Place := Addressed_Storage
+              (Location, Neutral_Body (Wrote), Site);
+            Location.Base := Field;
+            Location.Steps.Clear;
+            Alias_Subject := Syn.No_Node;
+         elsif Computed then
+            --  D134's computed value subject keeps its independent copy.
             Location := Lower_Stored_Place (Of_Tree, Holder, Scope);
             if Current = IR.No_Block then
                return;
@@ -7761,9 +7785,15 @@ package body Landin.Stages.Lowering is
            Site_Of (Of_Tree, Node);
          Subject : constant Syn.Node_Id :=
            Syn.Match_Subject (Of_Tree, Node);
+         --  The union and its present binding share the pointer's reached
+         --  type as well as its carrier. Preserve that witness while the
+         --  subject crosses the dispatch blocks; a bare usize would erase
+         --  it before Bind stores the value into the narrowed pointer slot.
          Saved : constant IR.Slot_Id :=
            IR.Add_Slot
-             (Unit.all, Filling, Ty.Usize, Res.No_Declaration, Site);
+             (Unit.all, Filling, Ty.Usize, Res.No_Declaration, Site,
+              Pointee => Pointee_For
+                (Landin.Checking.Reference_Of (Types.all, Of_Tree, Subject)));
          Merge : IR.Block_Id := IR.No_Block;
 
          procedure Bind (Arm : Syn.Node_Id);
@@ -8183,6 +8213,9 @@ package body Landin.Stages.Lowering is
                 elsif Part.Kind = Ty.Atom_Value then Ty.U32
                 else Ty.Scalar_Name (Part.Kind)),
                Res.No_Declaration, Site,
+               Pointee =>
+                 (if Part.Kind = Ty.Pointer_Value
+                  then Pointee_For (Part.Reference) else IR.No_Pointee),
                Signature =>
                  (if Part.Kind = Ty.Function_Value
                   then Signature_For (Part.Signature)
@@ -9656,20 +9689,19 @@ package body Landin.Stages.Lowering is
                                           (From_Field, From_Steps),
                                       Signature => Signature);
                               when IR.Runtime_Address =>
-                                 if Signature /= IR.No_Signature then
-                                    raise Landin.Compiler_Defect with
-                                      "a function field used runtime copy"
-                                      & " storage";
-                                 end if;
-                                 Taken := IR.Emit_Load_Indirect
-                                   (Unit.all, Filling,
-                                    IR.Emit_Place_Address
-                                      (Unit.all, Filling, Source, Site,
-                                       Field => Natural (Leaf_Base
-                                         (From_Field, From_Steps)),
-                                       Nested => Leaf_Steps
-                                         (From_Field, From_Steps)),
-                                    Held, Site);
+                                 declare
+                                    Neutral : constant IR.Field_Shape :=
+                                      Neutral_Shape (Shape);
+                                    Address : constant IR.Storage :=
+                                      Addressed_Storage
+                                        (Stored_At
+                                           (Source, From_Field, From_Steps),
+                                         Neutral, Site);
+                                 begin
+                                    Taken := IR.Emit_Load_Indirect
+                                      (Unit.all, Filling,
+                                       Address.Address, Site);
+                                 end;
                            end case;
 
                            case Destination.Kind is
@@ -9688,15 +9720,10 @@ package body Landin.Stages.Lowering is
                                     Nested =>
                                       Leaf_Steps (Into_Field, Into_Steps));
                               when IR.Runtime_Address =>
-                                 IR.Emit_Store_Indirect
-                                   (Unit.all, Filling,
-                                    IR.Emit_Place_Address
-                                      (Unit.all, Filling, Destination, Site,
-                                       Field => Natural (Leaf_Base
-                                         (Into_Field, Into_Steps)),
-                                       Nested => Leaf_Steps
-                                         (Into_Field, Into_Steps)),
-                                    Taken, Site);
+                                 Store_Shaped_Scalar
+                                   (Stored_At
+                                      (Destination, Into_Field, Into_Steps),
+                                    Neutral_Shape (Shape), Taken, Site);
                            end case;
                         end;
 
@@ -9741,15 +9768,17 @@ package body Landin.Stages.Lowering is
                                           Nested => Leaf_Steps
                                             (From_Field, From_Steps));
                                     when IR.Runtime_Address =>
-                                       Taken := IR.Emit_Load_Indirect
-                                         (Unit.all, Filling,
-                                          IR.Emit_Place_Address
-                                            (Unit.all, Filling, Source, Site,
-                                             Field => Natural (Leaf_Base
-                                               (From_Field, From_Steps)),
-                                             Nested => Leaf_Steps
-                                               (From_Field, From_Steps)),
-                                          Ty.Usize, Site);
+                                       declare
+                                          Address : constant IR.Storage :=
+                                            Addressed_Storage
+                                              (Stored_At (Source, From_Field,
+                                                          From_Steps),
+                                               Neutral_Shape (Shape), Site);
+                                       begin
+                                          Taken := IR.Emit_Load_Indirect
+                                            (Unit.all, Filling,
+                                             Address.Address, Site);
+                                       end;
                                  end case;
                                  case Destination.Kind is
                                     when IR.Module_Datum =>
@@ -9771,16 +9800,11 @@ package body Landin.Stages.Lowering is
                                           Nested => Leaf_Steps
                                             (Into_Field, Into_Steps));
                                     when IR.Runtime_Address =>
-                                       IR.Emit_Store_Indirect
-                                         (Unit.all, Filling,
-                                          IR.Emit_Place_Address
-                                            (Unit.all, Filling, Destination,
-                                             Site,
-                                             Field => Natural (Leaf_Base
-                                               (Into_Field, Into_Steps)),
-                                             Nested => Leaf_Steps
-                                               (Into_Field, Into_Steps)),
-                                          Taken, Site);
+                                       Store_Shaped_Scalar
+                                         (Stored_At
+                                            (Destination, Into_Field,
+                                             Into_Steps),
+                                          Neutral_Shape (Shape), Taken, Site);
                                  end case;
                               end;
                            end if;
@@ -9990,292 +10014,17 @@ package body Landin.Stages.Lowering is
                   Variant_Case : Natural := 0;
                   Variant_Payload_Field : Natural := 0)
                is
-                  procedure Store_Element
-                    (Position : Positive; Element : IR.Value_Id);
-
-                  procedure Store_Element
-                    (Position : Positive; Element : IR.Value_Id)
-                  is
-                     Part : constant IR.Part_Position :=
-                       IR.Part_Position (Position);
-                  begin
-                     if Destination.Kind = IR.Runtime_Address then
-                        declare
-                           Index : constant IR.Value_Id := IR.Emit_Number
-                             (Unit.all, Filling, Ty.Usize,
-                              Ty.Magnitude (Position - 1), False, Site);
-                           Steps : constant IR.Path_Step_Array :=
-                             (if Variant_Payload_Field = 0 then Path
-                              else Payload_Steps
-                                (Path, Positive (Variant_Case),
-                                 Positive (Variant_Payload_Field)));
-                           Address : constant IR.Value_Id :=
-                             IR.Emit_Storage_Address
-                               (Unit.all, Filling, Destination, Site,
-                                Field => Field, Nested => Steps,
-                                Index => Index);
-                        begin
-                           IR.Emit_Store_Indirect
-                             (Unit.all, Filling, Address, Element, Site);
-                        end;
-                        return;
-                     end if;
-                     if Field = 0 and then Path'Length = 0 then
-                        case Destination.Kind is
-                           when IR.Module_Datum =>
-                              IR.Emit_Store_Field
-                                (Unit.all, Filling, Destination.Datum, Part,
-                                 Element, Site);
-                           when IR.Frame_Slot =>
-                              IR.Emit_Store_Slot_Field
-                                (Unit.all, Filling, Destination.Slot, Part,
-                                 Element, Site);
-                           when IR.Runtime_Address =>
-                              raise Landin.Compiler_Defect with
-                                "an array element write needs a containing"
-                                & " field";
-                        end case;
-                     else
-                        --  A zero base with a nonempty path is an array
-                        --  reached through constant indexes in array
-                        --  storage.  Keep that path on Store_Element so the
-                        --  verifier and target derive every containing
-                        --  dimension before selecting this scalar element.
-                        declare
-                           Index : constant IR.Value_Id :=
-                             IR.Emit_Number
-                               (Unit.all, Filling, Ty.Usize,
-                                Ty.Magnitude (Position - 1), False, Site);
-                        begin
-                           case Destination.Kind is
-                              when IR.Module_Datum =>
-                                 IR.Emit_Store_Element
-                                   (Unit.all, Filling, Destination.Datum,
-                                    Index, Element, Site, Field => Field,
-                                    Nested => Path,
-                                    Variant_Case => Variant_Case,
-                                    Variant_Payload_Field =>
-                                      Variant_Payload_Field);
-                              when IR.Frame_Slot =>
-                                 IR.Emit_Store_Slot_Element
-                                   (Unit.all, Filling, Destination.Slot,
-                                    Index, Element, Site, Field => Field,
-                                    Nested => Path,
-                                    Variant_Case => Variant_Case,
-                                    Variant_Payload_Field =>
-                                      Variant_Payload_Field);
-                              when IR.Runtime_Address =>
-                                 raise Landin.Compiler_Defect with
-                                   "a runtime array field reached scalar"
-                                   & " element lowering";
-                           end case;
-                        end;
-                     end if;
-                  end Store_Element;
+                  Steps : constant IR.Path_Step_Array :=
+                    (if Variant_Payload_Field = 0 then Path
+                     else Payload_Steps
+                       (Path, Positive (Variant_Case),
+                        Positive (Variant_Payload_Field)));
+                  Shape : constant IR.Field_Shape :=
+                    Neutral_Value_Shape (Of_Tree, Value);
                begin
-                  --  D49--D53/D65: every contextual fixed-array destination
-                  --  uses the same field-qualified operation family.  Field
-                  --  zero is complete array storage; a positive field is the
-                  --  array member of an aggregate datum or slot.
-                  pragma Assert
-                    ((Variant_Case = 0
-                      and then Variant_Payload_Field = 0)
-                     or else
-                       (Field > 0
-                        and then Variant_Case > 0
-                        and then Variant_Payload_Field > 0));
-                  pragma Assert
-                    (Field = 0
-                     or else Syn.Kind (Of_Tree, Value)
-                               in Syn.Array_Literal
-                                  | Syn.Array_Repetition
-                                  | Syn.Mixed_Array_Repetition
-                                  | Syn.Zeroed_Literal
-                                  | Syn.Name_Reference
-                                  | Syn.Member_Selection
-                                  | Syn.Element_Index
-                                  | Syn.Inclusive_Slice
-                                  | Syn.Half_Open_Slice
-                                  | Syn.Empty_Slice_Literal
-                                  | Syn.Text_Literal
-                                  | Syn.Raw_Literal
-                                  | Syn.Any_Construction);
-
-                  if Type_At (Of_Tree, Value)
-                       in Ty.Slice_Value | Ty.Any_Value
-                  then
-                     declare
-                        Temporary : constant IR.Slot_Id := IR.Add_Array_Slot
-                          (Unit.all, Filling, Ty.Usize, 2,
-                           Res.No_Declaration, Site);
-                     begin
-                        Lower_Slice_Into
-                          (Of_Tree, Value, Scope, Temporary);
-                        IR.Emit_Array_Copy
-                          (Unit.all, Filling,
-                           (Kind => IR.Frame_Slot, Slot => Temporary),
-                           Destination, Site,
-                           Destination_Field => Field,
-                           Destination_Nested => Path,
-                           Destination_Variant_Case => Variant_Case,
-                           Destination_Variant_Payload_Field =>
-                             Variant_Payload_Field);
-                     end;
-                  elsif Syn.Kind (Of_Tree, Value) = Syn.Array_Literal then
-                     --  D29/D52 forms each contextual element directly in
-                     --  destination storage in source order.
-                     for Position in
-                       1 .. Syn.Element_Count (Of_Tree, Value)
-                     loop
-                        declare
-                           Held : constant IR.Value_Id :=
-                             Lower_Expression
-                               (Of_Tree,
-                                Syn.Nth_Element
-                                  (Of_Tree, Value, Position), Scope);
-                        begin
-                           if Current = IR.No_Block then
-                              return;
-                           end if;
-                           Store_Element (Position, Held);
-                        end;
-                     end loop;
-                  elsif Syn.Kind (Of_Tree, Value)
-                          = Syn.Mixed_Array_Repetition
-                  then
-                     --  D37/D53 writes each prefix position, then evaluates
-                     --  one suffix value for the compact fill.
-                     for Position in
-                       1 .. Syn.Element_Count (Of_Tree, Value)
-                     loop
-                        declare
-                           Held : constant IR.Value_Id :=
-                             Lower_Expression
-                               (Of_Tree,
-                                Syn.Nth_Element
-                                  (Of_Tree, Value, Position), Scope);
-                        begin
-                           if Current = IR.No_Block then
-                              return;
-                           end if;
-                           Store_Element (Position, Held);
-                        end;
-                     end loop;
-
-                     declare
-                        Held : constant IR.Value_Id :=
-                          Lower_Expression
-                            (Of_Tree,
-                             Syn.Repeated_Element (Of_Tree, Value), Scope);
-                     begin
-                        if Current = IR.No_Block then
-                           return;
-                        end if;
-                        IR.Emit_Array_Fill
-                          (Unit.all, Filling, Destination,
-                           IR.Part_Position
-                             (Syn.Element_Count (Of_Tree, Value) + 1),
-                           Held, Site, Field => Field,
-                           Nested => Path,
-                           Variant_Case => Variant_Case,
-                           Variant_Payload_Field => Variant_Payload_Field);
-                     end;
-                  elsif Syn.Kind (Of_Tree, Value) = Syn.Array_Repetition
-                  then
-                     declare
-                        Held : constant IR.Value_Id :=
-                          Lower_Expression
-                            (Of_Tree,
-                             Syn.Repeated_Element (Of_Tree, Value), Scope);
-                     begin
-                        if Current = IR.No_Block then
-                           return;
-                        end if;
-                        IR.Emit_Array_Fill
-                          (Unit.all, Filling, Destination, 1, Held, Site,
-                           Field => Field, Nested => Path,
-                           Variant_Case => Variant_Case,
-                           Variant_Payload_Field => Variant_Payload_Field);
-                     end;
-                  elsif Syn.Kind (Of_Tree, Value) = Syn.Zeroed_Literal then
-                     if Variant_Payload_Field = 0 then
-                        IR.Emit_Array_Clear
-                          (Unit.all, Filling, Destination, Site,
-                           Field => Field, Nested => Path);
-                     end if;
-                  else
-                     --  D20/D50: a whole array source is storage, optionally
-                     --  qualified by its containing aggregate field. A
-                     --  pointer dereference or computed element changes that
-                     --  storage root to a runtime address, just as D127's
-                     --  aggregate whole-copy path does.
-                     declare
-                        Dynamic : constant Boolean :=
-                          Has_Computed_Index (Of_Tree, Value)
-                          or else Has_Reference_Storage (Of_Tree, Value)
-                          or else Destination.Kind = IR.Runtime_Address;
-                     begin
-                        if Dynamic then
-                           declare
-                              Source : constant Stored_Place :=
-                                Lower_Stored_Place
-                                  (Of_Tree, Value, Scope);
-                              Target_Steps : constant IR.Path_Step_Array :=
-                                (if Variant_Payload_Field = 0
-                                 then Path
-                                 else Payload_Steps
-                                   (Path, Positive (Variant_Case),
-                                    Positive (Variant_Payload_Field)));
-                              Target : Stored_Place :=
-                                (Place => Destination, Base => Field,
-                                 Steps =>
-                                   Stored_Path_Vectors.Empty_Vector);
-                           begin
-                              for Step of Target_Steps loop
-                                 Target.Steps.Append (Step);
-                              end loop;
-                              if Current /= IR.No_Block then
-                                 declare
-                                    Shape : constant IR.Field_Shape :=
-                                      Neutral_Value_Shape (Of_Tree, Value);
-                                    From : constant IR.Storage :=
-                                      Addressed_Storage
-                                        (Source, Shape,
-                                         Site_Of (Of_Tree, Value));
-                                    Into : constant IR.Storage :=
-                                      Addressed_Storage
-                                        (Target, Shape, Site);
-                                 begin
-                                    IR.Emit_Array_Copy
-                                      (Unit.all, Filling, From, Into, Site);
-                                 end;
-                              end if;
-                           end;
-                        else
-                           declare
-                              Source_Place : constant IR.Storage :=
-                                Rooted_Storage (Of_Tree, Value);
-                              Source_Field : constant Natural :=
-                                Rooted_Base (Of_Tree, Value);
-                              Source_Steps : constant IR.Path_Step_Array :=
-                                Rooted_Steps (Of_Tree, Value);
-                           begin
-                              IR.Emit_Array_Copy
-                                (Unit.all, Filling,
-                                 Source => Source_Place,
-                                 Destination => Destination,
-                                 Site => Site,
-                                 Source_Field => Source_Field,
-                                 Source_Nested => Source_Steps,
-                                 Destination_Field => Field,
-                                 Destination_Nested => Path,
-                                 Destination_Variant_Case => Variant_Case,
-                                 Destination_Variant_Payload_Field =>
-                                   Variant_Payload_Field);
-                           end;
-                        end if;
-                     end;
-                  end if;
+                  Write_Shaped_Value
+                    (Of_Tree, Value, Scope, Shape,
+                     Stored_At (Destination, Field, Steps));
                end Write_Array_Value;
 
                procedure Write_Variant_Value
@@ -10446,286 +10195,28 @@ package body Landin.Stages.Lowering is
                   Base        : Natural := 0;
                   Steps       : IR.Path_Step_Array := IR.No_Path_Steps)
                is
-                  Count : constant Natural :=
-                    Landin.Checking.Layout_Field_Count
-                      (Types.all, Wrote);
-                  type Seen_Array is array (Positive range <>) of Boolean;
-                  Seen : Seen_Array (1 .. Count) := [others => False];
-
-                  procedure Store_Scalar
-                    (Field : Positive; Value : IR.Value_Id);
-
-                  procedure Store_Scalar
-                    (Field : Positive; Value : IR.Value_Id)
-                  is
-                     Into_Field : constant Natural :=
-                       Descended_Base (Base, Steps, Field);
-                     Into_Steps : constant IR.Path_Step_Array :=
-                       Descended_Steps (Base, Steps, Field);
-                  begin
-                     --  D127: a field operation names one part, so a run
-                     --  that starts at whole array storage gives its first
-                     --  step to the part it names.
-                     case Destination.Kind is
-                        when IR.Module_Datum =>
-                           IR.Emit_Store_Field
-                             (Unit.all, Filling, Destination.Datum,
-                              Leaf_Base (Into_Field, Into_Steps),
-                              Value, Site,
-                              Nested =>
-                                Leaf_Steps (Into_Field, Into_Steps));
-                        when IR.Frame_Slot =>
-                           IR.Emit_Store_Slot_Field
-                             (Unit.all, Filling, Destination.Slot,
-                              Leaf_Base (Into_Field, Into_Steps),
-                              Value, Site,
-                              Nested =>
-                                Leaf_Steps (Into_Field, Into_Steps));
-                        when IR.Runtime_Address =>
-                           raise Landin.Compiler_Defect with
-                             "a runtime literal destination was not"
-                             & " temporary-backed";
-                     end case;
-                  end Store_Scalar;
+                  Shape : constant IR.Field_Shape := Neutral_Body (Wrote);
                begin
-                  --  [0410]/D29: named fields are evaluated and committed in
-                  --  source order, irrespective of declaration/layout order.
-                  for Position in
-                    1 .. Construction_Field_Count (Of_Tree, Literal)
-                  loop
-                     declare
-                        Field_Node : constant Syn.Node_Id :=
-                          Nth_Construction_Field
-                            (Of_Tree, Literal, Position);
-                        Field : constant Natural :=
-                          Landin.Checking.Field_Index
-                            (Types.all, Of_Tree, Field_Node);
-                        Value : constant Syn.Node_Id :=
-                          Construction_Field_Value (Of_Tree, Field_Node);
-                     begin
-                        pragma Assert (Field > 0);
-                        Seen (Field) := True;
-                        case Landin.Checking.Field_Kind_Of
-                          (Types.all, Wrote, Field)
-                        is
-                           when Landin.Checking.Scalar_Field =>
-                              declare
-                                 Held : constant IR.Value_Id :=
-                                   Lower_Expression
-                                     (Of_Tree, Value, Scope);
-                              begin
-                                 if Current /= IR.No_Block then
-                                    Store_Scalar (Field, Held);
-                                 end if;
-                              end;
-                           when Landin.Checking.Reference_Field =>
-                              declare
-                                 Shape : constant
-                                   Landin.Checking.Field_Shape :=
-                                     Landin.Checking.Field_Shape_Of
-                                       (Types.all, Wrote, Field);
-                              begin
-                                 if Landin.Checking.Descriptor_Of
-                                   (Types.all, Shape.Reference).Kind
-                                     = Ty.Pointer_Value
-                                 then
-                                    declare
-                                       Held : constant IR.Value_Id :=
-                                         Lower_Expression
-                                           (Of_Tree, Value, Scope);
-                                    begin
-                                       if Current /= IR.No_Block then
-                                          Store_Scalar (Field, Held);
-                                       end if;
-                                    end;
-                                 else
-                                    Write_Array_Value
-                                      (Value, Destination,
-                                       Descended_Base
-                                         (Base, Steps, Field),
-                                       Path => Descended_Steps
-                                         (Base, Steps, Field));
-                                 end if;
-                              end;
-                           when Landin.Checking.Fixed_Array_Field =>
-                              --  D65: the label is the same contextual array
-                              --  destination D49--D53 lower on assignment.
-                              Write_Array_Value
-                                (Value, Destination,
-                                 Descended_Base (Base, Steps, Field),
-                                 Path =>
-                                   Descended_Steps (Base, Steps, Field));
-
-                           when Landin.Checking.Aggregate_Field =>
-                              declare
-                                 Child : constant
-                                   Landin.Checking.Nominal_Type_Id :=
-                                   Landin.Checking.Field_Shape_Of
-                                     (Types.all, Wrote, Field).Nominal;
-                                 Into_Field : constant Natural :=
-                                   Descended_Base (Base, Steps, Field);
-                                 Into_Steps :
-                                   constant IR.Path_Step_Array :=
-                                     Descended_Steps (Base, Steps, Field);
-                              begin
-                                 if Is_Struct_Construction (Of_Tree, Value)
-                                 then
-                                    Write_Struct_Literal
-                                      (Value, Child, Destination,
-                                       Base  => Into_Field,
-                                       Steps => Into_Steps);
-                                 elsif Syn.Kind (Of_Tree, Value)
-                                         = Syn.Zeroed_Literal
-                                 then
-                                    IR.Emit_Array_Clear
-                                      (Unit.all, Filling, Destination, Site,
-                                       Field  => Into_Field,
-                                       Nested => Into_Steps);
-                                 elsif Syn.Kind (Of_Tree, Value)
-                                   in Syn.Call | Syn.Labeled_Application
-                                      | Syn.Try_Expression
-                                      | Syn.If_Statement
-                                      | Syn.Match_Statement
-                                      | Syn.Bare_Block
-                                 then
-                                    --  A stored call or control result has
-                                    --  no source name to root a copy at.  Let
-                                    --  it fill one caller-owned temporary,
-                                    --  then copy that child's ordinary fields
-                                    --  into the enclosing literal.
-                                    declare
-                                       Temporary : constant IR.Slot_Id :=
-                                         Add_Value_Temporary
-                                           (Of_Tree, Value);
-                                    begin
-                                       Lower_Stored_Expression
-                                         (Of_Tree, Value, Scope, Temporary);
-                                       if Current = IR.No_Block then
-                                          return;
-                                       end if;
-                                       for Child_Field in
-                                         1 .. Landin.Checking
-                                                .Layout_Field_Count
-                                                  (Types.all, Child)
-                                       loop
-                                          Copy_Field
-                                            (Child,
-                                             (Kind => IR.Frame_Slot,
-                                              Slot => Temporary),
-                                             Destination, Child_Field,
-                                             Destination_Base => Into_Field,
-                                             Destination_Steps => Into_Steps);
-                                       end loop;
-                                    end;
-                                 else
-                                    declare
-                                       Source_Base : constant Natural :=
-                                         Rooted_Base (Of_Tree, Value);
-                                       Source_Steps :
-                                         constant IR.Path_Step_Array :=
-                                           Rooted_Steps (Of_Tree, Value);
-                                       Source : constant IR.Storage :=
-                                         Rooted_Storage (Of_Tree, Value);
-                                    begin
-                                       for Child_Field in
-                                         1 .. Landin.Checking
-                                                .Layout_Field_Count
-                                                  (Types.all, Child)
-                                       loop
-                                          Copy_Field
-                                            (Child, Source, Destination,
-                                             Child_Field,
-                                             Source_Base => Source_Base,
-                                             Source_Steps => Source_Steps,
-                                             Destination_Base => Into_Field,
-                                             Destination_Steps =>
-                                               Into_Steps);
-                                       end loop;
-                                    end;
-                                 end if;
-                              end;
-
-                           when Landin.Checking.Variant_Field =>
-                              --  D126: a labelled variant part is one
-                              --  place deeper, like every other label.
-                              Write_Variant_Value
-                                (Value, Wrote, Field, Destination,
-                                 Base  => Descended_Base (Base, Steps, Field),
-                                 Steps =>
-                                   Descended_Steps (Base, Steps, Field));
-                        end case;
-                        exit when Current = IR.No_Block;
-                     end;
-                  end loop;
-
-                  if Current = IR.No_Block then
-                     return;
-                  end if;
-
-                  --  D64's deliberately narrow fill is all-bits zero.  It is
-                  --  written after every labelled value, in declaration
-                  --  order, without forming one heterogeneously typed value.
-                  if Construction_Fill (Of_Tree, Literal) /= Syn.No_Node then
-                     for Field in Seen'Range loop
-                        if not Seen (Field) then
-                           case Landin.Checking.Field_Kind_Of
-                             (Types.all, Wrote, Field)
-                           is
-                              when Landin.Checking.Scalar_Field =>
-                                 declare
-                                    Held : constant Ty.Scalar_Name :=
-                                      Landin.Checking.Field_Type
-                                        (Types.all, Wrote, Field);
-                                    Zero : IR.Value_Id;
-                                 begin
-                                    if Held = Ty.Bool then
-                                       Zero := IR.Emit_Truth
-                                         (Unit.all, Filling, False, Site);
-                                    else
-                                       Zero := IR.Emit_Number
-                                         (Unit.all, Filling, Held, 0, False,
-                                          Site);
-                                    end if;
-                                    Store_Scalar (Field, Zero);
-                                 end;
-
-                              when Landin.Checking.Reference_Field =>
-                                 raise Landin.Compiler_Defect with
-                                   "a reference field reached a zero fill"
-                                   & " despite having no zero image";
-
-                              when Landin.Checking.Fixed_Array_Field
-                                 | Landin.Checking.Aggregate_Field =>
-                                 --  One whole-part clear covers both: a
-                                 --  fixed array's elements and a child's
-                                 --  complete padded extent are the same
-                                 --  all-bits-zero image [0540].
-                                 IR.Emit_Array_Clear
-                                   (Unit.all, Filling, Destination, Site,
-                                    Field  =>
-                                      Descended_Base (Base, Steps, Field),
-                                    Nested =>
-                                      Descended_Steps (Base, Steps, Field));
-
-                              when Landin.Checking.Variant_Field =>
-                                 --  D75's zero image selects the first case.
-                                 IR.Emit_Variant_Select
-                                   (Unit.all, Filling, Destination,
-                                    Descended_Base (Base, Steps, Field),
-                                    1, Site,
-                                    Nested =>
-                                      Descended_Steps (Base, Steps, Field));
-                           end case;
-                        end if;
-                     end loop;
-                  end if;
+                  Write_Shaped_Value
+                    (Of_Tree, Literal, Scope, Shape,
+                     Stored_At (Destination, Base, Steps));
                end Write_Struct_Literal;
 
                function Reference_Address_For
                  (Place : Syn.Node_Id) return IR.Slot_Id is
                begin
                   if Current = IR.No_Block
-                    or else not Has_Reference_Storage (Of_Tree, Place)
+                    or else not
+                      (Has_Reference_Storage (Of_Tree, Place)
+                       or else
+                         (Syn.Kind (Of_Tree, Place)
+                            in Syn.Element_Index | Syn.Member_Selection
+                          and then
+                            (Type_At (Of_Tree, Place)
+                               in Ty.Function_Value | Ty.Pointer_Value
+                                  | Ty.Atom_Value
+                             or else Has_Computed_Index
+                               (Of_Tree, Syn.Target_Of (Of_Tree, Place)))))
                   then
                      return IR.No_Slot;
                   end if;
@@ -10752,9 +10243,7 @@ package body Landin.Stages.Lowering is
                            Nested => Stored_Steps (Reached));
                         Slot : constant IR.Slot_Id := IR.Add_Address_Slot
                           (Unit.all, Filling,
-                           (Kind => IR.Scalar_Field_Shape,
-                            Element => Scalar_At (Of_Tree, Place),
-                            Length => 1, others => <>), Site);
+                           Neutral_Value_Shape (Of_Tree, Place), Site);
                      begin
                         IR.Emit_Store
                           (Unit.all, Filling, Slot, Address, Site);
@@ -10810,9 +10299,7 @@ package body Landin.Stages.Lowering is
                begin
                   if Address_Slot /= IR.No_Slot then
                      return IR.Emit_Load_Indirect
-                       (Unit.all, Filling,
-                        IR.Emit_Load (Unit.all, Filling, Address_Slot, Site),
-                        Scalar_At (Of_Tree, Place), Site);
+                       (Unit.all, Filling, Address_Slot, Site);
                   end if;
                   if Index = IR.No_Value then
                      return Lower_Expression (Of_Tree, Place, Scope);
@@ -10823,6 +10310,8 @@ package body Landin.Stages.Lowering is
                      declare
                         Alias : Payload_Alias renames
                           Aliases (Declared (Means));
+                        Element_Path : constant IR.Path_Step_Array :=
+                          Alias_Element_Steps (Of_Tree, Alias);
                      begin
                         if not Alias.Active then
                            raise Landin.Compiler_Defect with
@@ -10835,26 +10324,32 @@ package body Landin.Stages.Lowering is
                                 (Unit.all, Filling, Alias.Source.Datum,
                                  Index, Scalar_At (Of_Tree, Place), Site,
                                  Field => Alias.Field,
-                                 Nested => Alias_Steps (Of_Tree, Alias),
-                                 Variant_Case => Alias.Which,
+                                 Nested => Element_Path,
+                                 Variant_Case =>
+                                   (if Element_Path'Length = 0
+                                    then Alias.Which else 0),
                                  Variant_Payload_Field =>
-                                   Alias.Payload_Field);
+                                   (if Element_Path'Length = 0
+                                    then Alias.Payload_Field else 0));
                            when IR.Frame_Slot =>
                               return IR.Emit_Load_Slot_Element
                                 (Unit.all, Filling, Alias.Source.Slot,
                                  Index, Scalar_At (Of_Tree, Place), Site,
                                  Field => Alias.Field,
-                                 Nested => Alias_Steps (Of_Tree, Alias),
-                                 Variant_Case => Alias.Which,
+                                 Nested => Element_Path,
+                                 Variant_Case =>
+                                   (if Element_Path'Length = 0
+                                    then Alias.Which else 0),
                                  Variant_Payload_Field =>
-                                   Alias.Payload_Field);
+                                   (if Element_Path'Length = 0
+                                    then Alias.Payload_Field else 0));
                            when IR.Runtime_Address =>
                               raise Landin.Compiler_Defect with
                                 "a runtime array alias reached scalar read";
                         end case;
                      end;
                   end if;
-                  if Res.Sort_Of (Meanings.all, Means) = Res.Local_Binding
+                  if Res.Sort_Of (Meanings.all, Means) /= Res.Module_Binding
                   then
                      return IR.Emit_Load_Slot_Element
                               (Unit.all, Filling,
@@ -10897,9 +10392,7 @@ package body Landin.Stages.Lowering is
                      return;
                   elsif Address_Slot /= IR.No_Slot then
                      IR.Emit_Store_Indirect
-                       (Unit.all, Filling,
-                        IR.Emit_Load (Unit.all, Filling, Address_Slot, Site),
-                        Value, Site);
+                       (Unit.all, Filling, Address_Slot, Value, Site);
                      return;
                   end if;
 
@@ -10916,6 +10409,8 @@ package body Landin.Stages.Lowering is
                      declare
                         Alias : Payload_Alias renames
                           Aliases (Declared (Means));
+                        Element_Path : constant IR.Path_Step_Array :=
+                          Alias_Element_Steps (Of_Tree, Alias);
                      begin
                         if not Alias.Active then
                            raise Landin.Compiler_Defect with
@@ -10988,19 +10483,25 @@ package body Landin.Stages.Lowering is
                                    (Unit.all, Filling, Alias.Source.Datum,
                                     Index, Value, Site,
                                     Field => Alias.Field,
-                                    Nested => Alias_Steps (Of_Tree, Alias),
-                                    Variant_Case => Alias.Which,
+                                    Nested => Element_Path,
+                                    Variant_Case =>
+                                      (if Element_Path'Length = 0
+                                       then Alias.Which else 0),
                                     Variant_Payload_Field =>
-                                      Alias.Payload_Field);
+                                      (if Element_Path'Length = 0
+                                       then Alias.Payload_Field else 0));
                               when IR.Frame_Slot =>
                                  IR.Emit_Store_Slot_Element
                                    (Unit.all, Filling, Alias.Source.Slot,
                                     Index, Value, Site,
                                     Field => Alias.Field,
-                                    Nested => Alias_Steps (Of_Tree, Alias),
-                                    Variant_Case => Alias.Which,
+                                    Nested => Element_Path,
+                                    Variant_Case =>
+                                      (if Element_Path'Length = 0
+                                       then Alias.Which else 0),
                                     Variant_Payload_Field =>
-                                      Alias.Payload_Field);
+                                      (if Element_Path'Length = 0
+                                       then Alias.Payload_Field else 0));
                               when IR.Runtime_Address =>
                                  declare
                                     Address : constant IR.Value_Id :=
@@ -11047,7 +10548,7 @@ package body Landin.Stages.Lowering is
                              (Of_Tree, Syn.Index_Of (Of_Tree, Place), Scope);
                         end if;
                         if Res.Sort_Of (Meanings.all, Means)
-                           = Res.Local_Binding
+                           /= Res.Module_Binding
                         then
                            if At_Index = IR.No_Value then
                               IR.Emit_Store_Slot_Field
@@ -11166,15 +10667,10 @@ package body Landin.Stages.Lowering is
                         if Syn.Convention_Of (Their_Tree.all, Their_Node)
                              = Syn.Inout_Convention
                         then
-                           declare
-                              Address : constant IR.Value_Id := IR.Emit_Load
-                                (Unit.all, Filling,
-                                 Slot_For (Of_Tree, Place, Means), Site);
-                           begin
-                              IR.Emit_Store_Indirect
-                                (Unit.all, Filling, Address, Value, Site);
-                              return;
-                           end;
+                           IR.Emit_Store_Indirect
+                             (Unit.all, Filling,
+                              Slot_For (Of_Tree, Place, Means), Value, Site);
+                           return;
                         end if;
                      end;
                   end if;
@@ -11422,6 +10918,18 @@ package body Landin.Stages.Lowering is
                            then
                               Lower_Stored_Expression
                                 (Of_Tree, Value, Scope, Where);
+                           elsif Syn.Kind (Of_Tree, Value)
+                                   in Syn.Array_Literal
+                                      | Syn.Mixed_Array_Repetition
+                                      | Syn.Array_Repetition
+                             and then Neutral_Element
+                               (Of_Tree, Value).Kind /= IR.Scalar_Field_Shape
+                           then
+                              --  A compound child is constructed in storage,
+                              --  not lowered as a scalar expression or call.
+                              Write_Array_Value
+                                (Value, (Kind => IR.Frame_Slot, Slot => Where),
+                                 Field => 0);
                            elsif Syn.Kind (Of_Tree, Value)
                                    = Syn.Array_Literal
                            then
@@ -11723,17 +11231,11 @@ package body Landin.Stages.Lowering is
                               declare
                                  procedure Finish_Update
                                    (Was          : IR.Value_Id;
-                                    Address_Slot : IR.Slot_Id := IR.No_Slot;
-                                    Base         : Natural := 0;
-                                    Steps        : IR.Path_Step_Array :=
-                                      IR.No_Path_Steps);
+                                    Address_Slot : IR.Slot_Id := IR.No_Slot);
 
                                  procedure Finish_Update
                                    (Was          : IR.Value_Id;
-                                    Address_Slot : IR.Slot_Id := IR.No_Slot;
-                                    Base         : Natural := 0;
-                                    Steps        : IR.Path_Step_Array :=
-                                      IR.No_Path_Steps)
+                                    Address_Slot : IR.Slot_Id := IR.No_Slot)
                                  is
                                     Saved : constant IR.Slot_Id :=
                                       IR.Add_Slot
@@ -11769,20 +11271,10 @@ package body Landin.Stages.Lowering is
                                           begin
                                              if Address_Slot = IR.No_Slot then
                                                 Write (Place, Result);
-                                             elsif Base = 0 then
+                                             else
                                                 IR.Emit_Store_Indirect
                                                   (Unit.all, Filling,
-                                                   IR.Emit_Load
-                                                     (Unit.all, Filling,
-                                                      Address_Slot, Site),
-                                                   Result, Site);
-                                             else
-                                                IR.Emit_Store_Slot_Field
-                                                  (Unit.all, Filling,
-                                                   Address_Slot,
-                                                   IR.Part_Position (Base),
-                                                   Result, Site,
-                                                   Nested => Steps);
+                                                   Address_Slot, Result, Site);
                                              end if;
                                           end;
                                        end if;
@@ -11794,34 +11286,22 @@ package body Landin.Stages.Lowering is
                                        Reached : constant Stored_Place :=
                                          Lower_Stored_Place
                                            (Of_Tree, Place, Scope);
-                                       Steps : constant IR.Path_Step_Array :=
-                                         Stored_Steps (Reached);
-                                       Was : IR.Value_Id;
                                     begin
                                        if Current /= IR.No_Block then
-                                          pragma Assert
-                                            (Reached.Place.Kind
-                                               = IR.Runtime_Address);
-                                          if Reached.Base = 0 then
-                                             pragma Assert (Steps'Length = 0);
-                                             Was := IR.Emit_Load_Indirect
-                                               (Unit.all, Filling,
-                                                IR.Emit_Load
-                                                  (Unit.all, Filling,
-                                                   Reached.Place.Address,
-                                                   Site),
-                                                Held, Site);
-                                          else
-                                             Was := IR.Emit_Load_Slot_Field
-                                               (Unit.all, Filling,
-                                                Reached.Place.Address,
-                                                IR.Part_Position
-                                                  (Reached.Base),
-                                                Held, Site, Nested => Steps);
-                                          end if;
-                                          Finish_Update
-                                            (Was, Reached.Place.Address,
-                                             Reached.Base, Steps);
+                                          declare
+                                             Address : constant IR.Storage :=
+                                               Addressed_Storage
+                                                 (Reached,
+                                                  Neutral_Value_Shape
+                                                    (Of_Tree, Place), Site);
+                                             Was : constant IR.Value_Id :=
+                                               IR.Emit_Load_Indirect
+                                                 (Unit.all, Filling,
+                                                  Address.Address, Site);
+                                          begin
+                                             Finish_Update
+                                               (Was, Address.Address);
+                                          end;
                                        end if;
                                     end;
                                  else
@@ -12881,22 +12361,11 @@ package body Landin.Stages.Lowering is
                         declare
                            Element : constant IR.Field_Shape :=
                              Neutral_Element (Id);
-                           First : constant Natural :=
-                             (if Element.Kind = IR.Scalar_Field_Shape
-                              then 0
-                              else IR.Add_Shape_Run
-                                (Unit.all, [1 => Element]));
                         begin
-                           Shape :=
-                             (Kind => IR.Array_Field_Shape,
-                              Element => Element.Element,
-                              Length => IR.Element_Total
-                                (Landin.Checking.Array_Length
-                                   (Types.all, Id)),
-                              Cases => (if First = 0 then 0 else 1),
-                              Payloads_First => First,
-                              Nominal => Element.Nominal,
-                              others => <>);
+                           Shape := IR.Make_Array_Shape
+                             (Unit.all, IR.Element_Total
+                                (Landin.Checking.Array_Length (Types.all, Id)),
+                              Element);
                         end;
                      elsif Held in Ty.Slice_Value | Ty.Any_Value then
                         Shape :=
@@ -12911,6 +12380,21 @@ package body Landin.Stages.Lowering is
                               elsif Held = Ty.Atom_Value then Ty.U32
                               else Ty.Scalar_Name (Held)),
                            Length => 1,
+                           Pointee =>
+                             (if Held = Ty.Pointer_Value
+                              then Pointee_For
+                                (Landin.Checking.Reference_Of (Types.all, Id))
+                              else IR.No_Pointee),
+                           Signature =>
+                             (if Held = Ty.Function_Value
+                              then Signature_For
+                                (Landin.Checking.Signature_Of (Types.all, Id))
+                              else IR.No_Signature),
+                           Atoms =>
+                             (if Held = Ty.Atom_Value
+                              then Atom_Set_For
+                                (Landin.Checking.Atom_Set_Of (Types.all, Id))
+                              else IR.No_Atom_Set),
                            others => <>);
                      end if;
                      Slots (Positive (Id)) :=
@@ -12963,6 +12447,11 @@ package body Landin.Stages.Lowering is
                         elsif Held = Ty.Atom_Value then Ty.U32
                         else Held),
                        Id, Site_Of (Of_Tree, Param),
+                       Pointee =>
+                         (if Held = Ty.Pointer_Value
+                          then Pointee_For
+                            (Landin.Checking.Reference_Of (Types.all, Id))
+                          else IR.No_Pointee),
                        Signature =>
                          (if Held = Ty.Function_Value
                           then Signature_For
@@ -13067,62 +12556,6 @@ package body Landin.Stages.Lowering is
       --  [1940]: a module value
       ------------------------------------------------------------
 
-      function Static_Function_Target
-        (Id : Res.Declaration_Id) return IR.Item_Id;
-
-      function Static_Function_Target
-        (Id : Res.Declaration_Id) return IR.Item_Id
-      is
-         Of_Tree : constant not null access constant Syn.Tree :=
-           Tree_For (Res.Source_Of (Meanings.all, Id));
-         Node : constant Syn.Node_Id := Res.Node_Of (Meanings.all, Id);
-         Value : constant Syn.Node_Id := Syn.Value_Of (Of_Tree.all, Node);
-      begin
-         if Static_Function_Targets (Positive (Id)) /= IR.No_Item then
-            return Static_Function_Targets (Positive (Id));
-         end if;
-         if Finding_Static_Function (Positive (Id)) then
-            raise Landin.Compiler_Defect with
-              "a static function image cycle reached lowering";
-         end if;
-         Finding_Static_Function (Positive (Id)) := True;
-
-         if Value /= Syn.No_Node
-           and then Syn.Kind (Of_Tree.all, Value) = Syn.Anonymous_Function
-         then
-            Static_Function_Targets (Positive (Id)) :=
-              Anonymous_Item (Of_Tree.all, Value);
-         elsif Value /= Syn.No_Node
-           and then Syn.Kind (Of_Tree.all, Value) = Syn.Name_Reference
-           and then Res.Verdict_Of (Meanings.all, Of_Tree.all, Value)
-                      = Res.Bound
-         then
-            declare
-               Source_Id : constant Res.Declaration_Id :=
-                 Res.Bound_To (Meanings.all, Of_Tree.all, Value);
-            begin
-               if Res.Sort_Of (Meanings.all, Source_Id)
-                    = Res.Module_Function
-               then
-                  Static_Function_Targets (Positive (Id)) :=
-                    IR.Item_For (Unit.all, Source_Id);
-               elsif Res.Sort_Of (Meanings.all, Source_Id)
-                       = Res.Module_Binding
-               then
-                  Static_Function_Targets (Positive (Id)) :=
-                    Static_Function_Target (Source_Id);
-               end if;
-            end;
-         end if;
-
-         Finding_Static_Function (Positive (Id)) := False;
-         if Static_Function_Targets (Positive (Id)) = IR.No_Item then
-            raise Landin.Compiler_Defect with
-              "a module function value has no static routine target";
-         end if;
-         return Static_Function_Targets (Positive (Id));
-      end Static_Function_Target;
-
       --  A datum's block describes its value.  [1460] says nothing runs
       --  before the entry point, so this is not code and R1.80 reads it
       --  rather than executing it.
@@ -13185,13 +12618,11 @@ package body Landin.Stages.Lowering is
          end if;
 
          if Held = Ty.Function_Value then
-            declare
-               Target : constant IR.Item_Id := Static_Function_Target (Id);
-            begin
-               IR.Set_Function_Target (Unit.all, Filling, Target);
-               Answer :=
-                 IR.Emit_Function_Address (Unit.all, Filling, Target, Site);
-            end;
+            --  Static dependencies are already resolved, including leaves
+            --  of later images.  Emit the datum in declaration order.
+            Answer := IR.Emit_Function_Address
+              (Unit.all, Filling, IR.Function_Target (Unit.all, Filling),
+               Site);
          elsif Value = Syn.No_Node
            or else Syn.Kind (Of_Tree, Value) = Syn.Zeroed_Literal
          then
@@ -13239,6 +12670,33 @@ package body Landin.Stages.Lowering is
               Landin.Checking.Template_Of (Types.all, Source);
          begin
             Nominals (Position) := IR.Add_Nominal_Type (Unit.all, Template);
+         end;
+      end loop;
+
+      --  A C classifier needs the nominal body even when a type occurs
+      --  only in an imported signature or behind a callback.  Storage is
+      --  not an authority for that body: register all completed checker
+      --  layouts after identities exist and before any call is emitted.
+      for Position in 1 .. Landin.Checking.Nominal_Type_Count (Types.all) loop
+         declare
+            Source : constant Landin.Checking.Nominal_Type_Id :=
+              Landin.Checking.Nth_Nominal_Type (Types.all, Position);
+         begin
+            if Landin.Checking.Has_Layout (Types.all, Source) then
+               declare
+                  Fields : IR.Field_Shape_Array
+                    (1 .. Landin.Checking.Layout_Field_Count
+                      (Types.all, Source));
+               begin
+                  for Field in Fields'Range loop
+                     Fields (Field) := Neutral_Field (Source, Field);
+                  end loop;
+                  IR.Set_Nominal_Shape
+                    (Unit.all, Nominals (Position), Fields,
+                     C_Layout => Landin.Checking.Has_C_Layout
+                       (Types.all, Source));
+               end;
+            end if;
          end;
       end loop;
 
@@ -13327,6 +12785,13 @@ package body Landin.Stages.Lowering is
                      if Syn.Is_External (Of_Tree, Node) then
                         IR.Mark_External (Unit.all, Made);
                      end if;
+                     if Landin.Checking.Link_Symbol (Types.all, Id)
+                          /= Landin.Source.Names.No_Name
+                     then
+                        IR.Set_Link_Symbol
+                          (Unit.all, Made,
+                           Landin.Checking.Link_Symbol (Types.all, Id));
+                     end if;
                   end if;
                end;
 
@@ -13359,6 +12824,12 @@ package body Landin.Stages.Lowering is
                         Atom_Set_For
                           (Landin.Checking.Atom_Set_Of
                              (Types.all, Id)));
+                  end if;
+
+                  if Held = Ty.Pointer_Value then
+                     IR.Set_Pointee
+                       (Unit.all, Made, Pointee_For
+                         (Landin.Checking.Reference_Of (Types.all, Id)));
                   end if;
 
                   if Held = Ty.Function_Value then
@@ -13611,32 +13082,42 @@ package body Landin.Stages.Lowering is
             end;
          end Concept_For;
 
-         Used_Concepts : Boolean_Array
-           (1 .. Landin.Checking.Concept_Count (Types.all)) :=
+         Used_Any_Evidence : Boolean_Array
+           (1 .. Landin.Checking.Conformance_Count (Types.all)) :=
              [others => False];
 
-         procedure Collect_Any_Concepts (Of_Tree : Syn.Tree);
+         procedure Collect_Any_Evidence (Of_Tree : Syn.Tree);
 
-         procedure Collect_Any_Concepts (Of_Tree : Syn.Tree) is
+         procedure Collect_Any_Evidence (Of_Tree : Syn.Tree) is
          begin
             for Node in Syn.Node_Id'(1) .. Syn.Last_Node (Of_Tree) loop
-               if Landin.Checking.Type_Of
-                 (Types.all, Of_Tree, Node) = Ty.Any_Value
+               --  Naming or copying an any type does not require an
+               --  object-safe table. Only checked constructions and entry
+               --  selections carry the exact evidence erased lowering uses.
+               --  A selection's shape witness need not itself be constructed.
+               if Syn.Kind (Of_Tree, Node) = Syn.Any_Construction
+                 or else
+                   (Syn.Kind (Of_Tree, Node) = Syn.Member_Selection
+                    and then Res.Verdict_Of (Meanings.all, Of_Tree, Node)
+                      /= Res.Bound
+                    and then Landin.Checking.Type_Of
+                      (Types.all, Of_Tree, Syn.Target_Of (Of_Tree, Node))
+                        = Ty.Any_Value)
                then
                   declare
-                     Concept : constant Landin.Checking.Concept_Id :=
-                       Landin.Checking.Any_Concept_Of
+                     Source : constant Landin.Checking.Conformance_Id :=
+                       Landin.Checking.Evidence_Of
                          (Types.all, Of_Tree, Node);
                   begin
-                     if Concept /= Landin.Checking.No_Concept then
-                        Used_Concepts
-                          (Landin.Checking.Concept_Identities.Position
-                             (Types.all, Concept)) := True;
+                     if Source /= Landin.Checking.No_Conformance then
+                        Used_Any_Evidence
+                          (Landin.Checking.Conformance_Identities.Position
+                             (Types.all, Source)) := True;
                      end if;
                   end;
                end if;
             end loop;
-         end Collect_Any_Concepts;
+         end Collect_Any_Evidence;
 
          procedure Add_Provider
            (To_Evidence : IR.Evidence_Id;
@@ -13761,10 +13242,10 @@ package body Landin.Stages.Lowering is
             end;
          end Add_Closure;
       begin
-         --  Generic constructions carry their concept in the concrete
+         --  Generic erased uses carry their evidence in the concrete
          --  checker view. Inventory those views before mapping erased tables.
          for Index in 1 .. Source_Count (Context) loop
-            Collect_Any_Concepts (Tree_For (Nth_Source (Context, Index)).all);
+            Collect_Any_Evidence (Tree_For (Nth_Source (Context, Index)).all);
          end loop;
 
          for Position in
@@ -13786,7 +13267,7 @@ package body Landin.Stages.Lowering is
                   begin
                      Landin.Checking.Activate_Routine_View
                        (Types.all, Instance, Previous);
-                     Collect_Any_Concepts
+                     Collect_Any_Evidence
                        (Tree_For
                           (Res.Source_Of (Meanings.all, Template)).all);
                      Landin.Checking.Restore_Routine_View
@@ -13824,13 +13305,10 @@ package body Landin.Stages.Lowering is
                     (Evidence (Position), Source, Provider_Position);
                end loop;
 
-               if Used_Concepts
-                 (Landin.Checking.Concept_Identities.Position
-                    (Types.all,
-                     Landin.Checking.Conformance_Concept (Types.all, Source)))
-               then
+               if Used_Any_Evidence (Position) then
                   Any_Evidence (Position) :=
-                    IR.Add_Evidence (Unit.all, Evidence_Shape (Actual));
+                    IR.Add_Evidence
+                      (Unit.all, Evidence_Shape (Actual), Erased => True);
                   Add_Closure (Any_Evidence (Position), Source, Seen);
                end if;
             end;
@@ -13899,114 +13377,15 @@ package body Landin.Stages.Lowering is
          end loop;
       end;
 
-      --  Pass two: fill every active item in the same declaration order.
-      declare
-         procedure Lower_Declaration
-           (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
-
-         procedure Lower_Declaration
-           (Of_Tree : Syn.Tree; Node : Syn.Node_Id) is
-         begin
-            case Syn.Kind (Of_Tree, Node) is
-               when Syn.Function_Declaration =>
-                  if Syn.Generic_Formal_Count (Of_Tree, Node) = 0
-                    and then not Syn.Is_External (Of_Tree, Node)
-                  then
-                     Lower_Routine (Of_Tree, Node);
-                  end if;
-               when Syn.Binding =>
-                  Lower_Datum (Of_Tree, Node);
-               when others =>
-                  null;
-            end case;
-         end Lower_Declaration;
-      begin
-         for Index in 1 .. Source_Count (Context) loop
-            declare
-               Of_Tree : constant not null access constant Syn.Tree :=
-                 Tree_For (Nth_Source (Context, Index));
-               procedure Walk is new
-                 Landin.Configuration.For_Each_Active_Declaration
-                   (Lower_Declaration);
-            begin
-               Walk (Activity.all, Of_Tree.all);
-            end;
-         end loop;
-      end;
-
-      for Position in 1 .. Landin.Checking.Routine_Instance_Count (Types.all)
-      loop
-         declare
-            Source : constant Landin.Checking.Routine_Instance_Id :=
-              Landin.Checking.Routine_Identities.Nth (Types.all, Position);
-         begin
-            if Landin.Checking.Routine_State_Of (Types.all, Source)
-              = Landin.Checking.Routine_Ready
-            then
-               declare
-                  Template : constant Res.Declaration_Id :=
-                    Landin.Checking.Routine_Template_Of (Types.all, Source);
-                  Of_Tree : constant not null access constant Syn.Tree :=
-                    Tree_For (Res.Source_Of (Meanings.all, Template));
-                  Previous : Landin.Checking.Routine_Instance_Id;
-               begin
-                  Landin.Checking.Activate_Routine_View
-                    (Types.all, Source, Previous);
-                  Lower_Routine
-                    (Of_Tree.all, Res.Node_Of (Meanings.all, Template));
-                  Landin.Checking.Restore_Routine_View
-                    (Types.all, Previous);
-               exception
-                  when others =>
-                     Landin.Checking.Restore_Routine_View
-                       (Types.all, Previous);
-                     raise;
-               end;
-            end if;
-         end;
-      end loop;
-
-      for Index in 1 .. Anonymous_Count loop
-         declare
-            Routine_Entry : Anonymous_Entry renames
-              Anonymous_Routines (Index);
-            Of_Tree : constant not null access constant Syn.Tree :=
-              Tree_For (Routine_Entry.Source);
-         begin
-            Lower_Routine (Of_Tree.all, Routine_Entry.Node);
-         end;
-      end loop;
-
-      --  Text datums were appended after every routine and declaration
-      --  item.  Give them their static no-result blocks in that same item
-      --  order, after every earlier item has finished its own block and
-      --  instruction runs.
-      for Position in 1 .. IR.Item_Count (Unit.all) loop
-         declare
-            Item : constant IR.Item_Id := IR.Item_Id (Position);
-         begin
-            if IR.Is_Read_Only (Unit.all, Item) then
-               declare
-                  Site : constant Landin.Provenance.Origin :=
-                    IR.Origin_Of (Unit.all, Item);
-                  Block : constant IR.Block_Id := IR.Add_Block
-                    (Unit.all, Item, Res.Program_Scope, Site);
-               begin
-                  IR.Enter (Unit.all, Item, Block);
-                  IR.Emit_Leave (Unit.all, Item, IR.No_Value, Site);
-                  IR.Leave_Block (Unit.all, Item);
-               end;
-            end if;
-         end;
-      end loop;
-
-      --  Pass three: D24/D34/D66 initial-image resolution.  Array datums keep
+      --  Resolve D24/D34/D66 initial images after every item identity and
+      --  shape exists, but before emitting any declaration's instructions.
+      --  Static dependencies can follow later declarations [1740] without
+      --  disturbing item-ordered block and value runs.  Array datums keep
       --  their per-position or compact repetition folds; an aggregate literal
       --  carries one fold per declaration-order field.  A direct storage name
       --  follows D21/D60/D61's chain while preserving the source image.  An
       --  absent or explicit zero image stays reserved in `.bss`; a written
-      --  image reaches `.data`.  This pass follows Lower_Datum because a
-      --  source may be written below its use [1740].
+      --  image reaches `.data`.
       Resolve_Module_Images :
       declare
          Declarations : constant Natural :=
@@ -14041,6 +13420,20 @@ package body Landin.Stages.Lowering is
             Value : out Ty.Folded;
             Known : out Boolean);
 
+         type Static_Selection is record
+            Item  : IR.Item_Id := IR.No_Item;
+            Shape : IR.Field_Shape;
+            Image : IR.Aggregate_Field_Image;
+            Root  : Boolean := False;
+         end record;
+
+         function Selected_Image
+           (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Static_Selection;
+
+         --  All static dependencies, including callable leaf selections,
+         --  share the same cycle guard and declaration-owned image cache.
+         procedure Resolve_Image (Id : Res.Declaration_Id);
+
          function Static_Field_Target
            (Of_Tree : Syn.Tree; Value : Syn.Node_Id) return IR.Item_Id;
 
@@ -14067,9 +13460,15 @@ package body Landin.Stages.Lowering is
                     and then Landin.Checking.Type_Of
                       (Types.all, Source_Id) = Ty.Function_Value
                   then
-                     return Static_Function_Target (Source_Id);
+                     Resolve_Image (Source_Id);
+                     return IR.Function_Target
+                       (Unit.all, IR.Item_For (Unit.all, Source_Id));
                   end if;
                end;
+            elsif Syn.Kind (Of_Tree, Value)
+              in Syn.Member_Selection | Syn.Element_Index
+            then
+               return Selected_Image (Of_Tree, Value).Image.Target;
             end if;
 
             raise Landin.Compiler_Defect with
@@ -14291,10 +13690,106 @@ package body Landin.Stages.Lowering is
             Made (Id) := True;
          end Set_Image_From_Mixed_Repetition;
 
-         --  D69's struct-literal field may name an array datum declared
-         --  later, so its image must be resolved before the aggregate image
-         --  gathers that field's compact descriptor.
-         procedure Resolve_Image (Id : Res.Declaration_Id);
+         function Selected_Image
+           (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Static_Selection
+         is
+            Result : Static_Selection;
+         begin
+            if Syn.Kind (Of_Tree, Node) = Syn.Name_Reference then
+               declare
+                  Id : constant Res.Declaration_Id :=
+                    Res.Bound_To (Meanings.all, Of_Tree, Node);
+               begin
+                  Resolve_Image (Id);
+                  Result.Item := IR.Item_For (Unit.all, Id);
+                  Result.Shape := Neutral_Value_Shape (Of_Tree, Node);
+                  Result.Root := True;
+                  if IR.Has_Recursive_Array_Image (Unit.all, Result.Item) then
+                     Result.Image := IR.Array_Image_Of (Unit.all, Result.Item);
+                  end if;
+                  return Result;
+               end;
+            end if;
+            Result := Selected_Image
+              (Of_Tree, Syn.Target_Of (Of_Tree, Node));
+            if Syn.Kind (Of_Tree, Node) = Syn.Member_Selection then
+               declare
+                  Field : constant Positive := Positive
+                    (Landin.Checking.Field_Index (Types.all, Of_Tree, Node));
+                  Child : constant IR.Field_Shape :=
+                    IR.Nth_Aggregate_Field (Unit.all, Result.Shape, Field);
+               begin
+                  if not IR.Has_Image (Unit.all, Result.Item) then
+                     Result.Image := (others => <>);
+                  elsif Result.Root then
+                     Result.Image :=
+                       IR.Field_Image_Of (Unit.all, Result.Item, Field);
+                     if Child.Kind = IR.Scalar_Field_Shape then
+                        Result.Image.Value :=
+                          IR.Nth_Field_Image (Unit.all, Result.Item, Field);
+                     end if;
+                  elsif Result.Image.Form = IR.Nested then
+                     Result.Image := IR.Descendant_Image_Of
+                       (Unit.all, Result.Item, Result.Image, Field);
+                  elsif Result.Image.Form /= IR.Absent then
+                     raise Landin.Compiler_Defect with
+                       "a static member selected a non-aggregate image";
+                  end if;
+                  Result.Shape := Child;
+               end;
+            elsif Syn.Kind (Of_Tree, Node) = Syn.Element_Index then
+               declare
+                  Index : Ty.Folded;
+                  Known : Boolean;
+               begin
+                  Fold_Constant
+                    (Of_Tree, Syn.Index_Of (Of_Tree, Node), Index, Known);
+                  if not Known or else Index < 0
+                    or else Index >= Ty.Folded (Result.Shape.Length)
+                  then
+                     raise Landin.Compiler_Defect with
+                       "a static array selection has no checked index";
+                  end if;
+                  if not IR.Has_Image (Unit.all, Result.Item) then
+                     Result.Image := (others => <>);
+                  elsif Result.Root and then not IR.Has_Recursive_Array_Image
+                    (Unit.all, Result.Item)
+                  then
+                     Result.Image :=
+                       (Value => IR.Nth_Image
+                          (Unit.all, Result.Item,
+                           IR.Part_Position (Index + 1)),
+                        others => <>);
+                  elsif Result.Image.Form = IR.Element_Sequence then
+                     Result.Image := IR.Descendant_Image_Of
+                       (Unit.all, Result.Item, Result.Image,
+                        (if Index < Ty.Folded (Result.Image.Count - 1)
+                         then Positive (Index + 1) else Result.Image.Count));
+                  elsif Result.Image.Form = IR.Finite
+                    or else (Result.Image.Form = IR.Hybrid
+                             and then Index < Ty.Folded (Result.Image.Count))
+                  then
+                     Result.Image :=
+                       (Value => IR.Nth_Descriptor_Element
+                          (Unit.all, Result.Item, Result.Image,
+                           IR.Part_Position (Index + 1)), others => <>);
+                  elsif Result.Image.Form in IR.Repeated | IR.Hybrid then
+                     Result.Image :=
+                       (Value => Result.Image.Value, others => <>);
+                  elsif Result.Image.Form /= IR.Absent then
+                     raise Landin.Compiler_Defect with
+                       "a static index selected a non-array image";
+                  end if;
+                  Result.Shape :=
+                    IR.Array_Element_Shape (Unit.all, Result.Shape);
+               end;
+            else
+               raise Landin.Compiler_Defect with
+                 "a static selection has no stored source";
+            end if;
+            Result.Root := False;
+            return Result;
+         end Selected_Image;
 
          function Is_C_String_Value
            (Of_Tree : Syn.Tree; Value : Syn.Node_Id) return Boolean;
@@ -14436,18 +13931,21 @@ package body Landin.Stages.Lowering is
          --  those children may point farther into the run in turn.  Every
          --  offset below is therefore a descriptor or fold index, never a
          --  target byte position.
-         procedure Set_Recursive_Image_From_Struct_Literal
+         procedure Set_Recursive_Image
            (Id      : Res.Declaration_Id;
             Of_Tree : Syn.Tree;
             Literal : Syn.Node_Id);
 
-         procedure Set_Recursive_Image_From_Struct_Literal
+         procedure Set_Recursive_Image
            (Id      : Res.Declaration_Id;
             Of_Tree : Syn.Tree;
             Literal : Syn.Node_Id)
          is
             Item : constant IR.Item_Id := IR.Item_For (Unit.all, Id);
-            Top_Count : constant Natural := IR.Field_Count (Unit.all, Item);
+            Array_Root : constant Boolean :=
+              IR.Result_Of (Unit.all, Item) = Ty.Fixed_Array;
+            Top_Count : constant Natural :=
+              (if Array_Root then 1 else IR.Field_Count (Unit.all, Item));
             Values : Ty.Folded_Array (1 .. Top_Count) := [others => 0];
             Descriptors : Descriptor_Vectors.Vector;
             Elements : Fold_Vectors.Vector;
@@ -14461,10 +13959,12 @@ package body Landin.Stages.Lowering is
             procedure Put
               (Position : Positive; Image : IR.Aggregate_Field_Image);
 
+            --  Empty aggregates and payloadless selected cases still own
+            --  a descriptor, but reserve no child entries.
             function Reserve_Children
               (Position : Positive;
                Form     : IR.Field_Image_Form;
-               Count    : Positive;
+               Count    : Natural;
                Value    : Ty.Folded := 0) return Positive;
 
             procedure Build_Field
@@ -14481,6 +13981,7 @@ package body Landin.Stages.Lowering is
 
             procedure Clone_Array
               (Source_Item  : IR.Item_Id;
+               Shape        : IR.Field_Shape;
                Source_Image : IR.Aggregate_Field_Image;
                Position     : Positive);
 
@@ -14517,7 +14018,7 @@ package body Landin.Stages.Lowering is
             function Reserve_Children
               (Position : Positive;
                Form     : IR.Field_Image_Form;
-               Count    : Positive;
+               Count    : Natural;
                Value    : Ty.Folded := 0) return Positive
             is
                Offset : constant Natural := Descendant_Cursor;
@@ -14538,11 +14039,35 @@ package body Landin.Stages.Lowering is
 
             procedure Clone_Array
               (Source_Item  : IR.Item_Id;
+               Shape        : IR.Field_Shape;
                Source_Image : IR.Aggregate_Field_Image;
                Position     : Positive)
             is
                Image : IR.Aggregate_Field_Image := Source_Image;
             begin
+               if Image.Form = IR.Element_Sequence then
+                  if Image.Count = 0 then
+                     Image.Offset := Descendant_Cursor;
+                     Put (Position, Image);
+                  else
+                     declare
+                        First : constant Positive := Reserve_Children
+                          (Position, IR.Element_Sequence, Image.Count,
+                           Image.Value);
+                        Child : constant IR.Field_Shape :=
+                          IR.Array_Element_Shape (Unit.all, Shape);
+                     begin
+                        for Element in 1 .. Image.Count loop
+                           Clone_Field
+                             (Source_Item, Child,
+                              IR.Descendant_Image_Of
+                                (Unit.all, Source_Item, Source_Image, Element),
+                              First + Element - 1);
+                        end loop;
+                     end;
+                  end if;
+                  return;
+               end if;
                Image.Offset := Element_Cursor;
                Put (Position, Image);
                if Image.Form in IR.Finite | IR.Hybrid then
@@ -14575,7 +14100,7 @@ package body Landin.Stages.Lowering is
 
                   when IR.Array_Field_Shape =>
                      Clone_Array
-                       (Source_Item, Source_Image, Position);
+                       (Source_Item, Shape, Source_Image, Position);
 
                   when IR.Aggregate_Field_Shape =>
                      if Source_Image.Form = IR.Absent then
@@ -14592,7 +14117,7 @@ package body Landin.Stages.Lowering is
                              IR.Aggregate_Field_Count (Unit.all, Shape);
                            First : constant Positive :=
                              Reserve_Children
-                               (Position, IR.Nested, Positive (Count));
+                               (Position, IR.Nested, Count);
                         begin
                            if Source_Image.Count /= Count then
                               raise Landin.Compiler_Defect with
@@ -14634,7 +14159,7 @@ package body Landin.Stages.Lowering is
                                (Unit.all, Shape, Selected);
                            First : constant Positive :=
                              Reserve_Children
-                               (Position, IR.Selected, Positive (Count),
+                               (Position, IR.Selected, Count,
                                 Source_Image.Value);
                         begin
                            if Source_Image.Count /= Count then
@@ -14682,7 +14207,7 @@ package body Landin.Stages.Lowering is
                     IR.Field_Count (Unit.all, Source_Item);
                   First : constant Positive :=
                     Reserve_Children
-                      (Position, IR.Nested, Positive (Count));
+                      (Position, IR.Nested, Count);
                begin
                   for Field in 1 .. Count loop
                      declare
@@ -14723,55 +14248,15 @@ package body Landin.Stages.Lowering is
               (Given    : Syn.Node_Id;
                Position : Positive)
             is
-               Source_Id : Res.Declaration_Id := Res.No_Declaration;
-               Source_Field : Natural := 0;
+               Source : constant Static_Selection :=
+                 Selected_Image (Of_Tree, Given);
             begin
-               if Syn.Kind (Of_Tree, Given) = Syn.Name_Reference then
-                  Source_Id := Res.Bound_To
-                    (Meanings.all, Of_Tree, Given);
-               elsif Syn.Kind (Of_Tree, Given) = Syn.Member_Selection then
-                  Source_Id := Res.Bound_To
-                    (Meanings.all, Of_Tree,
-                     Syn.Target_Of (Of_Tree, Given));
-                  Source_Field := Landin.Checking.Field_Index
-                    (Types.all, Of_Tree, Given);
+               if Source.Root then
+                  Clone_Aggregate_Root (Source.Item, Position);
                else
-                  raise Landin.Compiler_Defect with
-                    "a non-storage ordinary-child image reached lowering";
+                  Clone_Field
+                    (Source.Item, Source.Shape, Source.Image, Position);
                end if;
-
-               Resolve_Image (Source_Id);
-               if not Made (Source_Id) then
-                  Put
-                    (Position,
-                     (Form   => IR.Absent,
-                      Offset => Descendant_Cursor,
-                      Count  => 0,
-                      Value  => 0,
-                      others => <>));
-                  return;
-               end if;
-
-               declare
-                  Source_Item : constant IR.Item_Id :=
-                    IR.Item_For (Unit.all, Source_Id);
-               begin
-                  if Source_Field = 0 then
-                     Clone_Aggregate_Root (Source_Item, Position);
-                  else
-                     declare
-                        Shape : constant IR.Field_Shape :=
-                          IR.Nth_Field_Shape
-                            (Unit.all, Source_Item, Source_Field);
-                     begin
-                        Clone_Field
-                          (Source_Item, Shape,
-                           IR.Field_Image_Of
-                             (Unit.all, Source_Item, Source_Field),
-                           Position);
-                     end;
-                  end if;
-               end;
             end Copy_Aggregate_Value;
 
             procedure Build_Array
@@ -14792,6 +14277,53 @@ package body Landin.Stages.Lowering is
                  or else Syn.Kind (Of_Tree, Given) = Syn.Zeroed_Literal
                then
                   Put (Position, Image);
+                  return;
+               end if;
+
+               if IR.Array_Element_Is_Aggregate (Unit.all, Shape)
+                 and then Syn.Kind (Of_Tree, Given)
+                   in Syn.Array_Literal | Syn.Array_Repetition
+                      | Syn.Mixed_Array_Repetition
+               then
+                  declare
+                     Kind : constant Syn.Node_Kind :=
+                       Syn.Kind (Of_Tree, Given);
+                     Child : constant IR.Field_Shape :=
+                       IR.Array_Element_Shape (Unit.all, Shape);
+                     Prefix : constant Natural :=
+                       (if Kind = Syn.Array_Repetition then 0
+                        else Syn.Element_Count (Of_Tree, Given));
+                     Count : constant Natural :=
+                       Prefix + (if Kind = Syn.Array_Literal then 0 else 1);
+                     Repetitions : constant Ty.Folded :=
+                       (if Kind = Syn.Array_Literal
+                        then (if Count = 0 then 0 else 1)
+                        else Ty.Folded (Shape.Length) - Ty.Folded (Prefix));
+                  begin
+                     if Count = 0 then
+                        Put (Position,
+                             (Form => IR.Element_Sequence,
+                              Offset => Descendant_Cursor, others => <>));
+                     else
+                        declare
+                           First : constant Positive := Reserve_Children
+                             (Position, IR.Element_Sequence,
+                              Count, Repetitions);
+                        begin
+                           for Element in 1 .. Prefix loop
+                              Build_Field
+                                (Child, Syn.Nth_Element
+                                   (Of_Tree, Given, Element),
+                                 First + Element - 1);
+                           end loop;
+                           if Kind /= Syn.Array_Literal then
+                              Build_Field
+                                (Child, Syn.Repeated_Element (Of_Tree, Given),
+                                 First + Count - 1);
+                           end if;
+                        end;
+                     end if;
+                  end;
                   return;
                end if;
 
@@ -14850,6 +14382,15 @@ package body Landin.Stages.Lowering is
                               Source_Item : constant IR.Item_Id :=
                                 IR.Item_For (Unit.all, Source_Id);
                            begin
+                              if IR.Has_Recursive_Array_Image
+                                (Unit.all, Source_Item)
+                              then
+                                 Clone_Array
+                                   (Source_Item, Shape,
+                                    IR.Array_Image_Of (Unit.all, Source_Item),
+                                    Position);
+                                 return;
+                              end if;
                               if IR.Is_Repeated_Image
                                 (Unit.all, Source_Item)
                               then
@@ -14881,32 +14422,13 @@ package body Landin.Stages.Lowering is
                         end if;
                      end;
 
-                  when Syn.Member_Selection =>
+                  when Syn.Member_Selection | Syn.Element_Index =>
                      declare
-                        Source_Id : constant Res.Declaration_Id :=
-                          Res.Bound_To
-                            (Meanings.all, Of_Tree,
-                             Syn.Target_Of (Of_Tree, Given));
+                        Source : constant Static_Selection :=
+                          Selected_Image (Of_Tree, Given);
                      begin
-                        Resolve_Image (Source_Id);
-                        if Made (Source_Id) then
-                           declare
-                              Source_Item : constant IR.Item_Id :=
-                                IR.Item_For (Unit.all, Source_Id);
-                              Source_Image : constant
-                                IR.Aggregate_Field_Image :=
-                                  IR.Field_Image_Of
-                                    (Unit.all, Source_Item,
-                                     Positive
-                                       (Landin.Checking.Field_Index
-                                          (Types.all, Of_Tree, Given)));
-                           begin
-                              Clone_Array
-                                (Source_Item, Source_Image, Position);
-                           end;
-                        else
-                           Put (Position, Image);
-                        end if;
+                        Clone_Array
+                          (Source.Item, Shape, Source.Image, Position);
                      end;
 
                   when others =>
@@ -14938,7 +14460,7 @@ package body Landin.Stages.Lowering is
                        IR.Aggregate_Field_Count (Unit.all, Shape);
                      First : constant Positive :=
                        Reserve_Children
-                         (Position, IR.Nested, Positive (Count));
+                         (Position, IR.Nested, Count);
                      type Node_Array is
                        array (Positive range <>) of Syn.Node_Id;
                      Nodes : Node_Array (1 .. Count) :=
@@ -15013,7 +14535,7 @@ package body Landin.Stages.Lowering is
                   declare
                      First : constant Positive :=
                        Reserve_Children
-                         (Position, IR.Selected, Positive (Count),
+                         (Position, IR.Selected, Count,
                           Ty.Folded (Selected));
                      type Node_Array is
                        array (Positive range <>) of Syn.Node_Id;
@@ -15112,32 +14634,72 @@ package body Landin.Stages.Lowering is
                  (IR.Aggregate_Field_Image'(others => <>));
             end loop;
 
-            declare
-               type Node_Array is array (Positive range <>) of Syn.Node_Id;
-               Nodes : Node_Array (1 .. Top_Count) :=
-                 [others => Syn.No_Node];
-            begin
-               for Written in
-                 1 .. Construction_Field_Count (Of_Tree, Literal)
-               loop
-                  declare
-                     Label : constant Syn.Node_Id :=
-                       Nth_Construction_Field (Of_Tree, Literal, Written);
-                  begin
-                     Nodes
-                       (Positive
-                          (Landin.Checking.Field_Index
-                             (Types.all, Of_Tree, Label))) :=
-                               Construction_Field_Value (Of_Tree, Label);
-                  end;
-               end loop;
+            if Array_Root then
+               Build_Array (IR.Whole_Array_Shape (Unit.all, Item), Literal, 1);
+            elsif not Is_Struct_Construction (Of_Tree, Literal) then
+               declare
+                  Source : constant Static_Selection :=
+                    Selected_Image (Of_Tree, Literal);
+               begin
+                  for Field in 1 .. Top_Count loop
+                     declare
+                        Shape : constant IR.Field_Shape :=
+                          IR.Nth_Field_Shape (Unit.all, Item, Field);
+                        Image : IR.Aggregate_Field_Image := (others => <>);
+                     begin
+                        if IR.Has_Image (Unit.all, Source.Item) then
+                           if Source.Root then
+                              Image := IR.Field_Image_Of
+                                (Unit.all, Source.Item, Field);
+                              if Shape.Kind = IR.Scalar_Field_Shape then
+                                 Image.Value := IR.Nth_Field_Image
+                                   (Unit.all, Source.Item, Field);
+                              end if;
+                           elsif Source.Image.Form = IR.Nested then
+                              Image := IR.Descendant_Image_Of
+                                (Unit.all, Source.Item, Source.Image, Field);
+                           end if;
+                        end if;
+                        Clone_Field (Source.Item, Shape, Image, Field);
+                        if Shape.Kind = IR.Scalar_Field_Shape then
+                           Image := Descriptors (Field);
+                           Values (Field) := Image.Value;
+                           Image.Value := 0;
+                           Put (Field, Image);
+                        end if;
+                     end;
+                  end loop;
+               end;
+            else
+               declare
+                  type Node_Array is
+                    array (Positive range <>) of Syn.Node_Id;
+                  Nodes : Node_Array (1 .. Top_Count) :=
+                    [others => Syn.No_Node];
+               begin
+                  for Written in
+                    1 .. Construction_Field_Count (Of_Tree, Literal)
+                  loop
+                     declare
+                        Label : constant Syn.Node_Id :=
+                          Nth_Construction_Field
+                            (Of_Tree, Literal, Written);
+                     begin
+                        Nodes
+                          (Positive
+                             (Landin.Checking.Field_Index
+                                (Types.all, Of_Tree, Label))) :=
+                                  Construction_Field_Value (Of_Tree, Label);
+                     end;
+                  end loop;
 
-               for Field in 1 .. Top_Count loop
-                  Build_Field
-                    (IR.Nth_Field_Shape (Unit.all, Item, Field),
-                     Nodes (Field), Field, Top_Field => Field);
-               end loop;
-            end;
+                  for Field in 1 .. Top_Count loop
+                     Build_Field
+                       (IR.Nth_Field_Shape (Unit.all, Item, Field),
+                        Nodes (Field), Field, Top_Field => Field);
+                  end loop;
+               end;
+            end if;
 
             declare
                Descendant_Count : constant Natural := Descendant_Cursor;
@@ -15159,11 +14721,18 @@ package body Landin.Stages.Lowering is
                for Element in Folds'Range loop
                   Folds (Element) := Elements (Element);
                end loop;
-               IR.Set_Aggregate_Image
-                 (Unit.all, Item, Values, Images, Descendants, Folds);
+               if Array_Root then
+                  if Images (1).Form /= IR.Absent then
+                     IR.Set_Array_Image
+                       (Unit.all, Item, Images (1), Descendants, Folds);
+                  end if;
+               else
+                  IR.Set_Aggregate_Image
+                    (Unit.all, Item, Values, Images, Descendants, Folds);
+               end if;
                Made (Id) := True;
             end;
-         end Set_Recursive_Image_From_Struct_Literal;
+         end Set_Recursive_Image;
 
          procedure Set_Image_From_Struct_Literal
            (Id      : Res.Declaration_Id;
@@ -15191,6 +14760,8 @@ package body Landin.Stages.Lowering is
             begin
                if Shape.Kind = IR.Aggregate_Field_Shape then
                   return True;
+               elsif Shape.Kind = IR.Array_Field_Shape then
+                  return IR.Array_Element_Is_Aggregate (Unit.all, Shape);
                elsif Shape.Kind = IR.Variant_Field_Shape then
                   for Variant_Case in 1 .. Shape.Cases loop
                      for Payload in
@@ -15224,7 +14795,7 @@ package body Landin.Stages.Lowering is
             end Needs_Recursive_Image;
          begin
             if Needs_Recursive_Image then
-               Set_Recursive_Image_From_Struct_Literal
+               Set_Recursive_Image
                  (Id, Of_Tree, Literal);
                return;
             end if;
@@ -16007,7 +15578,7 @@ package body Landin.Stages.Lowering is
                      end;
                      Made (Id) := True;
 
-                  when IR.Selected | IR.Nested =>
+                  when IR.Selected | IR.Nested | IR.Element_Sequence =>
                      raise Landin.Compiler_Defect with
                        "a non-array field was used as an array image";
                end case;
@@ -16027,6 +15598,31 @@ package body Landin.Stages.Lowering is
             Length : constant IR.Element_Total :=
               IR.Image_Length (Unit.all, Source_Item);
          begin
+            if IR.Has_Recursive_Array_Image (Unit.all, Source_Item) then
+               declare
+                  Count : constant Natural :=
+                    IR.Aggregate_Field_Image_Count (Unit.all, Source_Item) - 1;
+                  Children : IR.Aggregate_Field_Image_Array (1 .. Count);
+                  Elements : Ty.Folded_Array (1 .. Natural (Length));
+               begin
+                  --  Whole-run copies retain item-relative offsets.  Only
+                  --  extracting a subtree needs Clone_Field's fresh rebasing.
+                  for Child in Children'Range loop
+                     Children (Child) := IR.Nth_Image_Descriptor
+                       (Unit.all, Source_Item, Child + 1);
+                  end loop;
+                  for Element in Elements'Range loop
+                     Elements (Element) := IR.Nth_Aggregate_Image_Element
+                       (Unit.all, Source_Item, IR.Part_Position (Element));
+                  end loop;
+                  IR.Set_Array_Image
+                    (Unit.all, IR.Item_For (Unit.all, Destination),
+                     IR.Array_Image_Of (Unit.all, Source_Item),
+                     Children, Elements);
+                  Made (Destination) := True;
+               end;
+               return;
+            end if;
             if IR.Result_Of (Unit.all, Source_Item) = Ty.Aggregate then
                declare
                   Recursive : Boolean := False;
@@ -16037,7 +15633,8 @@ package body Landin.Stages.Lowering is
                   loop
                      Recursive := Recursive
                        or else IR.Nth_Image_Descriptor
-                         (Unit.all, Source_Item, Position).Form = IR.Nested;
+                         (Unit.all, Source_Item, Position).Form
+                           in IR.Nested | IR.Element_Sequence;
                   end loop;
 
                   if Recursive then
@@ -16235,15 +15832,48 @@ package body Landin.Stages.Lowering is
                when Resolved =>
                   return;
                when Visiting =>
-                  --  A cycle the checker already reported: leave the
-                  --  destination without an image.  Following it would
-                  --  loop; the diagnostic is the reader's answer here.
-                  return;
+                  raise Landin.Compiler_Defect with
+                    "a checked static image contains a dependency cycle";
                when Unseen =>
                   null;
             end case;
 
             Where (Id) := Visiting;
+
+            if Landin.Checking.Type_Of (Types.all, Id) = Ty.Function_Value then
+               declare
+                  Item : constant IR.Item_Id := IR.Item_For (Unit.all, Id);
+                  Target : constant IR.Item_Id :=
+                    Static_Field_Target (Their_Tree.all, Value);
+               begin
+                  if not IR.Holds (Unit.all, Target)
+                    or else IR.Kind_Of (Unit.all, Target) /= IR.Routine
+                  then
+                     raise Landin.Compiler_Defect with
+                       "a static callback selection has no routine target";
+                  end if;
+                  IR.Set_Function_Target (Unit.all, Item, Target);
+                  Made (Id) := True;
+               end;
+               Where (Id) := Resolved;
+               return;
+            end if;
+
+            if (Landin.Checking.Type_Of (Types.all, Id) = Ty.Fixed_Array
+                and then IR.Array_Element_Is_Aggregate
+                  (Unit.all, IR.Whole_Array_Shape
+                     (Unit.all, IR.Item_For (Unit.all, Id))))
+              or else
+                (Landin.Checking.Type_Of (Types.all, Id)
+                   in Ty.Fixed_Array | Ty.Aggregate
+                 and then Value /= Syn.No_Node
+                 and then Syn.Kind (Their_Tree.all, Value)
+                   in Syn.Member_Selection | Syn.Element_Index)
+            then
+               Set_Recursive_Image (Id, Their_Tree.all, Value);
+               Where (Id) := Resolved;
+               return;
+            end if;
 
             if Landin.Checking.Type_Of (Types.all, Id) = Ty.Bool then
                declare
@@ -16459,12 +16089,114 @@ package body Landin.Stages.Lowering is
                  and then Landin.Checking.Type_Of (Types.all, Id)
                           in Ty.Bool | Ty.Fixed_Array | Ty.Aggregate
                              | Ty.Pointer_Value | Ty.Slice_Value
+                             | Ty.Function_Value
                then
                   Resolve_Image (Id);
                end if;
             end loop;
          end if;
       end Resolve_Module_Images;
+
+      --  Pass two: fill every active item in the same declaration order.
+      declare
+         procedure Lower_Declaration
+           (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
+
+         procedure Lower_Declaration
+           (Of_Tree : Syn.Tree; Node : Syn.Node_Id) is
+         begin
+            case Syn.Kind (Of_Tree, Node) is
+               when Syn.Function_Declaration =>
+                  if Syn.Generic_Formal_Count (Of_Tree, Node) = 0
+                    and then not Syn.Is_External (Of_Tree, Node)
+                  then
+                     Lower_Routine (Of_Tree, Node);
+                  end if;
+               when Syn.Binding =>
+                  Lower_Datum (Of_Tree, Node);
+               when others =>
+                  null;
+            end case;
+         end Lower_Declaration;
+      begin
+         for Index in 1 .. Source_Count (Context) loop
+            declare
+               Of_Tree : constant not null access constant Syn.Tree :=
+                 Tree_For (Nth_Source (Context, Index));
+               procedure Walk is new
+                 Landin.Configuration.For_Each_Active_Declaration
+                   (Lower_Declaration);
+            begin
+               Walk (Activity.all, Of_Tree.all);
+            end;
+         end loop;
+      end;
+
+      for Position in 1 .. Landin.Checking.Routine_Instance_Count (Types.all)
+      loop
+         declare
+            Source : constant Landin.Checking.Routine_Instance_Id :=
+              Landin.Checking.Routine_Identities.Nth (Types.all, Position);
+         begin
+            if Landin.Checking.Routine_State_Of (Types.all, Source)
+              = Landin.Checking.Routine_Ready
+            then
+               declare
+                  Template : constant Res.Declaration_Id :=
+                    Landin.Checking.Routine_Template_Of (Types.all, Source);
+                  Of_Tree : constant not null access constant Syn.Tree :=
+                    Tree_For (Res.Source_Of (Meanings.all, Template));
+                  Previous : Landin.Checking.Routine_Instance_Id;
+               begin
+                  Landin.Checking.Activate_Routine_View
+                    (Types.all, Source, Previous);
+                  Lower_Routine
+                    (Of_Tree.all, Res.Node_Of (Meanings.all, Template));
+                  Landin.Checking.Restore_Routine_View
+                    (Types.all, Previous);
+               exception
+                  when others =>
+                     Landin.Checking.Restore_Routine_View
+                       (Types.all, Previous);
+                     raise;
+               end;
+            end if;
+         end;
+      end loop;
+
+      for Index in 1 .. Anonymous_Count loop
+         declare
+            Routine_Entry : Anonymous_Entry renames
+              Anonymous_Routines (Index);
+            Of_Tree : constant not null access constant Syn.Tree :=
+              Tree_For (Routine_Entry.Source);
+         begin
+            Lower_Routine (Of_Tree.all, Routine_Entry.Node);
+         end;
+      end loop;
+
+      --  Text datums were appended after every routine and declaration
+      --  item.  Give them their static no-result blocks in that same item
+      --  order, after every earlier item has finished its own block and
+      --  instruction runs.
+      for Position in 1 .. IR.Item_Count (Unit.all) loop
+         declare
+            Item : constant IR.Item_Id := IR.Item_Id (Position);
+         begin
+            if IR.Is_Read_Only (Unit.all, Item) then
+               declare
+                  Site : constant Landin.Provenance.Origin :=
+                    IR.Origin_Of (Unit.all, Item);
+                  Block : constant IR.Block_Id := IR.Add_Block
+                    (Unit.all, Item, Res.Program_Scope, Site);
+               begin
+                  IR.Enter (Unit.all, Item, Block);
+                  IR.Emit_Leave (Unit.all, Item, IR.No_Value, Site);
+                  IR.Leave_Block (Unit.all, Item);
+               end;
+            end if;
+         end;
+      end loop;
 
       --  Every Unit this stage builds, in every build mode.  A failure
       --  is a Landin.Compiler_Defect and never a diagnostic: the

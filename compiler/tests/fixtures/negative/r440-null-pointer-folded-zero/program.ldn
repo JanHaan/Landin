@@ -1,0 +1,5 @@
+zero_address: usize = (7 * 6) - 42
+bad: () -> none =
+    pointer: ptr u8 = ptr(zero_address)
+    _ = pointer
+end bad

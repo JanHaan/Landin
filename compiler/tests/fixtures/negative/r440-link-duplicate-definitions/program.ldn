@@ -1,0 +1,4 @@
+extern(c) link(symbol: "shared_entry") first: () -> none =
+end first
+extern(c) link(symbol: "shared_entry") second: () -> none =
+end second

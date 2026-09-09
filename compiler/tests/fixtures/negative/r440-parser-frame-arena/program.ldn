@@ -1,0 +1,15 @@
+import core/diag
+import core/mem
+import examples/config_parser/parser
+
+bad: () -> none =
+    mut memory: [4096]u8 = zeroed
+    mut arena := mem.arena_over(addr memory[0], 4096)
+    mut collected := diag.new_log(capacity: 1)
+    mut logger: any diag.log = any(addr collected)
+    mut tree := parser.empty()
+    source: [1]u8 = [10]
+    parser.parse_file(source[0..<1], logger, arena, tree) else (problem)
+        _ = problem
+    end
+end bad

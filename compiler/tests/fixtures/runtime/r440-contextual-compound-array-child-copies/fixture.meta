@@ -1,0 +1,6 @@
+class: runtime
+summary: contextual arrays preserve named slice descriptors and every named compound element in root and nested aggregate storage
+constructs: 0420, 0520, 0570, 0670, 0700
+program: main.ldn
+status: 42
+targets: linux-x86-64

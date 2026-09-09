@@ -2908,10 +2908,10 @@ that has no implementation owner.
 | `[1550]` | principle | none | native-backend policy; implementations have target owners |
 | `[1560]` | hosted-now | R4.30 | D202 hosted tool facts/directives; machine operations have named owners |
 | `[1570]` | hosted-now | R3.50 | matrix evidence |
-| `[1580]` | hosted-now | R4.40 | narrow matrix has evidence; remaining C ABI has a named refusal |
+| `[1580]` | hosted-now | R4.40 | D203--D205 and `extern.c-boundary` cover the selected boundary; native integration remains active |
 | `[1590]` | hosted-now | R4.30 | D202 and runtime/r430-static-library archive execution |
-| `[1600]` | later-r4 | R4.40 | scheduled C export work |
-| `[1610]` | later-r4 | R4.40 | scheduled foreign symbol-name work |
+| `[1600]` | hosted-now | R4.40 | C definitions are implemented and classified by `extern.c-boundary`; native gate evidence remains active |
+| `[1610]` | hosted-now | R4.40 | independent native/C symbol overrides are implemented and classified by `functions.linkage`; native gate evidence remains active |
 | `[1620]` | freestanding | R6.30 | scheduled atomics work |
 | `[1630]` | freestanding | R6.60 | scheduled inline-assembly work |
 | `[1640]` | freestanding | R6.60 | scheduled keep and placement work |
@@ -4674,20 +4674,89 @@ binding generation sufficient to avoid a
 hand-written-declaration workflow, without turning the compiler into a header
 parser.
 
-D189 leaves one contradiction here rather than silently: [1580] states that
-`ptr(0)` is refused so that null cannot be minted on the Landin side, and it
-is not — [0470]'s integer-to-pointer conversion accepts it and
-`runtime/core-mem-allocators` uses it as a failure sentinel five times.
-Refusing it would break that fixture and needs the union to be usable as its
-replacement across the foreign boundary, which is this item's `extern (c)`
-signature work. Until then [0480] is closed for ordinary Landin code and
-evadable through [0470].
+The selected contract is D203--D208 and [1975]: Linux x86-64 SysV AMD64
+LP64, signed plain C char, guarded ordinary `core/c` aliases, C convention and
+variadicness in recursive function identity, and independent import/body,
+visibility and symbol facts. A standalone `link(symbol: text)` also names a
+native Landin definition without changing its convention or making its body
+optional. Private/public C definitions, C function types, explicit symbol
+overrides, scalar/floating/callback transport, recursive nonempty `layout(c)`
+structs, register exhaustion and inline stack records are in scope. The internal Landin calling convention and failure channel remain
+unchanged.
 
-Sources: legacy B2; `R§9`, `R§10`.
+The separate deterministic clang-AST generator owns header extraction and C
+adapters for enums, unions, bitfields, globals, TLS, nullable callbacks and
+schema-defined incoming varargs. Policy supplies facts headers cannot infer,
+not handwritten replacement signatures. Native receiving-varargs definitions
+and unsupported `va_list` forwarding, selected extended/x87 or 128-bit scalars,
+complex, vector, atomic or volatile types, old-style or non-C-convention
+functions, packed, overaligned, flexible or zero-size by-value records,
+anonymous unaliased declarations, unsupported arrays, and unsafe, stale or
+missing policy must fail explicitly. The required enum, union, bitfield,
+global/TLS, nullable-callback and incoming-schema categories cannot be refused
+wholesale as a completion shortcut. No native union/bitfield/TLS grammar and no
+C or LLVM backend are introduced. `bindings/README.md` owns the current
+invocation: it requires an
+explicit Clang executable, target, sysroot, one or more relocatable header
+mappings, policy and output directory, with include roots and definitions named
+rather than inherited. Its `python3 bindings/test.py` route requires real Clang;
+`check.py` only discovers and syntax-checks the Python entry points.
+
+D189's former null-construction gap is addressed by refusing known zero after
+target-width conversion, including folded zero, and trapping dynamic zero
+always, including `unchecked`. Named pointer unions replace actual absent
+allocator backing; no `ptr(1)` sentinel substitutes for an allocation.
+Repeated `core/mem.dispose` reports `raw_empty`. On an optional return,
+[0790]'s exact `from` comparison applies only when an edge actually returns the
+reference; a provably empty arm has no origin and is not `Untracked`, as D189
+requires. The derived parser consequently retains `from arena` on its optional
+entry result and `escaping inout arena` on the allocating path. Its runtime case
+now supplies real module-static arrays, while `negative/r440-parser-frame-arena`
+records the continuing refusal of frame-backed arena authority.
+
+The hosted provider captures errno before other C calls, retains exact terminal
+detail in explicit state, retries only safe no-progress EINTR attempts and
+consumes close exactly once.
+
+The selected hosted bridge emits the global hidden ELF entry
+`void _landin_host_initialize_arguments(int argc, char **argv);`. A normal
+no-argument Landin `main` calls it with the incoming carriers before its body. A
+C-owned startup driving an export-only unit calls it explicitly before
+`io.host` or any thread that may acquire argument authority; startup-independent
+bridge calls need no argument initialization, and exports and callbacks never
+reset it. The first valid call retains the exact nonnegative-count,
+non-null-table root without copying or allocation. Identical repetition is a
+no-op; use before initialization, invalid input or root replacement traps. The C
+owner keeps the table and strings live for every capability derived from them.
+
+Implementation and verification are in progress. Recorded source and library
+cases include `positive/r440-c-aliases`, `positive/r440-c-signatures`,
+`positive/r440-external-float`, `positive/r440-compatible-link-declarations`,
+`negative/r440-link-does-not-change-convention`,
+`negative/r440-parser-frame-arena`, `runtime/r440-c-aliases`,
+`runtime/r440-errno-detail`, `runtime/r440-io-partial-progress`,
+`runtime/null-pointer-dynamic-traps`, `runtime/null-pointer-unchecked-traps`,
+`runtime/null-pointer-union-call-else`, `runtime/core-mem-dispose-empty`,
+`abi/r440-bindings-generated`, `abi/r440-native-startup-initialized`,
+`abi/r440-native-startup-empty`, `abi/r440-native-startup-uninitialized` and
+`abi/r440-native-startup-replaced`. Clean local integration passes unfiltered
+Linux x86-64 debug and release suites in the pinned Apple Container through
+Rosetta, each with 486/486 cases and 14,795 checks. The clean Mac suite ran 486
+cases with 485 passed, one failed and 14,423 checks; the failing case contained
+only the expected missing-Linux-toolchain failures and zero compiler defects.
+The pinned Clang 19 generator suite passed 41/41, full `check.py` passed, and
+generated IR/layout records were refreshed. The authoritative native Linux
+x86-64 SourceHut clean debug/release gate has not run, so R4.40 remains active
+and cannot close from these local results.
+
+Sources: `[0480]`, `[0790]`, `[1580]`, `[1600]`, `[1610]`, `[1975]`,
+legacy B2; `R§9`, `R§10`.
 
 Exit evidence: ABI differential tests call in both directions; unsupported C
-forms fail explicitly; generated declarations are deterministic; `ptr(0)` is
-refused as [1580] states, with the pointer union carrying what it stood for.
+forms fail explicitly; generated declarations are deterministic; C-owned
+startup proves initialized, empty, uninitialized and replacement cases against
+the one retained argument root; `ptr(0)` is refused as [1580] states, with the
+pointer union carrying what it stood for.
 
 ### R4.50 — Implement baseline code generation and specialization
 

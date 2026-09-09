@@ -1,0 +1,75 @@
+absent: atom
+unavailable: atom
+maybe_pointer: type = absent | ptr u32
+
+pair: (left: ptr u32, right: ptr u32, missing: bool)
+      -> (first: maybe_pointer from left, second: maybe_pointer from right,
+          got: bool) =
+    first = absent
+    second = absent
+    got = false
+    return when missing
+    first = left
+    second = right
+    got = true
+end pair
+
+forward: (left: ptr u32, right: ptr u32, missing: bool)
+         -> (first: maybe_pointer from left, second: maybe_pointer from right,
+             got: bool) =
+    pair(left, right, missing)
+end forward
+
+forward_local: (left: ptr u32, right: ptr u32, missing: bool)
+               -> (first: maybe_pointer from left,
+                   second: maybe_pointer from right, got: bool) =
+    begin
+        values := pair(left, right, missing)
+        values
+    end
+end forward_local
+
+forward_choice: (left: ptr u32, right: ptr u32, missing: bool, choose: bool)
+                -> (first: maybe_pointer from left,
+                    second: maybe_pointer from right, got: bool) =
+    if choose then pair(left, right, missing)
+    else pair(left, right, true) end if
+end forward_choice
+
+select_second: (left: ptr u32, right: ptr u32, missing: bool)
+               -> (result: maybe_pointer from right) =
+    values := forward(left, right, missing)
+    result = values.second
+end select_second
+
+destructure: (left: ptr u32, right: ptr u32, missing: bool)
+             -> (first: maybe_pointer from left, second: maybe_pointer from right) =
+    values := pair(left, right, missing)
+    (second: latter, first: former) := values
+    first = former
+    second = latter
+end destructure
+
+failable: (left: ptr u32, right: ptr u32, reject: bool)
+          -> (first: maybe_pointer from left, second: maybe_pointer from right)
+          ! unavailable =
+    fail unavailable when reject
+    first = left
+    second = right
+end failable
+
+forward_try: (left: ptr u32, right: ptr u32, reject: bool)
+             -> (first: maybe_pointer from left, second: maybe_pointer from right)
+             ! unavailable =
+    try failable(left, right, reject)
+end forward_try
+
+captured_index: (data: []u32, other: []u32)
+                -> (first: ptr u32 from data, second: ptr u32 from other) =
+    mut chosen: []u32 = data
+    first = addr chosen[begin
+        chosen = other
+        0
+    end]
+    second = addr chosen[0]
+end captured_index

@@ -1,0 +1,22 @@
+import aliases
+import aliases (ratio)
+
+image: u8 = aliases.ratio(40)
+convert: (value: u16) -> (result: u8) =
+    result = aliases.ratio(value)
+end convert
+
+public main: () -> (code: i32) =
+    value: u16 = u16(image) + 1
+    qualified: u8 = convert(value)
+    selected: u8 = ratio(value)
+    called: u8 = aliases.convert(qualified)
+    word: usize = aliases.word(called)
+    if qualified == 41 and selected == 41 and called == 42 and word == 42
+      and sizeof aliases.word == sizeof usize
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

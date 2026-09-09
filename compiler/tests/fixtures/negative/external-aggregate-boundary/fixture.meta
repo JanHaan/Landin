@@ -1,5 +1,5 @@
 class: negative
-summary: R3.50 refuses aggregate carriers at the narrow extern(c) boundary
+summary: R4.40 refuses an ordinary Landin struct at the native C boundary; layout(c) is required
 program: program.ldn
 codes: L0301
 constructs: 0670, 1570, 1580, 1740, 1800, 1975

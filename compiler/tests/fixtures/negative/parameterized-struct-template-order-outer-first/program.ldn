@@ -1,6 +1,7 @@
+problem: atom
 outer: type (item: type) = struct
     child: inner(item)
 end outer
 inner: type (item: type) = struct
-    bad: [2][3]u8
+    bad: [2][3]problem
 end inner

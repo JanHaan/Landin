@@ -1,0 +1,5 @@
+class: positive
+summary: R4.40 a fixed C callback field may take its containing C record by value without creating a recursive object-layout edge
+program: program.ldn
+constructs: 0670, 1000, 1580
+targets: linux-x86-64

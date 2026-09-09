@@ -1,0 +1,6 @@
+class: negative
+summary: Forming a fixed-array slice evaluates deferred bounds before checking the named return's origin
+constructs: 0480, 0570, 0770, 0790, 1100
+program: program.ldn
+codes: L0314
+targets: linux-x86-64, macos-arm64, synthetic-32

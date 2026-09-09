@@ -199,14 +199,22 @@
               gprbuild
               pkgs.python3 #  check.py and docs/site/render_html.py
               pkgs.hut #  scripts/site.sh --publish
+            ] ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux [
+              #  R4.40's external header frontend.  Selecting the LLVM 19
+              #  package set matches Debian stable's versioned clang-19 rather
+              #  than following nixpkgs' moving default Clang.
+              pkgs.llvmPackages."19".clang
             ];
 
-            #  R4.30's explicit archive requests need the separate static
-            #  glibc output: the ordinary libc output does not hold libm.a.
-            #  Keep the shared output first so the driver's own -lc remains
-            #  dynamic while -l:libm.a can reach the requested archive.
+            #  The binding generator's Linux C model comes from the same
+            #  package-set pin as Clang, rather than from host Darwin headers.
+            #  R4.30's explicit archive requests also need nixpkgs' separate
+            #  static glibc output: the ordinary libc output does not hold
+            #  libm.a.  Keep the shared output first so the driver's own -lc
+            #  remains dynamic while -l:libm.a can reach the requested archive.
             buildInputs = lib.optionals pkgs.stdenv.hostPlatform.isLinux [
               (lib.getLib pkgs.glibc)
+              pkgs.glibc.dev
               pkgs.glibc.static
             ];
 

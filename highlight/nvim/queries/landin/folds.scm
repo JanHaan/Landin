@@ -1,4 +1,5 @@
 (function_declaration) @fold
+(extern_declaration body: (block)) @fold
 (anonymous_function) @fold
 (struct_body) @fold
 (concept_body) @fold

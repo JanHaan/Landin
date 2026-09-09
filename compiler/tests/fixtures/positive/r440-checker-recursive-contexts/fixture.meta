@@ -1,0 +1,5 @@
+class: positive
+summary: Complete contextual recursive arrays survive images, aliases, generic calls, control results and pointer indexing
+program: program.ldn
+constructs: 0520, 0540, 0710, 1580, 1940
+targets: linux-x86-64

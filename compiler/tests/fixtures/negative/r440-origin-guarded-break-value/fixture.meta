@@ -1,0 +1,6 @@
+class: negative
+summary: An untaken break with value does not execute the value's mutation before a frame-origin return
+constructs: 0480, 0770, 0790, 1190
+program: program.ldn
+codes: L0314
+targets: linux-x86-64, macos-arm64, synthetic-32

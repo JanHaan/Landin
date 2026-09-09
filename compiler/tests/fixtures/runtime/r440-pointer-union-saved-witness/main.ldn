@@ -1,0 +1,30 @@
+absent: atom
+maybe_cell: type = absent | ptr i32
+maybe_pointer: type = absent | ptr ptr i32
+
+-- The temporary that retains a match subject must retain its reached type,
+-- including another pointer's pointee, not merely the usize carrier.
+read_cell: (value: maybe_cell) -> (result: i32) =
+    match value
+        absent: result = 1
+        ptr (cell): result = cell.val
+    end match
+end read_cell
+
+read_pointer: (value: maybe_pointer) -> (result: i32) =
+    match value
+        ptr (pointer): result = pointer.val.val
+        absent: result = 1
+    end match
+end read_pointer
+
+public main: () -> (code: i32) =
+    cell: i32 = 20
+    pointer: ptr i32 = addr cell
+    present_cell: maybe_cell = pointer
+    present_pointer: maybe_pointer = addr pointer
+    missing_cell: maybe_cell = absent
+    missing_pointer: maybe_pointer = absent
+    code = read_cell(present_cell) + read_pointer(present_pointer)
+        + read_cell(missing_cell) + read_pointer(missing_pointer)
+end main

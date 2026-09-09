@@ -58,6 +58,30 @@ package body Landin.Testing.Fixtures is
    function Codes (Item : Fixture) return String
      is (Unbounded.To_String (Item.Codes));
 
+   function Normalized_Codes (Text : String) return String is
+      Found : Unbounded.Unbounded_String;
+      Start : Positive := Text'First;
+   begin
+      for Index in Text'First .. Text'Last + 1 loop
+         if Index > Text'Last or else Text (Index) = ',' then
+            declare
+               Piece : constant String :=
+                 Ada.Strings.Fixed.Trim
+                   (Text (Start .. Index - 1), Ada.Strings.Both);
+            begin
+               if Piece'Length > 0 then
+                  if Unbounded.Length (Found) > 0 then
+                     Unbounded.Append (Found, ", ");
+                  end if;
+                  Unbounded.Append (Found, Piece);
+               end if;
+            end;
+            Start := Index + 1;
+         end if;
+      end loop;
+      return Unbounded.To_String (Found);
+   end Normalized_Codes;
+
    function Args (Item : Fixture) return String
      is (Unbounded.To_String (Item.Args));
 
@@ -79,6 +103,59 @@ package body Landin.Testing.Fixtures is
 
    function Module_Root (Item : Fixture) return String
      is (Unbounded.To_String (Item.Root));
+
+   function Trimmed (Text : String) return String;
+
+   procedure Append_Module_Arguments
+     (Item         : Fixture;
+      Fixture_Root : String;
+      To           : in out Landin.Platform.Path_List)
+   is
+      Directory : constant String :=
+        Fixture_Root & "/" & Class_Directory (Class (Item)) & "/"
+        & Name (Item);
+   begin
+      if Module_Root (Item) /= "" then
+         Landin.Platform.Add
+           (To, "--root=" & Directory & "/" & Module_Root (Item));
+         Landin.Platform.Add (To, Directory);
+         return;
+      end if;
+
+      Landin.Platform.Add (To, Directory & "/" & Program (Item));
+
+      declare
+         Rest  : constant String := With_Sources (Item);
+         First : Integer := Rest'First;
+
+         procedure Add_One (Named : String);
+
+         procedure Add_One (Named : String) is
+            One : constant String := Trimmed (Named);
+         begin
+            if One /= "" then
+               Landin.Platform.Add (To, Directory & "/" & One);
+            end if;
+         end Add_One;
+      begin
+         for Index in Rest'Range loop
+            if Rest (Index) = ',' then
+               Add_One (Rest (First .. Index - 1));
+               First := Index + 1;
+            end if;
+         end loop;
+
+         if First <= Rest'Last then
+            Add_One (Rest (First .. Rest'Last));
+         end if;
+      end;
+   end Append_Module_Arguments;
+
+   function C_Sources (Item : Fixture) return String
+     is (Unbounded.To_String (Item.C_Files));
+
+   function C_Args (Item : Fixture) return String
+     is (Unbounded.To_String (Item.C_Options));
 
    function Stream (Item : Fixture) return Stream_Choice is (Item.Stream);
 
@@ -108,7 +185,7 @@ package body Landin.Testing.Fixtures is
      (In_Catalogue : Catalogue; Index : Positive) return String
      is (In_Catalogue.Problems.Element (Index));
 
-   function Trimmed (Text : String) return String;
+   function Is_Relative_C_Source (Name : String) return Boolean;
 
    function Trimmed (Text : String) return String is
       First : Integer := Text'First;
@@ -125,6 +202,36 @@ package body Landin.Testing.Fixtures is
       end loop;
       return Text (First .. Last);
    end Trimmed;
+
+   --  ABI companions are repository files, not paths interpreted by a shell.
+   --  Keep them below the fixture directory on every host, and require the
+   --  extension that says which inputs the C driver should compile.
+   function Is_Relative_C_Source (Name : String) return Boolean is
+      First : Integer := Name'First;
+   begin
+      if Name'Length < 3
+        or else Name (Name'Last - 1 .. Name'Last) /= ".c"
+        or else Name (Name'First) in '/' | '\'
+      then
+         return False;
+      end if;
+
+      for Index in Name'Range loop
+         if Name (Index) = '\' or else Name (Index) = ':' then
+            return False;
+         elsif Name (Index) = '/' then
+            if Index = First
+              or else Name (First .. Index - 1) in "." | ".."
+            then
+               return False;
+            end if;
+            First := Index + 1;
+         end if;
+      end loop;
+
+      return First <= Name'Last
+        and then Name (First .. Name'Last) not in "." | "..";
+   end Is_Relative_C_Source;
 
    ---------------------------------------------------------------------
    --  Read_Metadata
@@ -166,6 +273,8 @@ package body Landin.Testing.Fixtures is
       Seen_Constructs : Boolean := False;
       Seen_With    : Boolean := False;
       Seen_Root    : Boolean := False;
+      Seen_C_Sources : Boolean := False;
+      Seen_C_Args  : Boolean := False;
       Seen_Stream  : Boolean := False;
       Seen_Lex     : Boolean := False;
       Seen_Codes   : Boolean := False;
@@ -409,6 +518,90 @@ package body Landin.Testing.Fixtures is
                   Item.Root := Unbounded.To_Unbounded_String (Value);
                end if;
 
+            elsif Key = "c-sources" then
+               if Seen_C_Sources then
+                  Complain ("duplicate key: c-sources");
+                  return;
+               end if;
+               Seen_C_Sources := True;
+
+               if Expected /= Abi then
+                  Complain ("c-sources belong only to an ABI fixture");
+               end if;
+
+               declare
+                  First : Integer := Value'First;
+                  Ok    : Boolean := Value'Length > 0;
+                  Seen  : Landin.Platform.Path_List;
+
+                  procedure Consider (Text : String);
+
+                  procedure Consider (Text : String) is
+                     One      : constant String := Trimmed (Text);
+                     Repeated : Boolean := False;
+                  begin
+                     if not Is_Relative_C_Source (One) then
+                        Ok := False;
+                        Complain
+                          ("c-sources path is not a relative .c file: "
+                           & (if One = "" then "<empty>" else One));
+                        return;
+                     end if;
+
+                     for Previous of Seen loop
+                        if Previous = One then
+                           Repeated := True;
+                        end if;
+                     end loop;
+
+                     if Repeated then
+                        Ok := False;
+                        Complain ("duplicate c-sources path: " & One);
+                     else
+                        Seen.Append (One);
+                     end if;
+                  end Consider;
+               begin
+                  for Index in Value'First .. Value'Last + 1 loop
+                     if Index > Value'Last or else Value (Index) = ',' then
+                        Consider (Value (First .. Index - 1));
+                        First := Index + 1;
+                     end if;
+                  end loop;
+
+                  if Ok then
+                     Item.C_Files := Unbounded.To_Unbounded_String (Value);
+                  end if;
+               end;
+
+            elsif Key = "c-args" then
+               if Seen_C_Args then
+                  Complain ("duplicate key: c-args");
+                  return;
+               end if;
+               Seen_C_Args := True;
+
+               if Expected /= Abi then
+                  Complain ("c-args belong only to an ABI fixture");
+               end if;
+
+               declare
+                  Has_Argument : Boolean := False;
+               begin
+                  for Letter of Value loop
+                     if Letter not in ' ' | ASCII.HT then
+                        Has_Argument := True;
+                     end if;
+                  end loop;
+
+                  if not Has_Argument then
+                     Complain ("c-args names no argument");
+                  else
+                     Item.C_Options :=
+                       Unbounded.To_Unbounded_String (Value);
+                  end if;
+               end;
+
             elsif Key = "constructs" then
                if Seen_Constructs then
                   Complain ("duplicate key: constructs");
@@ -511,6 +704,8 @@ package body Landin.Testing.Fixtures is
                Made_Of => Unbounded.Null_Unbounded_String,
                Beside  => Unbounded.Null_Unbounded_String,
                Root    => Unbounded.Null_Unbounded_String,
+               C_Files => Unbounded.Null_Unbounded_String,
+               C_Options => Unbounded.Null_Unbounded_String,
                Stream  => Merged);
 
       for Index in Content'Range loop
@@ -550,25 +745,32 @@ package body Landin.Testing.Fixtures is
       end if;
 
       if Seen_Run_Args
-        and then (not Seen_Class or else Item.Class /= Runtime)
+        and then (not Seen_Class
+                  or else Item.Class not in Runtime | Abi)
       then
-         Complain ("run_args belong only to a runtime fixture");
+         Complain ("run_args belong only to a runtime or ABI fixture");
       end if;
 
       if Seen_Run_Expect
-        and then (not Seen_Class or else Item.Class /= Runtime)
+        and then (not Seen_Class
+                  or else Item.Class not in Runtime | Abi)
       then
-         Complain ("run_expect belongs only to a runtime fixture");
+         Complain ("run_expect belongs only to a runtime or ABI fixture");
       end if;
 
-      --  A runtime fixture is compiled, linked and executed, so its
-      --  program is the whole of what it is.  Without one there is
-      --  nothing to run, and a status on its own is a number nobody
-      --  produces -- the same dead data the two rules above refuse.
-      if Seen_Class and then Item.Class = Runtime
+      --  Runtime and ABI fixtures both produce and execute a hosted program.
+      --  ABI compilation stops at assembly inside refine, then the harness
+      --  adds the required C companions through the selected target driver.
+      if Seen_Class and then Item.Class in Runtime | Abi
         and then not Seen_Program
       then
-         Complain ("a runtime fixture needs a program to run");
+         Complain
+           ((if Item.Class = Runtime then "a runtime" else "an ABI")
+            & " fixture needs a program to run");
+      end if;
+
+      if Seen_Class and then Item.Class = Abi and then not Seen_C_Sources then
+         Complain ("an ABI fixture needs c-sources");
       end if;
 
       --  A `.ldn` program is written in the language, so it is evidence
@@ -584,14 +786,60 @@ package body Landin.Testing.Fixtures is
                    & " program to be the rest of");
       end if;
 
+      if Seen_With then
+         declare
+            Value : constant String := Unbounded.To_String (Item.Beside);
+            First : Integer := Value'First;
+
+            procedure Consider (Text : String);
+
+            procedure Consider (Text : String) is
+               One : constant String := Trimmed (Text);
+            begin
+               if One'Length >= 2
+                 and then One (One'Last - 1 .. One'Last) = ".c"
+               then
+                  Complain
+                    ("C source belongs in c-sources, never with: " & One);
+               end if;
+            end Consider;
+         begin
+            for Index in Value'First .. Value'Last + 1 loop
+               if Index > Value'Last or else Value (Index) = ',' then
+                  Consider (Value (First .. Index - 1));
+                  First := Index + 1;
+               end if;
+            end loop;
+         end;
+      end if;
+
       if Seen_Root
-        and then (not Seen_Class or else Item.Class /= Runtime)
+        and then (not Seen_Class
+                  or else Item.Class not in Positive_Program
+                                            | Negative_Program
+                                            | Runtime
+                                            | Abi)
       then
-         Complain ("root belongs only to a runtime fixture");
+         Complain
+           ("root belongs only to a positive, negative, runtime or ABI"
+            & " fixture");
+      end if;
+
+      --  Rooted compile-only fixtures still name the corpus file their
+      --  acceptance or refusal is evidence about.  Without a nonempty program,
+      --  the whole-corpus parser and positive-emission loops would omit them.
+      if Seen_Root
+        and then Seen_Class
+        and then Item.Class in Positive_Program | Negative_Program
+        and then (not Seen_Program
+                  or else Unbounded.Length (Item.Program) = 0)
+      then
+         Complain
+           ("a rooted positive or negative fixture needs a nonempty program");
       end if;
 
       if Seen_Root and then Seen_With then
-         Complain ("a rooted runtime fixture discovers its module files"
+         Complain ("a rooted fixture discovers its module files"
                    & " instead of naming them with `with`");
       end if;
 
@@ -608,9 +856,10 @@ package body Landin.Testing.Fixtures is
       end if;
 
       if Seen_Traps and then Item.Traps
-        and then Seen_Class and then Item.Class /= Runtime
+        and then Seen_Class and then Item.Class not in Runtime | Abi
       then
-         Complain ("only a runtime fixture runs a program that could trap");
+         Complain
+           ("only a runtime or ABI fixture runs a program that could trap");
       end if;
 
       --  Any reported fault rejects the fixture.  A fixture that is
@@ -662,7 +911,42 @@ package body Landin.Testing.Fixtures is
                Accepted     => Accepted);
 
             if Accepted then
-               Into.Items.Append (Item);
+               declare
+                  Sources : constant String := C_Sources (Item);
+                  First   : Integer := Sources'First;
+                  Valid   : Boolean := True;
+               begin
+                  if Sources = "" then
+                     Into.Items.Append (Item);
+                     return;
+                  end if;
+
+                  for Index in Sources'First .. Sources'Last + 1 loop
+                     if Index > Sources'Last
+                       or else Sources (Index) = ','
+                     then
+                        declare
+                           One : constant String :=
+                             Trimmed (Sources (First .. Index - 1));
+                           Source_Path : constant String := Path & "/" & One;
+                        begin
+                           if not Host.Exists (Source_Path)
+                             or else Host.Is_Directory (Source_Path)
+                           then
+                              Into.Problems.Append
+                                (Meta & ": c-sources names " & One
+                                 & ", which is missing or not a file");
+                              Valid := False;
+                           end if;
+                        end;
+                        First := Index + 1;
+                     end if;
+                  end loop;
+
+                  if Valid then
+                     Into.Items.Append (Item);
+                  end if;
+               end;
             end if;
          end;
       end Consider;

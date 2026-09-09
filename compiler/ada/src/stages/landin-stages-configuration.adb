@@ -21,6 +21,7 @@ package body Landin.Stages.Configuration is
    use type Landin.Syntax.Node_Id;
    use type Landin.Syntax.Node_Kind;
    use type Landin.Targets.Architecture;
+   use type Landin.Targets.C_ABI_Kind;
    use type Landin.Types.Folded;
    use type Landin.Types.Type_Kind;
    use type Landin.Source.Names.Name_Id;
@@ -265,7 +266,9 @@ package body Landin.Stages.Configuration is
                declare
                   Word : constant String := Spelled (Syn.Name (Of_Tree, Node));
                begin
-                  if Word = "word_size" then
+                  if Word = "c_sysv_lp64" then
+                     return Truth;
+                  elsif Word = "word_size" then
                      return Number;
                   elsif Word = "byte_order" then
                      return Byte_Order;
@@ -326,7 +329,7 @@ package body Landin.Stages.Configuration is
                   if not Is_Compiler
                     or else Spelled (Syn.Name (Of_Tree, Node))
                       not in "arch" | "word_size" | "byte_order"
-                           | "build_mode"
+                           | "build_mode" | "c_sysv_lp64"
                   then
                      Report_Not_Fixed
                        (Of_Tree, Node,
@@ -457,7 +460,11 @@ package body Landin.Stages.Configuration is
                declare
                   Word : constant String := Spelled (Syn.Name (Of_Tree, Node));
                begin
-                  if Word = "word_size" then
+                  if Word = "c_sysv_lp64" then
+                     return Boolean_Result
+                       (Landin.Targets.C_ABI_Of (Target (Context))
+                          = Landin.Targets.SysV_AMD64_LP64);
+                  elsif Word = "word_size" then
                      return (Kind => Number, Integer_Value => Ty.Folded
                        (Landin.Targets.Pointer_Width (Target (Context))));
                   elsif Word = "byte_order" then

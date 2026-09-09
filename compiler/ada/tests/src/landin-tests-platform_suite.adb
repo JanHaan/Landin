@@ -440,10 +440,10 @@ package body Landin.Tests.Platform_Suite is
       Runner.Run ("sh", Sleeping, Result);
       Landin.Testing.Check
         (Item,
-         Result.Ended = Landin.Platform.Signaled
+         Result.Ended = Landin.Platform.Timed_Out
            and then Ada.Strings.Fixed.Index
              (Unbounded.To_String (Result.Output), "ran longer than") > 0,
-         "a run past the limit is stopped, reported as signaled and named");
+         "a run past the limit is stopped, reported as timed out and named");
    end Native_Runs_Report_Status_And_Are_Bounded;
 
    procedure Fake_Writes_Are_Recorded

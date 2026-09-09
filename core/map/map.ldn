@@ -46,9 +46,7 @@ public map: type (key: type is hashable, item: type) = struct
 end map
 
 empty_storage: (value: type) -> (result: mem.storage(value)) =
-    zero: usize = 0
-    base: ptr mut u8 = ptr(zero)
-    result = mem.reserve(item: value, base: base, slots: zero)
+    result = mem.empty_storage(item: value)
 end empty_storage
 
 public new_map: (key: type is hashable, item: type)

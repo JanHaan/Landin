@@ -1,0 +1,13 @@
+absent: atom
+maybe_pointer: type = absent | ptr u32
+
+pair: (left: ptr u32, right: ptr u32)
+      -> (first: maybe_pointer from left, second: maybe_pointer from right) =
+    first = left
+    second = right
+end pair
+
+bad: (left: ptr u32, right: ptr u32)
+     -> (first: maybe_pointer from left, second: maybe_pointer) =
+    pair(left, right)
+end bad

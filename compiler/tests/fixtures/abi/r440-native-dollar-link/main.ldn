@@ -1,0 +1,9 @@
+callback: type = extern(c) (value: i32) -> (result: i32)
+extern(c) link(symbol: "$r440_foreign") foreign: (value: i32) -> (result: i32)
+saved: callback = foreign
+
+public extern(c) link(symbol: "$r440_export") exported: (value: i32)
+    -> (result: i32) =
+    local: callback = foreign
+    result = foreign(value) + saved(value) + local(value)
+end exported

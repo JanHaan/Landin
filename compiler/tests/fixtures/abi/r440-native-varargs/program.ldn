@@ -1,0 +1,40 @@
+-- Scalar tails are promoted before native placement. Both banks overflow.
+collector: type = extern(c) (count: i32, ...) -> (result: i32)
+fixed_collector: type = extern(c) (bias: f64, count: i32, ...) -> (result: i32)
+extern(c) c_collect: (count: i32, ...) -> (result: i32)
+extern(c) c_fixed: (bias: f64, count: i32, ...) -> (result: i32)
+extern(c) probe_al: (count: i32, ...) -> (result: i32)
+
+public extern(c) landin_check: () -> (result: i32) =
+    signed_byte: i8 = -7
+    unsigned_byte: u8 = 250
+    signed_half: i16 = -30000
+    unsigned_half: u16 = 60000
+    truth: bool = true
+    single: f32 = 0.5
+    call: collector = c_collect
+    fixed_call: fixed_collector = c_fixed
+    probe: collector = probe_al
+    direct := c_collect(10, signed_byte, single, unsigned_byte, 1.5,
+        signed_half, 2.5, unsigned_half, 3.5, truth, 4.5,
+        6, 5.5, 7, 6.5, 8, 7.5, 9, 8.5, 10, 9.5)
+    indirect := call(10, signed_byte, single, unsigned_byte, 1.5,
+        signed_half, 2.5, unsigned_half, 3.5, truth, 4.5,
+        6, 5.5, 7, 6.5, 8, 7.5, 9, 8.5, 10, 9.5)
+    fixed_direct := c_fixed(12.5, 10, signed_byte, single, unsigned_byte, 1.5,
+        signed_half, 2.5, unsigned_half, 3.5, truth, 4.5,
+        6, 5.5, 7, 6.5, 8, 7.5, 9, 8.5, 10, 9.5)
+    fixed_indirect := fixed_call(12.5, 10, signed_byte, single, unsigned_byte, 1.5,
+        signed_half, 2.5, unsigned_half, 3.5, truth, 4.5,
+        6, 5.5, 7, 6.5, 8, 7.5, 9, 8.5, 10, 9.5)
+    result = 1
+    if direct == 42 and indirect == 42
+       and fixed_direct == 42 and fixed_indirect == 42
+       and probe_al(0) == 0 and probe(0) == 0
+       and probe_al(1, single) == 1 and probe(1, single) == 1
+       and probe_al(9, 0.5, 1.5, 2.5, 3.5, 4.5, 5.5, 6.5, 7.5, 8.5) == 8
+       and probe(9, 0.5, 1.5, 2.5, 3.5, 4.5, 5.5, 6.5, 7.5, 8.5) == 8
+    then
+        result = 42
+    end if
+end landin_check

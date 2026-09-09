@@ -7,10 +7,12 @@ public uninitialized: atom
 public raw_empty: atom
 public raw_not_empty: atom
 
+no_storage: atom
+allocation: type = no_storage | ptr mut u8
+
 raw: type (item: type) = struct
-    base: ptr mut u8
+    base: allocation
     capacity_count: usize
-    first: ptr mut [1]item
     prefix: []mut item
 end raw
 
@@ -37,12 +39,17 @@ public free: (provider: type is allocator, inout state: provider,
     provider.free(state, block, size)
 end free
 
+--  A descriptor without an allocation is not a zero-address allocation.
+--  It owns no extent, admits no item and cannot yield a pointer on disposal.
+public empty_storage: (item: type) -> (storage: raw(item)) =
+    prefix: []mut item = []
+    storage = (base: no_storage, capacity_count: 0, prefix: prefix)
+end empty_storage
+
 public reserve: (item: type, base: ptr mut u8, slots: usize)
                 -> (storage: raw(item) from base) =
-    first: ptr mut [1]item = ptr(usize(base))
     prefix: []mut item = []
-    storage = (base: base, capacity_count: slots,
-               first: first, prefix: prefix)
+    storage = (base: base, capacity_count: slots, prefix: prefix)
 end reserve
 
 public capacity: (item: type, storage: raw(item)) -> (count: usize) =
@@ -65,8 +72,14 @@ public admit: (item: type, inout storage: raw(item), escaping value: item)
     fail raw_full when index >= storage.capacity_count
     wanted: usize = index + 1
     if index == 0 then
-        storage.first.val[0] = value
-        storage.prefix = storage.first.val[0..<1]
+        match storage.base
+            no_storage: fail raw_full
+            ptr (base): begin
+                first: ptr mut [1]item = ptr(usize(base))
+                first.val[0] = value
+                storage.prefix = first.val[0..<1]
+            end
+        end match
     else
         unchecked begin
             storage.prefix[index] = value
@@ -98,8 +111,14 @@ public transfer: (item: type, source: raw(item), index: usize,
     saved: item = source.prefix[index]
     wanted: usize = admitted + 1
     if admitted == 0 then
-        target.first.val[0] = saved
-        target.prefix = target.first.val[0..<1]
+        match target.base
+            no_storage: fail raw_full
+            ptr (base): begin
+                first: ptr mut [1]item = ptr(usize(base))
+                first.val[0] = saved
+                target.prefix = first.val[0..<1]
+            end
+        end match
     else
         unchecked begin
             target.prefix[admitted] = saved
@@ -118,11 +137,14 @@ public release: (item: type, inout storage: raw(item))
 end release
 
 public dispose: (item: type, inout storage: raw(item))
-                -> (released: ptr mut u8 from storage) ! raw_not_empty =
+                -> (released: ptr mut u8 from storage)
+                   ! raw_not_empty | raw_empty =
     fail raw_not_empty when initialized(storage) <> 0
-    released = storage.base
-    storage.base = ptr(0)
-    storage.first = ptr(0)
+    match storage.base
+        no_storage: fail raw_empty
+        ptr (base): released = base
+    end match
+    storage.base = no_storage
     storage.prefix = []
     storage.capacity_count = 0
 end dispose

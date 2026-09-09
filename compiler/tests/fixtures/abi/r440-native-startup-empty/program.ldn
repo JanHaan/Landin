@@ -1,0 +1,16 @@
+import core/io
+
+extern(c) c_argument_table: (table: ptr ptr u8) -> (ok: bool)
+extern(c) _landin_host_argument_table: () -> (table: ptr ptr u8)
+
+public extern(c) l_root: () -> (ok: bool) =
+    state: io.system = io.host()
+    ok = false
+    return when io.argument_count(state) <> 0
+    return when not c_argument_table(_landin_host_argument_table())
+    value: io.argument = io.argument_at(addr state, usize(0)) else (problem)
+        ok = problem == io.no_argument
+        return
+    end
+    _ = value.length
+end l_root

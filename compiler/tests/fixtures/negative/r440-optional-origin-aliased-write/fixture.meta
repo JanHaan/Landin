@@ -1,0 +1,6 @@
+class: negative
+summary: Writing a present static pointer through an alias cannot leave a reusable empty proof on the original optional binding
+constructs: 0430, 0480, 0790
+program: program.ldn
+codes: L0316
+targets: linux-x86-64, macos-arm64, synthetic-32

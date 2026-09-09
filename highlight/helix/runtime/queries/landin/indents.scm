@@ -9,6 +9,8 @@
   (bare_block)
 ] @indent.begin
 
+(extern_declaration body: (block)) @indent.begin
+
 [
   "end"
   "else"

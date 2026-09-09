@@ -1,0 +1,56 @@
+-- Three real struct elements, not a scalar float array: the first two
+-- leaves share an SSE eightbyte and the third occupies a partial one.
+leaf: type = layout(c) struct
+    value: f32
+end leaf
+
+nested: type = layout(c) struct
+    values: [3]leaf
+end nested
+
+handler: type = extern(c) (value: nested) -> (result: nested)
+extern(c) c_nested3: (value: nested) -> (result: nested)
+extern(c) callback_nested3: (call: handler, value: nested) -> (result: nested)
+extern(c) c_layout: (leaf_size: usize, leaf_alignment: usize,
+    nested_size: usize, nested_alignment: usize) -> (ok: bool)
+
+public extern(c) l_nested3: (value: nested) -> (result: nested) =
+    result = value
+    result.values[0].value = value.values[0].value + 1.0
+    result.values[1].value = value.values[1].value + 2.0
+    result.values[2].value = value.values[2].value + 4.0
+end l_nested3
+
+public extern(c) landin_check: () -> (result: i32) =
+    mut input: nested = zeroed
+    input.values[0].value = 0.5
+    input.values[1].value = -3.25
+    input.values[2].value = 101.5
+    direct := c_nested3(input)
+    call: handler = c_nested3
+    indirect := call(input)
+    callback := callback_nested3(l_nested3, input)
+    result = 42
+    if direct.values[0].value <> 8.5
+       or direct.values[1].value <> 12.75
+       or direct.values[2].value <> 133.5
+       or indirect.values[0].value <> 8.5
+       or indirect.values[1].value <> 12.75
+       or indirect.values[2].value <> 133.5
+    then
+        result = 1
+    end if
+    if callback.values[0].value <> 1.5
+       or callback.values[1].value <> -1.25
+       or callback.values[2].value <> 105.5
+       or input.values[0].value <> 0.5
+       or input.values[1].value <> -3.25
+       or input.values[2].value <> 101.5
+    then
+        result = 2
+    end if
+    if not c_layout(sizeof leaf, alignof leaf, sizeof nested, alignof nested)
+    then
+        result = 3
+    end if
+end landin_check

@@ -54,6 +54,10 @@ package Landin.Targets is
 
    function Architecture_Of (Facts : Target_Facts) return Architecture;
 
+   type C_ABI_Kind is (No_C_ABI, SysV_AMD64_LP64);
+
+   function C_ABI_Of (Facts : Target_Facts) return C_ABI_Kind;
+
    function Pointer_Width (Facts : Target_Facts) return Bit_Width;
 
    function Pointer_Alignment (Facts : Target_Facts) return Byte_Alignment;
@@ -150,8 +154,8 @@ package Landin.Targets is
    --  alignment and padding in between, "so a hexdump matches the source
    --  and the layout does not shift under a new compiler".  That sentence
    --  is the whole of this: no reordering, no packing, and padding only
-   --  where an alignment demands it.  `layout(optimal)` and `layout(c)`
-   --  are [0750]'s other two policies and arrive with the attributes.
+   --  where an alignment demands it.  The supported SysV C record subset
+   --  uses this same placement; `layout(optimal)` remains a separate policy.
    --
    --  An accumulator rather than a function over a list, because the
    --  caller holds the fields and this package must not learn what a
@@ -225,6 +229,7 @@ private
    type Target_Facts is record
       Label             : String (1 .. Name_Length);
       Machine           : Architecture;
+      C_ABI             : C_ABI_Kind;
       Pointer           : Bit_Width;
       Pointer_Align     : Byte_Alignment;
       Stack_Align       : Byte_Alignment;

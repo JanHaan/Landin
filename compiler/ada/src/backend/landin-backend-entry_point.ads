@@ -6,7 +6,13 @@
 --  of the language, and a freestanding program names its entry in the build
 --  description instead.
 --
---  All five conditions are asked, including the return's name.  D12 lists
+--  The selected entry uses the native convention and the effective linker
+--  name `main`.  C exports (including a callback with source name `main`)
+--  never acquire argc/argv implicitly.  A renamed native `main` is legal
+--  assembly input, but does not satisfy an executable request: there is no
+--  implicit wrapper or second linker name.
+--
+--  The source shape is asked in full, including the return's name.  D12 lists
 --  "treat the return's name as immaterial" among the alternatives it did
 --  not take, so accepting `-> (status: i32)` here would quietly implement
 --  the alternative rather than the decision.

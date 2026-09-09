@@ -84,6 +84,8 @@ package Landin.IR.Verifier is
       Evidence_Out_Of_Range,
       Evidence_Entry_Out_Of_Range,
       Evidence_Entry_Signature_Disagrees,
+      Erased_Dispatch_Malformed,
+      Evidence_Self_Disagrees,
       Atom_Metadata_Disagrees,
       Atom_Identity_Not_In_Set,
       Field_Shape_Malformed,

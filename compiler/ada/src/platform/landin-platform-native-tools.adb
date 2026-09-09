@@ -41,16 +41,16 @@ package body Landin.Platform.Native.Tools is
       Result    : out Tool_Result;
       Capture   : Capture_Mode := Merged)
    is
-      List    : OS.Argument_List (1 .. Integer (Arguments.Length)) :=
+      List           : OS.Argument_List (1 .. Integer (Arguments.Length)) :=
         [others => null];
-      Located : OS.String_Access := null;
-      Name    : OS.String_Access := null;
-      FD      : OS.File_Descriptor := OS.Invalid_FD;
-      Success : Boolean;
-      Status  : Integer;
-      Timed_Out : Boolean := False;
-      Reader  : Native_Filesystem;
-      Read    : Read_Status;
+      Located        : OS.String_Access := null;
+      Name           : OS.String_Access := null;
+      FD             : OS.File_Descriptor := OS.Invalid_FD;
+      Success        : Boolean;
+      Status         : Integer;
+      Exceeded_Limit : Boolean := False;
+      Reader         : Native_Filesystem;
+      Read           : Read_Status;
 
       procedure Release_Arguments;
 
@@ -134,7 +134,7 @@ package body Landin.Platform.Native.Tools is
             raise External_Tool_Failed with "could not run tool: " & Program;
          end if;
 
-         Timed_Out := False;
+         Exceeded_Limit := False;
          loop
             Reaped :=
               Wait_Pid (Interfaces.C.int (OS.Pid_To_Integer (Pid)),
@@ -145,7 +145,7 @@ package body Landin.Platform.Native.Tools is
                Reaped :=
                  Wait_Pid (Interfaces.C.int (OS.Pid_To_Integer (Pid)),
                            Word'Access, 0);
-               Timed_Out := True;
+               Exceeded_Limit := True;
                exit;
             end if;
             delay 0.02;
@@ -158,7 +158,7 @@ package body Landin.Platform.Native.Tools is
 
          --  The low seven bits name a signal, or nothing; the next byte is
          --  the exit status when there was one.
-         if Timed_Out or else Integer (Word) mod 128 /= 0 then
+         if Integer (Word) mod 128 /= 0 then
             Status := -1;
          else
             Status := (Integer (Word) / 256) mod 256;
@@ -169,7 +169,7 @@ package body Landin.Platform.Native.Tools is
       if Read /= Read_Ok then
          Result.Output := Unbounded.Null_Unbounded_String;
       end if;
-      if Timed_Out then
+      if Exceeded_Limit then
          Unbounded.Append
            (Result.Output,
             "landin: " & Program & " ran longer than the limit of"
@@ -185,9 +185,14 @@ package body Landin.Platform.Native.Tools is
       --  POSIX exit status is one byte and so can never be -1, which is
       --  what makes the two answerable apart.
       --
-      --  No signal number reaches the record; [1960] says which signal is
-      --  not stable program behaviour, and this seam is where that stops.
-      if Status = -1 then
+      --  A watchdog kill has the same POSIX wait status as another signal,
+      --  so Exceeded_Limit takes precedence over that decoding.  No signal
+      --  number reaches the record; [1960] says which signal is not stable
+      --  program behaviour, and this seam is where that stops.
+      if Exceeded_Limit then
+         Result.Ended := Landin.Platform.Timed_Out;
+         Result.Exit_Code := 0;
+      elsif Status = -1 then
          Result.Ended := Landin.Platform.Signaled;
          Result.Exit_Code := 0;
       else

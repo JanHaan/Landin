@@ -1,0 +1,4 @@
+node: type = struct
+    value: i32
+    visit: extern(c) (value: node) -> none
+end node

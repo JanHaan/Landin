@@ -1,0 +1,7 @@
+class: abi
+summary: Dollar-prefixed ELF names preserve identity in calls, function addresses, static relocations and exported definitions
+program: main.ldn
+c-sources: companion.c
+constructs: 1610, 1650, 1975
+status: 42
+targets: linux-x86-64

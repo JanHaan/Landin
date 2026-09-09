@@ -2,6 +2,10 @@ with Landin.Types;
 
 package body Landin.IR.Verifier is
 
+   use type Landin.Targets.C_ABI_Kind;
+   use type Landin.Source.Names.Name_Id;
+   use type Landin.Types.Magnitude;
+
    function Describe (Of_Kind : Fault_Kind) return String
      is (case Of_Kind is
             when Nothing_Wrong        => "nothing wrong",
@@ -64,6 +68,11 @@ package body Landin.IR.Verifier is
                "an evidence operation names no direct concept entry",
             when Evidence_Entry_Signature_Disagrees =>
                "an evidence entry's signature disagrees with its provider",
+            when Erased_Dispatch_Malformed =>
+               "an erased signature differs from its provider beyond self"
+               & " or is used as an ordinary callable",
+            when Evidence_Self_Disagrees =>
+               "an erased call does not pair its function and receiver",
             when Atom_Metadata_Disagrees =>
                "an atom carrier disagrees with its structural atom set",
             when Atom_Identity_Not_In_Set =>
@@ -215,7 +224,7 @@ package body Landin.IR.Verifier is
             when Unary_Kind    => 1,
             when Binary_Kind   => 2,
             when Failure_Test  => 1,
-            when Evidence_Function => 1,
+            when Evidence_Function | Evidence_Self => 1,
             when Storage_Address | Place_Address | Function_Address
                | Evidence_Address | Call | Indirect_Call => 0,
             when Jump          => 0,
@@ -255,6 +264,10 @@ package body Landin.IR.Verifier is
         Aggregate_Field_Image_Pattern_Not_Canonical;
       Signature_Mismatch : constant Fault_Kind :=
         Function_Value_Signature_Disagrees;
+
+      function Run_Fits (Held : Run; Total : Natural) return Boolean
+        is (Held.First <= Total
+            and then Held.Count <= Total - Held.First);
 
       function Variant_Shape_Of
         (Item          : Item_Id;
@@ -919,8 +932,20 @@ package body Landin.IR.Verifier is
                     (Of_Unit, Whole_Array_Shape (Of_Unit, Place.Datum),
                      Expected);
                elsif Result_Of (Of_Unit, Place.Datum)
+                       in Landin.Types.Scalar_Name
+               then
+                  return Same_Shape
+                    (Of_Unit,
+                     (Element => Landin.Types.Scalar_Name
+                        (Result_Of (Of_Unit, Place.Datum)),
+                      Signature => Signature_Of (Of_Unit, Place.Datum),
+                      Atoms => Atom_Set_Of (Of_Unit, Place.Datum),
+                      Pointee => Pointee_Of (Of_Unit, Place.Datum),
+                      others => <>), Expected);
+               elsif Result_Of (Of_Unit, Place.Datum)
                        /= Landin.Types.Aggregate
                  or else Expected.Kind /= Aggregate_Field_Shape
+                 or else Nominal_Of (Of_Unit, Place.Datum) /= Expected.Nominal
                  or else Field_Count (Of_Unit, Place.Datum)
                            /= Aggregate_Field_Count (Of_Unit, Expected)
                then
@@ -946,8 +971,17 @@ package body Landin.IR.Verifier is
                     (Of_Unit,
                      Whole_Slot_Array_Shape
                        (Of_Unit, Item, Place.Slot), Expected);
-               elsif not Is_Aggregate (Of_Unit, Item, Place.Slot)
-                 or else Expected.Kind /= Aggregate_Field_Shape
+               elsif not Is_Aggregate (Of_Unit, Item, Place.Slot) then
+                  return Same_Shape
+                    (Of_Unit,
+                     (Element => Type_Of (Of_Unit, Item, Place.Slot),
+                      Signature => Signature_Of (Of_Unit, Item, Place.Slot),
+                      Atoms => Atom_Set_Of (Of_Unit, Item, Place.Slot),
+                      Pointee => Pointee_Of (Of_Unit, Item, Place.Slot),
+                      others => <>), Expected);
+               elsif Expected.Kind /= Aggregate_Field_Shape
+                 or else Nominal_Of (Of_Unit, Item, Place.Slot)
+                   /= Expected.Nominal
                  or else Slot_Field_Count (Of_Unit, Item, Place.Slot)
                            /= Aggregate_Field_Count (Of_Unit, Expected)
                then
@@ -1058,21 +1092,58 @@ package body Landin.IR.Verifier is
       function Field_Shape_Is_Malformed
         (Shape : Field_Shape;
          Aggregate_Allowed : Boolean := False;
-         Budget : Natural := 0)
+         Budget : Natural := Natural'Last)
         return Boolean;
 
-      function Shape_Contains_Aggregate
+      function Shape_Needs_Recursive_Image
         (Shape : Field_Shape) return Boolean;
 
-      function Item_Image_Contains_Aggregate
+      function Item_Needs_Recursive_Image
         (Item : Item_Id) return Boolean;
 
       function Signature_Part_Is_Malformed
         (Part : Signature_Part) return Boolean;
 
+      --  Called only after the shape walk has proved finite child runs.
+      function Shape_Has_Callable (Shape : Field_Shape) return Boolean;
+
+      function Shape_Has_Callable (Shape : Field_Shape) return Boolean is
+      begin
+         case Shape.Kind is
+            when Scalar_Field_Shape =>
+               return Shape.Signature /= No_Signature;
+            when Array_Field_Shape =>
+               return Shape.Length > 0
+                 and then Shape_Has_Callable
+                   (Array_Element_Shape (Of_Unit, Shape));
+            when Aggregate_Field_Shape =>
+               for Field in 1 .. Aggregate_Field_Count (Of_Unit, Shape) loop
+                  if Shape_Has_Callable
+                    (Nth_Aggregate_Field (Of_Unit, Shape, Field))
+                  then
+                     return True;
+                  end if;
+               end loop;
+            when Variant_Field_Shape =>
+               for Which in 1 .. Shape.Cases loop
+                  for Field in
+                    1 .. Variant_Case_Field_Count (Of_Unit, Shape, Which)
+                  loop
+                     if Shape_Has_Callable
+                       (Nth_Variant_Case_Field (Of_Unit, Shape, Which, Field))
+                     then
+                        return True;
+                     end if;
+                  end loop;
+               end loop;
+         end case;
+         return False;
+      end Shape_Has_Callable;
+
       type Aggregate_Source_Kind is
-        (No_Aggregate_Source, Item_Aggregate_Source,
-         Slot_Aggregate_Source, Nested_Aggregate_Source);
+        (No_Aggregate_Source, Nominal_Aggregate_Source,
+         Item_Aggregate_Source, Slot_Aggregate_Source,
+         Nested_Aggregate_Source);
 
       type Aggregate_Source is record
          Kind    : Aggregate_Source_Kind := No_Aggregate_Source;
@@ -1113,6 +1184,12 @@ package body Landin.IR.Verifier is
       function Atom_Metadata_Is_Subset
         (Left, Right : Atom_Set_Id) return Boolean;
 
+      function Indirect_Fault
+        (Item : Item_Id; Value : Value_Id) return Fault_Kind;
+      function Pointer_Fault
+        (Item : Item_Id; Value : Value_Id) return Fault_Kind;
+      function Pointer_Provenance (Item : Item_Id) return Fault;
+
       --  A legacy array part has the default Element_Shape. Its Element
       --  fixes a scalar extent, or its Nominal names the canonical body
       --  checked independently below. No other child can use that fallback.
@@ -1124,15 +1201,30 @@ package body Landin.IR.Verifier is
         (Item : Item_Id; Signature : Signature_Id; Slot : Slot_Id)
          return Boolean;
 
+      --  Classification uses the registry, but verification must also read
+      --  explicit occurrence runs: otherwise canonical lookup would hide a
+      --  corrupt or contradictory body attached to the same nominal.
+      function Local_Field_Count (Shape : Field_Shape) return Natural
+        is (if Shape.Cases = 0
+            then Aggregate_Field_Count (Of_Unit, Shape) else Shape.Cases);
+
+      function Nth_Local_Field
+        (Shape : Field_Shape; Field : Positive) return Field_Shape
+        is (if Shape.Cases = 0
+            then Nth_Aggregate_Field (Of_Unit, Shape, Field)
+            else Of_Unit.Variant_Fields
+              (Shape.Payloads_First + Field - 1));
+
       function Field_Shape_Is_Malformed
         (Shape : Field_Shape;
          Aggregate_Allowed : Boolean := False;
-         Budget : Natural := 0)
+         Budget : Natural := Natural'Last)
         return Boolean
       is
          Left : constant Natural :=
-           (if Budget = 0 then Variant_Field_Shape_Count (Of_Unit) + 1
-            else Budget);
+           (if Budget = Natural'Last
+            then Variant_Field_Shape_Count (Of_Unit)
+              + Nominal_Type_Count (Of_Unit) + 1 else Budget);
       begin
          if Shape.Kind = Scalar_Field_Shape then
             return Shape.Nominal /= No_Nominal_Type
@@ -1140,11 +1232,20 @@ package body Landin.IR.Verifier is
               or else Shape.Cases /= 0
               or else Shape.Payloads_First /= 0
               or else
+                (Shape.Pointee /= No_Pointee
+                 and then
+                   (not Holds (Of_Unit, Shape.Pointee)
+                    or else Shape.Element /= Landin.Types.Usize
+                    or else Shape.Signature /= No_Signature
+                    or else Shape.Atoms /= No_Atom_Set))
+              or else
                 (Shape.Signature /= No_Signature
                  and then
                    (Shape.Atoms /= No_Atom_Set
                     or else Shape.Element /= Landin.Types.Usize
-                    or else not Holds (Of_Unit, Shape.Signature)))
+                    or else not Holds (Of_Unit, Shape.Signature)
+                    or else Signature_Has_Erased_Self
+                      (Of_Unit, Shape.Signature)))
               or else
                 (Shape.Atoms /= No_Atom_Set
                  and then
@@ -1153,33 +1254,40 @@ package body Landin.IR.Verifier is
                     or else not Holds (Of_Unit, Shape.Atoms)));
          elsif Shape.Signature /= No_Signature
            or else Shape.Atoms /= No_Atom_Set
+           or else Shape.Pointee /= No_Pointee
          then
             return True;
          elsif Shape.Kind = Array_Field_Shape then
-            --  D121: an aggregate element is one run of exactly one shape.
-            --  No run at all is the scalar element every array had before.
-            if Shape.Cases = 0 then
-               return Shape.Nominal /= No_Nominal_Type
-                 or else Shape.Payloads_First /= 0;
+            --  An explicit child may itself be scalar: callable and atom
+            --  metadata cannot use the legacy inline scalar representation.
+            if not Array_Element_Run_Is_Valid (Of_Unit, Shape) then
+               return True;
+            elsif Shape.Cases = 0 then
+               return Shape.Nominal /= No_Nominal_Type;
             end if;
-            return (Shape.Nominal /= No_Nominal_Type
-                      and then not Holds (Of_Unit, Shape.Nominal))
-              or else Shape.Cases /= 1
-              or else not Array_Element_Is_Aggregate (Of_Unit, Shape)
-              or else Array_Element_Shape (Of_Unit, Shape).Kind
-                        not in Array_Field_Shape | Aggregate_Field_Shape
-              or else Array_Element_Shape (Of_Unit, Shape).Nominal
-                        /= Shape.Nominal
-              or else Left = 0
-              or else Field_Shape_Is_Malformed
-                (Array_Element_Shape (Of_Unit, Shape),
-                 Aggregate_Allowed => True,
-                 Budget => Left - 1);
+            declare
+               Child : constant Field_Shape :=
+                 Array_Element_Shape (Of_Unit, Shape);
+            begin
+               return Child.Kind = Variant_Field_Shape
+                 or else Child.Nominal /= Shape.Nominal
+                 or else Child.Element /= Shape.Element
+                 or else Left = 0
+                 or else Field_Shape_Is_Malformed
+                   (Child, Aggregate_Allowed => True, Budget => Left - 1);
+            end;
          elsif Shape.Kind = Aggregate_Field_Shape then
             if not Aggregate_Allowed
               or else not Holds (Of_Unit, Shape.Nominal)
               or else Shape.Length /= 1
               or else Shape.Element /= Landin.Types.Bool
+              or else (Shape.Cases = 0 and then Shape.Payloads_First /= 0)
+              or else (Shape.Cases > 0
+                and then (Shape.Payloads_First = 0
+                  or else Shape.Payloads_First
+                    > Variant_Field_Shape_Count (Of_Unit)
+                  or else Shape.Cases > Variant_Field_Shape_Count (Of_Unit)
+                    - Shape.Payloads_First + 1))
               or else not Aggregate_Field_Run_Is_Valid (Of_Unit, Shape)
             then
                return True;
@@ -1189,9 +1297,9 @@ package body Landin.IR.Verifier is
                return True;
             end if;
 
-            for Field in 1 .. Aggregate_Field_Count (Of_Unit, Shape) loop
+            for Field in 1 .. Local_Field_Count (Shape) loop
                if Field_Shape_Is_Malformed
-                    (Nth_Aggregate_Field (Of_Unit, Shape, Field),
+                    (Nth_Local_Field (Shape, Field),
                      Aggregate_Allowed => True,
                      Budget => Left - 1)
                then
@@ -1251,7 +1359,7 @@ package body Landin.IR.Verifier is
          return False;
       end Field_Shape_Is_Malformed;
 
-      function Shape_Contains_Aggregate
+      function Shape_Needs_Recursive_Image
         (Shape : Field_Shape) return Boolean
       is
       begin
@@ -1260,15 +1368,14 @@ package body Landin.IR.Verifier is
          elsif Shape.Kind = Array_Field_Shape
            and then Array_Element_Is_Aggregate (Of_Unit, Shape)
          then
-            return Shape_Contains_Aggregate
-              (Array_Element_Shape (Of_Unit, Shape));
+            return True;
          elsif Shape.Kind = Variant_Field_Shape then
             for Variant_Case in 1 .. Shape.Cases loop
                for Payload in
                  1 .. Variant_Case_Field_Count
                         (Of_Unit, Shape, Variant_Case)
                loop
-                  if Shape_Contains_Aggregate
+                  if Shape_Needs_Recursive_Image
                     (Nth_Variant_Case_Field
                        (Of_Unit, Shape, Variant_Case, Payload))
                   then
@@ -1278,26 +1385,49 @@ package body Landin.IR.Verifier is
             end loop;
          end if;
          return False;
-      end Shape_Contains_Aggregate;
+      end Shape_Needs_Recursive_Image;
 
-      function Item_Image_Contains_Aggregate
+      function Item_Needs_Recursive_Image
         (Item : Item_Id) return Boolean
       is
       begin
          for Field in 1 .. Field_Count (Of_Unit, Item) loop
-            if Shape_Contains_Aggregate
+            if Shape_Needs_Recursive_Image
               (Nth_Field_Shape (Of_Unit, Item, Field))
             then
                return True;
             end if;
          end loop;
+         --  An inline scalar array may also use the recursive descriptor
+         --  representation. Its spelling, not just its child kind, selects
+         --  the walker; orphan descriptors are still rejected there.
+         for Position in 1 .. Aggregate_Field_Image_Count (Of_Unit, Item) loop
+            if Nth_Image_Descriptor (Of_Unit, Item, Position).Form
+              = Element_Sequence
+            then
+               return True;
+            end if;
+         end loop;
          return False;
-      end Item_Image_Contains_Aggregate;
+      end Item_Needs_Recursive_Image;
 
       function Signature_Part_Is_Malformed
         (Part : Signature_Part) return Boolean
       is
       begin
+         if Part.Convention = Inout_Place
+           and then (Part.Kind /= Landin.Types.Usize
+             or else not Holds (Of_Unit, Part.Pointee))
+         then
+            return True;
+         elsif Part.Pointee /= No_Pointee
+           and then (Part.Kind /= Landin.Types.Usize
+             or else Part.Atoms /= No_Atom_Set
+             or else Part.Signature /= No_Signature
+             or else not Holds (Of_Unit, Part.Pointee))
+         then
+            return True;
+         end if;
          case Part.Kind is
             when Landin.Types.No_Value =>
                return True;
@@ -1320,38 +1450,262 @@ package body Landin.IR.Verifier is
                  (Part.Element_Shape, Aggregate_Allowed => True)
                  or else (Part.Nominal /= No_Nominal_Type
                          and then not Holds (Of_Unit, Part.Nominal))
+                 or else (Part.Element_Shape /= Field_Shape'(others => <>)
+                   and then (Part.Element_Shape.Element /= Part.Element
+                     or else Part.Element_Shape.Nominal /= Part.Nominal))
                  or else Part.Signature /= No_Signature
                  or else Part.Atoms /= No_Atom_Set;
             when Landin.Types.Function_Value =>
                return Part.Nominal /= No_Nominal_Type
                  or else Part.Length /= 0
                  or else not Holds (Of_Unit, Part.Signature)
+                 or else Signature_Has_Erased_Self (Of_Unit, Part.Signature)
                  or else Part.Atoms /= No_Atom_Set;
             when others =>
                return True;
          end case;
       end Signature_Part_Is_Malformed;
 
+      --  Erasure is a derived descriptor, not a wildcard in ordinary
+      --  signature or pointee equality. The builder copies every part;
+      --  even unused part metadata must remain identical to that copy.
+      function Dispatch_Agrees
+        (Held : Evidence_Record; Provider : Evidence_Entry_Record)
+         return Boolean;
+
+      function Dispatch_Agrees
+        (Held : Evidence_Record; Provider : Evidence_Entry_Record)
+         return Boolean
+      is
+      begin
+         if not Holds (Of_Unit, Provider.Signature)
+           or else Signature_Has_Erased_Self (Of_Unit, Provider.Signature)
+           or else not Holds (Of_Unit, Provider.Dispatch)
+         then
+            return False;
+         elsif not Held.Erased then
+            return Provider.Dispatch = Provider.Signature;
+         elsif not Signature_Has_Erased_Self (Of_Unit, Provider.Dispatch) then
+            return False;
+         end if;
+         declare
+            Concrete : constant Signature_Record :=
+              Of_Unit.Signatures (Positive (Provider.Signature));
+            Dispatch : constant Signature_Record :=
+              Of_Unit.Signatures (Positive (Provider.Dispatch));
+         begin
+            if Concrete.Parameters.Count = 0
+              or else Concrete.Parameters.Count /= Dispatch.Parameters.Count
+              or else Concrete.Results.Count /= Dispatch.Results.Count
+              or else Concrete.Sources.Count /= Dispatch.Sources.Count
+              or else Concrete.Errors /= Dispatch.Errors
+              or else Concrete.C_ABI /= Dispatch.C_ABI
+              or else Concrete.Variadic /= Dispatch.Variadic
+            then
+               return False;
+            end if;
+            for Index in 1 .. Concrete.Parameters.Count loop
+               declare
+                  Expected : Signature_Part := Nth_Signature_Parameter
+                    (Of_Unit, Provider.Signature, Index);
+               begin
+                  if Index = 1 then
+                     if Expected.Kind /= Landin.Types.Usize
+                       or else Expected.Convention /= In_Value
+                       or else not Holds (Of_Unit, Expected.Pointee)
+                       or else not Same_Shape
+                         (Of_Unit, Pointee_Shape (Of_Unit, Expected.Pointee),
+                          Held.Represented)
+                     then
+                        return False;
+                     end if;
+                     Expected.Pointee := No_Pointee;
+                  end if;
+                  if Expected /= Nth_Signature_Parameter
+                    (Of_Unit, Provider.Dispatch, Index)
+                  then
+                     return False;
+                  end if;
+               end;
+            end loop;
+            for Index in 1 .. Concrete.Results.Count loop
+               if Nth_Signature_Result (Of_Unit, Provider.Signature, Index)
+                 /= Nth_Signature_Result (Of_Unit, Provider.Dispatch, Index)
+               then
+                  return False;
+               end if;
+            end loop;
+            for Index in 1 .. Concrete.Sources.Count loop
+               if Of_Unit.Return_Sources (Concrete.Sources.First + Index)
+                 /= Of_Unit.Return_Sources (Dispatch.Sources.First + Index)
+               then
+                  return False;
+               end if;
+            end loop;
+         end;
+         return True;
+      end Dispatch_Agrees;
+
+      --  Callable identities remain semantic types.  A function pointer
+      --  crossing C names a fixed C prototype, never the Landin convention
+      --  or a failure channel.  Every signature is checked independently
+      --  after all of its runs have been proved, so callback cycles do not
+      --  turn this predicate into recursive signature traversal.
+      function Is_C_Callback (Signature : Signature_Id) return Boolean
+        is (Holds (Of_Unit, Signature)
+            and then Signature_Uses_C_ABI (Of_Unit, Signature)
+            and then not Signature_Is_Variadic (Of_Unit, Signature)
+            and then Signature_Errors (Of_Unit, Signature) = No_Atom_Set);
+
+      function Is_C_Field
+        (Shape : Field_Shape; Budget : Natural) return Boolean;
+
+      function Is_C_Field
+        (Shape : Field_Shape; Budget : Natural) return Boolean
+      is
+      begin
+         if Budget = 0 or else Shape.Atoms /= No_Atom_Set then
+            return False;
+         end if;
+         case Shape.Kind is
+            when Scalar_Field_Shape =>
+               return Shape.Signature = No_Signature
+                 or else Is_C_Callback (Shape.Signature);
+            when Array_Field_Shape =>
+               return Shape.Length > 0
+                 and then Is_C_Field
+                   (Array_Element_Shape (Of_Unit, Shape), Budget - 1);
+            when Aggregate_Field_Shape =>
+               if not Has_Nominal_Shape (Of_Unit, Shape.Nominal)
+                 or else not Has_C_Layout (Of_Unit, Shape.Nominal)
+                 or else Aggregate_Field_Count (Of_Unit, Shape) = 0
+               then
+                  return False;
+               end if;
+               for Field in 1 .. Aggregate_Field_Count (Of_Unit, Shape) loop
+                  if not Is_C_Field
+                    (Nth_Aggregate_Field (Of_Unit, Shape, Field), Budget - 1)
+                  then
+                     return False;
+                  end if;
+               end loop;
+               return True;
+            when Variant_Field_Shape =>
+               return False;
+         end case;
+      end Is_C_Field;
+
+      function Is_C_Part (Part : Signature_Part) return Boolean;
+
+      function Is_C_Part (Part : Signature_Part) return Boolean is
+      begin
+         if Part.Convention /= In_Value or else Part.Atoms /= No_Atom_Set then
+            return False;
+         end if;
+         case Part.Kind is
+            when Landin.Types.Scalar_Name =>
+               return True;
+            when Landin.Types.Function_Value =>
+               return Is_C_Callback (Part.Signature);
+            when Landin.Types.Aggregate =>
+               return Has_Nominal_Shape (Of_Unit, Part.Nominal)
+                 and then Has_C_Layout (Of_Unit, Part.Nominal)
+                 and then Nominal_Field_Count (Of_Unit, Part.Nominal) > 0;
+            when others =>
+               return False;
+         end case;
+      end Is_C_Part;
+
+      --  C aggregate carriers are addresses logically, but an arbitrary
+      --  usize is not proof that the ABI may read or write a struct there.
+      --  Saved actuals use typed address slots; direct operands retain the
+      --  storage endpoint and subobject path checked by the normal walk.
+      function Address_Has_Nominal
+        (Item : Item_Id; Value : Value_Id; Nominal : Nominal_Type_Id)
+         return Boolean;
+
+      function Address_Has_Nominal
+        (Item : Item_Id; Value : Value_Id; Nominal : Nominal_Type_Id)
+         return Boolean
+      is
+         Shape : Field_Shape;
+         Length : Element_Total;
+         Bad : Fault_Kind;
+      begin
+         if Op_Of (Of_Unit, Item, Value) = Load then
+            declare
+               Slot : constant Slot_Id := Slot_Of (Of_Unit, Item, Value);
+            begin
+               return Is_Address (Of_Unit, Item, Slot)
+                 and then Address_Shape (Of_Unit, Item, Slot).Kind
+                   = Aggregate_Field_Shape
+                 and then Address_Shape (Of_Unit, Item, Slot).Nominal
+                   = Nominal;
+            end;
+         elsif Op_Of (Of_Unit, Item, Value) /= Storage_Address then
+            return False;
+         end if;
+         declare
+            Place : constant Storage :=
+              Destination_Of (Of_Unit, Item, Value);
+            Field : constant Natural :=
+              Element_Field_Of (Of_Unit, Item, Value);
+            Path : constant Path_Step_Array := Path_Of (Of_Unit, Item, Value);
+         begin
+            if Storage_Address_Has_Index (Of_Unit, Item, Value) then
+               Bad := Shape_Of
+                 (Item, Place, Field, Shape, Length, Nested => Path);
+               return Bad = Nothing_Wrong
+                 and then Shape.Kind = Aggregate_Field_Shape
+                 and then Shape.Nominal = Nominal;
+            elsif Field /= 0 or else Path'Length /= 0 then
+               return Root_Shape_Of (Item, Place, Field, Shape)
+                 and then Path_Is_Valid (Of_Unit, Shape, Path)
+                 and then Shape_At (Of_Unit, Shape, Path).Kind
+                   = Aggregate_Field_Shape
+                 and then Shape_At (Of_Unit, Shape, Path).Nominal = Nominal;
+            end if;
+            case Place.Kind is
+               when Module_Datum =>
+                  return Result_Of (Of_Unit, Place.Datum)
+                    = Landin.Types.Aggregate
+                    and then Nominal_Of (Of_Unit, Place.Datum) = Nominal;
+               when Frame_Slot =>
+                  return Is_Aggregate (Of_Unit, Item, Place.Slot)
+                    and then Nominal_Of (Of_Unit, Item, Place.Slot) = Nominal;
+               when Runtime_Address =>
+                  return Address_Shape (Of_Unit, Item, Place.Address).Kind
+                    = Aggregate_Field_Shape
+                    and then Address_Shape
+                      (Of_Unit, Item, Place.Address).Nominal = Nominal;
+            end case;
+         end;
+      end Address_Has_Nominal;
+
       function Source_Field_Count (Source : Aggregate_Source) return Natural
         is (case Source.Kind is
+               when Nominal_Aggregate_Source =>
+                  Nominal_Field_Count (Of_Unit, Source.Nominal),
                when Item_Aggregate_Source =>
                   Field_Count (Of_Unit, Source.Item),
                when Slot_Aggregate_Source =>
                   Slot_Field_Count (Of_Unit, Source.Item, Source.Slot),
                when Nested_Aggregate_Source =>
-                  Aggregate_Field_Count (Of_Unit, Source.Shape),
+                  Local_Field_Count (Source.Shape),
                when No_Aggregate_Source => 0);
 
       function Nth_Source_Field
         (Source : Aggregate_Source; Field : Positive) return Field_Shape
         is (case Source.Kind is
+               when Nominal_Aggregate_Source =>
+                  Nth_Nominal_Field (Of_Unit, Source.Nominal, Field),
                when Item_Aggregate_Source =>
                   Nth_Field_Shape (Of_Unit, Source.Item, Field),
                when Slot_Aggregate_Source =>
                   Nth_Slot_Field_Shape
                     (Of_Unit, Source.Item, Source.Slot, Field),
                when Nested_Aggregate_Source =>
-                  Nth_Aggregate_Field (Of_Unit, Source.Shape, Field),
+                  Nth_Local_Field (Source.Shape, Field),
                when No_Aggregate_Source => (others => <>));
 
       function Sources_Agree
@@ -1434,9 +1788,9 @@ package body Landin.IR.Verifier is
                if Bad /= Nothing_Wrong then
                   return Bad;
                end if;
-               for Field in 1 .. Aggregate_Field_Count (Of_Unit, Shape) loop
+               for Field in 1 .. Local_Field_Count (Shape) loop
                   Bad := Register_Shape
-                    (Nth_Aggregate_Field (Of_Unit, Shape, Field), Budget - 1);
+                    (Nth_Local_Field (Shape, Field), Budget - 1);
                   if Bad /= Nothing_Wrong then
                      return Bad;
                   end if;
@@ -1505,7 +1859,8 @@ package body Landin.IR.Verifier is
             and then Kind_Of (Of_Unit, Target) = Datum
             and then Result_Of (Of_Unit, Target)
               = Landin.Types.Fixed_Array
-            and then Array_Element (Of_Unit, Target) = Landin.Types.U8
+            and then Array_Element_Shape (Of_Unit, Target)
+              = Field_Shape'(Element => Landin.Types.U8, others => <>)
             and then Is_Read_Only (Of_Unit, Target));
 
       function Atom_Metadata_Agrees
@@ -1536,14 +1891,157 @@ package body Landin.IR.Verifier is
          return True;
       end Atom_Metadata_Is_Subset;
 
+      function Address_Agrees
+        (Item : Item_Id; Value : Value_Id; Shape : Field_Shape)
+         return Boolean;
+
+      function Indirect_Fault
+        (Item : Item_Id; Value : Value_Id) return Fault_Kind
+      is
+         Op : constant Opcode := Op_Of (Of_Unit, Item, Value);
+         Address : constant Value_Id :=
+           Nth_Operand (Of_Unit, Item, Value, 1);
+         Witness : constant Slot_Id :=
+           Indirect_Address_Slot (Of_Unit, Item, Value);
+         Scalar : constant Value_Id :=
+           (if Op = Load_Indirect then Value
+            else Nth_Operand (Of_Unit, Item, Value, 2));
+      begin
+         if Result_Of (Of_Unit, Item, Address) /= Landin.Types.Usize
+           or else Result_Of (Of_Unit, Item, Scalar)
+             not in Landin.Types.Scalar_Name
+         then
+            return Result_Disagrees;
+         elsif Signature_Of (Of_Unit, Item, Address) /= No_Signature
+           or else Atom_Set_Of (Of_Unit, Item, Address) /= No_Atom_Set
+         then
+            return Address_Value_Disagrees;
+         elsif Witness = No_Slot then
+            --  The legacy scalar reader has no callable type witness.  A
+            --  corruption hook must not turn raw bytes into a typed callee.
+            if Op = Load_Indirect
+              and then Signature_Of (Of_Unit, Item, Value) /= No_Signature
+            then
+               return Function_Value_Signature_Disagrees;
+            elsif Atom_Set_Of (Of_Unit, Item, Value) /= No_Atom_Set then
+               return Atom_Metadata_Disagrees;
+            end if;
+            declare
+               Shape : constant Field_Shape :=
+                 (Element => Landin.Types.Scalar_Name
+                    (Result_Of (Of_Unit, Item, Scalar)),
+                  Signature => Signature_Of (Of_Unit, Item, Scalar),
+                  Atoms => Atom_Set_Of (Of_Unit, Item, Scalar),
+                  Pointee => Pointee_Of (Of_Unit, Item, Scalar), others => <>);
+            begin
+               if Pointee_Of (Of_Unit, Item, Address) /= No_Pointee then
+                  if not Holds
+                    (Of_Unit, Pointee_Of (Of_Unit, Item, Address))
+                    or else not Same_Shape
+                      (Of_Unit, Shape, Pointee_Shape
+                         (Of_Unit, Pointee_Of (Of_Unit, Item, Address)))
+                  then
+                     return Address_Value_Disagrees;
+                  end if;
+               elsif Op_Of (Of_Unit, Item, Address) = Place_Address
+                 or else (Op_Of (Of_Unit, Item, Address) = Load
+                   and then Is_Address (Of_Unit, Item,
+                     Slot_Of (Of_Unit, Item, Address)))
+               then
+                  if not Address_Agrees (Item, Address, Shape) then
+                     return Address_Value_Disagrees;
+                  end if;
+               end if;
+            end;
+            return Nothing_Wrong;
+         elsif not Holds (Of_Unit, Item, Witness)
+           or else not Is_Address (Of_Unit, Item, Witness)
+           or else Address_Shape (Of_Unit, Item, Witness).Kind
+             /= Scalar_Field_Shape
+         then
+            return Runtime_Address_Is_Not_Valid;
+         elsif Op_Of (Of_Unit, Item, Address) /= Load
+           or else Slot_Of (Of_Unit, Item, Address) /= Witness
+         then
+            return Address_Value_Disagrees;
+         end if;
+         declare
+            Shape : constant Field_Shape :=
+              Address_Shape (Of_Unit, Item, Witness);
+         begin
+            if Result_Of (Of_Unit, Item, Scalar) /= Shape.Element then
+               return Result_Disagrees;
+            elsif not Function_Metadata_Agrees
+              (Shape.Signature, Signature_Of (Of_Unit, Item, Scalar))
+            then
+               return Function_Value_Signature_Disagrees;
+            elsif not Pointees_Agree
+              (Of_Unit, Shape.Pointee, Pointee_Of (Of_Unit, Item, Scalar))
+            then
+               return Address_Value_Disagrees;
+            elsif not Atom_Metadata_Agrees
+              (Shape.Atoms, Atom_Set_Of (Of_Unit, Item, Scalar))
+            then
+               return Atom_Metadata_Disagrees;
+            end if;
+         end;
+         return Nothing_Wrong;
+      end Indirect_Fault;
+
+      function Array_Part_Agrees
+        (Part : Signature_Part; Child : Field_Shape) return Boolean
+        is (Child.Element = Part.Element
+            and then Child.Nominal = Part.Nominal
+            and then
+              (if Part.Element_Shape = Field_Shape'(others => <>)
+               then Child.Kind = Aggregate_Field_Shape
+                 or else Child = Field_Shape'
+                   (Element => Part.Element, others => <>)
+               else Same_Shape (Of_Unit, Child, Part.Element_Shape)));
+
+      function Part_Agrees_With_Shape
+        (Part : Signature_Part; Shape : Field_Shape) return Boolean
+        is (case Part.Kind is
+               when Landin.Types.Scalar_Name =>
+                  Shape.Kind = Scalar_Field_Shape
+                  and then Shape.Element = Part.Kind
+                  and then Shape.Signature = No_Signature
+                  and then Pointees_Agree
+                    (Of_Unit, Part.Pointee, Shape.Pointee)
+                  and then Atom_Metadata_Agrees (Part.Atoms, Shape.Atoms),
+               when Landin.Types.Function_Value =>
+                  Shape.Kind = Scalar_Field_Shape
+                  and then Shape.Element = Landin.Types.Usize
+                  and then Holds (Of_Unit, Shape.Signature)
+                  and then Signatures_Agree
+                    (Of_Unit, Part.Signature, Shape.Signature),
+               when Landin.Types.Aggregate =>
+                  Shape.Kind = Aggregate_Field_Shape
+                  and then Shape.Nominal = Part.Nominal,
+               when Landin.Types.Fixed_Array =>
+                  Shape.Kind = Array_Field_Shape
+                  and then Shape.Length = Part.Length
+                  and then Array_Part_Agrees
+                    (Part, Array_Element_Shape (Of_Unit, Shape)),
+               when others => False);
+
       function Part_Agrees_With_Slot
         (Item : Item_Id; Part : Signature_Part; Slot : Slot_Id)
          return Boolean
-        is (case Part.Kind is
+        is (if Part.Convention = Inout_Place
+            then Is_Address (Of_Unit, Item, Slot)
+              and then Same_Shape
+                (Of_Unit, Pointee_Shape (Of_Unit, Part.Pointee),
+                 Address_Shape (Of_Unit, Item, Slot))
+            else not Is_Address (Of_Unit, Item, Slot)
+              and then (case Part.Kind is
                when Landin.Types.Scalar_Name =>
                   not Is_Aggregate (Of_Unit, Item, Slot)
                   and then not Is_Array (Of_Unit, Item, Slot)
                   and then Type_Of (Of_Unit, Item, Slot) = Part.Kind
+                  and then Signature_Of (Of_Unit, Item, Slot) = No_Signature
+                  and then Pointees_Agree
+                    (Of_Unit, Part.Pointee, Pointee_Of (Of_Unit, Item, Slot))
                   and then Atom_Metadata_Agrees
                     (Part.Atoms, Atom_Set_Of (Of_Unit, Item, Slot)),
                when Landin.Types.Aggregate =>
@@ -1553,18 +2051,8 @@ package body Landin.IR.Verifier is
                   Is_Array (Of_Unit, Item, Slot)
                   and then Slot_Array_Length (Of_Unit, Item, Slot)
                              = Part.Length
-                  and then Slot_Array_Element (Of_Unit, Item, Slot)
-                             = Part.Element
-                  and then Slot_Array_Element_Shape
-                    (Of_Unit, Item, Slot).Nominal = Part.Nominal
-                  and then
-                    ((Part.Element_Shape = Field_Shape'(others => <>)
-                      and then Slot_Array_Element_Shape
-                        (Of_Unit, Item, Slot).Kind
-                          in Scalar_Field_Shape | Aggregate_Field_Shape)
-                     or else Same_Shape
-                       (Of_Unit, Slot_Array_Element_Shape
-                          (Of_Unit, Item, Slot), Part.Element_Shape)),
+                  and then Array_Part_Agrees
+                    (Part, Slot_Array_Element_Shape (Of_Unit, Item, Slot)),
                when Landin.Types.Function_Value =>
                   not Is_Aggregate (Of_Unit, Item, Slot)
                   and then not Is_Array (Of_Unit, Item, Slot)
@@ -1575,7 +2063,7 @@ package body Landin.IR.Verifier is
                   and then Signatures_Agree
                     (Of_Unit, Part.Signature,
                      Signature_Of (Of_Unit, Item, Slot)),
-               when others => False);
+               when others => False));
 
       function Results_Agree_With_Slot
         (Item : Item_Id; Signature : Signature_Id; Slot : Slot_Id)
@@ -1590,52 +2078,592 @@ package body Landin.IR.Verifier is
             return False;
          end if;
          for Index in 1 .. Count loop
-            declare
-               Part : constant Signature_Part :=
-                 Nth_Signature_Result (Of_Unit, Signature, Index);
-               Shape : constant Field_Shape :=
-                 Nth_Slot_Field_Shape (Of_Unit, Item, Slot, Index);
-               Agrees : Boolean;
-            begin
-               case Part.Kind is
-                  when Landin.Types.Scalar_Name =>
-                     Agrees := Shape.Kind = Scalar_Field_Shape
-                       and then Shape.Element = Part.Kind
-                       and then Shape.Signature = No_Signature;
-                  when Landin.Types.Function_Value =>
-                     Agrees := Shape.Kind = Scalar_Field_Shape
-                       and then Shape.Element = Landin.Types.Usize
-                       and then Holds (Of_Unit, Shape.Signature)
-                       and then Signatures_Agree
-                         (Of_Unit, Part.Signature, Shape.Signature);
-                  when Landin.Types.Aggregate =>
-                     Agrees := Shape.Kind = Aggregate_Field_Shape
-                       and then Shape.Nominal = Part.Nominal;
-                  when Landin.Types.Fixed_Array =>
-                     Agrees := Shape.Kind = Array_Field_Shape
-                       and then Shape.Length = Part.Length
-                       and then
-                         (if Part.Nominal = No_Nominal_Type
-                          then not Array_Element_Is_Aggregate
-                            (Of_Unit, Shape)
-                            and then Shape.Element = Part.Element
-                          else Array_Element_Is_Aggregate (Of_Unit, Shape)
-                            and then Shape.Nominal = Part.Nominal);
-                  when others =>
-                     Agrees := False;
-               end case;
-               if not Agrees then
-                  return False;
-               end if;
-            end;
+            if not Part_Agrees_With_Shape
+              (Nth_Signature_Result (Of_Unit, Signature, Index),
+               Nth_Slot_Field_Shape (Of_Unit, Item, Slot, Index))
+            then
+               return False;
+            end if;
          end loop;
          return True;
       end Results_Agree_With_Slot;
+
+      function Address_Agrees
+        (Item : Item_Id; Value : Value_Id; Shape : Field_Shape)
+         return Boolean
+      is
+         Op : constant Opcode := Op_Of (Of_Unit, Item, Value);
+         Child : Field_Shape;
+         Count : Element_Total;
+      begin
+         case Op is
+            when Load =>
+               return Is_Address
+                 (Of_Unit, Item, Slot_Of (Of_Unit, Item, Value))
+                 and then Same_Shape
+                   (Of_Unit, Shape, Address_Shape
+                      (Of_Unit, Item, Slot_Of (Of_Unit, Item, Value)));
+            when Pointer_Address =>
+               return Holds (Of_Unit, Pointee_Of (Of_Unit, Item, Value))
+                 and then Same_Shape
+                   (Of_Unit, Shape, Pointee_Shape
+                      (Of_Unit, Pointee_Of (Of_Unit, Item, Value)));
+            when Slice_Address =>
+               return Same_Shape
+                 (Of_Unit, Shape, Slice_Element_Shape (Of_Unit, Item, Value));
+            when Place_Address | Storage_Address =>
+               if Op = Storage_Address
+                 and then Storage_Address_Has_Index (Of_Unit, Item, Value)
+               then
+                  return Shape_Of
+                    (Item, Destination_Of (Of_Unit, Item, Value),
+                     Element_Field_Of (Of_Unit, Item, Value), Child, Count,
+                     Nested => Path_Of (Of_Unit, Item, Value)) = Nothing_Wrong
+                    and then Same_Shape (Of_Unit, Child, Shape);
+               end if;
+               return Stored_Shape_Agrees
+                 (Item, Destination_Of (Of_Unit, Item, Value),
+                  Element_Field_Of (Of_Unit, Item, Value),
+                  Path_Of (Of_Unit, Item, Value), Shape);
+            when others =>
+               return False;
+         end case;
+      end Address_Agrees;
+
+      --  Marked dispatch erases only self, not the storage addressed by a
+      --  hidden result or another shaped parameter. Parameter zero denotes
+      --  the hidden result. Nominal bodies and operand definitions have been
+      --  verified before this walk; an anonymous result tuple instead keeps
+      --  its actual field source. No synthetic shape is added to the unit.
+      function Erased_Carrier_Agrees
+        (Item      : Item_Id;
+         Value     : Value_Id;
+         Signature : Signature_Id;
+         Parameter : Natural := 0) return Boolean;
+
+      function Erased_Carrier_Agrees
+        (Item      : Item_Id;
+         Value     : Value_Id;
+         Signature : Signature_Id;
+         Parameter : Natural := 0) return Boolean
+      is
+         Op : constant Opcode := Op_Of (Of_Unit, Item, Value);
+         Shape : Field_Shape;
+         Fields : Aggregate_Source := (others => <>);
+         Length : Element_Total;
+      begin
+         case Op is
+            when Load =>
+               if not Is_Address
+                 (Of_Unit, Item, Slot_Of (Of_Unit, Item, Value))
+               then
+                  return False;
+               end if;
+               Shape := Address_Shape
+                 (Of_Unit, Item, Slot_Of (Of_Unit, Item, Value));
+            when Pointer_Address =>
+               if not Holds (Of_Unit, Pointee_Of (Of_Unit, Item, Value)) then
+                  return False;
+               end if;
+               Shape := Pointee_Shape
+                 (Of_Unit, Pointee_Of (Of_Unit, Item, Value));
+            when Slice_Address =>
+               Shape := Slice_Element_Shape (Of_Unit, Item, Value);
+            when Place_Address | Storage_Address =>
+               declare
+                  Place : constant Storage :=
+                    Destination_Of (Of_Unit, Item, Value);
+                  Field : constant Natural :=
+                    Element_Field_Of (Of_Unit, Item, Value);
+                  Path : constant Path_Step_Array :=
+                    Path_Of (Of_Unit, Item, Value);
+               begin
+                  if Op = Storage_Address
+                    and then Storage_Address_Has_Index (Of_Unit, Item, Value)
+                  then
+                     if Shape_Of
+                       (Item, Place, Field, Shape, Length, Nested => Path)
+                         /= Nothing_Wrong
+                     then
+                        return False;
+                     end if;
+                  elsif Field = 0 and then Path'Length = 0
+                    and then Is_Whole_Aggregate (Item, Place)
+                  then
+                     case Place.Kind is
+                        when Module_Datum =>
+                           Fields :=
+                             (Kind => Item_Aggregate_Source,
+                              Item => Place.Datum,
+                              Nominal => Nominal_Of (Of_Unit, Place.Datum),
+                              others => <>);
+                        when Frame_Slot =>
+                           Fields :=
+                             (Kind => Slot_Aggregate_Source,
+                              Item => Item, Slot => Place.Slot,
+                              Nominal => Nominal_Of
+                                (Of_Unit, Item, Place.Slot), others => <>);
+                        when Runtime_Address =>
+                           Shape := Address_Shape
+                             (Of_Unit, Item, Place.Address);
+                     end case;
+                     if Fields.Kind /= No_Aggregate_Source then
+                        Shape := (Kind => Aggregate_Field_Shape,
+                                  Nominal => Fields.Nominal, others => <>);
+                     end if;
+                  else
+                     if not Root_Shape_Of (Item, Place, Field, Shape)
+                       or else not Path_Is_Valid (Of_Unit, Shape, Path)
+                     then
+                        return False;
+                     end if;
+                     Shape := Shape_At (Of_Unit, Shape, Path);
+                  end if;
+               end;
+            when others =>
+               return False;
+         end case;
+
+         if Parameter > 0 then
+            return Part_Agrees_With_Shape
+              (Nth_Signature_Parameter (Of_Unit, Signature, Parameter), Shape);
+         elsif Signature_Result_Count (Of_Unit, Signature) = 1 then
+            return Part_Agrees_With_Shape
+              (Nth_Signature_Result (Of_Unit, Signature, 1), Shape);
+         end if;
+
+         if Shape.Kind /= Aggregate_Field_Shape then
+            return False;
+         elsif Fields.Kind = No_Aggregate_Source then
+            Fields := (Kind => Nested_Aggregate_Source, Shape => Shape,
+                       Nominal => Shape.Nominal, others => <>);
+         end if;
+         if Source_Field_Count (Fields)
+           /= Signature_Result_Count (Of_Unit, Signature)
+         then
+            return False;
+         end if;
+         for Index in 1 .. Source_Field_Count (Fields) loop
+            if not Part_Agrees_With_Shape
+              (Nth_Signature_Result (Of_Unit, Signature, Index),
+               Nth_Source_Field (Fields, Index))
+            then
+               return False;
+            end if;
+         end loop;
+         return True;
+      end Erased_Carrier_Agrees;
+
+      function Is_Erased_Function
+        (Item : Item_Id; Value : Value_Id) return Boolean
+        is (Holds (Of_Unit, Item, Value)
+            and then Op_Of (Of_Unit, Item, Value) = Evidence_Function
+            and then Holds (Of_Unit, Evidence_Of (Of_Unit, Item, Value))
+            and then Evidence_Is_Erased
+              (Of_Unit, Evidence_Of (Of_Unit, Item, Value)));
+
+      --  An annotation cannot turn untyped bytes into a pointer. Storage and
+      --  signatures supply load/call metadata; an addr supplies its actual
+      --  place shape. Only checked integer construction introduces a new
+      --  reached type without such a source. Zero denotes the optional empty
+      --  representation, not a nonnull or dereferenceability promise.
+      function Pointer_Fault
+        (Item : Item_Id; Value : Value_Id) return Fault_Kind
+      is
+         Code : constant Instruction := Of_Unit.Code
+           (Of_Unit.Items (Positive (Item)).Values.First + Positive (Value));
+         Expected : constant Pointee_Id := Pointee_Of (Of_Unit, Item, Value);
+         Source : Value_Id;
+      begin
+         if Code.Pointee /= No_Pointee
+           and then (not Holds (Of_Unit, Code.Pointee)
+             or else Code.Result /= Landin.Types.Usize
+             or else Signature_Of (Of_Unit, Item, Value) /= No_Signature
+             or else Atom_Set_Of (Of_Unit, Item, Value) /= No_Atom_Set
+             or else not Pointees_Agree
+               (Of_Unit, Code.Pointee, Expected))
+         then
+            return Address_Value_Disagrees;
+         end if;
+         if Code.Op = Pointer_Address then
+            Source := Nth_Operand (Of_Unit, Item, Value, 1);
+            if not Holds (Of_Unit, Expected)
+              or else not Pointees_Agree
+                (Of_Unit, Expected, Pointee_Of (Of_Unit, Item, Source))
+            then
+               return Address_Value_Disagrees;
+            end if;
+         end if;
+         if Expected /= No_Pointee
+           and then Code.Op not in Store | Store_Datum | Store_Field
+             | Store_Element | Store_Variant_Field | Store_Indirect
+         then
+            case Code.Op is
+               when Load =>
+                  if Is_Address (Of_Unit, Item, Code.Slot)
+                    and then not Address_Agrees
+                      (Item, Value, Pointee_Shape (Of_Unit, Expected))
+                  then
+                     return Address_Value_Disagrees;
+                  end if;
+               when Load_Datum | Load_Field | Load_Element
+                  | Load_Variant_Field | Call | Indirect_Call =>
+                  null;
+               when Load_Indirect =>
+                  if Code.Slot = No_Slot then
+                     return Address_Value_Disagrees;
+                  end if;
+               when Pointer_Address =>
+                  null;
+               when Place_Address | Storage_Address | Slice_Address =>
+                  if not Address_Agrees
+                    (Item, Value, Pointee_Shape (Of_Unit, Expected))
+                  then
+                     return Address_Value_Disagrees;
+                  end if;
+               when Range_Check =>
+                  Source := Nth_Operand (Of_Unit, Item, Value, 1);
+                  if not Pointees_Agree
+                    (Of_Unit, Expected, Pointee_Of (Of_Unit, Item, Source))
+                    and then
+                      (Op_Of (Of_Unit, Item, Source) /= Conversion
+                       or else Result_Of (Of_Unit, Item, Source)
+                         /= Landin.Types.Usize
+                       or else Result_Of (Of_Unit, Item,
+                         Nth_Operand (Of_Unit, Item, Source, 1))
+                           not in Landin.Types.Integer_Name
+                       or else Code.Lower_Bound /= 1
+                       or else Code.Upper_Bound < 1
+                       or else (Check_Image and then Code.Upper_Bound
+                         /= Landin.Types.Folded
+                           (Landin.Targets.Maximum_Object_Size (Facts))))
+                  then
+                     return Address_Value_Disagrees;
+                  end if;
+               when Number =>
+                  if Code.Number /= 0 or else Code.Negated then
+                     return Address_Value_Disagrees;
+                  end if;
+               when others =>
+                  return Address_Value_Disagrees;
+            end case;
+         end if;
+         if Code.Op in Store | Store_Datum | Store_Field | Store_Element
+           | Store_Variant_Field | Store_Indirect
+           and then Expected /= No_Pointee
+         then
+            Source := Nth_Operand
+              (Of_Unit, Item, Value,
+               (if Code.Op in Store_Element | Store_Indirect then 2 else 1));
+            if not Pointees_Agree
+              (Of_Unit, Expected, Pointee_Of (Of_Unit, Item, Source))
+            then
+               return Address_Value_Disagrees;
+            end if;
+         elsif Code.Op = Leave and then Code.Args > 0
+           and then Pointee_Of (Of_Unit, Item) /= No_Pointee
+           and then not Pointees_Agree
+             (Of_Unit, Pointee_Of (Of_Unit, Item), Pointee_Of
+                (Of_Unit, Item, Nth_Operand (Of_Unit, Item, Value, 1)))
+         then
+            return Address_Value_Disagrees;
+         end if;
+         return Nothing_Wrong;
+      end Pointer_Fault;
+
+      --  This must analysis is limited to proof-carrying local addresses and
+      --  source pointer scalars. It does not claim to initialise memory they
+      --  point at, or repeat the source checker's aggregate/element analysis.
+      --  Its bounds count source slots and blocks, never target elements.
+      function Pointer_Provenance (Item : Item_Id) return Fault
+      is
+         Blocks : constant Natural := Block_Count (Of_Unit, Item);
+         Slots : constant Natural := Slot_Count (Of_Unit, Item);
+         type Slot_State is array (1 .. Slots) of Boolean;
+         type Block_State is array (1 .. Blocks) of Slot_State;
+         Entry_State : Slot_State := [others => False];
+         Outputs : Block_State := [others => [others => True]];
+         Inputs : Block_State := [others => [others => True]];
+         Changed : Boolean;
+         Live : array (1 .. Blocks) of Boolean := [others => False];
+
+         function Edge (From, To : Positive) return Boolean;
+
+         function Edge (From, To : Positive) return Boolean is
+            Last : constant Value_Id := Nth_Value
+              (Of_Unit, Item, Block_Id (From),
+               Length (Of_Unit, Item, Block_Id (From)));
+         begin
+            return (Op_Of (Of_Unit, Item, Last) in Jump | Branch
+                    and then Target_Of (Of_Unit, Item, Last) = Block_Id (To))
+              or else (Op_Of (Of_Unit, Item, Last) = Branch
+                and then Alternative_Of (Of_Unit, Item, Last) = Block_Id (To));
+         end Edge;
+
+         function Tracked (Slot : Slot_Id) return Boolean
+           is (Slot /= No_Slot
+               and then (Is_Address (Of_Unit, Item, Slot)
+                 or else Pointee_Of (Of_Unit, Item, Slot) /= No_Pointee));
+      begin
+         for P in 1 .. Parameter_Count (Of_Unit, Item) loop
+            if Tracked (Nth_Parameter (Of_Unit, Item, P))
+              and then not Holds (Of_Unit, Signature_Of (Of_Unit, Item))
+            then
+               return (Kind => Routine_Signature_Disagrees,
+                       Item => Item, others => <>);
+            end if;
+            Entry_State (Positive (Nth_Parameter (Of_Unit, Item, P))) := True;
+         end loop;
+         Live (1) := True;
+         loop
+            Changed := False;
+            for B in 1 .. Blocks loop
+               if Live (B) then
+                  for Next in 1 .. Blocks loop
+                     if not Live (Next) and then Edge (B, Next) then
+                        Live (Next) := True;
+                        Changed := True;
+                     end if;
+                  end loop;
+               end if;
+            end loop;
+            exit when not Changed;
+         end loop;
+         for B in 1 .. Blocks loop
+            if not Live (B) then
+               return (Kind => Block_Unreachable, Item => Item,
+                       Block => Block_Id (B), others => <>);
+            end if;
+         end loop;
+         loop
+            Changed := False;
+            for B in 1 .. Blocks loop
+               declare
+                  State : Slot_State :=
+                    (if B = 1 then Entry_State else [others => True]);
+               begin
+                  if B /= 1 then
+                     for Prior in 1 .. Blocks loop
+                        if Edge (Prior, B) then
+                           for S in State'Range loop
+                              State (S) := State (S) and Outputs (Prior) (S);
+                           end loop;
+                        end if;
+                     end loop;
+                  end if;
+                  Inputs (B) := State;
+                  for P in 1 .. Length (Of_Unit, Item, Block_Id (B)) loop
+                     declare
+                        V : constant Value_Id := Nth_Value
+                          (Of_Unit, Item, Block_Id (B), P);
+                     begin
+                        if Op_Of (Of_Unit, Item, V) = Store then
+                           State (Positive (Slot_Of (Of_Unit, Item, V))) :=
+                             True;
+                        end if;
+                     end;
+                  end loop;
+                  if State /= Outputs (B) then
+                     Outputs (B) := State;
+                     Changed := True;
+                  end if;
+               end;
+            end loop;
+            exit when not Changed;
+         end loop;
+         for B in 1 .. Blocks loop
+            declare
+               State : Slot_State := Inputs (B);
+               function Missing (Place : Storage) return Boolean
+                 is (case Place.Kind is
+                        when Runtime_Address =>
+                          not Holds (Of_Unit, Item, Place.Address)
+                          or else not Is_Address
+                            (Of_Unit, Item, Place.Address)
+                          or else not State (Positive (Place.Address)),
+                        when Frame_Slot =>
+                          Holds (Of_Unit, Item, Place.Slot)
+                          and then Is_Address (Of_Unit, Item, Place.Slot),
+                        when Module_Datum => False);
+            begin
+               for P in 1 .. Length (Of_Unit, Item, Block_Id (B)) loop
+                  declare
+                     V : constant Value_Id := Nth_Value
+                       (Of_Unit, Item, Block_Id (B), P);
+                     Code : constant Instruction := Of_Unit.Code
+                       (Of_Unit.Items (Positive (Item)).Values.First
+                        + Positive (V));
+                     Bad : constant Fault_Kind := Pointer_Fault (Item, V);
+                  begin
+                     if Bad /= Nothing_Wrong then
+                        return (Bad, Item, Block_Id (B), V);
+                     elsif Missing (Code.Source) or else Missing
+                       (Code.Destination)
+                       or else (Code.Op in Load | Load_Field | Store_Field
+                         | Load_Element | Store_Element | Load_Indirect
+                         | Store_Indirect
+                         and then Tracked (Code.Slot)
+                         and then not State (Positive (Code.Slot)))
+                     then
+                        return (Address_Value_Disagrees,
+                                Item, Block_Id (B), V);
+                     end if;
+                     if Code.Op = Store then
+                        State (Positive (Code.Slot)) := True;
+                     end if;
+                  end;
+               end loop;
+            end;
+         end loop;
+         return Sound;
+      end Pointer_Provenance;
 
    begin
       if not Is_Prepared (Of_Unit) then
          return (Kind => Unprepared_Unit, others => <>);
       end if;
+
+      --  Prove storage bounds and references before shape accessors can
+      --  consult incidental storage or routine entry parameters.  Contracts
+      --  on those accessors are not a release-build validation boundary.
+      for Which in 1 .. Item_Count (Of_Unit) loop
+         declare
+            Held : constant Item_Record := Of_Unit.Items (Which);
+            Id : constant Item_Id := Item_Id (Which);
+         begin
+            if not Run_Fits (Held.Image, Natural (Of_Unit.Images.Length))
+              or else not Run_Fits
+                (Held.Aggregate_Images,
+                 Natural (Of_Unit.Aggregate_Images.Length))
+            then
+               return (Kind => Item_Runs_Overlap, Item => Id, others => <>);
+            end if;
+            if not Run_Fits (Held.Slots, Natural (Of_Unit.Slots.Length))
+              or else not Run_Fits
+                (Held.Parameters, Natural (Of_Unit.Parameters.Length))
+              or else not Run_Fits
+                (Held.Blocks, Natural (Of_Unit.Blocks.Length))
+              or else not Run_Fits
+                (Held.Values, Natural (Of_Unit.Code.Length))
+              or else not Run_Fits
+                (Held.Fields, Natural (Of_Unit.Fields.Length))
+            then
+               return (Kind => Item_Runs_Overlap, Item => Id, others => <>);
+            end if;
+            if (not Held.Has_Image
+                and then (Held.Image.Count /= 0
+                  or else Held.Aggregate_Images.Count /= 0
+                  or else Held.Repeated_Image or else Held.Slice_Image))
+              or else (Held.Has_Image
+                and then (Held.Kind /= Datum
+                  or else Held.Result not in
+                    Landin.Types.Aggregate | Landin.Types.Fixed_Array))
+              or else (Held.Result /= Landin.Types.Aggregate
+                and then Held.Fields.Count /= 0)
+              or else (Held.Repeated_Image
+                and then (Held.Result /= Landin.Types.Fixed_Array
+                  or else Held.Aggregate_Images.Count /= 0
+                  or else Held.Slice_Image
+                  or else Held.Image.Count = 0
+                  or else Element_Total (Held.Image.Count - 1)
+                    >= Held.Length))
+              or else (Held.Slice_Image
+                and then (Held.Result /= Landin.Types.Fixed_Array
+                  or else Held.Aggregate_Images.Count /= 0
+                  or else Held.Image.Count /= 0))
+            then
+               return (Kind => Array_Image_Length_Disagrees,
+                       Item => Id, others => <>);
+            end if;
+            for Index in 1 .. Held.Parameters.Count loop
+               declare
+                  Slot : constant Slot_Id :=
+                    Of_Unit.Parameters (Held.Parameters.First + Index);
+               begin
+                  if not Holds (Of_Unit, Id, Slot) then
+                     return (Kind => Slot_Out_Of_Range,
+                             Item => Id, others => <>);
+                  end if;
+               end;
+            end loop;
+            for Index in 1 .. Held.Blocks.Count loop
+               declare
+                  Block : constant Block_Record :=
+                    Of_Unit.Blocks (Held.Blocks.First + Index);
+               begin
+                  if not Run_Fits
+                    ((First => Block.First_Value, Count => Block.Values),
+                     Natural (Of_Unit.Code.Length))
+                    or else (Block.Values > 0
+                      and then (Block.First_Value < Held.Values.First
+                        or else Block.First_Value - Held.Values.First
+                          > Held.Values.Count
+                        or else Block.Values > Held.Values.Count
+                          - (Block.First_Value - Held.Values.First)))
+                  then
+                     return (Kind => Item_Runs_Overlap,
+                             Item => Id, others => <>);
+                  end if;
+               end;
+            end loop;
+         end;
+      end loop;
+      for Slot of Of_Unit.Slots loop
+         if not Run_Fits (Slot.Fields, Natural (Of_Unit.Slot_Fields.Length))
+         then
+            return (Kind => Item_Runs_Overlap, others => <>);
+         end if;
+      end loop;
+      for Code of Of_Unit.Code loop
+         if not Run_Fits
+           ((First => Code.First_Arg, Count => Code.Args),
+            Natural (Of_Unit.Operands.Length))
+         then
+            return (Kind => Operand_Runs_Overlap, others => <>);
+         elsif not Run_Fits
+           (Code.Variadic_Types, Natural (Of_Unit.Signature_Parts.Length))
+         then
+            return (Kind => Signature_Runs_Overlap, others => <>);
+         elsif Code.Variadic_Types.Count /= 0 then
+            --  The baseline transports promoted scalar actual kinds.  A
+            --  descriptor run must not silently enable aggregate transport
+            --  before lowering and the backend consume it together.
+            return (Kind => Signature_Part_Malformed, others => <>);
+         elsif not Run_Fits (Code.Nested, Natural (Of_Unit.Paths.Length))
+           or else not Run_Fits
+             (Code.Source_Nested, Natural (Of_Unit.Paths.Length))
+           or else not Run_Fits
+             (Code.Below_Element, Natural (Of_Unit.Paths.Length))
+           or else not Run_Fits
+             ((First => Code.First_Measurement_Field,
+               Count => Code.Measurement_Field_Total),
+              Natural (Of_Unit.Measurement_Fields.Length))
+         then
+            return (Kind => Field_Shape_Malformed, others => <>);
+         end if;
+      end loop;
+
+      --  Canonical bodies can be reached from signature element shapes, so
+      --  prove all registry runs before validating even the first signature.
+      if Natural (Of_Unit.Nominal_Shapes.Length)
+        /= Nominal_Type_Count (Of_Unit)
+      then
+         return (Kind => Nominal_Metadata_Malformed, others => <>);
+      end if;
+      for Position in 1 .. Nominal_Type_Count (Of_Unit) loop
+         declare
+            Nominal : constant Nominal_Type_Id :=
+              Nth_Nominal_Type (Of_Unit, Position);
+         begin
+            if Has_Nominal_Shape (Of_Unit, Nominal)
+              and then not Aggregate_Field_Run_Is_Valid
+                (Of_Unit, (Kind => Aggregate_Field_Shape,
+                           Nominal => Nominal, others => <>))
+            then
+               return (Kind => Nominal_Metadata_Malformed, others => <>);
+            end if;
+         end;
+      end loop;
 
       --  [0630]/[0640]: sets partition one declaration-identity vector.
       --  Validate it before a signature, slot or instruction asks membership.
@@ -1781,6 +2809,284 @@ package body Landin.IR.Verifier is
          end if;
       end;
 
+      --  Canonical nominal bodies exist independently of storage.  This
+      --  includes imported-only types, which have no result or parameter
+      --  slots from which a backend could recover an ABI classification.
+      for Position in 1 .. Nominal_Type_Count (Of_Unit) loop
+         declare
+            Nominal : constant Nominal_Type_Id :=
+              Nth_Nominal_Type (Of_Unit, Position);
+         begin
+            if Has_Nominal_Shape (Of_Unit, Nominal) then
+               for Field in 1 .. Nominal_Field_Count (Of_Unit, Nominal) loop
+                  if Field_Shape_Is_Malformed
+                    (Nth_Nominal_Field (Of_Unit, Nominal, Field),
+                     Aggregate_Allowed => True)
+                  then
+                     return (Kind => Field_Shape_Malformed, others => <>);
+                  end if;
+               end loop;
+               Canonical_Nominals (Position) :=
+                 (Kind => Nominal_Aggregate_Source,
+                  Nominal => Nominal, others => <>);
+            elsif Has_C_Layout (Of_Unit, Nominal) then
+               return (Kind => Nominal_Metadata_Malformed, others => <>);
+            end if;
+         end;
+      end loop;
+
+      for Shape of Of_Unit.Pointees loop
+         if Field_Shape_Is_Malformed (Shape, Aggregate_Allowed => True) then
+            return (Kind => Field_Shape_Malformed, others => <>);
+         end if;
+      end loop;
+
+      --  Callable/array recursion is structural, unlike a nominal identity
+      --  in a signature part.  Prove its graph acyclic once, before equality
+      --  is used by canonical registration, relocations or instructions.
+      declare
+         type Visit_State is (Unseen, Active, Complete);
+         Seen : array (1 .. Signature_Count (Of_Unit)) of Visit_State :=
+           [others => Unseen];
+
+         Pointers : array (1 .. Pointee_Count (Of_Unit)) of Visit_State :=
+           [others => Unseen];
+
+         function Visit (Signature : Signature_Id) return Boolean;
+         function Visit_Pointer (Pointee : Pointee_Id) return Boolean;
+         function Visit_Shape (Shape : Field_Shape) return Boolean;
+         function Visit_Part (Part : Signature_Part) return Boolean;
+
+         function Visit_Shape (Shape : Field_Shape) return Boolean is
+         begin
+            case Shape.Kind is
+               when Scalar_Field_Shape =>
+                  return
+                    (Shape.Signature = No_Signature
+                     or else Visit (Shape.Signature))
+                    and then Visit_Pointer (Shape.Pointee);
+               when Array_Field_Shape =>
+                  return Visit_Shape (Array_Element_Shape (Of_Unit, Shape));
+               when Aggregate_Field_Shape =>
+                  for Field in 1 .. Local_Field_Count (Shape) loop
+                     if not Visit_Shape (Nth_Local_Field (Shape, Field)) then
+                        return False;
+                     end if;
+                  end loop;
+               when Variant_Field_Shape =>
+                  for Which in 1 .. Shape.Cases loop
+                     for Field in
+                       1 .. Variant_Case_Field_Count (Of_Unit, Shape, Which)
+                     loop
+                        if not Visit_Shape
+                          (Nth_Variant_Case_Field
+                             (Of_Unit, Shape, Which, Field))
+                        then
+                           return False;
+                        end if;
+                     end loop;
+                  end loop;
+            end case;
+            return True;
+         end Visit_Shape;
+
+         function Visit_Part (Part : Signature_Part) return Boolean
+           is (Visit_Pointer (Part.Pointee)
+               and then (case Part.Kind is
+                  when Landin.Types.Function_Value => Visit (Part.Signature),
+                  when Landin.Types.Fixed_Array =>
+                     Visit_Shape (Part.Element_Shape),
+                  when others => True));
+
+         function Visit_Pointer (Pointee : Pointee_Id) return Boolean is
+         begin
+            if Pointee = No_Pointee then
+               return True;
+            elsif Pointers (Positive (Pointee)) = Active then
+               return False;
+            elsif Pointers (Positive (Pointee)) = Complete then
+               return True;
+            end if;
+            Pointers (Positive (Pointee)) := Active;
+            --  A nominal referent is an identity edge, not by-value layout.
+            --  Its canonical fields were checked independently above.
+            if Pointee_Shape (Of_Unit, Pointee).Kind
+              /= Aggregate_Field_Shape
+              and then not Visit_Shape (Pointee_Shape (Of_Unit, Pointee))
+            then
+               return False;
+            end if;
+            Pointers (Positive (Pointee)) := Complete;
+            return True;
+         end Visit_Pointer;
+
+         function Visit (Signature : Signature_Id) return Boolean is
+         begin
+            if Seen (Positive (Signature)) = Active then
+               return False;
+            elsif Seen (Positive (Signature)) = Complete then
+               return True;
+            end if;
+            Seen (Positive (Signature)) := Active;
+            for Index in 1 .. Signature_Parameter_Count
+              (Of_Unit, Signature)
+            loop
+               if not Visit_Part
+                 (Nth_Signature_Parameter (Of_Unit, Signature, Index))
+               then
+                  return False;
+               end if;
+            end loop;
+            for Index in 1 .. Signature_Result_Count (Of_Unit, Signature) loop
+               if not Visit_Part
+                 (Nth_Signature_Result (Of_Unit, Signature, Index))
+               then
+                  return False;
+               end if;
+            end loop;
+            Seen (Positive (Signature)) := Complete;
+            return True;
+         end Visit;
+      begin
+         for Position in 1 .. Signature_Count (Of_Unit) loop
+            if not Visit (Signature_Id (Position)) then
+               return (Kind => Signature_Part_Malformed, others => <>);
+            end if;
+         end loop;
+         for Position in 1 .. Pointee_Count (Of_Unit) loop
+            if not Visit_Pointer (Pointee_Id (Position)) then
+               return (Kind => Field_Shape_Malformed, others => <>);
+            end if;
+         end loop;
+      end;
+
+      for Slot of Of_Unit.Slots loop
+         if Holds (Of_Unit, Slot.Signature)
+           and then Signature_Has_Erased_Self (Of_Unit, Slot.Signature)
+         then
+            return (Kind => Erased_Dispatch_Malformed, others => <>);
+         end if;
+         if Slot.Pointee /= No_Pointee
+           and then (not Holds (Of_Unit, Slot.Pointee)
+             or else Slot.Of_Type /= Landin.Types.Usize
+             or else Slot.Aggregate or else Slot.Array_Shape
+             or else Slot.Addressed or else Slot.Signature /= No_Signature
+             or else Slot.Atom_Set /= No_Atom_Set)
+         then
+            return (Kind => Address_Value_Disagrees, others => <>);
+         end if;
+      end loop;
+      for Item of Of_Unit.Items loop
+         if Holds (Of_Unit, Item.Signature)
+           and then Signature_Has_Erased_Self (Of_Unit, Item.Signature)
+         then
+            return (Kind => Erased_Dispatch_Malformed, others => <>);
+         end if;
+         if Item.Pointee /= No_Pointee
+           and then (not Holds (Of_Unit, Item.Pointee)
+             or else Item.Result /= Landin.Types.Usize
+             or else Item.Kind /= Datum
+             or else Item.Signature /= No_Signature
+             or else Item.Atom_Set /= No_Atom_Set)
+         then
+            return (Kind => Address_Value_Disagrees, others => <>);
+         end if;
+      end loop;
+
+      for Position in 1 .. Nominal_Type_Count (Of_Unit) loop
+         declare
+            Nominal : constant Nominal_Type_Id :=
+              Nth_Nominal_Type (Of_Unit, Position);
+            Budget : constant Natural :=
+              Variant_Field_Shape_Count (Of_Unit)
+                + Nominal_Type_Count (Of_Unit) + 1;
+            Bad : Fault_Kind;
+         begin
+            if Has_Nominal_Shape (Of_Unit, Nominal) then
+               if Has_C_Layout (Of_Unit, Nominal)
+                 and then Nominal_Field_Count (Of_Unit, Nominal) = 0
+               then
+                  return (Kind => Nominal_Metadata_Malformed, others => <>);
+               end if;
+               for Field in 1 .. Nominal_Field_Count (Of_Unit, Nominal) loop
+                  declare
+                     Shape : constant Field_Shape :=
+                       Nth_Nominal_Field (Of_Unit, Nominal, Field);
+                  begin
+                     Bad := Register_Shape (Shape, Budget);
+                     if Bad /= Nothing_Wrong then
+                        return (Kind => Bad, others => <>);
+                     elsif Has_C_Layout (Of_Unit, Nominal)
+                       and then not Is_C_Field (Shape, Budget)
+                     then
+                        return (Kind => Nominal_Metadata_Malformed,
+                                others => <>);
+                     end if;
+                  end;
+               end loop;
+            end if;
+         end;
+      end loop;
+
+      --  Do this only after every signature run and canonical field tree
+      --  is sound: a callback may name a signature later in the registry.
+      for Position in 1 .. Signature_Count (Of_Unit) loop
+         declare
+            Signature : constant Signature_Id := Signature_Id (Position);
+         begin
+            if Signature_Has_Erased_Self (Of_Unit, Signature) then
+               if Signature_Parameter_Count (Of_Unit, Signature) = 0 then
+                  return (Kind => Erased_Dispatch_Malformed, others => <>);
+               end if;
+               declare
+                  Self : constant Signature_Part :=
+                    Nth_Signature_Parameter (Of_Unit, Signature, 1);
+               begin
+                  if Self.Kind /= Landin.Types.Usize
+                    or else Self.Convention /= In_Value
+                    or else Self.Pointee /= No_Pointee
+                  then
+                     return (Kind => Erased_Dispatch_Malformed, others => <>);
+                  end if;
+               end;
+            end if;
+            if Signature_Is_Variadic (Of_Unit, Signature)
+              and then not Signature_Uses_C_ABI (Of_Unit, Signature)
+            then
+               return (Kind => Signature_Part_Malformed, others => <>);
+            end if;
+            if Signature_Uses_C_ABI (Of_Unit, Signature) then
+               if Signature_Errors (Of_Unit, Signature) /= No_Atom_Set
+                 or else Signature_Result_Count (Of_Unit, Signature) > 1
+                 or else (Signature_Is_Variadic (Of_Unit, Signature)
+                   and then Signature_Parameter_Count
+                     (Of_Unit, Signature) = 0)
+                 or else (Check_Image and then Landin.Targets.C_ABI_Of
+                   (Facts) /= Landin.Targets.SysV_AMD64_LP64)
+               then
+                  return (Kind => Signature_Part_Malformed, others => <>);
+               end if;
+               for Index in 1 .. Signature_Parameter_Count
+                 (Of_Unit, Signature)
+               loop
+                  if not Is_C_Part
+                    (Nth_Signature_Parameter (Of_Unit, Signature, Index))
+                  then
+                     return (Kind => Signature_Part_Malformed, others => <>);
+                  end if;
+               end loop;
+               for Index in 1 .. Signature_Result_Count (Of_Unit, Signature)
+               loop
+                  if not Is_C_Part
+                    (Nth_Signature_Result (Of_Unit, Signature, Index))
+                  then
+                     return (Kind => Signature_Part_Malformed, others => <>);
+                  end if;
+               end loop;
+            end if;
+         end;
+      end loop;
+
       --  R2.70 tables partition their direct-entry vector.  The represented
       --  shape is target-neutral; every code word names a routine carrying
       --  exactly the retained semantic signature.
@@ -1819,8 +3125,8 @@ package body Landin.IR.Verifier is
                         return (Kind => Callee_Is_Not_A_Routine,
                                 others => <>);
                      elsif not Holds (Of_Unit, Provider.Signature)
-                       or else Signature_Of (Of_Unit, Provider.Target)
-                         = No_Signature
+                       or else not Holds
+                         (Of_Unit, Signature_Of (Of_Unit, Provider.Target))
                        or else not Signatures_Agree
                          (Of_Unit, Provider.Signature,
                           Signature_Of (Of_Unit, Provider.Target))
@@ -1828,6 +3134,9 @@ package body Landin.IR.Verifier is
                         return
                           (Kind => Evidence_Entry_Signature_Disagrees,
                            others => <>);
+                     elsif not Dispatch_Agrees (Held, Provider) then
+                        return (Kind => Erased_Dispatch_Malformed,
+                                others => <>);
                      end if;
                   end;
                end loop;
@@ -2023,6 +3332,49 @@ package body Landin.IR.Verifier is
          declare
             Id : constant Item_Id := Item_Id (Which);
          begin
+            if Is_External (Of_Unit, Id)
+              and then
+                (Kind_Of (Of_Unit, Id) /= Routine
+                 or else Block_Count (Of_Unit, Id) /= 0
+                 or else Slot_Count (Of_Unit, Id) /= 0
+                 or else Parameter_Count (Of_Unit, Id) /= 0
+                 or else Result_Slot (Of_Unit, Id) /= No_Slot
+                 or else not Holds (Of_Unit, Signature_Of (Of_Unit, Id))
+                 or else not Signature_Uses_C_ABI
+                   (Of_Unit, Signature_Of (Of_Unit, Id))
+                 or else Link_Symbol (Of_Unit, Id)
+                   = Landin.Source.Names.No_Name)
+            then
+               return (Kind => Routine_Signature_Disagrees,
+                       Item => Id, others => <>);
+            end if;
+            if Link_Symbol (Of_Unit, Id) /= Landin.Source.Names.No_Name then
+               if Kind_Of (Of_Unit, Id) /= Routine
+                 or else not Holds (Of_Unit, Signature_Of (Of_Unit, Id))
+               then
+                  return (Kind => Routine_Signature_Disagrees,
+                          Item => Id, others => <>);
+               end if;
+               for Prior in 1 .. Which - 1 loop
+                  declare
+                     Other : constant Item_Id := Item_Id (Prior);
+                  begin
+                     if Link_Symbol (Of_Unit, Other)
+                          = Link_Symbol (Of_Unit, Id)
+                       and then
+                         ((not Is_External (Of_Unit, Id)
+                           and then not Is_External (Of_Unit, Other))
+                          or else not Signatures_Agree
+                            (Of_Unit, Signature_Of (Of_Unit, Id),
+                             Signature_Of (Of_Unit, Other)))
+                     then
+                        return (Kind => Routine_Signature_Disagrees,
+                                Item => Id, others => <>);
+                     end if;
+                  end;
+               end loop;
+            end if;
+
             if Nominal_Of (Of_Unit, Id) /= No_Nominal_Type
               and then
                 (Result_Of (Of_Unit, Id) /= Landin.Types.Aggregate
@@ -2050,9 +3402,17 @@ package body Landin.IR.Verifier is
                   end;
                end loop;
             elsif Result_Of (Of_Unit, Id) = Landin.Types.Fixed_Array
-              and then Field_Shape_Is_Malformed
-                (Array_Element_Shape (Of_Unit, Id),
-                 Aggregate_Allowed => True)
+              and then
+                (Field_Shape_Is_Malformed
+                   (Whole_Array_Shape (Of_Unit, Id),
+                    Aggregate_Allowed => True)
+                 or else Field_Shape_Is_Malformed
+                   (Array_Element_Shape (Of_Unit, Id),
+                    Aggregate_Allowed => True)
+                 or else not Same_Shape
+                   (Of_Unit, Array_Element_Shape (Of_Unit, Id),
+                    Array_Element_Shape
+                      (Of_Unit, Whole_Array_Shape (Of_Unit, Id))))
             then
                return (Kind => Field_Shape_Malformed,
                        Item => Id, others => <>);
@@ -2077,6 +3437,10 @@ package body Landin.IR.Verifier is
                     or else Is_Array (Of_Unit, Id, Slot_Id (Slot))
                     or else Type_Of (Of_Unit, Id, Slot_Id (Slot))
                               /= Landin.Types.Usize
+                    or else Signature_Of (Of_Unit, Id, Slot_Id (Slot))
+                              /= No_Signature
+                    or else Atom_Set_Of (Of_Unit, Id, Slot_Id (Slot))
+                              /= No_Atom_Set
                     or else Field_Shape_Is_Malformed
                       (Address_Shape (Of_Unit, Id, Slot_Id (Slot)),
                        Aggregate_Allowed => True))
@@ -2103,10 +3467,21 @@ package body Landin.IR.Verifier is
                      end;
                   end loop;
                elsif Is_Array (Of_Unit, Id, Slot_Id (Slot))
-                 and then Field_Shape_Is_Malformed
-                   (Slot_Array_Element_Shape
-                      (Of_Unit, Id, Slot_Id (Slot)),
-                    Aggregate_Allowed => True)
+                 and then
+                   (Field_Shape_Is_Malformed
+                      (Whole_Slot_Array_Shape
+                         (Of_Unit, Id, Slot_Id (Slot)),
+                       Aggregate_Allowed => True)
+                    or else Field_Shape_Is_Malformed
+                      (Slot_Array_Element_Shape
+                         (Of_Unit, Id, Slot_Id (Slot)),
+                       Aggregate_Allowed => True)
+                    or else not Same_Shape
+                      (Of_Unit, Slot_Array_Element_Shape
+                         (Of_Unit, Id, Slot_Id (Slot)),
+                       Array_Element_Shape
+                         (Of_Unit, Whole_Slot_Array_Shape
+                            (Of_Unit, Id, Slot_Id (Slot)))))
                then
                   return (Kind => Field_Shape_Malformed,
                           Item => Id, others => <>);
@@ -2221,6 +3596,13 @@ package body Landin.IR.Verifier is
                              Item => Id, others => <>);
                   end if;
 
+                  if Signature_Is_Variadic (Of_Unit, Signature)
+                    and then not Is_External (Of_Unit, Id)
+                  then
+                     return (Kind => Routine_Signature_Disagrees,
+                             Item => Id, others => <>);
+                  end if;
+
                   declare
                      Count : constant Natural :=
                        Signature_Result_Count (Of_Unit, Signature);
@@ -2249,17 +3631,16 @@ package body Landin.IR.Verifier is
                                 Item => Id, others => <>);
                      end if;
 
-                     if not Is_External (Of_Unit, Id)
-                       and then
-                         (Result_Of (Of_Unit, Id) /= Carrier
-                       or else Parameter_Count (Of_Unit, Id)
-                                 /= Signature_Carrier_Count (Signature)
+                     if Result_Of (Of_Unit, Id) /= Carrier
+                       or else (not Is_External (Of_Unit, Id)
+                         and then Parameter_Count (Of_Unit, Id)
+                           /= Signature_Carrier_Count (Signature))
                        or else
                          (if Count = 1
                                and then Result.Kind = Landin.Types.Aggregate
                           then Nominal_Of (Of_Unit, Id) /= Result.Nominal
                           else Nominal_Of (Of_Unit, Id)
-                                 /= No_Nominal_Type))
+                                 /= No_Nominal_Type)
                      then
                         return (Kind => Routine_Signature_Disagrees,
                                 Item => Id, others => <>);
@@ -2351,13 +3732,16 @@ package body Landin.IR.Verifier is
       declare
          Bad : Fault_Kind;
          Budget : constant Natural :=
-           Variant_Field_Shape_Count (Of_Unit) + 1;
+           Variant_Field_Shape_Count (Of_Unit)
+             + Nominal_Type_Count (Of_Unit) + 1;
       begin
          for Which in 1 .. Item_Count (Of_Unit) loop
             declare
                Id : constant Item_Id := Item_Id (Which);
             begin
-               if Nominal_Of (Of_Unit, Id) /= No_Nominal_Type then
+               if Nominal_Of (Of_Unit, Id) /= No_Nominal_Type
+                 and then not Is_External (Of_Unit, Id)
+               then
                   Bad :=
                     (if Kind_Of (Of_Unit, Id) = Datum
                      then Register
@@ -2446,6 +3830,12 @@ package body Landin.IR.Verifier is
             end;
          end loop;
 
+         for Shape of Of_Unit.Pointees loop
+            Bad := Register_Shape (Shape, Budget);
+            if Bad /= Nothing_Wrong then
+               return (Kind => Bad, others => <>);
+            end if;
+         end loop;
          for Shape of Of_Unit.Measurement_Fields loop
             Bad := Register_Shape (Shape, Budget);
             if Bad /= Nothing_Wrong then
@@ -2462,6 +3852,21 @@ package body Landin.IR.Verifier is
             Reached : array (1 .. Positive'Max (1, Blocks)) of Boolean :=
               [others => False];
          begin
+            --  Read-only data needs a complete numeric text image.
+            --  Recheck builder eligibility after every metadata mutation.
+            if Is_Read_Only (Of_Unit, Id)
+              and then
+                (not Is_Datum
+                 or else Result_Of (Of_Unit, Id) /= Landin.Types.Fixed_Array
+                 or else not Has_Image (Of_Unit, Id)
+                 or else Has_Slice_Image (Of_Unit, Id)
+                 or else Array_Element (Of_Unit, Id)
+                   not in Landin.Types.U8 | Landin.Types.U16)
+            then
+               return (Kind => Array_Image_Length_Disagrees,
+                       Item => Id, others => <>);
+            end if;
+
             if Blocks = 0 then
                if Is_External (Of_Unit, Id) then
                   goto Next_IR_Item;
@@ -2481,9 +3886,16 @@ package body Landin.IR.Verifier is
                   Source : constant Item_Id :=
                     Slice_Image_Source (Of_Unit, Id);
                begin
-                  if Field_Shape_Is_Malformed
-                    (Slice_Image_Element (Of_Unit, Id),
-                     Aggregate_Allowed => True)
+                  if Array_Length (Of_Unit, Id) /= 2
+                    or else Array_Element_Shape (Of_Unit, Id)
+                      /= Field_Shape'
+                        (Element => Landin.Types.Usize, others => <>)
+                    or else (Source = No_Item
+                      and then (Slice_Image_Length (Of_Unit, Id) /= 0
+                        or else Slice_Image_First (Of_Unit, Id) /= 0))
+                    or else Field_Shape_Is_Malformed
+                      (Slice_Image_Element (Of_Unit, Id),
+                       Aggregate_Allowed => True)
                     or else
                       (Source /= No_Item
                        and then
@@ -2507,12 +3919,26 @@ package body Landin.IR.Verifier is
                end;
             end if;
 
+            if Result_Of (Of_Unit, Id) = Landin.Types.Fixed_Array
+              and then Has_Image (Of_Unit, Id)
+              and then not Has_Slice_Image (Of_Unit, Id)
+              and then not Has_Recursive_Array_Image (Of_Unit, Id)
+              and then Array_Element_Shape (Of_Unit, Id) /= Field_Shape'
+                (Element => Array_Element (Of_Unit, Id), others => <>)
+            then
+               --  Numeric images have no place for a callable relocation
+               --  or the immediate shape of a nested array/record.
+               return (Kind => Array_Image_Length_Disagrees,
+                       Item => Id, others => <>);
+            end if;
+
             --  D24: an array item's image, when it has one, has one value
             --  per declared position.  A datum with no image is D10's zero
             --  storage and this check has nothing to say about it.
             if Result_Of (Of_Unit, Id) = Landin.Types.Fixed_Array
               and then Has_Image (Of_Unit, Id)
               and then not Has_Slice_Image (Of_Unit, Id)
+              and then not Has_Recursive_Array_Image (Of_Unit, Id)
               and then Image_Length (Of_Unit, Id)
                        /= Array_Length (Of_Unit, Id)
             then
@@ -2530,6 +3956,7 @@ package body Landin.IR.Verifier is
               and then Result_Of (Of_Unit, Id) = Landin.Types.Fixed_Array
               and then Has_Image (Of_Unit, Id)
               and then not Has_Slice_Image (Of_Unit, Id)
+              and then not Has_Recursive_Array_Image (Of_Unit, Id)
               and then Image_Length (Of_Unit, Id)
                        = Array_Length (Of_Unit, Id)
             then
@@ -2613,19 +4040,18 @@ package body Landin.IR.Verifier is
             --  descriptor offsets are checked independently before either
             --  accessor is used, so a malformed recursive image is an IR
             --  fault in release builds rather than a failed contract.
-            if Result_Of (Of_Unit, Id) = Landin.Types.Aggregate
-              and then Has_Image (Of_Unit, Id)
-              and then Image_Length (Of_Unit, Id)
-                       >= Element_Total (Field_Count (Of_Unit, Id))
-              and then Aggregate_Field_Image_Count (Of_Unit, Id)
-                       >= Field_Count (Of_Unit, Id)
-              and then Item_Image_Contains_Aggregate (Id)
+            if Has_Recursive_Array_Image (Of_Unit, Id)
+              or else (Result_Of (Of_Unit, Id) = Landin.Types.Aggregate
+                and then Has_Image (Of_Unit, Id)
+                and then Item_Needs_Recursive_Image (Id))
             then
                declare
-                  Top_Count : constant Natural := Field_Count (Of_Unit, Id);
+                  Top_Count : constant Natural :=
+                    Image_Root_Count (Of_Unit, Id);
+                  Flat_Count : constant Natural := Field_Count (Of_Unit, Id);
                   Element_Count : constant Natural := Natural
                     (Image_Length (Of_Unit, Id)
-                     - Element_Total (Top_Count));
+                     - Element_Total (Flat_Count));
                   Descendant_Count : constant Natural :=
                     Aggregate_Field_Image_Count (Of_Unit, Id) - Top_Count;
                   Expected_Elements : Natural := 0;
@@ -2682,8 +4108,9 @@ package body Landin.IR.Verifier is
                               return Function_Value_Signature_Disagrees;
                            elsif Shape.Signature = No_Signature
                              and then Image.Target /= No_Item
-                             and then not Address_Image_Target_Agrees
-                               (Shape, Image.Target)
+                             and then (Scalar_Value /= 0
+                               or else not Address_Image_Target_Agrees
+                                 (Shape, Image.Target))
                            then
                               return Address_Value_Disagrees;
                            elsif Check_Image
@@ -2701,8 +4128,19 @@ package body Landin.IR.Verifier is
 
                         when Array_Field_Shape =>
                            if Image.Slice then
-                              if Shape.Length /= 2
-                                or else Shape.Element /= Landin.Types.Usize
+                              if Image.Offset /= Expected_Elements
+                                or else Shape.Length /= 2
+                                or else Array_Element_Shape (Of_Unit, Shape)
+                                  /= Field_Shape'
+                                    (Element => Landin.Types.Usize,
+                                     others => <>)
+                                or else Field_Shape_Is_Malformed
+                                  (Image.Slice_Element,
+                                   Aggregate_Allowed => True)
+                                or else Image.Value < 0
+                                or else (Image.Target = No_Item
+                                  and then (Image.Value /= 0
+                                    or else Image.Slice_First /= 0))
                                 or else Image.Form /= Absent
                                 or else Image.Count /= 0
                                 or else (Top and then Flat /= 0)
@@ -2732,6 +4170,57 @@ package body Landin.IR.Verifier is
                               end if;
                               return Nothing_Wrong;
                            end if;
+                           if Image.Form = Element_Sequence then
+                              if Image.Offset /= Expected_Descendants
+                                or else (Top and then Flat /= 0)
+                                or else Image.Target /= No_Item
+                                or else Image.Value < 0
+                                or else Image.Value
+                                  > Landin.Types.Folded (Shape.Length)
+                                or else Expected_Descendants > Descendant_Count
+                                or else Image.Count
+                                  > Descendant_Count - Expected_Descendants
+                                or else
+                                  (if Image.Count = 0
+                                   then Image.Value /= 0
+                                     or else Shape.Length /= 0
+                                   else Element_Total (Image.Count - 1)
+                                     /= Shape.Length
+                                       - Element_Total (Image.Value))
+                              then
+                                 return Field_Length_Fault;
+                              end if;
+                              declare
+                                 First : constant Natural :=
+                                   Expected_Descendants;
+                                 Child : constant Field_Shape :=
+                                   Array_Element_Shape (Of_Unit, Shape);
+                              begin
+                                 --  Reserve the whole immediate group before
+                                 --  descending.  Offsets can never revisit an
+                                 --  ancestor or overlap another child's run.
+                                 Expected_Descendants :=
+                                   Expected_Descendants + Image.Count;
+                                 for Position in 1 .. Image.Count loop
+                                    declare
+                                       Child_Image : constant
+                                         Aggregate_Field_Image :=
+                                           Nth_Image_Descriptor
+                                             (Of_Unit, Id,
+                                              Top_Count + First + Position);
+                                       Bad : constant Fault_Kind :=
+                                         Check_Field_Image
+                                           (Child, Child_Image,
+                                            Child_Image.Value, False);
+                                    begin
+                                       if Bad /= Nothing_Wrong then
+                                          return Bad;
+                                       end if;
+                                    end;
+                                 end loop;
+                              end;
+                              return Nothing_Wrong;
+                           end if;
                            if Image.Offset /= Expected_Elements
                              or else (Top and then Flat /= 0)
                              or else Image.Target /= No_Item
@@ -2748,6 +4237,8 @@ package body Landin.IR.Verifier is
                                 or else Image.Value /= 0
                               then
                                  return Aggregate_Image_On_Array_Field;
+                              elsif Shape_Has_Callable (Shape) then
+                                 return Function_Value_Signature_Disagrees;
                               end if;
                               return Nothing_Wrong;
                            end if;
@@ -2776,7 +4267,7 @@ package body Landin.IR.Verifier is
                                  then
                                     return Field_Pattern_Fault;
                                  end if;
-                              when Selected | Nested =>
+                              when Selected | Nested | Element_Sequence =>
                                  return Aggregate_Image_On_Array_Field;
                            end case;
 
@@ -2815,6 +4306,8 @@ package body Landin.IR.Verifier is
                            elsif Image.Form = Absent then
                               if Image.Count /= 0 then
                                  return Aggregate_Image_On_Aggregate_Field;
+                              elsif Shape_Has_Callable (Shape) then
+                                 return Function_Value_Signature_Disagrees;
                               end if;
                               return Nothing_Wrong;
                            elsif Image.Form /= Nested
@@ -2924,19 +4417,30 @@ package body Landin.IR.Verifier is
                      end case;
                   end Check_Field_Image;
                begin
-                  for Field in 1 .. Top_Count loop
+                  if Has_Recursive_Array_Image (Of_Unit, Id) then
                      declare
-                        Fault : constant Fault_Kind :=
-                          Check_Field_Image
-                            (Nth_Field_Shape (Of_Unit, Id, Field),
-                             Field_Image_Of (Of_Unit, Id, Field),
-                             Nth_Field_Image (Of_Unit, Id, Field), True);
+                        Bad : constant Fault_Kind := Check_Field_Image
+                          (Whole_Array_Shape (Of_Unit, Id),
+                           Array_Image_Of (Of_Unit, Id), 0, False);
                      begin
-                        if Fault /= Nothing_Wrong then
-                           return (Kind => Fault, Item => Id, others => <>);
+                        if Bad /= Nothing_Wrong then
+                           return (Kind => Bad, Item => Id, others => <>);
                         end if;
                      end;
-                  end loop;
+                  else
+                     for Field in 1 .. Top_Count loop
+                        declare
+                           Bad : constant Fault_Kind := Check_Field_Image
+                             (Nth_Field_Shape (Of_Unit, Id, Field),
+                              Field_Image_Of (Of_Unit, Id, Field),
+                              Nth_Field_Image (Of_Unit, Id, Field), True);
+                        begin
+                           if Bad /= Nothing_Wrong then
+                              return (Kind => Bad, Item => Id, others => <>);
+                           end if;
+                        end;
+                     end loop;
+                  end if;
 
                   if Expected_Elements /= Element_Count
                     or else Expected_Descendants /= Descendant_Count
@@ -2954,7 +4458,7 @@ package body Landin.IR.Verifier is
                        >= Element_Total (Field_Count (Of_Unit, Id))
               and then Aggregate_Field_Image_Count (Of_Unit, Id)
                        >= Field_Count (Of_Unit, Id)
-              and then not Item_Image_Contains_Aggregate (Id)
+              and then not Item_Needs_Recursive_Image (Id)
             then
                declare
                   Expected : Natural := 0;
@@ -3073,9 +4577,10 @@ package body Landin.IR.Verifier is
                                        elsif Leaf.Signature = No_Signature
                                          and then
                                            Payload_Image.Target /= No_Item
-                                         and then not
-                                           Address_Image_Target_Agrees
-                                             (Leaf, Payload_Image.Target)
+                                         and then (Payload_Image.Value /= 0
+                                           or else not
+                                             Address_Image_Target_Agrees
+                                               (Leaf, Payload_Image.Target))
                                        then
                                           return
                                             (Kind => Address_Value_Disagrees,
@@ -3146,7 +4651,8 @@ package body Landin.IR.Verifier is
                                                      Field_Pattern_Fault,
                                                    Item => Id, others => <>);
                                              end if;
-                                          when Selected | Nested =>
+                                          when Selected | Nested
+                                             | Element_Sequence =>
                                              return
                                                (Kind => Variant_Fault,
                                                 Item => Id, others => <>);
@@ -3220,8 +4726,9 @@ package body Landin.IR.Verifier is
                                  Item => Id, others => <>);
                            elsif Shape.Signature = No_Signature
                              and then Image.Target /= No_Item
-                             and then not Address_Image_Target_Agrees
-                               (Shape, Image.Target)
+                             and then (Held /= 0
+                               or else not Address_Image_Target_Agrees
+                                 (Shape, Image.Target))
                            then
                               return
                                 (Kind => Address_Value_Disagrees,
@@ -3240,7 +4747,17 @@ package body Landin.IR.Verifier is
                         else
                            if Image.Slice then
                               if Shape.Length /= 2
-                                or else Shape.Element /= Landin.Types.Usize
+                                or else Array_Element_Shape (Of_Unit, Shape)
+                                  /= Field_Shape'
+                                    (Element => Landin.Types.Usize,
+                                     others => <>)
+                                or else Field_Shape_Is_Malformed
+                                  (Image.Slice_Element,
+                                   Aggregate_Allowed => True)
+                                or else Image.Value < 0
+                                or else (Image.Target = No_Item
+                                  and then (Image.Value /= 0
+                                    or else Image.Slice_First /= 0))
                                 or else Image.Form /= Absent
                                 or else Image.Count /= 0
                                 or else Held /= 0
@@ -3329,7 +4846,7 @@ package body Landin.IR.Verifier is
                                       (Kind => Field_Pattern_Fault,
                                        Item => Id, others => <>);
                                  end if;
-                              when Selected | Nested =>
+                              when Selected | Nested | Element_Sequence =>
                                  return
                                    (Kind => Aggregate_Image_On_Variant_Field,
                                     Item => Id, others => <>);
@@ -3887,7 +5404,6 @@ package body Landin.IR.Verifier is
                                  Source_Shape, Destination_Shape, Leaf :
                                    Field_Shape;
                                  Bad : Fault_Kind;
-                                 Agree : Boolean := True;
                               begin
                                  Bad := Variant_Shape_Of
                                    (Id, Source_Of (Of_Unit, Id, V),
@@ -3909,51 +5425,9 @@ package body Landin.IR.Verifier is
                                             Block => Block, Value => V);
                                  end if;
 
-                                 Agree :=
-                                   Source_Shape.Element
-                                     = Destination_Shape.Element
-                                   and then Source_Shape.Cases
-                                     = Destination_Shape.Cases;
-                                 if Agree then
-                                    for Which in 1 .. Source_Shape.Cases loop
-                                       Agree :=
-                                         Variant_Case_Field_Count
-                                           (Of_Unit, Source_Shape, Which)
-                                         = Variant_Case_Field_Count
-                                           (Of_Unit, Destination_Shape,
-                                            Which);
-                                       exit when not Agree;
-                                       for Field in 1 ..
-                                         Variant_Case_Field_Count
-                                           (Of_Unit, Source_Shape, Which)
-                                       loop
-                                          declare
-                                             Source_Leaf : constant
-                                               Field_Shape :=
-                                                 Nth_Variant_Case_Field
-                                                   (Of_Unit, Source_Shape,
-                                                    Which, Field);
-                                             Destination_Leaf : constant
-                                               Field_Shape :=
-                                                 Nth_Variant_Case_Field
-                                                   (Of_Unit,
-                                                    Destination_Shape,
-                                                    Which, Field);
-                                          begin
-                                             Agree :=
-                                               Source_Leaf.Kind
-                                                 = Destination_Leaf.Kind
-                                               and then Source_Leaf.Element
-                                                 = Destination_Leaf.Element
-                                               and then Source_Leaf.Length
-                                                 = Destination_Leaf.Length;
-                                          end;
-                                          exit when not Agree;
-                                       end loop;
-                                    end loop;
-                                 end if;
-
-                                 if not Agree then
+                                 if not Same_Shape
+                                   (Of_Unit, Source_Shape, Destination_Shape)
+                                 then
                                     return
                                       (Kind => Variant_Copy_Shapes_Disagree,
                                        Item => Id, Block => Block, Value => V);
@@ -4083,12 +5557,7 @@ package body Landin.IR.Verifier is
 
                                  --  A fill repeats one scalar pattern, so
                                  --  D121's aggregate element has none.
-                                 if Element.Kind /= Scalar_Field_Shape
-                                   or else Result_Of
-                                      (Of_Unit, Id,
-                                       Nth_Operand (Of_Unit, Id, V, 1))
-                                      /= Element.Element
-                                 then
+                                 if Element.Kind /= Scalar_Field_Shape then
                                     return
                                       (Kind => Array_Fill_Value_Disagrees,
                                        Item => Id, Block => Block, Value => V);
@@ -4154,33 +5623,17 @@ package body Landin.IR.Verifier is
                                        Item => Id, Block => Block, Value => V);
                                  end if;
                                  declare
-                                    Target : constant Item_Id :=
-                                      Evidence_Entry_Target
-                                        (Of_Unit, Evidence, Which);
                                     Signature : constant Signature_Id :=
-                                      Evidence_Entry_Signature
+                                      Evidence_Entry_Dispatch_Signature
                                         (Of_Unit, Evidence, Which);
                                  begin
-                                    if not Holds (Of_Unit, Target)
-                                      or else Kind_Of (Of_Unit, Target)
-                                        /= Routine
-                                    then
-                                       return
-                                         (Kind => Callee_Is_Not_A_Routine,
-                                          Item => Id, Block => Block,
-                                          Value => V);
-                                    elsif not Holds (Of_Unit, Signature)
-                                      or else not Holds
-                                        (Of_Unit,
-                                         Signature_Of (Of_Unit, Id, V))
-                                      or else not Signatures_Agree
-                                        (Of_Unit, Signature,
-                                         Signature_Of (Of_Unit, Id, V))
-                                      or else Signature_Of
-                                        (Of_Unit, Target) = No_Signature
-                                      or else not Signatures_Agree
-                                        (Of_Unit, Signature,
-                                         Signature_Of (Of_Unit, Target))
+                                    if (if Evidence_Is_Erased
+                                          (Of_Unit, Evidence)
+                                        then Signature_Of (Of_Unit, Id, V)
+                                          /= Signature
+                                        else not Function_Metadata_Agrees
+                                          (Signature,
+                                           Signature_Of (Of_Unit, Id, V)))
                                     then
                                        return
                                          (Kind =>
@@ -4379,7 +5832,13 @@ package body Landin.IR.Verifier is
                                      then 1 else 0),
                                  when others => Wanted (Op));
                         begin
-                           if Operand_Count (Of_Unit, Id, V) /= Expect
+                           if Operand_Count (Of_Unit, Id, V) < Expect
+                             or else (Operand_Count (Of_Unit, Id, V) > Expect
+                               and then not
+                                 (Op in Call | Indirect_Call
+                                  and then Signature_Is_Variadic
+                                    (Of_Unit,
+                                     Call_Signature (Of_Unit, Id, V))))
                            then
                               return (Kind => Wrong_Operand_Count,
                                       Item => Id, Block => Block,
@@ -4424,11 +5883,114 @@ package body Landin.IR.Verifier is
                                          Item => Id, Block => Block,
                                          Value => V);
                               end if;
+
+                              --  A bound function is not a first-class word:
+                              --  only its paired self projection and direct
+                              --  indirect-callee position may consume it.
+                              declare
+                                 Signature : constant Signature_Id :=
+                                   Signature_Of (Of_Unit, Id, Arg);
+                              begin
+                                 if Holds (Of_Unit, Signature)
+                                   and then Signature_Has_Erased_Self
+                                     (Of_Unit, Signature)
+                                   and then not
+                                     (Index = 1 and then Op in
+                                        Evidence_Self | Indirect_Call)
+                                 then
+                                    return
+                                      (Kind => Erased_Dispatch_Malformed,
+                                       Item => Id, Block => Block, Value => V);
+                                 end if;
+                              end;
                            end;
                         end loop;
 
+                        --  Marked descriptors are transient dispatch types.
+                        --  In particular, no slot reload or ordinary code
+                        --  address can recover an erased callable.
+                        declare
+                           Code : constant Instruction := Of_Unit.Code
+                             (Of_Unit.Items (Positive (Id)).Values.First
+                              + Positive (V));
+                        begin
+                           if Holds (Of_Unit, Code.Signature)
+                             and then Signature_Has_Erased_Self
+                               (Of_Unit, Code.Signature)
+                             and then Op not in Evidence_Function
+                               | Indirect_Call
+                           then
+                              return (Kind => Erased_Dispatch_Malformed,
+                                      Item => Id, Block => Block, Value => V);
+                           end if;
+                        end;
+
                         --  Step four: the types [1890].
                         case Op is
+                           when Load =>
+                              declare
+                                 Slot : constant Slot_Id :=
+                                   Slot_Of (Of_Unit, Id, V);
+                              begin
+                                 if Is_Aggregate (Of_Unit, Id, Slot)
+                                   or else Is_Array (Of_Unit, Id, Slot)
+                                   or else Result_Of (Of_Unit, Id, V)
+                                     /= Type_Of (Of_Unit, Id, Slot)
+                                 then
+                                    return (Kind => Result_Disagrees,
+                                            Item => Id, Block => Block,
+                                            Value => V);
+                                 elsif not Function_Metadata_Agrees
+                                   (Signature_Of (Of_Unit, Id, Slot),
+                                    Signature_Of (Of_Unit, Id, V))
+                                 then
+                                    return (Kind => Signature_Mismatch,
+                                            Item => Id, Block => Block,
+                                            Value => V);
+                                 elsif not Atom_Metadata_Agrees
+                                   (Atom_Set_Of (Of_Unit, Id, Slot),
+                                    Atom_Set_Of (Of_Unit, Id, V))
+                                 then
+                                    return (Kind => Atom_Metadata_Disagrees,
+                                            Item => Id, Block => Block,
+                                            Value => V);
+                                 end if;
+                              end;
+
+                           when Fill_Array =>
+                              declare
+                                 Element : Field_Shape;
+                                 Length : Element_Total;
+                                 Bad : constant Fault_Kind := Shape_Of
+                                   (Id, Destination_Of (Of_Unit, Id, V),
+                                    Element_Field_Of (Of_Unit, Id, V),
+                                    Element, Length,
+                                    Variant_Case_Of (Of_Unit, Id, V),
+                                    Variant_Payload_Field_Of (Of_Unit, Id, V),
+                                    Nested => Path_Of (Of_Unit, Id, V));
+                                 Source : constant Value_Id :=
+                                   Nth_Operand (Of_Unit, Id, V, 1);
+                              begin
+                                 if Bad /= Nothing_Wrong
+                                   or else Result_Of (Of_Unit, Id, Source)
+                                     /= Element.Element
+                                   or else not Function_Metadata_Agrees
+                                     (Element.Signature,
+                                      Signature_Of (Of_Unit, Id, Source))
+                                   or else (Element.Pointee /= No_Pointee
+                                     and then not Pointees_Agree
+                                       (Of_Unit, Element.Pointee,
+                                        Pointee_Of (Of_Unit, Id, Source)))
+                                   or else not Atom_Metadata_Agrees
+                                     (Element.Atoms,
+                                      Atom_Set_Of (Of_Unit, Id, Source))
+                                 then
+                                    return
+                                      (Kind => Array_Fill_Value_Disagrees,
+                                       Item => Id, Block => Block, Value => V);
+                                 end if;
+                              end;
+
                            when Binary_Kind =>
                               declare
                                  L : constant Value_Id :=
@@ -4613,6 +6175,8 @@ package body Landin.IR.Verifier is
                               --  type holds.  A bound the type does not
                               --  hold would make the emitted comparison
                               --  meaningless rather than merely redundant.
+                              --  Pointer-sized bounds require a chosen target,
+                              --  not the structural walk's placeholder facts.
                               declare
                                  Result_Kind : constant
                                    Landin.Types.Type_Kind :=
@@ -4628,14 +6192,18 @@ package body Landin.IR.Verifier is
                                    or else Operand_Kind /= Result_Kind
                                    or else Range_Lower (Of_Unit, Id, V)
                                              > Range_Upper (Of_Unit, Id, V)
-                                   or else not Landin.Types.Holds
-                                     (Range_Lower (Of_Unit, Id, V),
-                                      Landin.Types.Integer_Name (Result_Kind),
-                                      Facts)
-                                   or else not Landin.Types.Holds
-                                     (Range_Upper (Of_Unit, Id, V),
-                                      Landin.Types.Integer_Name (Result_Kind),
-                                      Facts)
+                                   or else
+                                     ((Check_Image
+                                       or else Result_Kind not in
+                                         Landin.Types.Usize
+                                           | Landin.Types.Isize)
+                                      and then
+                                        (not Landin.Types.Holds
+                                           (Range_Lower (Of_Unit, Id, V),
+                                            Result_Kind, Facts)
+                                         or else not Landin.Types.Holds
+                                           (Range_Upper (Of_Unit, Id, V),
+                                            Result_Kind, Facts)))
                                  then
                                     return (Kind => Result_Disagrees,
                                             Item => Id, Block => Block,
@@ -4687,27 +6255,16 @@ package body Landin.IR.Verifier is
                                          Value => V);
                               end if;
 
-                           when Load_Indirect =>
-                              if Result_Of
-                                   (Of_Unit, Id,
-                                    Nth_Operand (Of_Unit, Id, V, 1))
-                                   /= Landin.Types.Usize
-                              then
-                                 return (Kind => Result_Disagrees,
-                                         Item => Id, Block => Block,
-                                         Value => V);
-                              end if;
-
-                           when Store_Indirect =>
-                              if Result_Of
-                                   (Of_Unit, Id,
-                                    Nth_Operand (Of_Unit, Id, V, 1))
-                                   /= Landin.Types.Usize
-                              then
-                                 return (Kind => Result_Disagrees,
-                                         Item => Id, Block => Block,
-                                         Value => V);
-                              end if;
+                           when Load_Indirect | Store_Indirect =>
+                              declare
+                                 Bad : constant Fault_Kind :=
+                                   Indirect_Fault (Id, V);
+                              begin
+                                 if Bad /= Nothing_Wrong then
+                                    return (Kind => Bad, Item => Id,
+                                            Block => Block, Value => V);
+                                 end if;
+                              end;
 
                            when Place_Address =>
                               if Result_Of (Of_Unit, Id, V)
@@ -4798,9 +6355,61 @@ package body Landin.IR.Verifier is
                                                 Value => V);
                                           end if;
                                        elsif Op_Of (Of_Unit, Id, Source)
-                                            in Pointer_Address | Place_Address
+                                            = Pointer_Address
                                        then
-                                          null;
+                                          if not Holds (Of_Unit,
+                                            Pointee_Of (Of_Unit, Id, Source))
+                                            or else not Same_Shape
+                                              (Of_Unit, Address_Shape
+                                                 (Of_Unit, Id, S),
+                                               Pointee_Shape (Of_Unit,
+                                                 Pointee_Of
+                                                   (Of_Unit, Id, Source)))
+                                          then
+                                             return
+                                               (Kind =>
+                                                  Address_Value_Disagrees,
+                                                Item => Id, Block => Block,
+                                                Value => V);
+                                          end if;
+                                       elsif Op_Of (Of_Unit, Id, Source) = Load
+                                       then
+                                          declare
+                                             From : constant Slot_Id :=
+                                               Slot_Of (Of_Unit, Id, Source);
+                                          begin
+                                             if not Is_Address
+                                               (Of_Unit, Id, From)
+                                               or else not Same_Shape
+                                                 (Of_Unit, Address_Shape
+                                                    (Of_Unit, Id, From),
+                                                  Address_Shape
+                                                    (Of_Unit, Id, S))
+                                             then
+                                                return
+                                                  (Kind =>
+                                                     Address_Value_Disagrees,
+                                                   Item => Id, Block => Block,
+                                                   Value => V);
+                                             end if;
+                                          end;
+                                       elsif Op_Of (Of_Unit, Id, Source)
+                                            = Place_Address
+                                       then
+                                          if not Stored_Shape_Agrees
+                                            (Id, Destination_Of
+                                               (Of_Unit, Id, Source),
+                                             Element_Field_Of
+                                               (Of_Unit, Id, Source),
+                                             Path_Of (Of_Unit, Id, Source),
+                                             Address_Shape (Of_Unit, Id, S))
+                                          then
+                                             return
+                                               (Kind =>
+                                                  Address_Value_Disagrees,
+                                                Item => Id, Block => Block,
+                                                Value => V);
+                                          end if;
                                        elsif Op_Of (Of_Unit, Id, Source)
                                             /= Storage_Address
                                        then
@@ -5321,6 +6930,43 @@ package body Landin.IR.Verifier is
                                          Item => Id, Block => Block,
                                          Value => V);
                               end if;
+                              --  D147's existing private descriptor boundary:
+                              --  prove complete transport shape, not that
+                              --  arbitrary two-word memory is authentic any.
+                              if Is_Erased_Function (Id, V)
+                                and then not Address_Agrees
+                                  (Id, Nth_Operand (Of_Unit, Id, V, 1),
+                                   (Kind => Array_Field_Shape,
+                                    Element => Landin.Types.Usize,
+                                    Length => 2, others => <>))
+                              then
+                                 return (Kind => Address_Value_Disagrees,
+                                         Item => Id, Block => Block,
+                                         Value => V);
+                              end if;
+
+                           when Evidence_Self =>
+                              declare
+                                 Bound : constant Value_Id :=
+                                   Nth_Operand (Of_Unit, Id, V, 1);
+                                 Code : constant Instruction := Of_Unit.Code
+                                   (Of_Unit.Items (Positive (Id)).Values.First
+                                    + Positive (V));
+                              begin
+                                 if not Is_Erased_Function (Id, Bound)
+                                   or else Bound /= V - 1
+                                   or else Block_Of (Of_Unit, Id, Bound)
+                                     /= Block
+                                   or else Code.Result /= Landin.Types.Usize
+                                   or else Code.Signature /= No_Signature
+                                   or else Code.Pointee /= No_Pointee
+                                   or else Code.Atom_Set /= No_Atom_Set
+                                 then
+                                    return (Kind => Evidence_Self_Disagrees,
+                                            Item => Id, Block => Block,
+                                            Value => V);
+                                 end if;
+                              end;
 
                            when Call | Indirect_Call =>
                               declare
@@ -5378,6 +7024,36 @@ package body Landin.IR.Verifier is
                                             Value => V);
                                  end if;
 
+                                 if Signature_Has_Erased_Self
+                                   (Of_Unit, Signature)
+                                 then
+                                    if not Indirect then
+                                       return (Kind => Evidence_Self_Disagrees,
+                                               Item => Id, Block => Block,
+                                               Value => V);
+                                    end if;
+                                    declare
+                                       Bound : constant Value_Id :=
+                                         Nth_Operand (Of_Unit, Id, V, 1);
+                                       Self : constant Value_Id := Nth_Operand
+                                         (Of_Unit, Id, V, Offset + Hidden + 1);
+                                    begin
+                                       if not Is_Erased_Function (Id, Bound)
+                                         or else Signature /= Signature_Of
+                                           (Of_Unit, Id, Bound)
+                                         or else Op_Of (Of_Unit, Id, Self)
+                                           /= Evidence_Self
+                                         or else Nth_Operand
+                                           (Of_Unit, Id, Self, 1) /= Bound
+                                       then
+                                          return
+                                            (Kind => Evidence_Self_Disagrees,
+                                             Item => Id, Block => Block,
+                                             Value => V);
+                                       end if;
+                                    end;
+                                 end if;
+
                                  if Indirect then
                                     declare
                                        Address : constant Value_Id :=
@@ -5407,6 +7083,32 @@ package body Landin.IR.Verifier is
                                       Nth_Operand
                                         (Of_Unit, Id, V, Offset + 1))
                                        /= Landin.Types.Usize
+                                 then
+                                    return (Kind => Operands_Disagree,
+                                            Item => Id, Block => Block,
+                                            Value => V);
+                                 end if;
+
+                                 if Hidden = 1
+                                   and then Signature_Uses_C_ABI
+                                     (Of_Unit, Signature)
+                                   and then not Address_Has_Nominal
+                                     (Id, Nth_Operand
+                                        (Of_Unit, Id, V, Offset + 1),
+                                      Declared_Result.Nominal)
+                                 then
+                                    return (Kind => Operands_Disagree,
+                                            Item => Id, Block => Block,
+                                            Value => V);
+                                 end if;
+
+                                 if Hidden = 1
+                                   and then Signature_Has_Erased_Self
+                                     (Of_Unit, Signature)
+                                   and then not Erased_Carrier_Agrees
+                                     (Id, Nth_Operand
+                                        (Of_Unit, Id, V, Offset + 1),
+                                      Signature)
                                  then
                                     return (Kind => Operands_Disagree,
                                             Item => Id, Block => Block,
@@ -5452,10 +7154,93 @@ package body Landin.IR.Verifier is
                                     begin
                                        if not Agrees
                                          or else not Signature_Agrees
+                                         or else
+                                           (if Parameter.Convention
+                                              = Inout_Place
+                                            then not Address_Agrees
+                                              (Id, Argument, Pointee_Shape
+                                                 (Of_Unit, Parameter.Pointee))
+                                            elsif Parameter.Pointee
+                                              /= No_Pointee
+                                            then not Pointees_Agree
+                                              (Of_Unit, Parameter.Pointee,
+                                               Pointee_Of
+                                                 (Of_Unit, Id, Argument))
+                                            else False)
+                                         or else
+                                           (Parameter.Kind
+                                              = Landin.Types.Aggregate
+                                            and then Signature_Uses_C_ABI
+                                              (Of_Unit, Signature)
+                                            and then not Address_Has_Nominal
+                                              (Id, Argument,
+                                               Parameter.Nominal))
+                                         or else
+                                           (P > 1
+                                            and then Signature_Has_Erased_Self
+                                              (Of_Unit, Signature)
+                                            and then Parameter.Kind in
+                                              Landin.Types.Aggregate
+                                                | Landin.Types.Fixed_Array
+                                            and then not Erased_Carrier_Agrees
+                                              (Id, Argument, Signature, P))
                                          or else not Atom_Metadata_Is_Subset
                                            (Atom_Set_Of
                                               (Of_Unit, Id, Argument),
                                             Parameter.Atoms)
+                                       then
+                                          return
+                                            (Kind => Operands_Disagree,
+                                             Item => Id, Block => Block,
+                                             Value => V);
+                                       end if;
+                                    end;
+                                 end loop;
+
+                                 --  Unnamed actuals retain their own scalar
+                                 --  descriptors after C default promotion.
+                                 --  Aggregate tails have no native carrier.
+                                 --  Storage_Address and typed address-slot
+                                 --  loads are internal carriers, not source
+                                 --  pointers (addr emits Place_Address).
+                                 for P in Signature_Carrier_Count (Signature)
+                                   + Offset + 1
+                                   .. Operand_Count (Of_Unit, Id, V)
+                                 loop
+                                    declare
+                                       Argument : constant Value_Id :=
+                                         Nth_Operand (Of_Unit, Id, V, P);
+                                       Callback : constant Signature_Id :=
+                                         Signature_Of (Of_Unit, Id, Argument);
+                                    begin
+                                       if Op_Of (Of_Unit, Id, Argument)
+                                            = Storage_Address
+                                         or else
+                                           (Op_Of (Of_Unit, Id, Argument)
+                                              = Load
+                                            and then Is_Address
+                                              (Of_Unit, Id, Slot_Of
+                                                 (Of_Unit, Id, Argument)))
+                                       then
+                                          return
+                                            (Kind => Operands_Disagree,
+                                             Item => Id, Block => Block,
+                                             Value => V);
+                                       end if;
+                                       if Result_Of (Of_Unit, Id, Argument)
+                                         not in Landin.Types.I32
+                                           | Landin.Types.U32
+                                           | Landin.Types.I64
+                                           | Landin.Types.U64
+                                           | Landin.Types.Isize
+                                           | Landin.Types.Usize
+                                           | Landin.Types.F64
+                                         or else Atom_Set_Of
+                                           (Of_Unit, Id, Argument)
+                                             /= No_Atom_Set
+                                         or else (Callback /= No_Signature
+                                           and then not Is_C_Callback
+                                             (Callback))
                                        then
                                           return
                                             (Kind => Operands_Disagree,
@@ -5579,6 +7364,14 @@ package body Landin.IR.Verifier is
                           Block => Block_Id (B), others => <>);
                end if;
             end loop;
+
+            declare
+               Bad : constant Fault := Pointer_Provenance (Id);
+            begin
+               if Bad.Kind /= Nothing_Wrong then
+                  return Bad;
+               end if;
+            end;
 
             <<Next_IR_Item>>
             null;

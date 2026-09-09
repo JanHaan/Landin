@@ -1,0 +1,6 @@
+class: negative
+summary: R4.40 variadicness is part of structural callable identity, not merely a call argument-count allowance
+program: program.ldn
+codes: L0301
+constructs: 1000, 1580
+targets: linux-x86-64

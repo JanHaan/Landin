@@ -1,0 +1,22 @@
+byte: type = u8
+size: type = usize
+bytes: type = ptr byte
+table: type = ptr bytes
+no_memory: atom
+allocation: type = no_memory | ptr mut byte
+extern(c) _landin_host_initialize_arguments: (escaping argc: i32, escaping argv: table) -> none
+extern(c) _landin_host_argument_count: () -> (count: size)
+extern(c) _landin_host_argument_table: () -> (argv: table)
+extern(c) _landin_host_argument_at: (i: size) -> (data: cstring)
+extern(c) _landin_host_argument_at_from: (argv: table, i: size) -> (data: bytes from argv)
+extern(c) _landin_host_text_length: (p: bytes) -> (n: size)
+extern(c) _landin_host_open_read: (p: bytes) -> (fd: i32)
+extern(c) _landin_host_open_write: (p: bytes) -> (fd: i32)
+extern(c) _landin_host_read: (fd: i32, p: ptr mut byte, n: size) -> (count: size)
+extern(c) _landin_host_write: (fd: i32, p: bytes, n: size) -> (count: size)
+extern(c) _landin_host_close: (fd: i32) -> (status: i32)
+extern(c) _landin_host_errno: () -> (error: i32)
+extern(c) _landin_host_heap_allocate: (n: size, a: size) -> (data: allocation)
+extern(c) _landin_host_heap_release: (p: ptr mut byte) -> none
+extern(c) link(symbol: "_landin_host_initialize_arguments") initialize:
+    (escaping count: i32, escaping pointers: ptr ptr u8) -> none

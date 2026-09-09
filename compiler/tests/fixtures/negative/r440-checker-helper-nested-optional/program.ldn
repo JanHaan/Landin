@@ -1,0 +1,3 @@
+missing: atom
+maybe_byte: type = missing | ptr u8
+extern(c) link(symbol: "_landin_host_initialize_arguments") bridge: (argc: i32, escaping argv: ptr maybe_byte) -> none

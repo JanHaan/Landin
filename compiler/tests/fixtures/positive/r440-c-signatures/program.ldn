@@ -1,0 +1,45 @@
+absent: atom
+optional_bytes: type = absent | ptr mut u8
+callback: type = extern(c) (value: i32) -> (result: i32)
+variadic_callback: type = extern(c) (count: i32, ...) -> (result: f64)
+
+pair: type = layout(c) struct
+    real: f64
+    count: i32
+end pair
+
+record: type = layout(c) struct
+    values: [2]pair
+    notify: callback
+    storage: optional_bytes
+end record
+
+extern(c) link(symbol: "foreign_record") receive:
+    (value: record, transform: callback) -> (result: record)
+extern(c) malloc: (count: usize) -> (result: optional_bytes)
+extern(c) collect: (count: i32, ...) -> (result: f64)
+
+extern(c) increment: (value: i32) -> (result: i32) =
+    result = value + 1
+end increment
+
+public extern(c) link(symbol: "exported_pair") exported:
+    (value: pair) -> (result: pair) =
+    result = value
+end exported
+
+link(symbol: "native_identity") native: (value: i32) -> (result: i32) =
+    result = value
+end native
+
+exercise: () -> (result: f64) =
+    code: callback = increment
+    values: variadic_callback = collect
+    _ = code(41)
+    _ = native(42)
+    small: i8 = -2
+    real: f32 = 1.5
+    cell: u8 = 42
+    _ = collect(5, true, small, real, addr cell, 3.25)
+    result = values(2, 42, 2.5)
+end exercise

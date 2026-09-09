@@ -1,0 +1,9 @@
+import aliases
+
+convert: (value: u16) -> (result: u8) =
+    result = aliases.ratio(value)
+end convert
+
+public main: () -> (code: i32) =
+    code = i32(convert(101))
+end main

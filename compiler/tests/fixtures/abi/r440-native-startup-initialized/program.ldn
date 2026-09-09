@@ -1,0 +1,100 @@
+import core/io
+import core/text
+
+-- The plain bridge receives file capabilities from the C root. Importing the
+-- real io module also retains its unrelated host/argv routines in this unit.
+extern(c) _landin_host_read: (descriptor: i32, data: ptr mut u8,
+                              length: usize) -> (count: usize)
+extern(c) _landin_host_write: (descriptor: i32, data: ptr u8,
+                               length: usize) -> (count: usize)
+extern(c) _landin_host_argument_count: () -> (count: usize)
+extern(c) _landin_host_argument_table: () -> (table: ptr ptr u8)
+extern(c) _landin_host_argument_at: (index: usize) -> (data: ptr u8)
+
+read: () -> (value: i32) = value = 17 end read
+write: () -> (value: i32) = value = 19 end write
+
+public extern(c) l_plain: (input: i32, output: i32) -> (ok: bool) =
+    ok = false
+    return when read() <> 17 or write() <> 19
+    mut received: [4]u8 = zeroed
+    mut copied: [4]u8 = zeroed
+    count: usize = _landin_host_read(input, addr received[0], 4)
+    return when count <> 4
+    source: io.argument = (data: addr received[0], length: count)
+    bytes: []u8 = io.copy_argument(source, copied[0..<4]) else (problem)
+        _ = problem
+        return
+    end
+    ok = _landin_host_write(output, addr bytes[0], lenof bytes) == 4
+end l_plain
+
+callback: type = extern(c) (state: ptr io.system, depth: i32) -> (ok: bool)
+extern(c) c_reenter: (state: ptr io.system, visit: callback, depth: i32)
+                     -> (ok: bool)
+extern(c) c_argument_storage: (count: usize, table: ptr ptr u8,
+                               first: ptr u8) -> (ok: bool)
+
+arguments_match: (state: ptr io.system) -> (ok: bool) =
+    ok = false
+    return when io.argument_count(state.val) <> 2
+    first: io.argument = io.argument_at(state, usize(0)) else (problem)
+        _ = problem
+        return
+    end
+    second: io.argument = io.argument_at(state, usize(1)) else (problem)
+        _ = problem
+        return
+    end
+    mut word_scratch: [5]u8 = zeroed
+    mut number_scratch: [2]u8 = zeroed
+    word_bytes: []u8 = io.copy_argument(first, word_scratch[0..<5])
+      else (problem)
+        _ = problem
+        return
+    end
+    number_bytes: []u8 = io.copy_argument(second, number_scratch[0..<2])
+      else (problem)
+        _ = problem
+        return
+    end
+    word: utf8 = text.from_bytes(word_bytes) else (problem)
+        _ = problem
+        return
+    end
+    number: utf8 = text.from_bytes(number_bytes) else (problem)
+        _ = problem
+        return
+    end
+    return when not text.eq(word, "alpha") or not text.eq(number, "42")
+    -- Check the actual global snapshot as well as the already-minted world.
+    -- This catches a callback prologue resetting hidden argc/argv cells.
+    return when usize(first.data) <> usize(_landin_host_argument_at(0))
+    ok = c_argument_storage(_landin_host_argument_count(),
+                            _landin_host_argument_table(), first.data)
+end arguments_match
+
+extern(c) visit: (state: ptr io.system, depth: i32) -> (ok: bool) =
+    ok = false
+    return when not arguments_match(state)
+    if depth > 0 then
+        return when not c_reenter(state, visit, depth - 1)
+    end if
+    ok = arguments_match(state)
+end visit
+
+-- C main delegates capability minting to this root exactly once. All lower
+-- calls, including reentrant C callbacks, receive that ordinary capability.
+public extern(c) l_root: () -> (ok: bool) =
+    mut state: io.system = io.host()
+    ok = false
+    return when not arguments_match(addr state)
+    return when not c_reenter(addr state, visit, 3)
+    output: io.file = io.out(state)
+    message: []u8 = "native Landin io\n"
+    io.write(state, output, message) else (problem)
+        _ = problem
+        return
+    end
+    ok = arguments_match(addr state)
+end l_root

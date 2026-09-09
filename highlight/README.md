@@ -63,9 +63,11 @@ What it cannot do is tell the `set` of `[0410]` from a variable called
 `set`. The contextual words — `from`, `of`, `at`, `set`, `range`, `option`,
 `link`, `align` — are coloured by position, and some of them will be
 coloured wrongly. A regex cannot fix that. The tree-sitter grammar handles
-the enabled structural surface, including contextual `lenof` and `of`, while
-remaining deliberately non-normative and tolerant enough for incomplete
-editor buffers.
+the enabled structural surface, including contextual `lenof` and `of`, the
+`layout(c)` and `link(symbol: ...)` annotations, and `extern(c)` function
+types, while `c`, `layout`, `link`, and `symbol` remain ordinary identifiers
+outside those positions. It remains deliberately non-normative and tolerant
+enough for incomplete editor buffers.
 
 `check.py` keeps its own list of reserved words on purpose. That one is
 about legality and this one is about colour, they have drifted apart
@@ -117,7 +119,9 @@ To exercise Pygments without installing anything into the repository, create
 a temporary virtual environment, `pip install -e ./highlight`, and run the
 suite with that environment's `python3` first on `PATH`.
 
-`--integration` adds the 392 positive, runtime and `core/*` sources to the
-tree-sitter pass. It remains useful as language-wide evidence, but is not
-needed to test or package the highlighters themselves. Each editor directory
-contains the shortest installation path for that editor.
+`--integration` adds every positive, runtime and ABI Landin source plus
+`core/*` to the tree-sitter pass. The `*.ldn` filter is deliberate: C and
+header companions in an ABI fixture are never presented to the Landin grammar.
+It remains useful as language-wide evidence, but is not needed to test or
+package the highlighters themselves. Each editor directory contains the
+shortest installation path for that editor.

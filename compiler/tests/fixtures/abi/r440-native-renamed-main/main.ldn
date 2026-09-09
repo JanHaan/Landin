@@ -1,0 +1,20 @@
+extern(c) _landin_host_argument_count: () -> (count: usize)
+extern(c) link(symbol: ".Llandin_host_argv") foreign_state: () -> (value: i32)
+extern(c) link(symbol: "_landin_host_initialize_arguments") initialize:
+    (argc: i32, escaping argv: ptr ptr u8) -> none
+extern(c) link(symbol: "_landin_host_initialize_arguments") initialize_again:
+    (argc: i32, escaping argv: ptr ptr u8) -> none
+
+public extern(c) r440_explicit_start:
+    (argc: i32, escaping argv: ptr ptr u8) -> none =
+    initialize(argc, argv)
+    initialize_again(argc, argv)
+end r440_explicit_start
+
+public extern(c) link(symbol: "r440_renamed_main") main: () -> (code: i32) =
+    code = foreign_state()
+end main
+
+public extern(c) r440_retained_count: () -> (count: usize) =
+    count = _landin_host_argument_count()
+end r440_retained_count

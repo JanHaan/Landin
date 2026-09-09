@@ -1,0 +1,5 @@
+class: positive
+summary: R4.40 accepts numeric and callback array substitutions in a parameterized struct
+constructs: 0520, 0540, 0670, 1350, 1795, 1800
+program: program.ldn
+targets: linux-x86-64, macos-arm64

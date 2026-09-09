@@ -1,0 +1,8 @@
+import core/io
+
+-- The C root omitted argument initialization. Acquiring the system world is
+-- an actual argv-dependent operation; it must trap before publishing a ptr.
+public extern(c) l_root: () -> (count: usize) =
+    state: io.system = io.host()
+    count = io.argument_count(state)
+end l_root

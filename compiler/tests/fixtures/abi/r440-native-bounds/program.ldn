@@ -1,0 +1,40 @@
+-- Page-end objects expose accidental full-eightbyte loads and stores.
+bytes3: type = layout(c) struct
+    values: [3]u8
+end bytes3
+extern(c) c_bytes3: (value: bytes3) -> (result: bytes3)
+public extern(c) l_bytes3: (source: ptr bytes3, target: ptr mut bytes3) -> none =
+    target.val = c_bytes3(source.val)
+end l_bytes3
+
+bytes5: type = layout(c) struct
+    values: [5]u8
+end bytes5
+extern(c) c_bytes5: (value: bytes5) -> (result: bytes5)
+public extern(c) l_bytes5: (source: ptr bytes5, target: ptr mut bytes5) -> none =
+    target.val = c_bytes5(source.val)
+end l_bytes5
+
+bytes7: type = layout(c) struct
+    values: [7]u8
+end bytes7
+extern(c) c_bytes7: (value: bytes7) -> (result: bytes7)
+public extern(c) l_bytes7: (source: ptr bytes7, target: ptr mut bytes7) -> none =
+    target.val = c_bytes7(source.val)
+end l_bytes7
+
+bytes12: type = layout(c) struct
+    values: [12]u8
+end bytes12
+extern(c) c_bytes12: (value: bytes12) -> (result: bytes12)
+public extern(c) l_bytes12: (source: ptr bytes12, target: ptr mut bytes12) -> none =
+    target.val = c_bytes12(source.val)
+end l_bytes12
+
+bytes24: type = layout(c) struct
+    values: [24]u8
+end bytes24
+extern(c) c_bytes24: (value: bytes24) -> (result: bytes24)
+public extern(c) l_bytes24: (source: ptr bytes24, target: ptr mut bytes24) -> none =
+    target.val = c_bytes24(source.val)
+end l_bytes24

@@ -1,5 +1,5 @@
 class: negative
-summary: array payload views follow temporary local value and genuine inout match storage separately
+summary: payload views through pointers and slices of local storage and direct local or by-value subjects cannot escape
 expect: expected.txt
 args: ../tests/fixtures/negative/variant-match-copied-array-view-escape/main.ldn
 codes: L0314, L0314, L0314, L0314

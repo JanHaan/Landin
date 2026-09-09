@@ -1,0 +1,9 @@
+class: abi
+summary: C va_arg checks data pointers both optional pointer arms and invoked fixed callbacks in register and spilled direct and indirect tails
+program: program.ldn
+c-sources: peer.c
+c-args: -O2
+run_expect: expected.txt
+status: 42
+constructs: 1570, 1580, 1600, 1975
+targets: linux-x86-64

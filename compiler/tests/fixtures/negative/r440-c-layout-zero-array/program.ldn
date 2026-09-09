@@ -1,0 +1,3 @@
+bad: type = layout(c) struct
+    values: [0]i32
+end bad

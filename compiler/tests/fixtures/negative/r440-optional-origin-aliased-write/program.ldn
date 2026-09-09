@@ -1,0 +1,10 @@
+absent: atom
+maybe_pointer: type = absent | ptr u32
+stored: u32 = 42
+
+bad: (cell: ptr u32) -> (result: maybe_pointer from cell) =
+    mut local: maybe_pointer = absent
+    alias: ptr mut maybe_pointer = addr local
+    alias.val = addr stored
+    result = local
+end bad

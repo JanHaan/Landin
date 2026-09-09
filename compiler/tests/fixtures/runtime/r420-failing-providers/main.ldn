@@ -23,7 +23,11 @@ heap_budgets: () -> (ok: bool) =
 
     one: usize = 1
     failing.permit(state, one)
-    first: ptr mut u8 = mem.allocate(state, size_1, alignment_1) else ptr(0)
+    first: ptr mut u8 = mem.allocate(state, size_1, alignment_1) else (problem)
+        _ = problem
+        ok = false
+        return
+    end
     first_last: ptr mut u8 = ptr(usize(first) + size_1 - 1)
     first.val = 11
     first_last.val = 13
@@ -35,8 +39,16 @@ heap_budgets: () -> (ok: bool) =
     failing.permit(state, two)
     size_2: usize = 31
     alignment_2: usize = 64
-    second: ptr mut u8 = mem.allocate(state, size_1, alignment_1) else ptr(0)
-    third: ptr mut u8 = mem.allocate(state, size_2, alignment_2) else ptr(0)
+    second: ptr mut u8 = mem.allocate(state, size_1, alignment_1) else (problem)
+        _ = problem
+        ok = false
+        return
+    end
+    third: ptr mut u8 = mem.allocate(state, size_2, alignment_2) else (problem)
+        _ = problem
+        ok = false
+        return
+    end
     third_aligned: bool = usize(third) % alignment_2 == 0
     mut failed_after_two: bool = false
     _ = mem.allocate(state, one, one) else (problem)
@@ -85,11 +97,23 @@ pool_budgets_and_inner_failure: () -> (ok: bool) =
         failed_zero = true
     end
     failing.permit(state, one)
-    first: ptr mut u8 = mem.allocate(state, slot_size, alignment) else ptr(0)
+    first: ptr mut u8 = mem.allocate(state, slot_size, alignment) else (problem)
+        _ = problem
+        ok = false
+        return
+    end
     mem.free(state, first, slot_size)
     failing.permit(state, two)
-    second: ptr mut u8 = mem.allocate(state, slot_size, alignment) else ptr(0)
-    third: ptr mut u8 = mem.allocate(state, slot_size, alignment) else ptr(0)
+    second: ptr mut u8 = mem.allocate(state, slot_size, alignment) else (problem)
+        _ = problem
+        ok = false
+        return
+    end
+    third: ptr mut u8 = mem.allocate(state, slot_size, alignment) else (problem)
+        _ = problem
+        ok = false
+        return
+    end
     mut failed_after_two: bool = false
     _ = mem.allocate(state, one, one) else (problem)
         _ = problem

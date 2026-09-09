@@ -1,0 +1,17 @@
+absent: atom
+maybe_pointer: type = absent | ptr u32
+
+pair: (cell: ptr u32) -> (item: maybe_pointer from cell, got: bool) =
+    item = cell
+    got = true
+end pair
+
+forward: (cell: ptr u32) -> (item: maybe_pointer, got: bool) =
+    pair(cell)
+end forward
+
+escape: () -> (result: maybe_pointer) =
+    local: u32 = 42
+    values := forward(addr local)
+    result = values.item
+end escape

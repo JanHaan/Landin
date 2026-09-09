@@ -1,0 +1,14 @@
+absent: atom
+maybe_pointer: type = absent | ptr u32
+
+retain: (escaping pointer: ptr u32) -> none =
+    _ = pointer
+end retain
+
+bad: (cell: ptr u32, missing: bool) -> none =
+    local: maybe_pointer = if missing then absent else cell end if
+    match local
+        absent: _ = 0
+        ptr (pointer): retain(pointer)
+    end match
+end bad

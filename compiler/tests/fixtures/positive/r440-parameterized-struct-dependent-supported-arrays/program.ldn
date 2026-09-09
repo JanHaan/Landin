@@ -1,0 +1,11 @@
+problem: atom
+problems: type = problem
+bad: type (item: type) = struct
+    values: [2]item
+end bad
+first: bad([3]u8)
+identity: (value: u8) -> (result: u8) =
+    result = value
+end identity
+second: bad((value: u8) -> (result: u8)) =
+    (values: [identity, identity])

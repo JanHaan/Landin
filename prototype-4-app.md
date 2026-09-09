@@ -40,6 +40,14 @@ manual obligations under D153. Small complete library clients exercise these
 contracts; they do not claim the full `read`, `filter`, `dest`, `config` and
 command-line application below, which remain R4.80.
 
+At the system boundary D207 keeps errno in the explicit provider state,
+readable through `io.last_errno`, rather than adding payloads to these atoms.
+Capture follows the failing libc operation before another host call. Safe
+no-progress EINTR attempts may retry open/read/write, preserving completed
+transfers; close consumes its handle once even when it fails and is not
+blindly retried. The memory provider's injected failures do not invent a
+thread-local host errno.
+
 For the argument path touched by this slice, both providers expose only user
 arguments and index zero is the first of them, never `argv[0]`. The ordinary
 adapter copies a pointer-and-length `io.argument` into exact caller scratch and
@@ -586,7 +594,10 @@ A callback not worth a concept: one use, one shape, no second
 implementation on the horizon. So it is the pair from [1000],
 written out, and the contrast with the chain above is the point.
 A concept earns its place when the set of implementations is
-open; a pair is enough when it is not.
+open; a pair is enough when it is not. This pair is internal Landin dispatch,
+not a C-compatible record: a C callback field must carry an explicit
+`extern(c)` function type under [1975], with independently declared retention
+and state-lifetime contracts.
 ```landin
 public on_progress: type = struct
     call:  (state: ptr u8, done: u32) -> none

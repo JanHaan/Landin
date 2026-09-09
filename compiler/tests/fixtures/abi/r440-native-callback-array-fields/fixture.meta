@@ -1,0 +1,9 @@
+class: abi
+summary: Callback array fields preserve initialized code values through register memory image copy and pointer paths
+program: program.ldn
+c-sources: peer.c
+c-args: -O2
+run_expect: expected.txt
+status: 42
+constructs: 0420, 0430, 0520, 0540, 1570, 1580, 1600, 1940
+targets: linux-x86-64

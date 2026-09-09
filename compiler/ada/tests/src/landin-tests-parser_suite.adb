@@ -233,13 +233,15 @@ package body Landin.Tests.Parser_Suite is
                                 (Item,
                                  Is_Prefix
                                    (Unbounded.To_String (Codes),
-                                    Fixtures.Codes (Fixture)),
+                                    Fixtures.Normalized_Codes
+                                      (Fixtures.Codes (Fixture))),
                                  Fixtures.Name (Fixture)
                                  & ": what the parse reports must begin"
                                  & " the codes the fixture names, and "
                                  & Unbounded.To_String (Codes)
                                  & " does not begin "
-                                 & Fixtures.Codes (Fixture));
+                                 & Fixtures.Normalized_Codes
+                                     (Fixtures.Codes (Fixture)));
                            end if;
                         end if;
                      end;
@@ -1268,9 +1270,10 @@ package body Landin.Tests.Parser_Suite is
 
    --  Every negative fixture names the exact ordered sequence of codes its
    --  report carries, and this is what holds the compiler to it.  It runs
-   --  the whole frontend the way a user does -- Landin.Driver.Execute, with
-   --  the program in a fake filesystem -- because the sequence a fixture
-   --  pins is the sequence a user sees, and a case that assembled the
+   --  the whole frontend the way a user does -- Landin.Driver.Execute.  An
+   --  ordinary program stays isolated in a fake filesystem; a rooted fixture
+   --  uses the real repository module closure it names.  The sequence a
+   --  fixture pins is the sequence a user sees, and a case that assembled the
    --  stages itself could agree with the fixture while the driver did not.
    procedure Reports_Carry_The_Pinned_Codes
      (Item : in out Landin.Testing.Context);
@@ -1282,7 +1285,7 @@ package body Landin.Tests.Parser_Suite is
       Catalogue : Fixtures.Catalogue;
       Pinned    : Natural := 0;
 
-      function Arguments_Of (First : String)
+      function Arguments_Of (First : String; Written : String)
         return Landin.Platform.Path_List;
 
       --  The codes a rendered report carries, in the order it carries
@@ -1290,12 +1293,31 @@ package body Landin.Tests.Parser_Suite is
       --  what a fixture pins is what a reader sees.
       function Codes_In (Text : String) return String;
 
-      function Arguments_Of (First : String)
+      function Arguments_Of (First : String; Written : String)
         return Landin.Platform.Path_List
       is
          Made : Landin.Platform.Path_List;
+         Start : Integer := Written'First;
       begin
-         Made.Append (First);
+         if Written = "" then
+            Made.Append (First);
+            return Made;
+         end if;
+
+         --  Fixture arguments are whitespace-separated, as in the execution
+         --  harness.  Keep emission and target flags: a valid source can be
+         --  refused only when the driver is asked to produce an executable.
+         for Index in Written'Range loop
+            if Written (Index) in ' ' | ASCII.HT then
+               if Start < Index then
+                  Made.Append (Written (Start .. Index - 1));
+               end if;
+               Start := Index + 1;
+            end if;
+         end loop;
+         if Start <= Written'Last then
+            Made.Append (Written (Start .. Written'Last));
+         end if;
          return Made;
       end Arguments_Of;
 
@@ -1349,23 +1371,20 @@ package body Landin.Tests.Parser_Suite is
                      Landin.Testing.Fail (Item, Path & " is unreadable");
                   else
                      declare
-                        Host : Landin.Testing.Fakes.Fake_Filesystem;
-                        Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
-                     begin
-                        Host.Add_File
-                          ("program.ldn", Unbounded.To_String (Content));
+                        procedure Check_Outcome
+                          (Ran : Landin.Driver.Outcome);
 
-                        declare
-                           Ran : constant Landin.Driver.Outcome :=
-                             Landin.Driver.Execute
-                               (Arguments_Of ("program.ldn"), Host, Tools);
+                        procedure Check_Outcome
+                          (Ran : Landin.Driver.Outcome)
+                        is
                         begin
                            Pinned := Pinned + 1;
                            Landin.Testing.Check_Equal
                              (Item,
                               Codes_In
                                 (Unbounded.To_String (Ran.Report)),
-                              Fixtures.Codes (Fixture),
+                              Fixtures.Normalized_Codes
+                                (Fixtures.Codes (Fixture)),
                               Fixtures.Name (Fixture)
                               & ": the report carries the codes the"
                               & " fixture names");
@@ -1374,7 +1393,38 @@ package body Landin.Tests.Parser_Suite is
                               Landin.Driver.Status_Reported,
                               Fixtures.Name (Fixture)
                               & ": a rejected program exits reported");
-                        end;
+                        end Check_Outcome;
+                     begin
+                        if Fixtures.Module_Root (Fixture) = "" then
+                           --  The ordinary one-file seam remains isolated from
+                           --  the host: only the fixture's program is visible.
+                           declare
+                              Host  : Landin.Testing.Fakes.Fake_Filesystem;
+                              Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+                           begin
+                              Host.Add_File
+                                (Path, Unbounded.To_String (Content));
+                              Check_Outcome
+                                (Landin.Driver.Execute
+                                   (Arguments_Of
+                                      (Path, Fixtures.Args (Fixture)),
+                                    Host, Tools));
+                           end;
+                        else
+                           --  Deliberate real-host exception: a rooted fixture
+                           --  asserts a report from its repository module
+                           --  closure, not from a fake containing one file.
+                           declare
+                              Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+                              Arguments : Landin.Platform.Path_List;
+                           begin
+                              Fixtures.Append_Module_Arguments
+                                (Fixture, Corpus, Arguments);
+                              Check_Outcome
+                                (Landin.Driver.Execute
+                                   (Arguments, Real, Tools));
+                           end;
+                        end if;
                      end;
                   end if;
                end;
@@ -2157,8 +2207,126 @@ package body Landin.Tests.Parser_Suite is
              & ASCII.LF & "else compiler.assert(false) end if", True);
    end Import_And_Directive_Syntax_Boundaries;
 
+   procedure C_Syntax_Recovery (Item : in out Landin.Testing.Context);
+
+   procedure C_Syntax_Recovery (Item : in out Landin.Testing.Context) is
+      procedure Check (Text : String; Expected : String);
+
+      procedure Check (Text : String; Expected : String) is
+         Codes : Unbounded.Unbounded_String;
+         Total, Nodes : Natural;
+         Held : Boolean;
+      begin
+         Read_And_Parse
+           (Text & ASCII.LF & "after: u8 = 1" & ASCII.LF,
+            Codes, Total, Nodes, Held);
+         Landin.Testing.Check
+           (Item, Held and then Nodes > 0,
+            "C syntax recovery retains the tree invariants");
+         Landin.Testing.Check_Equal
+           (Item, Unbounded.To_String (Codes), Expected,
+            "C syntax recovery: " & Text);
+      end Check;
+   begin
+      Check ("extern(c extra) read: () -> none", "L0103");
+      Check ("extern(c read: () -> none", "L0103");
+      Check ("pair: type = layout(c extra) struct x: u8 end pair",
+             "L0103");
+      Check ("extern(c) link(symbol: ""read"" extra) read: () -> none",
+             "L0103");
+      Check ("extern(c) link(symbol: ) read: () -> none", "L0103");
+      Check ("extern(c) read: (...) -> none", "L0103");
+      Check ("callback: type = extern(c) (...) -> none", "L0103");
+      Check ("read: (...) -> none = end read", "L0103");
+      Check ("extern(c) read: (count: i32, ..., extra: u8) -> none",
+             "L0103");
+      Check ("extern(c) read: (count: i32, ...) -> none", "");
+
+      declare
+         Text : constant String :=
+           "extern(c) link(symbol: ""read"") read: (count: i32, ...)"
+           & " -> none" & ASCII.LF
+           & "callback: type = extern(c) (count: i32, ...) -> none";
+         Codes : Unbounded.Unbounded_String;
+         Total, Nodes : Natural;
+         Held : Boolean;
+      begin
+         for Cut in Text'First - 1 .. Text'Last loop
+            Read_And_Parse
+              (Text (Text'First .. Cut), Codes, Total, Nodes, Held);
+            Landin.Testing.Check
+              (Item, Held and then Nodes > 0,
+               "C annotation and variadic truncation" & Cut'Image);
+         end loop;
+      end;
+   end C_Syntax_Recovery;
+
+   procedure Destructuring_Begins_A_Body
+     (Item : in out Landin.Testing.Context);
+
+   procedure Destructuring_Begins_A_Body
+     (Item : in out Landin.Testing.Context)
+   is
+      Sources : Landin.Source.Sets.Source_Set;
+      Names   : Landin.Source.Names.Table;
+      Stream  : Landin.Tokens.Token_Stream;
+      Found   : Landin.Diagnostics.Diagnostic_List;
+      Id      : constant Landin.Source.Source_Id := Sources.Add
+        ("destructuring.ldn",
+         "first: () -> (r: i32) =" & ASCII.LF
+         & "  (item: local, _) := pair()" & ASCII.LF
+         & "  r = local" & ASCII.LF
+         & "end first" & ASCII.LF
+         & "second: () -> (r: i32) = begin" & ASCII.LF
+         & "  (item: local, _) := pair()" & ASCII.LF
+         & "  local" & ASCII.LF
+         & "end end second" & ASCII.LF
+         & "third: () -> none =" & ASCII.LF
+         & "  (item: _, _) := pair()" & ASCII.LF
+         & "  (item, _) := pair()" & ASCII.LF
+         & "end third" & ASCII.LF
+         & "fourth: () -> (r: i32) = if true then" & ASCII.LF
+         & "  (item: local, _) := pair()" & ASCII.LF
+         & "  local" & ASCII.LF
+         & "else 0 end if end fourth" & ASCII.LF
+         & "image: () -> (r: point) = (item: local) end image" & ASCII.LF);
+      Bindings : Natural := 0;
+      Images   : Natural := 0;
+   begin
+      Landin.Tokens.Lexer.Lex (Sources.Get (Id), Names, Stream);
+      Landin.Diagnostics.Lexical.Report (Stream, Found);
+      declare
+         Parsed : constant Landin.Syntax.Tree :=
+           Landin.Syntax.Parser.Parse (Stream, Names, Found);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Landin.Diagnostics.Count (Found), 0,
+            "labelled destructuring is a statement in every body position");
+         for Node in Landin.Syntax.Node_Id'(1)
+           .. Landin.Syntax.Last_Node (Parsed)
+         loop
+            case Landin.Syntax.Kind (Parsed, Node) is
+               when Landin.Syntax.Destructuring_Binding =>
+                  Bindings := Bindings + 1;
+               when Landin.Syntax.Struct_Literal =>
+                  Images := Images + 1;
+               when others => null;
+            end case;
+         end loop;
+      end;
+      Landin.Testing.Check_Equal
+        (Item, Bindings, 5, "all labelled, discarded and bare fields bind");
+      Landin.Testing.Check_Equal
+        (Item, Images, 1, "without := a labelled body is still an image");
+   end Destructuring_Begins_A_Body;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "parser", "C syntax recovery", C_Syntax_Recovery'Access);
+      Landin.Testing.Register
+        (Into, "parser", "destructuring begins a body",
+         Destructuring_Begins_A_Body'Access);
       Landin.Testing.Register
         (Into, "parser", "import and directive syntax boundaries",
          Import_And_Directive_Syntax_Boundaries'Access);

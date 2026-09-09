@@ -1,0 +1,41 @@
+-- C-owned startup uses only the startup-independent hosted service seams.
+-- The argv-global services intentionally are not declared by this fixture.
+extern(c) _landin_host_text_length: (data: ptr u8) -> (length: usize)
+extern(c) _landin_host_read: (descriptor: i32, data: ptr mut u8, length: usize) -> (count: usize)
+extern(c) _landin_host_write: (descriptor: i32, data: ptr u8, length: usize) -> (count: usize)
+failed: atom
+allocation: type = failed | ptr mut u8
+extern(c) _landin_host_heap_allocate: (size: usize, alignment: usize) -> (block: allocation)
+extern(c) _landin_host_heap_release: (block: ptr mut u8) -> none
+
+-- Private Landin names cannot replace libc calls made by the service shims.
+strlen: () -> (result: usize) = result = 99 end strlen
+malloc: () -> (result: usize) = result = 99 end malloc
+free: () -> (result: usize) = result = 99 end free
+
+public extern(c) l_length: (data: ptr u8) -> (length: usize) =
+    _ = strlen()
+    length = _landin_host_text_length(data)
+end l_length
+
+public extern(c) l_copy: (input: i32, output: i32, buffer: ptr mut u8, length: usize) -> (count: usize) =
+    received := _landin_host_read(input, buffer, length)
+    count = 0
+    if received == length then
+        count = _landin_host_write(output, buffer, length)
+    end if
+end l_copy
+
+public extern(c) l_heap: () -> (ok: bool) =
+    _ = malloc()
+    _ = free()
+    ok = false
+    match _landin_host_heap_allocate(64, 24)
+        failed: ok = false
+        ptr (block): begin
+            block.val = 42
+            ok = block.val == 42 and usize(block) % 24 == 0
+            _landin_host_heap_release(block)
+        end
+    end match
+end l_heap

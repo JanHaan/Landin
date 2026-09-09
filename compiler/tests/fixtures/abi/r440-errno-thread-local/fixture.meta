@@ -1,0 +1,10 @@
+class: abi
+summary: pthreads preserve distinct thread-local errno across C to Landin to hosted bridge calls
+program: program.ldn
+root: ../../../../..
+c-sources: threads.c
+c-args: -pthread -Wl,--wrap=open
+run_expect: expected.txt
+status: 42
+constructs: 0940, 1570, 1580, 1600, 1660, 1975
+targets: linux-x86-64

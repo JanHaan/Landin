@@ -1,0 +1,68 @@
+import core/c
+import core/c (c_bool, c_double, c_float, c_long, c_longlong, c_ptrdiff,
+               c_size, c_ulong, c_ulonglong)
+
+public main: () -> (code: i32) =
+    --  c_char is deliberately a signed numeric byte, not Unicode u32.
+    character: c.c_char = -1
+    signed_character: c.c_schar = -2
+    unsigned_character: c.c_uchar = 255
+    short_value: c.c_short = -123
+    unsigned_short: c.c_ushort = 456
+    integer: c.c_int = -789
+    unsigned_integer: c.c_uint = 987
+    long_value: c.c_long = c_long(integer)
+    unsigned_long: c.c_ulong = c_ulong(unsigned_integer)
+    long_long: c.c_longlong = c_longlong(long_value)
+    unsigned_long_long: c.c_ulonglong = c_ulonglong(unsigned_long)
+    size: c.c_size = c_size(24)
+    difference: c.c_ptrdiff = c_ptrdiff(-24)
+    single: c.c_float = c_float(3)
+    double: c.c_double = c_double(single)
+    truth: c.c_bool = c_bool(1)
+
+    --  Alias identity permits these ordinary assignments without adapters.
+    ordinary_character: i8 = character
+    ordinary_short: i16 = short_value
+    ordinary_integer: i32 = integer
+    ordinary_long: i64 = long_value
+    ordinary_unsigned_character: u8 = unsigned_character
+    ordinary_unsigned_short: u16 = unsigned_short
+    ordinary_unsigned_integer: u32 = unsigned_integer
+    ordinary_unsigned_long: u64 = unsigned_long
+    ordinary_size: usize = size
+    ordinary_difference: isize = difference
+    ordinary_single: f32 = single
+    ordinary_double: f64 = double
+    ordinary_truth: bool = truth
+
+    if sizeof c.c_char == 1 and alignof c.c_char == 1
+      and sizeof c.c_schar == 1 and alignof c.c_schar == 1
+      and sizeof c.c_uchar == 1 and alignof c.c_uchar == 1
+      and sizeof c.c_short == 2 and alignof c.c_short == 2
+      and sizeof c.c_ushort == 2 and alignof c.c_ushort == 2
+      and sizeof c.c_int == 4 and alignof c.c_int == 4
+      and sizeof c.c_uint == 4 and alignof c.c_uint == 4
+      and sizeof c.c_long == 8 and alignof c.c_long == 8
+      and sizeof c.c_ulong == 8 and alignof c.c_ulong == 8
+      and sizeof c.c_longlong == 8 and alignof c.c_longlong == 8
+      and sizeof c.c_ulonglong == 8 and alignof c.c_ulonglong == 8
+      and sizeof c.c_size == 8 and alignof c.c_size == 8
+      and sizeof c.c_ptrdiff == 8 and alignof c.c_ptrdiff == 8
+      and sizeof c.c_float == 4 and alignof c.c_float == 4
+      and sizeof c.c_double == 8 and alignof c.c_double == 8
+      and sizeof c.c_bool == 1 and alignof c.c_bool == 1
+      and ordinary_character == -1 and ordinary_short == -123
+      and ordinary_integer == -789 and ordinary_long == -789
+      and ordinary_unsigned_character == 255 and ordinary_unsigned_short == 456
+      and ordinary_unsigned_integer == 987 and ordinary_unsigned_long == 987
+      and long_long == -789 and unsigned_long_long == 987
+      and ordinary_size == 24 and ordinary_difference == -24
+      and ordinary_single == 3.0 and ordinary_double == 3.0
+      and ordinary_truth
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

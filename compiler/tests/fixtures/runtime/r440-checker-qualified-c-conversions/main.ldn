@@ -1,0 +1,25 @@
+import core/c
+
+highbit: c.c_ulong = c.c_ulong(0x8000000000000000)
+image: [2]c.c_uint = [c.c_uint(40), c.c_uint(2)]
+
+convert: (value: u32) -> (result: c.c_ulong) =
+    result = c.c_ulong(value)
+end convert
+
+public main: () -> (code: i32) =
+    value: u32 = image[0] + image[1]
+    widened: c.c_ulong = convert(value)
+    size: c.c_size = c.c_size(widened)
+    single: c.c_float = c.c_float(value)
+    double: c.c_double = c.c_double(single)
+    truth: c.c_bool = c.c_bool(1)
+    if widened == 42 and size == 42 and double == 42.0 and truth
+      and c.c_ulong(highbit) == 0x8000000000000000
+      and sizeof c.c_ulong == 8 and sizeof c.c_size == 8
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

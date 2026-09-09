@@ -10,9 +10,12 @@ with Ada.Strings.Fixed;
 with Ada.Environment_Variables;
 with Ada.Strings.Unbounded;
 
+with Landin.Backend.Toolchain;
 with Landin.Platform;
 with Landin.Platform.Native;
 with Landin.Platform.Native.Tools;
+with Landin.Targets;
+with Landin.Testing.Fakes;
 with Landin.Testing.Fixtures;
 
 --  This suite runs the real `refine` against the real fixture tree through
@@ -84,7 +87,9 @@ package body Landin.Tests.Fixture_Execution_Suite is
       First  : Integer := Text'First;
    begin
       for Index in Text'Range loop
-         if Text (Index) = ' ' then
+         if Text (Index) in ' ' | ASCII.HT | ASCII.LF | ASCII.VT
+           | ASCII.FF | ASCII.CR
+         then
             if Index > First then
                Result.Append (Text (First .. Index - 1));
             end if;
@@ -102,35 +107,65 @@ package body Landin.Tests.Fixture_Execution_Suite is
    function Label_Of (Item : Fixture) return String is
      (Class_Directory (Class (Item)) & "/" & Name (Item));
 
-   function Codes_In (Text : String) return String;
+   --  A watchdog stops a child with a signal, but that intervention is not
+   --  the trap a fixture promised to produce.  Keep the verdict on the typed
+   --  outcome rather than on the adapter's explanatory output.
+   function Satisfies_Termination_Expectation
+     (Ended : Landin.Platform.Termination;
+      Traps : Boolean) return Boolean
+   is
+     (case Ended is
+         when Landin.Platform.Exited    => not Traps,
+         when Landin.Platform.Signaled  => Traps,
+         when Landin.Platform.Timed_Out => False);
 
-   --  A fixture may write `L0010,L0020` or `L0010, L0020`; the comparison
-   --  is on the codes, not the spaces (R4.21).
-   function Normalised (Codes : String) return String;
+   procedure A_Timeout_Cannot_Satisfy_A_Trap
+     (Item : in out Landin.Testing.Context);
 
-   function Normalised (Codes : String) return String is
-      Found : Unbounded.Unbounded_String;
-      Start : Positive := Codes'First;
+   procedure A_Timeout_Cannot_Satisfy_A_Trap
+     (Item : in out Landin.Testing.Context)
+   is
+      Runner      : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Overdue     : Landin.Platform.Tool_Result;
+      Trap_Result : Landin.Platform.Tool_Result;
    begin
-      for Index in Codes'First .. Codes'Last + 1 loop
-         if Index > Codes'Last or else Codes (Index) = ',' then
-            declare
-               Piece : constant String :=
-                 Ada.Strings.Fixed.Trim
-                   (Codes (Start .. Index - 1), Ada.Strings.Both);
-            begin
-               if Piece'Length > 0 then
-                  if Unbounded.Length (Found) > 0 then
-                     Unbounded.Append (Found, ", ");
-                  end if;
-                  Unbounded.Append (Found, Piece);
-               end if;
-            end;
-            Start := Index + 1;
-         end if;
-      end loop;
-      return Unbounded.To_String (Found);
-   end Normalised;
+      --  Deliberately identical text: the typed outcome, not stderr prose,
+      --  must decide whether the fixture produced its promised trap.
+      Runner.Add_Result
+        (Exit_Code => 0,
+         Output    => "same captured output",
+         Ended     => Landin.Platform.Timed_Out);
+      Runner.Add_Result
+        (Exit_Code => 0,
+         Output    => "same captured output",
+         Ended     => Landin.Platform.Signaled);
+
+      Runner.Run
+        ("overdue", Landin.Platform.No_Arguments, Overdue,
+         Landin.Platform.Merged);
+      Runner.Run
+        ("signaled", Landin.Platform.No_Arguments, Trap_Result,
+         Landin.Platform.Merged);
+
+      Landin.Testing.Check
+        (Item, Overdue.Ended = Landin.Platform.Timed_Out,
+         "the fake preserves a watchdog expiration");
+      Landin.Testing.Check
+        (Item,
+         not Satisfies_Termination_Expectation
+           (Overdue.Ended, Traps => True),
+         "a watchdog expiration cannot satisfy a trap fixture");
+      Landin.Testing.Check
+        (Item, Trap_Result.Ended = Landin.Platform.Signaled,
+         "the fake preserves signal termination");
+      Landin.Testing.Check
+        (Item,
+         Satisfies_Termination_Expectation
+           (Trap_Result.Ended, Traps => True),
+         "signal termination can satisfy a trap fixture");
+   end A_Timeout_Cannot_Satisfy_A_Trap;
+
+   function Codes_In (Text : String) return String;
 
    function Codes_In (Text : String) return String is
       Found : Unbounded.Unbounded_String;
@@ -219,43 +254,13 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Item      : in out Landin.Testing.Context)
    is
       Label   : constant String := "positive/" & Name (Case_Item);
-      Source  : constant String :=
-        Fixture_Root & "/positive/" & Name (Case_Item) & "/"
-        & Landin.Testing.Fixtures.Program (Case_Item);
       Written : constant String :=
         Output_Directory & "positive-" & Name (Case_Item) & ".s";
       Runner  : Landin.Platform.Native.Tools.Native_Tool_Runner;
       Outcome : Landin.Platform.Tool_Result;
       Args    : Landin.Platform.Path_List;
    begin
-      Landin.Platform.Add (Args, Source);
-      declare
-         Rest : constant String := With_Sources (Case_Item);
-         First : Integer := Rest'First;
-
-         procedure Add_One (Named : String);
-
-         procedure Add_One (Named : String) is
-            Trimmed : constant String :=
-              Ada.Strings.Fixed.Trim (Named, Ada.Strings.Both);
-         begin
-            if Trimmed /= "" then
-               Landin.Platform.Add
-                 (Args, Fixture_Root & "/positive/" & Name (Case_Item)
-                  & "/" & Trimmed);
-            end if;
-         end Add_One;
-      begin
-         for Index in Rest'Range loop
-            if Rest (Index) = ',' then
-               Add_One (Rest (First .. Index - 1));
-               First := Index + 1;
-            end if;
-         end loop;
-         if First <= Rest'Last then
-            Add_One (Rest (First .. Rest'Last));
-         end if;
-      end;
+      Append_Module_Arguments (Case_Item, Fixture_Root, Args);
       Landin.Platform.Add (Args, "--emit=asm");
       Landin.Platform.Add (Args, "-o");
       Landin.Platform.Add (Args, Written);
@@ -289,14 +294,11 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Item      : in out Landin.Testing.Context)
    is
       Label   : constant String := "negative/" & Name (Case_Item);
-      Source  : constant String :=
-        Fixture_Root & "/" & Label & "/"
-        & Landin.Testing.Fixtures.Program (Case_Item);
       Runner  : Landin.Platform.Native.Tools.Native_Tool_Runner;
       Outcome : Landin.Platform.Tool_Result;
       Args    : Landin.Platform.Path_List;
    begin
-      Landin.Platform.Add (Args, Source);
+      Append_Module_Arguments (Case_Item, Fixture_Root, Args);
       Runner.Run (Program, Args, Outcome, Landin.Platform.Merged);
 
       Landin.Testing.Check
@@ -306,7 +308,7 @@ package body Landin.Tests.Fixture_Execution_Suite is
         (Item, Outcome.Exit_Code, 1, Label & ": the program was refused");
       Landin.Testing.Check_Equal
         (Item, Codes_In (Unbounded.To_String (Outcome.Output)),
-         Normalised (Codes (Case_Item)),
+         Normalized_Codes (Codes (Case_Item)),
          Label & ": the report carries its pinned codes");
    end Run_Negative;
 
@@ -396,7 +398,7 @@ package body Landin.Tests.Fixture_Execution_Suite is
 
 
    ------------------------------------------------------------------
-   --  Runtime fixtures
+   --  Runtime and ABI fixtures
    --
    --  Compiled, linked and executed, and the only cases in this
    --  repository that run a program this compiler produced.  Everything
@@ -483,9 +485,6 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Item      : in out Landin.Testing.Context)
    is
       Label   : constant String := "runtime/" & Name (Case_Item);
-      Source  : constant String :=
-        Fixture_Root & "/runtime/" & Name (Case_Item) & "/"
-        & Landin.Testing.Fixtures.Program (Case_Item);
       Built   : constant String :=
         Output_Directory & "runtime-" & Name (Case_Item);
       Runner  : Landin.Platform.Native.Tools.Native_Tool_Runner;
@@ -496,51 +495,7 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Expected : Unbounded.Unbounded_String;
       Read     : Landin.Platform.Read_Status;
    begin
-      if Module_Root (Case_Item) = "" then
-         Landin.Platform.Add (Args, Source);
-      else
-         Landin.Platform.Add
-           (Args,
-            "--root=" & Fixture_Root & "/runtime/" & Name (Case_Item)
-            & "/" & Module_Root (Case_Item));
-         Landin.Platform.Add
-           (Args, Fixture_Root & "/runtime/" & Name (Case_Item));
-      end if;
-
-      --  [1840]'s module scope is every file compiled together, so a
-      --  fixture that claims something about it hands `refine` more than
-      --  one source.
-      if Module_Root (Case_Item) = "" then
-         declare
-            Rest  : constant String := With_Sources (Case_Item);
-            First : Integer := Rest'First;
-
-            procedure Add_One (Named : String);
-
-            procedure Add_One (Named : String) is
-               Trimmed : constant String :=
-                 Ada.Strings.Fixed.Trim (Named, Ada.Strings.Both);
-            begin
-               if Trimmed /= "" then
-                  Landin.Platform.Add
-                    (Args,
-                     Fixture_Root & "/runtime/" & Name (Case_Item) & "/"
-                     & Trimmed);
-               end if;
-            end Add_One;
-         begin
-            for Index in Rest'Range loop
-               if Rest (Index) = ',' then
-                  Add_One (Rest (First .. Index - 1));
-                  First := Index + 1;
-               end if;
-            end loop;
-
-            if First <= Rest'Last then
-               Add_One (Rest (First .. Rest'Last));
-            end if;
-         end;
-      end if;
+      Append_Module_Arguments (Case_Item, Fixture_Root, Args);
 
       Landin.Platform.Add (Args, "--emit=exe");
       Landin.Platform.Add (Args, "-o");
@@ -569,37 +524,242 @@ package body Landin.Tests.Fixture_Execution_Suite is
          Runner.Run
            (Built, Runtime_Arguments, Outcome, Landin.Platform.Merged);
 
-         if Run_Expect (Case_Item) /= "" then
-            Host.Read_File
-              (Fixture_Root & "/runtime/" & Name (Case_Item) & "/"
-               & Run_Expect (Case_Item), Expected, Read);
-            if Read /= Landin.Platform.Read_Ok then
-               Landin.Testing.Fail
-                 (Item, Label & ": runtime expectation is unreadable");
-            else
-               Landin.Testing.Check_Equal
-                 (Item,
-                  Unbounded.To_String (Outcome.Output),
-                  Unbounded.To_String (Expected),
-                  Label & ": recorded merged runtime output");
-            end if;
-         end if;
-
-         if Traps (Case_Item) then
-            Landin.Testing.Check
-              (Item, Outcome.Ended = Landin.Platform.Signaled,
-               Label & ": the program trapped rather than returning a"
-               & " status");
+         if Outcome.Ended = Landin.Platform.Timed_Out then
+            Landin.Testing.Fail
+              (Item, Label & ": the program exceeded its execution time limit"
+               & ASCII.LF & Unbounded.To_String (Outcome.Output));
          else
-            Landin.Testing.Check
-              (Item, Outcome.Ended = Landin.Platform.Exited,
-               Label & ": the program returned a status");
-            Landin.Testing.Check_Equal
-              (Item, Outcome.Exit_Code, Status (Case_Item),
-               Label & ": the program's own exit status");
+            if Run_Expect (Case_Item) /= "" then
+               Host.Read_File
+                 (Fixture_Root & "/runtime/" & Name (Case_Item) & "/"
+                  & Run_Expect (Case_Item), Expected, Read);
+               if Read /= Landin.Platform.Read_Ok then
+                  Landin.Testing.Fail
+                    (Item, Label & ": runtime expectation is unreadable");
+               else
+                  Landin.Testing.Check_Equal
+                    (Item,
+                     Unbounded.To_String (Outcome.Output),
+                     Unbounded.To_String (Expected),
+                     Label & ": recorded merged runtime output");
+               end if;
+            end if;
+
+            if Traps (Case_Item) then
+               Landin.Testing.Check
+                 (Item,
+                  Satisfies_Termination_Expectation
+                    (Outcome.Ended, Traps => True),
+                  Label & ": the program trapped rather than returning a"
+                  & " status");
+            else
+               Landin.Testing.Check
+                 (Item,
+                  Satisfies_Termination_Expectation
+                    (Outcome.Ended, Traps => False),
+                  Label & ": the program returned a status");
+               if Outcome.Ended = Landin.Platform.Exited then
+                  Landin.Testing.Check_Equal
+                    (Item, Outcome.Exit_Code, Status (Case_Item),
+                     Label & ": the program's own exit status");
+               end if;
+            end if;
          end if;
       end if;
    end Run_Runtime;
+
+   --  ABI fixtures deliberately stop refine at assembly.  Their C sources
+   --  belong to this repository-owned test harness, not to a product C-input
+   --  adapter, and the target-selected driver receives each one as its own
+   --  argument-vector element.
+   procedure Run_ABI
+     (Case_Item : Fixture;
+      Host      : Landin.Platform.Filesystem'Class;
+      Program   : String;
+      Item      : in out Landin.Testing.Context);
+
+   procedure Run_ABI
+     (Case_Item : Fixture;
+      Host      : Landin.Platform.Filesystem'Class;
+      Program   : String;
+      Item      : in out Landin.Testing.Context)
+   is
+      Label     : constant String := "abi/" & Name (Case_Item);
+      Directory : constant String := Fixture_Root & "/" & Label;
+      Assembly  : constant String :=
+        Output_Directory & "abi-" & Name (Case_Item) & ".s";
+      Built     : constant String :=
+        Output_Directory & "abi-" & Name (Case_Item);
+      Facts     : constant Landin.Targets.Target_Facts :=
+        Landin.Targets.Linux_X86_64;
+      Driver    : constant String :=
+        Landin.Backend.Toolchain.Driver_For (Facts, "");
+      Runner    : Landin.Platform.Native.Tools.Native_Tool_Runner;
+      Emit      : Landin.Platform.Tool_Result;
+      Compile   : Landin.Platform.Tool_Result;
+      Outcome   : Landin.Platform.Tool_Result;
+      Refine_Arguments : Landin.Platform.Path_List;
+      Driver_Arguments : Landin.Platform.Path_List;
+      Runtime_Arguments : Landin.Platform.Path_List;
+      Expected  : Unbounded.Unbounded_String;
+      Read      : Landin.Platform.Read_Status;
+   begin
+      Append_Module_Arguments
+        (Case_Item, Fixture_Root, Refine_Arguments);
+
+      Landin.Platform.Add
+        (Refine_Arguments, "--target=" & Landin.Targets.Name (Facts));
+      Landin.Platform.Add (Refine_Arguments, "--emit=asm");
+      Landin.Platform.Add (Refine_Arguments, "-o");
+      Landin.Platform.Add (Refine_Arguments, Assembly);
+
+      Runner.Run
+        (Program, Refine_Arguments, Emit, Landin.Platform.Merged);
+
+      if Emit.Ended /= Landin.Platform.Exited then
+         Landin.Testing.Fail
+           (Item,
+            Label & ": refine was stopped before it could emit assembly"
+            & ASCII.LF & Unbounded.To_String (Emit.Output));
+         return;
+      elsif Emit.Exit_Code /= 0 then
+         Landin.Testing.Fail
+           (Item,
+            Label & ": refine could not emit assembly" & ASCII.LF
+            & Unbounded.To_String (Emit.Output));
+         return;
+      elsif not Host.Exists (Assembly) then
+         Landin.Testing.Fail
+           (Item,
+            Label & ": refine reported success and wrote no assembly at "
+            & Assembly);
+         return;
+      end if;
+
+      Landin.Platform.Add (Driver_Arguments, Assembly);
+      declare
+         Rest  : constant String := C_Sources (Case_Item);
+         First : Integer := Rest'First;
+
+         procedure Add_One (Named : String);
+
+         procedure Add_One (Named : String) is
+            Trimmed : constant String :=
+              Ada.Strings.Fixed.Trim (Named, Ada.Strings.Both);
+         begin
+            if Trimmed /= "" then
+               Landin.Platform.Add
+                 (Driver_Arguments, Directory & "/" & Trimmed);
+            end if;
+         end Add_One;
+      begin
+         for Index in Rest'Range loop
+            if Rest (Index) = ',' then
+               Add_One (Rest (First .. Index - 1));
+               First := Index + 1;
+            end if;
+         end loop;
+
+         if First <= Rest'Last then
+            Add_One (Rest (First .. Rest'Last));
+         end if;
+      end;
+
+      Landin.Platform.Add (Driver_Arguments, "-std=c11");
+      Landin.Platform.Add (Driver_Arguments, "-Wall");
+      Landin.Platform.Add (Driver_Arguments, "-Wextra");
+      Landin.Platform.Add (Driver_Arguments, "-Werror");
+      Landin.Platform.Add (Driver_Arguments, "-no-pie");
+      declare
+         Options : constant Landin.Platform.Path_List :=
+           Split (C_Args (Case_Item));
+      begin
+         for Argument of Options loop
+            Landin.Platform.Add (Driver_Arguments, Argument);
+         end loop;
+      end;
+      Landin.Platform.Add (Driver_Arguments, "-o");
+      Landin.Platform.Add (Driver_Arguments, Built);
+
+      if Driver = "" then
+         Landin.Testing.Fail
+           (Item, Label & ": linux-x86-64 names no C toolchain driver");
+         return;
+      end if;
+
+      begin
+         Runner.Run
+           (Driver, Driver_Arguments, Compile, Landin.Platform.Merged);
+      exception
+         when Landin.External_Tool_Failed =>
+            Landin.Testing.Fail
+              (Item, Label & ": C toolchain driver could not be run: "
+               & Driver);
+            return;
+      end;
+
+      if Compile.Ended /= Landin.Platform.Exited then
+         Landin.Testing.Fail
+           (Item,
+            Label & ": the C toolchain was stopped before it could link"
+            & ASCII.LF & Unbounded.To_String (Compile.Output));
+      elsif Compile.Exit_Code /= 0 then
+         Landin.Testing.Fail
+           (Item,
+            Label & ": the C toolchain could not link the ABI fixture"
+            & ASCII.LF & Unbounded.To_String (Compile.Output));
+      elsif not Host.Exists (Built) then
+         Landin.Testing.Fail
+           (Item,
+            Label & ": the C toolchain reported success and wrote no"
+            & " executable at " & Built);
+      else
+         Runtime_Arguments := Split (Run_Args (Case_Item));
+         Runner.Run
+           (Built, Runtime_Arguments, Outcome, Landin.Platform.Merged);
+
+         if Outcome.Ended = Landin.Platform.Timed_Out then
+            Landin.Testing.Fail
+              (Item, Label & ": the program exceeded its execution time limit"
+               & ASCII.LF & Unbounded.To_String (Outcome.Output));
+         else
+            if Run_Expect (Case_Item) /= "" then
+               Host.Read_File
+                 (Directory & "/" & Run_Expect (Case_Item), Expected, Read);
+               if Read /= Landin.Platform.Read_Ok then
+                  Landin.Testing.Fail
+                    (Item, Label & ": runtime expectation is unreadable");
+               else
+                  Landin.Testing.Check_Equal
+                    (Item,
+                     Unbounded.To_String (Outcome.Output),
+                     Unbounded.To_String (Expected),
+                     Label & ": recorded merged runtime output");
+               end if;
+            end if;
+
+            if Traps (Case_Item) then
+               Landin.Testing.Check
+                 (Item,
+                  Satisfies_Termination_Expectation
+                    (Outcome.Ended, Traps => True),
+                  Label & ": the program trapped rather than returning a"
+                  & " status");
+            else
+               Landin.Testing.Check
+                 (Item,
+                  Satisfies_Termination_Expectation
+                    (Outcome.Ended, Traps => False),
+                  Label & ": the program returned a status");
+               if Outcome.Ended = Landin.Platform.Exited then
+                  Landin.Testing.Check_Equal
+                    (Item, Outcome.Exit_Code, Status (Case_Item),
+                     Label & ": the program's own exit status");
+               end if;
+            end if;
+         end if;
+      end if;
+   end Run_ABI;
 
    procedure Runtime_Fixtures_Execute
      (Item : in out Landin.Testing.Context);
@@ -607,10 +767,11 @@ package body Landin.Tests.Fixture_Execution_Suite is
    procedure Runtime_Fixtures_Execute
      (Item : in out Landin.Testing.Context)
    is
-      Host    : Landin.Platform.Native.Native_Filesystem;
-      Found   : Catalogue;
-      Program : constant String := Refine_Path;
-      Ran     : Natural := 0;
+      Host        : Landin.Platform.Native.Native_Filesystem;
+      Found       : Catalogue;
+      Program     : constant String := Refine_Path;
+      Runtime_Ran : Natural := 0;
+      ABI_Ran     : Natural := 0;
    begin
       if not Host.Exists (Program) then
          Landin.Testing.Fail
@@ -627,16 +788,21 @@ package body Landin.Tests.Fixture_Execution_Suite is
             Case_Item : constant Fixture := Nth (Found, Index);
          begin
             if Class (Case_Item) = Runtime then
-               Ran := Ran + 1;
+               Runtime_Ran := Runtime_Ran + 1;
                Run_Runtime (Case_Item, Host, Program, Item);
+            elsif Class (Case_Item) = Abi then
+               ABI_Ran := ABI_Ran + 1;
+               Run_ABI (Case_Item, Host, Program, Item);
             end if;
          end;
       end loop;
 
-      --  Without this the case would pass by running nothing, which is
-      --  the failure the class exists to prevent.
+      --  Without these the case would pass by running nothing, which is
+      --  the failure both executable fixture classes exist to prevent.
       Landin.Testing.Check
-        (Item, Ran >= 1, "at least one runtime fixture was found");
+        (Item, Runtime_Ran >= 1, "at least one runtime fixture was found");
+      Landin.Testing.Check
+        (Item, ABI_Ran >= 1, "at least one ABI fixture was found");
    end Runtime_Fixtures_Execute;
 
    procedure Selected_Fixture_Executes
@@ -671,7 +837,9 @@ package body Landin.Tests.Fixture_Execution_Suite is
             if Label_Of (Case_Item) = Wanted then
                Ran := Ran + 1;
 
-               if Expect (Case_Item) /= "" then
+               if Class (Case_Item) = Abi then
+                  Run_ABI (Case_Item, Host, Program, Item);
+               elsif Expect (Case_Item) /= "" then
                   Run_Recorded (Case_Item, Host, Program, Item);
                elsif Class (Case_Item) = Positive_Program then
                   Emit_Positive (Case_Item, Host, Program, Item);
@@ -694,6 +862,9 @@ package body Landin.Tests.Fixture_Execution_Suite is
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "fixture execution", "a timeout cannot satisfy a trap",
+         A_Timeout_Cannot_Satisfy_A_Trap'Access);
       Landin.Testing.Register
         (Into, "fixture execution", "recorded expectations hold",
          Recorded_Expectations_Hold'Access);

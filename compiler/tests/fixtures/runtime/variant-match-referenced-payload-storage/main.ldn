@@ -1,0 +1,99 @@
+missing: atom
+
+choice: type = struct
+    kind: variant
+        absent |
+        present: (count: i32, values: [2]i32)
+    end kind
+end choice
+
+envelope: type = struct
+    before: u64
+    child: choice
+    after: u64
+end envelope
+
+through_inout: (inout source: envelope)
+               -> (result: ptr mut i32 from source) ! missing =
+    match source.child.kind
+        absent: fail missing
+        present(inout count, inout values): begin
+            count = count + 1
+            values[0] = values[0] + 1
+            result = addr values[1]
+        end
+    end match
+end through_inout
+
+through_pointer: (source: ptr mut envelope)
+                 -> (result: ptr mut i32 from source) ! missing =
+    match source.val.child.kind
+        absent: fail missing
+        present(inout count, inout values): begin
+            count = count + 1
+            values[0] = values[0] + 1
+            result = addr values[1]
+        end
+    end match
+end through_pointer
+
+choose: (inout calls: i32) -> (index: usize) =
+    inc calls
+    index = 0
+end choose
+
+through_slice: (source: []mut envelope, inout calls: i32)
+               -> (result: ptr mut i32 from source) ! missing =
+    match source[choose(calls)].child.kind
+        absent: fail missing
+        present(inout count, inout values): begin
+            count = count + 1
+            values[0] = values[0] + 1
+            result = addr values[1]
+        end
+    end match
+end through_slice
+
+check: (source: envelope, wanted: i32, last: i32) -> (ok: bool) =
+    ok = false
+    match source.child.kind
+        absent: ok = false
+        present(count, values):
+            ok = count == wanted and values[0] == wanted + 1
+                 and values[1] == last
+                 and source.before == 91 and source.after == 93
+    end match
+end check
+
+public main: () -> (code: i32) =
+    code = 1
+    mut rows: [1]envelope = zeroed
+    rows[0].before = 91
+    rows[0].after = 93
+    rows[0].child.kind = present(count: 1, values: [2, 3])
+    begin
+        reached := through_inout(rows[0]) else (problem)
+            _ = problem
+            return
+        end
+        reached.val = 17
+    end
+    return when not check(rows[0], 2, 17)
+    begin
+        reached := through_pointer(addr rows[0]) else (problem)
+            _ = problem
+            return
+        end
+        reached.val = 23
+    end
+    return when not check(rows[0], 3, 23)
+    mut calls: i32 = 0
+    begin
+        reached := through_slice(rows[0..<1], calls) else (problem)
+            _ = problem
+            return
+        end
+        reached.val = 31
+    end
+    code = if calls == 1 and check(rows[0], 4, 31) then 42 else 1 end if
+end main

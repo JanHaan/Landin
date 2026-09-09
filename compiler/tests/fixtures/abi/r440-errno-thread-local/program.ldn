@@ -1,0 +1,40 @@
+--  Two actual pthreads enter this exported routine concurrently.  Each owns a
+--  distinct system provider supplied by main, so the only shared failure
+--  source is libc's real thread-local errno reached through the emitted bridge.
+
+import core/io
+
+extern(c) r440_run_errno_threads: (first: ptr mut io.system,
+                                    second: ptr mut io.system)
+                                   -> (result: i32)
+
+thread_path: [12]u8 =
+    [114, 52, 52, 48, 45, 116, 104, 114, 101, 97, 100, 0]
+
+public extern(c) link(symbol: "r440_errno_thread_probe") thread_probe:
+    (state: ptr mut io.system, expected: i32) -> (result: i32) =
+    result = 1
+    opened: io.file = io.open_read(state.val, addr thread_path[0])
+        else (problem)
+            if problem == io.io_failed
+              and io.last_errno(state.val) == expected
+            then
+                result = 42
+            end if
+            return
+        end
+    io.close(state.val, opened) else (problem)
+        _ = problem
+    end
+end thread_probe
+
+public main: () -> (code: i32) =
+    code = 1
+    mut first: io.system = io.host()
+    mut second: io.system = io.host()
+    code = r440_run_errno_threads(addr first, addr second)
+    return when code <> 42
+    code = 1
+    return when io.last_errno(first) <> 5 or io.last_errno(second) <> 28
+    code = 42
+end main

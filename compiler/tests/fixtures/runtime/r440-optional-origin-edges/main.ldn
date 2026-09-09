@@ -1,0 +1,40 @@
+read_or: (candidate: maybe_pointer, fallback: u32) -> (value: u32) =
+    match candidate
+        absent: value = fallback
+        ptr (pointer): value = pointer.val
+    end match
+end read_or
+
+public main: () -> (code: i32) =
+    cell: u32 = 42
+    if read_or(early(addr cell, true), 17) == 17
+      and read_or(early(addr cell, false), 17) == 42
+      and read_or(fallthrough(addr cell), 17) == 17
+      and read_or(empty_control(addr cell, true), 17) == 17
+      and read_or(empty_control(addr cell, false), 17) == 17
+      and read_or(mixed_control(addr cell, true), 17) == 42
+      and read_or(mixed_control(addr cell, false), 17) == 17
+      and read_or(recover_early(addr cell, true), 17) == 17
+      and read_or(recover_early(addr cell, false), 17) == 42
+      and read_or(recover_value(addr cell, true), 17) == 17
+      and read_or(recover_value(addr cell, false), 17) == 42
+      and read_or(recover_state(addr cell, true), 17) == 17
+      and read_or(recover_state(addr cell, false), 17) == 17
+      and read_or(loop_empty(addr cell, 0), 17) == 17
+      and read_or(loop_empty(addr cell, 3), 17) == 17
+      and read_or(loop_value(addr cell, true), 17) == 17
+      and read_or(loop_value(addr cell, false), 17) == 17
+      and read_or(narrow(early(addr cell, true)), 17) == 17
+      and read_or(narrow(early(addr cell, false)), 17) == 42
+      and read_or(empty_match(addr cell, early(addr cell, true)), 17) == 17
+      and read_or(empty_match(addr cell, early(addr cell, false)), 17) == 42
+      and read_or(pair_field(addr cell, true), 17) == 17
+      and read_or(pair_field(addr cell, false), 17) == 42
+      and read_or(pair_binding(addr cell, true), 17) == 17
+      and read_or(pair_binding(addr cell, false), 17) == 42
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

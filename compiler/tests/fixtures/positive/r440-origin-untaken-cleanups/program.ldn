@@ -1,0 +1,108 @@
+absent: atom
+unavailable: atom
+maybe_pointer: type = absent | ptr u32
+
+consume: (value: i32) -> none =
+    _ = value
+end consume
+
+return_edge: (cell: ptr u32, choose: bool)
+             -> (result: maybe_pointer from cell) =
+    local: u32 = 42
+    mut candidate: maybe_pointer = cell
+    result = cell
+    defer consume(begin
+        candidate = addr local
+        0
+    end)
+    return when choose
+    result = candidate
+end return_edge
+
+break_edge: (cell: ptr u32, choose: bool)
+            -> (result: maybe_pointer from cell) =
+    local: u32 = 42
+    mut candidate: maybe_pointer = cell
+    result = cell
+    loop do
+        defer consume(begin
+            candidate = addr local
+            0
+        end)
+        break when choose
+        result = candidate
+        return
+    end loop
+end break_edge
+
+continue_edge: (cell: ptr u32, choose: bool)
+               -> (result: maybe_pointer from cell) =
+    local: u32 = 42
+    mut candidate: maybe_pointer = cell
+    result = cell
+    loop do
+        candidate = cell
+        defer consume(begin
+            candidate = addr local
+            0
+        end)
+        continue when choose
+        result = candidate
+        return
+    end loop
+end continue_edge
+
+fail_edge: (cell: ptr u32, choose: bool)
+           -> (result: maybe_pointer from cell) ! unavailable =
+    local: u32 = 42
+    mut candidate: maybe_pointer = cell
+    undo consume(begin
+        candidate = addr local
+        0
+    end)
+    fail unavailable when choose
+    result = candidate
+end fail_edge
+
+break_value: (cell: ptr u32, choose: bool)
+             -> (result: maybe_pointer from cell) =
+    local: u32 = 42
+    mut candidate: maybe_pointer = cell
+    result = cell
+    value: i32 = loop do
+        break with begin
+            candidate = addr local
+            0
+        end when choose
+        result = candidate
+        return
+    end loop
+    _ = value
+end break_value
+
+fail_value: (cell: ptr u32, choose: bool)
+            -> (result: maybe_pointer from cell) ! unavailable =
+    local: u32 = 42
+    mut candidate: maybe_pointer = cell
+    fail begin
+        candidate = addr local
+        unavailable
+    end when choose
+    result = candidate
+end fail_value
+
+post_guard_empty: (cell: ptr u32, choose: bool)
+                  -> (result: maybe_pointer from cell) =
+    local: u32 = 42
+    mut candidate: maybe_pointer = addr local
+    result = cell
+    defer consume(begin
+        candidate = addr local
+        0
+    end)
+    return when begin
+        candidate = absent
+        choose
+    end
+    result = candidate
+end post_guard_empty

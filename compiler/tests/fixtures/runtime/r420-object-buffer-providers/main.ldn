@@ -3,6 +3,15 @@ import core/heap
 import core/mem
 import core/pool
 
+no_object: atom
+object_result: type = no_object | ptr mut node
+is_absent: (value: object_result) -> (empty: bool) =
+    match value
+        no_object: empty = true
+        ptr: empty = false
+    end match
+end is_absent
+
 node: type = struct
     next: ptr i32
     value: i32
@@ -34,11 +43,11 @@ exercise: (provider: type is mem.allocator, inout inner: provider)
     mem.drop_bytes(state, empty)
     return when empty_size <> 0 or failing.attempts(state) <> 0
     mut refused: bool = false
-    absent: ptr mut node = mem.new(state, initial()) else (problem)
+    absent: object_result = mem.new(state, initial()) else (problem)
         refused = problem == mem.out_of_memory
-        ptr(0)
+        no_object
     end
-    return when not refused or usize(absent) <> 0 or evaluations <> before + 1
+    return when not refused or not is_absent(absent) or evaluations <> before + 1
       or failing.live(state) <> 0 or failing.frees(state) <> 0
     failing.permit(state, two)
     value: ptr mut node = mem.new(state, initial()) else (problem)

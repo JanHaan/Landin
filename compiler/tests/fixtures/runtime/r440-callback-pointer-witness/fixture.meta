@@ -1,0 +1,6 @@
+class: runtime
+summary: Callback pointers retain complete reached types through aliases, casts, inout forwarding and pointer-bearing struct copies
+program: main.ldn
+status: 42
+constructs: 0440, 0470, 0750, 1580, 1920
+targets: linux-x86-64

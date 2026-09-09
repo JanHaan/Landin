@@ -1,0 +1,9 @@
+pair: type = layout(c) struct
+    left: i32
+    right: i32
+end pair
+extern(c) collect: (count: i32, ...) -> none
+bad: () -> none =
+    value: pair = pair(left: 1, right: 2)
+    collect(1, value)
+end bad

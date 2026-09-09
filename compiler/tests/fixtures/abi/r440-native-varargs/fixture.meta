@@ -1,0 +1,9 @@
+class: abi
+summary: Promoted scalar C varargs exhaust both banks and pin al directly and indirectly
+program: program.ldn
+c-sources: peer.c
+c-args: -O2
+run_expect: expected.txt
+status: 42
+constructs: 1570, 1580, 1600, 1610
+targets: linux-x86-64

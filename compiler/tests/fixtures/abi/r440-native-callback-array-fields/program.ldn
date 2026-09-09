@@ -1,0 +1,240 @@
+-- Fixed C callback arrays are initialized values: every element retains its
+-- structural signature through images, copies, indexing and pointer-backed use.
+handler: type = extern(c) (value: i32) -> (result: i32)
+
+callback_pair: type = layout(c) struct
+    handlers: [2]handler
+end callback_pair
+
+callback_triple: type = layout(c) struct
+    handlers: [3]handler
+end callback_triple
+
+callback_nested: type = layout(c) struct
+    handlers: [2][2]handler
+end callback_nested
+
+pair_call: type = extern(c) (value: callback_pair) -> (result: callback_pair)
+triple_call: type = extern(c) (value: callback_triple) -> (result: callback_triple)
+nested_call: type = extern(c) (value: callback_nested) -> (result: callback_nested)
+
+extern(c) c_add_one: (value: i32) -> (result: i32)
+extern(c) c_add_two: (value: i32) -> (result: i32)
+extern(c) c_add_three: (value: i32) -> (result: i32)
+extern(c) c_add_four: (value: i32) -> (result: i32)
+extern(c) c_pair: (value: callback_pair) -> (result: callback_pair)
+extern(c) c_triple: (value: callback_triple) -> (result: callback_triple)
+extern(c) c_nested: (value: callback_nested) -> (result: callback_nested)
+extern(c) c_pair_image: () -> (result: callback_pair)
+extern(c) c_triple_image: () -> (result: callback_triple)
+extern(c) c_nested_image: () -> (result: callback_nested)
+extern(c) c_touch_pair: (value: ptr mut callback_pair) -> none
+extern(c) c_touch_nested: (value: ptr mut callback_nested) -> none
+extern(c) c_layout: (which: i32, size: usize, alignment: usize) -> (ok: bool)
+
+extern(c) add_ten: (value: i32) -> (result: i32) =
+    result = value + 10
+end add_ten
+
+extern(c) add_twenty: (value: i32) -> (result: i32) =
+    result = value + 20
+end add_twenty
+
+extern(c) add_thirty: (value: i32) -> (result: i32) =
+    result = value + 30
+end add_thirty
+
+extern(c) add_forty: (value: i32) -> (result: i32) =
+    result = value + 40
+end add_forty
+
+-- No callback array has an all-zero image. These are code relocations at every
+-- scalar leaf, including the leaves below two array dimensions.
+pair_image: callback_pair = callback_pair(handlers: [add_ten, add_twenty])
+triple_image: callback_triple = callback_triple(
+    handlers: [add_ten, add_twenty, add_thirty])
+nested_image: callback_nested = callback_nested(handlers: [
+    [add_ten, add_twenty],
+    [add_thirty, add_forty]
+])
+
+public extern(c) l_pair: (value: callback_pair) -> (result: callback_pair) =
+    result = callback_pair(handlers: [value.handlers[1], value.handlers[0]])
+end l_pair
+
+public extern(c) l_triple: (value: callback_triple) -> (result: callback_triple) =
+    result = callback_triple(handlers: [
+        value.handlers[2], value.handlers[0], value.handlers[1]
+    ])
+end l_triple
+
+public extern(c) l_nested: (value: callback_nested) -> (result: callback_nested) =
+    result = callback_nested(handlers: [
+        [value.handlers[1][1], value.handlers[1][0]],
+        [value.handlers[0][1], value.handlers[0][0]]
+    ])
+end l_nested
+
+public extern(c) l_pair_image: () -> (result: callback_pair) =
+    result = pair_image
+end l_pair_image
+
+public extern(c) l_triple_image: () -> (result: callback_triple) =
+    result = triple_image
+end l_triple_image
+
+public extern(c) l_nested_image: () -> (result: callback_nested) =
+    result = nested_image
+end l_nested_image
+
+public extern(c) l_touch_pair: (value: ptr mut callback_pair) -> none =
+    value.val.handlers[0] = add_thirty
+    value.val.handlers[1] = add_forty
+end l_touch_pair
+
+public extern(c) l_touch_nested: (value: ptr mut callback_nested) -> none =
+    value.val.handlers[0][0] = add_forty
+    value.val.handlers[1][1] = add_ten
+end l_touch_nested
+
+public extern(c) landin_check: () -> (result: i32) =
+    result = 42
+
+    -- Invoke every callback in every Landin static image by its own index.
+    if pair_image.handlers[0](100) <> 110
+       or pair_image.handlers[1](100) <> 120
+       or triple_image.handlers[0](100) <> 110
+       or triple_image.handlers[1](100) <> 120
+       or triple_image.handlers[2](100) <> 130
+       or nested_image.handlers[0][0](100) <> 110
+       or nested_image.handlers[0][1](100) <> 120
+       or nested_image.handlers[1][0](100) <> 130
+       or nested_image.handlers[1][1](100) <> 140
+    then
+        result = 1
+    end if
+
+    -- C static callback images cross as INTEGER/INTEGER and MEMORY results.
+    from_c_pair := c_pair_image()
+    from_c_triple := c_triple_image()
+    from_c_nested := c_nested_image()
+    if from_c_pair.handlers[0](100) <> 101
+       or from_c_pair.handlers[1](100) <> 102
+       or from_c_triple.handlers[0](100) <> 101
+       or from_c_triple.handlers[1](100) <> 102
+       or from_c_triple.handlers[2](100) <> 103
+       or from_c_nested.handlers[0][0](100) <> 101
+       or from_c_nested.handlers[0][1](100) <> 102
+       or from_c_nested.handlers[1][0](100) <> 103
+       or from_c_nested.handlers[1][1](100) <> 104
+    then
+        result = 2
+    end if
+
+    direct_pair := c_pair(pair_image)
+    call_pair: pair_call = c_pair
+    indirect_pair := call_pair(pair_image)
+    if direct_pair.handlers[0](100) <> 120
+       or direct_pair.handlers[1](100) <> 110
+       or indirect_pair.handlers[0](100) <> 120
+       or indirect_pair.handlers[1](100) <> 110
+    then
+        result = 3
+    end if
+
+    direct_triple := c_triple(triple_image)
+    call_triple: triple_call = c_triple
+    indirect_triple := call_triple(triple_image)
+    if direct_triple.handlers[0](100) <> 130
+       or direct_triple.handlers[1](100) <> 110
+       or direct_triple.handlers[2](100) <> 120
+       or indirect_triple.handlers[0](100) <> 130
+       or indirect_triple.handlers[1](100) <> 110
+       or indirect_triple.handlers[2](100) <> 120
+    then
+        result = 4
+    end if
+
+    direct_nested := c_nested(nested_image)
+    call_nested: nested_call = c_nested
+    indirect_nested := call_nested(nested_image)
+    if direct_nested.handlers[0][0](100) <> 140
+       or direct_nested.handlers[0][1](100) <> 130
+       or direct_nested.handlers[1][0](100) <> 120
+       or direct_nested.handlers[1][1](100) <> 110
+       or indirect_nested.handlers[0][0](100) <> 140
+       or indirect_nested.handlers[0][1](100) <> 130
+       or indirect_nested.handlers[1][0](100) <> 120
+       or indirect_nested.handlers[1][1](100) <> 110
+    then
+        result = 5
+    end if
+
+    -- Explicit local construction, whole-value copy, replacement and direct
+    -- array-pointer access must preserve callable metadata.
+    mut local_pair: callback_pair = callback_pair(
+        handlers: [c_add_one, c_add_two])
+    mut copied_pair: callback_pair = local_pair
+    copied_pair.handlers[0] = c_add_three
+    pair_pointer: ptr mut callback_pair = addr copied_pair
+    pair_index: usize = 1
+    pair_pointer.val.handlers[pair_index] = c_add_four
+    mut copied_handlers: [2]handler = local_pair.handlers
+    handlers_pointer: ptr mut [2]handler = addr copied_handlers
+    handlers_pointer.val[0] = c_add_four
+    if local_pair.handlers[0](100) <> 101
+       or local_pair.handlers[1](100) <> 102
+       or pair_pointer.val.handlers[0](100) <> 103
+       or pair_pointer.val.handlers[pair_index](100) <> 104
+       or handlers_pointer.val[0](100) <> 104
+       or handlers_pointer.val[1](100) <> 102
+    then
+        result = 6
+    end if
+
+    mut pointed_pair: callback_pair = callback_pair(
+        handlers: [c_add_one, c_add_two])
+    c_touch_pair(addr pointed_pair)
+    if pointed_pair.handlers[0](100) <> 103
+       or pointed_pair.handlers[1](100) <> 104
+    then
+        result = 7
+    end if
+
+    mut pointed_nested: callback_nested = callback_nested(handlers: [
+        [c_add_one, c_add_two],
+        [c_add_three, c_add_four]
+    ])
+    nested_pointer: ptr mut callback_nested = addr pointed_nested
+    c_touch_nested(nested_pointer)
+    if nested_pointer.val.handlers[0][0](100) <> 104
+       or nested_pointer.val.handlers[0][1](100) <> 102
+       or nested_pointer.val.handlers[1][0](100) <> 103
+       or nested_pointer.val.handlers[1][1](100) <> 101
+    then
+        result = 8
+    end if
+    row: usize = 1
+    column: usize = 1
+    nested_pointer.val.handlers[row][column] = c_add_two
+    if nested_pointer.val.handlers[0][0](100) <> 104
+       or nested_pointer.val.handlers[0][1](100) <> 102
+       or nested_pointer.val.handlers[1][0](100) <> 103
+       or nested_pointer.val.handlers[row][column](100) <> 102
+    then
+        result = 9
+    end if
+
+    if not c_layout(0, sizeof callback_pair, alignof callback_pair)
+       or not c_layout(1, sizeof callback_triple, alignof callback_triple)
+       or not c_layout(2, sizeof callback_nested, alignof callback_nested)
+       or sizeof callback_pair <> 16
+       or alignof callback_pair <> 8
+       or sizeof callback_triple <> 24
+       or alignof callback_triple <> 8
+       or sizeof callback_nested <> 32
+       or alignof callback_nested <> 8
+    then
+        result = 10
+    end if
+end landin_check

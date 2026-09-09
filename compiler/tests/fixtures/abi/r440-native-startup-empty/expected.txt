@@ -1,0 +1,1 @@
+native empty arguments ok

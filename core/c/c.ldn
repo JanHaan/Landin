@@ -1,0 +1,27 @@
+--  The selected Linux x86-64 SysV LP64 C scalar spelling layer. These are
+--  ordinary aliases, not distinct scalar kinds: an extern(c) signature keeps
+--  the same Landin scalar identity that its C spelling names.
+--
+--  c_char follows the selected toolchain's default signed-char policy. It is
+--  signed numeric i8, never Landin's Unicode scalar u32.
+
+--  landin/compiler is implicit. The ABI fact, not pointer width or
+--  architecture alone, keeps LP64 aliases from crossing data models.
+compiler.assert(compiler.c_sysv_lp64)
+
+public c_char: type = i8
+public c_schar: type = i8
+public c_uchar: type = u8
+public c_short: type = i16
+public c_ushort: type = u16
+public c_int: type = i32
+public c_uint: type = u32
+public c_long: type = i64
+public c_ulong: type = u64
+public c_longlong: type = i64
+public c_ulonglong: type = u64
+public c_size: type = usize
+public c_ptrdiff: type = isize
+public c_float: type = f32
+public c_double: type = f64
+public c_bool: type = bool

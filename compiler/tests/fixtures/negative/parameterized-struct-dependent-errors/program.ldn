@@ -1,7 +1,9 @@
 problem: atom
 problems: type = problem
+fault: atom
+faults: type = fault
 bad: type (item: type) = struct
     values: [2]item
 end bad
 first: bad(problems)
-second: bad((value: u8) -> (result: u8))
+second: bad(faults)

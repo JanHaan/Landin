@@ -14,9 +14,8 @@ public new_bytes: (provider: type is allocator, inout state: provider,
                    count: usize) -> (result: buffer) ! out_of_memory =
     zero: usize = 0
     if count == 0 then
-        base: ptr mut u8 = ptr(0)
-        result = (values: reserve(item: u8, base: base, slots: zero),
-                  extent: zero)
+        empty := empty_storage(item: u8)
+        result = (values: empty, extent: zero)
         return
     end if
     block: ptr mut u8 = try provider.alloc(state, count, alignof u8)

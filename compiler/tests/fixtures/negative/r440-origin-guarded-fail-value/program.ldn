@@ -1,0 +1,14 @@
+absent: atom
+unavailable: atom
+maybe_pointer: type = absent | ptr u32
+
+bad: (cell: ptr u32, choose: bool)
+     -> (result: maybe_pointer from cell) ! unavailable =
+    local: u32 = 42
+    mut candidate: maybe_pointer = addr local
+    fail begin
+        candidate = absent
+        unavailable
+    end when choose
+    result = candidate
+end bad

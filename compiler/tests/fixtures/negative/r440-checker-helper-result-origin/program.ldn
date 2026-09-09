@@ -1,0 +1,1 @@
+extern(c) link(symbol: "_landin_host_argument_at_from") bridge: (table: ptr ptr u8, index: usize) -> (data: ptr u8)

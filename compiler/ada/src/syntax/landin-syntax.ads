@@ -545,9 +545,31 @@ package Landin.Syntax is
                              | Concept_Declaration
                              | Conformance_Declaration;
 
-   --  `extern(c)` is an imported C routine declaration.  It retains the
-   --  ordinary declared signature but has no Landin body [1570] [1580].
+   --  Bodylessness is independent of convention: a C routine may have a
+   --  Landin body, and its callable type still uses the C convention.
    function Is_External (Of_Tree : Tree; Id : Node_Id) return Boolean
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id) = Function_Declaration;
+
+   function Uses_C_ABI (Of_Tree : Tree; Id : Node_Id) return Boolean
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id)
+                   in Function_Declaration | Anonymous_Function
+                      | Function_Type | Concept_Entry;
+
+   function Is_Variadic (Of_Tree : Tree; Id : Node_Id) return Boolean
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id)
+                   in Function_Declaration | Anonymous_Function
+                      | Function_Type | Concept_Entry;
+
+   function Has_C_Layout (Of_Tree : Tree; Id : Node_Id) return Boolean
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id)
+                   in Type_Declaration | Struct_Body;
+
+   function Link_Symbol_Span (Of_Tree : Tree; Id : Node_Id)
+     return Landin.Source.Span
      with Pre => Contains (Of_Tree, Id)
                  and then Kind (Of_Tree, Id) = Function_Declaration;
 
@@ -1455,6 +1477,10 @@ private
       Sound      : Boolean := True;
       Exported   : Boolean := False;
       External   : Boolean := False;
+      C_ABI      : Boolean := False;
+      Variadic   : Boolean := False;
+      C_Layout   : Boolean := False;
+      Link_Name  : Landin.Source.Span := Landin.Source.Empty_Span;
       Mutable    : Boolean := False;
       Escaping   : Boolean := False;
       Caller     : Boolean := False;

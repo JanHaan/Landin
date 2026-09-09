@@ -1,0 +1,16 @@
+absent: atom
+maybe_pointer: type = absent | ptr u32
+
+consume: (value: []u32) -> none =
+    _ = value
+end consume
+
+bad: (cell: ptr u32) -> (result: maybe_pointer from cell) =
+    local: u32 = 42
+    slots: [1]u32 = [7]
+    result = absent
+    defer consume(slots[begin
+        result = addr local
+        0
+    end..<1])
+end bad

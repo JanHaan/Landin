@@ -1,0 +1,151 @@
+-- Actual recursively nested C array fields retain their element shape through
+-- layout, construction, selection, copying, pointer access and native calls.
+large_matrix: type = layout(c) struct
+    values: [2][3]f64
+end large_matrix
+
+small_matrix: type = layout(c) struct
+    values: [2][1]f64
+end small_matrix
+
+mixed_matrix: type = layout(c) struct
+    tag: u8
+    values: [2][1]f32
+end mixed_matrix
+
+large_call: type = extern(c) (value: large_matrix) -> (result: large_matrix)
+small_call: type = extern(c) (value: small_matrix) -> (result: small_matrix)
+mixed_call: type = extern(c) (value: mixed_matrix) -> (result: mixed_matrix)
+
+extern(c) c_large: (value: large_matrix) -> (result: large_matrix)
+extern(c) c_small: (value: small_matrix) -> (result: small_matrix)
+extern(c) c_mixed: (value: mixed_matrix) -> (result: mixed_matrix)
+extern(c) c_touch_large: (value: ptr mut large_matrix) -> none
+extern(c) c_layout: (which: i32, size: usize, alignment: usize) -> (ok: bool)
+
+-- This image must contain six f64 leaves. It must not collapse to two bytes or
+-- be reconstructed only when a call happens.
+large_image: large_matrix = large_matrix(values: [
+    [1.0, 2.0, 3.0],
+    [4.0, 5.0, 6.0]
+])
+small_image: small_matrix = small_matrix(values: [[7.0], [8.0]])
+mixed_image: mixed_matrix = mixed_matrix(tag: 9, values: [[10.0], [11.0]])
+
+public extern(c) l_large: (value: large_matrix) -> (result: large_matrix) =
+    result = value
+    result.values[0][0] = value.values[0][0] + 10.0
+    result.values[0][1] = value.values[0][1] + 20.0
+    result.values[0][2] = value.values[0][2] + 30.0
+    result.values[1][0] = value.values[1][0] + 40.0
+    result.values[1][1] = value.values[1][1] + 50.0
+    result.values[1][2] = value.values[1][2] + 60.0
+end l_large
+
+public extern(c) l_small: (value: small_matrix) -> (result: small_matrix) =
+    result = value
+    result.values[0][0] = value.values[0][0] + 10.0
+    result.values[1][0] = value.values[1][0] + 20.0
+end l_small
+
+public extern(c) l_mixed: (value: mixed_matrix) -> (result: mixed_matrix) =
+    result = value
+    result.tag = value.tag + 10
+    result.values[0][0] = value.values[0][0] + 20.0
+    result.values[1][0] = value.values[1][0] + 30.0
+end l_mixed
+
+public extern(c) l_touch_large: (value: ptr mut large_matrix) -> none =
+    value.val.values[0][0] = value.val.values[0][0] + 1000.0
+    value.val.values[1][2] = value.val.values[1][2] + 6000.0
+end l_touch_large
+
+public extern(c) landin_check: () -> (result: i32) =
+    result = 42
+
+    -- The module image and the farthest leaf pin recursive static emission.
+    if large_image.values[0][0] <> 1.0
+       or large_image.values[0][1] <> 2.0
+       or large_image.values[0][2] <> 3.0
+       or large_image.values[1][0] <> 4.0
+       or large_image.values[1][1] <> 5.0
+       or large_image.values[1][2] <> 6.0
+       or small_image.values[0][0] <> 7.0
+       or small_image.values[1][0] <> 8.0
+       or mixed_image.tag <> 9
+       or mixed_image.values[0][0] <> 10.0
+       or mixed_image.values[1][0] <> 11.0
+    then
+        result = 1
+    end if
+
+    direct_large := c_large(large_image)
+    call_large: large_call = c_large
+    indirect_large := call_large(large_image)
+    if direct_large.values[0][0] <> 2.0
+       or direct_large.values[0][1] <> 4.0
+       or direct_large.values[0][2] <> 6.0
+       or direct_large.values[1][0] <> 8.0
+       or direct_large.values[1][1] <> 10.0
+       or direct_large.values[1][2] <> 12.0
+       or indirect_large.values[0][0] <> 2.0
+       or indirect_large.values[0][1] <> 4.0
+       or indirect_large.values[0][2] <> 6.0
+       or indirect_large.values[1][0] <> 8.0
+       or indirect_large.values[1][1] <> 10.0
+       or indirect_large.values[1][2] <> 12.0
+       or large_image.values[1][2] <> 6.0
+    then
+        result = 2
+    end if
+
+    direct_small := c_small(small_image)
+    call_small: small_call = c_small
+    indirect_small := call_small(small_image)
+    if direct_small.values[0][0] <> 10.0
+       or direct_small.values[1][0] <> 12.0
+       or indirect_small.values[0][0] <> 10.0
+       or indirect_small.values[1][0] <> 12.0
+    then
+        result = 3
+    end if
+
+    direct_mixed := c_mixed(mixed_image)
+    call_mixed: mixed_call = c_mixed
+    indirect_mixed := call_mixed(mixed_image)
+    if direct_mixed.tag <> 10
+       or direct_mixed.values[0][0] <> 12.0
+       or direct_mixed.values[1][0] <> 14.0
+       or indirect_mixed.tag <> 10
+       or indirect_mixed.values[0][0] <> 12.0
+       or indirect_mixed.values[1][0] <> 14.0
+    then
+        result = 4
+    end if
+
+    mut pointed: large_matrix = large_image
+    pointer: ptr mut large_matrix = addr pointed
+    c_touch_large(pointer)
+    pointer.val.values[0][1] = pointer.val.values[0][1] + 200.0
+    if pointer.val.values[0][0] <> 101.0
+       or pointer.val.values[0][1] <> 202.0
+       or pointer.val.values[1][2] <> 606.0
+       or large_image.values[0][0] <> 1.0
+       or large_image.values[1][2] <> 6.0
+    then
+        result = 5
+    end if
+
+    if not c_layout(0, sizeof large_matrix, alignof large_matrix)
+       or not c_layout(1, sizeof small_matrix, alignof small_matrix)
+       or not c_layout(2, sizeof mixed_matrix, alignof mixed_matrix)
+       or sizeof large_matrix <> 48
+       or alignof large_matrix <> 8
+       or sizeof small_matrix <> 16
+       or alignof small_matrix <> 8
+       or sizeof mixed_matrix <> 12
+       or alignof mixed_matrix <> 4
+    then
+        result = 6
+    end if
+end landin_check

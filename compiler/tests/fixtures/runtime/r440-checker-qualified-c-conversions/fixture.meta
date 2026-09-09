@@ -1,0 +1,7 @@
+class: runtime
+summary: Qualified core/c scalar conversions preserve LP64 widths in folded images and runtime expressions
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0120, 0370, 0700, 1420, 1500, 1510, 1940
+targets: linux-x86-64

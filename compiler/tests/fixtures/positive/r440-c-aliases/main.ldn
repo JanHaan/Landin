@@ -1,0 +1,18 @@
+import core/c
+import core/c (c_bool, c_double, c_float, c_int, c_long, c_uint)
+
+--  The imported module itself asserts the selected target's LP64 facts.
+--  These assertions use only R4.30's established compiler directives.
+compiler.assert(compiler.arch == x86_64)
+compiler.assert(compiler.word_size == 64)
+compiler.assert(compiler.byte_order == little)
+
+signed: c_int = -42
+unsigned: c_uint = 42
+wide: c_long = c_long(signed)
+narrow: c_int = c_int(wide)
+ordinary: i32 = narrow
+single: c_float = c_float(3)
+double: c_double = c_double(single)
+truth: c_bool = c_bool(1)
+ordinary_truth: bool = truth

@@ -1,0 +1,22 @@
+handler: type = extern(c) (value: i32) -> (result: i32)
+callbacks: type = layout(c) struct
+    values: [2][2]handler
+end callbacks
+extern(c) add: (value: i32) -> (result: i32) =
+    result = value + 1
+end add
+image: callbacks = callbacks(values: [[add, add], [2 of add]])
+copy: callbacks = image
+select: (input: callbacks) -> (result: callbacks) =
+    result = callbacks(values: [input.values[1],
+        [input.values[0][1], input.values[0][0]]])
+end select
+use: (row: usize, column: usize) -> (result: i32) =
+    mut local: callbacks = select(copy)
+    pointer: ptr mut callbacks = addr local
+    pointer.val.values[row][column] = add
+    mut values: [2][2]handler = local.values
+    array_pointer: ptr mut [2][2]handler = addr values
+    array_pointer.val[row][column] = add
+    result = array_pointer.val[row][column](41)
+end use

@@ -42,7 +42,8 @@ keyword rule omits it, the token is an identifier whose spelling the
 enclosing production recognises. Thus 'of', 'lenof', 'variant', 'begin',
 'match', 'defer', 'undo', 'unchecked', 'caller', 'range', 'arena', 'loop',
 'while', 'for', 'do', 'break', 'continue', 'complete', 'with', 'concept',
-'is', 'as', 'option', 'compiler', 'assembler', 'linker' and 'c' remain
+'is', 'as', 'option', 'compiler', 'assembler', 'linker', 'c', 'layout',
+'link' and 'symbol' remain
 identifier tokens everywhere their contextual productions do not meet them.
 D202 separately reserves the three tool names as declaration/import bindings;
 that semantic reservation does not turn their tokens into keywords.
@@ -266,7 +267,7 @@ binding       ::= "mut"? identifier ":" type ("=" expression)?
 type          ::= function_type | array_type | pointer_type | slice_type
                 | any_type | type_application | scalar_name | text_name
                 | declaration_reference
-function_type ::= signature
+function_type ::= signature | c_convention c_signature
 array_type    ::= "[" expression "]" type
 pointer_type  ::= "ptr" "mut"? type
 slice_type    ::= "[" "]" "mut"? type
@@ -337,7 +338,7 @@ type_formal     ::= identifier ":" "type" constraint?
 constraint      ::= "is" concept_reference
 atom_union      ::= union_member "|" union_member ("|" union_member)*
 union_member    ::= declaration_reference | pointer_type
-struct_body      ::= "struct" member+ "end" identifier?
+struct_body      ::= ("layout" "(" "c" ")")? "struct" member+ "end" identifier?
 member           ::= field | variant_part
 field            ::= identifier ":" type
 variant_part     ::= identifier ":" "variant" variant_case
@@ -361,16 +362,21 @@ formals alone make the runtime signature. `escaping` precedes an explicitly
 written convention, and both precede the parameter name (D140). An omitted
 convention and explicit `in` have the same language meaning but remain distinct
 syntax facts. Each `from` name is retained in written order and associated with
-the correspondingly labelled runtime parameter position. The reference-origin
-pass checks every returning edge against exactly that ordered source set;
-unknown, duplicate, missing and extra sources are rejected. A generic template has no standalone
+the correspondingly labelled runtime parameter position. For every returning
+edge that actually carries a tracked reference, the reference-origin pass checks
+its source set against exactly that ordered list; [0480]'s provably empty
+optional arm has no reference or origin to compare. Unknown, duplicate, missing
+and extra sources are rejected. A generic template has no standalone
 function value or IR item. D138's first executable increment deduces a direct
 type formal or exact `[n]t` shape from context-free runtime argument types,
 interns the concrete routine instance, and emits that instance rather than the
 template.
 An enabled nongeneric signature takes values
 including function values, hands one or more named values (or none) back, and
-optionally declares [0940]'s payload-free atom error set. A function type
+optionally declares [0940]'s payload-free atom error set. A standalone
+`link(symbol: text)` may precede the name of a native function declaration, but
+does not change this signature or convention and does not make its body
+optional [1610]. A function type
 reuses the nongeneric `signature` production but has no body. Its labels are
 type description only and do not declare parameters or named returns.
 
@@ -392,8 +398,15 @@ also keeps `return 1` the refused payload spelling [1810]. A guarded return may
 prefix a final expression because its untaken edge continues.
 
 ```landin-grammar
-function           ::= identifier ":" declared_signature "=" body "end" identifier?
-external_function  ::= "extern" "(" "c" ")" identifier ":" declared_signature
+function           ::= link_symbol? identifier ":" declared_signature "=" body
+                       "end" identifier?
+external_function  ::= c_convention link_symbol? identifier ":" c_declared_signature
+                       ("=" body "end" identifier?)?
+c_convention       ::= "extern" "(" "c" ")"
+link_symbol        ::= "link" "(" "symbol" ":" text ")"
+c_signature        ::= "(" (parameters ("," "...")?)? ")" "->" returns errors?
+c_declared_signature ::= "(" (routine_formals ("," "...")?)? ")"
+                         "->" returns errors?
 anonymous_function ::= signature "=" body "end"
 signature          ::= "(" parameters? ")" "->" returns errors?
 declared_signature ::= "(" routine_formals? ")" "->" returns errors?
@@ -945,7 +958,9 @@ permission. [0440] is the sole relaxation: `ptr mut T` satisfies `ptr T`, and
 `[]mut T` satisfies `[]T`; neither direction changes bits, and the reverse is
 refused. Function signature agreement also includes parameter conventions,
 `escaping`, and each result's ordered `from` positions; omitted and explicit
-`in` have the same semantic convention.
+`in` have the same semantic convention. [1975] additionally includes C versus
+Landin convention and variadicness recursively, including function-valued
+fields and nested signature parts.
 A literal whose value the type does not hold is refused
 [0190], and the report names the literal.
 A unary minus over a literal is part of the value that check
@@ -953,7 +968,9 @@ reads, which is what makes 'i8 = -128' the smallest i8
 rather than 128 refused and then negated. Nothing else is
 folded: 'u8 = 200 + 100' is two literals a u8 holds and a
 sum it does not, and [0300] says that traps rather than that
-it is refused here.
+it is refused here. This literal-range rule does not suppress [1975]'s
+separate refusal of a known null pointer construction, whose closed expression
+is folded before testing its target-width value.
 
 ### [1890] What each operator takes and what it gives
 
@@ -1064,10 +1081,14 @@ frame origin; copying a descriptor locally does not move its backing storage
 into the frame. A returned value
 with frame origin is refused. A retained `escaping` argument must be independent
 or derive only from parameters themselves declared `escaping`. Integer-created
-pointers are explicitly untracked [0470]. For a tracked returned reference, the
-set of parameter origins on every return edge is exactly the signature's `from`
-set. A live local view records the binding it derives from; an `inout` or `sink`
-use of that binding is refused when the view is read before being replaced.
+pointers are explicitly untracked [0470]. On each return edge, [0790]'s exact
+`from` comparison applies to an actual tracked reference in the returned value.
+A provably empty arm of [0480]'s optional pointer carries no reference and
+therefore no origin to compare; it is not an `Untracked` reference. For every
+edge that does return a tracked reference, the set of parameter origins is
+exactly the signature's `from` set. A live local view records the binding it
+derives from; an `inout` or `sink` use of that binding is refused when the view
+is read before being replaced.
 Volatile reference paths remain exempt [0850].
 
 A `caller` position is part of the complete structural function signature. It
@@ -1102,7 +1123,10 @@ structural function-type identity. Each runtime argument is synthesized and
 checked in written order, then its checked value is placed at the matched formal
 position for the ABI. A static-role label is not a runtime argument of a
 nongeneric or indirect callable. Each argument has its parameter's type [0310],
-and the call has the type of the named return.
+and the call has the type of the named return. [1975]'s C variadic call is the
+explicit exception to fixed arity and named matching: all actuals are
+positional, every fixed parameter is supplied, and the additional tail uses
+that rule's restricted carriers and default promotions.
 A call of a function returning none has no successful-result type. It is a
 statement [1810] and nothing else: nothing binds it, no argument is one, and
 [1930] cannot discard it, because there is no result there to discard. A call
@@ -1136,7 +1160,8 @@ A scalar type name in front of `(` remains [0700]'s explicit conversion.
 The enabled reference slice admits the two directions [0470] requires: an
 integer type applied to a pointer checks that the address fits, and
 `ptr(integer)` takes its complete pointer type from context and produces an
-untracked pointer. D168 also admits an enabled integer type applied to an
+untracked non-null pointer under [1975]'s known-zero refusal and always-on
+converted-zero check. D168 also admits an enabled integer type applied to an
 integer value. D169 admits f32 or f64 applied to a float value. Conversion
 from an enabled integer to f32 or f64 is admitted by D170. D171 admits an
 enabled integer type applied to a float value, and D172 admits an enabled
@@ -1322,28 +1347,151 @@ In a rooted R3.10 program, only a declaration in the designated entry module
 can satisfy this shape. A reachable imported module's `public main` is an
 ordinary public function and is never selected as the executable entry.
 
-### [1975] The first foreign boundary imports fixed scalar C routines
+### [1975] The selected C boundary is SysV AMD64 LP64
 
-`extern(c) name: declared_signature` declares a C routine supplied by the
-linked host and has no Landin body. R3.50 admits no generic form, no declared
-error set, only `in` scalar or pointer parameters, and at most one scalar or
-pointer result. Pointer permission remains part of the Landin signature. The
-general C ABI matrix—aggregates, unions, bitfields, variadic calls, callbacks,
-thread-local state, foreign ownership and generated bindings—belongs to R4.40.
+`extern(c)` selects a function convention, not an import or a visibility.
+Without a body the declaration imports a linked C routine; with `= body end`
+it defines a C-convention routine in Landin. A definition may be private (for
+example a callback) or `public`. A `link(symbol: "foreign_name")` annotation
+may follow `extern(c)` before the declared name, or stand alone before a native
+function's declared name [1610]. It selects the linker identity, not the Landin
+lookup name, signature, convention or visibility. In particular, the standalone
+form keeps the native Landin convention and still requires the ordinary
+`= body end`; `link` never implies C. The decoded link name has the precise safe
+ASCII shape `[A-Za-z_.$][A-Za-z0-9_.$]*`: its first byte is a letter,
+underscore, dot or dollar, and only a later byte may additionally be a digit.
+Whitespace, `@` suffixes and arbitrary assembler expressions are outside this
+form. The backend quotes the identity where target assembly operand syntax
+requires it; that rendering is not part of the link name and does not change the
+linker identity. Compatible bodyless C declarations may share a symbol with each
+other or with one definition; incompatible signatures and
+multiple definitions are refused. C imports and public C definitions default to
+their declared spelling. A private C definition without an override uses
+collision-safe internal naming.
+A C function type is `extern(c) (parameters) -> returns`.
+Convention and variadic status are part of recursive function identity wherever
+a function is carried, including nested fields, parameters, results, generic
+actuals, static images and indirect calls. Neither matching machine widths nor
+`layout(c)` makes a Landin function a C callback. Function values are code
+addresses; `ptr handler` instead addresses a stored function value.
 
-On the first Linux x86-64 hosted path, the executable's selected no-argument
-Landin entry captures the incoming C `argc` and `argv` before its body runs.
-The repository-owned runtime bridge exposes the user-argument table beginning
-after `argv[0]`, its bounded count, an indexed pointer derived from that table,
-retains the established one-index compatibility helper, and provides fixed
-wrappers for `strlen`, read-only and write-create-truncate `open`,
-`read`, `write`, `close`, `errno`, and hosted heap allocation and release;
-those wrappers call libc. This is a compiler/runtime ABI used by `core/io` and
-`core/heap`, not a set of privileged language operations. `core/io` turns
-descriptors and pointer-and-length argument views into ordinary values, maps
-foreseeable host failures onto declared atoms, and threads its
-`world(provider)` concept as the authority for opening files and touching
-streams [1660] [1680]. Direct Linux syscalls are not part of this route.
+The selected ABI is Linux x86-64 SysV AMD64 LP64, with signed plain C `char`.
+`compiler.c_sysv_lp64` is its fixed bool configuration fact, not a guess from
+pointer width or architecture spelling. The ordinary `core/c` aliases assert
+that fact before exposing `c_char`, `c_schar`, `c_uchar`, `c_short`, `c_ushort`,
+`c_int`, `c_uint`, `c_long`, `c_ulong`, `c_longlong`, `c_ulonglong`, `c_size`,
+`c_ptrdiff`, `c_float`, `c_double` and `c_bool`. These name existing scalar
+identities: signed/unsigned 8, 16, 32 and 64-bit integers as appropriate,
+`usize`/`isize`, `f32`/`f64` and `bool`; `long` and `long long` are both 64-bit.
+C `char` is numeric `i8`, not a Unicode scalar.
+
+A C signature is nongeneric and infallible, takes only `in` runtime
+parameters, and returns at most one value. Its admitted values are the enabled
+integer scalars, bool, pointers, D189's named one-atom pointer unions, f32, f64,
+fixed C function values and recursively compatible nonempty `layout(c)` structs.
+Such structs contain those leaves, nested C structs and nonempty fixed arrays of
+compatible fields, with the selected C field offsets, alignment and trailing
+padding. Ordinary Landin structs, variants, slices, text and `any` do not
+become C records by having a similar byte count. Arrays are fields or pointees,
+not by-value C array parameters or results. Pointer permission, `escaping`
+and written `from` contracts remain Landin checks; a header alone establishes
+none of their ownership or retention promises.
+
+The C transport classifies actual target-byte eightbytes as INTEGER or SSE,
+recursively merging fields at their offsets. In this non-vector subset an
+aggregate above sixteen bytes uses MEMORY. Integer/pointer and SSE argument
+register banks are independent. A register aggregate is assigned wholly or
+rolled back wholly to inline stack storage when either bank is exhausted;
+it is not passed as the internal Landin pointer carrier. Results use the
+corresponding integer/SSE return banks, or caller storage through the hidden C
+result pointer, returned again by the callee. Copies and partial eightbyte
+loads/stores stay inside the actual object extent. None of this changes
+Landin's internal convention or [1980]'s separate failure carrier.
+
+A final `, ...` after at least one fixed parameter marks a variadic C
+signature. It is not [0960]'s `! ...`. Variadic calls use only positional
+arguments, including their fixed prefix, evaluated in written order. Their
+unnamed tail admits scalars, pointers (including named optional unions) and
+fixed C callbacks, not aggregates, arrays, slices, atoms or erased values.
+Outgoing direct and indirect calls promote unnamed f32 to f64 and bool/narrow
+integers to C int; untyped integer and floating literals take i32 and f64
+respectively. Other admitted tail identities remain unchanged, and calls
+supply the ABI's SSE-register count. Fixed arguments retain their declared
+types. Variadic C function values may be stored and called in Landin, but a C
+callback parameter, result or record field must have a fixed signature.
+A native Landin definition that
+receives varargs is refused: incoming entries require a generated C adapter
+with an explicit extraction schema rather than an untyped Landin `va_list`.
+No declared or inferred Landin error set, exception unwinding, or `longjmp`
+across Landin frames is part of this boundary.
+
+Header processing belongs to the separate deterministic clang-AST binding
+generator, never to `refine`. The R4.40 generator contract covers declarations
+and C adapters for integer-backed enums, untagged unions, bitfields, globals,
+thread-local access, nullable callbacks and schema-defined incoming varargs.
+It does not introduce native C union, bitfield or TLS grammar. Policy supplies
+missing nullability, origin, retention and adapter choices, not handwritten
+replacement signatures. Nullable callbacks require a genuine code-pointer
+adapter representation, never a pointer to a function-value cell. Selected
+extended/x87 or 128-bit scalars, complex, vector, atomic or volatile types,
+old-style or non-C-calling-convention functions, packed, overaligned, flexible
+or zero-size by-value records, anonymous unaliased declarations, unsupported
+arrays, unsafe, stale or missing policies, and unsupported `va_list` forwarding
+receive explicit generator refusals rather than guessed layout or a fallback
+ABI. Enums, unions, bitfields, globals and TLS, nullable callbacks and bounded
+incoming-varargs schemas cannot be refused wholesale as a completion shortcut.
+ROADMAP.md records which implementation and differential evidence is still
+pending for this contract; this rule is not a native-gate completion claim.
+
+A known integer-to-pointer construction whose value is zero after target
+`usize` conversion is refused, including a closed folded expression. A dynamic
+construction tests the converted address for zero and traps before producing a
+pointer; this check remains in `unchecked`. Integer construction still loses
+origin, not non-nullness. Foreign nullable data pointers use a named one-atom
+pointer union and exhaustive `match`. Absent allocator backing uses that same
+ordinary union discipline, never a forged `ptr(0)` or `ptr(1)` allocation.
+`core/mem.dispose` reports `raw_not_empty` for a nonempty prefix and `raw_empty`
+for already absent backing; a successful release clears backing to its atom.
+
+Foreign failure detail is ordinary explicit state. After a documented libc
+failure indication, `core/io` captures errno before any other host call and
+retains the exact terminal value in its system provider, exposed by
+`io.last_errno`. Safe interrupted open/read/write attempts may retry; completed
+read/write progress is never replayed. Close consumes the handle even on
+failure and is never blindly retried, including EINTR. These facts neither add
+payloads to error atoms nor make errno a process-global Landin variable.
+
+On the first Linux x86-64 hosted path, the compiler-owned bridge emits the
+global hidden ELF entry
+`void _landin_host_initialize_arguments(int argc, char **argv);` whenever
+hosted bridge support is retained. An executable's selected no-argument Landin
+entry calls it with the actual incoming C carriers before its source body runs.
+A C-owned startup that drives public C-convention Landin routines calls it
+explicitly before `io.host` can mint an argument-table capability and before
+starting any thread that may do so. Merely importing `core/io` does not perform
+initialization, and startup-independent bridge services may run without it.
+Ordinary exports and callbacks never initialize, replace or reset this state.
+
+The first call requires a nonnegative `argc` and non-null `argv` and retains that
+exact pair as the one argument root. It allocates and copies nothing: the C
+owner must keep the `argv` table and every argument it names readable for the
+whole lifetime of every Landin world, view and callback derived from them. A
+later call with the identical count and pointer is harmless; a negative count,
+null table or attempt to replace either part of the established root traps. The
+retained-state count, table and indexed services trap before initialization.
+The published user table begins at `argv + 1`, its count is
+`max(argc - 1, 0)`, and the retained-state indexed compatibility lookup traps
+on an out-of-range index or null entry.
+
+The remaining repository-owned runtime bridge exposes fixed wrappers for
+`strlen`, read-only and write-create-truncate `open`, `read`, `write`, `close`,
+`errno`, and hosted heap allocation and release; those wrappers call libc. This
+is a compiler/runtime ABI used by `core/io` and `core/heap`, not a set of
+privileged language operations. `core/io` turns descriptors and
+pointer-and-length argument views into ordinary values, maps foreseeable host
+failures onto declared atoms, and threads its `world(provider)` concept as the
+authority for opening files and touching streams [1660] [1680]. Direct Linux
+syscalls are not part of this route.
 
 ### [1980] Declared errors are an orthogonal payload-free atom outcome
 
@@ -8822,11 +8970,13 @@ classified failure boundary before the repository gate can pass.
 | `slices.bounds-runtime` | trap | 0570, 0580, 1120, 1950, 1960 | trap, outside [1120]'s region | `runtime/computed-array-index-traps`, `runtime/local-array-computed-store-traps`, `runtime/slice-index-read-traps`, `runtime/slice-index-write-traps`, `runtime/slice-half-open-upper-traps`, `runtime/slice-inclusive-upper-traps`, `runtime/slice-lower-after-upper-traps` |
 | `atoms.sets` | static | 0630, 0640 | L0301 or L0312 | `negative/atom-match-not-exhaustive`, `runtime/atom-values-cross-the-abi` |
 | `aggregates.variants` | static | 0670, 0680, 0690, 0700, 0710, 0720, 0750, 1210 | L0301, L0308--L0312 or L0313 | `negative/struct-literal-field-not-given`, `negative/variant-match-not-exhaustive` |
-| `origins.escape` | static | 0770, 0780, 0790, 0800, 0830, 0840 | L0314--L0316; a retained provider wrapper keeps its ordinary inner argument's origin without requiring that argument to be declared `escaping`, and tracked pool constructor sources join | `negative/frame-origin-return`, `negative/borrowed-source-inout`, `negative/returned-reference-missing-from`, `negative/core-arena-frame-escape`, `negative/core-pool-frame-escape`, `negative/core-pool-bookkeeping-frame-escape`, `negative/core-failing-frame-escape`, `negative/core-text-frame-slice-escape`, `negative/core-diag-frame-message-escape`, `runtime/diagnostic-loggers-dispatch`, `runtime/r420-failing-providers` |
+| `origins.escape` | static | 0480, 0770, 0780, 0790, 0800, 0830, 0840 | L0314--L0316; [0790]'s exact `from` comparison applies to an actual returned reference, while a provably empty optional-pointer arm has no origin and is not `Untracked`; a retained provider wrapper keeps its ordinary inner argument's origin without requiring that argument to be declared `escaping`, and tracked pool constructor sources join | `negative/frame-origin-return`, `negative/borrowed-source-inout`, `negative/returned-reference-missing-from`, `negative/core-arena-frame-escape`, `negative/core-pool-frame-escape`, `negative/core-pool-bookkeeping-frame-escape`, `negative/core-failing-frame-escape`, `negative/core-text-frame-slice-escape`, `negative/core-diag-frame-message-escape`, `negative/r440-parser-frame-arena`, `runtime/diagnostic-loggers-dispatch`, `runtime/r420-failing-providers` |
 | `origins.aliasing-limit` | outside | 0770, 0910 | non-guarantee: a pre-existing copy or indistinguishable arena is not tracked | `positive/reference-origins-and-consume`, `negative/use-after-sink` |
 | `functions.abi` | static | 0870, 0880, 0890, 0900, 0920, 0930, 0980, 1000, 1020, 1030, 1460, 1920, 1970 | L0301, L0302 or L0502 | `negative/call-with-too-few-arguments`, `runtime/r230-composition` |
 | `functions.caller` | static | 0670, 0790, 1000, 1040, 1800, 1920 | caller positions have immutable three-u32 struct values (file_id, line, column) and structural signature identity, are compiler-filled without source strings, and accept an explicit argument only as a named forwarding of another caller parameter; L0301 rejects every other type, position or source and L0303 rejects mutation, and `caller` decided on two tokens leaves the spelling an ordinary name | `negative/caller-parameter-extra-field`, `negative/caller-parameter-field-order`, `negative/caller-parameter-field-width`, `negative/caller-parameter-read-only`, `negative/caller-parameter-forward-copy`, `negative/caller-parameter-forward-needs-caller`, `negative/caller-parameter-needs-site`, `negative/caller-parameter-positional`, `negative/caller-parameter-signature-mismatch`, `runtime/caller-parameters`, `runtime/caller-is-an-ordinary-name` |
-| `extern.c-boundary` | static | 0430, 1570, 1580, 1975 | L0301 for a signature outside R3.50's fixed integer/bool/pointer subset | `positive/external-scalar-c-boundary`, `negative/external-aggregate-boundary`, `negative/external-float-abi-not-enabled` |
+| `extern.c-boundary` | static | 0430, 0570, 0750, 0920, 1000, 1570, 1580, 1600, 1975 | C convention and variadicness remain recursively distinct from the Landin convention; fixed positions at the selected boundary admit integers, bool, pointers, f32/f64, fixed C callbacks and compatible nonempty `layout(c)` structs, while L0301 refuses an ordinary Landin struct, a slice, a Landin error channel or a native-convention callback even when its machine shape matches | `positive/external-scalar-c-boundary`, `positive/r440-external-float`, `positive/r440-c-signatures`, `negative/external-aggregate-boundary`, `negative/r440-c-slice-parameter`, `negative/r440-c-error-channel`, `negative/r440-c-native-callback` |
+| `functions.linkage` | static | 1000, 1570, 1580, 1600, 1610, 1800, 1975 | `link(symbol: text)` changes only the linker spelling: standalone use retains the native convention and body requirement, C imports may have compatible repeated declarations, and L0301 refuses an assembly expression, incompatible declarations, multiple definitions or treating a native linked function as a C callback | `positive/r440-c-signatures`, `positive/r440-compatible-link-declarations`, `negative/r440-link-assembly-expression`, `negative/r440-link-does-not-change-convention`, `negative/r440-link-duplicate-definitions`, `negative/r440-link-incompatible-declarations` |
+| `host.arguments-startup` | trap | 1580, 1600, 1650, 1660, 1960, 1975 | the no-argument Landin entry initializes the actual argument root before its body; C-owned startup must initialize it explicitly before `io.host`; use before initialization, a negative `argc`, null `argv`, or replacement of either established root carrier traps, while an identical repeated initialization is a no-op and startup-independent bridge calls need no root | `abi/r440-native-startup-initialized`, `abi/r440-native-startup-empty`, `abi/r440-native-startup-uninitialized`, `abi/r440-native-startup-replaced` |
 | `host.io` | outside | 0430, 1580, 1650, 1660, 1680, 1975 | non-guarantee: files, descriptors, arguments and streams reflect mutable host state | `runtime/hosted-io-reads-parser-input`, `runtime/core-io-erased-system`, `runtime/derived-parser` |
 | `host.io-failure` | static | 0940, 0960, 1030, 1975 | `core/io` reports foreseeable host failure as declared atoms which callers handle or declare | `runtime/hosted-io-reads-parser-input`, `runtime/core-io-erased-system`, `runtime/diagnostic-loggers-dispatch`, `runtime/derived-parser` |
 | `diagnostics.retention` | outside | 0950, 1680 | non-guarantee: `core/diag.bounded(N)` retains at most N notes and reports every later note through its `dropped` count instead | `runtime/diagnostic-loggers-dispatch`, `runtime/derived-parser` |
@@ -8850,19 +9000,20 @@ classified failure boundary before the repository gate can pass.
 | `module.images` | static | 0180, 0340, 0350, 0410, 1460, 1890, 1930, 1940 | L0300, L0304 or L0305; module-known bool `not`, `and` and `or` fold left to right into scalar and aggregate images, short-circuit `and`/`or`, and execute no initializer CFG | `negative/module-value-from-a-call`, `runtime/module-known-short-circuit-bools`, `runtime/recursive-module-images-are-laid-out-and-distinct` |
 | `unchecked.region` | outside | 0290, 0300, 0310, 0320, 0430, 0470, 0570, 0580, 0700, 1100, 1110, 1120, 1950, 1960 | non-guarantee: inside [1120]'s region the compiler emits no integer overflow edge for `+`, `-`, `*` and unary `-`, no element-index or slice-range edge, and no destination-range edge for an integer-to-integer or pointer-to-integer conversion; the results are [0320]'s wrapping value, [0430]'s pointer non-guarantee at the computed address, and the low-order bits of the source; every static refusal, every division, shift, bool and float conversion edge and every text boundary edge stays, and a [1100] `defer` or [1110] `undo` call keeps the edges of the place its registration is written rather than those of the exit that runs it | `positive/unchecked-regions`, `positive/unchecked-marks-only-the-edges-it-removes`, `runtime/unchecked-arithmetic-wraps`, `runtime/unchecked-integer-conversion-truncates`, `runtime/unchecked-slice-index-passes-the-length`, `runtime/checks-return-after-the-region`, `runtime/unchecked-does-not-cross-a-call`, `runtime/unchecked-does-not-reach-an-anonymous-body`, `runtime/unchecked-keeps-the-divisor-check`, `runtime/unchecked-keeps-the-shift-check`, `runtime/unchecked-keeps-text-boundary-traps`, `runtime/unchecked-keeps-bool-conversion-traps`, `runtime/unchecked-keeps-float-conversion-traps`, `runtime/unchecked-pointer-conversion-truncates`, `runtime/unchecked-does-not-reach-an-outer-cleanup`, `runtime/unchecked-reaches-a-cleanup-written-inside`, `negative/unchecked-keeps-a-known-index`, `negative/unchecked-keeps-permissions`, `negative/unchecked-keeps-definite-assignment`, `negative/unchecked-region-end-name-mismatch` |
 | `subtype.range` | trap | 0540, 0660, 0700, 1730, 1795, 1880, 1940, 1950, 1960 | storing into a place whose declared type is [0660]'s range subtype, and applying the subtype name to a value, check the value against both folded bounds; L0300 rejects a known value outside them, a runtime value outside them traps, and a value whose own subtype's bounds lie inside them is not checked again; [1120]'s region does not remove this edge | `positive/range-subtypes`, `runtime/range-subtype-checks`, `runtime/range-subtype-store-traps`, `runtime/range-subtype-conversion-traps`, `runtime/range-subtype-update-traps`, `negative/range-subtype-literal-out-of-range`, `negative/range-subtype-known-value-out-of-range`, `negative/range-subtype-zeroed-excluded`, `negative/range-subtype-bounds-inverted`, `negative/range-subtype-in-a-slice` |
-| `pointer.optional` | static | 0430, 0440, 0470, 0480, 0630, 0640, 1210, 1870 | L0301 for every use that would read the empty case as an address — `.val` in a read, in an assignment target and under `addr`, an integer conversion, `any` construction, a comparison, a `ptr T` position, `ptr(n)` into one, and an `inout` arm binding — and for a union of two pointer types; L0304 for `zeroed` and for a union of several atoms and a pointer; L0311 for either case named twice and L0312 for a case no arm and no `_` names; the bound pointer carries the subject's origin and the empty case carries none | `positive/pointer-unions`, `runtime/pointer-unions`, `negative/pointer-union-dereference`, `negative/pointer-union-assignment-target`, `negative/pointer-union-address-of-referent`, `negative/pointer-union-any-construction`, `negative/pointer-union-case-named-twice`, `negative/pointer-union-present-arm-named-twice`, `negative/pointer-union-is-not-a-pointer`, `negative/pointer-union-match-not-exhaustive`, `negative/pointer-union-frame-escape`, `negative/pointer-union-comparison`, `negative/pointer-union-integer-conversion`, `negative/pointer-union-from-an-integer`, `negative/pointer-union-inout-binding`, `negative/pointer-union-zeroed`, `negative/pointer-union-several-atoms`, `negative/pointer-union-two-pointers`, `negative/pointer-case-arm-is-not-an-atom` |
+| `pointer.optional` | static | 0430, 0440, 0470, 0480, 0630, 0640, 1210, 1870 | L0301 for every use that would read the empty case as an address — `.val` in a read, in an assignment target and under `addr`, an integer conversion, `any` construction, a comparison, a `ptr T` position, `ptr(n)` into one, and an `inout` arm binding — and for a union of two pointer types; L0304 for `zeroed` and for a union of several atoms and a pointer; L0311 for either case named twice and L0312 for a case no arm and no `_` names; the bound pointer carries the subject's origin and the empty case carries none | `positive/pointer-unions`, `runtime/pointer-unions`, `negative/pointer-union-dereference`, `negative/pointer-union-assignment-target`, `negative/pointer-union-address-of-referent`, `negative/pointer-union-any-construction`, `negative/pointer-union-case-named-twice`, `negative/pointer-union-present-arm-named-twice`, `negative/pointer-union-is-not-a-pointer`, `negative/pointer-union-match-not-exhaustive`, `negative/pointer-union-frame-escape`, `negative/r440-parser-frame-arena`, `negative/pointer-union-comparison`, `negative/pointer-union-integer-conversion`, `negative/pointer-union-from-an-integer`, `negative/pointer-union-inout-binding`, `negative/pointer-union-zeroed`, `negative/pointer-union-several-atoms`, `negative/pointer-union-two-pointers`, `negative/pointer-case-arm-is-not-an-atom` |
 | `configuration.fixed` | static | 1480, 1500, 1510, 1530, 1540, 1560, 1590, 1980 | L0200 for duplicate option names; L0203 for reserved tool names; L0300, L0301, L0305 or L0306 for invalid fixed configuration; L0324 for a false compiler assertion | `negative/fixed-conditional-evaluator`, `negative/r430-assertion-false`, `negative/r430-option-cycle`, `negative/r430-option-duplicate`, `negative/r430-option-reserved`, `negative/r430-library-injection`, `positive/r430-fixed-options`, `runtime/r430-fixed-tools`, `runtime/r430-static-library` |
 
 This is a coverage register, not an optimizer contract. D187 adds
 `unchecked.region` for [1120], which weakens the four trapping rows it names
 and no others; `subtype.range` is deliberately not among them, because a
 value outside a range subtype's bounds is not a value the destination type
-holds and removing that edge would leave no stated behaviour. C calls and raw allocation are absent because the current
-compiler does not implement those operations; their enabling work must add
-rows. Driver and
-backend inability have diagnostic owners in `diagnostics.matrix`, but are host
-failures rather than source semantic operations and therefore are not invented
-as language guarantees here.
+holds and removing that edge would leave no stated behaviour. D203--D208 add
+the selected C-call, export, linkage, allocation and hosted-startup boundaries
+now that R4.40 implements their source and backend paths; generated binding
+integration and the native gate remain active roadmap evidence rather than
+additional guarantee classes. Driver and backend inability have diagnostic
+owners in `diagnostics.matrix`, but are host failures rather than source semantic
+operations and therefore are not invented as language guarantees here.
 
 #### Conformance and evidence coverage
 
@@ -9136,6 +9287,12 @@ library design without parser evidence. All were declined.
 `modules.visibility` guarantee rows.
 
 ### D153 — Hosted I/O is a libc-backed capability over a scalar import seam
+
+D203--D208 supersede the narrow C signature limit and complete [1975]'s
+selected-boundary contract. D208 refines this decision's original executable-
+owned argument capture into the shared Landin- or C-owned startup contract. The
+original bridge decision below remains the basis of the hosted authority path,
+not today's complete C admissibility rule.
 
 **The tour and prototypes said** that hosted arguments begin in C `argc` and
 `argv` form [1650], that the entry is where a root capability is minted
@@ -9657,6 +9814,8 @@ bits through local and module scalar storage, fixed arrays, ordinary structs,
 internal parameters and returns. Representation-class routine sharing treats
 a float as distinct from a same-width integer. The first external C boundary
 continues to refuse float signatures until R4.40 supplies its register classes.
+D204 and the current [1975] subsequently define that separate C float path;
+the limit in this increment does not override them.
 
 A module float at this increment may use a literal, its unary minus or
 `zeroed`, also inside a static aggregate image. Float arithmetic in a module
@@ -9679,9 +9838,10 @@ make cross-compilation depend on the host.
 `negative/float-remainder-is-integer-only`,
 `negative/float-type-not-enabled`,
 `negative/integer-literal-not-a-float`,
-`negative/malformed-float-exponent`,
-`negative/external-float-abi-not-enabled`, the lexer cases, and the
-`float.ieee` guarantee row.
+`negative/malformed-float-exponent`, `positive/r440-external-float` for R4.40's
+later f64 C-boundary admission, `negative/external-aggregate-boundary` and
+`negative/r440-c-slice-parameter` for the boundary's continuing carrier
+refusals, the lexer cases, and the `float.ieee` guarantee row.
 
 ### D163 — A character is one decoded Unicode scalar with fixed type u32
 
@@ -11119,12 +11279,14 @@ named twice is L0311, a case named by neither an arm nor `_` is L0312, and
 
 The empty case contributes no origin at all, and in particular never the
 `Untracked` fact [0470]'s integer-to-pointer conversion sets, because that
-fact *suppresses* the frame-escape refusal. The bound pointer takes the
-subject's own origin, so a union built from `addr local` still refuses an
-escaping use of the binding with L0314. Lowering is one comparison against
-zero and the CFG branch a match already emits; the empty case lowers to a
-`usize` zero rather than the atom's dense nonzero code, which is the one
-place a wrong carrier could be produced.
+fact *suppresses* the frame-escape refusal. On a return edge provably carrying
+this empty case, [0790]'s exact `from` contract has no actual reference origin
+to compare; it does not reinterpret absence as an untracked reference. The
+bound pointer takes the subject's own origin, so a union built from `addr local`
+still refuses an escaping use of the binding with L0314. Lowering is one
+comparison against zero and the CFG branch a match already emits; the empty
+case lowers to a `usize` zero rather than the atom's dense nonzero code, which
+is the one place a wrong carrier could be produced.
 
 Two or more atoms beside a pointer is refused by name with L0304 citing
 [0480] and owned by R7.20. The tagged carrier [1870] describes needs an IR
@@ -11150,6 +11312,11 @@ declaration would be a change no atom union has today. Laying the multi-atom
 case out now would have made this increment a representation increment. All
 were declined.
 
+D206 supersedes the null-construction gap recorded below: [1975] now requires
+known-zero refusal and an always-on dynamic check, and allocator absence uses
+the union. The following is the state D189 handed to that work, not a present
+permission to construct a null pointer.
+
 `ptr(0)` remains accepted [0470] and `runtime/core-mem-allocators` uses it as
 a failure sentinel five times, so null is still mintable on the pointer side
 even though [1580] states that it is refused. That contradiction is real, it
@@ -11169,6 +11336,7 @@ leaving [0480] looking closed while its headline sentence is evadable.
 `negative/pointer-union-is-not-a-pointer`,
 `negative/pointer-union-match-not-exhaustive`,
 `negative/pointer-union-frame-escape`,
+`negative/r440-parser-frame-arena`,
 `negative/pointer-union-comparison`,
 `negative/pointer-union-integer-conversion`,
 `negative/pointer-union-from-an-integer`,
@@ -12180,3 +12348,185 @@ from the driver. All were declined.
 target-fact, ordered-library and pre-root builtin-import cases, plus
 `negative/option-outside-configuration`, `negative/tool-namespace-bindings`
 and `negative/function-tool-refusals` for the ordinary-resolution boundary.
+
+### D203 — C convention and variadicness are recursive signature facts
+
+**The tour said** at [1000] that function values have structural signatures,
+at [1570] that a convention is selected explicitly, and at [1580]/[1600] that
+imports and exports meet C. It did not separate convention from bodylessness,
+visibility or linker spelling.
+
+**Chosen:** [1800] and [1975] separate those facts. Named private and public C
+definitions use `extern(c)`; C function types carry that prefix too. Only a
+final ellipsis after fixed parameters marks varargs. A symbol literal follows
+the C convention when one is written, or stands alone before a native function
+name; the standalone form retains the native convention and ordinary body
+requirement. The decoded link name is a linker identity with the safe ASCII
+shape `[A-Za-z_.$][A-Za-z0-9_.$]*`. Whitespace, `@` suffixes and arbitrary
+assembler expressions are excluded; target-assembly quoting is only a rendering
+of the same identity. C signatures cannot declare Landin failures. Agreement
+recursively includes convention and variadicness, independently of labels and
+symbol names.
+Variadic calls are positional-only and limit the unnamed tail to scalars,
+pointers and fixed C callbacks. Fixed callback signatures and nonempty C array
+fields delimit the selected subset explicitly rather than borrowing C
+extensions accidentally.
+
+**The alternative** was to infer C transport from an import flag, public name,
+or a matching machine shape. That loses the convention as soon as the function
+is stored or passed indirectly and silently miscalls nested callbacks. A new
+error bridge or implicit callback thunk would change the language contract;
+both are declined.
+
+**Pinned by** `positive/external-scalar-c-boundary` for the retained bodyless
+import form, `positive/r440-c-signatures` for C types, definitions and the
+standalone native link form, and `negative/r440-link-does-not-change-convention`
+for the independence of linkage and convention. Further compiler and ABI
+differential coverage belongs to active R4.40. These recorded cases do not
+claim a passing native gate.
+
+### D204 — C layout and transport follow one selected target ABI
+
+**The tour said** at [0750] that C layout keeps C offsets, and at [1580] that a
+foreign declaration describes the actual C value. It did not specify the data
+model, recursive aggregate classes or target guard on C scalar aliases.
+
+**Chosen:** [1975]'s Linux SysV AMD64 LP64 matrix, signed C char, recursive
+nonempty C structs and separate INTEGER/SSE banks define this boundary.
+`compiler.c_sysv_lp64` is a fixed bool supplied by the selected ABI;
+`core/c` asserts it and supplies ordinary aliases rather than new scalar kinds.
+Register exhaustion rolls an aggregate wholly onto the stack; MEMORY results
+use the C hidden destination. The internal Landin convention is unchanged.
+
+**The alternatives:** using host Ada layout breaks cross compilation. Guessing
+LP64 from 64-bit pointers admits other data models. Flattening every aggregate
+into integer words breaks SSE and mixed values; passing large records by the
+internal pointer carrier is not C by-value passing. Universal boxed records
+would impose unnecessary storage and indirection on the small target. All are
+declined in favor of target-selected layout and signature-selected transport.
+
+**Pinned by** `positive/r440-c-aliases`, `positive/r440-external-float` and
+`runtime/r440-c-aliases` for the ordinary aliases and admitted f64 signature.
+Bidirectional aggregate, callback and variadic interoperation and
+target-description cases remain R4.40 gate evidence, not a claim made by the
+existence of these fixtures.
+
+### D205 — Headers describe ABI shapes, not lifetime policy
+
+**The tour said** at [1580] that declarations were handwritten and no header
+was read. That workflow cannot meet R4.40's complete binding pressure without
+repeating signatures manually.
+
+**Chosen:** the separate deterministic clang-AST generator described at [1975]
+extracts C declarations and emits explicit adapters for forms outside the
+native grammar. Policy fills semantic gaps and extraction schemas; it does not
+replace signatures by hand. Enums retain C integer values; C unions and
+bitfields are not Landin tagged variants or hardware packed fields. Globals
+and TLS use accessors; nullable callbacks require their own code-pointer
+representation. Native receiving-varargs definitions are refused in favor of
+schema-defined generated C entries. Ownership, nullability, `from`, retention,
+foreign unwinding and callback-state validity are never inferred from an
+ordinary C prototype.
+
+**The alternatives:** parsing headers inside `refine` couples the language
+frontend to C preprocessing. A C/LLVM backend replaces the chosen native
+backend rather than solving bindings. Adding native union, bitfield, TLS and
+`va_list` syntax merely for adapters widens the language and burdens the
+freestanding path. Handwritten signature replacement disguises the old
+workflow as generation. These alternatives are declined.
+
+**Pinned by — pending:** `bindings/generate.py`, its Clang-backed
+`bindings/test.py` suite and `abi/r440-bindings-generated` are recorded under
+active R4.40. Deterministic regeneration, compiled adapters and end-to-end
+interoperation still require integration-barrier evidence; the files' presence
+does not assert passing generator or native execution.
+
+### D206 — Null construction cannot evade the pointer union
+
+**The tour said** at [0470] that integer construction loses origin, at [0480]
+that pointers are non-null, and at [1580] that `ptr(0)` is refused. D189 left the
+compiler's contrary integer-conversion path for this boundary to close.
+
+**Chosen:** [1975] refuses known zero after target-width conversion, including
+closed folds, and checks dynamic converted zero even inside `unchecked`.
+Pointer-union transport remains one target carrier, with no origin in the atom
+arm and the original origin in the narrowed pointer arm. [0790]'s exact `from`
+comparison applies only on an edge that actually returns the reference; a
+provably empty arm has no origin and is not `Untracked`. A call-site `else`
+still handles failure, not absence: a successful union is matched normally.
+Allocator and disposed backing use named atom/pointer unions; a successful
+`dispose` clears to the atom and a repeat reports `raw_empty`.
+
+**The alternatives:** keeping zero as an untracked pointer contradicts the
+niche. Testing before narrowing misses target-width zero; removing the check
+in `unchecked` reopens the contradiction. Replacing null with `ptr(1)` hides
+absence in a false allocation. A second tagged wrapper wastes a word where
+the existing one-atom union already expresses the state. All are declined.
+
+**Pinned by** `runtime/null-pointer-dynamic-traps`,
+`runtime/null-pointer-unchecked-traps`, `runtime/null-pointer-union-call-else`,
+`negative/null-pointer-union-call-else-frame-escape`,
+`negative/r440-parser-frame-arena` and
+`runtime/core-mem-dispose-empty` are recorded cases; their native execution and
+the static folded/target-width refusals remain part of R4.40 verification.
+
+### D207 — Foreign failure detail stays in the provider
+
+**The tour said** at [0950] to represent foreseeable conditions directly and
+at [1660] to pass host authority explicitly. Prototype 2's diagnostic sink and
+prototype 4's replaceable world both need detail without a second error system.
+
+**Chosen:** [1975]'s immediate errno capture, explicit system state and
+`io.last_errno` preserve the exact terminal libc detail while ordinary
+`not_found`, `no_access` and `io_failed` remain payload-free atoms. A successful
+operation clears the remembered detail; a local refusal invents no errno.
+Interrupted open/read/write attempts retry only under the selected platform's
+no-progress guarantee, and writes resume after the completed prefix. Close
+consumes its handle once even if it fails; EINTR does not authorize retry.
+
+**The alternatives:** reading errno after cleanup can report the cleanup's
+failure instead. A global last-error value loses the capability boundary and
+thread-local meaning. Retrying every EINTR can close a reused descriptor or
+repeat completed output. Adding exception payloads changes the error model
+rather than preserving foreign detail. All are declined.
+
+**Pinned by** `runtime/r440-errno-detail` and
+`runtime/r440-io-partial-progress` record the explicit-state and progress
+contracts. Interrupted-host-call and close evidence remains part of active
+R4.40's native verification.
+
+### D208 — Hosted argument capabilities retain one C startup root
+
+**The tour said** at [1650] that the hosted world retains the incoming argument
+table and that C's `argc`/`argv` entry remains available, and at [1660] that the
+entry point mints the host capability. It did not say how a C-owned entry starts
+Landin exports, when the argument root exists, or how long its backing lives.
+
+**Chosen:** [1975]'s compiler/runtime ABI emits the global hidden ELF entry
+`void _landin_host_initialize_arguments(int argc, char **argv);` with hosted
+bridge support. The ordinary no-argument Landin `main` calls it before its body;
+a C-owned startup calls it with its real carriers before `io.host` or any thread
+that may acquire the argument capability. Exports and callbacks never call it
+implicitly. Startup-independent bridge operations need no argument root, and
+retaining `core/io` alone does not initialize one.
+
+The first nonnegative-count, non-null-table call establishes one exact
+`(argc, argv)` root without copying or allocation. An identical later call is a
+no-op; an invalid call, use before initialization, or replacement of either root
+carrier traps. The C owner retains the table and strings for as long as any
+derived Landin world, view or callback can use them. The published sequence
+omits `argv[0]`; its count is `max(argc - 1, 0)`, and retained-state indexed
+lookup checks both the bound and selected pointer.
+
+**The alternatives:** initialize every export or callback, fabricate an empty
+argument table, copy the vector into hidden allocated storage, permit root
+replacement, or gate every hosted bridge operation on argument startup. The
+first has no authentic carriers and breaks reentrant callbacks; the second
+mints a false capability; the third adds an allocator and an unstated release
+lifetime; the fourth can dangle already published views; and the last prevents
+startup-independent file and stream work. All are declined.
+
+**Pinned by** `abi/r440-native-startup-initialized`,
+`abi/r440-native-startup-empty`, `abi/r440-native-startup-uninitialized` and
+`abi/r440-native-startup-replaced` are recorded cases. Their native execution
+remains required by active R4.40; their presence is not runtime evidence.

@@ -105,6 +105,13 @@ package body Landin.Tests.Targets_Suite is
          "the synthetic constructor names synthetic_32 explicitly");
 
       Landin.Testing.Check
+        (Item, C_ABI_Of (Linux_X86_64) = SysV_AMD64_LP64,
+         "the Linux constructor selects its C ABI explicitly");
+      Landin.Testing.Check
+        (Item, C_ABI_Of (Synthetic_32) = No_C_ABI,
+         "the synthetic target does not inherit a host C ABI");
+
+      Landin.Testing.Check
         (Item, Maximum_Object_Size (Linux_X86_64) = Byte_Count'Last,
          "a 64-bit target admits a 64-bit byte extent");
       Landin.Testing.Check

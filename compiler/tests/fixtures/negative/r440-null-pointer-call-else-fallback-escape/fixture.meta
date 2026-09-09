@@ -1,0 +1,6 @@
+class: negative
+summary: R4.40 a call-else pointer-union join retains a frame origin introduced only by the fallback, not just origins of the successful call
+program: program.ldn
+codes: L0314
+constructs: 0480, 0770, 0780, 0940
+targets: linux-x86-64, synthetic-32

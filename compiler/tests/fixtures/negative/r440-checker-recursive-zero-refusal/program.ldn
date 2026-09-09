@@ -1,0 +1,4 @@
+handler: type = extern(c) (value: i32) -> (result: i32)
+use: () -> none =
+    values: [2][2]handler = zeroed
+end use

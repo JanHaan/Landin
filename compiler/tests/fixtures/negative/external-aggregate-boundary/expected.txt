@@ -1,4 +1,4 @@
-error[L0301]: this external signature is outside the hosted scalar C boundary
+error[L0301]: this signature is not representable by the selected target's native C ABI
   --> ../tests/fixtures/negative/external-aggregate-boundary/program.ldn:6:1
   |
 6 | extern(c) host_pair: (value: pair) -> none
@@ -6,5 +6,5 @@ error[L0301]: this external signature is outside the hosted scalar C boundary
   --> ../tests/fixtures/negative/external-aggregate-boundary/program.ldn:6:1
   |
 6 | extern(c) host_pair: (value: pair) -> none
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this external declaration
-  = note: [1580]: R3.50 admits fixed scalar and pointer parameters and at most one such result; the general C ABI matrix belongs to R4.40
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this C signature
+  = note: [1580]: C signatures are infallible and nongeneric; only implicit/in parameters, no caller or constraints; scalars, pointers (including named optional unions), fixed C callbacks or layout(c) structs, and at most one result; no slices, any, atoms or by-value arrays; variadic definitions require a generated adapter

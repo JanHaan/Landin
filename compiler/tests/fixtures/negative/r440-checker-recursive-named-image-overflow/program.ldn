@@ -1,0 +1,5 @@
+record: type = layout(c) struct
+    values: [1][1]u8
+end record
+alias: type = record
+image: alias = alias(values: [[255 + 1]])

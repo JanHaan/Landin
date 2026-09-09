@@ -1,0 +1,152 @@
+--  This program uses the real core/io system provider.  The C companion wraps
+--  the libc symbols reached by the compiler-emitted _landin_host_* bridge; it
+--  scripts return values and checks every offered address, extent and byte.
+
+import core/io
+
+extern(c) r440_errno_select: (scenario: i32) -> none
+extern(c) r440_errno_check: (scenario: i32) -> (fault: i32)
+extern(c) r440_errno_record: (detail: i32) -> none
+
+read_path: [10]u8 = [114, 52, 52, 48, 45, 114, 101, 97, 100, 0]
+write_path: [11]u8 =
+    [114, 52, 52, 48, 45, 119, 114, 105, 116, 101, 0]
+payload: [6]u8 = [10, 20, 30, 40, 50, 60]
+
+public main: () -> (code: i32) =
+    code = 1
+    mut state: io.system = io.host()
+
+    --  A read-only open retries EINTR with the identical path and flags.  The
+    --  successful retry leaves no stale detail, and its fake handle is closed.
+    r440_errno_select(1)
+    read_file: io.file = io.open_read(state, addr read_path[0]) else (problem)
+        _ = problem
+        return
+    end
+    return when io.last_errno(state) <> 0
+    io.close(state, read_file) else (problem)
+        _ = problem
+        return
+    end
+    return when r440_errno_check(1) <> 0
+
+    --  The write-open bridge must preserve path, flags and creation mode over
+    --  the EINTR retry rather than rebuilding a different request.
+    code = 2
+    r440_errno_select(2)
+    write_file: io.file = io.open_write(state, addr write_path[0]) else (problem)
+        _ = problem
+        return
+    end
+    return when io.last_errno(state) <> 0
+    io.close(state, write_file) else (problem)
+        _ = problem
+        return
+    end
+    return when r440_errno_check(2) <> 0
+
+    --  The first read attempt is interrupted.  Its retry must offer the same
+    --  storage and extent; a positive partial result is returned immediately.
+    --  A later zero result is successful EOF and leaves the bytes untouched.
+    code = 3
+    r440_errno_select(3)
+    read_stream: io.file = io.out(state)
+    mut received: [4]u8 = zeroed
+    first_count: usize = io.read(state, read_stream, received[0..<4])
+        else (problem)
+            _ = problem
+            return
+        end
+    return when first_count <> 3 or received[0] <> 65 or received[1] <> 66
+      or received[2] <> 67 or received[3] <> 0
+    eof_count: usize = io.read(state, read_stream, received[0..<4])
+        else (problem)
+            _ = problem
+            return
+        end
+    return when eof_count <> 0 or received[0] <> 65 or received[1] <> 66
+      or received[2] <> 67 or received[3] <> 0
+      or io.last_errno(state) <> 0 or r440_errno_check(3) <> 0
+
+    --  A completed prefix advances exactly once.  EINTR retries only the same
+    --  remaining suffix, and subsequent short success advances within it.
+    code = 4
+    r440_errno_select(4)
+    write_stream: io.file = io.out(state)
+    io.write(state, write_stream, payload[0..<6]) else (problem)
+        _ = problem
+        return
+    end
+    return when io.last_errno(state) <> 0 or r440_errno_check(4) <> 0
+
+    --  close is not retry-safe.  EINTR is terminal, its detail is four, and C
+    --  must observe exactly one call even though the consumed handle may be gone.
+    code = 5
+    r440_errno_select(5)
+    close_stream: io.file = io.out(state)
+    mut close_failed: bool = false
+    io.close(state, close_stream) else (problem)
+        close_failed = problem == io.io_failed and io.last_errno(state) == 4
+    end
+    return when not close_failed or r440_errno_check(5) <> 0
+
+    --  A second failing read after EINTR replaces the transient four with the
+    --  terminal EIO value five.  Its retry still uses the identical offer.
+    code = 6
+    r440_errno_select(6)
+    terminal_stream: io.file = io.out(state)
+    mut terminal_bytes: [2]u8 = [91, 92]
+    mut terminal_failed: bool = false
+    terminal_count: usize = io.read
+        (state, terminal_stream, terminal_bytes[0..<2]) else (problem)
+            terminal_failed = problem == io.io_failed
+              and io.last_errno(state) == 5
+            0
+        end
+    return when not terminal_failed or terminal_count <> 0
+      or terminal_bytes[0] <> 91 or terminal_bytes[1] <> 92
+      or r440_errno_check(6) <> 0
+
+    --  A zero result on a nonempty write is stalled progress, not success.  It
+    --  is not a failing libc result, so even deliberately dirty ambient errno
+    --  is not copied.  An empty write makes no additional bridge call.
+    code = 7
+    r440_errno_select(7)
+    zero_stream: io.file = io.out(state)
+    mut zero_failed: bool = false
+    io.write(state, zero_stream, payload[0..<6]) else (problem)
+        zero_failed = problem == io.io_failed and io.last_errno(state) == 0
+    end
+    return when not zero_failed
+    io.write(state, zero_stream, payload[0..<0]) else (problem)
+        _ = problem
+        return
+    end
+    return when io.last_errno(state) <> 0 or r440_errno_check(7) <> 0
+
+    --  Capture the terminal write detail before cleanup.  The successful close
+    --  deliberately dirties C errno and clears provider detail; the copied EIO
+    --  and the C-side record must survive, and close must occur exactly once.
+    code = 8
+    r440_errno_select(8)
+    cleanup_stream: io.file = io.out(state)
+    mut original: i32 = 0
+    mut write_failed: bool = false
+    io.write(state, cleanup_stream, payload[0..<6]) else (problem)
+        if problem == io.io_failed then
+            original = io.last_errno(state)
+            r440_errno_record(original)
+            write_failed = true
+        end if
+    end
+    return when not write_failed or original <> 5
+    io.close(state, cleanup_stream) else (problem)
+        _ = problem
+        return
+    end
+    return when original <> 5 or io.last_errno(state) <> 0
+      or r440_errno_check(8) <> 0
+
+    code = 42
+end main

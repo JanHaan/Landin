@@ -1,6 +1,15 @@
 import core/heap
 import core/mem
 
+absent: atom
+allocation: type = absent | ptr mut u8
+is_absent: (value: allocation) -> (empty: bool) =
+    match value
+        absent: empty = true
+        ptr: empty = false
+    end match
+end is_absent
+
 public main: () -> (code: i32) =
     code = 1
     mut allocator := heap.host()
@@ -8,8 +17,14 @@ public main: () -> (code: i32) =
     zero: usize = 0
     one: usize = 1
     extent: usize = two * sizeof u32
-    base: ptr mut u8 = mem.allocate(allocator, extent, alignof u32) else ptr(0)
-    other: ptr mut u8 = mem.allocate(allocator, extent, alignof u32) else ptr(0)
+    base: ptr mut u8 = mem.allocate(allocator, extent, alignof u32) else (problem)
+        _ = problem
+        return
+    end
+    other: ptr mut u8 = mem.allocate(allocator, extent, alignof u32) else (problem)
+        _ = problem
+        return
+    end
     mut source := mem.reserve(item: u32, base: base, slots: two)
     mut target := mem.reserve(item: u32, base: other, slots: two)
     empty: bool = begin
@@ -52,9 +67,9 @@ public main: () -> (code: i32) =
         view := mem.used(source)
         view[0] == 11 and view[1] == 23
     end
-    blocked: usize = begin
-        refused: ptr mut u8 = mem.dispose(target) else ptr(0)
-        usize(refused)
+    blocked: bool = begin
+        refused: allocation = mem.dispose(target) else absent
+        is_absent(refused)
     end
     tail: u32 = mem.release(target) else 0
     remaining: bool = begin
@@ -70,10 +85,16 @@ public main: () -> (code: i32) =
     end
     again: usize = mem.admit(target, second) else two
     repeated: u32 = mem.release(target) else 0
-    target_block: ptr mut u8 = mem.dispose(target) else ptr(0)
+    target_block: ptr mut u8 = mem.dispose(target) else (problem)
+        _ = problem
+        return
+    end
     _ = mem.release(source) else 0
     _ = mem.release(source) else 0
-    source_block: ptr mut u8 = mem.dispose(source) else ptr(0)
+    source_block: ptr mut u8 = mem.dispose(source) else (problem)
+        _ = problem
+        return
+    end
     final_empty: bool = begin
         view := mem.used(target)
         lenof view == 0 and mem.capacity(target) == 0
@@ -84,7 +105,7 @@ public main: () -> (code: i32) =
     mem.free(allocator, source_block, extent)
     if empty and a == 0 and b == 1 and refused == 2 and replace_refused
       and before and missing == 2 and target_empty and c == 0 and d == 1
-      and full == 2 and copied and original and blocked == 0
+      and full == 2 and copied and original and blocked
       and tail == 29 and remaining and head == 31 and empty_refused
       and again == 0 and repeated == 23 and final_empty and exact
     then

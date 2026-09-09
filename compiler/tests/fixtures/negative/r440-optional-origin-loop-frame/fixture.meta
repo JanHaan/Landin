@@ -1,0 +1,6 @@
+class: negative
+summary: A loop back edge adding a frame pointer invalidates the entry's empty proof and preserves the frame-escape refusal
+constructs: 0480, 0770, 0790, 1150
+program: program.ldn
+codes: L0314
+targets: linux-x86-64, macos-arm64, synthetic-32

@@ -1,0 +1,10 @@
+error[L0301]: link symbol `main` collides with the selected native hosted entry
+  --> ../tests/fixtures/negative/r440-checker-hosted-main-collision/program.ldn:4:24
+  |
+4 | extern(c) link(symbol: "main") foreign: () -> (value: i32)
+  |                        ^^^^^^
+  --> ../tests/fixtures/negative/r440-checker-hosted-main-collision/program.ldn:1:1
+  |
+1 | public main: () -> (code: i32) =
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the selected hosted entry
+  = note: [1610]/[1975]: only the entry module's public native main():code:i32 retaining main linkage selects hosted startup

@@ -11,7 +11,7 @@ package Landin.Platform.Native.Tools is
 
    --  How long a tool may run before it is stopped.  A fixture program
    --  that loops forever hung the whole gate without naming itself; a run
-   --  past the limit is killed and reported as Signaled, with a line in
+   --  past the limit is killed and reported as Timed_Out, with a line in
    --  its output saying so (R4.21).  Ten minutes is far past any tool the
    --  compiler runs and any fixture the harness executes.
    procedure Set_Limit (Host : in out Native_Tool_Runner; Seconds : Duration);

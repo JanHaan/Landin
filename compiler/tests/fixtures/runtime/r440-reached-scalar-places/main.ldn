@@ -1,0 +1,43 @@
+matrix: type = struct
+    values: [2][2]i32
+end matrix
+
+next: (inout count: usize) -> (index: usize) =
+    index = count
+    count += 1
+end next
+
+update: (inout value: matrix, inout flat: [2]i32) -> none =
+    value.values[0][1] = value.values[0][0] + 2
+    value.values[1][0] += 3
+    index: usize = 1
+    value.values[index][index] += 4
+    flat[0] = flat[1] + 5
+    flat[index] += 6
+end update
+
+public main: () -> (code: i32) =
+    mut value: matrix = matrix(values: [[10, 20], [30, 40]])
+    mut flat: [2]i32 = [1, 2]
+    update(value, flat)
+    pointer: ptr mut matrix = addr value
+    pointer.val.values[0][0] = pointer.val.values[0][1] + 7
+    pointer.val.values[1][0] += 8
+    mut count: usize = 0
+    pointer.val.values[next(count)][1] += if count == 1 then
+        9
+    else
+        100
+    end if
+    array_pointer: ptr mut [2]i32 = addr flat
+    array_pointer.val[0] += 10
+    index: usize = 1
+    array_pointer.val[index] = array_pointer.val[0] + 11
+    if value.values[0][0] == 19 and value.values[0][1] == 21
+      and value.values[1][0] == 41 and value.values[1][1] == 44
+      and flat[0] == 17 and flat[1] == 28 and count == 1 then
+        code = 42
+    else
+        code = 1
+    end if
+end main

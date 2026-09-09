@@ -1,0 +1,5 @@
+accept: (item: type) -> none = end accept
+
+exercise: () -> none =
+    accept(item: [2]extern(c) (value: i32) -> (result: i32))
+end exercise

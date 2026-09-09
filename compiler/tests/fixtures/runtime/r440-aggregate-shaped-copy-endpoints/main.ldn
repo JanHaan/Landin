@@ -1,0 +1,46 @@
+handler: type = (value: i32) -> (result: i32)
+
+leaf: type = struct
+    number: i32
+    callback: handler
+end leaf
+
+parcel: type = struct
+    from_local: leaf
+    from_call: leaf
+    repeated: [3]leaf
+end parcel
+
+plus_one: (value: i32) -> (result: i32) =
+    result = value + 1
+end plus_one
+
+plus_two: (value: i32) -> (result: i32) =
+    result = value + 2
+end plus_two
+
+make_leaf: (number: i32, callback: handler) -> (result: leaf) =
+    result = leaf(number: number, callback: callback)
+end make_leaf
+
+public main: () -> (code: i32) =
+    local: leaf = leaf(number: 5, callback: plus_one)
+    packed: parcel = parcel(
+        from_local: local,
+        from_call: make_leaf(7, plus_two),
+        repeated: [3 of leaf(number: 9, callback: plus_one)]
+    )
+
+    if packed.from_local.number == 5
+      and packed.from_local.callback(5) == 6
+      and packed.from_call.number == 7
+      and packed.from_call.callback(7) == 9
+      and packed.repeated[0].number == 9
+      and packed.repeated[1].callback(9) == 10
+      and packed.repeated[2].number == 9
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

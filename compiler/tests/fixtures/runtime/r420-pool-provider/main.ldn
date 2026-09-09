@@ -45,7 +45,11 @@ one_slot_reuses: () -> (ok: bool) =
     end
 
     first_size: usize = 17
-    first: ptr mut u8 = mem.allocate(state, first_size, alignment) else ptr(0)
+    first: ptr mut u8 = mem.allocate(state, first_size, alignment) else (problem)
+        _ = problem
+        ok = false
+        return
+    end
     first.val = 11
     mut exhausted: bool = false
     one: usize = 1
@@ -56,7 +60,11 @@ one_slot_reuses: () -> (ok: bool) =
     mem.free(state, first, first_size)
     second_size: usize = 31
     second: ptr mut u8 = mem.allocate(state, second_size, alignment)
-        else ptr(0)
+        else (problem)
+        _ = problem
+        ok = false
+        return
+    end
     second_last: ptr mut u8 = ptr(usize(second) + second_size - 1)
     second.val = 13
     second_last.val = 17
@@ -90,10 +98,22 @@ multiple_live_and_bounds: () -> (ok: bool) =
     first_size: usize = 16
     second_size: usize = 128
     third_size: usize = 1
-    first: ptr mut u8 = mem.allocate(state, first_size, alignment) else ptr(0)
+    first: ptr mut u8 = mem.allocate(state, first_size, alignment) else (problem)
+        _ = problem
+        ok = false
+        return
+    end
     second: ptr mut u8 = mem.allocate(state, second_size, alignment)
-        else ptr(0)
-    third: ptr mut u8 = mem.allocate(state, third_size, alignment) else ptr(0)
+        else (problem)
+        _ = problem
+        ok = false
+        return
+    end
+    third: ptr mut u8 = mem.allocate(state, third_size, alignment) else (problem)
+        _ = problem
+        ok = false
+        return
+    end
     second_last: ptr mut u8 = ptr(usize(second) + second_size - 1)
     first.val = 19
     second.val = 29
@@ -107,7 +127,11 @@ multiple_live_and_bounds: () -> (ok: bool) =
     mem.free(state, first, first_size)
     replacement_size: usize = 64
     replacement: ptr mut u8 = mem.allocate
-        (state, replacement_size, alignment) else ptr(0)
+        (state, replacement_size, alignment) else (problem)
+        _ = problem
+        ok = false
+        return
+    end
 
     wrong_size: usize = 63
     mem.free(state, replacement, wrong_size)
@@ -165,17 +189,41 @@ six_live_slots: () -> (ok: bool) =
     end
 
     first: ptr mut u8 = mem.allocate
-        (state, slot_size, alignment) else ptr(0)
+        (state, slot_size, alignment) else (problem)
+        _ = problem
+        ok = false
+        return
+    end
     second: ptr mut u8 = mem.allocate
-        (state, slot_size, alignment) else ptr(0)
+        (state, slot_size, alignment) else (problem)
+        _ = problem
+        ok = false
+        return
+    end
     third: ptr mut u8 = mem.allocate
-        (state, slot_size, alignment) else ptr(0)
+        (state, slot_size, alignment) else (problem)
+        _ = problem
+        ok = false
+        return
+    end
     fourth: ptr mut u8 = mem.allocate
-        (state, slot_size, alignment) else ptr(0)
+        (state, slot_size, alignment) else (problem)
+        _ = problem
+        ok = false
+        return
+    end
     fifth: ptr mut u8 = mem.allocate
-        (state, slot_size, alignment) else ptr(0)
+        (state, slot_size, alignment) else (problem)
+        _ = problem
+        ok = false
+        return
+    end
     sixth: ptr mut u8 = mem.allocate
-        (state, slot_size, alignment) else ptr(0)
+        (state, slot_size, alignment) else (problem)
+        _ = problem
+        ok = false
+        return
+    end
     mut exhausted: bool = false
     _ = mem.allocate(state, slot_size, alignment) else (problem)
         _ = problem

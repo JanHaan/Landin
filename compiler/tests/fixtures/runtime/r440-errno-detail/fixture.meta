@@ -1,0 +1,7 @@
+class: runtime
+summary: hosted I/O retains exact terminal errno detail after stable atom mapping
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0940, 0960, 1570, 1660, 1975
+targets: linux-x86-64

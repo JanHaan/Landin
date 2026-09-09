@@ -1,0 +1,6 @@
+class: runtime
+summary: Pointer and inout array leaves retain scalar address witnesses across reads, writes and compound recovery.
+program: main.ldn
+status: 42
+constructs: 0390, 0420, 0520, 0900
+targets: linux-x86-64

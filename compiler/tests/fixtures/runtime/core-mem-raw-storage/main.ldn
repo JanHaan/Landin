@@ -1,5 +1,14 @@
 import core/mem
 
+no_allocation: atom
+allocation: type = no_allocation | ptr mut u8
+is_absent: (value: allocation) -> (empty: bool) =
+    match value
+        no_allocation: empty = true
+        ptr: empty = false
+    end match
+end is_absent
+
 node: type = struct
     value: i32
 end node
@@ -21,8 +30,6 @@ growth_case: () -> (ok: bool) =
     one: usize = 1
     two: usize = 2
     four: usize = 4
-    null_address: usize = 0
-    fallback: ptr mut u8 = ptr(null_address)
 
     old_start: ptr mut u8 = addr old_bytes[0]
     mut old := mem.reserve(item: node_ptr, base: old_start, slots: two)
@@ -45,7 +52,11 @@ growth_case: () -> (ok: bool) =
         value: ptr node = mem.release(short) else addr second
         value.val.value
     end
-    short_freed: ptr mut u8 = mem.dispose(short) else fallback
+    short_freed: ptr mut u8 = mem.dispose(short) else (problem)
+        _ = problem
+        ok = false
+        return
+    end
     preserved_first: i32 = begin
         value: ptr node = mem.get(old, zero) else addr second
         value.val.value
@@ -76,7 +87,11 @@ growth_case: () -> (ok: bool) =
         value: ptr node = mem.release(old) else addr second
         value.val.value
     end
-    old_freed: ptr mut u8 = mem.dispose(old) else fallback
+    old_freed: ptr mut u8 = mem.dispose(old) else (problem)
+        _ = problem
+        ok = false
+        return
+    end
     old = grown
     published_second: i32 = begin
         value: ptr node = mem.get(old, one) else addr first
@@ -103,11 +118,9 @@ public main: () -> (code: i32) =
     second_slot: usize = mem.admit(storage, addr second) else slots
     blocked: usize = mem.admit(storage, addr first) else slots
 
-    null_address: usize = 0
-    fallback: ptr mut u8 = ptr(null_address)
-    refused_address: usize = begin
-        refused: ptr mut u8 = mem.dispose(storage) else fallback
-        usize(refused)
+    disposal_refused: bool = begin
+        refused: allocation = mem.dispose(storage) else no_allocation
+        is_absent(refused)
     end
     missing_value: i32 = begin
         missing: ptr node = mem.get(storage, slots) else addr first
@@ -129,9 +142,13 @@ public main: () -> (code: i32) =
         empty.val.value
     end
 
-    freed: ptr mut u8 = mem.dispose(storage) else fallback
+    freed: ptr mut u8 = mem.dispose(storage) else (problem)
+        _ = problem
+        code = 9
+        return
+    end
     if first_slot == 0 and second_slot == 1 and blocked == slots
-      and refused_address == 0 and missing_value == 19
+      and disposal_refused and missing_value == 19
       and right_value == 23 and released_value == 23
       and empty_value == 19 and slots * sizeof ptr node == 16
       and usize(freed) == usize(start)

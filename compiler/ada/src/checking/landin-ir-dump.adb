@@ -7,6 +7,8 @@ package body Landin.IR.Dump is
 
    package Unbounded renames Ada.Strings.Unbounded;
 
+   use type Landin.Source.Names.Name_Id;
+
    LF : constant Character := Character'Val (10);
 
    --  `Integer'Image` leads with a blank for a non-negative number and a
@@ -81,7 +83,8 @@ package body Landin.IR.Dump is
          return Unbounded.To_String (Text);
       end Atom_Set_Text;
 
-      function Shape_Text (Shape : Field_Shape) return String;
+      function Shape_Text
+        (Shape : Field_Shape; Budget : Natural := Natural'Last) return String;
 
       function Signature_Part_Text (Part : Signature_Part) return String
         is (case Part.Kind is
@@ -109,9 +112,18 @@ package body Landin.IR.Dump is
       --  datum and slot runs.  Variant payloads are depth-one leaves, so
       --  their case runs can be rendered without inventing target offsets.
 
-      function Shape_Text (Shape : Field_Shape) return String is
+      function Shape_Text
+        (Shape : Field_Shape; Budget : Natural := Natural'Last) return String
+      is
          Result : Unbounded.Unbounded_String;
+         Left : constant Natural :=
+           (if Budget = Natural'Last
+            then Variant_Field_Shape_Count (Of_Unit)
+              + Nominal_Type_Count (Of_Unit) + 1 else Budget);
       begin
+         if Left = 0 and then Shape.Kind /= Scalar_Field_Shape then
+            return "invalid recursive shape";
+         end if;
          case Shape.Kind is
             when Scalar_Field_Shape =>
                return Landin.Types.Spelling (Shape.Element)
@@ -123,8 +135,12 @@ package body Landin.IR.Dump is
                --  D121: the element may be an ordinary struct, and then it
                --  is spelt by the same one spelling every shape is.
                return "[" & Trimmed (Element_Total'Image (Shape.Length))
-                 & "]" & Shape_Text (Array_Element_Shape (Of_Unit, Shape));
+                 & "]" & Shape_Text
+                   (Array_Element_Shape (Of_Unit, Shape), Left - 1);
             when Aggregate_Field_Shape =>
+               if not Aggregate_Field_Run_Is_Valid (Of_Unit, Shape) then
+                  return "invalid aggregate run";
+               end if;
                Unbounded.Append (Result, "struct (");
                for Field in 1 .. Aggregate_Field_Count
                  (Of_Unit, Shape)
@@ -135,7 +151,8 @@ package body Landin.IR.Dump is
                   Unbounded.Append
                     (Result,
                      Shape_Text
-                       (Nth_Aggregate_Field (Of_Unit, Shape, Field)));
+                       (Nth_Aggregate_Field (Of_Unit, Shape, Field),
+                        Left - 1));
                end loop;
                Unbounded.Append (Result, ")");
                return Unbounded.To_String (Result);
@@ -145,6 +162,9 @@ package body Landin.IR.Dump is
                   "variant " & Landin.Types.Spelling (Shape.Element)
                   & " cases" & Trimmed (Natural'Image (Shape.Cases)));
                for Which in 1 .. Shape.Cases loop
+                  if not Variant_Case_Run_Is_Valid (Of_Unit, Shape, Which) then
+                     return "invalid variant run";
+                  end if;
                   Unbounded.Append (Result, " (");
                   for Payload in 1 .. Variant_Case_Field_Count
                     (Of_Unit, Shape, Which)
@@ -159,7 +179,7 @@ package body Landin.IR.Dump is
                        (Result,
                         Shape_Text
                           (Nth_Variant_Case_Field
-                             (Of_Unit, Shape, Which, Payload)));
+                             (Of_Unit, Shape, Which, Payload), Left - 1));
                   end loop;
                   Unbounded.Append (Result, ")");
                end loop;
@@ -193,7 +213,39 @@ package body Landin.IR.Dump is
                            (Landin.Types.Folded'Image (Image.Value))));
 
             when Array_Field_Shape =>
-               if Image.Form = Absent then
+               if Image.Slice then
+                  Put
+                    (Prefix & " slice " & Shape_Text (Image.Slice_Element)
+                     & " source "
+                     & (if Image.Target = No_Item then "-"
+                        else Trimmed (Item_Id'Image (Image.Target)) & " "
+                          & Item_Named (Image.Target))
+                     & " first "
+                     & Trimmed
+                         (Element_Total'Image (Image.Slice_First))
+                     & " length "
+                     & Trimmed
+                         (Landin.Types.Folded'Image (Image.Value)));
+                  return;
+               elsif Image.Form = Element_Sequence then
+                  Put
+                    (Prefix & " elements "
+                     & Trimmed (Natural'Image (Image.Count))
+                     & (if Image.Count = 0 then ""
+                        else " last repeat "
+                          & Trimmed
+                              (Landin.Types.Folded'Image (Image.Value))));
+                  for Position in 1 .. Image.Count loop
+                     Put_Recursive_Image
+                       (Item,
+                        Prefix & " element "
+                        & Trimmed (Natural'Image (Position)),
+                        Array_Element_Shape (Of_Unit, Shape),
+                        Descendant_Image_Of
+                          (Of_Unit, Item, Image, Position));
+                  end loop;
+                  return;
+               elsif Image.Form = Absent then
                   Put (Prefix & " zeroed");
                   return;
                end if;
@@ -221,7 +273,10 @@ package body Landin.IR.Dump is
                      & Trimmed
                          (Landin.Types.Folded'Image (Image.Value)));
                end if;
-               Put (Prefix & " image " & Unbounded.To_String (Rendered));
+               Put
+                 (Prefix & " image"
+                  & (if Unbounded.Length (Rendered) = 0 then ""
+                     else " " & Unbounded.To_String (Rendered)));
 
             when Aggregate_Field_Shape =>
                if Image.Form = Absent then
@@ -427,6 +482,22 @@ package body Landin.IR.Dump is
                       & Trimmed
                           (Slot_Id'Image (Slot_Of (Of_Unit, Item, Value)))
                       & Operands (Item, Value);
+
+            when Load_Indirect | Store_Indirect =>
+               declare
+                  Address : constant Slot_Id :=
+                    Indirect_Address_Slot (Of_Unit, Item, Value);
+               begin
+                  --  Typed operations retain the slot whose complete reached
+                  --  shape justified the access.  The legacy Value_Id builders
+                  --  deliberately retain No_Slot and keep their old
+                  --  operand-only spelling.
+                  return Lead
+                    & (if Address = No_Slot then ""
+                       else " address slot "
+                         & Trimmed (Slot_Id'Image (Address)))
+                    & Operands (Item, Value);
+               end;
 
             when Storage_Address =>
                return Lead & " storage "
@@ -649,7 +720,11 @@ package body Landin.IR.Dump is
                         (Evidence_Of (Of_Unit, Item, Value)));
 
             when Evidence_Function =>
-               return Lead & " evidence "
+               return Lead
+                 & (if Evidence_Is_Erased
+                      (Of_Unit, Evidence_Of (Of_Unit, Item, Value))
+                    then " erased receiver" else " table")
+                 & " evidence "
                  & Trimmed
                      (Evidence_Id'Image
                         (Evidence_Of (Of_Unit, Item, Value)))
@@ -662,6 +737,9 @@ package body Landin.IR.Dump is
                      (Signature_Id'Image
                         (Signature_Of (Of_Unit, Item, Value)))
                  & Operands (Item, Value);
+
+            when Evidence_Self =>
+               return Lead & " bound function" & Operands (Item, Value);
 
             when Call =>
                declare
@@ -761,6 +839,21 @@ package body Landin.IR.Dump is
             & Atom_Set_Text (Atom_Set_Id (Which)));
       end loop;
 
+      for Which in 1 .. Nominal_Type_Count (Of_Unit) loop
+         declare
+            Id : constant Nominal_Type_Id := Nth_Nominal_Type (Of_Unit, Which);
+         begin
+            if Has_C_Layout (Of_Unit, Id) then
+               Put
+                 ("nominal " & Trimmed (Natural'Image (Which))
+                  & " " & Named (Template_Of (Of_Unit, Id)) & " layout(c) "
+                  & Shape_Text
+                    ((Kind => Aggregate_Field_Shape,
+                      Nominal => Id, others => <>)));
+            end if;
+         end;
+      end loop;
+
       for Which in 1 .. Signature_Count (Of_Unit) loop
          declare
             Id : constant Signature_Id := Signature_Id (Which);
@@ -809,8 +902,18 @@ package body Landin.IR.Dump is
                   end loop;
                end if;
             end loop;
+            if Signature_Is_Variadic (Of_Unit, Id) then
+               Unbounded.Append
+                 (Parameters,
+                  (if Signature_Parameter_Count (Of_Unit, Id) = 0
+                   then "..." else ", ..."));
+            end if;
             Put
               ("signature " & Trimmed (Signature_Id'Image (Id))
+               & (if Signature_Has_Erased_Self (Of_Unit, Id)
+                  then " erased-self" else "")
+               & (if Signature_Uses_C_ABI (Of_Unit, Id)
+                  then " extern(c)" else "")
                & " (" & Unbounded.To_String (Parameters) & ") -> "
                & (if Signature_Result_Count (Of_Unit, Id) = 0
                   then "none"
@@ -821,6 +924,28 @@ package body Landin.IR.Dump is
                   then ""
                   else " errors"
                     & Atom_Set_Text (Signature_Errors (Of_Unit, Id))));
+         end;
+      end loop;
+
+      for Which in 1 .. Evidence_Count (Of_Unit) loop
+         declare
+            Id : constant Evidence_Id := Evidence_Id (Which);
+         begin
+            Put ("evidence " & Trimmed (Evidence_Id'Image (Id))
+                 & (if Evidence_Is_Erased (Of_Unit, Id)
+                    then " erased" else " concrete")
+                 & " represents " & Shape_Text
+                   (Evidence_Represented (Of_Unit, Id)));
+            for Entry_Index in 1 .. Evidence_Entry_Count (Of_Unit, Id) loop
+               Put ("  entry " & Trimmed (Positive'Image (Entry_Index))
+                    & " target " & Trimmed (Item_Id'Image
+                      (Evidence_Entry_Target (Of_Unit, Id, Entry_Index)))
+                    & " provider " & Trimmed (Signature_Id'Image
+                      (Evidence_Entry_Signature (Of_Unit, Id, Entry_Index)))
+                    & " dispatch " & Trimmed (Signature_Id'Image
+                      (Evidence_Entry_Dispatch_Signature
+                         (Of_Unit, Id, Entry_Index))));
+            end loop;
          end;
       end loop;
 
@@ -842,6 +967,9 @@ package body Landin.IR.Dump is
                           (Signature_Id'Image
                              (Signature_Of (Of_Unit, Id))))
                  & (if Is_External (Of_Unit, Id) then " extern(c)" else "")
+                 & (if Link_Symbol (Of_Unit, Id) = Landin.Source.Names.No_Name
+                    then "" else " link " & Landin.Source.Names.Spelling
+                      (Names, Link_Symbol (Of_Unit, Id)))
                  & (if Function_Target (Of_Unit, Id) = No_Item then ""
                     else " function target "
                       & Trimmed
@@ -879,7 +1007,36 @@ package body Landin.IR.Dump is
                --  D24: an initial image is the source-order run of folded
                --  values.  An array datum with no image is D10's zero and
                --  says so by omitting this line.
-               if Is_Repeated_Image (Of_Unit, Id) then
+               if Has_Slice_Image (Of_Unit, Id) then
+                  declare
+                     Source : constant Item_Id :=
+                       Slice_Image_Source (Of_Unit, Id);
+                  begin
+                     Put
+                       ("  image slice "
+                        & Shape_Text (Slice_Image_Element (Of_Unit, Id))
+                        & " source "
+                        & (if Source = No_Item then "-"
+                           else Trimmed (Item_Id'Image (Source)) & " "
+                             & Item_Named (Source))
+                        & " first "
+                        & Trimmed
+                            (Element_Total'Image
+                               (Slice_Image_First (Of_Unit, Id)))
+                        & " length "
+                        & Trimmed
+                            (Element_Total'Image
+                               (Slice_Image_Length (Of_Unit, Id))));
+                  end;
+               elsif Has_Recursive_Array_Image (Of_Unit, Id) then
+                  --  A recursive image's descriptors are its structure.  Its
+                  --  numeric fold run can be empty (for example, when every
+                  --  element is a function relocation), and Nth_Image is only
+                  --  the legacy flat-array reader.
+                  Put_Recursive_Image
+                    (Id, "  image", Whole_Array_Shape (Of_Unit, Id),
+                     Array_Image_Of (Of_Unit, Id));
+               elsif Is_Repeated_Image (Of_Unit, Id) then
                   declare
                      Rendered : Unbounded.Unbounded_String;
                      Prefix : constant Element_Total :=
@@ -908,8 +1065,8 @@ package body Landin.IR.Dump is
                   declare
                      Rendered : Unbounded.Unbounded_String;
                   begin
-                     for P in Part_Position'(1)
-                              .. Part_Position (Image_Length (Of_Unit, Id))
+                     for P in Element_Total'(1)
+                              .. Image_Length (Of_Unit, Id)
                      loop
                         if P /= 1 then
                            Unbounded.Append (Rendered, " ");
@@ -918,7 +1075,8 @@ package body Landin.IR.Dump is
                           (Rendered,
                            Trimmed
                              (Landin.Types.Folded'Image
-                                (Nth_Image (Of_Unit, Id, P))));
+                                (Nth_Image
+                                   (Of_Unit, Id, Part_Position (P)))));
                      end loop;
                      Put ("  image "
                           & Unbounded.To_String (Rendered));
@@ -997,79 +1155,25 @@ package body Landin.IR.Dump is
                                      Variant_Payload_Image_Of
                                        (Of_Unit, Id, F, Payload);
                               begin
-                                 Unbounded.Set_Unbounded_String
-                                   (Rendered, "");
-                                 if Leaf.Kind = Scalar_Field_Shape then
-                                    Put
-                                      ("    payload "
-                                       & Trimmed
-                                           (Natural'Image (Payload))
-                                       & (if Leaf.Signature /= No_Signature
-                                          then " function target "
-                                            & Trimmed
-                                              (Item_Id'Image
-                                                 (Payload_Image.Target))
-                                          else " image "
-                                            & Trimmed
-                                              (Landin.Types.Folded'Image
-                                                 (Payload_Image.Value))));
-                                 elsif Payload_Image.Form = Nested then
-                                    Put_Recursive_Image
-                                      (Id,
-                                       "    payload "
-                                       & Trimmed
-                                           (Natural'Image (Payload)),
-                                       Leaf, Payload_Image);
-                                 elsif Payload_Image.Form = Absent then
-                                    Put
-                                      ("    payload "
-                                       & Trimmed
-                                           (Natural'Image (Payload))
-                                       & " zeroed");
-                                 else
-                                    if Payload_Image.Form
-                                      in Finite | Hybrid
-                                    then
-                                       for P in 1 .. Payload_Image.Count loop
-                                          if P /= 1 then
-                                             Unbounded.Append
-                                               (Rendered, " ");
-                                          end if;
-                                          Unbounded.Append
-                                            (Rendered,
-                                             Trimmed
-                                               (Landin.Types.Folded'Image
-                                                  (Nth_Variant_Field_Element
-                                                     (Of_Unit, Id, F,
-                                                      Payload,
-                                                      Part_Position (P)))));
-                                       end loop;
-                                    end if;
-
-                                    if Payload_Image.Form
-                                      in Repeated | Hybrid
-                                    then
-                                       if Payload_Image.Form = Hybrid then
-                                          Unbounded.Append (Rendered, " ");
-                                       end if;
-                                       Unbounded.Append
-                                         (Rendered,
-                                          "repeat "
-                                          & Trimmed
-                                              (Landin.Types.Folded'Image
-                                                 (Payload_Image.Value)));
-                                    end if;
-
-                                    Put
-                                      ("    payload "
-                                       & Trimmed
-                                           (Natural'Image (Payload))
-                                       & " image "
-                                       & Unbounded.To_String (Rendered));
-                                 end if;
+                                 Put_Recursive_Image
+                                   (Id,
+                                    "    payload "
+                                    & Trimmed (Natural'Image (Payload)),
+                                    Leaf, Payload_Image);
                               end;
                            end loop;
                         end;
+                     elsif Nth_Field_Shape (Of_Unit, Id, F).Kind
+                       = Array_Field_Shape
+                       and then (Image.Form /= Absent or else Image.Slice)
+                     then
+                        --  Recursive array descriptors carry child values
+                        --  and relocations even when their numeric fold run
+                        --  is empty.
+                        Put_Recursive_Image
+                          (Id,
+                           "  field " & Trimmed (Natural'Image (F)),
+                           Nth_Field_Shape (Of_Unit, Id, F), Image);
                      elsif Image.Target /= No_Item then
                         Put
                           ("  field " & Trimmed (Natural'Image (F))
@@ -1104,7 +1208,9 @@ package body Landin.IR.Dump is
 
                         Put
                           ("  field " & Trimmed (Natural'Image (F))
-                           & " image " & Unbounded.To_String (Rendered));
+                           & " image"
+                           & (if Unbounded.Length (Rendered) = 0 then ""
+                              else " " & Unbounded.To_String (Rendered)));
                      end if;
                   end;
                end loop;
@@ -1148,7 +1254,10 @@ package body Landin.IR.Dump is
                   Put
                     ("  slot " & Trimmed (Slot_Id'Image (Slot))
                      & " " & Named (Declares (Of_Unit, Id, Slot)) & " "
-                     & (if Is_Array (Of_Unit, Id, Slot)
+                     & (if Is_Address (Of_Unit, Id, Slot)
+                        then "address of "
+                          & Shape_Text (Address_Shape (Of_Unit, Id, Slot))
+                        elsif Is_Array (Of_Unit, Id, Slot)
                         then "elements "
                              & Trimmed
                                  (Element_Total'Image

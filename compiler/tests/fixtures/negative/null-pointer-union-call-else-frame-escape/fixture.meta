@@ -1,0 +1,6 @@
+class: negative
+summary: R4.40 an atom fallback in a pointer-union call-else cannot erase the successful frame-origin pointer and permit its escape
+program: program.ldn
+constructs: 0480, 0770, 0780, 0840, 0940, 1210
+codes: L0314
+targets: linux-x86-64, macos-arm64, synthetic-32

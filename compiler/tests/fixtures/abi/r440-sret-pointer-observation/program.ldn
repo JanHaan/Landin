@@ -1,0 +1,10 @@
+-- A C assembly observer checks rax, not just the caller-owned result fields.
+large: type = layout(c) struct
+    first: u64
+    second: f64
+    third: u64
+end large
+
+public extern(c) r440_l_sret: (first: u64, second: f64, third: u64) -> (result: large) =
+    result = large(first: first + 1, second: second + 0.5, third: third + 3)
+end r440_l_sret

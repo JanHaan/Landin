@@ -1,0 +1,11 @@
+retain: (escaping value: ptr u32) -> none =
+    _ = value
+end retain
+
+bad: () -> (result: ptr u32) =
+    local: u32 = 42
+    result = ptr(begin
+        retain(addr local)
+        usize(addr local)
+    end)
+end bad

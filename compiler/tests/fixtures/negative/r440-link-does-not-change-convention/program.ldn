@@ -1,0 +1,8 @@
+callback: type = extern(c) (value: i32) -> (result: i32)
+link(symbol: "native_identity") native: (value: i32) -> (result: i32) =
+    result = value
+end native
+bad: () -> none =
+    code: callback = native
+    _ = code
+end bad

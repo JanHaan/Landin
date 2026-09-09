@@ -1,0 +1,73 @@
+import core/io
+
+--  These are paths supplied by the selected Linux execution profile.  The
+--  missing parent makes ENOENT deterministic; /dev/full and /dev/null provide
+--  terminal write and close failures without changing repository files.
+missing: [41]u8 =
+    [47, 108, 97, 110, 100, 105, 110, 45, 114, 52, 52, 48, 45, 97,
+     98, 115, 101, 110, 116, 45, 112, 97, 114, 101, 110, 116, 47, 102,
+     105, 108, 101, 45, 100, 111, 101, 115, 45, 110, 111, 116, 0]
+full_name: [10]u8 = [47, 100, 101, 118, 47, 102, 117, 108, 108, 0]
+null_name: [10]u8 = [47, 100, 101, 118, 47, 110, 117, 108, 108, 0]
+payload: [1]u8 = [88]
+
+missing_retains_errno: (inout state: io.system) -> (yes: bool) =
+    yes = false
+    opened: io.file = io.open_read(state, addr missing[0]) else (problem)
+        return when problem <> io.not_found
+        --  A pure capability query cannot clobber captured failure detail.
+        _ = io.argument_count(state)
+        yes = io.last_errno(state) == 2
+        return
+    end
+    io.close(state, opened) else (problem)
+        _ = problem
+    end
+end missing_retains_errno
+
+full_retains_errno: (inout state: io.system) -> (yes: bool) =
+    yes = false
+    opened: io.file = io.open_write(state, addr full_name[0]) else (problem)
+        _ = problem
+        return
+    end
+    io.write(state, opened, payload[0..<1]) else (problem)
+        if problem == io.io_failed and io.last_errno(state) == 28 then
+            yes = true
+        end if
+    end
+    io.close(state, opened) else (problem)
+        _ = problem
+        yes = false
+    end
+end full_retains_errno
+
+close_retains_errno: (inout state: io.system) -> (yes: bool) =
+    yes = false
+    opened: io.file = io.open_read(state, addr null_name[0]) else (problem)
+        _ = problem
+        return
+    end
+    copy: io.file = opened
+    io.close(state, opened) else (problem)
+        _ = problem
+        return
+    end
+    io.close(state, copy) else (problem)
+        yes = problem == io.io_failed and io.last_errno(state) == 9
+        return
+    end
+end close_retains_errno
+
+public main: () -> (code: i32) =
+    code = 1
+    mut state: io.system = io.host()
+    return when io.last_errno(state) <> 0
+    code = 2
+    return when not missing_retains_errno(state)
+    code = 3
+    return when not full_retains_errno(state)
+    code = 4
+    return when not close_retains_errno(state)
+    code = 42
+end main

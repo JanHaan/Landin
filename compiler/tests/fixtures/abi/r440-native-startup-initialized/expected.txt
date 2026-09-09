@@ -1,0 +1,2 @@
+native Landin io
+native startup ok

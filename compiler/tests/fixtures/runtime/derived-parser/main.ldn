@@ -4,6 +4,13 @@ import core/mem
 import core/text
 import examples/config_parser/parser
 
+--  Parsed nodes are retained through the public escaping arena capability.
+--  Give the backing storage static lifetime, not a hidden frame origin.
+mut first_memory: [4096]u8 = zeroed
+mut second_memory: [4096]u8 = zeroed
+mut tiny_memory: [1]u8 = zeroed
+mut third_memory: [4096]u8 = zeroed
+
 ast_is_expected: (tree: parser.document) -> (yes: bool) =
     yes = false
     if parser.length(tree) <> 3 then
@@ -133,7 +140,6 @@ public main: () -> (code: i32) =
     end if
     source: []u8 = source_bytes[0..<source_length]
 
-    mut first_memory: [4096]u8 = zeroed
     mut first_arena := mem.arena_over(addr first_memory[0], 4096)
     mut collected := diag.new_log(capacity: 8)
     mut bounded_log: any diag.log = any(addr collected)
@@ -148,7 +154,6 @@ public main: () -> (code: i32) =
         return
     end if
 
-    mut second_memory: [4096]u8 = zeroed
     mut second_arena := mem.arena_over(addr second_memory[0], 4096)
     diagnostic_stream := world.err()
     mut immediate := diag.to(addr world, addr diagnostic_stream)
@@ -163,7 +168,6 @@ public main: () -> (code: i32) =
         return
     end if
 
-    mut tiny_memory: [1]u8 = zeroed
     mut tiny_arena := mem.arena_over(addr tiny_memory[0], 1)
     mut quiet := diag.new_log(capacity: 1)
     mut quiet_log: any diag.log = any(addr quiet)
@@ -177,7 +181,6 @@ public main: () -> (code: i32) =
         return
     end if
 
-    mut third_memory: [4096]u8 = zeroed
     mut third_arena := mem.arena_over(addr third_memory[0], 4096)
     mut broken := diag.to(addr world, addr dead_stream)
     mut broken_log: any diag.log = any(addr broken)

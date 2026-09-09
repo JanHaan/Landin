@@ -1,0 +1,6 @@
+class: negative
+summary: R4.40 refuses a native-convention callback in a C parameter despite matching scalar parameter and result shapes
+program: program.ldn
+codes: L0301
+constructs: 1000, 1580
+targets: linux-x86-64

@@ -1,0 +1,2 @@
+bad: type = layout(c) struct
+end bad

@@ -1,12 +1,15 @@
 with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 
+with Landin.Backend.C_ABI;
 with Landin.Types;
 
 package body Landin.Backend.X86_64 is
 
    package Unbounded renames Ada.Strings.Unbounded;
 
+   use type Landin.Backend.C_ABI.Eightbyte_Class;
+   use type Landin.Source.Names.Name_Id;
    use type Landin.Targets.Bit_Width;
    use type Landin.Targets.Byte_Count;
    use type Landin.Targets.Scalar_Size;
@@ -228,7 +231,47 @@ package body Landin.Backend.X86_64 is
          return True;
       end if;
       Layout := Laid_Out (Of_Unit, Item, Facts);
-      return Extent (Layout) <= Largest_Displacement;
+      if Extent (Layout) > Largest_Displacement then
+         return False;
+      end if;
+      if Landin.IR.Signature_Of (Of_Unit, Item) /= Landin.IR.No_Signature
+        and then Landin.IR.Signature_Uses_C_ABI
+          (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item))
+        and then C_ABI.Signature_Plan
+          (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item), Facts).Stack_Bytes
+          > Largest_Displacement - 16
+      then
+         return False;
+      end if;
+      --  C passes MEMORY arguments inline rather than as Landin addresses.
+      --  A huge module object can therefore fit this frame while its outgoing
+      --  stack area cannot be encoded by the baseline displacement form.
+      for Index in 1 .. Landin.IR.Value_Count (Of_Unit, Item) loop
+         declare
+            Value : constant Landin.IR.Value_Id := Landin.IR.Value_Id (Index);
+            Op : constant Landin.IR.Opcode :=
+              Landin.IR.Op_Of (Of_Unit, Item, Value);
+         begin
+            if Op in Landin.IR.Call | Landin.IR.Indirect_Call then
+               declare
+                  Signature : constant Landin.IR.Signature_Id :=
+                    (if Op = Landin.IR.Indirect_Call
+                     then Landin.IR.Call_Signature (Of_Unit, Item, Value)
+                     else Landin.IR.Signature_Of
+                       (Of_Unit, Landin.IR.Callee_Of (Of_Unit, Item, Value)));
+               begin
+                  if Landin.IR.Signature_Uses_C_ABI (Of_Unit, Signature)
+                    and then C_ABI.Call_Plan
+                      (Of_Unit, Item, Value, Facts).Stack_Bytes
+                      > Largest_Displacement
+                  then
+                     return False;
+                  end if;
+               end;
+            end if;
+         end;
+      end loop;
+      return True;
    exception
       when Constraint_Error | Landin.Compiler_Defect =>
          --  Laid_Out uses target-width arithmetic.  Overflow says the frame
@@ -262,21 +305,54 @@ package body Landin.Backend.X86_64 is
          Put (Character'Val (9) & Instruction);
       end Emit;
 
-      --  A unique declared item's symbol remains its readable source
-      --  spelling.  Two modules may legally declare the same short name, so
-      --  a collision receives a deterministic whole-program declaration
-      --  prefix.  The same applies to names used by the compiler's hosted
-      --  libc shims: a Landin declaration called `open` must not interpose on
-      --  the shim's call to libc.  The selected hosted entry and C extern
-      --  names retain their platform ABI spellings.  An anonymous routine
-      --  instead receives one assembler-local name derived only from its
-      --  Unit item identity.
+      --  Allocate one namespace before emitting anything.  Forced linker
+      --  identities are reserved first, including imports whose source names
+      --  differ.  Ordinary routines, anonymous items and data then keep their
+      --  readable names when free, or receive a deterministic unused mangle.
+      --  A candidate must avoid both forced names and other source names:
+      --  even `landin_1_foo` can be an explicit C name or an ordinary datum.
       function Symbol (Item : Landin.IR.Item_Id) return String;
       function Evidence_Symbol (Id : Landin.IR.Evidence_Id) return String;
       function Is_Public_Item (Item : Landin.IR.Item_Id) return Boolean;
 
+      Host_Bridge_Needed : Boolean := Hosted_Entry /= Landin.IR.No_Item;
+      Allocated_Symbols : array
+        (1 .. Positive'Max (1, Landin.IR.Item_Count (Of_Unit))) of
+          Unbounded.Unbounded_String;
+
+      function Is_C_Item (Item : Landin.IR.Item_Id) return Boolean
+        is (Landin.IR.Signature_Of (Of_Unit, Item) /= Landin.IR.No_Signature
+            and then Landin.IR.Signature_Uses_C_ABI
+              (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item)));
+
+      type Hosted_Bridge is
+        (Not_A_Bridge, Initialize_Arguments, Argument_Count, Argument_Table,
+         Argument_At, Argument_At_From, Text_Length, Open_Read, Open_Write,
+         Read_Bytes, Write_Bytes, Close_File, Errno_Value,
+         Heap_Allocate, Heap_Release);
+
+      function Bridge_Of (Spelling : String) return Hosted_Bridge
+        is (if Spelling = "_landin_host_initialize_arguments"
+            then Initialize_Arguments
+            elsif Spelling = "_landin_host_argument_count" then Argument_Count
+            elsif Spelling = "_landin_host_argument_table" then Argument_Table
+            elsif Spelling = "_landin_host_argument_at" then Argument_At
+            elsif Spelling = "_landin_host_argument_at_from"
+            then Argument_At_From
+            elsif Spelling = "_landin_host_text_length" then Text_Length
+            elsif Spelling = "_landin_host_open_read" then Open_Read
+            elsif Spelling = "_landin_host_open_write" then Open_Write
+            elsif Spelling = "_landin_host_read" then Read_Bytes
+            elsif Spelling = "_landin_host_write" then Write_Bytes
+            elsif Spelling = "_landin_host_close" then Close_File
+            elsif Spelling = "_landin_host_errno" then Errno_Value
+            elsif Spelling = "_landin_host_heap_allocate" then Heap_Allocate
+            elsif Spelling = "_landin_host_heap_release" then Heap_Release
+            else Not_A_Bridge);
+
       function Is_Hosted_Dependency (Spelling : String) return Boolean
-        is (Spelling = "strlen"
+        is (Bridge_Of (Spelling) /= Not_A_Bridge
+            or else Spelling = "strlen"
             or else Spelling = "malloc"
             or else Spelling = "free"
             or else Spelling = "open"
@@ -285,59 +361,304 @@ package body Landin.Backend.X86_64 is
             or else Spelling = "close"
             or else Spelling = "__errno_location");
 
-      function Symbol (Item : Landin.IR.Item_Id) return String is
+      function Is_Forced (Item : Landin.IR.Item_Id) return Boolean
+        is (Landin.IR.Link_Symbol (Of_Unit, Item)
+              /= Landin.Source.Names.No_Name
+            or else Item = Hosted_Entry
+            or else Landin.IR.Is_External (Of_Unit, Item));
+
+      --  Explicit ELF spellings may start with `.L` too.  Pick a disjoint
+      --  prefix for every generated local label (blocks, evidence, anonymous
+      --  data and bridge state), rather than reserving a new source-language
+      --  namespace.  Most units retain exactly the original `.L` spelling.
+      function Unused_Local_Prefix return String;
+
+      function Unused_Local_Prefix return String is
+         Candidate : Unbounded.Unbounded_String :=
+           Unbounded.To_Unbounded_String (".L");
+         Collides : Boolean;
+      begin
+         loop
+            Collides := False;
+            for Position in 1 .. Landin.IR.Item_Count (Of_Unit) loop
+               declare
+                  Link : constant Landin.Source.Names.Name_Id :=
+                    Landin.IR.Link_Symbol
+                      (Of_Unit, Landin.IR.Item_Id (Position));
+               begin
+                  if Link /= Landin.Source.Names.No_Name then
+                     declare
+                        Spelling : constant String :=
+                          Landin.Source.Names.Spelling (Names, Link);
+                        Prefix : constant String :=
+                          Unbounded.To_String (Candidate);
+                     begin
+                        if Spelling'Length >= Prefix'Length
+                          and then Spelling
+                            (Spelling'First
+                             .. Spelling'First + Prefix'Length - 1) = Prefix
+                        then
+                           Collides := True;
+                           exit;
+                        end if;
+                     end;
+                  end if;
+               end;
+            end loop;
+            exit when not Collides;
+            Unbounded.Append (Candidate, "_");
+         end loop;
+         return Unbounded.To_String (Candidate);
+      end Unused_Local_Prefix;
+
+      Local_Prefix : constant String := Unused_Local_Prefix;
+
+      --  Linker identity, not assembly syntax.  This is also available before
+      --  allocation, when discovery decides which runtime names to reserve.
+      function Source_Symbol (Item : Landin.IR.Item_Id) return String;
+
+      function Source_Symbol (Item : Landin.IR.Item_Id) return String is
          Declared : constant Landin.IR.Declaration_Id :=
            Landin.IR.Declares (Of_Unit, Item);
       begin
-         if Declared = Landin.IR.No_Declaration then
-            return ".Llandin_anonymous_"
+         if Landin.IR.Link_Symbol (Of_Unit, Item)
+           /= Landin.Source.Names.No_Name
+         then
+            return Landin.Source.Names.Spelling
+              (Names, Landin.IR.Link_Symbol (Of_Unit, Item));
+         elsif Declared = Landin.IR.No_Declaration then
+            return Local_Prefix & "landin_anonymous_"
               & Trimmed (Landin.IR.Item_Id'Image (Item));
          end if;
-         declare
-            Spelling : constant String :=
-              Landin.Source.Names.Spelling
-                (Names, Landin.Resolution.Name_Of (Meanings, Declared));
-            Collides : Boolean :=
-              Hosted_Entry /= Landin.IR.No_Item
-              and then Is_Hosted_Dependency (Spelling);
-         begin
-            if Item = Hosted_Entry or else Landin.IR.Is_External
-              (Of_Unit, Item)
-            then
-               return Spelling;
-            end if;
+         return Landin.Source.Names.Spelling
+           (Names, Landin.Resolution.Name_Of (Meanings, Declared));
+      end Source_Symbol;
 
+      --  This target owns the emitted bridges and sees actual linker
+      --  spellings; the target-neutral verifier sees only interned name IDs.
+      --  Refuse an override before returning any assembly, in release too.
+      --  Source linkage checking must diagnose these earlier, including the
+      --  pointer/retention distinctions erased from neutral scalar carriers.
+      procedure Validate_Linkage;
+
+      procedure Validate_Linkage is
+         function Import_Agrees
+           (Item : Landin.IR.Item_Id; Bridge : Hosted_Bridge) return Boolean;
+
+         function Import_Agrees
+           (Item : Landin.IR.Item_Id; Bridge : Hosted_Bridge) return Boolean
+         is
+            package Ty renames Landin.Types;
+            Signature : constant Landin.IR.Signature_Id :=
+              Landin.IR.Signature_Of (Of_Unit, Item);
+            type Kind_Array is array (Positive range <>) of Ty.Type_Kind;
+
+            function Matches
+              (Parameters : Kind_Array; Result : Ty.Type_Kind) return Boolean;
+
+            function Matches
+              (Parameters : Kind_Array; Result : Ty.Type_Kind) return Boolean
+            is
+            begin
+               if Landin.IR.Signature_Parameter_Count (Of_Unit, Signature)
+                    /= Parameters'Length
+                 or else Landin.IR.Signature_Result_Count (Of_Unit, Signature)
+                    /= (if Result = Ty.No_Value then 0 else 1)
+               then
+                  return False;
+               end if;
+               for Index in Parameters'Range loop
+                  declare
+                     Part : constant Landin.IR.Signature_Part :=
+                       Landin.IR.Nth_Signature_Parameter
+                         (Of_Unit, Signature, Index);
+                  begin
+                     if Part.Kind /= Parameters (Index)
+                       or else Part.Convention /= Landin.IR.In_Value
+                       or else Part.Atoms /= Landin.IR.No_Atom_Set
+                     then
+                        return False;
+                     end if;
+                  end;
+               end loop;
+               return Result = Ty.No_Value
+                 or else Landin.IR.Nth_Signature_Result
+                   (Of_Unit, Signature, 1).Kind = Result;
+            end Matches;
+         begin
+            if Landin.IR.Kind_Of (Of_Unit, Item) /= Landin.IR.Routine
+              or else Signature = Landin.IR.No_Signature
+              or else not Is_C_Item (Item)
+              or else Landin.IR.Signature_Is_Variadic (Of_Unit, Signature)
+              or else Landin.IR.Signature_Errors (Of_Unit, Signature)
+                /= Landin.IR.No_Atom_Set
+            then
+               return False;
+            end if;
+            case Bridge is
+               when Initialize_Arguments =>
+                  return Matches ([Ty.I32, Ty.Usize], Ty.No_Value);
+               when Argument_Count | Argument_Table =>
+                  return Matches ([], Ty.Usize);
+               when Argument_At | Text_Length =>
+                  return Matches ([Ty.Usize], Ty.Usize);
+               when Argument_At_From | Heap_Allocate =>
+                  return Matches ([Ty.Usize, Ty.Usize], Ty.Usize);
+               when Open_Read | Open_Write =>
+                  return Matches ([Ty.Usize], Ty.I32);
+               when Read_Bytes | Write_Bytes =>
+                  return Matches ([Ty.I32, Ty.Usize, Ty.Usize], Ty.Usize);
+               when Close_File =>
+                  return Matches ([Ty.I32], Ty.I32);
+               when Errno_Value =>
+                  return Matches ([], Ty.I32);
+               when Heap_Release =>
+                  return Matches ([Ty.Usize], Ty.No_Value);
+               when Not_A_Bridge =>
+                  return False;
+            end case;
+         end Import_Agrees;
+      begin
+         for Position in 1 .. Landin.IR.Item_Count (Of_Unit) loop
+            declare
+               Item : constant Landin.IR.Item_Id :=
+                 Landin.IR.Item_Id (Position);
+               Spelling : constant String := Source_Symbol (Item);
+               Bridge : constant Hosted_Bridge := Bridge_Of (Spelling);
+            begin
+               if Item = Hosted_Entry then
+                  if Landin.IR.Kind_Of (Of_Unit, Item) /= Landin.IR.Routine
+                    or else Is_C_Item (Item)
+                    or else Spelling /= "main"
+                  then
+                     raise Landin.Compiler_Defect with
+                       "a hosted entry must retain native main linkage";
+                  end if;
+               elsif Is_Forced (Item)
+                 and then Hosted_Entry /= Landin.IR.No_Item
+                 and then Spelling = "main"
+               then
+                  raise Landin.Compiler_Defect with
+                    "a link symbol overrides the hosted main entry";
+               end if;
+               if Is_Forced (Item) and then Bridge /= Not_A_Bridge then
+                  if not Landin.IR.Is_External (Of_Unit, Item) then
+                     raise Landin.Compiler_Defect with
+                       "a definition overrides compiler-owned symbol "
+                       & Spelling;
+                  elsif not Import_Agrees (Item, Bridge) then
+                     raise Landin.Compiler_Defect with
+                       "an import disagrees with compiler-owned symbol "
+                       & Spelling;
+                  end if;
+               end if;
+            end;
+         end loop;
+      end Validate_Linkage;
+
+      procedure Allocate_Symbols;
+
+      procedure Allocate_Symbols is
+         function Available
+           (Candidate : String; Item : Landin.IR.Item_Id) return Boolean;
+
+         function Available
+           (Candidate : String; Item : Landin.IR.Item_Id) return Boolean
+         is
+         begin
+            if Host_Bridge_Needed and then Is_Hosted_Dependency (Candidate)
+            then
+               return False;
+            end if;
             for Position in 1 .. Landin.IR.Item_Count (Of_Unit) loop
                declare
                   Other : constant Landin.IR.Item_Id :=
                     Landin.IR.Item_Id (Position);
-                  Other_Declaration : constant Landin.IR.Declaration_Id :=
-                    Landin.IR.Declares (Of_Unit, Other);
                begin
                   if Other /= Item
-                    and then Other_Declaration /= Landin.IR.No_Declaration
-                    and then Landin.Source.Names.Spelling
-                      (Names,
-                       Landin.Resolution.Name_Of
-                         (Meanings, Other_Declaration)) = Spelling
+                    and then
+                      (Unbounded.To_String (Allocated_Symbols (Position))
+                         = Candidate
+                       or else Source_Symbol (Other) = Candidate)
                   then
-                     Collides := True;
-                     exit;
+                     return False;
                   end if;
                end;
             end loop;
+            return True;
+         end Available;
+      begin
+         for Position in 1 .. Landin.IR.Item_Count (Of_Unit) loop
+            declare
+               Item : constant Landin.IR.Item_Id :=
+                 Landin.IR.Item_Id (Position);
+            begin
+               if Is_Forced (Item) then
+                  Allocated_Symbols (Position) :=
+                    Unbounded.To_Unbounded_String (Source_Symbol (Item));
+               end if;
+            end;
+         end loop;
+         for Position in 1 .. Landin.IR.Item_Count (Of_Unit) loop
+            declare
+               Item : constant Landin.IR.Item_Id :=
+                 Landin.IR.Item_Id (Position);
+               Declared : constant Landin.IR.Declaration_Id :=
+                 Landin.IR.Declares (Of_Unit, Item);
+               Spelling : constant String := Source_Symbol (Item);
+            begin
+               if not Is_Forced (Item) then
+                  if not Is_C_Item (Item) and then Available (Spelling, Item)
+                  then
+                     Allocated_Symbols (Position) :=
+                       Unbounded.To_Unbounded_String (Spelling);
+                  else
+                     declare
+                        Base : constant String :=
+                          (if Declared = Landin.IR.No_Declaration
+                           then Spelling
+                           else "landin_"
+                             & Trimmed
+                               (Landin.IR.Declaration_Id'Image (Declared))
+                             & "_" & Spelling);
+                        Candidate : Unbounded.Unbounded_String :=
+                          Unbounded.To_Unbounded_String (Base);
+                        Attempt : Natural := 0;
+                     begin
+                        while not Available
+                          (Unbounded.To_String (Candidate), Item)
+                        loop
+                           Attempt := Attempt + 1;
+                           Candidate := Unbounded.To_Unbounded_String
+                             (Base & "_" & Trimmed (Natural'Image (Attempt)));
+                        end loop;
+                        Allocated_Symbols (Position) := Candidate;
+                     end;
+                  end if;
+               end if;
+            end;
+         end loop;
+      end Allocate_Symbols;
 
-            if Collides then
-               return "landin_"
-                 & Trimmed (Landin.IR.Declaration_Id'Image (Declared))
-                 & "_" & Spelling;
-            end if;
-            return Spelling;
-         end;
+      --  `$` is part of the requested ELF identity but starts an AT&T
+      --  immediate operand.  Quote at the rendering seam, not in the symbol
+      --  table: calls, addresses, data relocations and directives all use this
+      --  spelling, while namespace comparisons keep the unquoted identity.
+      function Symbol (Item : Landin.IR.Item_Id) return String is
+         Spelling : constant String :=
+           Unbounded.To_String (Allocated_Symbols (Positive (Item)));
+      begin
+         if Spelling'Length = 0 then
+            raise Landin.Compiler_Defect with
+              "an unallocated linker symbol reached assembly rendering";
+         elsif Spelling (Spelling'First) = '$' then
+            return '"' & Spelling & '"';
+         end if;
+         return Spelling;
       end Symbol;
 
       function Evidence_Symbol (Id : Landin.IR.Evidence_Id) return String
-        is (".Llandin_evidence_"
+        is (Local_Prefix & "landin_evidence_"
             & Trimmed (Landin.IR.Evidence_Id'Image (Id)));
 
       function Is_Public_Item (Item : Landin.IR.Item_Id) return Boolean
@@ -354,7 +675,7 @@ package body Landin.Backend.X86_64 is
       function Label
         (Item : Landin.IR.Item_Id; Block : Landin.IR.Block_Id)
         return String
-        is (".L" & Trimmed (Landin.IR.Item_Id'Image (Item))
+        is (Local_Prefix & Trimmed (Landin.IR.Item_Id'Image (Item))
             & "_" & Trimmed (Landin.IR.Block_Id'Image (Block)));
 
       --  R2.70's baseline sharing is representation-class sharing: two
@@ -437,6 +758,12 @@ package body Landin.Backend.X86_64 is
          if Left = Right then
             return True;
          elsif Limit = 0
+           or else Landin.IR.Signature_Uses_C_ABI (Of_Unit, Left)
+             /= Landin.IR.Signature_Uses_C_ABI (Of_Unit, Right)
+           or else Landin.IR.Signature_Has_Erased_Self (Of_Unit, Left)
+             /= Landin.IR.Signature_Has_Erased_Self (Of_Unit, Right)
+           or else Landin.IR.Signature_Is_Variadic (Of_Unit, Left)
+             /= Landin.IR.Signature_Is_Variadic (Of_Unit, Right)
            or else Landin.IR.Signature_Parameter_Count (Of_Unit, Left)
              /= Landin.IR.Signature_Parameter_Count (Of_Unit, Right)
            or else Landin.IR.Signature_Result_Count (Of_Unit, Left)
@@ -586,9 +913,14 @@ package body Landin.Backend.X86_64 is
                   then
                      return False;
                   elsif Op = Landin.IR.Evidence_Function
-                    and then Landin.IR.Evidence_Entry_Of
-                      (Of_Unit, Left, A)
-                      /= Landin.IR.Evidence_Entry_Of (Of_Unit, Right, B)
+                    and then
+                      (Landin.IR.Evidence_Is_Erased
+                         (Of_Unit, Landin.IR.Evidence_Of (Of_Unit, Left, A))
+                       or else Landin.IR.Evidence_Is_Erased
+                         (Of_Unit, Landin.IR.Evidence_Of (Of_Unit, Right, B))
+                       or else Landin.IR.Evidence_Entry_Of
+                         (Of_Unit, Left, A)
+                           /= Landin.IR.Evidence_Entry_Of (Of_Unit, Right, B))
                   then
                      return False;
                   elsif Op = Landin.IR.Indirect_Call
@@ -1260,7 +1592,7 @@ package body Landin.Backend.X86_64 is
          --  A Value_Id restarts in each item, just as a Block_Id does.  The
          --  extra `V` keeps a continuation distinct from a block label.
          function Value_Label (Value : Landin.IR.Value_Id) return String
-           is (".L" & Trimmed (Landin.IR.Item_Id'Image (Item))
+           is (Local_Prefix & Trimmed (Landin.IR.Item_Id'Image (Item))
                & "_V" & Trimmed (Landin.IR.Value_Id'Image (Value)));
 
          --  A move through the accumulator, at one width.  Every value
@@ -1274,6 +1606,329 @@ package body Landin.Backend.X86_64 is
             Emit ("mov" & Suffix (Size) & " " & Accumulator (Size)
                   & ", " & To);
          end Carry;
+
+         --  Chunk transport never touches argument or result registers as
+         --  scratch.  %r11 is the object base and %r10 holds one eightbyte.
+         --  Partial final chunks read/write only bytes inside the object.
+         function Displacement
+           (Offset : Landin.Targets.Byte_Count; Base : String) return String
+           is (Trimmed (Landin.Targets.Byte_Count'Image (Offset))
+               & "(" & Base & ")");
+
+         function Chunk_Bytes
+           (Shape : C_ABI.Classification; Index : Positive)
+            return Landin.Targets.Byte_Count
+           is (Landin.Targets.Byte_Count'Min
+                 (8, Shape.Size - Landin.Targets.Byte_Count (Index - 1) * 8));
+
+         function C_Register
+           (Place : C_ABI.Location;
+            Index : Positive;
+            Returning : Boolean := False) return String
+           is (if Place.Shape.Classes (Index) = C_ABI.SSE_Class
+               then "%xmm" & Trimmed
+                 (Natural'Image (Place.Registers (Index) - 1))
+               elsif Returning
+               then (if Place.Registers (Index) = 1
+                     then "%rax" else "%rdx")
+               else Argument_Register
+                 (Place.Registers (Index), Landin.Targets.Byte_8));
+
+         procedure Load_C_Chunk
+           (Offset, Bytes : Landin.Targets.Byte_Count);
+         procedure Store_C_Chunk
+           (Offset, Bytes : Landin.Targets.Byte_Count);
+         procedure Extend_C_Integer
+           (Kind : Landin.Types.Type_Kind);
+         procedure Emit_C_Entry;
+         procedure Emit_C_Call (Value : Landin.IR.Value_Id);
+         procedure Emit_C_Result (Value : Landin.IR.Value_Id);
+
+         procedure Load_C_Chunk
+           (Offset, Bytes : Landin.Targets.Byte_Count) is
+         begin
+            if Bytes = 8 then
+               Emit ("movq " & Displacement (Offset, "%r11") & ", %r10");
+            elsif Bytes = 4 then
+               Emit ("movl " & Displacement (Offset, "%r11") & ", %r10d");
+            elsif Bytes = 2 then
+               Emit ("movzwq " & Displacement (Offset, "%r11") & ", %r10");
+            elsif Bytes = 1 then
+               Emit ("movzbq " & Displacement (Offset, "%r11") & ", %r10");
+            else
+               Emit ("xorq %r10, %r10");
+               for Byte in reverse 0 .. Bytes - 1 loop
+                  Emit ("shlq $8, %r10");
+                  Emit ("movb " & Displacement (Offset + Byte, "%r11")
+                        & ", %r10b");
+               end loop;
+            end if;
+         end Load_C_Chunk;
+
+         procedure Store_C_Chunk
+           (Offset, Bytes : Landin.Targets.Byte_Count) is
+         begin
+            if Bytes = 8 then
+               Emit ("movq %r10, " & Displacement (Offset, "%r11"));
+            elsif Bytes = 4 then
+               Emit ("movl %r10d, " & Displacement (Offset, "%r11"));
+            elsif Bytes = 2 then
+               Emit ("movw %r10w, " & Displacement (Offset, "%r11"));
+            elsif Bytes = 1 then
+               Emit ("movb %r10b, " & Displacement (Offset, "%r11"));
+            else
+               for Byte in 0 .. Bytes - 1 loop
+                  Emit ("movb %r10b, "
+                        & Displacement (Offset + Byte, "%r11"));
+                  Emit ("shrq $8, %r10");
+               end loop;
+            end if;
+         end Store_C_Chunk;
+
+         procedure Extend_C_Integer
+           (Kind : Landin.Types.Type_Kind) is
+         begin
+            case Kind is
+               when Landin.Types.I8 => Emit ("movsbl %r10b, %r10d");
+               when Landin.Types.I16 => Emit ("movswl %r10w, %r10d");
+               when others => null;
+            end case;
+         end Extend_C_Integer;
+
+         procedure Emit_C_Entry is
+            Plan : constant C_ABI.Plan := C_ABI.Signature_Plan
+              (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item), Facts);
+            Hidden : constant Natural :=
+              (if Plan.Result.Shape.Aggregate then 1 else 0);
+            Saved_Bytes : constant Landin.Targets.Byte_Count := 112;
+         begin
+            --  Save both banks before a copy or partial-chunk helper can
+            --  clobber them.  This temporary area does not become IR state.
+            Emit ("subq $112, %rsp");
+            for Index in 1 .. 6 loop
+               Emit ("movq "
+                     & Argument_Register (Index, Landin.Targets.Byte_8)
+                     & ", " & Displacement
+                       (Landin.Targets.Byte_Count (Index - 1) * 8, "%rsp"));
+            end loop;
+            for Index in 1 .. 8 loop
+               Emit ("movq %xmm" & Trimmed (Natural'Image (Index - 1))
+                     & ", " & Displacement
+                       (48 + Landin.Targets.Byte_Count (Index - 1) * 8,
+                        "%rsp"));
+            end loop;
+            if Hidden = 1 then
+               if Plan.Result.Shape.Memory then
+                  Emit ("movq 0(%rsp), %r10");
+               else
+                  Emit ("leaq " & Slot_Cell
+                        (Landin.IR.Result_Slot (Of_Unit, Item))
+                        & ", %r10");
+               end if;
+               Emit ("movq %r10, " & Slot_Cell
+                     (Landin.IR.Nth_Parameter (Of_Unit, Item, 1)));
+            end if;
+            for Index in Plan.Arguments'Range loop
+               declare
+                  Place : C_ABI.Location renames Plan.Arguments (Index);
+                  Slot : constant Landin.IR.Slot_Id :=
+                    Landin.IR.Nth_Parameter (Of_Unit, Item, Index + Hidden);
+               begin
+                  if Place.On_Stack then
+                     Emit ("leaq " & Displacement
+                           (16 + Place.Stack_At, "%rbp") & ", %rsi");
+                     Emit ("leaq " & Slot_Cell (Slot) & ", %rdi");
+                     Emit ("movabsq $" & Trimmed
+                           (Landin.Targets.Byte_Count'Image (Place.Shape.Size))
+                           & ", %rcx");
+                     Emit ("cld");
+                     Emit ("rep movsb");
+                  else
+                     Emit ("leaq " & Slot_Cell (Slot) & ", %r11");
+                     for Chunk in 1 .. Place.Shape.Count loop
+                        if Place.Shape.Classes (Chunk) /= C_ABI.No_Class then
+                           Emit ("movq " & Displacement
+                                 ((if Place.Shape.Classes (Chunk)
+                                       = C_ABI.SSE_Class
+                                   then Landin.Targets.Byte_Count'(48)
+                                   else Landin.Targets.Byte_Count'(0))
+                                  + Landin.Targets.Byte_Count
+                                    (Place.Registers (Chunk) - 1) * 8,
+                                  "%rsp") & ", %r10");
+                           Store_C_Chunk
+                             (Landin.Targets.Byte_Count (Chunk - 1) * 8,
+                              Chunk_Bytes (Place.Shape, Chunk));
+                        end if;
+                     end loop;
+                  end if;
+               end;
+            end loop;
+            Emit ("addq $" & Trimmed
+                  (Landin.Targets.Byte_Count'Image (Saved_Bytes)) & ", %rsp");
+         end Emit_C_Entry;
+
+         procedure Emit_C_Call (Value : Landin.IR.Value_Id) is
+            Indirect : constant Boolean :=
+              Landin.IR.Op_Of (Of_Unit, Item, Value) = Landin.IR.Indirect_Call;
+            Signature : constant Landin.IR.Signature_Id :=
+              (if Indirect then Landin.IR.Call_Signature (Of_Unit, Item, Value)
+               else Landin.IR.Signature_Of
+                 (Of_Unit, Landin.IR.Callee_Of (Of_Unit, Item, Value)));
+            Plan : constant C_ABI.Plan :=
+              C_ABI.Call_Plan (Of_Unit, Item, Value, Facts);
+            Hidden : constant Natural :=
+              (if Plan.Result.Shape.Aggregate then 1 else 0);
+            Offset : constant Natural := (if Indirect then 1 else 0);
+
+            function Argument (Index : Positive) return Landin.IR.Value_Id
+              is (Landin.IR.Nth_Operand
+                    (Of_Unit, Item, Value, Index + Offset + Hidden));
+         begin
+            if Plan.Stack_Bytes > 0 then
+               Emit ("subq $" & Trimmed
+                     (Landin.Targets.Byte_Count'Image (Plan.Stack_Bytes))
+                     & ", %rsp");
+            end if;
+            --  Copy stack objects before filling either register bank.
+            for Index in Plan.Arguments'Range loop
+               declare
+                  Place : C_ABI.Location renames Plan.Arguments (Index);
+               begin
+                  if Place.On_Stack then
+                     if Place.Shape.Aggregate then
+                        Emit ("movq " & Value_Cell (Argument (Index))
+                              & ", %rsi");
+                        Emit ("leaq " & Displacement
+                              (Place.Stack_At, "%rsp") & ", %rdi");
+                        Emit ("movabsq $" & Trimmed
+                              (Landin.Targets.Byte_Count'Image
+                                 (Place.Shape.Size)) & ", %rcx");
+                        Emit ("cld");
+                        Emit ("rep movsb");
+                     else
+                        Emit ("leaq " & Value_Cell (Argument (Index))
+                              & ", %r11");
+                        Load_C_Chunk (0, Place.Shape.Size);
+                        Extend_C_Integer
+                          (Landin.IR.Result_Of
+                             (Of_Unit, Item, Argument (Index)));
+                        Emit ("movq %r10, "
+                              & Displacement (Place.Stack_At, "%rsp"));
+                     end if;
+                  end if;
+               end;
+            end loop;
+            if Plan.Result.Shape.Memory then
+               Emit ("movq " & Value_Cell
+                     (Landin.IR.Nth_Operand
+                        (Of_Unit, Item, Value, Offset + 1)) & ", %rdi");
+            end if;
+            for Index in Plan.Arguments'Range loop
+               declare
+                  Place : C_ABI.Location renames Plan.Arguments (Index);
+               begin
+                  if not Place.On_Stack then
+                     Emit ((if Place.Shape.Aggregate
+                            then "movq " else "leaq ")
+                           & Value_Cell (Argument (Index)) & ", %r11");
+                     for Chunk in 1 .. Place.Shape.Count loop
+                        if Place.Shape.Classes (Chunk) /= C_ABI.No_Class
+                        then
+                           Load_C_Chunk
+                             (Landin.Targets.Byte_Count (Chunk - 1) * 8,
+                              Chunk_Bytes (Place.Shape, Chunk));
+                           if not Place.Shape.Aggregate then
+                              Extend_C_Integer
+                                (Landin.IR.Result_Of
+                                   (Of_Unit, Item, Argument (Index)));
+                           end if;
+                           Emit ("movq %r10, " & C_Register (Place, Chunk));
+                        end if;
+                     end loop;
+                  end if;
+               end;
+            end loop;
+            if Landin.IR.Signature_Is_Variadic (Of_Unit, Signature) then
+               Emit ("movb $" & Trimmed (Natural'Image (Plan.SSE_Used))
+                     & ", %al");
+            end if;
+            if Indirect then
+               Emit ("call *" & Value_Cell
+                     (Landin.IR.Nth_Operand (Of_Unit, Item, Value, 1)));
+            else
+               Emit ("call " & Symbol
+                     (Landin.IR.Callee_Of (Of_Unit, Item, Value)));
+            end if;
+            if not Plan.Result.Shape.Memory
+              and then Plan.Result.Shape.Size > 0
+            then
+               if Hidden = 1 then
+                  Emit ("movq " & Value_Cell
+                        (Landin.IR.Nth_Operand
+                           (Of_Unit, Item, Value, Offset + 1)) & ", %r11");
+               else
+                  Emit ("leaq " & Value_Cell (Value) & ", %r11");
+               end if;
+               for Chunk in 1 .. Plan.Result.Shape.Count loop
+                  if Plan.Result.Shape.Classes (Chunk) /= C_ABI.No_Class
+                  then
+                     Emit ("movq " & C_Register
+                           (Plan.Result, Chunk, Returning => True)
+                           & ", %r10");
+                     Store_C_Chunk
+                       (Landin.Targets.Byte_Count (Chunk - 1) * 8,
+                        Chunk_Bytes (Plan.Result.Shape, Chunk));
+                  end if;
+               end loop;
+            end if;
+            if Plan.Stack_Bytes > 0 then
+               Emit ("addq $" & Trimmed
+                     (Landin.Targets.Byte_Count'Image (Plan.Stack_Bytes))
+                     & ", %rsp");
+            end if;
+         end Emit_C_Call;
+
+         procedure Emit_C_Result (Value : Landin.IR.Value_Id) is
+            Plan : constant C_ABI.Plan := C_ABI.Signature_Plan
+              (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item), Facts);
+            Place : C_ABI.Location renames Plan.Result;
+         begin
+            if Place.Shape.Size = 0 then
+               return;
+            elsif Place.Shape.Memory then
+               Emit ("movq " & Slot_Cell
+                     (Landin.IR.Nth_Parameter (Of_Unit, Item, 1)) & ", %rdi");
+               Emit ("leaq " & Slot_Cell
+                     (Landin.IR.Result_Slot (Of_Unit, Item)) & ", %rsi");
+               Emit ("movabsq $" & Trimmed
+                     (Landin.Targets.Byte_Count'Image (Place.Shape.Size))
+                     & ", %rcx");
+               Emit ("cld");
+               Emit ("rep movsb");
+               Emit ("movq " & Slot_Cell
+                     (Landin.IR.Nth_Parameter (Of_Unit, Item, 1)) & ", %rax");
+               return;
+            elsif Place.Shape.Aggregate then
+               Emit ("leaq " & Slot_Cell
+                     (Landin.IR.Result_Slot (Of_Unit, Item)) & ", %r11");
+            else
+               Emit ("leaq " & Value_Cell
+                     (Landin.IR.Nth_Operand (Of_Unit, Item, Value, 1))
+                     & ", %r11");
+            end if;
+            for Chunk in 1 .. Place.Shape.Count loop
+               if Place.Shape.Classes (Chunk) /= C_ABI.No_Class then
+                  Load_C_Chunk
+                    (Landin.Targets.Byte_Count (Chunk - 1) * 8,
+                     Chunk_Bytes (Place.Shape, Chunk));
+                  if not Place.Shape.Aggregate then
+                     Extend_C_Integer (Result);
+                  end if;
+                  Emit ("movq %r10, "
+                        & C_Register (Place, Chunk, Returning => True));
+               end if;
+            end loop;
+         end Emit_C_Result;
 
          procedure Emit_Epilogue;
 
@@ -3266,6 +3921,13 @@ package body Landin.Backend.X86_64 is
                          (Facts, Positive (Which));
                   begin
                      Emit ("movq " & Value_Cell (Operand (1)) & ", %rax");
+                     if Landin.IR.Evidence_Is_Erased
+                       (Of_Unit, Landin.IR.Evidence_Of (Of_Unit, Item, Value))
+                     then
+                        --  The saved descriptor is data then table. The
+                        --  paired self projection reads this same snapshot.
+                        Emit ("movq 8(%rax), %rax");
+                     end if;
                      Emit
                        ("movq "
                         & Trimmed
@@ -3274,7 +3936,28 @@ package body Landin.Backend.X86_64 is
                      Emit ("movq %rax, " & Value_Cell (Value));
                   end;
 
+               when Landin.IR.Evidence_Self =>
+                  declare
+                     Receiver : constant Landin.IR.Value_Id :=
+                       Landin.IR.Nth_Operand
+                         (Of_Unit, Item, Operand (1), 1);
+                  begin
+                     Emit ("movq " & Value_Cell (Receiver) & ", %rax");
+                     Emit ("movq (%rax), %rax");
+                     Emit ("movq %rax, " & Value_Cell (Value));
+                  end;
+
                when Landin.IR.Call | Landin.IR.Indirect_Call =>
+                  if (if Op = Landin.IR.Indirect_Call
+                      then Landin.IR.Signature_Uses_C_ABI
+                        (Of_Unit,
+                         Landin.IR.Call_Signature (Of_Unit, Item, Value))
+                      else Is_C_Item
+                        (Landin.IR.Callee_Of (Of_Unit, Item, Value)))
+                  then
+                     Emit_C_Call (Value);
+                     return;
+                  end if;
                   --  [1920] names every parameter once and in order, so the
                   --  operands are already the argument list.  The first six
                   --  scalars fill the internal convention's integer
@@ -3446,6 +4129,11 @@ package body Landin.Backend.X86_64 is
                                    (Of_Unit, Item, Value)));
 
                when Landin.IR.Leave =>
+                  if Is_C_Item (Item) then
+                     Emit_C_Result (Value);
+                     Emit_Epilogue;
+                     return;
+                  end if;
                   --  [1810]'s return carries what the named return place
                   --  held; a `-> none` routine carries nothing.
                   if Result in Landin.Types.Scalar_Name then
@@ -3517,12 +4205,12 @@ package body Landin.Backend.X86_64 is
          Emit ("pushq %rbp");
          Emit ("movq %rsp, %rbp");
 
-         --  The hosted entry keeps its source-level no-argument shape.  Its
-         --  C argc/argv carriers are captured before ordinary Landin code can
-         --  clobber them and exposed only through core/io's runtime bridge.
+         --  The hosted entry keeps its source-level no-argument shape.  The
+         --  frame-pointer push aligned the stack for this C call, before any
+         --  body code can clobber argc/argv.  C-owned startup calls the same
+         --  initializer explicitly; ordinary exports and callbacks never do.
          if Item = Hosted_Entry then
-            Emit ("movl %edi, .Llandin_host_argc(%rip)");
-            Emit ("movq %rsi, .Llandin_host_argv(%rip)");
+            Emit ("call _landin_host_initialize_arguments");
          end if;
 
          if Extent (Layout) > 0 then
@@ -3532,107 +4220,111 @@ package body Landin.Backend.X86_64 is
                   & ", %rsp");
          end if;
 
-         --  A scalar parameter is copied directly into its slot.  D94's
-         --  aggregate argument transports an address in the same position;
-         --  preserve every such address before any byte copy clobbers the
-         --  integer argument registers, then copy into the parameter's own
-         --  aggregate frame slot.  The copy is what keeps `in` by value.
-         for Index in 1 .. Landin.IR.Parameter_Count (Of_Unit, Item) loop
-            declare
-               Slot : constant Landin.IR.Slot_Id :=
-                 Landin.IR.Nth_Parameter (Of_Unit, Item, Index);
-            begin
-               if not Landin.IR.Is_Aggregate (Of_Unit, Item, Slot)
-                 and then not Landin.IR.Is_Array (Of_Unit, Item, Slot)
-               then
-                  declare
-                     Held : constant Held_Size := Size_Of_Slot (Slot);
-                  begin
-                     if Index <= Register_Arguments then
-                        Emit ("mov" & Suffix (Held) & " "
-                              & Argument_Register (Index, Held) & ", "
-                              & Slot_Cell (Slot));
-                     else
-                        Carry
-                          (Held,
-                           Trimmed
-                             (Landin.Targets.Byte_Count'Image
-                                (16 + Landin.Targets.Byte_Count
-                                        (Index - Register_Arguments - 1)
-                                      * Stack_Argument_Bytes))
-                           & "(%rbp)",
-                           Slot_Cell (Slot));
-                     end if;
-                  end;
-               end if;
-            end;
-         end loop;
-
-         for Index in 1 .. Landin.IR.Parameter_Count (Of_Unit, Item) loop
-            declare
-               Slot : constant Landin.IR.Slot_Id :=
-                 Landin.IR.Nth_Parameter (Of_Unit, Item, Index);
-            begin
-               if Landin.IR.Is_Aggregate (Of_Unit, Item, Slot)
-                 or else Landin.IR.Is_Array (Of_Unit, Item, Slot)
-               then
-                  if Index <= Register_Arguments then
-                     Emit
-                       ("pushq "
-                        & Argument_Register (Index, Landin.Targets.Byte_8));
-                  else
-                     Emit
-                       ("pushq "
-                        & Trimmed
-                            (Landin.Targets.Byte_Count'Image
-                               (16 + Landin.Targets.Byte_Count
-                                       (Index - Register_Arguments - 1)
-                                     * Stack_Argument_Bytes))
-                        & "(%rbp)");
+         if Is_C_Item (Item) then
+            Emit_C_Entry;
+         else
+            --  A scalar parameter is copied directly into its slot.  D94's
+            --  aggregate argument transports an address in the same position;
+            --  preserve every such address before any byte copy clobbers the
+            --  integer argument registers, then copy into the parameter's own
+            --  aggregate frame slot.  The copy is what keeps `in` by value.
+            for Index in 1 .. Landin.IR.Parameter_Count (Of_Unit, Item) loop
+               declare
+                  Slot : constant Landin.IR.Slot_Id :=
+                    Landin.IR.Nth_Parameter (Of_Unit, Item, Index);
+               begin
+                  if not Landin.IR.Is_Aggregate (Of_Unit, Item, Slot)
+                    and then not Landin.IR.Is_Array (Of_Unit, Item, Slot)
+                  then
+                     declare
+                        Held : constant Held_Size := Size_Of_Slot (Slot);
+                     begin
+                        if Index <= Register_Arguments then
+                           Emit ("mov" & Suffix (Held) & " "
+                                 & Argument_Register (Index, Held) & ", "
+                                 & Slot_Cell (Slot));
+                        else
+                           Carry
+                             (Held,
+                              Trimmed
+                                (Landin.Targets.Byte_Count'Image
+                                   (16 + Landin.Targets.Byte_Count
+                                           (Index - Register_Arguments - 1)
+                                         * Stack_Argument_Bytes))
+                              & "(%rbp)",
+                              Slot_Cell (Slot));
+                        end if;
+                     end;
                   end if;
-               end if;
-            end;
-         end loop;
+               end;
+            end loop;
 
-         for Index in reverse
-           1 .. Landin.IR.Parameter_Count (Of_Unit, Item)
-         loop
-            declare
-               Slot : constant Landin.IR.Slot_Id :=
-                 Landin.IR.Nth_Parameter (Of_Unit, Item, Index);
-            begin
-               if Landin.IR.Is_Aggregate (Of_Unit, Item, Slot)
-                 or else Landin.IR.Is_Array (Of_Unit, Item, Slot)
-               then
-                  declare
-                     Bytes : Landin.Targets.Byte_Count;
-                     Alignment : Landin.Targets.Byte_Alignment;
-                  begin
-                     if Landin.IR.Is_Aggregate (Of_Unit, Item, Slot) then
-                        Landin.Backend.Aggregate_Extent
-                          (Of_Unit, Item, Slot, Facts, Bytes, Alignment);
+            for Index in 1 .. Landin.IR.Parameter_Count (Of_Unit, Item) loop
+               declare
+                  Slot : constant Landin.IR.Slot_Id :=
+                    Landin.IR.Nth_Parameter (Of_Unit, Item, Index);
+               begin
+                  if Landin.IR.Is_Aggregate (Of_Unit, Item, Slot)
+                    or else Landin.IR.Is_Array (Of_Unit, Item, Slot)
+                  then
+                     if Index <= Register_Arguments then
+                        Emit
+                          ("pushq "
+                           & Argument_Register (Index, Landin.Targets.Byte_8));
                      else
-                        Landin.Backend.Field_Extent
-                          (Of_Unit,
-                           Landin.IR.Whole_Slot_Array_Shape
-                             (Of_Unit, Item, Slot),
-                           Facts, Bytes, Alignment);
+                        Emit
+                          ("pushq "
+                           & Trimmed
+                               (Landin.Targets.Byte_Count'Image
+                                  (16 + Landin.Targets.Byte_Count
+                                          (Index - Register_Arguments - 1)
+                                        * Stack_Argument_Bytes))
+                           & "(%rbp)");
                      end if;
-                     Emit ("popq %rsi");
-                     Storage_Address
-                       ((Kind => Landin.IR.Frame_Slot, Slot => Slot),
-                        0, "%rdi");
-                     Emit
-                       ("movabsq $"
-                        & Trimmed
-                            (Landin.Targets.Byte_Count'Image (Bytes))
-                        & ", %rcx");
-                     Emit ("cld");
-                     Emit ("rep movsb");
-                  end;
-               end if;
-            end;
-         end loop;
+                  end if;
+               end;
+            end loop;
+
+            for Index in reverse
+              1 .. Landin.IR.Parameter_Count (Of_Unit, Item)
+            loop
+               declare
+                  Slot : constant Landin.IR.Slot_Id :=
+                    Landin.IR.Nth_Parameter (Of_Unit, Item, Index);
+               begin
+                  if Landin.IR.Is_Aggregate (Of_Unit, Item, Slot)
+                    or else Landin.IR.Is_Array (Of_Unit, Item, Slot)
+                  then
+                     declare
+                        Bytes : Landin.Targets.Byte_Count;
+                        Alignment : Landin.Targets.Byte_Alignment;
+                     begin
+                        if Landin.IR.Is_Aggregate (Of_Unit, Item, Slot) then
+                           Landin.Backend.Aggregate_Extent
+                             (Of_Unit, Item, Slot, Facts, Bytes, Alignment);
+                        else
+                           Landin.Backend.Field_Extent
+                             (Of_Unit,
+                              Landin.IR.Whole_Slot_Array_Shape
+                                (Of_Unit, Item, Slot),
+                              Facts, Bytes, Alignment);
+                        end if;
+                        Emit ("popq %rsi");
+                        Storage_Address
+                          ((Kind => Landin.IR.Frame_Slot, Slot => Slot),
+                           0, "%rdi");
+                        Emit
+                          ("movabsq $"
+                           & Trimmed
+                               (Landin.Targets.Byte_Count'Image (Bytes))
+                           & ", %rcx");
+                        Emit ("cld");
+                        Emit ("rep movsb");
+                     end;
+                  end if;
+               end;
+            end loop;
+         end if;
 
          for Index in 1 .. Landin.IR.Block_Count (Of_Unit, Item) loop
             declare
@@ -3811,13 +4503,29 @@ package body Landin.Backend.X86_64 is
                           := Of_Value (Operand_Of (Value, 1));
 
                      when Landin.IR.Range_Check =>
-                        --  D188: a module datum whose declared type is a
-                        --  range subtype is refused at the checker unless
-                        --  its value folds, so no image reaches here owing
-                        --  a check.  Reaching this is a compiler defect.
-                        raise Compiler_Defect with
-                          "a module image reached the backend owing a"
-                          & " range check";
+                        --  D188 folds a checked module datum before emission.
+                        --  A mandatory integer-to-pointer nonnull check also
+                        --  reaches this walk, so an in-range static operand
+                        --  passes through while an impossible image remains
+                        --  an internal failure.
+                        declare
+                           Source : constant Landin.IR.Value_Id :=
+                             Operand_Of (Value, 1);
+                           Folded_Source : constant Landin.Types.Folded :=
+                             Of_Value (Source);
+                           Lower : constant Landin.Types.Folded :=
+                             Landin.IR.Range_Lower (Of_Unit, Item, Value);
+                           Upper : constant Landin.Types.Folded :=
+                             Landin.IR.Range_Upper (Of_Unit, Item, Value);
+                        begin
+                           if Folded_Source < Lower
+                             or else Folded_Source > Upper
+                           then
+                              raise Compiler_Defect with
+                                "an out-of-range module image passed checking";
+                           end if;
+                           Held (Natural (Value)) := Folded_Source;
+                        end;
 
                      when Landin.IR.Conversion =>
                         declare
@@ -4115,7 +4823,8 @@ package body Landin.Backend.X86_64 is
                      when Landin.IR.Failure_Test
                         | Landin.IR.Function_Address
                         | Landin.IR.Evidence_Address
-                        | Landin.IR.Evidence_Function | Landin.IR.Call
+                        | Landin.IR.Evidence_Function
+                        | Landin.IR.Evidence_Self | Landin.IR.Call
                         | Landin.IR.Load_Indirect | Landin.IR.Store_Indirect
                         | Landin.IR.Indirect_Call | Landin.IR.Storage_Address
                         | Landin.IR.Place_Address | Landin.IR.Slice_Address
@@ -4162,16 +4871,7 @@ package body Landin.Backend.X86_64 is
 
       procedure Emit_Aggregate_Datum (Item : Landin.IR.Item_Id);
 
-      procedure Emit_Aggregate_Image_Datum (Item : Landin.IR.Item_Id);
-
-      procedure Emit_Recursive_Aggregate_Image_Datum
-        (Item : Landin.IR.Item_Id);
-
-      function Shape_Contains_Aggregate
-        (Shape : Landin.IR.Field_Shape) return Boolean;
-
-      function Item_Image_Contains_Aggregate
-        (Item : Landin.IR.Item_Id) return Boolean;
+      procedure Emit_Recursive_Image_Datum (Item : Landin.IR.Item_Id);
 
       procedure Emit_Array_Datum (Item : Landin.IR.Item_Id);
 
@@ -4196,59 +4896,21 @@ package body Landin.Backend.X86_64 is
             Landin.Targets.Alignment_Of (Placed));
       end Emit_Aggregate_Datum;
 
-      function Shape_Contains_Aggregate
-        (Shape : Landin.IR.Field_Shape) return Boolean
-      is
-      begin
-         if Shape.Kind = Landin.IR.Aggregate_Field_Shape then
-            return True;
-         elsif Shape.Kind = Landin.IR.Array_Field_Shape
-           and then Landin.IR.Array_Element_Is_Aggregate (Of_Unit, Shape)
-         then
-            return Shape_Contains_Aggregate
-              (Landin.IR.Array_Element_Shape (Of_Unit, Shape));
-         elsif Shape.Kind = Landin.IR.Variant_Field_Shape then
-            for Variant_Case in 1 .. Shape.Cases loop
-               for Payload in
-                 1 .. Landin.IR.Variant_Case_Field_Count
-                        (Of_Unit, Shape, Variant_Case)
-               loop
-                  if Shape_Contains_Aggregate
-                    (Landin.IR.Nth_Variant_Case_Field
-                       (Of_Unit, Shape, Variant_Case, Payload))
-                  then
-                     return True;
-                  end if;
-               end loop;
-            end loop;
-         end if;
-         return False;
-      end Shape_Contains_Aggregate;
-
-      function Item_Image_Contains_Aggregate
-        (Item : Landin.IR.Item_Id) return Boolean
-      is
-      begin
-         for Field in 1 .. Landin.IR.Field_Count (Of_Unit, Item) loop
-            if Shape_Contains_Aggregate
-              (Landin.IR.Nth_Field_Shape (Of_Unit, Item, Field))
-            then
-               return True;
-            end if;
-         end loop;
-         return False;
-      end Item_Image_Contains_Aggregate;
-
-      --  D132 emits the recursively indexed descriptor tree by replaying
-      --  each ordinary-child and selected-payload placement against this
-      --  target.  Descriptors carry no byte offsets: every gap and tail below
-      --  is derived here and emitted as zero.
-      procedure Emit_Recursive_Aggregate_Image_Datum
+      --  D132 and recursive arrays share one descriptor-tree writer.  Replay
+      --  ordinary-child and selected-payload placement against this target;
+      --  array sequences repeat the complete child image at its padded size.
+      --  Descriptors carry no byte offsets: every gap and tail is derived
+      --  here and emitted as zero, never stored per logical array element.
+      procedure Emit_Recursive_Image_Datum
         (Item : Landin.IR.Item_Id)
       is
          Placed : Landin.Targets.Placement;
          Ignored : Landin.Targets.Byte_Count;
          Written : Landin.Targets.Byte_Count := 0;
+         Size : Landin.Targets.Byte_Count;
+         Alignment : Landin.Targets.Byte_Alignment;
+         Is_Array : constant Boolean :=
+           Landin.IR.Has_Recursive_Array_Image (Of_Unit, Item);
 
          procedure Emit_Zero (Bytes : Landin.Targets.Byte_Count);
 
@@ -4318,8 +4980,54 @@ package body Landin.Backend.X86_64 is
                         & Trimmed (Landin.Types.Folded'Image (Image.Value)));
                   end;
                end;
-            elsif Landin.IR.Array_Element_Is_Aggregate (Of_Unit, Shape) then
+            elsif Image.Form = Landin.IR.Element_Sequence then
+               --  Count is stored children, not logical elements.  Only
+               --  the final child repeats; its complete target-laid-out
+               --  image (including tail padding) is the array stride.
+               --  Descendant_Image_Of skips descriptor roots, whereas
+               --  Nth_Descriptor_Element below skips numeric fields only.
+               if (Image.Count = 0
+                   and then (Image.Value /= 0 or else Shape.Length /= 0))
+                 or else (Image.Count > 0
+                   and then
+                     (Landin.IR.Element_Total (Image.Count - 1)
+                        > Shape.Length
+                      or else Image.Value /= Landin.Types.Folded
+                        (Shape.Length
+                         - Landin.IR.Element_Total (Image.Count - 1))))
+               then
+                  raise Landin.Compiler_Defect with
+                    "a recursive array image has the wrong coverage";
+               end if;
+               for Position in 1 .. Image.Count loop
+                  declare
+                     Child : constant Landin.IR.Aggregate_Field_Image :=
+                       Landin.IR.Descendant_Image_Of
+                         (Of_Unit, Item, Image, Position);
+                     Copies : constant Landin.Types.Folded :=
+                       (if Position = Image.Count then Image.Value else 1);
+                  begin
+                     --  A zero suffix was evaluated but stores nothing.
+                     if Copies > 0 then
+                        if Copies > 1 then
+                           Emit
+                             (".rept " & Trimmed
+                                (Landin.Types.Folded'Image (Copies)));
+                        end if;
+                        Emit_Field
+                          (Landin.IR.Array_Element_Shape (Of_Unit, Shape),
+                           Child, Child.Value);
+                        if Copies > 1 then
+                           Emit (".endr");
+                        end if;
+                     end if;
+                  end;
+               end loop;
+            elsif Image.Form = Landin.IR.Absent then
                Emit_Zero (Field_Size);
+            elsif Landin.IR.Array_Element_Is_Aggregate (Of_Unit, Shape) then
+               raise Landin.Compiler_Defect with
+                 "a complete array element has a numeric image";
             elsif Image.Form = Landin.IR.Finite then
                for Position in 1 .. Image.Count loop
                   Emit
@@ -4354,8 +5062,6 @@ package body Landin.Backend.X86_64 is
                  (Directive (Size_Of (Shape.Element, Facts)) & " "
                   & Trimmed (Landin.Types.Folded'Image (Image.Value)));
                Emit (".endr");
-            elsif Image.Form = Landin.IR.Absent then
-               Emit_Zero (Field_Size);
             else
                raise Landin.Compiler_Defect with
                  "a malformed recursive array image reached x86-64";
@@ -4505,7 +5211,15 @@ package body Landin.Backend.X86_64 is
             end case;
          end Emit_Field;
       begin
-         Place_Fields (Item, Placed, 0, Ignored);
+         if Is_Array then
+            Landin.Backend.Field_Extent
+              (Of_Unit, Landin.IR.Whole_Array_Shape (Of_Unit, Item),
+               Facts, Size, Alignment);
+         else
+            Place_Fields (Item, Placed, 0, Ignored);
+            Size := Landin.Targets.Size_Of (Placed);
+            Alignment := Landin.Targets.Alignment_Of (Placed);
+         end if;
 
          if Is_Public_Item (Item) then
             Put (Character'Val (9) & ".globl " & Symbol (Item));
@@ -4513,11 +5227,15 @@ package body Landin.Backend.X86_64 is
          Put (Character'Val (9) & ".type " & Symbol (Item) & ", @object");
          Put
            (Character'Val (9) & ".align "
-            & Trimmed
-                (Landin.Targets.Byte_Alignment'Image
-                   (Landin.Targets.Alignment_Of (Placed))));
+            & Trimmed (Landin.Targets.Byte_Alignment'Image (Alignment)));
          Put (Symbol (Item) & ":");
 
+         if Is_Array then
+            Emit_Array
+              (Landin.IR.Whole_Array_Shape (Of_Unit, Item),
+               Landin.IR.Array_Image_Of (Of_Unit, Item));
+            Written := Size;
+         end if;
          for Field in 1 .. Landin.IR.Field_Count (Of_Unit, Item) loop
             declare
                Shape : constant Landin.IR.Field_Shape :=
@@ -4546,315 +5264,13 @@ package body Landin.Backend.X86_64 is
             end;
          end loop;
 
-         if Landin.Targets.Size_Of (Placed) > Written then
-            Emit_Zero (Landin.Targets.Size_Of (Placed) - Written);
+         if Size > Written then
+            Emit_Zero (Size - Written);
          end if;
          Put
            (Character'Val (9) & ".size " & Symbol (Item) & ", "
-            & Trimmed
-                (Landin.Targets.Byte_Count'Image
-                   (Landin.Targets.Size_Of (Placed))));
-      end Emit_Recursive_Aggregate_Image_Datum;
-
-      --  D66 keeps the written aggregate image target-neutral: one fold per
-      --  declaration-order field.  Replay the shared placement here to insert
-      --  this target's padding, write scalar fields at their target widths,
-      --  reserve zero array fields at their compact extents, and keep every
-      --  padding byte zero as [0540] requires.
-      procedure Emit_Aggregate_Image_Datum (Item : Landin.IR.Item_Id) is
-         Placed  : Landin.Targets.Placement;
-         Ignored : Landin.Targets.Byte_Count;
-         Written : Landin.Targets.Byte_Count := 0;
-      begin
-         if Item_Image_Contains_Aggregate (Item) then
-            Emit_Recursive_Aggregate_Image_Datum (Item);
-            return;
-         end if;
-
-         Place_Fields (Item, Placed, 0, Ignored);
-
-         if Is_Public_Item (Item) then
-            Put (Character'Val (9) & ".globl " & Symbol (Item));
-         end if;
-
-         Put (Character'Val (9) & ".type " & Symbol (Item) & ", @object");
-         Put (Character'Val (9) & ".align "
-              & Trimmed
-                  (Landin.Targets.Byte_Alignment'Image
-                     (Landin.Targets.Alignment_Of (Placed))));
-         Put (Symbol (Item) & ":");
-
-         for Field in 1 .. Landin.IR.Field_Count (Of_Unit, Item) loop
-            declare
-               Shape : constant Landin.IR.Field_Shape :=
-                 Landin.IR.Nth_Field_Shape (Of_Unit, Item, Field);
-               Image : constant Landin.IR.Aggregate_Field_Image :=
-                 Landin.IR.Field_Image_Of (Of_Unit, Item, Field);
-               Field_Size : Landin.Targets.Byte_Count;
-               Field_Alignment : Landin.Targets.Byte_Alignment;
-               At_Field : Landin.Targets.Byte_Count;
-               Field_Placement : Landin.Targets.Placement;
-            begin
-               Place_Fields
-                 (Item, Field_Placement, Landin.IR.Element_Total (Field),
-                  At_Field);
-               Landin.Backend.Field_Extent
-                 (Of_Unit, Shape, Facts, Field_Size, Field_Alignment);
-               pragma Unreferenced (Field_Placement, Field_Alignment);
-
-               if At_Field > Written then
-                  Emit
-                    (".zero "
-                     & Trimmed
-                         (Landin.Targets.Byte_Count'Image
-                            (At_Field - Written)));
-               end if;
-
-               if Shape.Kind = Landin.IR.Variant_Field_Shape
-                 and then Image.Form = Landin.IR.Selected
-               then
-                  declare
-                     Selected : constant Positive := Positive (Image.Value);
-                     In_Field : Landin.Targets.Byte_Count :=
-                       Landin.Targets.Byte_Count
-                         (Landin.Targets.Bytes
-                            (Size_Of (Shape.Element, Facts)));
-                  begin
-                     Emit
-                       (Directive (Size_Of (Shape.Element, Facts)) & " "
-                        & Trimmed
-                            (Natural'Image (Natural (Selected) - 1)));
-
-                     for Payload in 1 .. Image.Count loop
-                        declare
-                           Leaf : constant Landin.IR.Field_Shape :=
-                             Landin.IR.Nth_Variant_Case_Field
-                               (Of_Unit, Shape, Selected, Payload);
-                           Payload_Image : constant
-                             Landin.IR.Aggregate_Field_Image :=
-                               Landin.IR.Variant_Payload_Image_Of
-                                 (Of_Unit, Item, Field, Payload);
-                           At_Payload : constant
-                             Landin.Targets.Byte_Count :=
-                               Landin.Backend.Variant_Payload_Field_Offset
-                                 (Of_Unit, Shape, Selected, Payload, Facts);
-                           Payload_Size : Landin.Targets.Byte_Count;
-                           Payload_Alignment :
-                             Landin.Targets.Byte_Alignment;
-                        begin
-                           Landin.Backend.Field_Extent
-                             (Of_Unit, Leaf, Facts, Payload_Size,
-                              Payload_Alignment);
-                           pragma Unreferenced (Payload_Alignment);
-
-                           if At_Payload > In_Field then
-                              Emit
-                                (".zero "
-                                 & Trimmed
-                                     (Landin.Targets.Byte_Count'Image
-                                        (At_Payload - In_Field)));
-                           end if;
-
-                           if Leaf.Kind =
-                                Landin.IR.Scalar_Field_Shape
-                           then
-                              Emit
-                                (Directive
-                                   (Size_Of (Leaf.Element, Facts))
-                                 & " "
-                                 & (if Payload_Image.Target /=
-                                         Landin.IR.No_Item
-                                    then Symbol (Payload_Image.Target)
-                                    else Trimmed
-                                      (Landin.Types.Folded'Image
-                                         (Payload_Image.Value))));
-                           elsif Payload_Image.Form = Landin.IR.Finite then
-                              for Position in 1 .. Payload_Image.Count loop
-                                 Emit
-                                   (Directive
-                                      (Size_Of (Leaf.Element, Facts))
-                                    & " "
-                                    & Trimmed
-                                        (Landin.Types.Folded'Image
-                                           (Landin.IR
-                                              .Nth_Variant_Field_Element
-                                                (Of_Unit, Item, Field,
-                                                 Payload,
-                                                 Landin.IR.Part_Position
-                                                   (Position)))));
-                              end loop;
-                           elsif Payload_Image.Form
-                                   in Landin.IR.Repeated | Landin.IR.Hybrid
-                           then
-                              if Payload_Image.Form = Landin.IR.Hybrid then
-                                 for Position in
-                                   1 .. Payload_Image.Count
-                                 loop
-                                    Emit
-                                      (Directive
-                                         (Size_Of (Leaf.Element, Facts))
-                                       & " "
-                                       & Trimmed
-                                           (Landin.Types.Folded'Image
-                                              (Landin.IR
-                                                 .Nth_Variant_Field_Element
-                                                   (Of_Unit, Item, Field,
-                                                    Payload,
-                                                    Landin.IR.Part_Position
-                                                      (Position)))));
-                                 end loop;
-                              end if;
-                              Emit
-                                (".rept "
-                                 & Trimmed
-                                     (Landin.IR.Element_Total'Image
-                                        (Leaf.Length
-                                         - Landin.IR.Element_Total
-                                             (Payload_Image.Count))));
-                              Emit
-                                (Directive (Size_Of (Leaf.Element, Facts))
-                                 & " "
-                                 & Trimmed
-                                     (Landin.Types.Folded'Image
-                                        (Payload_Image.Value)));
-                              Emit (".endr");
-                           elsif Payload_Image.Form = Landin.IR.Absent then
-                              if Payload_Size > 0 then
-                                 Emit
-                                   (".zero "
-                                    & Trimmed
-                                        (Landin.Targets.Byte_Count'Image
-                                           (Payload_Size)));
-                              end if;
-                           else
-                              raise Landin.Compiler_Defect with
-                                "a nested selected variant image reached"
-                                & " x86-64";
-                           end if;
-
-                           In_Field := At_Payload + Payload_Size;
-                        end;
-                     end loop;
-
-                     if Field_Size > In_Field then
-                        Emit
-                          (".zero "
-                           & Trimmed
-                               (Landin.Targets.Byte_Count'Image
-                                  (Field_Size - In_Field)));
-                     end if;
-                  end;
-               elsif Shape.Kind = Landin.IR.Variant_Field_Shape
-                 and then Image.Form = Landin.IR.Absent
-               then
-                  if Field_Size > 0 then
-                     Emit
-                       (".zero "
-                        & Trimmed
-                            (Landin.Targets.Byte_Count'Image (Field_Size)));
-                  end if;
-               elsif Shape.Kind = Landin.IR.Scalar_Field_Shape then
-                  Emit
-                    (Directive (Size_Of (Shape.Element, Facts)) & " "
-                     & (if Image.Target /= Landin.IR.No_Item
-                        then Symbol (Image.Target)
-                        else Trimmed
-                          (Landin.Types.Folded'Image
-                             (Landin.IR.Nth_Field_Image
-                                (Of_Unit, Item, Field)))));
-               elsif Image.Slice then
-                  declare
-                     Element_Size : Landin.Targets.Byte_Count;
-                     Element_Alignment : Landin.Targets.Byte_Alignment;
-                  begin
-                     Landin.Backend.Field_Extent
-                       (Of_Unit, Image.Slice_Element, Facts,
-                        Element_Size, Element_Alignment);
-                     declare
-                        Offset : constant Landin.Targets.Byte_Count :=
-                          Landin.Targets.Byte_Count (Image.Slice_First)
-                          * Element_Size;
-                        Base : constant String :=
-                          (if Image.Target = Landin.IR.No_Item
-                           then Trimmed
-                             (Landin.Targets.Byte_Alignment'Image
-                                (Element_Alignment))
-                           else Symbol (Image.Target)
-                             & (if Offset = 0 then ""
-                                else " + " & Trimmed
-                                  (Landin.Targets.Byte_Count'Image (Offset))));
-                     begin
-                        Emit (".quad " & Base);
-                        Emit
-                          (".quad "
-                           & Trimmed
-                               (Landin.Types.Folded'Image (Image.Value)));
-                     end;
-                  end;
-               elsif Image.Form = Landin.IR.Finite then
-                  for Position in 1 .. Image.Count loop
-                     Emit
-                       (Directive (Size_Of (Shape.Element, Facts)) & " "
-                        & Trimmed
-                            (Landin.Types.Folded'Image
-                               (Landin.IR.Nth_Field_Element
-                                  (Of_Unit, Item, Field,
-                                   Landin.IR.Part_Position (Position)))));
-                  end loop;
-               elsif Image.Form in Landin.IR.Repeated | Landin.IR.Hybrid
-               then
-                  if Image.Form = Landin.IR.Hybrid then
-                     for Position in 1 .. Image.Count loop
-                        Emit
-                          (Directive (Size_Of (Shape.Element, Facts)) & " "
-                           & Trimmed
-                               (Landin.Types.Folded'Image
-                                  (Landin.IR.Nth_Field_Element
-                                     (Of_Unit, Item, Field,
-                                      Landin.IR.Part_Position (Position)))));
-                     end loop;
-                  end if;
-                  Emit
-                    (".rept "
-                     & Trimmed
-                         (Landin.IR.Element_Total'Image
-                            (Shape.Length
-                             - Landin.IR.Element_Total (Image.Count))));
-                  Emit
-                    (Directive (Size_Of (Shape.Element, Facts)) & " "
-                     & Trimmed
-                         (Landin.Types.Folded'Image (Image.Value)));
-                  Emit (".endr");
-               elsif Image.Form = Landin.IR.Absent then
-                  if Field_Size > 0 then
-                     Emit
-                       (".zero "
-                        & Trimmed
-                            (Landin.Targets.Byte_Count'Image (Field_Size)));
-                  end if;
-               else
-                  raise Landin.Compiler_Defect with
-                    "an aggregate array-field image form reached x86-64"
-                    & " before its backend rule";
-               end if;
-
-               Written := At_Field + Field_Size;
-            end;
-         end loop;
-
-         if Landin.Targets.Size_Of (Placed) > Written then
-            Emit
-              (".zero "
-               & Trimmed
-                   (Landin.Targets.Byte_Count'Image
-                      (Landin.Targets.Size_Of (Placed) - Written)));
-         end if;
-
-         Put (Character'Val (9) & ".size " & Symbol (Item) & ", "
-              & Trimmed
-                  (Landin.Targets.Byte_Count'Image
-                     (Landin.Targets.Size_Of (Placed))));
-      end Emit_Aggregate_Image_Datum;
+            & Trimmed (Landin.Targets.Byte_Count'Image (Size)));
+      end Emit_Recursive_Image_Datum;
 
       --  Whether a module value has an absent zero image, and so is storage
       --  to reserve rather than bytes to carry.  D66 gives an aggregate its
@@ -4943,75 +5359,86 @@ package body Landin.Backend.X86_64 is
       procedure Emit_Array_Image_Datum (Item : Landin.IR.Item_Id);
 
       procedure Emit_Array_Image_Datum (Item : Landin.IR.Item_Id) is
-         Length : constant Landin.IR.Element_Total :=
-           Landin.IR.Array_Length (Of_Unit, Item);
-         Element : constant Landin.Types.Scalar_Name :=
-           Landin.IR.Array_Element (Of_Unit, Item);
-         Held : constant Held_Size := Size_Of (Element, Facts);
-         Bytes : constant String :=
-           Trimmed
-             (Landin.Targets.Byte_Count'Image
-                (Landin.Targets.Byte_Count (Length)
-                 * Landin.Targets.Byte_Count (Landin.Targets.Bytes (Held))));
       begin
-         if Is_Public_Item (Item) then
-            Put (Character'Val (9) & ".globl " & Symbol (Item));
+         if Landin.IR.Has_Recursive_Array_Image (Of_Unit, Item) then
+            Emit_Recursive_Image_Datum (Item);
+            return;
          end if;
 
-         Put (Character'Val (9) & ".type " & Symbol (Item) & ", @object");
-         Put (Character'Val (9) & ".align "
-              & Trimmed
-                  (Landin.Targets.Byte_Alignment'Image
-                     (Landin.Targets.Alignment_Of (Facts, Held))));
-         Put (Symbol (Item) & ":");
+         --  Do not even ask for a scalar width until recursive roots have
+         --  been excluded: their immediate element need not be scalar.
+         declare
+            Length : constant Landin.IR.Element_Total :=
+              Landin.IR.Array_Length (Of_Unit, Item);
+            Element : constant Landin.Types.Scalar_Name :=
+              Landin.IR.Array_Element (Of_Unit, Item);
+            Held : constant Held_Size := Size_Of (Element, Facts);
+            Bytes : constant String :=
+              Trimmed
+                (Landin.Targets.Byte_Count'Image
+                   (Landin.Targets.Byte_Count (Length)
+                    * Landin.Targets.Byte_Count
+                        (Landin.Targets.Bytes (Held))));
+         begin
+            if Is_Public_Item (Item) then
+               Put (Character'Val (9) & ".globl " & Symbol (Item));
+            end if;
 
-         if Landin.IR.Is_Repeated_Image (Of_Unit, Item) then
-            --  D34 uses `.rept` around one width-specific scalar directive.
-            --  D38 writes its finite prefix first, then repeats one suffix
-            --  value for N - k positions.  Assembly size therefore depends on
-            --  the written prefix, never the target-sized extent; `.quad`
-            --  preserves all eight bytes unlike GNU `.fill`.
-            declare
-               Prefix : constant Landin.IR.Element_Total :=
-                 Landin.IR.Image_Prefix_Length (Of_Unit, Item);
-            begin
-               if Prefix > 0 then
-                  for Position in Landin.IR.Part_Position'(1)
-                                  .. Landin.IR.Part_Position (Prefix)
-                  loop
-                     Emit
-                       (Directive (Held) & " "
-                        & Trimmed
-                            (Landin.Types.Folded'Image
-                               (Landin.IR.Nth_Image
-                                  (Of_Unit, Item, Position))));
-                  end loop;
-               end if;
-               Emit
-                 (".rept "
-                  & Trimmed
-                      (Landin.IR.Element_Total'Image (Length - Prefix)));
-               Emit
-                 (Directive (Held) & " "
-                  & Trimmed
-                      (Landin.Types.Folded'Image
-                         (Landin.IR.Repeated_Image_Value (Of_Unit, Item))));
-               Emit (".endr");
-            end;
-         else
-            for Position in Landin.IR.Part_Position'(1)
-                            .. Landin.IR.Part_Position (Length)
-            loop
-               Emit
-                 (Directive (Held) & " "
-                  & Trimmed
-                      (Landin.Types.Folded'Image
-                         (Landin.IR.Nth_Image
-                            (Of_Unit, Item, Position))));
-            end loop;
-         end if;
+            Put (Character'Val (9) & ".type " & Symbol (Item) & ", @object");
+            Put (Character'Val (9) & ".align "
+                 & Trimmed
+                     (Landin.Targets.Byte_Alignment'Image
+                        (Landin.Targets.Alignment_Of (Facts, Held))));
+            Put (Symbol (Item) & ":");
 
-         Put (Character'Val (9) & ".size " & Symbol (Item) & ", " & Bytes);
+            if Landin.IR.Is_Repeated_Image (Of_Unit, Item) then
+               --  D34 uses `.rept` around one width-specific scalar directive.
+               --  D38 writes its finite prefix first, then repeats one suffix
+               --  value for N - k positions.  Assembly size depends on
+               --  the written prefix, never the target-sized extent; `.quad`
+               --  preserves all eight bytes unlike GNU `.fill`.
+               declare
+                  Prefix : constant Landin.IR.Element_Total :=
+                    Landin.IR.Image_Prefix_Length (Of_Unit, Item);
+               begin
+                  if Prefix > 0 then
+                     for Position in Landin.IR.Part_Position'(1)
+                                     .. Landin.IR.Part_Position (Prefix)
+                     loop
+                        Emit
+                          (Directive (Held) & " "
+                           & Trimmed
+                               (Landin.Types.Folded'Image
+                                  (Landin.IR.Nth_Image
+                                     (Of_Unit, Item, Position))));
+                     end loop;
+                  end if;
+                  Emit
+                    (".rept "
+                     & Trimmed
+                         (Landin.IR.Element_Total'Image (Length - Prefix)));
+                  Emit
+                    (Directive (Held) & " "
+                     & Trimmed
+                         (Landin.Types.Folded'Image
+                            (Landin.IR.Repeated_Image_Value (Of_Unit, Item))));
+                  Emit (".endr");
+               end;
+            else
+               for Position in Landin.IR.Part_Position'(1)
+                               .. Landin.IR.Part_Position (Length)
+               loop
+                  Emit
+                    (Directive (Held) & " "
+                     & Trimmed
+                         (Landin.Types.Folded'Image
+                            (Landin.IR.Nth_Image
+                               (Of_Unit, Item, Position))));
+               end loop;
+            end if;
+
+            Put (Character'Val (9) & ".size " & Symbol (Item) & ", " & Bytes);
+         end;
       end Emit_Array_Image_Datum;
 
       procedure Emit_Slice_Image_Datum (Item : Landin.IR.Item_Id) is
@@ -5092,6 +5519,31 @@ package body Landin.Backend.X86_64 is
       Any_Read_Only : Boolean := False;
 
    begin
+      --  A C-owned main can drive Landin exports without asking refine to
+      --  synthesize a hosted entry.  Those exports still need the library's
+      --  fixed runtime bridges.  Discover them before choosing private names,
+      --  so a Landin `read` cannot capture a shim's libc dependency.
+      for Index in 1 .. Landin.IR.Item_Count (Of_Unit) loop
+         declare
+            Item : constant Landin.IR.Item_Id := Landin.IR.Item_Id (Index);
+         begin
+            if Landin.IR.Is_External (Of_Unit, Item) then
+               declare
+                  Name : constant String := Source_Symbol (Item);
+                  Prefix : constant String := "_landin_host_";
+               begin
+                  if Name'Length >= Prefix'Length
+                    and then Name
+                      (Name'First .. Name'First + Prefix'Length - 1) = Prefix
+                  then
+                     Host_Bridge_Needed := True;
+                  end if;
+               end;
+            end if;
+         end;
+      end loop;
+      Validate_Linkage;
+      Allocate_Symbols;
       Put (Character'Val (9) & ".text");
 
       for Right in 2 .. Landin.IR.Item_Count (Of_Unit) loop
@@ -5223,7 +5675,7 @@ package body Landin.Backend.X86_64 is
                   if Landin.IR.Result_Of (Of_Unit, Item)
                      = Landin.Types.Aggregate
                   then
-                     Emit_Aggregate_Image_Datum (Item);
+                     Emit_Recursive_Image_Datum (Item);
                   elsif Landin.IR.Has_Slice_Image (Of_Unit, Item) then
                      Emit_Slice_Image_Datum (Item);
                   elsif Landin.IR.Result_Of (Of_Unit, Item)
@@ -5277,16 +5729,53 @@ package body Landin.Backend.X86_64 is
          end loop;
       end if;
 
-      if Hosted_Entry /= Landin.IR.No_Item then
+      if Host_Bridge_Needed then
          Put (Character'Val (9) & ".text");
+         --  Compiler-owned C ABI: void _landin_host_initialize_arguments
+         --  (int argc, char **argv).  Startup supplies the real C vector and
+         --  retains its backing for every world derived from it.  Initialize
+         --  before publishing capabilities or starting threads.  Identical
+         --  repeated calls are harmless; replacing a live root is a trap.
+         --  The nonzero argv cell is also the initialized-state guard: zero
+         --  is private absence, never a published Landin pointer or fake argv.
+         Put (Character'Val (9)
+              & ".globl _landin_host_initialize_arguments");
+         Put (Character'Val (9)
+              & ".hidden _landin_host_initialize_arguments");
+         Put (Character'Val (9)
+              & ".type _landin_host_initialize_arguments, @function");
+         Put ("_landin_host_initialize_arguments:");
+         Emit ("cmpq $0, " & Local_Prefix & "landin_host_argv(%rip)");
+         Emit ("jne " & Local_Prefix & "landin_host_arguments_initialized");
+         Emit ("testl %edi, %edi");
+         Emit ("js " & Local_Prefix & "landin_host_arguments_invalid");
+         Emit ("testq %rsi, %rsi");
+         Emit ("jz " & Local_Prefix & "landin_host_arguments_invalid");
+         Emit ("movl %edi, " & Local_Prefix & "landin_host_argc(%rip)");
+         Emit ("movq %rsi, " & Local_Prefix & "landin_host_argv(%rip)");
+         Emit ("ret");
+         Put (Local_Prefix & "landin_host_arguments_initialized:");
+         Emit ("cmpl %edi, " & Local_Prefix & "landin_host_argc(%rip)");
+         Emit ("jne " & Local_Prefix & "landin_host_arguments_invalid");
+         Emit ("cmpq %rsi, " & Local_Prefix & "landin_host_argv(%rip)");
+         Emit ("jne " & Local_Prefix & "landin_host_arguments_invalid");
+         Emit ("ret");
+         Put (Local_Prefix & "landin_host_arguments_invalid:");
+         Emit ("ud2");
+         Put (Character'Val (9)
+              & ".size _landin_host_initialize_arguments, "
+              & ".-_landin_host_initialize_arguments");
+
          Put (Character'Val (9)
               & ".type _landin_host_argument_count, @function");
          Put ("_landin_host_argument_count:");
-         Emit ("movl .Llandin_host_argc(%rip), %eax");
+         Emit ("cmpq $0, " & Local_Prefix & "landin_host_argv(%rip)");
+         Emit ("je " & Local_Prefix & "landin_host_arguments_invalid");
+         Emit ("movl " & Local_Prefix & "landin_host_argc(%rip), %eax");
          Emit ("subl $1, %eax");
-         Emit ("jns .Llandin_host_count_ready");
+         Emit ("jns " & Local_Prefix & "landin_host_count_ready");
          Emit ("xorl %eax, %eax");
-         Put (".Llandin_host_count_ready:");
+         Put (Local_Prefix & "landin_host_count_ready:");
          Emit ("ret");
          Put (Character'Val (9)
               & ".size _landin_host_argument_count, "
@@ -5299,7 +5788,9 @@ package body Landin.Backend.X86_64 is
          Put (Character'Val (9)
               & ".type _landin_host_argument_table, @function");
          Put ("_landin_host_argument_table:");
-         Emit ("movq .Llandin_host_argv(%rip), %rax");
+         Emit ("movq " & Local_Prefix & "landin_host_argv(%rip), %rax");
+         Emit ("testq %rax, %rax");
+         Emit ("jz " & Local_Prefix & "landin_host_arguments_invalid");
          Emit ("addq $8, %rax");
          Emit ("ret");
          Put (Character'Val (9)
@@ -5309,8 +5800,17 @@ package body Landin.Backend.X86_64 is
          Put (Character'Val (9)
               & ".type _landin_host_argument_at, @function");
          Put ("_landin_host_argument_at:");
-         Emit ("movq .Llandin_host_argv(%rip), %rax");
+         Emit ("cmpq $0, " & Local_Prefix & "landin_host_argv(%rip)");
+         Emit ("je " & Local_Prefix & "landin_host_arguments_invalid");
+         Emit ("movl " & Local_Prefix & "landin_host_argc(%rip), %eax");
+         Emit ("subl $1, %eax");
+         Emit ("jle " & Local_Prefix & "landin_host_arguments_invalid");
+         Emit ("cmpq %rax, %rdi");
+         Emit ("jae " & Local_Prefix & "landin_host_arguments_invalid");
+         Emit ("movq " & Local_Prefix & "landin_host_argv(%rip), %rax");
          Emit ("movq 8(%rax,%rdi,8), %rax");
+         Emit ("testq %rax, %rax");
+         Emit ("jz " & Local_Prefix & "landin_host_arguments_invalid");
          Emit ("ret");
          Put (Character'Val (9)
               & ".size _landin_host_argument_at, "
@@ -5397,23 +5897,23 @@ package body Landin.Backend.X86_64 is
               & ".type _landin_host_heap_allocate, @function");
          Put ("_landin_host_heap_allocate:");
          Emit ("cmpq $1, %rsi");
-         Emit ("ja .Llandin_host_heap_alignment_ready");
+         Emit ("ja " & Local_Prefix & "landin_host_heap_alignment_ready");
          Emit ("movl $1, %esi");
-         Put (".Llandin_host_heap_alignment_ready:");
+         Put (Local_Prefix & "landin_host_heap_alignment_ready:");
          Emit ("movq %rsi, %rax");
          Emit ("subq $1, %rax");
          Emit ("addq $8, %rax");
-         Emit ("jc .Llandin_host_heap_failed");
+         Emit ("jc " & Local_Prefix & "landin_host_heap_failed");
          Emit ("addq %rdi, %rax");
-         Emit ("jc .Llandin_host_heap_failed");
+         Emit ("jc " & Local_Prefix & "landin_host_heap_failed");
          Emit ("testq %rax, %rax");
-         Emit ("js .Llandin_host_heap_failed");
+         Emit ("js " & Local_Prefix & "landin_host_heap_failed");
          Emit ("subq $24, %rsp");
          Emit ("movq %rsi, (%rsp)");
          Emit ("movq %rax, %rdi");
          Emit ("call malloc");
          Emit ("testq %rax, %rax");
-         Emit ("jz .Llandin_host_heap_malloc_failed");
+         Emit ("jz " & Local_Prefix & "landin_host_heap_malloc_failed");
          Emit ("movq %rax, 8(%rsp)");
          Emit ("addq $8, %rax");
          Emit ("xorl %edx, %edx");
@@ -5421,18 +5921,18 @@ package body Landin.Backend.X86_64 is
          Emit ("movq 8(%rsp), %rax");
          Emit ("addq $8, %rax");
          Emit ("testq %rdx, %rdx");
-         Emit ("jz .Llandin_host_heap_aligned");
+         Emit ("jz " & Local_Prefix & "landin_host_heap_aligned");
          Emit ("movq (%rsp), %rcx");
          Emit ("subq %rdx, %rcx");
          Emit ("addq %rcx, %rax");
-         Put (".Llandin_host_heap_aligned:");
+         Put (Local_Prefix & "landin_host_heap_aligned:");
          Emit ("movq 8(%rsp), %rcx");
          Emit ("movq %rcx, -8(%rax)");
          Emit ("addq $24, %rsp");
          Emit ("ret");
-         Put (".Llandin_host_heap_malloc_failed:");
+         Put (Local_Prefix & "landin_host_heap_malloc_failed:");
          Emit ("addq $24, %rsp");
-         Put (".Llandin_host_heap_failed:");
+         Put (Local_Prefix & "landin_host_heap_failed:");
          Emit ("xorl %eax, %eax");
          Emit ("ret");
          Put (Character'Val (9)
@@ -5447,17 +5947,19 @@ package body Landin.Backend.X86_64 is
          Put (Character'Val (9)
               & ".size _landin_host_heap_release, "
               & ".-_landin_host_heap_release");
+      end if;
 
+      if Host_Bridge_Needed then
          --  Keep the two entry cells in the small initialized data section.
          --  A program may own a multi-gigabyte zero-image datum in .bss;
          --  placing these cells after that section would put RIP-relative
          --  entry accesses outside x86-64's signed displacement.
          Put (Character'Val (9) & ".data");
          Put (Character'Val (9) & ".balign 8");
-         Put (".Llandin_host_argv:");
+         Put (Local_Prefix & "landin_host_argv:");
          Emit (".zero 8");
          Put (Character'Val (9) & ".balign 4");
-         Put (".Llandin_host_argc:");
+         Put (Local_Prefix & "landin_host_argc:");
          Emit (".zero 4");
       end if;
 

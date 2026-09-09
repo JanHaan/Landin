@@ -1,0 +1,74 @@
+missing: atom
+
+choice: type = struct
+    kind: variant
+        absent |
+        present: (count: i32, values: [2]i32)
+    end kind
+end choice
+
+envelope: type = struct
+    before: u64
+    child: choice
+    after: u64
+end envelope
+
+select_subject: (inout calls: i32) -> (index: usize) =
+    inc calls
+    index = 1
+end select_subject
+
+select_element: (inout calls: i32) -> (index: usize) =
+    index = usize(calls)
+    inc calls
+end select_element
+
+mutate: (source: []mut envelope, inout subjects: i32, inout elements: i32)
+        -> (result: ptr mut i32 from source) ! missing =
+    match source[select_subject(subjects)].child.kind
+        absent: fail missing
+        present(inout count, inout values): begin
+            inc values[select_element(elements)]
+            dec values[select_element(elements)]
+            inc count
+            result = addr count
+        end
+    end match
+end mutate
+
+public main: () -> (code: i32) =
+    code = 1
+    mut rows: [2]envelope = zeroed
+    rows[0].before = 77
+    rows[0].after = 79
+    rows[1].before = 91
+    rows[1].after = 93
+    rows[1].child.kind = present(count: 7, values: [11, 13])
+    mut subjects: i32 = 0
+    mut elements: i32 = 0
+    begin
+        reached := mutate(rows[0..<2], subjects, elements) else (problem)
+            _ = problem
+            return
+        end
+        reached.val = reached.val + 1
+    end
+    mut untouched: bool = false
+    match rows[0].child.kind
+        absent: untouched = true
+        present(count, values): begin
+            _ = count
+            _ = values[0]
+        end
+    end match
+    mut changed: bool = false
+    match rows[1].child.kind
+        absent: changed = false
+        present(count, values):
+            changed = count == 9 and values[0] == 12 and values[1] == 12
+    end match
+    code = if untouched and changed and subjects == 1 and elements == 2
+      and rows[0].before == 77 and rows[0].after == 79
+      and rows[1].before == 91 and rows[1].after == 93
+    then 42 else 1 end if
+end main

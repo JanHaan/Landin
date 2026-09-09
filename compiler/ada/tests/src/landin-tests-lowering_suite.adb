@@ -11,17 +11,22 @@
 --  lets a lowering violate it: Emit_Jump has no precondition against a
 --  mid-block terminator, on purpose, so that it can be tested.
 
+with Ada.Containers.Vectors;
 with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 
 with Landin.Checking;
+with Landin.Configuration;
 with Landin.IR;
 with Landin.IR.Dump;
 with Landin.IR.Verifier;
+with Landin.Modules;
 with Landin.Platform;
 with Landin.Platform.Native;
 with Landin.Testing.Fixtures;
+with Landin.Resolution;
 with Landin.Source;
+with Landin.Source.Names;
 with Landin.Syntax;
 with Landin.Syntax.Forest;
 with Landin.Stages.Checking;
@@ -36,6 +41,7 @@ package body Landin.Tests.Lowering_Suite is
 
    package IR renames Landin.IR;
 
+   use type IR.Aggregate_Field_Image;
    use type IR.Field_Shape;
    use type IR.Field_Shape_Kind;
    use type IR.Field_Image_Form;
@@ -46,6 +52,8 @@ package body Landin.Tests.Lowering_Suite is
    use type IR.Item_Id;
    use type IR.Item_Kind;
    use type IR.Nominal_Type_Id;
+   use type Landin.Modules.Module_Id;
+   use type Landin.Platform.List_Status;
    use type Landin.Platform.Read_Status;
    use type Landin.Platform.Write_Status;
    use type Landin.Testing.Fixtures.Fixture_Class;
@@ -67,6 +75,38 @@ package body Landin.Tests.Lowering_Suite is
      is (if Child = 0 then IR.No_Path_Steps
          else [1 => (Field      => IR.Part_Position (Child),
                      Case_Index => 0)]);
+
+   function Below
+     (Parent : Positive; Child : Positive) return IR.Path_Step_Array
+     is [1 => (Field      => IR.Part_Position (Parent),
+               Case_Index => 0),
+         2 => (Field      => IR.Part_Position (Child),
+               Case_Index => 0)];
+
+   function In_Case
+     (Which : Positive; Child : Positive) return IR.Path_Step_Array
+     is [1 => (Field      => IR.Part_Position (Child),
+               Case_Index => Which)];
+
+   function In_Case
+     (Which   : Positive;
+      Child   : Positive;
+      Element : Positive) return IR.Path_Step_Array
+     is [1 => (Field      => IR.Part_Position (Child),
+               Case_Index => Which),
+         2 => (Field      => IR.Part_Position (Element),
+               Case_Index => 0)];
+
+   --  A Number value keeps its magnitude and unary-minus marker in separate
+   --  IR fields; assertions compare the complete signed folded value.
+   function Folded_Number_Of
+     (Of_Unit : IR.Unit; Item : IR.Item_Id; Value : IR.Value_Id)
+      return Landin.Types.Folded
+   is (if IR.Is_Negated (Of_Unit, Item, Value)
+       then -Landin.Types.Folded
+              (IR.Number_Of (Of_Unit, Item, Value))
+       else Landin.Types.Folded
+              (IR.Number_Of (Of_Unit, Item, Value)));
 
    Frontend : aliased Landin.Stages.Syntax.Instance;
    Names    : aliased Landin.Stages.Resolution.Instance;
@@ -109,6 +149,10 @@ package body Landin.Tests.Lowering_Suite is
       Landin.Stages.Append (Order, Lowerer'Access);
       Ran := Landin.Stages.Run (Order, Work);
    end Lower;
+
+   function Named_Item
+     (Work : in out Landin.Stages.Compilation; Name : String)
+      return IR.Item_Id;
 
    --  Every block of every item ends with exactly one terminator, and it
    --  is the last instruction.
@@ -2314,8 +2358,8 @@ package body Landin.Tests.Lowering_Suite is
 
    --  D70 resolves a module struct image before copying one selected
    --  fixed-array field into a typed or inferred array datum.  Every D67/D68
-   --  descriptor form becomes the corresponding ordinary array image, and a
-   --  later D21 link treats that destination like any other array datum.
+   --  descriptor form becomes the exact recursive array root, and a later D21
+   --  link clones that root and its fold run like any other array datum.
    procedure A_Module_Array_Copies_A_Struct_Field_Image
      (Item : in out Landin.Testing.Context);
 
@@ -2355,38 +2399,92 @@ package body Landin.Tests.Lowering_Suite is
          Landin.Testing.Check
            (Item,
             IR.Has_Image (Unit, 2)
+            and then IR.Result_Of (Unit, 2) = Landin.Types.Fixed_Array
+            and then IR.Array_Length (Unit, 2) = 2
+            and then IR.Array_Element (Unit, 2) = Landin.Types.U16
+            and then IR.Has_Recursive_Array_Image (Unit, 2)
+            and then IR.Image_Root_Count (Unit, 2) = 1
+            and then IR.Aggregate_Field_Image_Count (Unit, 2) = 1
             and then IR.Image_Length (Unit, 2) = 2
-            and then IR.Nth_Image (Unit, 2, 1) = 11
-            and then IR.Nth_Image (Unit, 2, 2) = 13,
-            "a finite field becomes a finite array image");
+            and then IR.Array_Image_Of (Unit, 2)
+              = (Form   => IR.Finite,
+                 Offset => 0,
+                 Count  => 2,
+                 Value  => 0,
+                 others => <>)
+            and then IR.Nth_Descriptor_Element
+              (Unit, 2, IR.Array_Image_Of (Unit, 2), 1) = 11
+            and then IR.Nth_Descriptor_Element
+              (Unit, 2, IR.Array_Image_Of (Unit, 2), 2) = 13,
+            "a finite field becomes an exact recursive array image");
          Landin.Testing.Check
            (Item,
             IR.Has_Image (Unit, 3)
-            and then IR.Is_Repeated_Image (Unit, 3)
-            and then IR.Image_Prefix_Length (Unit, 3) = 0
-            and then IR.Repeated_Image_Value (Unit, 3) = 17,
-            "a repeated field stays compact");
+            and then IR.Result_Of (Unit, 3) = Landin.Types.Fixed_Array
+            and then IR.Array_Length (Unit, 3) = 3
+            and then IR.Array_Element (Unit, 3) = Landin.Types.U8
+            and then IR.Has_Recursive_Array_Image (Unit, 3)
+            and then IR.Image_Root_Count (Unit, 3) = 1
+            and then IR.Aggregate_Field_Image_Count (Unit, 3) = 1
+            and then IR.Image_Length (Unit, 3) = 0
+            and then IR.Array_Image_Of (Unit, 3)
+              = (Form   => IR.Repeated,
+                 Offset => 0,
+                 Count  => 0,
+                 Value  => 17,
+                 others => <>),
+            "a repeated field stays compact in its exact root");
          Landin.Testing.Check
            (Item,
             IR.Has_Image (Unit, 4)
-            and then IR.Is_Repeated_Image (Unit, 4)
-            and then IR.Image_Prefix_Length (Unit, 4) = 1
-            and then IR.Nth_Image (Unit, 4, 1) = 19
-            and then IR.Repeated_Image_Value (Unit, 4) = 23,
-            "a hybrid field preserves its prefix and suffix");
+            and then IR.Result_Of (Unit, 4) = Landin.Types.Fixed_Array
+            and then IR.Array_Length (Unit, 4) = 3
+            and then IR.Array_Element (Unit, 4) = Landin.Types.U8
+            and then IR.Has_Recursive_Array_Image (Unit, 4)
+            and then IR.Image_Root_Count (Unit, 4) = 1
+            and then IR.Aggregate_Field_Image_Count (Unit, 4) = 1
+            and then IR.Image_Length (Unit, 4) = 1
+            and then IR.Array_Image_Of (Unit, 4)
+              = (Form   => IR.Hybrid,
+                 Offset => 0,
+                 Count  => 1,
+                 Value  => 23,
+                 others => <>)
+            and then IR.Nth_Descriptor_Element
+              (Unit, 4, IR.Array_Image_Of (Unit, 4), 1) = 19,
+            "a hybrid field preserves its exact prefix and suffix");
          Landin.Testing.Check
            (Item,
-            not IR.Has_Image (Unit, 5)
-            and then not IR.Has_Image (Unit, 6),
+            IR.Result_Of (Unit, 5) = Landin.Types.Fixed_Array
+            and then IR.Array_Length (Unit, 5) = 2
+            and then IR.Array_Element (Unit, 5) = Landin.Types.U8
+            and then not IR.Has_Image (Unit, 5)
+            and then not IR.Has_Recursive_Array_Image (Unit, 5)
+            and then IR.Result_Of (Unit, 6) = Landin.Types.Fixed_Array
+            and then IR.Array_Length (Unit, 6) = 2
+            and then IR.Array_Element (Unit, 6) = Landin.Types.U8
+            and then not IR.Has_Image (Unit, 6)
+            and then not IR.Has_Recursive_Array_Image (Unit, 6),
             "zero-pattern and omitted fields stay absent");
          Landin.Testing.Check
            (Item,
             IR.Has_Image (Unit, 7)
-            and then IR.Is_Repeated_Image (Unit, 7)
-            and then IR.Image_Prefix_Length (Unit, 7) = 1
-            and then IR.Nth_Image (Unit, 7, 1) = 19
-            and then IR.Repeated_Image_Value (Unit, 7) = 23,
-            "a downstream array chain copies the selected field image");
+            and then IR.Result_Of (Unit, 7) = Landin.Types.Fixed_Array
+            and then IR.Array_Length (Unit, 7) = 3
+            and then IR.Array_Element (Unit, 7) = Landin.Types.U8
+            and then IR.Has_Recursive_Array_Image (Unit, 7)
+            and then IR.Image_Root_Count (Unit, 7) = 1
+            and then IR.Aggregate_Field_Image_Count (Unit, 7) = 1
+            and then IR.Image_Length (Unit, 7) = 1
+            and then IR.Array_Image_Of (Unit, 7)
+              = (Form   => IR.Hybrid,
+                 Offset => 0,
+                 Count  => 1,
+                 Value  => 23,
+                 others => <>)
+            and then IR.Nth_Descriptor_Element
+              (Unit, 7, IR.Array_Image_Of (Unit, 7), 1) = 19,
+            "a downstream chain clones the exact selected field image");
       end;
    end A_Module_Array_Copies_A_Struct_Field_Image;
 
@@ -3248,7 +3346,7 @@ package body Landin.Tests.Lowering_Suite is
 
    --  D52 keeps D29's direct-array Store_Field run unchanged, but an
    --  element inside a selected field needs D48's two-level identity:
-   --  containing field plus zero-based element index.
+   --  containing field plus its one-based constant child position.
    procedure Array_Field_Literals_Become_Field_Qualified_Element_Stores
      (Item : in out Landin.Testing.Context);
 
@@ -3283,44 +3381,52 @@ package body Landin.Tests.Lowering_Suite is
          Routine : constant IR.Item_Id := 2;
       begin
          Landin.Testing.Check_Equal
-           (Item, IR.Value_Count (Unit, Routine), 13,
-            "four value-index-store triples precede the return");
+           (Item, IR.Value_Count (Unit, Routine), 9,
+            "four ordered value/store pairs precede the return");
 
          for Position in 1 .. 4 loop
             declare
                Element : constant IR.Value_Id :=
-                 IR.Value_Id (3 * Position - 2);
-               Index : constant IR.Value_Id := IR.Value_Id (3 * Position - 1);
-               Store : constant IR.Value_Id := IR.Value_Id (3 * Position);
-               Expected_Index : constant Landin.Types.Magnitude :=
-                 Landin.Types.Magnitude ((Position - 1) mod 2);
+                 IR.Value_Id (2 * Position - 1);
+               Store : constant IR.Value_Id := IR.Value_Id (2 * Position);
+               Expected_Value : constant Landin.Types.Folded :=
+                 (case Position is
+                     when 1 => 20, when 2 => 22,
+                     when 3 => 30, when 4 => 12);
+               Expected_Part : constant Positive := (Position - 1) mod 2 + 1;
             begin
                Landin.Testing.Check
                  (Item,
                   IR.Op_Of (Unit, Routine, Element) = IR.Number
-                  and then IR.Op_Of (Unit, Routine, Index) = IR.Number
-                  and then IR.Number_Of (Unit, Routine, Index)
-                             = Expected_Index
-                  and then IR.Op_Of (Unit, Routine, Store) = IR.Store_Element
-                  and then IR.Element_Field_Of (Unit, Routine, Store) = 2
-                  and then IR.Nth_Operand (Unit, Routine, Store, 1) = Index
-                  and then IR.Nth_Operand (Unit, Routine, Store, 2) = Element,
-                  "each expression precedes its index and element store");
+                  and then IR.Result_Of (Unit, Routine, Element)
+                             = Landin.Types.U32
+                  and then Folded_Number_Of (Unit, Routine, Element)
+                             = Expected_Value
+                  and then IR.Op_Of (Unit, Routine, Store) = IR.Store_Field
+                  and then IR.Field_Of (Unit, Routine, Store) = 2
+                  and then IR.Path_Of (Unit, Routine, Store)
+                             = Below (Expected_Part)
+                  and then IR.Operand_Count (Unit, Routine, Store) = 1
+                  and then IR.Nth_Operand (Unit, Routine, Store, 1) = Element,
+                  "each typed expression immediately precedes its path store");
 
                if Position <= 2 then
                   Landin.Testing.Check
                     (Item, not IR.Reaches_A_Slot (Unit, Routine, Store)
                            and then IR.Datum_Of (Unit, Routine, Store) = 1,
-                     "the first literal reaches the module field");
+                     "the first literal reaches the exact module root");
                else
                   Landin.Testing.Check
                     (Item, IR.Reaches_A_Slot (Unit, Routine, Store)
                            and then IR.Slot_Of (Unit, Routine, Store) = 1,
-                     "the second literal reaches the local field");
+                     "the second literal reaches the exact local root");
                end if;
             end;
          end loop;
 
+         Landin.Testing.Check
+           (Item, IR.Op_Of (Unit, Routine, 9) = IR.Leave,
+            "the return follows every literal store");
          Landin.Testing.Check
            (Item, IR.Verifier.Check (Unit).Kind = IR.Verifier.Nothing_Wrong,
             "the field-qualified literal stores verify");
@@ -3365,59 +3471,89 @@ package body Landin.Tests.Lowering_Suite is
 
       declare
          Unit : IR.Unit renames Landin.Stages.Code (Work).all;
-         Full_Fills, Suffix_Fills : Natural := 0;
-         Module_Fills, Local_Fills : Natural := 0;
-         Module_Prefixes, Local_Prefixes : Natural := 0;
+         Routine : constant IR.Item_Id := 2;
+         type Value_List is array (Positive range <>) of IR.Value_Id;
+         type Folded_List is
+           array (Positive range <>) of Landin.Types.Folded;
+         type Part_List is array (Positive range <>) of IR.Part_Position;
+         Fill_Ids : constant Value_List := [2, 8, 10, 16];
+         Fill_Values : constant Folded_List := [10, 13, 20, 23];
+         Fill_Starts : constant Part_List := [1, 3, 1, 3];
+         Prefix_Ids : constant Value_List := [4, 6, 12, 14];
+         Prefix_Values : constant Folded_List := [11, 12, 21, 22];
+         Prefix_Parts : constant Part_List := [1, 2, 1, 2];
       begin
-         for I in 1 .. IR.Item_Count (Unit) loop
+         Landin.Testing.Check_Equal
+           (Item, IR.Value_Count (Unit, Routine), 17,
+            "four bounded repetitions and their prefixes precede the return");
+
+         for Position in Fill_Ids'Range loop
             declare
-               Owner : constant IR.Item_Id := IR.Item_Id (I);
+               Fill : constant IR.Value_Id := Fill_Ids (Position);
+               Value : constant IR.Value_Id := Fill - 1;
+               Destination : constant IR.Storage :=
+                 IR.Destination_Of (Unit, Routine, Fill);
             begin
-               for V in 1 .. IR.Value_Count (Unit, Owner) loop
-                  declare
-                     Value : constant IR.Value_Id := IR.Value_Id (V);
-                     Op : constant IR.Opcode :=
-                       IR.Op_Of (Unit, Owner, Value);
-                  begin
-                     if Op = IR.Fill_Array
-                       and then IR.Element_Field_Of
-                                  (Unit, Owner, Value) = 2
-                     then
-                        if IR.First_Part_Of (Unit, Owner, Value) = 1 then
-                           Full_Fills := Full_Fills + 1;
-                        elsif IR.First_Part_Of (Unit, Owner, Value) = 3 then
-                           Suffix_Fills := Suffix_Fills + 1;
-                        end if;
-                        if IR.Destination_Of (Unit, Owner, Value).Kind
-                             = IR.Frame_Slot
-                        then
-                           Local_Fills := Local_Fills + 1;
-                        else
-                           Module_Fills := Module_Fills + 1;
-                        end if;
-                     elsif Op = IR.Store_Element
-                       and then IR.Element_Field_Of
-                                  (Unit, Owner, Value) = 2
-                     then
-                        if IR.Reaches_A_Slot (Unit, Owner, Value) then
-                           Local_Prefixes := Local_Prefixes + 1;
-                        else
-                           Module_Prefixes := Module_Prefixes + 1;
-                        end if;
-                     end if;
-                  end;
-               end loop;
+               Landin.Testing.Check
+                 (Item,
+                  IR.Op_Of (Unit, Routine, Value) = IR.Number
+                  and then IR.Result_Of (Unit, Routine, Value)
+                             = Landin.Types.U32
+                  and then Folded_Number_Of (Unit, Routine, Value)
+                             = Fill_Values (Position)
+                  and then IR.Op_Of (Unit, Routine, Fill) = IR.Fill_Array
+                  and then IR.Element_Field_Of (Unit, Routine, Fill) = 2
+                  and then IR.Path_Of (Unit, Routine, Fill)
+                             = IR.No_Path_Steps
+                  and then IR.First_Part_Of (Unit, Routine, Fill)
+                             = Fill_Starts (Position)
+                  and then IR.Operand_Count (Unit, Routine, Fill) = 1
+                  and then IR.Nth_Operand (Unit, Routine, Fill, 1) = Value,
+                  "each typed repeated value immediately precedes its fill");
+               Landin.Testing.Check
+                 (Item,
+                  (if Position <= 2
+                   then Destination.Kind = IR.Module_Datum
+                        and then Destination.Datum = 1
+                   else Destination.Kind = IR.Frame_Slot
+                        and then Destination.Slot = 1),
+                  "each fill retains its exact storage root");
+            end;
+         end loop;
+
+         for Position in Prefix_Ids'Range loop
+            declare
+               Store : constant IR.Value_Id := Prefix_Ids (Position);
+               Value : constant IR.Value_Id := Store - 1;
+            begin
+               Landin.Testing.Check
+                 (Item,
+                  IR.Op_Of (Unit, Routine, Value) = IR.Number
+                  and then IR.Result_Of (Unit, Routine, Value)
+                             = Landin.Types.U32
+                  and then Folded_Number_Of (Unit, Routine, Value)
+                             = Prefix_Values (Position)
+                  and then IR.Op_Of (Unit, Routine, Store) = IR.Store_Field
+                  and then IR.Field_Of (Unit, Routine, Store) = 2
+                  and then IR.Path_Of (Unit, Routine, Store)
+                             = Below (Positive (Prefix_Parts (Position)))
+                  and then IR.Operand_Count (Unit, Routine, Store) = 1
+                  and then IR.Nth_Operand (Unit, Routine, Store, 1) = Value,
+                  "mixed prefixes are ordered typed path stores");
+               Landin.Testing.Check
+                 (Item,
+                  (if Position <= 2
+                   then not IR.Reaches_A_Slot (Unit, Routine, Store)
+                        and then IR.Datum_Of (Unit, Routine, Store) = 1
+                   else IR.Reaches_A_Slot (Unit, Routine, Store)
+                        and then IR.Slot_Of (Unit, Routine, Store) = 1),
+                  "each prefix retains its exact storage root");
             end;
          end loop;
 
          Landin.Testing.Check
-           (Item,
-            Full_Fills = 2 and then Suffix_Fills = 2
-            and then Module_Fills = 2 and then Local_Fills = 2,
-            "each storage class has one full and one suffix fill");
-         Landin.Testing.Check
-           (Item, Module_Prefixes = 2 and then Local_Prefixes = 2,
-            "each mixed prefix uses two field-qualified element stores");
+           (Item, IR.Op_Of (Unit, Routine, 17) = IR.Leave,
+            "the return follows every repetition write");
          Landin.Testing.Check
            (Item, IR.Verifier.Check (Unit).Kind = IR.Verifier.Nothing_Wrong,
             "the field-qualified repetition operations verify");
@@ -3848,6 +3984,98 @@ package body Landin.Tests.Lowering_Suite is
       end;
    end A_Struct_Measurement_Carries_A_Compact_Array_Field;
 
+   --  D121 applies inside a measurement too: the repeated element is the
+   --  named aggregate shape, not only the array record's scalar fallback.
+   procedure An_Array_Of_Struct_Measurement_Keeps_Its_Nominal
+     (Item : in out Landin.Testing.Context);
+
+   procedure An_Array_Of_Struct_Measurement_Keeps_Its_Nominal
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "inner: type = layout(c) struct" & LF
+         & "    value: i32" & LF
+         & "end inner" & LF
+         & "outer: type = layout(c) struct" & LF
+         & "    prefix: i32" & LF
+         & "    rows: [3]inner" & LF
+         & "end outer" & LF
+         & "size: usize = sizeof outer" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "an array-of-struct declaration can be measured");
+      if Landin.Stages.Failed (Work) then
+         return;
+      end if;
+
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         Inner : constant IR.Nominal_Type_Id :=
+           IR.Nth_Nominal_Type (Unit, 1);
+         Outer : constant IR.Nominal_Type_Id :=
+           IR.Nth_Nominal_Type (Unit, 2);
+         Rows : constant IR.Field_Shape :=
+           IR.Nth_Measurement_Field (Unit, 1, 1, 2);
+      begin
+         Landin.Testing.Check
+           (Item,
+            IR.Nominal_Type_Count (Unit) = 2
+              and then IR.Has_C_Layout (Unit, Inner)
+              and then IR.Has_C_Layout (Unit, Outer),
+            "both source structs retain their C layout identities");
+         Landin.Testing.Check
+           (Item,
+            IR.Is_Aggregate_Measurement (Unit, 1, 1)
+              and then IR.Measurement_Field_Count (Unit, 1, 1) = 2
+              and then Rows.Kind = IR.Array_Field_Shape
+              and then Rows.Length = 3
+              and then Rows.Nominal = Inner
+              and then IR.Array_Element_Is_Aggregate (Unit, Rows),
+            "the measured array retains its nominal aggregate element");
+
+         if Rows.Kind = IR.Array_Field_Shape then
+            declare
+               Element : constant IR.Field_Shape :=
+                 IR.Array_Element_Shape (Unit, Rows);
+            begin
+               Landin.Testing.Check
+                 (Item,
+                  Element.Kind = IR.Aggregate_Field_Shape
+                    and then Element.Nominal = Inner
+                    and then IR.Aggregate_Field_Run_Is_Valid (Unit, Element)
+                    and then IR.Aggregate_Field_Count (Unit, Element) = 1,
+                  "the element names the complete inner field run");
+               if Element.Kind = IR.Aggregate_Field_Shape
+                 and then IR.Aggregate_Field_Run_Is_Valid (Unit, Element)
+               then
+                  declare
+                     Value : constant IR.Field_Shape :=
+                       IR.Nth_Aggregate_Field (Unit, Element, 1);
+                  begin
+                     Landin.Testing.Check
+                       (Item,
+                        Value.Kind = IR.Scalar_Field_Shape
+                          and then Value.Element = Landin.Types.I32,
+                        "the recursive element run retains its actual field");
+                  end;
+               end if;
+            end;
+         end if;
+
+         Landin.Testing.Check
+           (Item, IR.Verifier.Check (Unit).Kind = IR.Verifier.Nothing_Wrong,
+            "the verifier accepts the nominal array measurement");
+      end;
+   end An_Array_Of_Struct_Measurement_Keeps_Its_Nominal;
+
    --  D74 first carries the unfolded tag and each case's compact payload
    --  shapes on aggregate measurements; D75 reuses that carrier for storage.
    procedure A_Struct_Measurement_Carries_Variant_Cases
@@ -4264,6 +4492,8 @@ package body Landin.Tests.Lowering_Suite is
    procedure Nested_Array_Values_Carry_Both_Identities
      (Item : in out Landin.Testing.Context)
    is
+      use type IR.Storage_Kind;
+
       Work : Landin.Stages.Compilation :=
         Landin.Stages.Create (Landin.Targets.Linux_X86_64);
       Ran : Natural;
@@ -4295,44 +4525,80 @@ package body Landin.Tests.Lowering_Suite is
 
       declare
          Unit : IR.Unit renames Landin.Stages.Code (Work).all;
-         Stores, Copies, Fills, Clears : Natural := 0;
+         type Value_List is array (Positive range <>) of IR.Value_Id;
+         type Folded_List is
+           array (Positive range <>) of Landin.Types.Folded;
+         Store_Ids : constant Value_List := [2, 4, 6];
+         Stored_Values : constant Folded_List := [1, 2, 3];
+         Copy : constant IR.Value_Id := 7;
+         Repeated : constant IR.Value_Id := 8;
+         Fill : constant IR.Value_Id := 9;
+         Clear : constant IR.Value_Id := 10;
       begin
-         for Position in 1 .. IR.Value_Count (Unit, 3) loop
+         Landin.Testing.Check_Equal
+           (Item, IR.Value_Count (Unit, 3), 11,
+            "literal, copy, fill and clear retain source order");
+         for Position in Store_Ids'Range loop
             declare
-               Value : constant IR.Value_Id := IR.Value_Id (Position);
-               Op : constant IR.Opcode := IR.Op_Of (Unit, 3, Value);
+               Store : constant IR.Value_Id := Store_Ids (Position);
+               Value : constant IR.Value_Id := Store - 1;
             begin
-               if Op in IR.Store_Element | IR.Copy_Array
-                        | IR.Fill_Array | IR.Clear_Array
-                 and then IR.Path_Depth_Of (Unit, 3, Value) > 0
-               then
-                  Landin.Testing.Check
-                    (Item,
-                     IR.Element_Field_Of (Unit, 3, Value) = 2
-                       and then IR.Path_Of (Unit, 3, Value) = Below (2),
-                     "the destination keeps its parent and child fields");
-                  case Op is
-                     when IR.Store_Element => Stores := Stores + 1;
-                     when IR.Copy_Array =>
-                        Copies := Copies + 1;
-                        Landin.Testing.Check
-                          (Item,
-                           IR.Source_Field_Of (Unit, 3, Value) = 2
-                           and then IR.Source_Path_Of (Unit, 3, Value)
-                                      = Below (2),
-                           "the copy source keeps both field identities");
-                     when IR.Fill_Array => Fills := Fills + 1;
-                     when IR.Clear_Array => Clears := Clears + 1;
-                     when others => null;
-                  end case;
-               end if;
+               Landin.Testing.Check
+                 (Item,
+                  IR.Op_Of (Unit, 3, Value) = IR.Number
+                  and then IR.Result_Of (Unit, 3, Value) = Landin.Types.I32
+                  and then Folded_Number_Of (Unit, 3, Value)
+                             = Stored_Values (Position)
+                  and then IR.Op_Of (Unit, 3, Store) = IR.Store_Field
+                  and then not IR.Reaches_A_Slot (Unit, 3, Store)
+                  and then IR.Datum_Of (Unit, 3, Store) = 1
+                  and then IR.Field_Of (Unit, 3, Store) = 2
+                  and then IR.Path_Of (Unit, 3, Store)
+                             = Below (2, Position)
+                  and then IR.Operand_Count (Unit, 3, Store) = 1
+                  and then IR.Nth_Operand (Unit, 3, Store, 1) = Value,
+                  "each typed literal leaf reaches its exact nested path");
             end;
          end loop;
          Landin.Testing.Check
            (Item,
-            Stores = 3 and then Copies = 1
-              and then Fills = 1 and then Clears = 1,
-            "literal copy fill and clear use nested array operations");
+            IR.Op_Of (Unit, 3, Copy) = IR.Copy_Array
+              and then IR.Source_Of (Unit, 3, Copy).Kind = IR.Module_Datum
+              and then IR.Source_Of (Unit, 3, Copy).Datum = 1
+              and then IR.Source_Field_Of (Unit, 3, Copy) = 2
+              and then IR.Source_Path_Of (Unit, 3, Copy) = Below (2)
+              and then IR.Destination_Of (Unit, 3, Copy).Kind
+                         = IR.Module_Datum
+              and then IR.Destination_Of (Unit, 3, Copy).Datum = 2
+              and then IR.Element_Field_Of (Unit, 3, Copy) = 2
+              and then IR.Path_Of (Unit, 3, Copy) = Below (2),
+            "the copy keeps both exact nested roots and paths");
+         Landin.Testing.Check
+           (Item,
+            IR.Op_Of (Unit, 3, Repeated) = IR.Number
+              and then IR.Result_Of (Unit, 3, Repeated) = Landin.Types.I32
+              and then IR.Number_Of (Unit, 3, Repeated) = 4
+              and then IR.Op_Of (Unit, 3, Fill) = IR.Fill_Array
+              and then IR.Destination_Of (Unit, 3, Fill).Kind
+                         = IR.Module_Datum
+              and then IR.Destination_Of (Unit, 3, Fill).Datum = 1
+              and then IR.Element_Field_Of (Unit, 3, Fill) = 2
+              and then IR.Path_Of (Unit, 3, Fill) = Below (2)
+              and then IR.First_Part_Of (Unit, 3, Fill) = 1
+              and then IR.Nth_Operand (Unit, 3, Fill, 1) = Repeated,
+            "the typed fill retains its exact nested destination");
+         Landin.Testing.Check
+           (Item,
+            IR.Op_Of (Unit, 3, Clear) = IR.Clear_Array
+              and then IR.Destination_Of (Unit, 3, Clear).Kind
+                         = IR.Module_Datum
+              and then IR.Destination_Of (Unit, 3, Clear).Datum = 2
+              and then IR.Element_Field_Of (Unit, 3, Clear) = 2
+              and then IR.Path_Of (Unit, 3, Clear) = Below (2),
+            "the clear retains its exact nested destination");
+         Landin.Testing.Check
+           (Item, IR.Op_Of (Unit, 3, 11) = IR.Leave,
+            "the return follows every nested array operation");
          Landin.Testing.Check
            (Item, IR.Verifier.Check (Unit).Kind = IR.Verifier.Nothing_Wrong,
             "the verifier accepts every nested whole-array operation");
@@ -4401,11 +4667,32 @@ package body Landin.Tests.Lowering_Suite is
                  and then IR.Path_Of (Unit, 4, Value) = Below (1)
                then
                   Scalar_Stores := Scalar_Stores + 1;
-               elsif Op = IR.Store_Element
-                 and then IR.Element_Field_Of (Unit, 4, Value) = 2
-                 and then IR.Path_Of (Unit, 4, Value) = Below (2)
+               elsif Op = IR.Store_Field
+                 and then IR.Field_Of (Unit, 4, Value) = 2
+                 and then (IR.Path_Of (Unit, 4, Value) = Below (2, 1)
+                           or else IR.Path_Of (Unit, 4, Value) = Below (2, 2))
                then
                   Array_Stores := Array_Stores + 1;
+                  declare
+                     Stored : constant IR.Value_Id :=
+                       IR.Nth_Operand (Unit, 4, Value, 1);
+                  begin
+                     Landin.Testing.Check
+                       (Item,
+                        Array_Stores in 1 .. 2
+                          and then not IR.Reaches_A_Slot (Unit, 4, Value)
+                          and then IR.Datum_Of (Unit, 4, Value) = 3
+                          and then IR.Path_Of (Unit, 4, Value)
+                                     = Below (2, Array_Stores)
+                          and then Stored = Value - 1
+                          and then IR.Op_Of (Unit, 4, Stored) = IR.Number
+                          and then IR.Result_Of (Unit, 4, Stored)
+                                     = Landin.Types.I32
+                          and then Folded_Number_Of (Unit, 4, Stored)
+                                     = Landin.Types.Folded (Array_Stores),
+                        "literal array leaves keep root, path, type and"
+                        & " order");
+                  end;
                elsif Op = IR.Copy_Array
                  and then IR.Element_Field_Of (Unit, 4, Value) = 2
                  and then IR.Path_Of (Unit, 4, Value) = Below (2)
@@ -4437,6 +4724,39 @@ package body Landin.Tests.Lowering_Suite is
             "the verifier accepts contextual ordinary-child operations");
       end;
    end Nested_Child_Values_Keep_Their_Parent;
+
+   --  D92 admits a nested child selection only as a local storage-copy
+   --  initializer.  At module scope the same source remains L0304 rather than
+   --  becoming a static image edge.
+   procedure Nested_Child_Module_Initializer_Is_Refused
+     (Item : in out Landin.Testing.Context);
+
+   procedure Nested_Child_Module_Initializer_Is_Refused
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "inner: type = struct value: i32 end inner" & LF
+         & "outer: type = struct nested: inner end outer" & LF
+         & "source: outer = outer(nested: inner(value: 7))" & LF
+         & "copy: inner = source.nested" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal
+        (Item, Ran, 4, "the checker stops the nested module source");
+      Landin.Testing.Check
+        (Item, Landin.Stages.Failed (Work)
+         and then Ada.Strings.Fixed.Index
+           (Landin.Stages.Rendered_Report (Work), "L0304") > 0,
+         "a nested child cannot become a module image source");
+      Landin.Testing.Check_Equal
+        (Item, IR.Item_Count (Landin.Stages.Code (Work).all), 0,
+         "the refused module source produces no IR items");
+   end Nested_Child_Module_Initializer_Is_Refused;
 
    --  D94 carries a complete aggregate argument as a storage identity and
    --  gives the callee one shaped aggregate parameter slot.
@@ -4550,6 +4870,8 @@ package body Landin.Tests.Lowering_Suite is
    procedure Nested_Arguments_Carry_Both_Identities
      (Item : in out Landin.Testing.Context)
    is
+      use type IR.Storage_Kind;
+
       Work : Landin.Stages.Compilation :=
         Landin.Stages.Create (Landin.Targets.Linux_X86_64);
       Ran : Natural;
@@ -4588,24 +4910,70 @@ package body Landin.Tests.Lowering_Suite is
            IR.Nth_Parameter (Unit, 3, 1);
          Outer_Child : constant IR.Field_Shape :=
            IR.Nth_Slot_Field_Shape (Unit, 3, Outer_Parameter, 2);
+         type Folded_List is
+           array (Positive range <>) of Landin.Types.Folded;
+         Expected_Values : constant Folded_List := [2, 3, 4];
          Child, Row, Nested_Writes : Natural := 0;
+         Nested_Root : IR.Slot_Id := IR.No_Slot;
+         Literal_Address : IR.Value_Id := IR.No_Value;
       begin
          for Position in 1 .. IR.Value_Count (Unit, 2) loop
             declare
                Value : constant IR.Value_Id := IR.Value_Id (Position);
+               Op : constant IR.Opcode := IR.Op_Of (Unit, 2, Value);
             begin
-               if IR.Op_Of (Unit, 2, Value) = IR.Storage_Address
+               if Op = IR.Storage_Address
                  and then IR.Element_Field_Of (Unit, 2, Value) = 2
                then
+                  Landin.Testing.Check
+                    (Item,
+                     IR.Destination_Of (Unit, 2, Value).Kind = IR.Frame_Slot
+                       and then IR.Destination_Of (Unit, 2, Value).Slot = 1,
+                     "selected arguments retain their exact local root");
                   if IR.Path_Depth_Of (Unit, 2, Value) = 0 then
                      Child := Child + 1;
                   elsif IR.Path_Of (Unit, 2, Value) = Below (2) then
                      Row := Row + 1;
                   end if;
-               elsif IR.Op_Of (Unit, 2, Value) = IR.Store_Field
+               elsif Op = IR.Call
+                 and then IR.Callee_Of (Unit, 2, Value) = 3
+               then
+                  Literal_Address := IR.Nth_Operand (Unit, 2, Value, 1);
+               elsif Op = IR.Store_Field
+                 and then IR.Field_Of (Unit, 2, Value) = 2
                  and then IR.Path_Depth_Of (Unit, 2, Value) > 0
                then
                   Nested_Writes := Nested_Writes + 1;
+                  if Nested_Writes <= Expected_Values'Length then
+                     declare
+                        Stored : constant IR.Value_Id :=
+                          IR.Nth_Operand (Unit, 2, Value, 1);
+                        Expected_Path : constant IR.Path_Step_Array :=
+                          (if Nested_Writes = 1 then Below (1)
+                           else Below (2, Nested_Writes - 1));
+                     begin
+                        Landin.Testing.Check
+                          (Item,
+                           IR.Reaches_A_Slot (Unit, 2, Value)
+                             and then Stored = Value - 1
+                             and then IR.Op_Of (Unit, 2, Stored) = IR.Number
+                             and then IR.Result_Of (Unit, 2, Stored)
+                                        = Landin.Types.I32
+                             and then Folded_Number_Of (Unit, 2, Stored)
+                                        = Expected_Values (Nested_Writes)
+                             and then IR.Path_Of (Unit, 2, Value)
+                                        = Expected_Path,
+                           "nested literal leaves keep type, value and path");
+                        if Nested_Root = IR.No_Slot then
+                           Nested_Root := IR.Slot_Of (Unit, 2, Value);
+                        else
+                           Landin.Testing.Check
+                             (Item,
+                              IR.Slot_Of (Unit, 2, Value) = Nested_Root,
+                              "every nested literal leaf keeps one root");
+                        end if;
+                     end;
+                  end if;
                end if;
             end;
          end loop;
@@ -4619,8 +4987,21 @@ package body Landin.Tests.Lowering_Suite is
               and then Outer_Child.Cases = 2,
             "the nested parameter retains its compact child field run");
          Landin.Testing.Check
-           (Item, Nested_Writes = 1,
-            "the nested literal writes its scalar leaf by both identities");
+           (Item, Nested_Writes = 3,
+            "the nested literal writes every scalar leaf in source order");
+         Landin.Testing.Check
+           (Item,
+            Literal_Address /= IR.No_Value
+              and then IR.Op_Of (Unit, 2, Literal_Address)
+                         = IR.Storage_Address
+              and then IR.Destination_Of (Unit, 2, Literal_Address).Kind
+                         = IR.Frame_Slot
+              and then IR.Destination_Of (Unit, 2, Literal_Address).Slot
+                         = Nested_Root
+              and then IR.Element_Field_Of (Unit, 2, Literal_Address) = 0
+              and then IR.Path_Of (Unit, 2, Literal_Address)
+                         = IR.No_Path_Steps,
+            "the call carries the exact root written by its nested literal");
          Landin.Testing.Check
            (Item, IR.Verifier.Check (Unit).Kind = IR.Verifier.Nothing_Wrong,
             "the verifier accepts nested storage-address carriers");
@@ -4635,6 +5016,8 @@ package body Landin.Tests.Lowering_Suite is
    procedure Variant_Arguments_Keep_Their_Shape
      (Item : in out Landin.Testing.Context)
    is
+      use type IR.Storage_Kind;
+
       Work : Landin.Stages.Compilation :=
         Landin.Stages.Create (Landin.Targets.Linux_X86_64);
       Ran : Natural;
@@ -4665,7 +5048,12 @@ package body Landin.Tests.Lowering_Suite is
          Parameter : constant IR.Slot_Id := IR.Nth_Parameter (Unit, 1, 1);
          Shape : constant IR.Field_Shape :=
            IR.Nth_Slot_Field_Shape (Unit, 1, Parameter, 2);
+         type Folded_List is
+           array (Positive range <>) of Landin.Types.Folded;
+         Expected_Values : constant Folded_List := [2, 3];
          Selects, Stores : Natural := 0;
+         Selected_Root : IR.Slot_Id := IR.No_Slot;
+         Argument_Address : IR.Value_Id := IR.No_Value;
       begin
          Landin.Testing.Check
            (Item,
@@ -4676,19 +5064,69 @@ package body Landin.Tests.Lowering_Suite is
          for Position in 1 .. IR.Value_Count (Unit, 2) loop
             declare
                Value : constant IR.Value_Id := IR.Value_Id (Position);
+               Op : constant IR.Opcode := IR.Op_Of (Unit, 2, Value);
             begin
-               if IR.Op_Of (Unit, 2, Value) = IR.Select_Variant then
+               if Op = IR.Select_Variant then
                   Selects := Selects + 1;
-               elsif IR.Op_Of (Unit, 2, Value)
-                       = IR.Store_Variant_Field
+                  Landin.Testing.Check
+                    (Item,
+                     IR.Destination_Of (Unit, 2, Value).Kind = IR.Frame_Slot
+                       and then IR.Element_Field_Of (Unit, 2, Value) = 2
+                       and then IR.Path_Of (Unit, 2, Value)
+                                  = IR.No_Path_Steps
+                       and then IR.Variant_Case_Of (Unit, 2, Value) = 2,
+                     "selection keeps its exact root, field and case");
+                  Selected_Root :=
+                    IR.Destination_Of (Unit, 2, Value).Slot;
+               elsif Op = IR.Store_Field
+                 and then IR.Field_Of (Unit, 2, Value) = 2
+                 and then IR.Path_Depth_Of (Unit, 2, Value) > 0
                then
                   Stores := Stores + 1;
+                  if Stores <= Expected_Values'Length then
+                     declare
+                        Stored : constant IR.Value_Id :=
+                          IR.Nth_Operand (Unit, 2, Value, 1);
+                     begin
+                        Landin.Testing.Check
+                          (Item,
+                           IR.Reaches_A_Slot (Unit, 2, Value)
+                             and then IR.Slot_Of (Unit, 2, Value)
+                                        = Selected_Root
+                             and then IR.Path_Of (Unit, 2, Value)
+                                        = In_Case (2, Stores)
+                             and then Stored = Value - 1
+                             and then IR.Op_Of (Unit, 2, Stored) = IR.Number
+                             and then IR.Result_Of (Unit, 2, Stored)
+                                        = Landin.Types.U8
+                             and then Folded_Number_Of (Unit, 2, Stored)
+                                        = Expected_Values (Stores),
+                           "payload leaves keep source order, type and path");
+                     end;
+                  end if;
+               elsif Op = IR.Call
+                 and then IR.Callee_Of (Unit, 2, Value) = 1
+               then
+                  Argument_Address := IR.Nth_Operand (Unit, 2, Value, 1);
                end if;
             end;
          end loop;
          Landin.Testing.Check
            (Item, Selects = 1 and then Stores = 2,
-            "the caller constructs the selected payload in its temporary");
+            "the caller constructs both selected payload leaves by path");
+         Landin.Testing.Check
+           (Item,
+            Argument_Address /= IR.No_Value
+              and then IR.Op_Of (Unit, 2, Argument_Address)
+                         = IR.Storage_Address
+              and then IR.Destination_Of (Unit, 2, Argument_Address).Kind
+                         = IR.Frame_Slot
+              and then IR.Destination_Of (Unit, 2, Argument_Address).Slot
+                         = Selected_Root
+              and then IR.Element_Field_Of (Unit, 2, Argument_Address) = 0
+              and then IR.Path_Of (Unit, 2, Argument_Address)
+                         = IR.No_Path_Steps,
+            "the call carries the exact constructed temporary root");
          Landin.Testing.Check
            (Item, IR.Verifier.Check (Unit).Kind = IR.Verifier.Nothing_Wrong,
             "the verifier accepts the variant-bearing parameter carrier");
@@ -4859,8 +5297,9 @@ package body Landin.Tests.Lowering_Suite is
    end Variant_Storage_Carries_Cases_And_One_Clear;
 
    --  D76 keeps case construction contextual: selection clears one complete
-   --  part and writes its source-order tag, while each labelled scalar
-   --  payload field is a separate ordered write into that selected case.
+   --  part and writes its source-order tag.  Direct scalar payloads retain
+   --  Store_Variant_Field, while scalar leaves below an array retain their
+   --  complete one-based path into the selected case.
    procedure Variant_Case_Construction_Carries_Its_Identity
      (Item : in out Landin.Testing.Context);
 
@@ -4923,11 +5362,23 @@ package body Landin.Tests.Lowering_Suite is
 
       declare
          Unit : IR.Unit renames Landin.Stages.Code (Work).all;
-         Selects, Stores, Tag_Loads, Payload_Loads : Natural := 0;
+         type Folded_List is
+           array (Positive range <>) of Landin.Types.Folded;
+         type Scalar_List is
+           array (Positive range <>) of Landin.Types.Scalar_Name;
+         Expected_Values : constant Folded_List := [5, 6, 9, 10, 2, 3];
+         Expected_Types : constant Scalar_List :=
+           [Landin.Types.U8, Landin.Types.U16,
+            Landin.Types.U32, Landin.Types.U32,
+            Landin.Types.U8, Landin.Types.U16];
+         Selects, Alias_Stores, Path_Stores, Variant_Stores : Natural := 0;
+         Construction_Stores : Natural := 0;
+         Tag_Loads, Payload_Loads : Natural := 0;
          Array_Loads, Array_Stores, Array_Fills, Array_Copies : Natural := 0;
+         Nested_Finite : Natural := 0;
          Slot_Row, Slot_Pair, Datum_Pair, Wide_Payload : Boolean := False;
          Slot_Tag, Datum_Tag : Boolean := False;
-         Nested_Store, Nested_Fill, Nested_Copy : Boolean := False;
+         Nested_Fill, Nested_Copy : Boolean := False;
          Nested_Slot_Load, Nested_Datum_Load : Boolean := False;
          Nested_Alias_Slot_Store, Nested_Alias_Datum_Store : Boolean := False;
       begin
@@ -4956,16 +5407,140 @@ package body Landin.Tests.Lowering_Suite is
                         and then IR.Element_Field_Of (Unit, 2, Id) = 2
                         and then IR.Variant_Case_Of (Unit, 2, Id) = 2);
                   end;
-               elsif Op = IR.Store_Variant_Field then
-                  Stores := Stores + 1;
-                  Wide_Payload := Wide_Payload or else
-                    (IR.Destination_Of (Unit, 2, Id).Kind = IR.Module_Datum
-                     and then IR.Variant_Case_Of (Unit, 2, Id) = 2
-                     and then IR.Variant_Payload_Field_Of
-                       (Unit, 2, Id) = 2
-                     and then IR.Result_Of
-                       (Unit, 2, IR.Nth_Operand (Unit, 2, Id, 1))
-                         = Landin.Types.U16);
+               elsif Op = IR.Store_Variant_Field
+                 and then IR.Destination_Of (Unit, 2, Id).Kind = IR.Frame_Slot
+               then
+                  Alias_Stores := Alias_Stores + 1;
+                  declare
+                     Stored : constant IR.Value_Id :=
+                       IR.Nth_Operand (Unit, 2, Id, 1);
+                  begin
+                     Landin.Testing.Check
+                       (Item,
+                        IR.Destination_Of (Unit, 2, Id).Slot = 2
+                          and then IR.Element_Field_Of (Unit, 2, Id) = 2
+                          and then IR.Path_Of (Unit, 2, Id) = IR.No_Path_Steps
+                          and then IR.Variant_Case_Of (Unit, 2, Id) = 2
+                          and then IR.Variant_Payload_Field_Of
+                            (Unit, 2, Id) = 2
+                          and then IR.Op_Of (Unit, 2, Stored)
+                            = IR.Load_Variant_Field
+                          and then IR.Source_Of (Unit, 2, Stored).Kind
+                            = IR.Frame_Slot
+                          and then IR.Source_Of (Unit, 2, Stored).Slot = 2
+                          and then IR.Element_Field_Of (Unit, 2, Stored) = 2
+                          and then IR.Path_Of (Unit, 2, Stored)
+                            = IR.No_Path_Steps
+                          and then IR.Variant_Case_Of (Unit, 2, Stored) = 2
+                          and then IR.Variant_Payload_Field_Of
+                            (Unit, 2, Stored) = 2
+                          and then IR.Result_Of (Unit, 2, Stored)
+                            = Landin.Types.U16
+                          and then Stored < Id,
+                        "the inout alias reads and writes the same typed"
+                        & " selected payload");
+                  end;
+               elsif Op = IR.Store_Variant_Field
+                 or else
+                   (Op = IR.Store_Field
+                    and then IR.Field_Of (Unit, 2, Id) = 2
+                    and then
+                      (IR.Path_Of (Unit, 2, Id) = In_Case (2, 1)
+                       or else IR.Path_Of (Unit, 2, Id) = In_Case (2, 2)
+                       or else IR.Path_Of (Unit, 2, Id) = In_Case (3, 1, 1)
+                       or else
+                         IR.Path_Of (Unit, 2, Id) = In_Case (3, 1, 2)))
+               then
+                  Construction_Stores := Construction_Stores + 1;
+                  if Op = IR.Store_Variant_Field then
+                     Variant_Stores := Variant_Stores + 1;
+                  else
+                     Path_Stores := Path_Stores + 1;
+                  end if;
+                  if Construction_Stores <= Expected_Values'Length then
+                     declare
+                        Stored : constant IR.Value_Id :=
+                          IR.Nth_Operand (Unit, 2, Id, 1);
+                        Destination_Is_Exact : constant Boolean :=
+                          (case Construction_Stores is
+                              when 1 =>
+                                Op = IR.Store_Field
+                                and then IR.Reaches_A_Slot (Unit, 2, Id)
+                                and then IR.Slot_Of (Unit, 2, Id) = 3
+                                and then IR.Field_Of (Unit, 2, Id) = 2
+                                and then IR.Path_Of (Unit, 2, Id)
+                                  = In_Case (2, 1),
+                              when 2 =>
+                                Op = IR.Store_Field
+                                and then IR.Reaches_A_Slot (Unit, 2, Id)
+                                and then IR.Slot_Of (Unit, 2, Id) = 3
+                                and then IR.Field_Of (Unit, 2, Id) = 2
+                                and then IR.Path_Of (Unit, 2, Id)
+                                  = In_Case (2, 2),
+                              when 3 =>
+                                Op = IR.Store_Field
+                                and then IR.Reaches_A_Slot (Unit, 2, Id)
+                                and then IR.Slot_Of (Unit, 2, Id) = 2
+                                and then IR.Field_Of (Unit, 2, Id) = 2
+                                and then IR.Path_Of (Unit, 2, Id)
+                                  = In_Case (3, 1, 1),
+                              when 4 =>
+                                Op = IR.Store_Field
+                                and then IR.Reaches_A_Slot (Unit, 2, Id)
+                                and then IR.Slot_Of (Unit, 2, Id) = 2
+                                and then IR.Field_Of (Unit, 2, Id) = 2
+                                and then IR.Path_Of (Unit, 2, Id)
+                                  = In_Case (3, 1, 2),
+                              when 5 =>
+                                Op = IR.Store_Variant_Field
+                                and then
+                                  IR.Destination_Of (Unit, 2, Id).Kind
+                                    = IR.Module_Datum
+                                and then
+                                  IR.Destination_Of (Unit, 2, Id).Datum = 1
+                                and then
+                                  IR.Element_Field_Of (Unit, 2, Id) = 2
+                                and then IR.Path_Of (Unit, 2, Id)
+                                  = IR.No_Path_Steps
+                                and then
+                                  IR.Variant_Case_Of (Unit, 2, Id) = 2
+                                and then IR.Variant_Payload_Field_Of
+                                  (Unit, 2, Id) = 1,
+                              when 6 =>
+                                Op = IR.Store_Variant_Field
+                                and then
+                                  IR.Destination_Of (Unit, 2, Id).Kind
+                                    = IR.Module_Datum
+                                and then
+                                  IR.Destination_Of (Unit, 2, Id).Datum = 1
+                                and then
+                                  IR.Element_Field_Of (Unit, 2, Id) = 2
+                                and then IR.Path_Of (Unit, 2, Id)
+                                  = IR.No_Path_Steps
+                                and then
+                                  IR.Variant_Case_Of (Unit, 2, Id) = 2
+                                and then IR.Variant_Payload_Field_Of
+                                  (Unit, 2, Id) = 2,
+                              when others => False);
+                     begin
+                        Landin.Testing.Check
+                          (Item,
+                           Stored = Id - 1
+                             and then IR.Op_Of (Unit, 2, Stored) = IR.Number
+                             and then IR.Result_Of (Unit, 2, Stored)
+                               = Expected_Types (Construction_Stores)
+                             and then Folded_Number_Of (Unit, 2, Stored)
+                               = Expected_Values (Construction_Stores)
+                             and then Destination_Is_Exact,
+                           "constructed leaves keep opcode, root, identity,"
+                           & " type and global source order");
+                        if Construction_Stores in 3 | 4 then
+                           Nested_Finite := Nested_Finite + 1;
+                        elsif Construction_Stores = 6 then
+                           Wide_Payload := True;
+                        end if;
+                     end;
+                  end if;
                elsif Op = IR.Load_Variant_Tag then
                   Tag_Loads := Tag_Loads + 1;
                   declare
@@ -5011,12 +5586,6 @@ package body Landin.Tests.Lowering_Suite is
                        (Unit, 2, Id) in 1 | 2);
                elsif Op = IR.Store_Element then
                   Array_Stores := Array_Stores + 1;
-                  Nested_Store := Nested_Store or else
-                    (IR.Reaches_A_Slot (Unit, 2, Id)
-                     and then IR.Element_Field_Of (Unit, 2, Id) = 2
-                     and then IR.Variant_Case_Of (Unit, 2, Id) = 3
-                     and then IR.Variant_Payload_Field_Of
-                       (Unit, 2, Id) = 1);
                   Nested_Alias_Slot_Store := Nested_Alias_Slot_Store or else
                     (IR.Reaches_A_Slot (Unit, 2, Id)
                      and then IR.Element_Field_Of (Unit, 2, Id) = 2
@@ -5035,27 +5604,44 @@ package body Landin.Tests.Lowering_Suite is
                   Array_Fills := Array_Fills + 1;
                   Nested_Fill := Nested_Fill or else
                     (IR.Destination_Of (Unit, 2, Id).Kind = IR.Frame_Slot
+                     and then IR.Destination_Of (Unit, 2, Id).Slot = 2
                      and then IR.Element_Field_Of (Unit, 2, Id) = 2
-                     and then IR.Variant_Case_Of (Unit, 2, Id) = 3
+                     and then IR.Path_Of (Unit, 2, Id) = In_Case (3, 2)
+                     and then IR.Variant_Case_Of (Unit, 2, Id) = 0
                      and then IR.Variant_Payload_Field_Of
-                       (Unit, 2, Id) = 2);
+                       (Unit, 2, Id) = 0
+                     and then IR.First_Part_Of (Unit, 2, Id) = 1
+                     and then IR.Result_Of
+                       (Unit, 2, IR.Nth_Operand (Unit, 2, Id, 1))
+                         = Landin.Types.U32
+                     and then Folded_Number_Of
+                       (Unit, 2, IR.Nth_Operand (Unit, 2, Id, 1)) = 11);
                elsif Op = IR.Copy_Array then
                   Array_Copies := Array_Copies + 1;
                   Nested_Copy := Nested_Copy or else
                     (IR.Destination_Of (Unit, 2, Id).Kind = IR.Frame_Slot
+                     and then IR.Destination_Of (Unit, 2, Id).Slot = 2
                      and then IR.Source_Of (Unit, 2, Id).Kind = IR.Frame_Slot
+                     and then IR.Source_Of (Unit, 2, Id).Slot = 1
                      and then IR.Element_Field_Of (Unit, 2, Id) = 2
-                     and then IR.Variant_Case_Of (Unit, 2, Id) = 3
+                     and then IR.Path_Of (Unit, 2, Id) = In_Case (3, 3)
+                     and then IR.Variant_Case_Of (Unit, 2, Id) = 0
                      and then IR.Variant_Payload_Field_Of
-                       (Unit, 2, Id) = 3
-                     and then IR.Source_Field_Of (Unit, 2, Id) = 0);
+                       (Unit, 2, Id) = 0
+                     and then IR.Source_Field_Of (Unit, 2, Id) = 0
+                     and then IR.Source_Path_Of (Unit, 2, Id)
+                       = IR.No_Path_Steps);
                end if;
             end;
          end loop;
 
          Landin.Testing.Check
-           (Item, Selects = 4 and then Stores = 5,
-            "case construction and inout aliases write scalar payloads");
+           (Item,
+            Selects = 4 and then Variant_Stores = 2
+              and then Path_Stores = 4 and then Construction_Stores = 6
+              and then Alias_Stores = 1,
+            "case construction keeps all six selected leaves"
+            & " and one typed alias store");
          Landin.Testing.Check_Equal
            (Item, Payload_Loads, 2,
             "each referenced payload alias loads from matched storage");
@@ -5069,11 +5655,11 @@ package body Landin.Tests.Lowering_Suite is
             "each match loads its source storage and field exactly once");
          Landin.Testing.Check
            (Item,
-            Array_Loads = 5 and then Array_Stores = 4
+            Array_Loads = 5 and then Array_Stores = 2
               and then Array_Fills = 1
-              and then Array_Copies = 1 and then Nested_Store
+              and then Array_Copies = 1 and then Nested_Finite = 2
               and then Nested_Fill and then Nested_Copy,
-            "array writes carry top field, case and payload identities");
+            "array writes keep finite paths and dynamic selected operations");
          Landin.Testing.Check
            (Item,
             Nested_Slot_Load and then Nested_Datum_Load
@@ -5718,25 +6304,422 @@ package body Landin.Tests.Lowering_Suite is
    --  exception `Landin.Tests.Fixture_Execution_Suite` already names.
    Fixture_Root : constant String := "../tests/fixtures";
 
-   function Corpus_Text
-     (Host : Landin.Platform.Filesystem'Class) return String;
+   --  Driver.Execute does not expose its Compilation, which the IR dump needs.
+   --  Follow its reachable-module route here: parse each newly loaded suffix,
+   --  record the same module graph, then run the ordinary five-stage pipeline.
+   procedure Lower_Rooted_Fixture
+     (Work    : in out Landin.Stages.Compilation;
+      Each    : Landin.Testing.Fixtures.Fixture;
+      Host    : Landin.Platform.Filesystem'Class;
+      Ran     : out Natural;
+      Loaded  : out Boolean;
+      Problem : out Ada.Strings.Unbounded.Unbounded_String);
+
+   procedure Lower_Rooted_Fixture
+     (Work    : in out Landin.Stages.Compilation;
+      Each    : Landin.Testing.Fixtures.Fixture;
+      Host    : Landin.Platform.Filesystem'Class;
+      Ran     : out Natural;
+      Loaded  : out Boolean;
+      Problem : out Ada.Strings.Unbounded.Unbounded_String)
+   is
+      package Unbounded renames Ada.Strings.Unbounded;
+      package Fixtures renames Landin.Testing.Fixtures;
+      package Module_Vectors is new Ada.Containers.Vectors
+        (Index_Type => Positive, Element_Type => Landin.Modules.Module_Id);
+
+      Root_Prefix : constant String := "--root=";
+      Arguments   : Landin.Platform.Path_List;
+      Roots       : Landin.Platform.Path_List;
+      Entry_Directory : Unbounded.Unbounded_String;
+      Program_Path : Unbounded.Unbounded_String;
+      Program_Loaded : Boolean := False;
+      Graph       : constant not null access Landin.Modules.Table :=
+        Landin.Stages.Modules (Work);
+      Queue       : Module_Vectors.Vector;
+      Next        : Positive := 1;
+
+      procedure Refuse (Why : String);
+      function Joined_Path (Directory, Child : String) return String;
+      function Is_Source_Name (Name : String) return Boolean;
+      function Import_Path
+        (Of_Tree : Landin.Syntax.Tree;
+         Node    : Landin.Syntax.Node_Id) return String;
+      function Select_Module_Directory
+        (Of_Tree : Landin.Syntax.Tree;
+         Node    : Landin.Syntax.Node_Id;
+         Root_At : out Natural) return String;
+
+      procedure Refuse (Why : String) is
+      begin
+         if Unbounded.Length (Problem) = 0 then
+            Problem := Unbounded.To_Unbounded_String (Why);
+         end if;
+         Loaded := False;
+      end Refuse;
+
+      function Joined_Path (Directory, Child : String) return String is
+        (if Directory'Length > 0
+             and then Directory (Directory'Last) = '/'
+         then Directory & Child
+         else Directory & "/" & Child);
+
+      function Is_Source_Name (Name : String) return Boolean is
+        (Name'Length > 4
+         and then Name (Name'Last - 3 .. Name'Last) = ".ldn");
+
+      function Import_Path
+        (Of_Tree : Landin.Syntax.Tree;
+         Node    : Landin.Syntax.Node_Id) return String
+      is
+         Built : Unbounded.Unbounded_String;
+      begin
+         for Position in
+           1 .. Landin.Syntax.Import_Segment_Count (Of_Tree, Node)
+         loop
+            if Position > 1 then
+               Unbounded.Append (Built, "/");
+            end if;
+            Unbounded.Append
+              (Built,
+               Landin.Source.Names.Spelling
+                 (Landin.Stages.Identities (Work).all,
+                  Landin.Syntax.Name
+                    (Of_Tree,
+                     Landin.Syntax.Nth_Import_Segment
+                       (Of_Tree, Node, Position))));
+         end loop;
+         return Unbounded.To_String (Built);
+      end Import_Path;
+
+      function Select_Module_Directory
+        (Of_Tree : Landin.Syntax.Tree;
+         Node    : Landin.Syntax.Node_Id;
+         Root_At : out Natural) return String
+      is
+      begin
+         Root_At := 0;
+         for Root_Index in 1 .. Natural (Roots.Length) loop
+            declare
+               Current : Unbounded.Unbounded_String :=
+                 Unbounded.To_Unbounded_String (Roots.Element (Root_Index));
+               Matched : Boolean := True;
+            begin
+               for Position in
+                 1 .. Landin.Syntax.Import_Segment_Count (Of_Tree, Node)
+               loop
+                  declare
+                     Segment : constant String :=
+                       Landin.Source.Names.Spelling
+                         (Landin.Stages.Identities (Work).all,
+                          Landin.Syntax.Name
+                            (Of_Tree,
+                             Landin.Syntax.Nth_Import_Segment
+                               (Of_Tree, Node, Position)));
+                     Entries : Landin.Platform.Path_List;
+                     Status  : Landin.Platform.List_Status;
+                     Found   : Boolean := False;
+                  begin
+                     Host.List_Directory
+                       (Unbounded.To_String (Current), Entries, Status);
+                     if Status /= Landin.Platform.List_Ok then
+                        Matched := False;
+                        exit;
+                     end if;
+                     for Child_Name of Entries loop
+                        if Child_Name = Segment then
+                           Found := True;
+                           exit;
+                        end if;
+                     end loop;
+                     if not Found then
+                        Matched := False;
+                        exit;
+                     end if;
+                     Current := Unbounded.To_Unbounded_String
+                       (Joined_Path
+                          (Unbounded.To_String (Current), Segment));
+                     if not Host.Is_Directory
+                       (Unbounded.To_String (Current))
+                     then
+                        Matched := False;
+                        exit;
+                     end if;
+                  end;
+               end loop;
+               if Matched then
+                  Root_At := Root_Index;
+                  return Unbounded.To_String (Current);
+               end if;
+            end;
+         end loop;
+         return "";
+      end Select_Module_Directory;
+
+   begin
+      Ran := 0;
+      Loaded := True;
+      Problem := Unbounded.Null_Unbounded_String;
+
+      --  Use the same metadata-to-driver argument boundary as positive,
+      --  runtime, ABI and parser-corpus execution.  The real repository host
+      --  is deliberate here: an IR golden for a rooted fixture must include
+      --  its actual reachable modules.  Unrooted fixtures keep the isolated
+      --  source-text lowering seam below.
+      Fixtures.Append_Module_Arguments (Each, Fixture_Root, Arguments);
+      if Natural (Arguments.Length) /= 2 then
+         Refuse
+           ("rooted fixture did not produce one root and one entry module: "
+            & Fixtures.Name (Each));
+         return;
+      end if;
+
+      declare
+         Root_Option : constant String := Arguments.Element (1);
+      begin
+         if Root_Option'Length <= Root_Prefix'Length
+           or else Root_Option
+             (Root_Option'First
+              .. Root_Option'First + Root_Prefix'Length - 1) /= Root_Prefix
+         then
+            Refuse
+              ("rooted fixture produced an invalid root argument: "
+               & Fixtures.Name (Each));
+            return;
+         end if;
+         Roots.Append
+           (Root_Option
+              (Root_Option'First + Root_Prefix'Length .. Root_Option'Last));
+      end;
+      Entry_Directory := Unbounded.To_Unbounded_String (Arguments.Element (2));
+      Program_Path := Unbounded.To_Unbounded_String
+        (Joined_Path
+           (Unbounded.To_String (Entry_Directory), Fixtures.Program (Each)));
+
+      if not Host.Is_Directory (Unbounded.To_String (Entry_Directory)) then
+         Refuse
+           ("entry module is not a directory while recording: "
+            & Unbounded.To_String (Entry_Directory));
+         return;
+      end if;
+
+      Landin.Modules.Set_Entry_Directory
+        (Graph.all, Unbounded.To_String (Entry_Directory));
+      Queue.Append (Landin.Modules.Entry_Module);
+
+      while Loaded and then Next <= Natural (Queue.Length) loop
+         declare
+            Module : constant Landin.Modules.Module_Id := Queue.Element (Next);
+            Directory : constant String :=
+              Landin.Modules.Directory_Path (Graph.all, Module);
+            Entries   : Landin.Platform.Path_List;
+            Listed    : Landin.Platform.List_Status;
+            First_New : constant Natural :=
+              Landin.Stages.Source_Count (Work) + 1;
+         begin
+            Host.List_Directory (Directory, Entries, Listed);
+            if Listed /= Landin.Platform.List_Ok then
+               Refuse
+                 ("module directory cannot be listed while recording: "
+                  & Directory);
+            else
+               for Child_Name of Entries loop
+                  declare
+                     Path : constant String :=
+                       Joined_Path (Directory, Child_Name);
+                  begin
+                     if Is_Source_Name (Child_Name)
+                       and then not Host.Is_Directory (Path)
+                     then
+                        declare
+                           Content : Unbounded.Unbounded_String;
+                           Status  : Landin.Platform.Read_Status;
+                        begin
+                           Host.Read_File (Path, Content, Status);
+                           if Status = Landin.Platform.Read_Ok then
+                              if Path = Unbounded.To_String (Program_Path) then
+                                 Program_Loaded := True;
+                              end if;
+                              declare
+                                 Id : constant Landin.Source.Source_Id :=
+                                   Landin.Stages.Add_Source
+                                     (Work, Module, Path,
+                                      Unbounded.To_String (Content));
+                                 pragma Unreferenced (Id);
+                              begin
+                                 null;
+                              end;
+                           else
+                              Refuse
+                                ("module source cannot be read while"
+                                 & " recording: " & Path);
+                              exit;
+                           end if;
+                        end;
+                     end if;
+                  end;
+               end loop;
+
+               if Loaded
+                 and then Landin.Stages.Source_Count (Work) >= First_New
+               then
+                  declare
+                     Outcome : Landin.Stages.Stage_Outcome;
+                  begin
+                     Frontend.Run (Work, Outcome);
+                  end;
+                  if Landin.Stages.Failed (Work) then
+                     Refuse
+                       ("syntax failed while discovering rooted fixture "
+                        & Fixtures.Name (Each));
+                  end if;
+               end if;
+
+               if Loaded then
+                  for Source_Index in First_New
+                    .. Landin.Stages.Source_Count (Work)
+                  loop
+                     declare
+                        Source_Id : constant Landin.Source.Source_Id :=
+                          Landin.Stages.Nth_Source (Work, Source_Index);
+                        Tree : constant not null access constant
+                          Landin.Syntax.Tree :=
+                            Landin.Syntax.Forest.Tree_Of
+                              (Landin.Stages.Trees (Work).all, Source_Id);
+                     begin
+                        for Import_Index in
+                          1 .. Landin.Syntax.Import_Count (Tree.all)
+                        loop
+                           declare
+                              Import_Node : constant Landin.Syntax.Node_Id :=
+                                Landin.Syntax.Nth_Import
+                                  (Tree.all, Import_Index);
+                              Logical : constant String :=
+                                Import_Path (Tree.all, Import_Node);
+                              Target : Landin.Modules.Module_Id :=
+                                Landin.Modules.Find_Logical
+                                  (Graph.all, Logical);
+                           begin
+                              if Landin.Configuration.Is_Builtin_Import
+                                (Landin.Stages.Identities (Work).all,
+                                 Tree.all, Import_Node)
+                              then
+                                 null;
+                              elsif Target = Landin.Modules.No_Module then
+                                 declare
+                                    Selected_Root : Natural;
+                                    Selected : constant String :=
+                                      Select_Module_Directory
+                                        (Tree.all, Import_Node,
+                                         Selected_Root);
+                                 begin
+                                    if Selected = "" then
+                                       Refuse
+                                         ("module not found while recording "
+                                          & Fixtures.Name (Each) & ": "
+                                          & Logical);
+                                    else
+                                       Target :=
+                                         Landin.Modules.Find_Directory
+                                           (Graph.all, Selected);
+                                       if Target = Landin.Modules.No_Module
+                                       then
+                                          Target := Landin.Modules.Add_Module
+                                            (Graph.all, Logical, Selected,
+                                             Positive (Selected_Root));
+                                          Queue.Append (Target);
+                                       end if;
+                                    end if;
+                                 end;
+                              end if;
+
+                              if Loaded
+                                and then Target /= Landin.Modules.No_Module
+                              then
+                                 Landin.Modules.Record_Import
+                                   (Graph.all, Source_Id, Import_Node, Target);
+                              end if;
+                              exit when not Loaded;
+                           end;
+                        end loop;
+                        exit when not Loaded;
+                     end;
+                  end loop;
+               end if;
+            end if;
+         end;
+         Next := Next + 1;
+      end loop;
+
+      if Loaded and then not Program_Loaded then
+         Refuse
+           ("rooted fixture program was not loaded while recording: "
+            & Unbounded.To_String (Program_Path));
+      end if;
+
+      if Loaded and then Landin.Stages.Source_Count (Work) > 0 then
+         declare
+            Order : Landin.Stages.Pipeline;
+         begin
+            Landin.Stages.Append (Order, Frontend'Access);
+            Landin.Stages.Append (Order, Configurer'Access);
+            Landin.Stages.Append (Order, Names'Access);
+            Landin.Stages.Append (Order, Checker'Access);
+            Landin.Stages.Append (Order, Lowerer'Access);
+            Ran := Landin.Stages.Run (Order, Work);
+         end;
+      elsif Loaded then
+         Refuse
+           ("rooted fixture contains no source while recording: "
+            & Fixtures.Name (Each));
+      end if;
+   end Lower_Rooted_Fixture;
+
+   type Corpus_Build is record
+      Text     : Ada.Strings.Unbounded.Unbounded_String;
+      Problems : Ada.Strings.Unbounded.Unbounded_String;
+      Complete : Boolean := True;
+   end record;
 
    function Corpus_Text
-     (Host : Landin.Platform.Filesystem'Class) return String
+     (Host : Landin.Platform.Filesystem'Class) return Corpus_Build;
+
+   function Corpus_Text
+     (Host : Landin.Platform.Filesystem'Class) return Corpus_Build
    is
       package Unbounded renames Ada.Strings.Unbounded;
       package Fixtures renames Landin.Testing.Fixtures;
 
-      Found : Fixtures.Catalogue;
-      Text  : Unbounded.Unbounded_String;
-
-      function Additional_For (Each : Fixtures.Fixture) return String;
-
-      function Additional_For (Each : Fixtures.Fixture) return String is
-         Rest : constant String := Fixtures.With_Sources (Each);
-         Extra : Unbounded.Unbounded_String;
-         First : Integer := Rest'First;
+      type Additional_Build is record
+         Text     : Unbounded.Unbounded_String;
+         Problem  : Unbounded.Unbounded_String;
          Complete : Boolean := True;
+      end record;
+
+      Found       : Fixtures.Catalogue;
+      Built       : Corpus_Build;
+      Expected    : Natural := 0;
+      Represented : Natural := 0;
+
+      procedure Report_Problem (Why : String);
+      function Additional_For
+        (Each : Fixtures.Fixture) return Additional_Build;
+
+      procedure Report_Problem (Why : String) is
+      begin
+         Built.Complete := False;
+         if Unbounded.Length (Built.Problems) > 0 then
+            Unbounded.Append (Built.Problems, LF);
+         end if;
+         Unbounded.Append (Built.Problems, Why);
+      end Report_Problem;
+
+      function Additional_For
+        (Each : Fixtures.Fixture) return Additional_Build
+      is
+         Rest   : constant String := Fixtures.With_Sources (Each);
+         Result : Additional_Build;
+         First  : Integer := Rest'First;
 
          procedure Append_One (Named : String);
 
@@ -5744,16 +6727,25 @@ package body Landin.Tests.Lowering_Suite is
             Trimmed : constant String :=
               Ada.Strings.Fixed.Trim (Named, Ada.Strings.Both);
             Contents : Unbounded.Unbounded_String;
-            Status : Landin.Platform.Read_Status;
+            Status   : Landin.Platform.Read_Status;
+            Path     : constant String :=
+              Fixture_Root & "/positive/" & Fixtures.Name (Each)
+              & "/" & Trimmed;
          begin
-            if Trimmed /= "" then
-               Host.Read_File
-                 (Fixture_Root & "/positive/" & Fixtures.Name (Each)
-                  & "/" & Trimmed, Contents, Status);
+            if Trimmed = "" then
+               Result.Complete := False;
+               Result.Problem := Unbounded.To_Unbounded_String
+                 ("empty with source while recording positive/"
+                  & Fixtures.Name (Each));
+            else
+               Host.Read_File (Path, Contents, Status);
                if Status = Landin.Platform.Read_Ok then
-                  Unbounded.Append (Extra, Unbounded.To_String (Contents));
+                  Unbounded.Append
+                    (Result.Text, Unbounded.To_String (Contents));
                else
-                  Complete := False;
+                  Result.Complete := False;
+                  Result.Problem := Unbounded.To_Unbounded_String
+                    ("with source cannot be read while recording: " & Path);
                end if;
             end if;
          end Append_One;
@@ -5767,13 +6759,19 @@ package body Landin.Tests.Lowering_Suite is
          if First <= Rest'Last then
             Append_One (Rest (First .. Rest'Last));
          end if;
-         return (if Complete then Unbounded.To_String (Extra) else "");
+         return Result;
       end Additional_For;
    begin
       Fixtures.Discover (Found, Fixture_Root, Host);
 
+      for Index in 1 .. Fixtures.Problem_Count (Found) loop
+         Report_Problem
+           ("fixture discovery failed while recording: "
+            & Fixtures.Nth_Problem (Found, Index));
+      end loop;
+
       Unbounded.Append
-        (Text,
+        (Built.Text,
          "# Generated by landin_tests --record.  Do not edit." & LF
          & "# Every positive fixture, lowered to Landin.IR and rendered"
          & " by Landin.IR.Dump." & LF
@@ -5784,59 +6782,121 @@ package body Landin.Tests.Lowering_Suite is
          declare
             Each : constant Fixtures.Fixture := Fixtures.Nth (Found, Index);
          begin
-            if Fixtures.Class (Each) = Fixtures.Positive_Program
-              and then Fixtures.Program (Each) /= ""
-            then
-               declare
-                  Where : constant String :=
-                    Fixture_Root & "/positive/" & Fixtures.Name (Each)
-                    & "/" & Fixtures.Program (Each);
-                  Body_Text : Unbounded.Unbounded_String;
-                  Status : Landin.Platform.Read_Status;
-               begin
-                  Host.Read_File (Where, Body_Text, Status);
+            if Fixtures.Class (Each) = Fixtures.Positive_Program then
+               Expected := Expected + 1;
+               if Fixtures.Program (Each) = "" then
+                  Report_Problem
+                    ("positive fixture has no corpus source while recording: "
+                     & Fixtures.Name (Each));
+               else
+                  declare
+                     Work : Landin.Stages.Compilation :=
+                       Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+                     Ran     : Natural := 0;
+                     Ready   : Boolean := True;
+                     Problem : Unbounded.Unbounded_String;
+                  begin
+                     if Fixtures.Module_Root (Each) /= "" then
+                        Lower_Rooted_Fixture
+                          (Work, Each, Host, Ran, Ready, Problem);
+                        if not Ready then
+                           Report_Problem (Unbounded.To_String (Problem));
+                        end if;
+                     else
+                        declare
+                           Where : constant String :=
+                             Fixture_Root & "/positive/"
+                             & Fixtures.Name (Each) & "/"
+                             & Fixtures.Program (Each);
+                           Body_Text  : Unbounded.Unbounded_String;
+                           Status     : Landin.Platform.Read_Status;
+                           Additional : constant Additional_Build :=
+                             Additional_For (Each);
+                        begin
+                           Host.Read_File (Where, Body_Text, Status);
+                           if Status /= Landin.Platform.Read_Ok then
+                              Ready := False;
+                              Report_Problem
+                                ("positive source cannot be read while"
+                                 & " recording: " & Where);
+                           elsif not Additional.Complete then
+                              Ready := False;
+                              Report_Problem
+                                (Unbounded.To_String (Additional.Problem));
+                           else
+                              --  Preserve the original isolated source seam:
+                              --  nonroot programs and their `with` text are
+                              --  added directly, without exposing the host to
+                              --  any stage.
+                              Lower
+                                (Work, Unbounded.To_String (Body_Text), Ran,
+                                 Unbounded.To_String (Additional.Text));
+                           end if;
+                        end;
+                     end if;
 
-                  if Status = Landin.Platform.Read_Ok then
-                     declare
-                        Work : Landin.Stages.Compilation :=
-                          Landin.Stages.Create
-                            (Landin.Targets.Linux_X86_64);
-                        Ran : Natural;
-                     begin
-                        Lower
-                          (Work, Unbounded.To_String (Body_Text), Ran,
-                           Additional_For (Each));
-
-                        if not Landin.Stages.Failed (Work) then
+                     if Ready then
+                        if Landin.Stages.Failed (Work) then
+                           declare
+                              Report : constant String :=
+                                Landin.Stages.Rendered_Report (Work);
+                           begin
+                              Report_Problem
+                                ("positive/" & Fixtures.Name (Each)
+                                 & " failed to lower"
+                                 & (if Report = "" then "" else LF & Report));
+                           end;
+                        elsif Ran /= 5 then
+                           Report_Problem
+                             ("positive/" & Fixtures.Name (Each)
+                              & " did not run all five lowering stages");
+                        else
                            Unbounded.Append
-                             (Text,
+                             (Built.Text,
                               "file positive/" & Fixtures.Name (Each)
                               & "/" & Fixtures.Program (Each) & LF);
                            Unbounded.Append
-                             (Text,
+                             (Built.Text,
                               Landin.IR.Dump.Text
                                 (Landin.Stages.Code (Work).all,
                                  Landin.Stages.Meanings (Work).all,
                                  Landin.Stages.Identities (Work).all));
+                           Represented := Represented + 1;
                         end if;
-                     end;
-                  end if;
-               end;
+                     end if;
+                  end;
+               end if;
             end if;
          end;
       end loop;
 
-      return Unbounded.To_String (Text);
+      if Represented /= Expected then
+         Report_Problem
+           ("positive corpus represented" & Natural'Image (Represented)
+            & " of" & Natural'Image (Expected) & " admitted fixtures");
+      end if;
+
+      return Built;
    end Corpus_Text;
 
    procedure Record_Artefact (Path : String; Wrote : out Boolean) is
+      package Unbounded renames Ada.Strings.Unbounded;
       Host   : Landin.Platform.Native.Native_Filesystem;
+      Built  : constant Corpus_Build := Corpus_Text (Host);
       Status : Landin.Platform.Write_Status;
    begin
+      --  Never replace a complete golden with a partial corpus.  The ordinary
+      --  test case renders Built.Problems; record mode reports failure through
+      --  its existing Wrote boundary.
+      if not Built.Complete then
+         Wrote := False;
+         return;
+      end if;
+
       --  Through Write_File, which is byte exact.  Ada.Text_IO.Put would
       --  append a second line feed at close, which a golden would carry
       --  for ever.
-      Host.Write_File (Path, Corpus_Text (Host), Status);
+      Host.Write_File (Path, Unbounded.To_String (Built.Text), Status);
       Wrote := Status = Landin.Platform.Write_Ok;
    end Record_Artefact;
 
@@ -5848,10 +6908,27 @@ package body Landin.Tests.Lowering_Suite is
    is
       package Unbounded renames Ada.Strings.Unbounded;
       Host     : Landin.Platform.Native.Native_Filesystem;
+      Built    : constant Corpus_Build := Corpus_Text (Host);
       Recorded : Unbounded.Unbounded_String;
       Status   : Landin.Platform.Read_Status;
       Path     : constant String := "../tests/lowering.ir";
+      Alias_Marker : constant String :=
+        "file positive/r440-c-aliases/main.ldn" & LF;
    begin
+      if not Built.Complete then
+         Landin.Testing.Fail
+           (Item,
+            "the positive corpus could not be lowered completely" & LF
+            & Unbounded.To_String (Built.Problems));
+         return;
+      end if;
+
+      Landin.Testing.Check
+        (Item,
+         Ada.Strings.Fixed.Index
+           (Unbounded.To_String (Built.Text), Alias_Marker) > 0,
+         "the rooted r440-c-aliases fixture reaches generated IR");
+
       Host.Read_File (Path, Recorded, Status);
 
       if Status /= Landin.Platform.Read_Ok then
@@ -5863,7 +6940,13 @@ package body Landin.Tests.Lowering_Suite is
       end if;
 
       Landin.Testing.Check
-        (Item, Unbounded.To_String (Recorded) = Corpus_Text (Host),
+        (Item,
+         Ada.Strings.Fixed.Index
+           (Unbounded.To_String (Recorded), Alias_Marker) > 0,
+         "the recorded IR contains the rooted r440-c-aliases fixture");
+      Landin.Testing.Check
+        (Item,
+         Unbounded.To_String (Recorded) = Unbounded.To_String (Built.Text),
          "the recorded IR is what the lowering produces now"
          & " (regenerate with ./scripts/test.sh --record)");
    end The_Recorded_Corpus_Is_Current;
@@ -5961,6 +7044,8 @@ package body Landin.Tests.Lowering_Suite is
    procedure Struct_Literal_Array_Labels_Use_Field_Operations
      (Item : in out Landin.Testing.Context)
    is
+      use type IR.Storage_Kind;
+
       Work : Landin.Stages.Compilation :=
         Landin.Stages.Create (Landin.Targets.Linux_X86_64);
       Ran  : Natural;
@@ -6009,11 +7094,6 @@ package body Landin.Tests.Lowering_Suite is
                   Op : constant IR.Opcode := IR.Op_Of (Unit, Routine, Value);
                begin
                   case Op is
-                     when IR.Store_Element =>
-                        if IR.Element_Field_Of (Unit, Routine, Value) = 1
-                        then
-                           Element_Stores := Element_Stores + 1;
-                        end if;
                      when IR.Copy_Array =>
                         Copy := Value;
                      when IR.Fill_Array =>
@@ -6021,7 +7101,40 @@ package body Landin.Tests.Lowering_Suite is
                      when IR.Clear_Array =>
                         Clear := Value;
                      when IR.Store_Field =>
-                        if IR.Field_Of (Unit, Routine, Value) = 3
+                        if IR.Field_Of (Unit, Routine, Value) = 1
+                          and then IR.Path_Depth_Of (Unit, Routine, Value) > 0
+                        then
+                           Element_Stores := Element_Stores + 1;
+                           declare
+                              Stored : constant IR.Value_Id :=
+                                IR.Nth_Operand (Unit, Routine, Value, 1);
+                           begin
+                              Landin.Testing.Check
+                                (Item,
+                                 Element_Stores in 1 .. 2
+                                   and then not IR.Reaches_A_Slot
+                                     (Unit, Routine, Value)
+                                   and then IR.Datum_Of
+                                     (Unit, Routine, Value) = 2
+                                   and then IR.Path_Of
+                                     (Unit, Routine, Value)
+                                       = Below (Element_Stores)
+                                   and then Stored = Value - 1
+                                   and then IR.Op_Of
+                                     (Unit, Routine, Stored) = IR.Number
+                                   and then IR.Result_Of
+                                     (Unit, Routine, Stored)
+                                       = Landin.Types.Usize
+                                   and then Folded_Number_Of
+                                     (Unit, Routine, Stored)
+                                       = Landin.Types.Folded
+                                           (Element_Stores + 2),
+                                 "literal leaves retain root, path, type and"
+                                 & " order");
+                           end;
+                        elsif IR.Field_Of (Unit, Routine, Value) = 3
+                          and then IR.Path_Of (Unit, Routine, Value)
+                                     = IR.No_Path_Steps
                           and then IR.Op_Of
                             (Unit, Routine,
                              IR.Nth_Operand (Unit, Routine, Value, 1))
@@ -6041,26 +7154,48 @@ package body Landin.Tests.Lowering_Suite is
 
          Landin.Testing.Check_Equal
            (Item, Element_Stores, 2,
-            "the literal writes two elements through field one");
+            "the literal writes two path-qualified leaves through field one");
          Landin.Testing.Check
            (Item,
             Copy /= IR.No_Value
+            and then IR.Source_Of (Unit, Routine, Copy).Kind = IR.Module_Datum
+            and then IR.Source_Of (Unit, Routine, Copy).Datum = 1
             and then IR.Source_Field_Of (Unit, Routine, Copy) = 0
-            and then IR.Element_Field_Of (Unit, Routine, Copy) = 2,
-            "the direct source copies into field two");
+            and then IR.Source_Path_Of (Unit, Routine, Copy)
+                       = IR.No_Path_Steps
+            and then IR.Destination_Of (Unit, Routine, Copy).Kind
+                       = IR.Module_Datum
+            and then IR.Destination_Of (Unit, Routine, Copy).Datum = 2
+            and then IR.Element_Field_Of (Unit, Routine, Copy) = 2
+            and then IR.Path_Of (Unit, Routine, Copy) = IR.No_Path_Steps,
+            "the exact direct source copies into field two");
          Landin.Testing.Check
            (Item,
             Fill /= IR.No_Value
-            and then IR.Element_Field_Of (Unit, Routine, Fill) = 1,
-            "repetition fills field one");
+            and then IR.Destination_Of (Unit, Routine, Fill).Kind
+                       = IR.Module_Datum
+            and then IR.Destination_Of (Unit, Routine, Fill).Datum = 2
+            and then IR.Element_Field_Of (Unit, Routine, Fill) = 1
+            and then IR.Path_Of (Unit, Routine, Fill) = IR.No_Path_Steps
+            and then IR.First_Part_Of (Unit, Routine, Fill) = 1,
+            "repetition fills the exact field-one root");
          Landin.Testing.Check
            (Item,
             Clear /= IR.No_Value
-            and then IR.Element_Field_Of (Unit, Routine, Clear) = 2,
-            "zeroed clears field two");
+            and then IR.Destination_Of (Unit, Routine, Clear).Kind
+                       = IR.Module_Datum
+            and then IR.Destination_Of (Unit, Routine, Clear).Datum = 2
+            and then IR.Element_Field_Of (Unit, Routine, Clear) = 2
+            and then IR.Path_Of (Unit, Routine, Clear) = IR.No_Path_Steps,
+            "zeroed clears the exact field-two root");
          Landin.Testing.Check
-           (Item, False_Store /= IR.No_Value,
-            "scalar zeroed stores typed false in field three");
+           (Item, False_Store /= IR.No_Value
+            and then not IR.Reaches_A_Slot (Unit, Routine, False_Store)
+            and then IR.Datum_Of (Unit, Routine, False_Store) = 2
+            and then IR.Field_Of (Unit, Routine, False_Store) = 3
+            and then IR.Path_Of (Unit, Routine, False_Store)
+                       = IR.No_Path_Steps,
+            "scalar zeroed stores typed false in the exact field-three root");
          Check_Terminators (Item, Unit, "struct literal array labels");
       end;
    end Struct_Literal_Array_Labels_Use_Field_Operations;
@@ -6150,8 +7285,1419 @@ package body Landin.Tests.Lowering_Suite is
          & " template item");
    end Fixed_Conditional_Generic_Instance_Reaches_IR;
 
+   procedure C_Imports_Retain_Canonical_Metadata
+     (Item : in out Landin.Testing.Context);
+
+   procedure C_Imports_Retain_Canonical_Metadata
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "box: type = layout(c) struct" & LF
+         & "    value: i32" & LF
+         & "end box" & LF
+         & "extern(c) link(symbol: ""c_box"") imported:"
+         & " (value: box) -> (result: box)" & LF
+         & "absent: atom" & LF
+         & "maybe: type = absent | ptr mut u8" & LF
+         & "extern(c) optional: (value: maybe)"
+         & " -> (result: maybe from value)" & LF,
+         Ran);
+      Landin.Testing.Check_Equal
+        (Item, Ran, 5, "imported-only C shapes reach lowering");
+      if Landin.Stages.Failed (Work) then
+         return;
+      end if;
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         Text : constant String := IR.Dump.Text
+           (Unit, Landin.Stages.Meanings (Work).all,
+            Landin.Stages.Identities (Work).all);
+         Aggregates, Nullable : Natural := 0;
+      begin
+         for Which in 1 .. IR.Item_Count (Unit) loop
+            declare
+               Id : constant IR.Item_Id := IR.Item_Id (Which);
+               Signature : constant IR.Signature_Id := IR.Signature_Of
+                 (Unit, Id);
+            begin
+               Landin.Testing.Check
+                 (Item, IR.Is_External (Unit, Id)
+                  and then IR.Signature_Uses_C_ABI (Unit, Signature)
+                  and then IR.Slot_Count (Unit, Id) = 0
+                  and then IR.Result_Slot (Unit, Id) = IR.No_Slot,
+                  "bodyless C imports have signatures but no frame storage");
+               if IR.Result_Of (Unit, Id) = Landin.Types.Aggregate then
+                  Aggregates := Aggregates + 1;
+                  Landin.Testing.Check
+                    (Item, IR.Has_C_Layout (Unit, IR.Nominal_Of (Unit, Id))
+                     and then IR.Nominal_Field_Count
+                       (Unit, IR.Nominal_Of (Unit, Id)) = 1,
+                     "an imported-only result has its canonical C body");
+               elsif IR.Result_Of (Unit, Id) = Landin.Types.Usize then
+                  Nullable := Nullable + 1;
+                  Landin.Testing.Check
+                    (Item, IR.Nth_Signature_Parameter
+                       (Unit, Signature, 1).Kind = Landin.Types.Usize,
+                     "nullable pointer unions use scalar address carriers");
+               end if;
+            end;
+         end loop;
+         Landin.Testing.Check_Equal
+           (Item, Aggregates, 1, "one imported aggregate result");
+         Landin.Testing.Check_Equal
+           (Item, Nullable, 1, "one imported nullable pointer result");
+         Landin.Testing.Check
+           (Item, Ada.Strings.Fixed.Index (Text, "layout(c)") > 0
+            and then Ada.Strings.Fixed.Index (Text, "extern(c) (") > 0
+            and then Ada.Strings.Fixed.Index (Text, "link c_box") > 0,
+            "the canonical dump exposes layout, convention and link identity");
+         Landin.Testing.Check
+           (Item, IR.Verifier.Check (Unit, Landin.Targets.Linux_X86_64).Kind
+              = IR.Verifier.Nothing_Wrong,
+            "the target verifier accepts bodyless aggregate/nullable imports");
+      end;
+   end C_Imports_Retain_Canonical_Metadata;
+
+   procedure C_Variadic_Actuals_Keep_Promoted_Types
+     (Item : in out Landin.Testing.Context);
+
+   procedure C_Variadic_Actuals_Keep_Promoted_Types
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+      Direct, Indirect : Natural := 0;
+   begin
+      Lower
+        (Work,
+         "variadic: type = extern(c) (prefix: i32, ...) -> (result: i32)" & LF
+         & "extern(c) imported: (prefix: i32, ...) -> (result: i32)" & LF
+         & "invoke: (callback: variadic, flag: bool) -> (result: i32) =" & LF
+         & "    first: i32 = imported(1, true, i8(2), u16(3)," & LF
+         & "        if flag then f32(4) else f32(5) end if)" & LF
+         & "    result = callback(first, false, u8(2), i16(3), f32(4))" & LF
+         & "end invoke" & LF,
+         Ran);
+      Landin.Testing.Check_Equal
+        (Item, Ran, 5, "direct and indirect variadic calls reach lowering");
+      if Landin.Stages.Failed (Work) then
+         return;
+      end if;
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         Text : constant String := IR.Dump.Text
+           (Unit, Landin.Stages.Meanings (Work).all,
+            Landin.Stages.Identities (Work).all);
+      begin
+         for Which in 1 .. IR.Item_Count (Unit) loop
+            declare
+               Id : constant IR.Item_Id := IR.Item_Id (Which);
+            begin
+               for Index in 1 .. IR.Value_Count (Unit, Id) loop
+                  declare
+                     Value : constant IR.Value_Id := IR.Value_Id (Index);
+                     Op : constant IR.Opcode := IR.Op_Of (Unit, Id, Value);
+                  begin
+                     if Op in IR.Call | IR.Indirect_Call then
+                        declare
+                           Signature : constant IR.Signature_Id :=
+                             IR.Call_Signature (Unit, Id, Value);
+                           Offset : constant Natural :=
+                             (if Op = IR.Indirect_Call then 1 else 0);
+                        begin
+                           if Op = IR.Call then
+                              Direct := Direct + 1;
+                           else
+                              Indirect := Indirect + 1;
+                           end if;
+                           Landin.Testing.Check
+                             (Item, IR.Signature_Uses_C_ABI (Unit, Signature)
+                              and then IR.Signature_Is_Variadic
+                                (Unit, Signature)
+                              and then IR.Signature_Parameter_Count
+                                (Unit, Signature) = 1,
+                              "call identity retains only the fixed prefix");
+                           Landin.Testing.Check_Equal
+                             (Item, IR.Operand_Count (Unit, Id, Value),
+                              5 + Offset, "all promoted actuals are operands");
+                           for Actual in 1 .. 5 loop
+                              Landin.Testing.Check
+                                (Item, IR.Result_Of
+                                   (Unit, Id, IR.Nth_Operand
+                                      (Unit, Id, Value, Actual + Offset))
+                                 = (if Actual = 5 then Landin.Types.F64
+                                    else Landin.Types.I32),
+                                 "promotions survive the saved-actual path");
+                           end loop;
+                        end;
+                     end if;
+                  end;
+               end loop;
+            end;
+         end loop;
+         Landin.Testing.Check_Equal (Item, Direct, 1, "one direct call");
+         Landin.Testing.Check_Equal (Item, Indirect, 1, "one indirect call");
+         Landin.Testing.Check
+           (Item, Ada.Strings.Fixed.Index (Text, ", ...)") > 0,
+            "the dump records a variadic prototype");
+         Landin.Testing.Check
+           (Item, IR.Verifier.Check (Unit, Landin.Targets.Linux_X86_64).Kind
+              = IR.Verifier.Nothing_Wrong,
+            "the target verifier accepts promoted scalar tails");
+      end;
+   end C_Variadic_Actuals_Keep_Promoted_Types;
+
+   procedure Unchecked_Pointer_Conversions_Keep_Null_Checks
+     (Item : in out Landin.Testing.Context);
+
+   procedure Unchecked_Pointer_Conversions_Keep_Null_Checks
+     (Item : in out Landin.Testing.Context)
+   is
+   begin
+      for Small in Boolean loop
+         declare
+            Facts : constant Landin.Targets.Target_Facts :=
+              (if Small then Landin.Targets.Synthetic_32
+               else Landin.Targets.Linux_X86_64);
+            Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+            Ran, Checks : Natural := 0;
+         begin
+            Lower
+              (Work,
+               "convert: (address: u64) -> (result: usize) =" & LF
+               & "    unchecked begin" & LF
+               & "        pointer: ptr mut u8 = ptr(address)" & LF
+               & "        result = usize(pointer)" & LF
+               & "    end unchecked" & LF
+               & "end convert" & LF,
+               Ran);
+            Landin.Testing.Check_Equal
+              (Item, Ran, 5, "unchecked pointer conversion reaches lowering");
+            if not Landin.Stages.Failed (Work) then
+               declare
+                  Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+               begin
+                  for Which in 1 .. IR.Item_Count (Unit) loop
+                     declare
+                        Id : constant IR.Item_Id := IR.Item_Id (Which);
+                     begin
+                        for Index in 1 .. IR.Value_Count (Unit, Id) loop
+                           declare
+                              Value : constant IR.Value_Id :=
+                                IR.Value_Id (Index);
+                           begin
+                              if IR.Op_Of (Unit, Id, Value) = IR.Range_Check
+                              then
+                                 Checks := Checks + 1;
+                                 Landin.Testing.Check
+                                   (Item, not IR.Is_Unchecked (Unit, Id, Value)
+                                    and then IR.Range_Lower
+                                      (Unit, Id, Value) = 1
+                                    and then IR.Range_Upper
+                                      (Unit, Id, Value) = Landin.Types.Folded
+                                        (Landin.Targets.Maximum_Object_Size
+                                           (Facts))
+                                    and then IR.Result_Of
+                                      (Unit, Id, IR.Nth_Operand
+                                         (Unit, Id, Value, 1))
+                                        = Landin.Types.Usize,
+                                    "nonzero is checked after narrowing to"
+                                    & " the target address carrier");
+                              end if;
+                           end;
+                        end loop;
+                     end;
+                  end loop;
+               end;
+            end if;
+            Landin.Testing.Check_Equal
+              (Item, Checks, 1, "one mandatory null check per conversion");
+         end;
+      end loop;
+   end Unchecked_Pointer_Conversions_Keep_Null_Checks;
+
+   procedure C_Aggregate_Entries_And_Calls_Keep_Logical_Carriers
+     (Item : in out Landin.Testing.Context);
+
+   procedure C_Aggregate_Entries_And_Calls_Keep_Logical_Carriers
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran, Calls, Definitions, Saved : Natural := 0;
+   begin
+      Lower
+        (Work,
+         "box: type = layout(c) struct" & LF
+         & "    value: i32" & LF
+         & "end box" & LF
+         & "combine: type = extern(c) (left: box, right: box)"
+         & " -> (result: box)" & LF
+         & "extern(c) imported: (left: box, right: box) -> (result: box)" & LF
+         & "public extern(c) exported: (value: box, flag: bool)"
+         & " -> (result: box) =" & LF
+         & "    result = imported(value," & LF
+         & "        if flag then value else value end if)" & LF
+         & "end exported" & LF
+         & "invoke: (callback: combine, value: box, flag: bool)"
+         & " -> (result: box) =" & LF
+         & "    result = callback(value," & LF
+         & "        if flag then value else value end if)" & LF
+         & "end invoke" & LF,
+         Ran);
+      Landin.Testing.Check_Equal
+        (Item, Ran, 5, "aggregate C definitions and calls reach lowering");
+      if Landin.Stages.Failed (Work) then
+         return;
+      end if;
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+      begin
+         for Which in 1 .. IR.Item_Count (Unit) loop
+            declare
+               Id : constant IR.Item_Id := IR.Item_Id (Which);
+               Signature : constant IR.Signature_Id :=
+                 IR.Signature_Of (Unit, Id);
+            begin
+               if IR.Signature_Uses_C_ABI (Unit, Signature)
+                 and then not IR.Is_External (Unit, Id)
+               then
+                  Definitions := Definitions + 1;
+                  Landin.Testing.Check
+                    (Item, IR.Parameter_Count (Unit, Id) = 3
+                     and then IR.Type_Of
+                       (Unit, Id, IR.Nth_Parameter (Unit, Id, 1))
+                         = Landin.Types.Usize
+                     and then IR.Is_Aggregate
+                       (Unit, Id, IR.Nth_Parameter (Unit, Id, 2))
+                     and then IR.Result_Slot (Unit, Id) /= IR.No_Slot,
+                     "the logical result address precedes source parameters");
+               end if;
+               for Index in 1 .. IR.Value_Count (Unit, Id) loop
+                  declare
+                     Value : constant IR.Value_Id := IR.Value_Id (Index);
+                     Op : constant IR.Opcode := IR.Op_Of (Unit, Id, Value);
+                  begin
+                     if Op in IR.Call | IR.Indirect_Call then
+                        declare
+                           Offset : constant Natural :=
+                             (if Op = IR.Indirect_Call then 1 else 0);
+                        begin
+                           Calls := Calls + 1;
+                           Landin.Testing.Check_Equal
+                             (Item, IR.Operand_Count (Unit, Id, Value),
+                              3 + Offset,
+                              "callee then result address then two actuals");
+                           Landin.Testing.Check
+                             (Item, IR.Op_Of
+                                (Unit, Id, IR.Nth_Operand
+                                   (Unit, Id, Value, 1 + Offset))
+                                  = IR.Storage_Address,
+                              "the logical result destination names storage");
+                           declare
+                              Actual : constant IR.Value_Id :=
+                                IR.Nth_Operand (Unit, Id, Value, 2 + Offset);
+                           begin
+                              if IR.Op_Of (Unit, Id, Actual) = IR.Load
+                                and then IR.Is_Address
+                                  (Unit, Id, IR.Slot_Of (Unit, Id, Actual))
+                              then
+                                 Saved := Saved + 1;
+                              end if;
+                           end;
+                        end;
+                     end if;
+                  end;
+               end loop;
+            end;
+         end loop;
+         Landin.Testing.Check_Equal (Item, Calls, 2, "two aggregate calls");
+         Landin.Testing.Check_Equal
+           (Item, Definitions, 1, "one C-convention receiving definition");
+         Landin.Testing.Check_Equal
+           (Item, Saved, 2, "saved aggregates retain typed address slots");
+         Landin.Testing.Check
+           (Item, IR.Verifier.Check (Unit, Landin.Targets.Linux_X86_64).Kind
+              = IR.Verifier.Nothing_Wrong,
+            "logical aggregate carriers verify before ABI classification");
+      end;
+   end C_Aggregate_Entries_And_Calls_Keep_Logical_Carriers;
+
+   function Named_Item
+     (Work : in out Landin.Stages.Compilation; Name : String)
+      return IR.Item_Id
+   is
+      Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+   begin
+      for Which in 1 .. IR.Item_Count (Unit) loop
+         declare
+            Id : constant IR.Item_Id := IR.Item_Id (Which);
+            Declared : constant IR.Declaration_Id := IR.Declares (Unit, Id);
+         begin
+            if Declared /= IR.No_Declaration
+              and then Landin.Source.Names.Spelling
+                (Landin.Stages.Identities (Work).all,
+                 Landin.Resolution.Name_Of
+                   (Landin.Stages.Meanings (Work).all, Declared)) = Name
+            then
+               return Id;
+            end if;
+         end;
+      end loop;
+      raise Landin.Compiler_Defect with "missing lowered test item " & Name;
+   end Named_Item;
+
+   procedure Recursive_C_Fixture_Lowers
+     (Item : in out Landin.Testing.Context; Callbacks : Boolean);
+
+   procedure Recursive_C_Fixture_Lowers
+     (Item : in out Landin.Testing.Context; Callbacks : Boolean)
+   is
+      --  Deliberate native-host exception: read the actual ABI source, not
+      --  a smaller substitute.  This case never assembles, links or executes.
+      Host : Landin.Platform.Native.Native_Filesystem;
+      Text : Ada.Strings.Unbounded.Unbounded_String;
+      Status : Landin.Platform.Read_Status;
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran, Images, Relocations, Folds, Witnesses : Natural := 0;
+      Entries, Direct, Indirect : Natural := 0;
+      Name : constant String :=
+        (if Callbacks then "r440-native-callback-array-fields"
+         else "r440-native-recursive-array-fields");
+   begin
+      Host.Read_File
+        (Fixture_Root & "/abi/" & Name & "/program.ldn", Text, Status);
+      Landin.Testing.Check
+        (Item, Status = Landin.Platform.Read_Ok, "the real ABI source exists");
+      if Status /= Landin.Platform.Read_Ok then
+         return;
+      end if;
+      Lower (Work, Ada.Strings.Unbounded.To_String (Text), Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 5, Name & " reaches lowering");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work), Name & " is accepted");
+      if Landin.Stages.Failed (Work) then
+         return;
+      end if;
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+      begin
+         for Which in 1 .. IR.Item_Count (Unit) loop
+            declare
+               Id : constant IR.Item_Id := IR.Item_Id (Which);
+               Signature : constant IR.Signature_Id :=
+                 IR.Signature_Of (Unit, Id);
+               Local_Relocations : Natural := 0;
+            begin
+               if IR.Kind_Of (Unit, Id) = IR.Datum
+                 and then IR.Result_Of (Unit, Id) = Landin.Types.Aggregate
+               then
+                  Images := Images + 1;
+                  Landin.Testing.Check
+                    (Item, IR.Has_Image (Unit, Id)
+                     and then IR.Has_C_Layout (Unit, IR.Nominal_Of (Unit, Id)),
+                     "every named image retains its canonical C body");
+                  for Position in 1 .. IR.Field_Count (Unit, Id) loop
+                     Landin.Testing.Check
+                       (Item, IR.Nth_Field_Shape (Unit, Id, Position)
+                        = IR.Nth_Nominal_Field
+                          (Unit, IR.Nominal_Of (Unit, Id), Position),
+                        "storage is a view of the canonical nominal shape");
+                  end loop;
+                  Folds := Folds + Natural (IR.Image_Length (Unit, Id))
+                    - IR.Field_Count (Unit, Id);
+                  for Position in 1 ..
+                    Natural (IR.Image_Length (Unit, Id))
+                      - IR.Field_Count (Unit, Id)
+                  loop
+                     Landin.Testing.Check
+                       (Item, IR.Nth_Aggregate_Image_Element
+                          (Unit, Id, IR.Part_Position (Position)) /= 0,
+                        "each numeric fixture leaf retains its nonzero bits");
+                  end loop;
+                  for Position in 1 ..
+                    IR.Aggregate_Field_Image_Count (Unit, Id)
+                  loop
+                     declare
+                        Image : constant IR.Aggregate_Field_Image :=
+                          IR.Nth_Image_Descriptor (Unit, Id, Position);
+                     begin
+                        if Image.Target /= IR.No_Item then
+                           Relocations := Relocations + 1;
+                           Local_Relocations := Local_Relocations + 1;
+                           Landin.Testing.Check
+                             (Item, Local_Relocations <= 4
+                              and then Image.Target = Named_Item
+                                (Work, (case Local_Relocations is
+                                   when 1 => "add_ten",
+                                   when 2 => "add_twenty",
+                                   when 3 => "add_thirty",
+                                   when others => "add_forty")),
+                              "fixture callback leaves retain source order");
+                           Landin.Testing.Check
+                             (Item, IR.Kind_Of (Unit, Image.Target)
+                              = IR.Routine
+                              and then IR.Signature_Uses_C_ABI
+                                (Unit, IR.Signature_Of (Unit, Image.Target)),
+                              "each callback leaf names a C routine");
+                        end if;
+                     end;
+                  end loop;
+               end if;
+               if IR.Kind_Of (Unit, Id) = IR.Routine
+                 and then IR.Result_Of (Unit, Id) = Landin.Types.Aggregate
+               then
+                  Landin.Testing.Check
+                    (Item, IR.Signature_Result (Unit, Signature).Nominal
+                     = IR.Nominal_Of (Unit, Id)
+                     and then IR.Has_C_Layout (Unit, IR.Nominal_Of (Unit, Id)),
+                     "C imports and definitions share result identity");
+                  if not IR.Is_External (Unit, Id) then
+                     Entries := Entries + 1;
+                     Landin.Testing.Check
+                       (Item, IR.Parameter_Count (Unit, Id)
+                        = IR.Signature_Parameter_Count (Unit, Signature) + 1
+                        and then IR.Type_Of
+                          (Unit, Id, IR.Nth_Parameter (Unit, Id, 1))
+                            = Landin.Types.Usize
+                        and then IR.Result_Slot (Unit, Id) /= IR.No_Slot,
+                        "register and MEMORY results have logical storage");
+                  end if;
+               end if;
+               for Position in 1 .. IR.Value_Count (Unit, Id) loop
+                  declare
+                     Value : constant IR.Value_Id := IR.Value_Id (Position);
+                     Op : constant IR.Opcode := IR.Op_Of (Unit, Id, Value);
+                  begin
+                     if Op in IR.Load_Indirect | IR.Store_Indirect then
+                        declare
+                           Address : constant IR.Slot_Id :=
+                             IR.Indirect_Address_Slot (Unit, Id, Value);
+                        begin
+                           if Address /= IR.No_Slot then
+                              Witnesses := Witnesses + 1;
+                              declare
+                                 Source : constant IR.Value_Id :=
+                                   (if Op = IR.Load_Indirect then Value
+                                    else IR.Nth_Operand (Unit, Id, Value, 2));
+                                 Shape : constant IR.Field_Shape :=
+                                   IR.Address_Shape (Unit, Id, Address);
+                              begin
+                                 Landin.Testing.Check
+                                   (Item, IR.Result_Of (Unit, Id, Source)
+                                    = Shape.Element
+                                    and then
+                                      (if Shape.Signature = IR.No_Signature
+                                       then IR.Signature_Of (Unit, Id, Source)
+                                         = IR.No_Signature
+                                       else IR.Signatures_Agree
+                                         (Unit, IR.Signature_Of
+                                            (Unit, Id, Source),
+                                          Shape.Signature)),
+                                    "indirect leaves retain typed witnesses");
+                              end;
+                           end if;
+                        end;
+                     elsif Op in IR.Call | IR.Indirect_Call then
+                        declare
+                           Callable : constant IR.Signature_Id :=
+                             IR.Call_Signature (Unit, Id, Value);
+                           Offset : constant Natural :=
+                             (if Op = IR.Indirect_Call then 1 else 0);
+                        begin
+                           if IR.Signature_Result (Unit, Callable).Kind
+                             = Landin.Types.Aggregate
+                           then
+                              if Op = IR.Call then
+                                 Direct := Direct + 1;
+                              else
+                                 Indirect := Indirect + 1;
+                              end if;
+                              Landin.Testing.Check
+                                (Item, IR.Operand_Count (Unit, Id, Value)
+                                 = IR.Signature_Parameter_Count
+                                   (Unit, Callable) + 1 + Offset
+                                 and then IR.Op_Of
+                                   (Unit, Id, IR.Nth_Operand
+                                      (Unit, Id, Value, 1 + Offset))
+                                        = IR.Storage_Address,
+                                 "callee, logical destination, then actuals");
+                           end if;
+                        end;
+                     end if;
+                  end;
+               end loop;
+            end;
+         end loop;
+         Landin.Testing.Check_Equal (Item, Images, 3, "three static C images");
+         Landin.Testing.Check_Equal
+           (Item, Relocations, (if Callbacks then 9 else 0),
+            "exactly one relocation for each source callback leaf");
+         Landin.Testing.Check_Equal
+           (Item, Folds, (if Callbacks then 0 else 10),
+            "numeric leaves are folds; callbacks are never zero placeholders");
+         Landin.Testing.Check
+           (Item, Entries >= 3 and then Direct >= 3 and then Indirect = 3
+            and then Witnesses > 0,
+            "recursive entries, direct/indirect calls and typed access occur");
+         Check_Terminators (Item, Unit, Name);
+      end;
+   end Recursive_C_Fixture_Lowers;
+
+   procedure Recursive_Numeric_ABI_Source_Lowers
+     (Item : in out Landin.Testing.Context);
+
+   procedure Recursive_Numeric_ABI_Source_Lowers
+     (Item : in out Landin.Testing.Context) is
+   begin
+      Recursive_C_Fixture_Lowers (Item, Callbacks => False);
+   end Recursive_Numeric_ABI_Source_Lowers;
+
+   procedure Recursive_Callback_ABI_Source_Lowers
+     (Item : in out Landin.Testing.Context);
+
+   procedure Recursive_Callback_ABI_Source_Lowers
+     (Item : in out Landin.Testing.Context) is
+   begin
+      Recursive_C_Fixture_Lowers (Item, Callbacks => True);
+   end Recursive_Callback_ABI_Source_Lowers;
+
+   procedure Recursive_Static_Selections_Rebase_Images
+     (Item : in out Landin.Testing.Context);
+
+   procedure Recursive_Static_Selections_Rebase_Images
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "handler: type = extern(c) (value: i32) -> (result: i32)" & LF
+         & "board: type = layout(c) struct values: [2][2]u16 end board" & LF
+         & "codes: type = layout(c) struct" & LF
+         & "    handlers: [2][2]handler" & LF & "end codes" & LF
+         & "numeric_record: type = struct" & LF
+         & "    first: [2]u16" & LF & "    second: [2]u16" & LF
+         & "end numeric_record" & LF
+         & "numeric_box: type = struct nested: numeric_record"
+         & " end numeric_box" & LF
+         & "callback_record: type = struct" & LF
+         & "    picked: handler" & LF & "    row: [2]handler" & LF
+         & "end callback_record" & LF
+         & "callback_box: type = struct" & LF
+         & "    nested: callback_record" & LF & "end callback_box" & LF
+         & "picked: handler = c_second" & LF
+         & "alias: handler = picked" & LF
+         & "direct: handler = c_first" & LF
+         & "row: [2]u16 = numeric_leaf.second" & LF
+         & "matrix: [2][2]u16 = original.values" & LF
+         & "whole: board = original" & LF
+         & "rebuilt: board = board(values: [row," & LF
+         & "    numeric_leaf.first])" & LF
+         & "huge: [4294967296][2]u16 =" & LF
+         & "    [numeric_leaf.first," & LF
+         & "     of numeric_leaf.second]" & LF
+         & "suffix: [2]u16 = numeric_leaf.second" & LF
+         & "callback_row: [2]handler = callback_leaf.row" & LF
+         & "callback_copy: [2][2]handler = callbacks.handlers" & LF
+         & "chosen: [3]handler = [picked, direct, of alias]" & LF
+         & "single_suffix: [2]handler = [picked, of alias]" & LF
+         & "original: board = board(values: [[11, 12], [21, 22]])" & LF
+         & "numeric_leaf: numeric_record = numeric_record(" & LF
+         & "    first: [11, 12], second: [21, 22])" & LF
+         & "numeric_choices: numeric_box = numeric_box(nested:" & LF
+         & "    numeric_record(first: [11, 12], second: [21, 22]))" & LF
+         & "callbacks: codes = codes(handlers:" & LF
+         & "    [[c_first, c_second], [c_second, c_first]])" & LF
+         & "callback_leaf: callback_record = callback_record(" & LF
+         & "    picked: c_second, row: [c_second, c_first])" & LF
+         & "callback_choices: callback_box = callback_box(nested:" & LF
+         & "    callback_record(picked: c_second,"
+         & " row: [c_second, c_first]))" & LF
+         & "extern(c) c_first: (value: i32) -> (result: i32)" & LF
+         & "extern(c) c_second: (value: i32) -> (result: i32)" & LF
+         & "native_handler: type = () -> (result: i32)" & LF
+         & "anonymous: native_handler = () -> (result: i32) = 7 end" & LF
+         & "choice: type = struct" & LF
+         & "    kind: variant empty | full: (value: u16) end kind" & LF
+         & "end choice" & LF
+         & "wrapper: type = struct" & LF
+         & "    values: [2][2]u16" & LF & "    selected: choice" & LF
+         & "end wrapper" & LF
+         & "empty_choice: choice = choice(kind: empty)" & LF
+         & "wrapped: wrapper = wrapper(" & LF
+         & "    values: original.values, selected: empty_choice)" & LF
+         & "read: (value: board, outer: usize, inner: usize)" & LF
+         & "    -> (result: u16) =" & LF
+         & "    result = value.values[outer][inner]" & LF
+         & "end read" & LF,
+         Ran);
+      Landin.Testing.Check_Equal
+        (Item, Ran, 5, "recursive forward selections reach lowering");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "direct field selections coexist with recursive static images");
+      if Landin.Stages.Failed (Work) then
+         return;
+      end if;
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         First : constant IR.Item_Id := Named_Item (Work, "c_first");
+         Second : constant IR.Item_Id := Named_Item (Work, "c_second");
+         Original : constant IR.Item_Id := Named_Item (Work, "original");
+         Whole : constant IR.Item_Id := Named_Item (Work, "whole");
+         Rebuilt : constant IR.Item_Id := Named_Item (Work, "rebuilt");
+         Matrix : constant IR.Item_Id := Named_Item (Work, "matrix");
+         Huge : constant IR.Item_Id := Named_Item (Work, "huge");
+         Root : constant IR.Aggregate_Field_Image :=
+           IR.Array_Image_Of (Unit, Huge);
+         type Item_List is array (Positive range <>) of IR.Item_Id;
+         Copies : constant Item_List :=
+           [Named_Item (Work, "row"), Named_Item (Work, "suffix")];
+         Aliases : constant Item_List :=
+           [Named_Item (Work, "picked"), Named_Item (Work, "alias")];
+         Empty_Selections : Natural := 0;
+      begin
+         for Id of Aliases loop
+            Landin.Testing.Check
+              (Item, IR.Function_Target (Unit, Id) = Second
+               and then IR.Block_Count (Unit, Id) = 1
+               and then IR.Op_Of (Unit, Id, 1) = IR.Function_Address
+               and then IR.Callee_Of (Unit, Id, 1) = Second,
+               "callback aliases resolve the later direct relocation");
+         end loop;
+         Landin.Testing.Check
+           (Item, IR.Function_Target (Unit, Named_Item (Work, "direct"))
+            = First
+            and then IR.Function_Target
+              (Unit, Named_Item (Work, "anonymous")) /= IR.No_Item,
+            "direct names and anonymous callback data keep their targets");
+         for Id of Copies loop
+            Landin.Testing.Check
+              (Item, IR.Has_Recursive_Array_Image (Unit, Id)
+               and then IR.Image_Length (Unit, Id) = 2
+               and then IR.Nth_Descriptor_Element
+                 (Unit, Id, IR.Array_Image_Of (Unit, Id), 1) = 21
+               and then IR.Nth_Descriptor_Element
+                 (Unit, Id, IR.Array_Image_Of (Unit, Id), 2) = 22,
+               "a selected numeric row rebases its finite fold prefix");
+         end loop;
+         Landin.Testing.Check
+           (Item, IR.Nominal_Of (Unit, Original) = IR.Nominal_Of (Unit, Whole)
+            and then IR.Image_Length (Unit, Original)
+              = IR.Image_Length (Unit, Whole),
+            "whole image cloning retains nominal identity and stored length");
+         for Position in 1 ..
+           IR.Aggregate_Field_Image_Count (Unit, Original)
+         loop
+            Landin.Testing.Check
+              (Item, IR.Nth_Image_Descriptor (Unit, Original, Position)
+               = IR.Nth_Image_Descriptor (Unit, Whole, Position),
+               "whole copies preserve item-relative descriptor runs");
+         end loop;
+         for Position in 1 .. 4 loop
+            Landin.Testing.Check
+              (Item, IR.Nth_Aggregate_Image_Element
+                 (Unit, Original, IR.Part_Position (Position))
+               = IR.Nth_Aggregate_Image_Element
+                   (Unit, Whole, IR.Part_Position (Position)),
+               "whole copies retain each nonzero numeric leaf");
+         end loop;
+         declare
+            Source : constant IR.Item_Id := Named_Item (Work, "callbacks");
+            Copy : constant IR.Item_Id := Named_Item (Work, "callback_copy");
+         begin
+            Landin.Testing.Check
+              (Item, IR.Aggregate_Field_Image_Count (Unit, Copy) = 7
+               and then IR.Image_Length (Unit, Copy) = 0
+               and then IR.Field_Count (Unit, Copy) = 0,
+               "a callback matrix copy has seven descriptors and no folds");
+            for Position in 1 .. 7 loop
+               Landin.Testing.Check
+                 (Item, IR.Nth_Image_Descriptor (Unit, Source, Position)
+                  = IR.Nth_Image_Descriptor (Unit, Copy, Position),
+                  "matrix extraction retains all ordered callback targets");
+            end loop;
+         end;
+         Landin.Testing.Check
+           (Item, IR.Image_Root_Count (Unit, Matrix) = 1
+            and then IR.Field_Count (Unit, Matrix) = 0
+            and then IR.Image_Length (Unit, Matrix) = 4
+            and then IR.Nth_Aggregate_Image_Element (Unit, Matrix, 1) = 11
+            and then IR.Nth_Aggregate_Image_Element (Unit, Matrix, 4) = 22,
+            "extracting an array removes the aggregate numeric field prefix");
+         Landin.Testing.Check
+           (Item, IR.Nth_Aggregate_Image_Element (Unit, Rebuilt, 1) = 21
+            and then IR.Nth_Aggregate_Image_Element (Unit, Rebuilt, 2) = 22
+            and then IR.Nth_Aggregate_Image_Element (Unit, Rebuilt, 3) = 11
+            and then IR.Nth_Aggregate_Image_Element (Unit, Rebuilt, 4) = 12,
+            "independent selected rows append and rebase their own folds");
+         Landin.Testing.Check
+           (Item, Root.Form = IR.Element_Sequence and then Root.Count = 2
+            and then Root.Value = 4_294_967_295
+            and then IR.Aggregate_Field_Image_Count (Unit, Huge) = 3
+            and then IR.Image_Length (Unit, Huge) = 4,
+            "four billion rows keep two stored children and four folds");
+         declare
+            Row : constant IR.Item_Id := Named_Item (Work, "callback_row");
+            Chosen : constant IR.Item_Id := Named_Item (Work, "chosen");
+            Single : constant IR.Item_Id :=
+              Named_Item (Work, "single_suffix");
+         begin
+            Landin.Testing.Check
+              (Item, IR.Descendant_Image_Of
+                 (Unit, Row, IR.Array_Image_Of (Unit, Row), 1).Target = Second
+               and then IR.Descendant_Image_Of
+                 (Unit, Row, IR.Array_Image_Of (Unit, Row), 2).Target = First,
+               "selected callback rows keep ordered code relocations");
+            Landin.Testing.Check
+              (Item, IR.Descendant_Image_Of
+                 (Unit, Chosen, IR.Array_Image_Of (Unit, Chosen), 3).Target
+                   = Second
+               and then IR.Image_Length (Unit, Chosen) = 0
+               and then IR.Array_Image_Of (Unit, Single).Count = 2
+               and then IR.Array_Image_Of (Unit, Single).Value = 1
+               and then IR.Descendant_Image_Of
+                 (Unit, Single, IR.Array_Image_Of (Unit, Single), 1).Target
+                   = Second
+               and then IR.Descendant_Image_Of
+                 (Unit, Single, IR.Array_Image_Of (Unit, Single), 2).Target
+                   = Second,
+               "callback suffixes retain both evaluated descriptors");
+         end;
+         declare
+            Wrapped : constant IR.Item_Id := Named_Item (Work, "wrapped");
+         begin
+            for Position in 1 ..
+              IR.Aggregate_Field_Image_Count (Unit, Wrapped)
+            loop
+               declare
+                  Image : constant IR.Aggregate_Field_Image :=
+                    IR.Nth_Image_Descriptor (Unit, Wrapped, Position);
+               begin
+                  if Image.Form = IR.Selected and then Image.Count = 0 then
+                     Empty_Selections := Empty_Selections + 1;
+                  end if;
+               end;
+            end loop;
+         end;
+         Landin.Testing.Check_Equal
+           (Item, Empty_Selections, 1, "a payloadless clone stays empty");
+         Check_Terminators (Item, Unit, "recursive static images");
+      end;
+   end Recursive_Static_Selections_Rebase_Images;
+
+   procedure Recursive_Repetition_Stays_Compact
+     (Item : in out Landin.Testing.Context);
+
+   procedure Recursive_Repetition_Stays_Compact
+     (Item : in out Landin.Testing.Context)
+   is
+      First_Values, First_Blocks, First_Shapes : Natural := 0;
+   begin
+      for Large in Boolean loop
+         declare
+            Work : Landin.Stages.Compilation :=
+              Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+            Size : constant String := (if Large then "1000000" else "2");
+            Ran : Natural;
+         begin
+            Lower
+              (Work,
+               "handler: type = extern(c) (value: i32) -> (result: i32)" & LF
+               & "extern(c) one: (value: i32) -> (result: i32)" & LF
+               & "extern(c) two: (value: i32) -> (result: i32)" & LF
+               & "mut count: u16" & LF
+               & "make: () -> (result: [2]u16) =" & LF
+               & "    count = count + 1" & LF
+               & "    result = [count, count + 1]" & LF & "end make" & LF
+               & "fill: () -> none =" & LF
+               & "    mut numbers: [" & Size & "][2]u16 = [of make()]" & LF
+               & "    numbers = [[9, 10], of make()]" & LF
+               & "    codes: [" & Size & "][2]handler = [of [one, two]]" & LF
+               & "end fill" & LF
+               & "single_suffix: () -> none =" & LF
+               & "    row: [2][2]u16 = [[1, 2], of make()]" & LF
+               & "end single_suffix" & LF,
+               Ran);
+            Landin.Testing.Check_Equal
+              (Item, Ran, 5, "compound repetition reaches lowering");
+            if Landin.Stages.Failed (Work) then
+               return;
+            end if;
+            declare
+               Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+               Fill : constant IR.Item_Id := Named_Item (Work, "fill");
+               Single : constant IR.Item_Id :=
+                 Named_Item (Work, "single_suffix");
+               Make : constant IR.Item_Id := Named_Item (Work, "make");
+               Calls, Copies, Branches, Single_Calls, Single_Branches :
+                 Natural := 0;
+            begin
+               for Position in 1 .. IR.Value_Count (Unit, Fill) loop
+                  declare
+                     Value : constant IR.Value_Id := IR.Value_Id (Position);
+                     Op : constant IR.Opcode := IR.Op_Of (Unit, Fill, Value);
+                  begin
+                     if Op = IR.Call
+                       and then IR.Callee_Of (Unit, Fill, Value) = Make
+                     then
+                        Calls := Calls + 1;
+                     elsif Op = IR.Copy_Array then
+                        Copies := Copies + 1;
+                     elsif Op = IR.Branch then
+                        Branches := Branches + 1;
+                     end if;
+                  end;
+               end loop;
+               for Position in 1 .. IR.Value_Count (Unit, Single) loop
+                  declare
+                     Value : constant IR.Value_Id := IR.Value_Id (Position);
+                     Op : constant IR.Opcode := IR.Op_Of (Unit, Single, Value);
+                  begin
+                     if Op = IR.Call
+                       and then IR.Callee_Of (Unit, Single, Value) = Make
+                     then
+                        Single_Calls := Single_Calls + 1;
+                     elsif Op = IR.Branch then
+                        Single_Branches := Single_Branches + 1;
+                     end if;
+                  end;
+               end loop;
+               Landin.Testing.Check_Equal
+                 (Item, Calls, 2, "each repeated row is evaluated once");
+               Landin.Testing.Check
+                 (Item, Copies >= 3 and then Branches = 3,
+                  "two numeric and one callback repetition use copying loops");
+               Landin.Testing.Check
+                 (Item, Single_Calls = 1 and then Single_Branches = 1,
+                  "a one-row suffix evaluates once and uses one copying loop");
+               if Large then
+                  Landin.Testing.Check
+                    (Item, IR.Value_Count (Unit, Fill) = First_Values
+                     and then IR.Block_Count (Unit, Fill) = First_Blocks
+                     and then IR.Variant_Field_Shape_Count (Unit)
+                       = First_Shapes,
+                     "a million rows require exactly the same bounded IR");
+               else
+                  First_Values := IR.Value_Count (Unit, Fill);
+                  First_Blocks := IR.Block_Count (Unit, Fill);
+                  First_Shapes := IR.Variant_Field_Shape_Count (Unit);
+               end if;
+               Check_Terminators (Item, Unit, "compound repetition");
+            end;
+         end;
+      end loop;
+   end Recursive_Repetition_Stays_Compact;
+
+   procedure Callback_Slices_And_Inout_Keep_Metadata
+     (Item : in out Landin.Testing.Context);
+
+   procedure Callback_Slices_And_Inout_Keep_Metadata
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran, Loads, Stores, Slices : Natural := 0;
+   begin
+      Lower
+        (Work,
+         "handler: type = extern(c) (value: i32) -> (result: i32)" & LF
+         & "extern(c) one: (value: i32) -> (result: i32)" & LF
+         & "extern(c) two: (value: i32) -> (result: i32)" & LF
+         & "replace: (inout current: handler, next: handler)" & LF
+         & "    -> (result: i32) =" & LF
+         & "    result = current(5)" & LF
+         & "    current = next" & LF & "end replace" & LF
+         & "visit: (items: []mut handler, index: usize, next: handler)" & LF
+         & "    -> (result: i32) =" & LF
+         & "    result = replace(items[index], next)" & LF
+         & "    result = result + items[index](6)" & LF
+         & "    items[index] = next" & LF & "end visit" & LF
+         & "exercise: () -> (result: i32) =" & LF
+         & "    mut values: [2]handler = [one, two]" & LF
+         & "    view: []mut handler = values[0..<2]" & LF
+         & "    result = visit(view, 1, one)" & LF & "end exercise" & LF,
+         Ran);
+      Landin.Testing.Check_Equal
+        (Item, Ran, 5, "callable slices and inout reach lowering");
+      if Landin.Stages.Failed (Work) then
+         return;
+      end if;
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         Expected : constant IR.Signature_Id :=
+           IR.Signature_Of (Unit, Named_Item (Work, "one"));
+         Replace : constant IR.Item_Id := Named_Item (Work, "replace");
+         Parameter : constant IR.Slot_Id :=
+           IR.Nth_Parameter (Unit, Replace, 1);
+      begin
+         Landin.Testing.Check
+           (Item, IR.Is_Address (Unit, Replace, Parameter)
+            and then IR.Signatures_Agree
+              (Unit, IR.Address_Shape (Unit, Replace, Parameter).Signature,
+               Expected),
+            "an inout callback parameter is a complete typed address");
+         for Which in 1 .. IR.Item_Count (Unit) loop
+            declare
+               Id : constant IR.Item_Id := IR.Item_Id (Which);
+            begin
+               for Position in 1 .. IR.Value_Count (Unit, Id) loop
+                  declare
+                     Value : constant IR.Value_Id := IR.Value_Id (Position);
+                     Op : constant IR.Opcode := IR.Op_Of (Unit, Id, Value);
+                  begin
+                     if Op in IR.Load_Indirect | IR.Store_Indirect then
+                        declare
+                           Address : constant IR.Slot_Id :=
+                             IR.Indirect_Address_Slot (Unit, Id, Value);
+                           Source : constant IR.Value_Id :=
+                             (if Op = IR.Load_Indirect then Value
+                              else IR.Nth_Operand (Unit, Id, Value, 2));
+                        begin
+                           if Op = IR.Load_Indirect then
+                              Loads := Loads + 1;
+                           else
+                              Stores := Stores + 1;
+                           end if;
+                           Landin.Testing.Check
+                             (Item, Address /= IR.No_Slot
+                              and then IR.Signatures_Agree
+                                (Unit, IR.Address_Shape
+                                   (Unit, Id, Address).Signature, Expected)
+                              and then IR.Signatures_Agree
+                                (Unit, IR.Signature_Of (Unit, Id, Source),
+                                 Expected),
+                              "slice and inout accesses keep callable type");
+                        end;
+                     elsif Op = IR.Slice_Address then
+                        Slices := Slices + 1;
+                        Landin.Testing.Check
+                          (Item, IR.Signatures_Agree
+                             (Unit, IR.Slice_Element_Shape
+                                (Unit, Id, Value).Signature, Expected),
+                           "slice construction retains the callback child");
+                     end if;
+                  end;
+               end loop;
+            end;
+         end loop;
+         Landin.Testing.Check
+           (Item, Loads >= 2 and then Stores >= 2 and then Slices >= 1,
+            "typed indirect loads/stores and slice construction occurred");
+         Check_Terminators (Item, Unit, "callback slices and inout");
+      end;
+   end Callback_Slices_And_Inout_Keep_Metadata;
+
+   procedure Recursive_Constructors_Commit_Before_Filling
+     (Item : in out Landin.Testing.Context);
+
+   procedure Recursive_Constructors_Commit_Before_Filling
+     (Item : in out Landin.Testing.Context)
+   is
+      use type IR.Storage_Kind;
+
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "part: type = struct" & LF
+         & "    first: i32" & LF & "    rows: [2][2]u16" & LF
+         & "    second: i32" & LF & "    ready: bool" & LF & "end part" & LF
+         & "mut state: [1]part" & LF
+         & "fill: () -> none =" & LF
+         & "    state = [part(second: state[0].first + 1," & LF
+         & "        first: 10, of zeroed)]" & LF & "end fill" & LF,
+         Ran);
+      Landin.Testing.Check_Equal
+        (Item, Ran, 5, "nested contextual constructor reaches lowering");
+      if Landin.Stages.Failed (Work) then
+         return;
+      end if;
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         Fill : constant IR.Item_Id := Named_Item (Work, "fill");
+         State : constant IR.Item_Id := Named_Item (Work, "state");
+         Writes : Natural := 0;
+         Read_Old : Boolean := False;
+      begin
+         for Position in 1 .. IR.Value_Count (Unit, Fill) loop
+            declare
+               Value : constant IR.Value_Id := IR.Value_Id (Position);
+               Op : constant IR.Opcode := IR.Op_Of (Unit, Fill, Value);
+            begin
+               if Op in IR.Store_Field | IR.Clear_Array then
+                  Writes := Writes + 1;
+                  Landin.Testing.Check
+                    (Item, Writes <= 4,
+                     "the constructor emits exactly its four ordered writes");
+                  if Writes <= 4 then
+                     case Writes is
+                        when 1 =>
+                           declare
+                              Stored : constant IR.Value_Id :=
+                                IR.Nth_Operand (Unit, Fill, Value, 1);
+                              Old : constant IR.Value_Id :=
+                                IR.Nth_Operand (Unit, Fill, Stored, 1);
+                              One : constant IR.Value_Id :=
+                                IR.Nth_Operand (Unit, Fill, Stored, 2);
+                              Saved : IR.Value_Id := IR.No_Value;
+                              Original : IR.Value_Id := IR.No_Value;
+                           begin
+                              --  Binary evaluation saves the left operand
+                              --  before lowering the right.  Follow that
+                              --  slot's last write, not an obsolete direct
+                              --  edge from the add to the field load.
+                              if IR.Op_Of (Unit, Fill, Old) = IR.Load then
+                                 for Prior in 1 .. Natural (Old) - 1 loop
+                                    declare
+                                       Id : constant IR.Value_Id :=
+                                         IR.Value_Id (Prior);
+                                    begin
+                                       if IR.Op_Of (Unit, Fill, Id) = IR.Store
+                                         and then IR.Slot_Of (Unit, Fill, Id)
+                                           = IR.Slot_Of (Unit, Fill, Old)
+                                       then
+                                          Saved := Id;
+                                          Original := IR.Nth_Operand
+                                            (Unit, Fill, Id, 1);
+                                       end if;
+                                    end;
+                                 end loop;
+                              end if;
+                              Read_Old :=
+                                Op = IR.Store_Field
+                                and then
+                                  not IR.Reaches_A_Slot (Unit, Fill, Value)
+                                and then
+                                  IR.Datum_Of (Unit, Fill, Value) = State
+                                and then
+                                  IR.Field_Of (Unit, Fill, Value) = 1
+                                and then IR.Path_Of (Unit, Fill, Value)
+                                  = Below (3)
+                                and then IR.Op_Of (Unit, Fill, Stored) = IR.Add
+                                and then IR.Result_Of (Unit, Fill, Stored)
+                                  = Landin.Types.I32
+                                and then Saved /= IR.No_Value
+                                and then IR.Op_Of (Unit, Fill, Original)
+                                  = IR.Load_Field
+                                and then not IR.Reaches_A_Slot
+                                  (Unit, Fill, Original)
+                                and then IR.Datum_Of (Unit, Fill, Original)
+                                  = State
+                                and then IR.Field_Of (Unit, Fill, Original) = 1
+                                and then IR.Path_Of (Unit, Fill, Original)
+                                  = Below (1)
+                                and then IR.Result_Of (Unit, Fill, Original)
+                                  = Landin.Types.I32
+                                and then IR.Result_Of (Unit, Fill, Old)
+                                  = Landin.Types.I32
+                                and then IR.Op_Of (Unit, Fill, One) = IR.Number
+                                and then IR.Result_Of (Unit, Fill, One)
+                                  = Landin.Types.I32
+                                and then Folded_Number_Of (Unit, Fill, One) = 1
+                                and then Original < Saved and then Saved < One
+                                and then One < Old and then Old < Stored
+                                and then Stored < Value;
+                              Landin.Testing.Check
+                                (Item, Read_Old,
+                                 "second reads old first, adds one, then"
+                                 & " writes");
+                           end;
+                        when 2 =>
+                           declare
+                              Stored : constant IR.Value_Id :=
+                                IR.Nth_Operand (Unit, Fill, Value, 1);
+                           begin
+                              Landin.Testing.Check
+                                (Item,
+                                 Op = IR.Store_Field
+                                   and then not IR.Reaches_A_Slot
+                                     (Unit, Fill, Value)
+                                   and then IR.Datum_Of
+                                     (Unit, Fill, Value) = State
+                                   and then IR.Field_Of
+                                     (Unit, Fill, Value) = 1
+                                   and then IR.Path_Of (Unit, Fill, Value)
+                                     = Below (1)
+                                   and then IR.Op_Of
+                                     (Unit, Fill, Stored) = IR.Number
+                                   and then IR.Result_Of
+                                     (Unit, Fill, Stored) = Landin.Types.I32
+                                   and then Folded_Number_Of
+                                     (Unit, Fill, Stored) = 10,
+                                 "first keeps its exact labelled value and"
+                                 & " path");
+                           end;
+                        when 3 =>
+                           declare
+                              Destination : constant IR.Storage :=
+                                IR.Destination_Of (Unit, Fill, Value);
+                           begin
+                              Landin.Testing.Check
+                                (Item,
+                                 Op = IR.Clear_Array
+                                   and then Destination.Kind = IR.Module_Datum
+                                   and then Destination.Datum = State
+                                   and then IR.Element_Field_Of
+                                     (Unit, Fill, Value) = 0
+                                   and then IR.Path_Of (Unit, Fill, Value)
+                                     = Below (1, 2),
+                                 "rows clear keeps array and child"
+                                 & " identities");
+                           end;
+                        when 4 =>
+                           declare
+                              Stored : constant IR.Value_Id :=
+                                IR.Nth_Operand (Unit, Fill, Value, 1);
+                           begin
+                              Landin.Testing.Check
+                                (Item,
+                                 Op = IR.Store_Field
+                                   and then not IR.Reaches_A_Slot
+                                     (Unit, Fill, Value)
+                                   and then IR.Datum_Of
+                                     (Unit, Fill, Value) = State
+                                   and then IR.Field_Of
+                                     (Unit, Fill, Value) = 1
+                                   and then IR.Path_Of (Unit, Fill, Value)
+                                     = Below (4)
+                                   and then IR.Op_Of
+                                     (Unit, Fill, Stored) = IR.Truth
+                                   and then IR.Result_Of
+                                     (Unit, Fill, Stored) = Landin.Types.Bool
+                                   and then not IR.Truth_Of
+                                     (Unit, Fill, Stored),
+                                 "ready fill is false at its exact child"
+                                 & " path");
+                           end;
+                        when others =>
+                           null;
+                     end case;
+                  end if;
+               end if;
+            end;
+         end loop;
+         Landin.Testing.Check
+           (Item, Read_Old and then Writes = 4,
+            "labels precede row and ready fills in source order");
+         Check_Terminators (Item, Unit, "recursive constructor ordering");
+      end;
+   end Recursive_Constructors_Commit_Before_Filling;
+
+   procedure Utf8_Indexes_Stay_Expressions_In_Recursive_Storage
+     (Item : in out Landin.Testing.Context);
+
+   procedure Utf8_Indexes_Stay_Expressions_In_Recursive_Storage
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "part: type = struct" & LF & "    bytes: []u8" & LF
+         & "    rows: [2][2]u16" & LF & "end part" & LF
+         & "index: (text: utf8, position: u32) -> (result: usize) =" & LF
+         & "    values: [1]part = [part(bytes: text[position]," & LF
+         & "        rows: [[1, 2], [3, 4]])]" & LF
+         & "    slices: [1][]u8 = [text[position]]" & LF
+         & "    first_view: []u8 = values[0].bytes" & LF
+         & "    second_view: []u8 = slices[0]" & LF
+         & "    first: usize = lenof first_view" & LF
+         & "    second: usize = lenof second_view" & LF
+         & "    result = first + second" & LF
+         & "end index" & LF,
+         Ran);
+      Landin.Testing.Check_Equal
+        (Item, Ran, 5, "UTF8 indexes in recursive storage reach lowering");
+      if Landin.Stages.Failed (Work) then
+         return;
+      end if;
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         Index : constant IR.Item_Id := Named_Item (Work, "index");
+         Loads, Copies : Natural := 0;
+      begin
+         for Position in 1 .. IR.Value_Count (Unit, Index) loop
+            case IR.Op_Of (Unit, Index, IR.Value_Id (Position)) is
+               when IR.Load_Indirect =>
+                  Loads := Loads + 1;
+               when IR.Copy_Array =>
+                  Copies := Copies + 1;
+               when others =>
+                  null;
+            end case;
+         end loop;
+         Landin.Testing.Check
+           (Item, Loads >= 2 and then Copies >= 2
+            and then IR.Value_Count (Unit, Index) < 2_000,
+            "UTF8 decoding yields slice values, not recursive stored indexes");
+         Check_Terminators (Item, Unit, "UTF8 contextual indexes");
+      end;
+   end Utf8_Indexes_Stay_Expressions_In_Recursive_Storage;
+
+   procedure Erased_Shaped_Arguments_Keep_Spill_Types
+     (Item : in out Landin.Testing.Context);
+
+   procedure Erased_Shaped_Arguments_Keep_Spill_Types
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "reader: type = concept (t: type)" & LF
+         & "    read: (self: ptr t) -> (value: i32)" & LF
+         & "end reader" & LF
+         & "payload: type = struct value: i32 end payload" & LF
+         & "collector: type = concept (t: type)" & LF
+         & "    collect: (self: ptr t, packet: payload, numbers: [2]i32," & LF
+         & "              view: []i32, source: any reader, later: i32)" & LF
+         & "             -> (value: i32)" & LF
+         & "end collector" & LF
+         & "state: type = struct value: i32 end state" & LF
+         & "read_state: (self: ptr state) -> (value: i32) =" & LF
+         & "    value = self.val.value" & LF
+         & "end read_state" & LF
+         & "collect_state: (self: ptr state, packet: payload," & LF
+         & "                numbers: [2]i32, view: []i32," & LF
+         & "                source: any reader, later: i32)" & LF
+         & "               -> (value: i32) =" & LF
+         & "    value = self.val.value + packet.value + numbers[0]" & LF
+         & "        + view[0] + source.read() + later" & LF
+         & "end collect_state" & LF
+         & "state is reader (read: read_state)" & LF
+         & "state is collector (collect: collect_state)" & LF
+         & "run: (flag: bool) -> (value: i32) =" & LF
+         & "    concrete: state = (value: 1)" & LF
+         & "    target: any collector = any(addr concrete)" & LF
+         & "    source: any reader = any(addr concrete)" & LF
+         & "    packet: payload = (value: 2)" & LF
+         & "    numbers: [2]i32 = [3, 4]" & LF
+         & "    view: []i32 = numbers[0..<2]" & LF
+         & "    value = target.collect(packet, numbers, view, source," & LF
+         & "        if flag then 5 else 6 end if)" & LF
+         & "end run" & LF,
+         Ran);
+      Landin.Testing.Check_Equal
+        (Item, Ran, 5, "erased shaped arguments cross later control flow");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "erased shaped argument spills are accepted");
+      if Landin.Stages.Failed (Work) then
+         return;
+      end if;
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         Routine : constant IR.Item_Id := Named_Item (Work, "run");
+         Calls, Typed : Natural := 0;
+      begin
+         for Position in 1 .. IR.Value_Count (Unit, Routine) loop
+            declare
+               Value : constant IR.Value_Id := IR.Value_Id (Position);
+            begin
+               if IR.Op_Of (Unit, Routine, Value) = IR.Indirect_Call
+                 and then IR.Signature_Has_Erased_Self
+                   (Unit, IR.Call_Signature (Unit, Routine, Value))
+               then
+                  Calls := Calls + 1;
+                  --  Code and self precede these four by-value carriers.
+                  for Index in 3 .. 6 loop
+                     declare
+                        Argument : constant IR.Value_Id :=
+                          IR.Nth_Operand (Unit, Routine, Value, Index);
+                     begin
+                        if IR.Op_Of (Unit, Routine, Argument) = IR.Load
+                          and then IR.Is_Address
+                            (Unit, Routine,
+                             IR.Slot_Of (Unit, Routine, Argument))
+                        then
+                           declare
+                              Shape : constant IR.Field_Shape :=
+                                IR.Address_Shape
+                                  (Unit, Routine,
+                                   IR.Slot_Of (Unit, Routine, Argument));
+                           begin
+                              if (if Index = 3
+                                  then Shape.Kind = IR.Aggregate_Field_Shape
+                                  else Shape.Kind = IR.Array_Field_Shape
+                                    and then Shape.Length = 2
+                                    and then Shape.Element =
+                                      (if Index = 4 then Landin.Types.I32
+                                       else Landin.Types.Usize))
+                              then
+                                 Typed := Typed + 1;
+                              end if;
+                           end;
+                        end if;
+                     end;
+                  end loop;
+               end if;
+            end;
+         end loop;
+         Landin.Testing.Check
+           (Item, Calls = 1 and then Typed = 4,
+            "aggregate, array, slice and any reload checked address slots");
+         Landin.Testing.Check
+           (Item, IR.Verifier.Check (Unit).Kind = IR.Verifier.Nothing_Wrong,
+            "the lowered spills satisfy the strict erased carrier verifier");
+         Check_Terminators (Item, Unit, "erased shaped argument spills");
+      end;
+   end Erased_Shaped_Arguments_Keep_Spill_Types;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "lowering", "erased shaped arguments keep spill types",
+         Erased_Shaped_Arguments_Keep_Spill_Types'Access);
+      Landin.Testing.Register
+        (Into, "lowering", "recursive repetition has bounded IR",
+         Recursive_Repetition_Stays_Compact'Access);
+      Landin.Testing.Register
+        (Into, "lowering", "callback slice and inout typed metadata",
+         Callback_Slices_And_Inout_Keep_Metadata'Access);
+      Landin.Testing.Register
+        (Into, "lowering", "recursive constructor source order before fill",
+         Recursive_Constructors_Commit_Before_Filling'Access);
+      Landin.Testing.Register
+        (Into, "lowering", "UTF8 indexes in recursive contextual storage",
+         Utf8_Indexes_Stay_Expressions_In_Recursive_Storage'Access);
+      Landin.Testing.Register
+        (Into, "lowering", "recursive static selections rebase images",
+         Recursive_Static_Selections_Rebase_Images'Access);
+      Landin.Testing.Register
+        (Into, "lowering", "recursive numeric C ABI fixture source",
+         Recursive_Numeric_ABI_Source_Lowers'Access);
+      Landin.Testing.Register
+        (Into, "lowering", "recursive callback C ABI fixture source",
+         Recursive_Callback_ABI_Source_Lowers'Access);
+      Landin.Testing.Register
+        (Into, "lowering", "C aggregate logical entry and call carriers",
+         C_Aggregate_Entries_And_Calls_Keep_Logical_Carriers'Access);
+      Landin.Testing.Register
+        (Into, "lowering", "C imported-only canonical metadata and dump",
+         C_Imports_Retain_Canonical_Metadata'Access);
+      Landin.Testing.Register
+        (Into, "lowering", "C variadic actuals retain promoted types",
+         C_Variadic_Actuals_Keep_Promoted_Types'Access);
+      Landin.Testing.Register
+        (Into, "lowering", "unchecked pointer conversions retain null checks",
+         Unchecked_Pointer_Conversions_Keep_Null_Checks'Access);
       Landin.Testing.Register
         (Into, "lowering", "a function becomes one routine",
          A_Function_Becomes_One_Routine'Access);
@@ -6321,6 +8867,10 @@ package body Landin.Tests.Lowering_Suite is
          A_Struct_Measurement_Carries_A_Compact_Array_Field'Access);
       Landin.Testing.Register
         (Into, "lowering",
+         "an array-of-struct measurement keeps its nominal",
+         An_Array_Of_Struct_Measurement_Keeps_Its_Nominal'Access);
+      Landin.Testing.Register
+        (Into, "lowering",
          "a struct measurement carries variant case runs",
          A_Struct_Measurement_Carries_Variant_Cases'Access);
       Landin.Testing.Register
@@ -6347,6 +8897,10 @@ package body Landin.Tests.Lowering_Suite is
         (Into, "lowering",
          "nested child values keep their parent",
          Nested_Child_Values_Keep_Their_Parent'Access);
+      Landin.Testing.Register
+        (Into, "lowering",
+         "a nested child module initializer is refused",
+         Nested_Child_Module_Initializer_Is_Refused'Access);
       Landin.Testing.Register
         (Into, "lowering",
          "aggregate arguments carry storage identity",

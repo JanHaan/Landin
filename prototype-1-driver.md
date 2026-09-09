@@ -10,6 +10,13 @@ SPECIFICATION WAS SILENT.
 The target is a Cortex-M0 class part. GPIO, a timer, and a UART that
 receives by DMA and signals completion from an interrupt handler.
 
+R4.40's [1975] selects Linux SysV AMD64 LP64, not this hardware ABI. Its
+`layout(c)` subset does not enable the register, packed-field or vector-table
+forms below; SVD generation remains distinct from C header adapters. Interrupt,
+naked, ordinary Landin and C function conventions are not interchangeable merely
+because a vector entry or field holds a code address. The future target must
+settle its own entry and layout rules without inferring them from host widths.
+
 ---
 
 ## chip/vendor/gpio  —  generated from the SVD

@@ -1,0 +1,44 @@
+handler: type = extern(c) (value: i32) -> (result: i32)
+holder: type = struct
+    callback: ptr mut handler
+end holder
+
+extern(c) increment: (value: i32) -> (result: i32) =
+    result = value + 1
+end increment
+
+extern(c) advance: (value: i32) -> (result: i32) =
+    result = value + 2
+end advance
+
+replace: (inout cell: handler, value: handler) -> none =
+    cell = value
+end replace
+
+forward: (inout cell: handler, value: handler) -> none =
+    replace(cell, value)
+end forward
+
+identity: (pointer: ptr mut handler) -> (result: ptr mut handler from pointer) =
+    result = pointer
+end identity
+
+public main: () -> (code: i32) =
+    mut cell: handler = increment
+    direct: ptr mut handler = addr cell
+    alias: ptr mut handler = identity(direct)
+    bits: usize = usize(alias)
+    reconstructed: ptr mut handler = ptr(bits)
+    mut pointer_cell: ptr mut handler = reconstructed
+    indirect: ptr mut ptr mut handler = addr pointer_cell
+    indirect.val = alias
+    mut held: holder = holder(callback: indirect.val)
+    record_pointer: ptr mut holder = addr held
+    copied: holder = record_pointer.val
+    forward(copied.callback.val, advance)
+    if direct.val(40) == 42 and reconstructed.val(40) == 42 then
+        code = 42
+    else
+        code = 1
+    end if
+end main

@@ -8,10 +8,6 @@
         "named": true
       },
       {
-        "type": "extern_declaration",
-        "named": true
-      },
-      {
         "type": "fixed_conditional",
         "named": true
       },
@@ -605,6 +601,110 @@
     }
   },
   {
+    "type": "c_convention",
+    "named": true,
+    "fields": {
+      "convention": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "c_declared_signature",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "arrow",
+          "named": true
+        },
+        {
+          "type": "errors",
+          "named": true
+        },
+        {
+          "type": "returns",
+          "named": true
+        },
+        {
+          "type": "routine_formals",
+          "named": true
+        },
+        {
+          "type": "variadic_marker",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "c_layout",
+    "named": true,
+    "fields": {
+      "attribute": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      },
+      "convention": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "c_signature",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "arrow",
+          "named": true
+        },
+        {
+          "type": "errors",
+          "named": true
+        },
+        {
+          "type": "parameters",
+          "named": true
+        },
+        {
+          "type": "returns",
+          "named": true
+        },
+        {
+          "type": "variadic_marker",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
     "type": "call_expression",
     "named": true,
     "fields": {
@@ -1119,9 +1219,19 @@
     "type": "extern_declaration",
     "named": true,
     "fields": {
-      "convention": {
+      "body": {
         "multiple": false,
-        "required": true,
+        "required": false,
+        "types": [
+          {
+            "type": "block",
+            "named": true
+          }
+        ]
+      },
+      "end_name": {
+        "multiple": false,
+        "required": false,
         "types": [
           {
             "type": "identifier",
@@ -1141,11 +1251,19 @@
       }
     },
     "children": {
-      "multiple": false,
+      "multiple": true,
       "required": true,
       "types": [
         {
-          "type": "declared_signature",
+          "type": "c_convention",
+          "named": true
+        },
+        {
+          "type": "c_declared_signature",
+          "named": true
+        },
+        {
+          "type": "link_symbol",
           "named": true
         }
       ]
@@ -1380,11 +1498,15 @@
       }
     },
     "children": {
-      "multiple": false,
+      "multiple": true,
       "required": true,
       "types": [
         {
           "type": "declared_signature",
+          "named": true
+        },
+        {
+          "type": "link_symbol",
           "named": true
         }
       ]
@@ -1395,9 +1517,17 @@
     "named": true,
     "fields": {},
     "children": {
-      "multiple": false,
+      "multiple": true,
       "required": true,
       "types": [
+        {
+          "type": "c_convention",
+          "named": true
+        },
+        {
+          "type": "c_signature",
+          "named": true
+        },
         {
           "type": "signature",
           "named": true
@@ -1668,6 +1798,42 @@
           "named": true
         }
       ]
+    }
+  },
+  {
+    "type": "link_symbol",
+    "named": true,
+    "fields": {
+      "attribute": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      },
+      "label": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      },
+      "value": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "text_literal",
+            "named": true
+          }
+        ]
+      }
     }
   },
   {
@@ -2199,6 +2365,10 @@
           "named": true
         },
         {
+          "type": "extern_declaration",
+          "named": true
+        },
+        {
           "type": "function_declaration",
           "named": true
         },
@@ -2444,6 +2614,10 @@
       "multiple": true,
       "required": true,
       "types": [
+        {
+          "type": "c_layout",
+          "named": true
+        },
         {
           "type": "field",
           "named": true
@@ -2864,6 +3038,11 @@
         }
       ]
     }
+  },
+  {
+    "type": "variadic_marker",
+    "named": true,
+    "fields": {}
   },
   {
     "type": "variant_case",

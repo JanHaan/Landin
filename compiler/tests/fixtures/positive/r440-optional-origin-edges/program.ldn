@@ -1,0 +1,137 @@
+absent: atom
+unavailable: atom
+maybe_pointer: type = absent | ptr u32
+
+--  [0480]: from cell describes references, not the empty return edge.
+early: (cell: ptr u32, missing: bool)
+       -> (result: maybe_pointer from cell) =
+    result = absent
+    return when missing
+    result = cell
+end early
+
+fallthrough: (cell: ptr u32) -> (result: maybe_pointer from cell) =
+    mut local: maybe_pointer = cell
+    local = absent
+    copied: maybe_pointer = local
+    result = copied
+end fallthrough
+
+empty_control: (cell: ptr u32, choose: bool)
+               -> (result: maybe_pointer from cell) =
+    result = if choose then
+        absent
+    else
+        begin
+            local: maybe_pointer = absent
+            local
+        end
+    end if
+end empty_control
+
+mixed_control: (cell: ptr u32, choose: bool)
+               -> (result: maybe_pointer from cell) =
+    result = if choose then cell else absent end if
+end mixed_control
+
+obtain: (cell: ptr u32, reject: bool)
+        -> (result: ptr u32 from cell) ! unavailable =
+    fail unavailable when reject
+    result = cell
+end obtain
+
+recover_early: (cell: ptr u32, reject: bool)
+               -> (result: maybe_pointer from cell) =
+    local: ptr u32 = obtain(cell, reject) else begin
+        result = absent
+        return
+    end
+    result = local
+end recover_early
+
+recover_value: (cell: ptr u32, reject: bool)
+               -> (result: maybe_pointer from cell) =
+    result = obtain(cell, reject) else begin
+        local: maybe_pointer = absent
+        local
+    end
+end recover_value
+
+check: (reject: bool) -> none ! unavailable =
+    fail unavailable when reject
+end check
+
+recover_state: (cell: ptr u32, reject: bool)
+               -> (result: maybe_pointer from cell) =
+    mut local: maybe_pointer = absent
+    check(reject) else begin
+        local = absent
+    end
+    result = local
+end recover_state
+
+loop_empty: (cell: ptr u32, count: u32)
+            -> (result: maybe_pointer from cell) =
+    mut left: u32 = count
+    mut local: maybe_pointer = absent
+    while left > 0 do
+        local = absent
+        dec left
+        continue when left > 0
+    end while
+    result = local
+end loop_empty
+
+loop_value: (cell: ptr u32, choose: bool)
+            -> (result: maybe_pointer from cell) =
+    result = loop do
+        break with absent when choose
+        break with absent
+    end loop
+end loop_value
+
+--  An empty match arm can return the subject itself.  The pointer arm
+--  retains the subject's source rather than inheriting the empty proof.
+narrow: (candidate: maybe_pointer)
+        -> (result: maybe_pointer from candidate) =
+    match candidate
+        absent: begin
+            result = candidate
+            return
+        end
+        ptr (pointer): result = pointer
+    end match
+end narrow
+
+--  The empty subject need not pretend to derive from a different cell.
+empty_match: (cell: ptr u32, candidate: maybe_pointer)
+             -> (result: maybe_pointer from cell) =
+    match candidate
+        absent: begin
+            result = candidate
+            return
+        end
+        ptr: result = cell
+    end match
+end empty_match
+
+pair: (cell: ptr u32, missing: bool)
+      -> (item: maybe_pointer from cell, got: bool) =
+    item = absent
+    got = false
+    return when missing
+    item = cell
+    got = true
+end pair
+
+pair_field: (cell: ptr u32, missing: bool)
+            -> (result: maybe_pointer from cell) =
+    values := pair(cell, missing)
+    result = values.item
+end pair_field
+
+pair_binding: (cell: ptr u32, missing: bool)
+              -> (result: maybe_pointer from cell) =
+    (item: local, _) := pair(cell, missing)
+    result = local
+end pair_binding

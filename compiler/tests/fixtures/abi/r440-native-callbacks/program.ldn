@@ -1,0 +1,85 @@
+-- Fixed code pointers remain C-convention values through fields and results.
+handler: type = extern(c) (value: i32) -> (result: i32)
+box: type = layout(c) struct
+    callback: handler
+    bias: i32
+end box
+
+extern(c) c_make: () -> (result: handler)
+extern(c) c_box: () -> (result: box)
+extern(c) c_apply: (candidate: box, value: i32) -> (result: i32)
+extern(c) c_bounce: (callback: handler, value: i32) -> (result: i32)
+
+extern(c) private_step: (value: i32) -> (result: i32) =
+    result = value + 2
+end private_step
+
+public extern(c) l_make: () -> (result: handler) =
+    result = private_step
+end l_make
+
+public extern(c) l_box: () -> (result: box) =
+    result = box(callback: private_step, bias: 3)
+end l_box
+
+public extern(c) l_apply: (candidate: box, value: i32) -> (result: i32) =
+    result = candidate.callback(value) + candidate.bias
+end l_apply
+
+public extern(c) l_recur: (value: i32) -> (result: i32) =
+    if value == 0 then
+        result = 10
+    else
+        result = c_bounce(l_recur, value - 1) + 1
+    end if
+end l_recur
+
+-- The bodies may share, but both external spellings must remain callable.
+public extern(c) link(symbol: "r440_public_first") first: (value: i32) -> (result: i32) =
+    result = value + 3
+end first
+public extern(c) link(symbol: "r440_public_second") second: (value: i32) -> (result: i32) =
+    result = value + 3
+end second
+
+missing: atom
+optional: type = missing | ptr mut i32
+optional_handler: type = extern(c) (want: i32, value: ptr mut i32) -> (result: optional from value)
+extern(c) c_optional: (want: i32, value: ptr mut i32) -> (result: optional from value)
+public extern(c) l_optional: (want: i32, value: ptr mut i32) -> (result: optional from value) =
+    if want == 0 then
+        result = missing
+    else
+        result = value
+    end if
+end l_optional
+
+public extern(c) landin_check: () -> (result: i32) =
+    returned := c_make()
+    boxed := c_box()
+    mut cell: i32 = 40
+    pointer_call: optional_handler = c_optional
+    mut missing_ok: bool = false
+    mut present_ok: bool = false
+    mut indirect_ok: bool = false
+    match pointer_call(0, addr cell)
+        missing: indirect_ok = true
+        ptr: indirect_ok = false
+    end match
+    match c_optional(0, addr cell)
+        missing: missing_ok = true
+        ptr: missing_ok = false
+    end match
+    match c_optional(1, addr cell)
+        missing: present_ok = false
+        ptr (found): present_ok = found.val == 40
+    end match
+    result = 1
+    if returned(10) == 11 and boxed.callback(10) == 11
+       and boxed.bias == 4 and c_apply(l_box(), 10) == 15
+       and l_apply(boxed, 10) == 15 and l_recur(16) == 42
+       and missing_ok and present_ok and indirect_ok
+    then
+        result = 42
+    end if
+end landin_check

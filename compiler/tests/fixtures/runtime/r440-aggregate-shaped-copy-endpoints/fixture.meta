@@ -1,0 +1,6 @@
+class: runtime
+summary: aggregate-shaped constructor fields copy named locals, call temporaries and repeated elements without losing callback metadata
+constructs: 0420, 0520, 0670, 0700, 0870, 1000, 1800, 1810, 1970
+program: main.ldn
+status: 42
+targets: linux-x86-64

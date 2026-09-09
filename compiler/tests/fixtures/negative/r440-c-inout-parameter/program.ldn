@@ -1,0 +1,1 @@
+extern(c) bad: (inout value: i32) -> none

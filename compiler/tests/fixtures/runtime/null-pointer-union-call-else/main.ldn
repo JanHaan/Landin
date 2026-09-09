@@ -1,0 +1,38 @@
+unavailable: atom
+absent: atom
+maybe_pointer: type = absent | ptr mut u32
+
+obtain: (cell: ptr mut u32, reject: bool)
+        -> (result: ptr mut u32 from cell) ! unavailable =
+    fail unavailable when reject
+    result = cell
+end obtain
+
+read_or: (value: maybe_pointer, fallback: u32) -> (result: u32) =
+    match value
+        absent: result = fallback
+        ptr (cell): result = cell.val
+    end match
+end read_or
+
+public main: () -> (code: i32) =
+    code = 1
+    mut cell: u32 = 40
+    mut failures: u32 = 0
+    present: maybe_pointer = obtain(addr cell, false) else (problem)
+        _ = problem
+        inc failures
+        absent
+    end
+    missing: maybe_pointer = obtain(addr cell, true) else (problem)
+        _ = problem
+        inc failures
+        absent
+    end
+    if failures == 1 and read_or(present, 100) == 40
+      and read_or(missing, 2) == 2
+      and sizeof maybe_pointer == sizeof ptr mut u32
+    then
+        code = 42
+    end if
+end main

@@ -596,6 +596,11 @@ package Landin.Checking is
       Length  : Element_Count            := 1;
       Cases   : Natural                  := 0;
       Payloads_First : Natural           := 0;
+      --  Variant_Field names a case run, rebased by Lay_Out.  An array
+      --  with Cases = 1 instead names one complete immediate element in
+      --  the table's field-shape arena.  That link is already absolute:
+      --  Lay_Out must not rebase it.  Nested arrays and callable scalars
+      --  use this form, once per shape occurrence, never per element.
       --  The child's body for an Aggregate_Field, and since D121 the
       --  element's body for a Fixed_Array_Field whose elements are an
       --  ordinary struct.  Both answer the same question -- which nominal
@@ -634,10 +639,26 @@ package Landin.Checking is
       Empty_Atom : Declaration_Id := No_Declaration;
    end record;
 
-   function Array_Field_Element (Shape : Field_Shape) return Field_Shape
-     with Pre => Shape.Kind = Fixed_Array_Field;
-
    function Holds (Of_Table : Table; Shape : Field_Shape) return Boolean;
+
+   function Make_Array_Field
+     (Into    : in out Table;
+      Length  : Element_Count;
+      Element : Field_Shape) return Field_Shape
+     with Pre  => Holds (Into, Element),
+          Post => Holds (Into, Make_Array_Field'Result);
+
+   function Array_Field_Element
+     (Of_Table : Table; Shape : Field_Shape) return Field_Shape
+     with Pre => Shape.Kind = Fixed_Array_Field
+                 and then Holds (Of_Table, Shape);
+
+   --  Transitional compact-only accessor.  Explicit child metadata is a
+   --  release-checked defect here, never a scalar fallback.
+   function Array_Field_Element (Shape : Field_Shape) return Field_Shape
+     with Pre => Shape.Kind = Fixed_Array_Field and then Shape.Cases = 0
+                 and then Shape.Payloads_First = 0
+                 and then Shape.Signature = No_Signature;
 
    --  Complete immediate element identity; layout never supplies identity.
    function Field_Shapes_Agree
@@ -860,7 +881,9 @@ package Landin.Checking is
       Site       : Landin.Provenance.Origin;
       Errors     : Atom_Set_Id := No_Atom_Set;
       Error_Form : Error_Set_Form := Infallible;
-      Sources    : Return_Source_Array := No_Return_Sources)
+      Sources    : Return_Source_Array := No_Return_Sources;
+      C_ABI      : Boolean := False;
+      Variadic   : Boolean := False)
       return Signature_Id
      with Pre  => Is_Prepared (Into)
                   and then Landin.Provenance.Is_Known (Site)
@@ -884,7 +907,9 @@ package Landin.Checking is
       Site       : Landin.Provenance.Origin;
       Errors     : Atom_Set_Id := No_Atom_Set;
       Error_Form : Error_Set_Form := Infallible;
-      Sources    : Return_Source_Array := No_Return_Sources)
+      Sources    : Return_Source_Array := No_Return_Sources;
+      C_ABI      : Boolean := False;
+      Variadic   : Boolean := False)
       return Signature_Id
      with Pre  => Is_Prepared (Into)
                   and then Landin.Provenance.Is_Known (Site)
@@ -903,6 +928,45 @@ package Landin.Checking is
                      else Errors = No_Atom_Set),
           Post => Signature_Count (Into) = Signature_Count (Into)'Old + 1
                   and then Holds (Into, Add_Signature'Result);
+
+   --  The promoted actual expression, not its argument wrapper.  Absent
+   --  metadata returns No_Value; generic routine views retain separate facts.
+   procedure Note_Variadic_Argument
+     (Into    : in out Table;
+      Of_Tree : Landin.Syntax.Tree;
+      Node    : Landin.Syntax.Node_Id;
+      Part    : Signature_Part)
+     with Pre => Is_Prepared (Into) and then Covers (Into, Of_Tree)
+                 and then Landin.Syntax.Contains (Of_Tree, Node)
+                 and then Holds (Into, Part);
+
+   function Variadic_Argument_Of
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id) return Signature_Part
+     with Pre => Is_Prepared (Of_Table) and then Covers (Of_Table, Of_Tree)
+                 and then Landin.Syntax.Contains (Of_Tree, Node);
+
+   function Signature_Uses_C_ABI
+     (Of_Table : Table; Signature : Signature_Id) return Boolean
+     with Pre => Holds (Of_Table, Signature);
+
+   function Signature_Is_Variadic
+     (Of_Table : Table; Signature : Signature_Id) return Boolean
+     with Pre => Holds (Of_Table, Signature);
+
+   --  Link spelling is a source fact, independent of a routine view.
+   procedure Note_Link_Symbol
+     (Into   : in out Table;
+      Id     : Declaration_Id;
+      Symbol : Landin.Source.Names.Name_Id)
+     with Pre => Is_Prepared (Into)
+                 and then Id /= No_Declaration
+                 and then Natural (Id) <= Declaration_Limit (Into);
+
+   function Link_Symbol
+     (Of_Table : Table; Id : Declaration_Id)
+      return Landin.Source.Names.Name_Id;
 
    function Signature_Of
      (Of_Table : Table;
@@ -1077,11 +1141,7 @@ package Landin.Checking is
      (Of_Table : Table;
       Length   : Element_Count;
       Element  : Field_Shape) return Actual_Key
-     with Pre => Holds (Of_Table, Element)
-                 and then Element.Kind in Reference_Field | Fixed_Array_Field;
-
-   function Array_Element_Shape_Of
-     (Of_Table : Table; Key : Actual_Key) return Field_Shape;
+     with Pre => Holds (Of_Table, Element);
 
    function Nominal_Type_Actual
      (Of_Table : Table; Nominal : Nominal_Type_Id) return Actual_Key
@@ -1133,6 +1193,12 @@ package Landin.Checking is
 
    function Array_Element_Form_Of
      (Of_Table : Table; Key : Actual_Key) return Array_Element_Form
+     with Pre => Holds (Of_Table, Key)
+                 and then Actual_Kind_Of (Key) = Type_Actual_Kind
+                 and then Type_Form_Of (Key) = Fixed_Array_Actual_Type;
+
+   function Array_Element_Shape_Of
+     (Of_Table : Table; Key : Actual_Key) return Field_Shape
      with Pre => Holds (Of_Table, Key)
                  and then Actual_Kind_Of (Key) = Type_Actual_Kind
                  and then Type_Form_Of (Key) = Fixed_Array_Actual_Type;
@@ -1709,6 +1775,9 @@ package Landin.Checking is
      return Boolean
      with Pre => Is_Prepared (Of_Table);
 
+   function Has_C_Layout (Of_Table : Table; Id : Nominal_Type_Id)
+     return Boolean;
+
    function Layout_Field_Count (Of_Table : Table; Id : Nominal_Type_Id)
      return Natural
      with Pre => Is_Prepared (Of_Table)
@@ -1722,7 +1791,8 @@ package Landin.Checking is
       Facts : Landin.Targets.Target_Facts;
       Fits  : out Boolean;
       Cases : Case_Run_Array := No_Case_Runs;
-      Payloads : Field_Shape_Array := No_Field_Shapes)
+      Payloads : Field_Shape_Array := No_Field_Shapes;
+      C_Layout : Boolean := False)
      with Pre  => Is_Prepared (Into)
                   and then Holds (Into, Id)
                   and then Instance_State_Of (Into, Id)
@@ -2167,6 +2237,11 @@ private
    package Run_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Run);
 
+   package Link_Name_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive,
+      Element_Type => Landin.Source.Names.Name_Id,
+      "=" => Landin.Source.Names."=");
+
    type Settlement is record
       State  : Progress               := Untouched;
       Answer : Landin.Types.Type_Kind := Landin.Types.Undecided;
@@ -2354,12 +2429,15 @@ private
       Site       : Landin.Provenance.Origin := Landin.Provenance.No_Origin;
       Errors     : Atom_Set_Id := No_Atom_Set;
       Error_Form : Error_Set_Form := Infallible;
+      C_ABI      : Boolean := False;
+      Variadic   : Boolean := False;
    end record;
 
    package Signature_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Signature_Record);
 
    type Aggregate_Layout is record
+      C_Layout : Boolean := False;
       State  : Instance_State := Instance_Unseen;
       --  Payload shapes share Field_Shapes but have no top-level offset.
       --  Keep the two run starts distinct once a variant contributes those
@@ -2388,6 +2466,8 @@ private
       Has_Reference : Boolean := False;
       Reference : Reference_Id := No_Reference;
       Has_Text_Conversion : Boolean := False;
+      Has_Variadic_Part : Boolean := False;
+      Variadic_Part : Natural := 0;
       Text_Conversion : Text_Conversion_Kind := No_Text_Conversion;
       Has_Concept : Boolean := False;
       Concept : Concept_Id := No_Concept;
@@ -2449,6 +2529,7 @@ private
       Node_Owed_Checks : Constraint_Id_Vectors.Vector;
       Node_Concepts : Concept_Id_Vectors.Vector;
       Node_Result_Shapes : Signature_Id_Vectors.Vector;
+      Node_Variadic_Parts : Index_Vectors.Vector;
       Node_Routine_Targets : Routine_Id_Vectors.Vector;
       Node_Evidence : Conformance_Id_Vectors.Vector;
       Node_Evidence_Entries : Index_Vectors.Vector;
@@ -2458,6 +2539,7 @@ private
       Shapes       : Shape_Vectors.Vector;
       Runs         : Run_Vectors.Vector;
       Declarations : Settlement_Vectors.Vector;
+      Link_Names   : Link_Name_Vectors.Vector;
       Declaration_Nominals : Nominal_Id_Vectors.Vector;
       Empty_Nominals : Nominal_Id_Vectors.Vector;
       Nominal_Templates : Nominal_Template_Vectors.Vector;

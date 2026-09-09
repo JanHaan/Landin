@@ -1,0 +1,6 @@
+class: negative
+summary: A deferred address index evaluates its frame-pointer write before named return validation
+constructs: 0470, 0480, 0770, 0790, 1100
+program: program.ldn
+codes: L0314
+targets: linux-x86-64, macos-arm64, synthetic-32

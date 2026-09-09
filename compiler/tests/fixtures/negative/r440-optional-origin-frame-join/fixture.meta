@@ -1,0 +1,6 @@
+class: negative
+summary: Empty and frame-present control edges retain frame origin through a local and cannot escape in an optional return
+constructs: 0480, 0770, 0790
+program: program.ldn
+codes: L0314
+targets: linux-x86-64, macos-arm64, synthetic-32

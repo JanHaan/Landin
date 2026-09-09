@@ -1,0 +1,6 @@
+class: negative
+summary: A forwarding expression validates later reference results independently of a correct first result
+constructs: 0480, 0790, 0920, 0990
+program: program.ldn
+codes: L0316
+targets: linux-x86-64, macos-arm64, synthetic-32
