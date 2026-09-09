@@ -1,0 +1,13 @@
+row: type = [4096]i32
+reduce: (a: row) -> (r: i32) =
+    r = 0
+    mut i: usize = 0
+    while i < lenof a do r += a[i] inc i end while
+end reduce
+public main: () -> (code: i32) =
+    a: row = zeroed
+    b := a + 3
+    c := b * 2 - 1
+    if reduce(c) == 20480 and c[0] == 5 and c[4095] == 5
+    then code = 42 else code = 1 end if
+end main

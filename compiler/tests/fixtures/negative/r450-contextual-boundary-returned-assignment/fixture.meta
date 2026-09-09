@@ -1,0 +1,6 @@
+class: negative
+summary: an initializer arm that returns cannot lend assignment to its surviving array field edge
+program: program.ldn
+codes: L0302
+constructs: 0590, 0710, 0930, 0970, 1050, 1880, 1910
+targets: linux-x86-64, macos-arm64, synthetic-32

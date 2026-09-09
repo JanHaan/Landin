@@ -1,0 +1,30 @@
+row: type = [3]i32
+box: type = struct values: row end box
+make: () -> (r: row) = r = [2, 4, 6] end make
+scale: (values: row) -> (r: row) = r = values * 2 end scale
+sum: (values: row) -> (r: i32) =
+    r = 0
+    mut i: usize = 0
+    while i < lenof values do
+        r += values[i]
+        inc i
+    end while
+end sum
+public main: () -> (code: i32) =
+    a: row = make()
+    b := a + 3
+    c: row = 20 - a
+    d := -a
+    mut stored: box = zeroed
+    stored.values = scale(a + 1) / 2
+    p: ptr mut row = addr stored.values
+    p.val = p.val + make()
+    fractions: [3]f64 = [2.0, 4.0, 8.0]
+    floats := 16.0 / fractions + 0.5
+    combined := a + b
+    if sum(a + b) == 33 and sum(c) == 48 and sum(d) == -12
+      and stored.values[0] == 5 and p.val[1] == 9 and p.val[2] == 13
+      and floats[0] == 8.5 and floats[1] == 4.5 and floats[2] == 2.5
+      and lenof combined == 3
+    then code = 42 else code = 1 end if
+end main

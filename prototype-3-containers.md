@@ -8,6 +8,18 @@ parameterised types, concepts, allocator threading, escape rules and
 specialisation. A driver never instantiates anything and a parser
 barely does. A container library does nothing else.
 
+D211 separates those semantic instances from optional dispatch specialization.
+Allocator size/alignment evidence works with specialization off; expected
+instance metadata alone does not prove the incoming provider. Hidden evidence
+and aggregate-result ABI positions remain even after a proved entry call becomes
+direct. A counted failing allocator's attempts, rollback and frees remain
+observable, as do initialized-prefix publication and retained origins. D187's
+narrow raw-storage `unchecked` regions add no optimizer assumptions. D210
+reorders only explicitly optimal fields, never a container's natural layout;
+D209's numeric array loops do not turn arbitrary raw storage into initialized
+array values. These rules also preserve prototype 2's diagnostic provider and
+prototype 4's heterogeneous capability chains.
+
 Four containers, deliberately different in shape:
 
 - `vec` — a growing array: the one that reallocates, so it is where the

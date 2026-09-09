@@ -165,8 +165,14 @@ package body Landin.Syntax is
    function Is_Variadic (Of_Tree : Tree; Id : Node_Id) return Boolean
      is (Element (Of_Tree, Id).Variadic);
 
-   function Has_C_Layout (Of_Tree : Tree; Id : Node_Id) return Boolean
-     is (Element (Of_Tree, Id).C_Layout);
+   function Layout_Of (Of_Tree : Tree; Id : Node_Id)
+     return Landin.Layouts.Policy is (Element (Of_Tree, Id).Layout);
+
+   function Has_C_Layout (Of_Tree : Tree; Id : Node_Id) return Boolean is
+      use type Landin.Layouts.Policy;
+   begin
+      return Layout_Of (Of_Tree, Id) = Landin.Layouts.C;
+   end Has_C_Layout;
 
    function Link_Symbol_Span (Of_Tree : Tree; Id : Node_Id)
      return Landin.Source.Span

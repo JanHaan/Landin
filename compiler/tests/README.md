@@ -69,6 +69,69 @@ transcript begins with `FILTERED`, and an unknown selection fails: focused
 feedback cannot look like the complete suite by accident. Run
 `./scripts/test.sh` with no selector for the complete local gate.
 
+## Optimization profiles and object quality
+
+Every runtime and ABI fixture runs separately under `none/off`, `size/off`,
+`size/auto` and `speed/auto` (objective/specialization). Focused names containing
+`generic`, `any-` or `r450`, plus `allocator-vec-pressure`,
+`diagnostic-loggers-dispatch` and `core-io-erased-system`, also run `none/all`
+and `speed/all`. A selected runtime/ABI fixture uses the same matrix. Artifact
+names and assertion labels include the profile. Each profile independently
+checks the original exact status, trap and output oracle; agreement with another
+profile alone is never success. Timeout never satisfies `traps: yes`.
+
+The harness adds compiler controls directly, not through a fixture's `args` or
+`run_args`; metadata remains the program's original request and oracle.
+`--build-mode` is a separate source-configuration axis, and building the Ada
+compiler in debug/release does not select an emitted-code objective either.
+
+After the compiler build, `./scripts/quality.sh` runs the Linux x86-64 numeric
+acceptance in `quality/check.py`. It requires `LANDIN_GNAT_HOME` and takes gcc,
+objdump and size from that checksum-pinned installation, not an arbitrary host
+PATH. It compiles and repeats each request, parses factual JSON, assembles the
+same output to ELF objects, measures sections, function bytes, prologue frames
+and disassembled instruction sites, and executes that same assembly against
+exact exit/empty-stdout/empty-stderr oracles. Its probes cover scalar chains
+and loops, a tiny leaf, compact large-array arithmetic with real stack-page
+touches, explicit optimal layout, single-instance evidence specialization,
+a source-level two-instance size/speed threshold and final private-body
+folding. The specialization and folding probes also run none/all and speed/all.
+Existing insertion-sort and sieve-of-eratosthenes sources retain their original
+status-42 oracles; the other probes return zero. Scalar acceptance requires
+substantial stack-site, frame and instruction reductions, with no tiny-leaf
+growth or gratuitous callee-save overhead; existing workload text has a bounded
+regression allowance. Source threshold decisions are checked against both
+measured cost inputs and actual direct/indirect machine sites, including shared
+fallback bodies. The runner retains disassembly, symbol and size output and
+compiler/assembly/object hashes in JSON after all acceptance checks pass.
+`ROADMAP.md` R4.50 owns the numeric bounds and completion evidence. The script
+writes actual observations to the selected build tree's
+`quality/measurements.json`; it never updates an acceptance bound or recorded
+fixture. Acceptance is the current command's zero exit, not the presence of
+this file: a failed rerun leaves an earlier successful observation untouched.
+This is structural/object smoke evidence, not timing or competitive
+benchmark evidence. A non-Linux host fails rather than claiming a skip as a pass.
+
+## Native report identity and build inventory
+
+`python3 compiler/tests/test_native_report_identity.py --refine ABSOLUTE_PATH`
+checks real destination identities without substituting the fake filesystem.
+It retains the original collision/refusal and successful-output oracles for
+source and artifact links, absent leaves, actual symlink parents, case rules,
+dangling links and indeterminate identities. `--directory` optionally chooses
+another filesystem for the temporary cases. The native gate runs it with both
+compiler build modes. `python3 scripts/tests/test_build_inventory.py` exercises
+the production developer-build inventory decision, including C/header
+addition, removal and renaming, without invoking a builder; it is also gated.
+
+Absent names on an unknown filesystem remain conservatively indeterminate.
+In particular, a Linux container cannot infer the host volume's case rules
+from its virtiofs mount. For local object-quality measurements, put the
+runner's `--output` on the container's own filesystem (for example `/tmp`),
+then retain its `measurements.json` in the host build tree. This changes no
+source, profile, execution oracle or acceptance threshold; the native gate's
+ordinary `scripts/quality.sh` output already resides on its Linux filesystem.
+
 ## Complete programs to try
 
 The runtime fixtures include small, complete programs rather than only

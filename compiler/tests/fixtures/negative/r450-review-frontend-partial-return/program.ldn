@@ -1,0 +1,4 @@
+f: (stop: bool) -> none =
+    a: [0]i32 = zeroed
+    _ = a + (if stop then return end if)
+end f

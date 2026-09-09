@@ -1,0 +1,4 @@
+f: () -> none =
+    a: [3]i32 = zeroed
+    _ = (begin end) + a
+end f

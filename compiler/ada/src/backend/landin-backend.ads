@@ -8,16 +8,12 @@
 --  thing is.  Which register the frame pointer is, and how a store to
 --  one of these offsets is spelt, is a child's.
 --
---  Every value gets a cell, not only every slot, and that is a decision
---  rather than an oversight.  `Landin.IR` keeps values block-local so a
---  backend never has to compute dominance, and the cheapest correct way
---  to honour that is to give each defined value somewhere to live and to
---  reload it where it is used.  The roadmap asks for "deterministic
---  baseline code generation before competitive optimization" and puts
---  promoting a cell to a register in R4.50, where a register allocator
---  is actually being written.  The cost is stated plainly rather than
---  hidden: this frame is as large as the item has values, and every
---  operand is a memory reference.
+--  The reference layout gives every scalar value a separate cell.  The
+--  allocation-driven overload instead consumes explicit storage needs:
+--  pinned slots, reusable spill homes and callee-save homes.  Register
+--  identities and the proof that two values can reuse storage belong to
+--  the target child; this parent validates capacities and places bytes.
+--  Neither representation expands a compact array into per-element cells.
 --
 --  Offsets grow downward and are reported as positive distances *below*
 --  the frame pointer, because that is how every caller has to spell one
@@ -36,6 +32,8 @@ private with Ada.Containers.Vectors;
 
 with Landin.IR;
 with Landin.Targets;
+with Landin.Layouts;
+with Landin.Targets.Layouts;
 with Landin.Types;
 
 package Landin.Backend is
@@ -52,6 +50,36 @@ package Landin.Backend is
       Facts   : Landin.Targets.Target_Facts) return Frame
      with Pre => Landin.IR.Holds (Of_Unit, Item);
 
+   --  Indexes are source slot/value positions, starting at one.  False
+   --  slots and zero value assignments reserve no storage.  Positive value
+   --  assignments select an explicit spill home; disjoint live intervals
+   --  may name the same home.  Homes and saves are placed in supplied order
+   --  after pinned slots, with alignment checked against the target stack.
+   type Home_Mask is array (Positive range <>) of Boolean;
+   type Spill_Assignments is array (Positive range <>) of Natural;
+
+   function Laid_Out
+     (Of_Unit : Landin.IR.Unit;
+      Item    : Landin.IR.Item_Id;
+      Facts   : Landin.Targets.Target_Facts;
+      Slots   : Home_Mask;
+      Values  : Spill_Assignments;
+      Spills  : Landin.Targets.Layouts.Field_Extent_Array;
+      Saves   : Landin.Targets.Layouts.Field_Extent_Array) return Frame;
+
+   function Has_Slot_Home
+     (Of_Frame : Frame; Slot : Landin.IR.Slot_Id) return Boolean;
+   function Has_Value_Home
+     (Of_Frame : Frame; Value : Landin.IR.Value_Id) return Boolean;
+   function Spill_Offset
+     (Of_Frame : Frame; Home : Positive) return Landin.Targets.Byte_Count;
+   function Save_Offset
+     (Of_Frame : Frame; Home : Positive) return Landin.Targets.Byte_Count;
+
+   --  Sum of requested home extents, excluding inter-home/final padding.
+   function Spill_Bytes (Of_Frame : Frame) return Landin.Targets.Byte_Count;
+   function Save_Bytes (Of_Frame : Frame) return Landin.Targets.Byte_Count;
+
    --  What the prologue subtracts: the whole extent, rounded up to the
    --  target's stack alignment so the frame leaves the stack as aligned
    --  as it found it.
@@ -62,11 +90,10 @@ package Landin.Backend is
      return Landin.Targets.Byte_Count;
 
    --  Where one field of an aggregate slot sits, as a distance below the
-   --  frame pointer like any other cell.  A cell grows downward and
-   --  [0750] lays a struct out upward, so field 1 is furthest from the
-   --  frame pointer and the last field is nearest: this subtracts the
-   --  field's own offset from the cell's, which is what keeps a hexdump
-   --  of the cell matching the source.
+   --  frame pointer like any other cell.  A cell grows downward while
+   --  aggregate fields grow upward from its base.  Subtract the selected
+   --  source field's physical offset from the cell's downward distance;
+   --  an explicit optimal layout may place that field out of source order.
    function Field_Offset
      (Of_Unit  : Landin.IR.Unit;
       Item     : Landin.IR.Item_Id;
@@ -99,6 +126,49 @@ package Landin.Backend is
                  and then (Landin.IR.Is_Aggregate (Of_Unit, Item, Slot)
                            or else Landin.IR.Is_Array
                                      (Of_Unit, Item, Slot));
+
+   --  Shared physical placement for all consumers, including datum image
+   --  replay.  Order contains source field positions in physical order;
+   --  Offsets is indexed by source position.  Nested fields apply their own
+   --  policy, and variants retain their tag-first/source-order payloads.
+   function Fields_Layout
+     (Of_Unit : Landin.IR.Unit;
+      Fields  : Landin.IR.Field_Shape_Array;
+      Policy  : Landin.Layouts.Policy;
+      Facts   : Landin.Targets.Target_Facts)
+      return Landin.Targets.Layouts.Plan;
+
+   function Aggregate_Layout
+     (Of_Unit : Landin.IR.Unit;
+      Shape   : Landin.IR.Field_Shape;
+      Facts   : Landin.Targets.Target_Facts)
+      return Landin.Targets.Layouts.Plan;
+
+   function Nominal_Layout
+     (Of_Unit : Landin.IR.Unit;
+      Nominal : Landin.IR.Nominal_Type_Id;
+      Facts   : Landin.Targets.Target_Facts)
+      return Landin.Targets.Layouts.Plan;
+
+   function Slot_Layout
+     (Of_Unit : Landin.IR.Unit;
+      Item    : Landin.IR.Item_Id;
+      Slot    : Landin.IR.Slot_Id;
+      Facts   : Landin.Targets.Target_Facts)
+      return Landin.Targets.Layouts.Plan;
+
+   function Datum_Layout
+     (Of_Unit : Landin.IR.Unit;
+      Item    : Landin.IR.Item_Id;
+      Facts   : Landin.Targets.Target_Facts)
+      return Landin.Targets.Layouts.Plan;
+
+   function Measurement_Layout
+     (Of_Unit : Landin.IR.Unit;
+      Item    : Landin.IR.Item_Id;
+      Value   : Landin.IR.Value_Id;
+      Facts   : Landin.Targets.Target_Facts)
+      return Landin.Targets.Layouts.Plan;
 
    --  The target extent of one neutral field shape.  D86 recursively replays
    --  a measurement-only aggregate run; runtime datum and slot runs retain
@@ -163,10 +233,18 @@ private
       Element_Type => Landin.Targets.Byte_Count,
       "="          => Landin.Targets."=");
 
+   package Home_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Boolean);
+
    type Frame is record
-      Slots  : Offset_Vectors.Vector;
-      Values : Offset_Vectors.Vector;
-      Size   : Landin.Targets.Byte_Count := 0;
+      Slots       : Offset_Vectors.Vector;
+      Values      : Offset_Vectors.Vector;
+      Slot_Homes  : Home_Vectors.Vector;
+      Spills      : Offset_Vectors.Vector;
+      Saves       : Offset_Vectors.Vector;
+      Spill_Total : Landin.Targets.Byte_Count := 0;
+      Save_Total  : Landin.Targets.Byte_Count := 0;
+      Size        : Landin.Targets.Byte_Count := 0;
    end record;
 
 end Landin.Backend;

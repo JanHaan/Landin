@@ -1,0 +1,8 @@
+class: abi
+summary: C observes all GP callee saves and large MEMORY arguments cross probed frames and outgoing areas
+program: program.ldn
+c-sources: peer.c
+run_expect: expected.txt
+status: 0
+constructs: 1570, 1580, 1600, 1610
+targets: linux-x86-64

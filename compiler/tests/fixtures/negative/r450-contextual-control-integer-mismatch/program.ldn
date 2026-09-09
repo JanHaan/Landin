@@ -1,0 +1,4 @@
+f: () -> none =
+    a: [1]u8 = [10]
+    b := a + (if true then 1 else i32(2) end if)
+end f

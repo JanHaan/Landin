@@ -1,0 +1,4 @@
+f: () -> none =
+    a: [2]bool = zeroed
+    _ = a + a
+end f

@@ -1,0 +1,6 @@
+class: runtime
+summary: 24000 straight-line wrapping increments retain reference homes without instruction-sized host-stack scratch
+program: main.ldn
+status: 0
+constructs: 0320, 1890
+targets: linux-x86-64

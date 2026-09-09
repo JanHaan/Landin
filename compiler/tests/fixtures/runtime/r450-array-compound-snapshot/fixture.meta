@@ -1,0 +1,6 @@
+class: runtime
+summary: compound array assignment evaluates its place once and retains the old value before its right operand
+constructs: 0390, 0410, 0520, 0590
+program: main.ldn
+status: 42
+targets: linux-x86-64

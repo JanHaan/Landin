@@ -6656,6 +6656,265 @@ file positive/r440-parameterized-struct-template-order-outer-first-arrays/progra
 unit signatures 0 items 0
 file positive/r440-parameterized-struct-unused-numeric-array-shape/program.ldn
 unit signatures 0 items 0
+file positive/r450-array-arithmetic-source/program.ldn
+unit signatures 1 items 1
+signature 1 (in [4]i32, in [4]i32, in i32) -> [4]i32
+item 1 ROUTINE f result array signature 1 params 4 slots 42 blocks 28 values 169
+  elements 4 of i32
+  slot 1 f usize param 1
+  slot 2 a elements 4 of i32 param 2
+  slot 3 b elements 4 of i32 param 3
+  slot 4 scalar i32 param 4
+  slot 5 r elements 4 of i32 return
+  slot 6 sum elements 4 of i32
+  slot 7 - elements 4 of i32
+  slot 8 - elements 4 of i32
+  slot 9 - elements 4 of i32
+  slot 10 - usize
+  slot 11 shifted elements 4 of i32
+  slot 12 - i32
+  slot 13 - elements 4 of i32
+  slot 14 - elements 4 of i32
+  slot 15 - usize
+  slot 16 - elements 4 of i32
+  slot 17 - elements 4 of i32
+  slot 18 - elements 4 of i32
+  slot 19 - elements 4 of i32
+  slot 20 - elements 4 of i32
+  slot 21 - i32
+  slot 22 - elements 4 of i32
+  slot 23 - usize
+  slot 24 - i32
+  slot 25 - elements 4 of i32
+  slot 26 - usize
+  slot 27 - i32
+  slot 28 - elements 4 of i32
+  slot 29 - usize
+  slot 30 - elements 4 of i32
+  slot 31 - usize
+  slot 32 - elements 4 of i32
+  slot 33 - elements 4 of i32
+  slot 34 - elements 4 of i32
+  slot 35 - elements 4 of i32
+  slot 36 - elements 4 of i32
+  slot 37 - usize
+  slot 38 - i32
+  slot 39 - elements 4 of i32
+  slot 40 - usize
+  slot 41 - elements 4 of i32
+  slot 42 - usize
+  block 1 scope 5 BLOCK length 5
+    1 COPY_ARRAY from slot 2 to slot 7
+    2 COPY_ARRAY from slot 3 to slot 8
+    3 NUMBER usize 0
+    4 STORE slot 10 <- 3
+    5 JUMP target 2
+  block 2 scope 5 BLOCK length 4
+    6 LOAD usize slot 10
+    7 NUMBER usize 4
+    8 LESS_THAN bool <- 6 7
+    9 BRANCH target 3 alternative 4 <- 8
+  block 3 scope 5 BLOCK length 9
+    10 LOAD usize slot 10
+    11 LOAD_ELEMENT i32 slot 7 <- 10
+    12 LOAD_ELEMENT i32 slot 8 <- 10
+    13 ADD i32 <- 11 12
+    14 STORE_ELEMENT slot 9 <- 10 13
+    15 NUMBER usize 1
+    16 ADD usize <- 10 15
+    17 STORE slot 10 <- 16
+    18 JUMP target 2
+  block 4 scope 5 BLOCK length 7
+    19 COPY_ARRAY from slot 9 to slot 6
+    20 LOAD i32 slot 4
+    21 STORE slot 12 <- 20
+    22 COPY_ARRAY from slot 6 to slot 13
+    23 NUMBER usize 0
+    24 STORE slot 15 <- 23
+    25 JUMP target 5
+  block 5 scope 5 BLOCK length 4
+    26 LOAD usize slot 15
+    27 NUMBER usize 4
+    28 LESS_THAN bool <- 26 27
+    29 BRANCH target 6 alternative 7 <- 28
+  block 6 scope 5 BLOCK length 9
+    30 LOAD usize slot 15
+    31 LOAD i32 slot 12
+    32 LOAD_ELEMENT i32 slot 13 <- 30
+    33 SUBTRACT i32 <- 31 32
+    34 STORE_ELEMENT slot 14 <- 30 33
+    35 NUMBER usize 1
+    36 ADD usize <- 30 35
+    37 STORE slot 15 <- 36
+    38 JUMP target 5
+  block 7 scope 5 BLOCK length 7
+    39 COPY_ARRAY from slot 14 to slot 11
+    40 COPY_ARRAY from slot 11 to slot 20
+    41 NUMBER i32 2
+    42 STORE slot 21 <- 41
+    43 NUMBER usize 0
+    44 STORE slot 23 <- 43
+    45 JUMP target 8
+  block 8 scope 5 BLOCK length 4
+    46 LOAD usize slot 23
+    47 NUMBER usize 4
+    48 LESS_THAN bool <- 46 47
+    49 BRANCH target 9 alternative 10 <- 48
+  block 9 scope 5 BLOCK length 9
+    50 LOAD usize slot 23
+    51 LOAD_ELEMENT i32 slot 20 <- 50
+    52 LOAD i32 slot 21
+    53 MULTIPLY i32 <- 51 52
+    54 STORE_ELEMENT slot 22 <- 50 53
+    55 NUMBER usize 1
+    56 ADD usize <- 50 55
+    57 STORE slot 23 <- 56
+    58 JUMP target 8
+  block 10 scope 5 BLOCK length 6
+    59 COPY_ARRAY from slot 22 to slot 19
+    60 NUMBER i32 3
+    61 STORE slot 24 <- 60
+    62 NUMBER usize 0
+    63 STORE slot 26 <- 62
+    64 JUMP target 11
+  block 11 scope 5 BLOCK length 4
+    65 LOAD usize slot 26
+    66 NUMBER usize 4
+    67 LESS_THAN bool <- 65 66
+    68 BRANCH target 12 alternative 13 <- 67
+  block 12 scope 5 BLOCK length 9
+    69 LOAD usize slot 26
+    70 LOAD_ELEMENT i32 slot 19 <- 69
+    71 LOAD i32 slot 24
+    72 DIVIDE i32 <- 70 71
+    73 STORE_ELEMENT slot 25 <- 69 72
+    74 NUMBER usize 1
+    75 ADD usize <- 69 74
+    76 STORE slot 26 <- 75
+    77 JUMP target 11
+  block 13 scope 5 BLOCK length 6
+    78 COPY_ARRAY from slot 25 to slot 18
+    79 NUMBER i32 5
+    80 STORE slot 27 <- 79
+    81 NUMBER usize 0
+    82 STORE slot 29 <- 81
+    83 JUMP target 14
+  block 14 scope 5 BLOCK length 4
+    84 LOAD usize slot 29
+    85 NUMBER usize 4
+    86 LESS_THAN bool <- 84 85
+    87 BRANCH target 15 alternative 16 <- 86
+  block 15 scope 5 BLOCK length 9
+    88 LOAD usize slot 29
+    89 LOAD_ELEMENT i32 slot 18 <- 88
+    90 LOAD i32 slot 27
+    91 REMAINDER i32 <- 89 90
+    92 STORE_ELEMENT slot 28 <- 88 91
+    93 NUMBER usize 1
+    94 ADD usize <- 88 93
+    95 STORE slot 29 <- 94
+    96 JUMP target 14
+  block 16 scope 5 BLOCK length 4
+    97 COPY_ARRAY from slot 28 to slot 17
+    98 NUMBER usize 0
+    99 STORE slot 31 <- 98
+    100 JUMP target 17
+  block 17 scope 5 BLOCK length 4
+    101 LOAD usize slot 31
+    102 NUMBER usize 4
+    103 LESS_THAN bool <- 101 102
+    104 BRANCH target 18 alternative 19 <- 103
+  block 18 scope 5 BLOCK length 8
+    105 LOAD usize slot 31
+    106 LOAD_ELEMENT i32 slot 17 <- 105
+    107 NEGATION i32 <- 106
+    108 STORE_ELEMENT slot 30 <- 105 107
+    109 NUMBER usize 1
+    110 ADD usize <- 105 109
+    111 STORE slot 31 <- 110
+    112 JUMP target 17
+  block 19 scope 5 BLOCK length 6
+    113 COPY_ARRAY from slot 30 to slot 16
+    114 COPY_ARRAY from slot 2 to slot 34
+    115 COPY_ARRAY from slot 3 to slot 35
+    116 NUMBER usize 0
+    117 STORE slot 37 <- 116
+    118 JUMP target 20
+  block 20 scope 5 BLOCK length 4
+    119 LOAD usize slot 37
+    120 NUMBER usize 4
+    121 LESS_THAN bool <- 119 120
+    122 BRANCH target 21 alternative 22 <- 121
+  block 21 scope 5 BLOCK length 9
+    123 LOAD usize slot 37
+    124 LOAD_ELEMENT i32 slot 34 <- 123
+    125 LOAD_ELEMENT i32 slot 35 <- 123
+    126 WRAPPING_SUBTRACT i32 <- 124 125
+    127 STORE_ELEMENT slot 36 <- 123 126
+    128 NUMBER usize 1
+    129 ADD usize <- 123 128
+    130 STORE slot 37 <- 129
+    131 JUMP target 20
+  block 22 scope 5 BLOCK length 6
+    132 COPY_ARRAY from slot 36 to slot 33
+    133 LOAD i32 slot 4
+    134 STORE slot 38 <- 133
+    135 NUMBER usize 0
+    136 STORE slot 40 <- 135
+    137 JUMP target 23
+  block 23 scope 5 BLOCK length 4
+    138 LOAD usize slot 40
+    139 NUMBER usize 4
+    140 LESS_THAN bool <- 138 139
+    141 BRANCH target 24 alternative 25 <- 140
+  block 24 scope 5 BLOCK length 9
+    142 LOAD usize slot 40
+    143 LOAD_ELEMENT i32 slot 33 <- 142
+    144 LOAD i32 slot 38
+    145 WRAPPING_MULTIPLY i32 <- 143 144
+    146 STORE_ELEMENT slot 39 <- 142 145
+    147 NUMBER usize 1
+    148 ADD usize <- 142 147
+    149 STORE slot 40 <- 148
+    150 JUMP target 23
+  block 25 scope 5 BLOCK length 4
+    151 COPY_ARRAY from slot 39 to slot 32
+    152 NUMBER usize 0
+    153 STORE slot 42 <- 152
+    154 JUMP target 26
+  block 26 scope 5 BLOCK length 4
+    155 LOAD usize slot 42
+    156 NUMBER usize 4
+    157 LESS_THAN bool <- 155 156
+    158 BRANCH target 27 alternative 28 <- 157
+  block 27 scope 5 BLOCK length 9
+    159 LOAD usize slot 42
+    160 LOAD_ELEMENT i32 slot 16 <- 159
+    161 LOAD_ELEMENT i32 slot 32 <- 159
+    162 WRAPPING_ADD i32 <- 160 161
+    163 STORE_ELEMENT slot 41 <- 159 162
+    164 NUMBER usize 1
+    165 ADD usize <- 159 164
+    166 STORE slot 42 <- 165
+    167 JUMP target 26
+  block 28 scope 5 BLOCK length 2
+    168 COPY_ARRAY from slot 41 to slot 5
+    169 LEAVE
+file positive/r450-optimal-layout-source/program.ldn
+unit signatures 1 items 1
+signature 1 () -> usize
+item 1 ROUTINE measure result usize signature 1 params 0 slots 2 blocks 1 values 8
+  slot 1 r usize return
+  slot 2 - usize
+  block 1 scope 4 SIGNATURE length 8
+    1 MEASURE_SIZE usize fields u8 [3]struct (u8,usize,u8,usize) [0]struct (u8,usize,u8,usize) usize
+    2 STORE slot 2 <- 1
+    3 MEASURE_ALIGN usize fields u8 usize u8 usize
+    4 LOAD usize slot 2
+    5 ADD usize <- 4 3
+    6 STORE slot 1 <- 5
+    7 LOAD usize slot 1
+    8 LEAVE <- 7
 file positive/range-subtype-exit-before-the-check/program.ldn
 unit signatures 9 items 9
 signature 1 (in u8) -> i32
@@ -6700,10 +6959,11 @@ item 3 ROUTINE assignment_exit result i32 signature 3 params 0 slots 3 blocks 2 
   block 2 scope 11 BLOCK length 2
     6 LOAD i32 slot 1
     7 LEAVE <- 6
-item 4 ROUTINE update_exit result i32 signature 4 params 0 slots 3 blocks 2 values 9
+item 4 ROUTINE update_exit result i32 signature 4 params 0 slots 4 blocks 2 values 9
   slot 1 result i32 return
   slot 2 narrow u8
   slot 3 - u8
+  slot 4 - u8
   block 1 scope 13 BLOCK length 7
     1 NUMBER i32 42
     2 STORE slot 1 <- 1
@@ -6735,11 +6995,12 @@ item 6 ROUTINE argument_exit result i32 signature 6 params 0 slots 2 blocks 2 va
   block 2 scope 20 BLOCK length 2
     4 LOAD i32 slot 1
     5 LEAVE <- 4
-item 7 ROUTINE operand_exit result i32 signature 7 params 0 slots 4 blocks 2 values 9
+item 7 ROUTINE operand_exit result i32 signature 7 params 0 slots 5 blocks 2 values 9
   slot 1 result i32 return
   slot 2 one u8
   slot 3 narrow u8
   slot 4 - u8
+  slot 5 - u8
   block 1 scope 22 BLOCK length 7
     1 NUMBER i32 42
     2 STORE slot 1 <- 1

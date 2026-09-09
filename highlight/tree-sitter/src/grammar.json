@@ -1653,13 +1653,27 @@
           "type": "FIELD",
           "name": "convention",
           "content": {
-            "type": "ALIAS",
-            "content": {
-              "type": "STRING",
-              "value": "c"
-            },
-            "named": true,
-            "value": "identifier"
+            "type": "CHOICE",
+            "members": [
+              {
+                "type": "ALIAS",
+                "content": {
+                  "type": "STRING",
+                  "value": "c"
+                },
+                "named": true,
+                "value": "identifier"
+              },
+              {
+                "type": "ALIAS",
+                "content": {
+                  "type": "STRING",
+                  "value": "optimal"
+                },
+                "named": true,
+                "value": "identifier"
+              }
+            ]
           }
         },
         {

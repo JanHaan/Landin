@@ -1,0 +1,6 @@
+class: runtime
+summary: nested unary binary and complete array return-only operands retain returning flow
+program: main.ldn
+constructs: 0300, 0590, 0930, 0970, 1030, 1050, 1080, 1880, 1910
+status: 42
+targets: linux-x86-64

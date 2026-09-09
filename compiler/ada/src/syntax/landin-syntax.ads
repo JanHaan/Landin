@@ -51,6 +51,7 @@
 
 private with Ada.Containers.Vectors;
 
+with Landin.Layouts;
 with Landin.Provenance;
 with Landin.Source;
 with Landin.Source.Names;
@@ -562,6 +563,12 @@ package Landin.Syntax is
                  and then Kind (Of_Tree, Id)
                    in Function_Declaration | Anonymous_Function
                       | Function_Type | Concept_Entry;
+
+   function Layout_Of (Of_Tree : Tree; Id : Node_Id)
+     return Landin.Layouts.Policy
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id)
+                   in Type_Declaration | Struct_Body;
 
    function Has_C_Layout (Of_Tree : Tree; Id : Node_Id) return Boolean
      with Pre => Contains (Of_Tree, Id)
@@ -1479,7 +1486,7 @@ private
       External   : Boolean := False;
       C_ABI      : Boolean := False;
       Variadic   : Boolean := False;
-      C_Layout   : Boolean := False;
+      Layout     : Landin.Layouts.Policy := Landin.Layouts.Natural;
       Link_Name  : Landin.Source.Span := Landin.Source.Empty_Span;
       Mutable    : Boolean := False;
       Escaping   : Boolean := False;

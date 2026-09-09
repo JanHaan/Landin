@@ -1,0 +1,6 @@
+class: negative
+summary: nested unary fallthrough remains a missing-value refusal
+program: program.ldn
+codes: L0301
+constructs: 0300, 0590, 1050, 1080, 1880, 1910
+targets: linux-x86-64, macos-arm64, synthetic-32

@@ -15,6 +15,13 @@ capability. A function that was given one can report; a function that
 was not, cannot. No effect system, no global error list, just an
 argument — which is principle [1680] doing real work.
 
+D211 does not turn that capability into an assumed concrete logger. Bounded
+and streaming logs, their state changes and recovery behavior must agree with
+specialization off, auto and all; unknown `any` evidence stays indirect. The
+runtime profile matrix checks each original oracle, including diagnostic order
+and `io_failed`, rather than accepting agreement between two equally wrong
+optimized outputs. Prototype 4 applies the same rule to its chosen world.
+
 ---
 
 ## core/text  —  the parts this file leans on

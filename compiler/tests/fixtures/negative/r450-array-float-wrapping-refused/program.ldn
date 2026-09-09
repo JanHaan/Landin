@@ -1,0 +1,4 @@
+f: () -> none =
+    a: [2]f32 = zeroed
+    _ = a +% a
+end f

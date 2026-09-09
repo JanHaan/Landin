@@ -1,0 +1,120 @@
+scalar_0_0_0: () -> (code: i32) =
+    code = 42
+    b: i64 = 1 + (begin return end)
+    code = 1
+end scalar_0_0_0
+
+scalar_0_0_1: () -> (code: i32) =
+    code = 42
+    b := 1 + (begin return end)
+    code = 1
+end scalar_0_0_1
+
+scalar_0_0_2: () -> (code: i32) =
+    code = 42
+    mut b: i64 = 1
+    b = 1 + (begin return end)
+    code = 1
+end scalar_0_0_2
+
+scalar_0_0_3: () -> (code: i32) =
+    code = 42
+    _ = 1 + (begin return end)
+    code = 1
+end scalar_0_0_3
+
+scalar_0_1_0: () -> (code: i32) =
+    code = 42
+    b: i64 = (begin return end) + 1
+    code = 1
+end scalar_0_1_0
+
+scalar_0_1_1: () -> (code: i32) =
+    code = 42
+    b := (begin return end) + 1
+    code = 1
+end scalar_0_1_1
+
+scalar_0_1_2: () -> (code: i32) =
+    code = 42
+    mut b: i64 = 1
+    b = (begin return end) + 1
+    code = 1
+end scalar_0_1_2
+
+scalar_0_1_3: () -> (code: i32) =
+    code = 42
+    _ = (begin return end) + 1
+    code = 1
+end scalar_0_1_3
+
+scalar_1_0_0: () -> (code: i32) =
+    code = 42
+    b: f64 = 1.0 + (begin return end)
+    code = 1
+end scalar_1_0_0
+
+scalar_1_0_1: () -> (code: i32) =
+    code = 42
+    b := 1.0 + (begin return end)
+    code = 1
+end scalar_1_0_1
+
+scalar_1_0_2: () -> (code: i32) =
+    code = 42
+    mut b: f64 = 1.0
+    b = 1.0 + (begin return end)
+    code = 1
+end scalar_1_0_2
+
+scalar_1_0_3: () -> (code: i32) =
+    code = 42
+    _ = 1.0 + (begin return end)
+    code = 1
+end scalar_1_0_3
+
+scalar_1_1_0: () -> (code: i32) =
+    code = 42
+    b: f64 = (begin return end) + 1.0
+    code = 1
+end scalar_1_1_0
+
+scalar_1_1_1: () -> (code: i32) =
+    code = 42
+    b := (begin return end) + 1.0
+    code = 1
+end scalar_1_1_1
+
+scalar_1_1_2: () -> (code: i32) =
+    code = 42
+    mut b: f64 = 1.0
+    b = (begin return end) + 1.0
+    code = 1
+end scalar_1_1_2
+
+scalar_1_1_3: () -> (code: i32) =
+    code = 42
+    _ = (begin return end) + 1.0
+    code = 1
+end scalar_1_1_3
+
+public main: () -> (code: i32) =
+    code = 1
+    if scalar_0_0_0() <> 42 then return end if
+    if scalar_0_0_1() <> 42 then return end if
+    if scalar_0_0_2() <> 42 then return end if
+    if scalar_0_0_3() <> 42 then return end if
+    if scalar_0_1_0() <> 42 then return end if
+    if scalar_0_1_1() <> 42 then return end if
+    if scalar_0_1_2() <> 42 then return end if
+    if scalar_0_1_3() <> 42 then return end if
+    if scalar_1_0_0() <> 42 then return end if
+    if scalar_1_0_1() <> 42 then return end if
+    if scalar_1_0_2() <> 42 then return end if
+    if scalar_1_0_3() <> 42 then return end if
+    if scalar_1_1_0() <> 42 then return end if
+    if scalar_1_1_1() <> 42 then return end if
+    if scalar_1_1_2() <> 42 then return end if
+    if scalar_1_1_3() <> 42 then return end if
+    code = 42
+end main

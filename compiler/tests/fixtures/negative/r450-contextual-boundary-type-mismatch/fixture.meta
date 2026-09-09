@@ -1,0 +1,6 @@
+class: negative
+summary: contextual arithmetic keeps real array length element and scalar mismatches
+program: program.ldn
+codes: L0301, L0301, L0301, L0301
+constructs: 0590, 0710, 0880, 0900, 1050, 1880
+targets: linux-x86-64, macos-arm64, synthetic-32

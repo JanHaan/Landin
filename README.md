@@ -208,6 +208,15 @@ application programs remain R4.70 and R4.80 work.
 
 **Current roadmap work: R4.50 — Implement baseline code generation and specialization.**
 
+D209--D211 specify compact numeric-array arithmetic, explicit optimal field
+placement and optional evidence-proved specialization. The in-progress driver
+selects size/auto by default; `--optimize=none --specialize=off` selects the
+reference, and `--build-report=PATH` requests deterministic off-target JSON.
+Build mode remains independent. The mandatory runtime-profile matrix and
+`./scripts/quality.sh` object acceptance must pass before this item closes;
+ROADMAP.md records actual evidence rather than treating implemented switches
+as a completed gate.
+
 Language and architecture questions are resolved when the first vertical
 slice needs them.
 

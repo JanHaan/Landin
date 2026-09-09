@@ -1,0 +1,8 @@
+class: abi
+summary: page-boundary C entry scratch preserves GP and SSE carriers and a hidden MEMORY result address
+program: program.ldn
+c-sources: peer.c
+run_expect: expected.txt
+status: 0
+constructs: 1570, 1580, 1600, 1610
+targets: linux-x86-64

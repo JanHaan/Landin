@@ -1,0 +1,6 @@
+class: negative
+summary: scalar float empty and nonempty array expression bodies still require fallthrough answers
+program: program.ldn
+codes: L0301, L0301, L0301, L0301
+constructs: 0590, 0880, 1080, 1880, 1910
+targets: linux-x86-64, macos-arm64, synthetic-32

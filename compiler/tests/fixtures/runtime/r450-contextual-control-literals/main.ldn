@@ -1,0 +1,64 @@
+left: atom
+right: atom
+choices: type = left | right
+mut trace: i32 = 0
+
+integer: (take: bool, choice: choices) -> (ok: bool) =
+    a: [1]u8 = [10]
+    b := a + (if take then 1 else 2 end if)
+    c := (if take then 1 else 2 end if) + a
+    d: [1]u8 = a + (begin 0 + (match choice left: 1 right: 2 end match) end)
+    e: [1]u8 = (begin 0 + (match choice left: 1 right: 2 end match) end) + a
+    expected: u8 = if take then 11 else 12 end if
+    ok = b[0] == expected and c[0] == expected
+         and d[0] == expected and e[0] == expected
+end integer
+
+floating: (take: bool, choice: choices) -> (ok: bool) =
+    a: [1]f64 = [0.0]
+    --  Both answers lose their low bit if prematurely rounded to f32.
+    b := a + (if take then 1.0000000000000002 else 2.0000000000000004 end if)
+    c := (if take then 1.0000000000000002 else 2.0000000000000004 end if) + a
+    d: [1]f64 = a + -(begin -(match choice
+        left: 1.0000000000000002
+        right: 2.0000000000000004
+    end match) end)
+    e: [1]f64 = -(begin -(match choice
+        left: 1.0000000000000002
+        right: 2.0000000000000004
+    end match) end) + a
+    expected: f64 = if take then 1.0000000000000002 else 2.0000000000000004 end if
+    ok = b[0] == expected and c[0] == expected
+         and d[0] == expected and e[0] == expected
+         and b[0] <> (if take then 1.0 else 2.0 end if)
+end floating
+
+one: () -> (r: [1]u8) =
+    trace = trace * 10 + 1
+    r = [10]
+end one
+
+empty: () -> (r: [0]u8) =
+    trace = trace * 10 + 1
+    r = zeroed
+end empty
+
+public main: () -> (code: i32) =
+    code = 1
+    if not integer(true, left) or not integer(false, right) then return end if
+    if not floating(true, left) or not floating(false, right) then return end if
+
+    trace = 0
+    b := one() + (begin trace = trace * 10 + 2 (if true then 1 else 2 end if) end)
+    if trace <> 12 or b[0] <> 11 then return end if
+    trace = 0
+    c := (begin trace = trace * 10 + 2 (if true then 1 else 2 end if) end) + one()
+    if trace <> 21 or c[0] <> 11 then return end if
+    trace = 0
+    z := empty() + (begin trace = trace * 10 + 2 (if true then 1 else 2 end if) end)
+    if trace <> 12 or lenof z <> 0 then return end if
+    trace = 0
+    w := (begin trace = trace * 10 + 2 (if true then 1 else 2 end if) end) + empty()
+    if trace <> 21 or lenof w <> 0 then return end if
+    code = 42
+end main

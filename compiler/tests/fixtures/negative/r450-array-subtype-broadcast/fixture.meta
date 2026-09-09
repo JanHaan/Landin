@@ -1,0 +1,6 @@
+class: negative
+summary: array broadcast requires a plain scalar rather than a range subtype
+constructs: 0290, 0520, 0590
+program: program.ldn
+codes: L0301
+targets: linux-x86-64, macos-arm64

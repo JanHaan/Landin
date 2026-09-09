@@ -1,0 +1,19 @@
+box: type = struct value: [3]i32 end box
+empty_box: type = struct value: [0]f64 end empty_box
+consume: (a: [3]i32) -> none = end consume
+
+field: (stop: bool, a: [2]i32) -> none =
+    b: box = (value: -(-(-(if stop then return else a end if))))
+end field
+
+empty_field: (stop: bool, a: [0]f32) -> none =
+    b: empty_box = (value: -(-(-(if stop then return else a end if))))
+end empty_field
+
+argument: (stop: bool) -> none =
+    consume(-(-(-(if stop then return else i32(1) end if))))
+end argument
+
+result_body: (stop: bool, a: [2]i32) -> (r: [3]i32) =
+    -(-(-(if stop then r = zeroed return else a end if)))
+end result_body

@@ -732,6 +732,45 @@ package body Landin.Stages.Checking is
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
       function Admit_Variant_Field
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
+      function Is_Array_Arithmetic
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean is
+        (Syn.Kind (Of_Tree, Node)
+           in Syn.Negation | Syn.Add | Syn.Subtract | Syn.Multiply
+              | Syn.Divide | Syn.Remainder | Syn.Wrapping_Add
+              | Syn.Wrapping_Subtract | Syn.Wrapping_Multiply);
+
+      function Is_Value_Control
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean is
+        (Syn.Kind (Of_Tree, Node)
+           in Syn.If_Statement | Syn.Match_Statement | Syn.Bare_Block
+              | Syn.Loop_Statement | Syn.While_Statement | Syn.For_Statement);
+
+      function Is_Contextual_Operator
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean is
+        (Syn.Kind (Of_Tree, Node)
+           in Syn.Negation | Syn.Complement | Syn.Multiply .. Syn.Bitwise_Or);
+
+      --  Not_Typed from these expressions means synthesis has no answer yet,
+      --  not that checking refused the value.  Keep that distinction through
+      --  every context-transparent operator, not just at a direct control.
+      function Needs_Value_Context
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id; Held : Ty.Type_Kind)
+         return Boolean is
+        (Held = Ty.Not_Typed
+         and then (Is_Value_Control (Of_Tree, Node)
+                   or else Is_Contextual_Operator (Of_Tree, Node)));
+
+      function Needs_Arithmetic_Context
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean is
+        (Is_Contextual_Operator (Of_Tree, Node)
+         and then Needs_Value_Context
+           (Of_Tree, Node, Synthesise (Of_Tree, Node)));
+
+      function Arithmetic_Operand
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind;
+      function Plain_Array
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
+
       function Synthesise_Binary
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind;
       function Synthesise_Binary
@@ -867,6 +906,7 @@ package body Landin.Stages.Checking is
          Node : Syn.Node_Id;
          Instance : Landin.Checking.Routine_Instance_Id;
          Has_Arms : Boolean := False;
+         Calls_Discovered : Boolean := False;
       end record;
 
       package Discovered_Match_Vectors is new Ada.Containers.Vectors
@@ -3784,7 +3824,7 @@ package body Landin.Stages.Checking is
             Landin.Checking.Lay_Out
               (Types.all, Instance, Fields, Facts, Fits,
                Cases => Cases, Payloads => Payloads,
-               C_Layout => Syn.Has_C_Layout (Of_Tree, Struct_Node));
+               Policy => Syn.Layout_Of (Of_Tree, Struct_Node));
             Valid := Fits;
             if not Fits then
                if Landin.Provenance.Is_Known (Application) then
@@ -4877,7 +4917,7 @@ package body Landin.Stages.Checking is
                         Landin.Checking.Lay_Out
                           (Types.all, Nominal, Fields, Facts, Fits,
                            Cases => Cases, Payloads => Payloads,
-                           C_Layout => Syn.Has_C_Layout (Of_Tree, Written));
+                           Policy => Syn.Layout_Of (Of_Tree, Written));
 
                         if not Fits then
                            Bad.Report
@@ -6143,7 +6183,14 @@ package body Landin.Stages.Checking is
               and then Is_Local_Binding (Of_Tree, Node)
               and then Syn.Value_Of (Of_Tree, Node) /= Syn.No_Node
               and then Syn.Kind (Of_Tree, Syn.Value_Of (Of_Tree, Node))
-                       = Syn.Call;
+                       in Syn.Call | Syn.Labeled_Application
+                          | Syn.Try_Expression;
+            Is_Array_Arithmetic_Init : constant Boolean :=
+              Held = Ty.Fixed_Array
+              and then Is_Local_Binding (Of_Tree, Node)
+              and then Syn.Value_Of (Of_Tree, Node) /= Syn.No_Node
+              and then Is_Array_Arithmetic
+                (Of_Tree, Syn.Value_Of (Of_Tree, Node));
             --  [0960]'s `try` has exactly one call operand and produces that
             --  call's successful value.  Admit it through the same local
             --  struct destination as the bare call; Synthesise still checks
@@ -6320,6 +6367,7 @@ package body Landin.Stages.Checking is
               and then not Is_Module_Zeroed_Init
               and then not Is_Local_Zeroed_Init
               and then not Is_Array_Call_Init
+              and then not Is_Array_Arithmetic_Init
               and then not Is_Array_Control_Init
               and then not Is_Array_Parameter
               and then not Is_Array_Return
@@ -9476,7 +9524,17 @@ package body Landin.Stages.Checking is
             Was : constant Ty.Type_Kind :=
               Landin.Checking.Type_Of (Types.all, Of_Tree, Node);
          begin
-            if Was not in Ty.Untyped_Integer | Ty.Untyped_Float then
+            if (Was in Ty.Not_Typed | Ty.Undecided
+                       | Ty.Untyped_Integer | Ty.Untyped_Float
+                and then Is_Value_Control (Of_Tree, Node))
+              or else (Was = Ty.Undecided
+                and then Is_Contextual_Operator (Of_Tree, Node))
+            then
+               Check_Contextual_Value
+                 (Of_Tree, Node, (Kind => Wanted, others => <>),
+                  Syn.Origin (Of_Tree, Node), "the numeric operand context");
+               return;
+            elsif Was not in Ty.Untyped_Integer | Ty.Untyped_Float then
                return;
             end if;
          end;
@@ -9549,10 +9607,9 @@ package body Landin.Stages.Checking is
             return;
          end if;
 
-         if Syn.Kind (Of_Tree, Node)
-              in Syn.If_Statement | Syn.Match_Statement | Syn.Bare_Block
-                 | Syn.Loop_Statement | Syn.While_Statement
-                 | Syn.For_Statement
+         if Is_Value_Control (Of_Tree, Node)
+           and then Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
+             = Ty.Undecided
            and then Wanted in Ty.Scalar_Name
          then
             Check_Contextual_Value
@@ -9562,6 +9619,14 @@ package body Landin.Stages.Checking is
          end if;
 
          Got := Synthesise (Of_Tree, Node);
+
+         if Needs_Value_Context (Of_Tree, Node, Got)
+           and then Wanted in Ty.Scalar_Name
+         then
+            Check_Contextual_Value
+              (Of_Tree, Node, (Kind => Wanted, others => <>), Site, Because);
+            return;
+         end if;
 
          if not Decidable (Wanted) or else not Decidable (Got) then
             return;
@@ -9626,10 +9691,9 @@ package body Landin.Stages.Checking is
             return;
          end if;
 
-         if Syn.Kind (Of_Tree, Node)
-              in Syn.If_Statement | Syn.Match_Statement | Syn.Bare_Block
-                 | Syn.Loop_Statement | Syn.While_Statement
-                 | Syn.For_Statement
+         if Is_Value_Control (Of_Tree, Node)
+           and then Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
+             = Ty.Undecided
          then
             Check_Contextual_Value
               (Of_Tree, Node,
@@ -9673,6 +9737,63 @@ package body Landin.Stages.Checking is
       --  neither does, the whole node is untyped and its context settles
       --  it, which is what makes `1 + 2` an i32 in a discard [0200] and a
       --  u8 in a u8 binding.
+      --  Arithmetic consumes stored array values without enabling arbitrary
+      --  aggregate-to-scalar expressions.  Reuse the ordinary place/shape
+      --  checker for parameters, returns, fields and dereferenced arrays.
+      function Arithmetic_Operand
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind is
+      begin
+         if Syn.Kind (Of_Tree, Node)
+              in Syn.Name_Reference | Syn.Member_Selection
+           and then Res.Verdict_Of (Meanings.all, Of_Tree, Node) = Res.Bound
+           and then Res.Sort_Of
+             (Meanings.all, Res.Bound_To (Meanings.all, Of_Tree, Node))
+               in Res.Module_Binding | Res.Local_Binding | Res.Parameter
+                  | Res.Named_Return | Res.Pattern_Binding | Res.Result_Binding
+           and then Settled_Type
+             (Res.Bound_To (Meanings.all, Of_Tree, Node)) = Ty.Fixed_Array
+         then
+            return Selected_From (Of_Tree, Node);
+         elsif Syn.Kind (Of_Tree, Node) = Syn.Member_Selection
+           and then Admit_Array_Field (Of_Tree, Node)
+         then
+            return Ty.Fixed_Array;
+         end if;
+         return Synthesise (Of_Tree, Node);
+      end Arithmetic_Operand;
+
+      procedure Refuse_Missing_Context
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
+
+      procedure Refuse_Missing_Context
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) is
+      begin
+         Bad.Report
+           (Item => Bad.Type_Mismatch,
+            Source => Syn.Source_Of (Of_Tree),
+            Where => Syn.Where (Of_Tree, Node),
+            Message => "this expression has no answer from which to infer"
+              & " a value type",
+            Note => "[1880]/D124: an answerless value needs a sibling or"
+              & " enclosing type context",
+            Related => Syn.Origin (Of_Tree, Node),
+            Because => "this context-free expression", Into => Found);
+         Landin.Checking.Refuse (Types.all, Of_Tree, Node);
+      end Refuse_Missing_Context;
+
+      function Plain_Array
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
+      is
+         Shape : constant Landin.Checking.Field_Shape :=
+           Landin.Checking.Array_Element_Shape (Types.all, Of_Tree, Node);
+      begin
+         return Shape.Kind = Landin.Checking.Scalar_Field
+           and then Shape.Element in Ty.Numeric_Name
+           and then Shape.Nominal = Landin.Checking.No_Nominal_Type
+           and then Shape.Signature = Landin.Checking.No_Signature
+           and then Shape.Reference = Landin.Checking.No_Reference;
+      end Plain_Array;
+
       function Synthesise_Binary
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind
       is (Synthesise_Binary
@@ -9687,12 +9808,55 @@ package body Landin.Stages.Checking is
       is
          Comparing  : constant Boolean :=
            Of_Kind in Syn.Equal_To .. Syn.Greater_Or_Equal;
-         Left_Type  : constant Ty.Type_Kind := Synthesise (Of_Tree, Left);
-         Right_Type : constant Ty.Type_Kind := Synthesise (Of_Tree, Right);
+         Left_Type  : Ty.Type_Kind := Arithmetic_Operand (Of_Tree, Left);
+         Right_Type : Ty.Type_Kind := Arithmetic_Operand (Of_Tree, Right);
          Decided    : Ty.Type_Kind;
+
       begin
-         if not Decidable (Left_Type) or else not Decidable (Right_Type)
+         if Needs_Value_Context (Of_Tree, Left, Left_Type)
+           and then Needs_Value_Context (Of_Tree, Right, Right_Type)
+           and then Is_Contextual_Operator (Of_Tree, Site)
          then
+            return Ty.Not_Typed;
+         end if;
+         --  A numeric sibling supplies the same context whether it is a
+         --  typed binding or a literal.  Leave literals uncommitted until
+         --  the enclosing context (or the ordinary default) chooses a width.
+         if Needs_Value_Context (Of_Tree, Left, Left_Type)
+           and then Right_Type in Ty.Numeric_Name
+             | Ty.Untyped_Integer | Ty.Untyped_Float
+         then
+            Left_Type := Right_Type;
+         elsif Needs_Value_Context (Of_Tree, Right, Right_Type)
+           and then Left_Type in Ty.Numeric_Name
+             | Ty.Untyped_Integer | Ty.Untyped_Float
+         then
+            Right_Type := Left_Type;
+         end if;
+
+         --  An answerless control expression has no inferred value type,
+         --  not necessarily a falling edge.  Supply the array's scalar
+         --  element context below; flow checking still requires an answer
+         --  on every reachable fallthrough edge.
+         if (not Decidable (Left_Type)
+             and then not (Right_Type = Ty.Fixed_Array
+               and then Needs_Value_Context (Of_Tree, Left, Left_Type)))
+           or else (not Decidable (Right_Type)
+             and then not (Left_Type = Ty.Fixed_Array
+               and then Needs_Value_Context (Of_Tree, Right, Right_Type)))
+         then
+            if Left_Type /= Ty.Ill_Typed and then Right_Type /= Ty.Ill_Typed
+            then
+               Bad.Report
+                 (Item => Bad.Type_Mismatch,
+                  Source => Syn.Source_Of (Of_Tree),
+                  Where => Syn.Anchor (Of_Tree, Site),
+                  Message => "this operator has no compatible operand type",
+                  Note => "[1880]: an answerless operand needs a compatible"
+                    & " sibling or enclosing context",
+                  Related => Syn.Origin (Of_Tree, Site),
+                  Because => "this operator", Into => Found);
+            end if;
             return Ty.Ill_Typed;
          end if;
 
@@ -9765,6 +9929,82 @@ package body Landin.Stages.Checking is
                   end if;
                end;
             end loop;
+         end if;
+
+         if not Comparing
+           and then (Left_Type = Ty.Fixed_Array
+                     or else Right_Type = Ty.Fixed_Array)
+         then
+            declare
+               Array_Node : constant Syn.Node_Id :=
+                 (if Left_Type = Ty.Fixed_Array then Left else Right);
+               Element : constant Ty.Scalar_Name :=
+                 Landin.Checking.Array_Element
+                   (Types.all, Of_Tree, Array_Node);
+               Length : constant Landin.Checking.Element_Count :=
+                 Landin.Checking.Array_Length
+                   (Types.all, Of_Tree, Array_Node);
+               Legal : Boolean := Plain_Array (Of_Tree, Array_Node)
+                 and then
+                   (Of_Kind in Syn.Add | Syn.Subtract | Syn.Multiply
+                      | Syn.Divide
+                    or else (Element in Ty.Integer_Name
+                      and then Of_Kind in Syn.Remainder | Syn.Wrapping_Add
+                        | Syn.Wrapping_Subtract | Syn.Wrapping_Multiply));
+            begin
+               for Position in 1 .. 2 loop
+                  declare
+                     Operand : constant Syn.Node_Id :=
+                       (if Position = 1 then Left else Right);
+                     Held : constant Ty.Type_Kind :=
+                       (if Position = 1 then Left_Type else Right_Type);
+                  begin
+                     if Held = Ty.Fixed_Array then
+                        Legal := Legal and then Plain_Array (Of_Tree, Operand)
+                          and then Landin.Checking.Array_Length
+                            (Types.all, Of_Tree, Operand) = Length
+                          and then Landin.Checking.Array_Element
+                            (Types.all, Of_Tree, Operand) = Element;
+                     else
+                        Legal := Legal
+                          and then (Held = Element
+                            or else Needs_Value_Context
+                              (Of_Tree, Operand, Held)
+                            or else (Held = Ty.Untyped_Integer
+                              and then Element in Ty.Numeric_Name)
+                            or else (Held = Ty.Untyped_Float
+                              and then Element in Ty.Float_Name))
+                          and then Value_Constraint (Of_Tree, Operand)
+                              = Landin.Checking.No_Constraint;
+                     end if;
+                  end;
+               end loop;
+               if not Legal then
+                  Bad.Report
+                    (Item => Bad.Type_Mismatch,
+                     Source => Syn.Source_Of (Of_Tree),
+                     Where => Syn.Anchor (Of_Tree, Site),
+                     Message => "this array operator requires matching"
+                       & " plain numeric elements and lengths",
+                     Note => "[0590]: +, -, *, / lift numeric arithmetic;"
+                       & " %, +%, -%, *% lift integer arithmetic only",
+                     Related => Syn.Origin (Of_Tree, Array_Node),
+                     Because => "the array supplying the element type",
+                     Into => Found);
+                  return Ty.Ill_Typed;
+               end if;
+               if Left_Type /= Ty.Fixed_Array then
+                  Require (Of_Tree, Left, Element,
+                    Syn.Origin (Of_Tree, Site), "the array element type");
+               end if;
+               if Right_Type /= Ty.Fixed_Array then
+                  Require (Of_Tree, Right, Element,
+                    Syn.Origin (Of_Tree, Site), "the array element type");
+               end if;
+               Landin.Checking.Note_Array
+                 (Types.all, Of_Tree, Site, Length, Element);
+               return Ty.Fixed_Array;
+            end;
          end if;
 
          --  [1890]: one type on both sides.  Two pointers share a kind
@@ -10525,10 +10765,12 @@ package body Landin.Stages.Checking is
                if Wants in Ty.Aggregate | Ty.Fixed_Array | Ty.Function_Value
                               | Ty.Pointer_Value | Ty.Slice_Value
                               | Ty.Atom_Value | Ty.Any_Value
-                 and then Syn.Kind (Of_Tree, Argument)
-                            in Syn.If_Statement | Syn.Match_Statement
-                               | Syn.Bare_Block | Syn.Text_Literal
-                               | Syn.Raw_Literal
+                 and then
+                   (Is_Value_Control (Of_Tree, Argument)
+                    or else Syn.Kind (Of_Tree, Argument)
+                              in Syn.Text_Literal | Syn.Raw_Literal
+                    or else (Wants = Ty.Fixed_Array
+                      and then Needs_Arithmetic_Context (Of_Tree, Argument)))
                then
                   declare
                      Expected : Value_Context := (Kind => Wants, others => <>);
@@ -10732,15 +10974,19 @@ package body Landin.Stages.Checking is
                         Shape => Parameter.Element_Shape);
                   end if;
                elsif Wants in Ty.Aggregate | Ty.Fixed_Array
-                 and then Syn.Kind (Of_Tree, Argument)
-                            in Syn.Name_Reference | Syn.Member_Selection
-                               | Syn.Element_Index | Syn.Call
-                               | Syn.Labeled_Application
+                 and then
+                   (Syn.Kind (Of_Tree, Argument)
+                      in Syn.Name_Reference | Syn.Member_Selection
+                         | Syn.Element_Index | Syn.Call
+                         | Syn.Labeled_Application | Syn.Try_Expression
+                    or else Is_Array_Arithmetic (Of_Tree, Argument))
                then
                   declare
                      Got : constant Ty.Type_Kind :=
                        (if Syn.Kind (Of_Tree, Argument)
                              in Syn.Call | Syn.Labeled_Application
+                                | Syn.Try_Expression
+                             or else Is_Array_Arithmetic (Of_Tree, Argument)
                         then Synthesise (Of_Tree, Argument)
                         elsif Wants = Ty.Fixed_Array
                           and then Syn.Kind (Of_Tree, Argument)
@@ -15010,7 +15256,11 @@ package body Landin.Stages.Checking is
          --  further field selection.  Synthesise still refuses the child as
          --  a general aggregate value; this path-bearing question records
          --  both declaration-order identities and the child's nominal body.
-         if Syn.Kind (Of_Tree, Node) = Syn.Member_Selection then
+         --  A bound qualified module member is a declaration, not a field:
+         --  admit it below without treating its namespace as a value.
+         if Syn.Kind (Of_Tree, Node) = Syn.Member_Selection
+           and then Res.Verdict_Of (Meanings.all, Of_Tree, Node) /= Res.Bound
+         then
             declare
                From : constant Syn.Node_Id := Syn.Target_Of (Of_Tree, Node);
                Held : constant Ty.Type_Kind := Selected_From (Of_Tree, From);
@@ -15078,7 +15328,8 @@ package body Landin.Stages.Checking is
             end;
          end if;
 
-         if Syn.Kind (Of_Tree, Node) = Syn.Name_Reference
+         if Syn.Kind (Of_Tree, Node)
+              in Syn.Name_Reference | Syn.Member_Selection
            and then Res.Verdict_Of (Meanings.all, Of_Tree, Node) = Res.Bound
          then
             declare
@@ -15179,6 +15430,7 @@ package body Landin.Stages.Checking is
       begin
          while Syn.Kind (Of_Tree, Where)
            in Syn.Member_Selection | Syn.Element_Index
+           and then Res.Verdict_Of (Meanings.all, Of_Tree, Where) /= Res.Bound
          loop
             declare
                From : constant Syn.Node_Id := Syn.Target_Of (Of_Tree, Where);
@@ -15649,6 +15901,12 @@ package body Landin.Stages.Checking is
 
          function Kept (Item : Ty.Type_Kind) return Ty.Type_Kind is
          begin
+            if Needs_Value_Context (Of_Tree, Node, Item)
+              or else (Is_Value_Control (Of_Tree, Node)
+                and then Item in Ty.Untyped_Integer | Ty.Untyped_Float)
+            then
+               return Item;
+            end if;
             if Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
                = Ty.Undecided
             then
@@ -15798,7 +16056,15 @@ package body Landin.Stages.Checking is
             when Syn.If_Statement | Syn.Match_Statement | Syn.Bare_Block
                | Syn.Loop_Statement | Syn.While_Statement
                | Syn.For_Statement =>
-               return Kept (Synthesise_Control (Of_Tree, Node));
+               declare
+                  Held : constant Ty.Type_Kind :=
+                    Synthesise_Control (Of_Tree, Node);
+               begin
+                  --  No written answer means inference needs a context,
+                  --  not that this node has a final nonvalue type.  Keep
+                  --  it open for D124's contextual and flow checks.
+                  return (if Held = Ty.Not_Typed then Held else Kept (Held));
+               end;
 
             when Syn.Integer_Literal =>
                return Kept (Ty.Untyped_Integer);
@@ -15980,8 +16246,13 @@ package body Landin.Stages.Checking is
                   end if;
 
                   declare
+                     --  Measurement is nonreading and also admits named
+                     --  array types; arithmetic admits stored values only.
                      Held : constant Ty.Type_Kind :=
-                       Selected_From (Of_Tree, Asked);
+                       (if Res.Verdict_Of
+                             (Meanings.all, Of_Tree, Asked) = Res.Bound
+                        then Selected_From (Of_Tree, Asked)
+                        else Indexed_From (Of_Tree, Asked));
                   begin
                      if Held = Ty.Ill_Typed then
                         --  In particular, an unresolved name was already
@@ -17378,7 +17649,9 @@ package body Landin.Stages.Checking is
                         Into    => Found);
                      return Kept (Ty.Ill_Typed);
                   end if;
-                  Held := Selected_From (Of_Tree, Place);
+                  Held := (if Admit_Array_Field (Of_Tree, Place)
+                           then Ty.Fixed_Array
+                           else Selected_From (Of_Tree, Place));
 
                   --  D188: a pointer to a constrained place is a `ptr u8`
                   --  and a write through it would enter that place without
@@ -17539,8 +17812,39 @@ package body Landin.Stages.Checking is
             when Syn.Negation | Syn.Complement =>
                declare
                   Under : constant Ty.Type_Kind :=
-                    Synthesise (Of_Tree, Syn.Operand_Of (Of_Tree, Node));
+                    Arithmetic_Operand
+                      (Of_Tree, Syn.Operand_Of (Of_Tree, Node));
                begin
+                  if Under = Ty.Fixed_Array then
+                     declare
+                        Operand : constant Syn.Node_Id :=
+                          Syn.Operand_Of (Of_Tree, Node);
+                     begin
+                        if Syn.Kind (Of_Tree, Node) = Syn.Negation
+                          and then Plain_Array (Of_Tree, Operand)
+                        then
+                           Landin.Checking.Note_Array
+                             (Types.all, Of_Tree, Node,
+                              Landin.Checking.Array_Length
+                                (Types.all, Of_Tree, Operand),
+                              Landin.Checking.Array_Element
+                                (Types.all, Of_Tree, Operand));
+                           return Kept (Ty.Fixed_Array);
+                        end if;
+                        Bad.Report
+                          (Item => Bad.Type_Mismatch,
+                           Source => Syn.Source_Of (Of_Tree),
+                           Where => Syn.Anchor (Of_Tree, Node),
+                           Message => "only plain numeric array negation"
+                             & " is enabled",
+                           Note => "[0590]: array bitwise operators remain"
+                             & " refused",
+                           Related => Syn.Origin (Of_Tree, Operand),
+                           Because => "this array operand",
+                           Into => Found);
+                        return Kept (Ty.Ill_Typed);
+                     end;
+                  end if;
                   if Under in Ty.Untyped_Integer | Ty.Untyped_Float then
                      if Syn.Kind (Of_Tree, Node) = Syn.Complement
                        and then Under = Ty.Untyped_Float
@@ -17564,7 +17868,11 @@ package body Landin.Stages.Checking is
                      return Kept (Under);
                   end if;
 
-                  if not Decidable (Under) then
+                  if Needs_Value_Context
+                    (Of_Tree, Syn.Operand_Of (Of_Tree, Node), Under)
+                  then
+                     return Ty.Not_Typed;
+                  elsif not Decidable (Under) then
                      return Kept (Ty.Ill_Typed);
                   end if;
 
@@ -17640,6 +17948,7 @@ package body Landin.Stages.Checking is
       begin
          while Syn.Kind (Of_Tree, Base)
                in Syn.Member_Selection | Syn.Element_Index
+           and then Res.Verdict_Of (Meanings.all, Of_Tree, Base) /= Res.Bound
          loop
             Base := Syn.Target_Of (Of_Tree, Base);
          end loop;
@@ -19033,6 +19342,19 @@ package body Landin.Stages.Checking is
                return;
             end if;
 
+            --  D65/D124: a label supplies the same complete destination as a
+            --  typed binding or assignment, including through operators with
+            --  no synthesized answer.  Do not ask an unresolved wrapper for
+            --  its array shape before giving it the field's requirement.
+            if Is_Value_Control (Of_Tree, Value)
+              or else Needs_Arithmetic_Context (Of_Tree, Value)
+            then
+               Check_Contextual_Value
+                 (Of_Tree, Value, Context_For_Shape (Array_Shape),
+                  Syn.Origin (Of_Tree, Field), "the array field named here");
+               return;
+            end if;
+
             case Syn.Kind (Of_Tree, Value) is
                when Syn.Array_Literal =>
                   Check_Array_Literal
@@ -19647,8 +19969,8 @@ package body Landin.Stages.Checking is
 
          procedure Visit_Arm (Arm : Syn.Node_Id) is
          begin
+            Discovered_Matches (Discovery).Has_Arms := True;
             if Discover_Only then
-               Discovered_Matches (Discovery).Has_Arms := True;
                Discover_Generic_Calls
                  (Of_Tree, Syn.Body_Of (Of_Tree, Arm));
             else
@@ -19710,23 +20032,30 @@ package body Landin.Stages.Checking is
             end if;
          end loop;
          if Discovery /= 0 then
-            if not Discover_Only
-              and then Discovered_Matches (Discovery).Has_Arms
+            if Discover_Only
+              and then Discovered_Matches (Discovery).Calls_Discovered
             then
+               return;
+            end if;
+            if Discover_Only then
+               Discovered_Matches (Discovery).Calls_Discovered := True;
+            end if;
+            if Discovered_Matches (Discovery).Has_Arms then
                for Position in 1 .. Syn.Match_Arm_Count (Of_Tree, Node) loop
                   Visit_Arm (Syn.Nth_Match_Arm (Of_Tree, Node, Position));
                end loop;
             end if;
             return;
          end if;
-         if Discover_Only then
-            Discovered_Matches.Append
-              (Discovered_Match'
-                 (Source => Syn.Source_Of (Of_Tree), Node => Node,
-                  Instance => Landin.Checking.Current_Routine_View
-                    (Types.all), Has_Arms => False));
-            Discovery := Discovered_Matches.Last_Index;
-         end if;
+         --  Inward context can check a match before generic-call discovery
+         --  reaches its header.  Cache the header in either order, while
+         --  retaining the independent obligation to discover its arm calls.
+         Discovered_Matches.Append
+           (Discovered_Match'
+              (Source => Syn.Source_Of (Of_Tree), Node => Node,
+               Instance => Landin.Checking.Current_Routine_View (Types.all),
+               Has_Arms => False, Calls_Discovered => Discover_Only));
+         Discovery := Discovered_Matches.Last_Index;
 
          --  D189/[0480]: a pointer union is the second exhaustive subject
          --  kind beside an atom set and a variant part.  Its two cases are
@@ -21062,10 +21391,8 @@ package body Landin.Stages.Checking is
                         Written : constant Syn.Node_Id :=
                           Syn.Declared_Type (Of_Tree, Node);
                      begin
-                        if Syn.Kind (Of_Tree, Value)
-                             in Syn.If_Statement | Syn.Match_Statement
-                                | Syn.Bare_Block | Syn.Loop_Statement
-                                | Syn.While_Statement | Syn.For_Statement
+                        if Is_Value_Control (Of_Tree, Value)
+                          or else Needs_Arithmetic_Context (Of_Tree, Value)
                         then
                            Check_Contextual_Value
                              (Of_Tree, Value,
@@ -21563,6 +21890,9 @@ package body Landin.Stages.Checking is
                      Value : constant Syn.Node_Id :=
                        Syn.Value_Of (Of_Tree, Node);
                   begin
+                     if Admit_Array_Field (Of_Tree, Place) then
+                        null;
+                     end if;
                      Check_Place (Of_Tree, Place, Stepping => False);
                      if Landin.Checking.Type_Of
                           (Types.all, Of_Tree, Place) = Ty.Ill_Typed
@@ -21646,7 +21976,12 @@ package body Landin.Stages.Checking is
                if Syn.Kind (Of_Tree, Syn.Value_Of (Of_Tree, Node))
                     in Syn.Zeroed_Literal | Syn.Array_Literal
                        | Syn.Array_Repetition | Syn.Mixed_Array_Repetition
-                       | Syn.Call
+                       | Syn.Call | Syn.Labeled_Application
+                       | Syn.Try_Expression
+                 or else Is_Value_Control
+                   (Of_Tree, Syn.Value_Of (Of_Tree, Node))
+                 or else Is_Array_Arithmetic
+                   (Of_Tree, Syn.Value_Of (Of_Tree, Node))
                  or else Is_Direct_Array_Name
                    (Of_Tree, Syn.Value_Of (Of_Tree, Node))
                  or else Syn.Kind
@@ -21794,9 +22129,8 @@ package body Landin.Stages.Checking is
                   --  count and scalar element type without making either a
                   --  general value.
                   if Wants = Ty.Fixed_Array then
-                     if Syn.Kind (Of_Tree, Value)
-                          in Syn.If_Statement | Syn.Match_Statement
-                             | Syn.Bare_Block
+                     if Is_Value_Control (Of_Tree, Value)
+                       or else Needs_Arithmetic_Context (Of_Tree, Value)
                      then
                         Check_Contextual_Value
                           (Of_Tree, Value,
@@ -22064,7 +22398,9 @@ package body Landin.Stages.Checking is
 
                   Got := Synthesise (Of_Tree, Value);
 
-                  if Got = Ty.Untyped_Integer then
+                  if Needs_Value_Context (Of_Tree, Value, Got) then
+                     Refuse_Missing_Context (Of_Tree, Value);
+                  elsif Got = Ty.Untyped_Integer then
                      Commit_To (Of_Tree, Value, Ty.Default_Integer);
                   elsif Got = Ty.Untyped_Float then
                      Commit_To (Of_Tree, Value, Ty.Default_Float);
@@ -22752,10 +23088,9 @@ package body Landin.Stages.Checking is
             return;
          end if;
 
-         if Syn.Kind (Of_Tree, Node)
-              in Syn.If_Statement | Syn.Match_Statement | Syn.Bare_Block
-                 | Syn.Loop_Statement | Syn.While_Statement
-                 | Syn.For_Statement
+         if Is_Value_Control (Of_Tree, Node)
+           and then Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
+             = Ty.Undecided
          then
             Note_Context (Of_Tree, Node, Expected);
 
@@ -22801,6 +23136,26 @@ package body Landin.Stages.Checking is
                   raise Landin.Compiler_Defect;
             end case;
             return;
+         end if;
+
+         --  With no answer on either side, an operator cannot synthesize
+         --  even a scalar/array shape.  Push the complete requirement through
+         --  its operands, then let ordinary synthesis validate the operator.
+         --  This is also how a chain of unary/binary wrappers reaches D124's
+         --  flow checker without mistaking an absent answer for an error.
+         if Needs_Arithmetic_Context (Of_Tree, Node) then
+            if Syn.Kind (Of_Tree, Node) in Syn.Negation | Syn.Complement then
+               Check_Contextual_Value
+                 (Of_Tree, Syn.Operand_Of (Of_Tree, Node), Expected,
+                  Site, Because);
+            else
+               Check_Contextual_Value
+                 (Of_Tree, Syn.Left_Of (Of_Tree, Node), Expected,
+                  Site, Because);
+               Check_Contextual_Value
+                 (Of_Tree, Syn.Right_Of (Of_Tree, Node), Expected,
+                  Site, Because);
+            end if;
          end if;
 
          case Expected.Kind is
@@ -22863,6 +23218,18 @@ package body Landin.Stages.Checking is
                end;
 
             when Ty.Fixed_Array =>
+               if Static_Image and then Is_Array_Arithmetic (Of_Tree, Node)
+               then
+                  Bad.Report
+                    (Item => Bad.Not_Known_At_Compile_Time,
+                     Source => Syn.Source_Of (Of_Tree),
+                     Where => Syn.Where (Of_Tree, Node),
+                     Message => "array arithmetic requires runtime storage",
+                     Note => "[1940]: a module initializer is a static image",
+                     Into => Found);
+                  Landin.Checking.Refuse (Types.all, Of_Tree, Node);
+                  return;
+               end if;
                case Syn.Kind (Of_Tree, Node) is
                   when Syn.Array_Literal =>
                      Check_Array_Literal
@@ -23608,15 +23975,17 @@ package body Landin.Stages.Checking is
             Got :=
               (if Syn.Kind (Of_Tree, First)
                     in Syn.Name_Reference | Syn.Member_Selection
+                 and then Chain_Names_Element_Storage (Of_Tree, First)
                then Selected_From (Of_Tree, First)
                else Synthesise (Of_Tree, First));
 
-            if Got = Ty.Untyped_Integer then
-               Got := Ty.Default_Integer;
-               Commit_To (Of_Tree, First, Ty.Default_Integer);
-            elsif Got = Ty.Untyped_Float then
-               Got := Ty.Default_Float;
-               Commit_To (Of_Tree, First, Ty.Default_Float);
+            --  Synthesis discovers an answer's class without choosing its
+            --  width.  A sibling or enclosing requirement must still reach
+            --  all answers; only an inference/discard boundary defaults it.
+            if Got in Ty.Untyped_Integer | Ty.Untyped_Float
+              or else Needs_Value_Context (Of_Tree, First, Got)
+            then
+               return Got;
             end if;
 
             Expected.Kind := Got;
@@ -23848,12 +24217,18 @@ package body Landin.Stages.Checking is
                   return;
                end if;
 
-               if What /= "" then
+               if What /= ""
+                 or else (Is_Array_Arithmetic (Of_Tree, Where)
+                   and then Landin.Checking.Type_Of
+                     (Types.all, Of_Tree, Where) = Ty.Fixed_Array)
+               then
                   Bad.Report
                     (Item    => Bad.Not_Known_At_Compile_Time,
                      Source  => Syn.Source_Of (Of_Tree),
                      Where   => Syn.Where (Of_Tree, Where),
-                     Message => What & " has no static module value in this"
+                     Message => (if What = "" then "array arithmetic"
+                                 else What)
+                                & " has no static module value in this"
                                 & " compiler",
                      Note    => "[1940]: a module initializer is read at"
                                 & " compile time, before any storage can be"
@@ -24478,7 +24853,10 @@ package body Landin.Stages.Checking is
                    | Syn.Loop_Statement | Syn.While_Statement
                    | Syn.For_Statement;
          begin
-            if Got = Ty.Untyped_Integer then
+            if Needs_Value_Context (Of_Tree.all, Value, Got) then
+               Refuse_Missing_Context (Of_Tree.all, Value);
+               Landin.Checking.Settle (Types.all, Id, Ty.Ill_Typed);
+            elsif Got = Ty.Untyped_Integer then
                Commit_To (Of_Tree.all, Value, Ty.Default_Integer);
                Landin.Checking.Settle
                  (Types.all, Id, Ty.Type_Kind (Ty.Default_Integer));
@@ -24493,6 +24871,8 @@ package body Landin.Stages.Checking is
                                      in Syn.Call | Syn.Labeled_Application
                                         | Syn.Element_Index
                                         | Syn.Member_Selection
+                                        | Syn.Try_Expression
+                           or else Is_Array_Arithmetic (Of_Tree.all, Value)
                            or else Control_Source)
                then
                   Landin.Checking.Note_Array
@@ -26467,17 +26847,24 @@ package body Landin.Stages.Checking is
             return;
          end if;
 
-         if Operation = Syn.Divide
-           and then Landin.Checking.Type_Of
-             (Types.all, Of_Tree,
+         declare
+            Value_Node : constant Syn.Node_Id :=
               (if Syn.Kind (Of_Tree, Node) = Syn.Assignment
-               then Syn.Target_Of (Of_Tree, Node) else Node))
-                    in Ty.Float_Name
-         then
-            --  IEEE division by either signed zero produces infinity or
-            --  NaN; it is not [1950]'s impossible integer operand.
-            return;
-         end if;
+               then Syn.Target_Of (Of_Tree, Node) else Node);
+            Held : constant Ty.Type_Kind :=
+              Landin.Checking.Type_Of (Types.all, Of_Tree, Value_Node);
+         begin
+            if Operation = Syn.Divide
+              and then (Held in Ty.Float_Name
+                or else (Held = Ty.Fixed_Array
+                  and then Landin.Checking.Array_Element
+                    (Types.all, Of_Tree, Value_Node) in Ty.Float_Name))
+            then
+               --  IEEE division by either signed zero produces infinity or
+               --  NaN, including each element of a lifted array operation.
+               return;
+            end if;
+         end;
 
          declare
             Right : constant Syn.Node_Id :=

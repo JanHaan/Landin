@@ -1,0 +1,4 @@
+row: type = [21]u8
+f: () -> none =
+    _ = row + 1
+end f

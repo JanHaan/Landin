@@ -1,0 +1,39 @@
+-- Four no-callee-save witnesses bracket frame plus entry scratch at a page.
+public extern(c) r450_review_probe3932: (x: i64) -> (r: i64) =
+    mut pad: [3932]u8 = zeroed
+    r = x
+end r450_review_probe3932
+
+public extern(c) r450_review_probe3948: (x: i64) -> (r: i64) =
+    mut pad: [3948]u8 = zeroed
+    r = x
+end r450_review_probe3948
+
+public extern(c) r450_review_probe3964: (x: i64) -> (r: i64) =
+    mut pad: [3964]u8 = zeroed
+    r = x
+end r450_review_probe3964
+
+public extern(c) r450_review_probe3980: (x: i64) -> (r: i64) =
+    mut pad: [3980]u8 = zeroed
+    r = x
+end r450_review_probe3980
+
+outcome: type = layout(c) struct
+    integer: i64
+    fraction: f64
+    next: i64
+end outcome
+
+-- A MEMORY result preserves its hidden address alongside both argument banks.
+public extern(c) r450_review_mixed: (x: i64, y: f64) -> (r: outcome) =
+    mut pad: [3980]u8 = zeroed
+    r.integer = x
+    r.fraction = y
+    r.next = x + 1
+end r450_review_mixed
+
+extern(c) r450_review_c_entry: () -> (r: i32)
+public main: () -> (code: i32) =
+    code = r450_review_c_entry()
+end main

@@ -1,3 +1,4 @@
+with Landin.IR.Control_Flow;
 with Landin.Types;
 
 package body Landin.IR.Verifier is
@@ -2384,21 +2385,24 @@ package body Landin.IR.Verifier is
          Entry_State : Slot_State := [others => False];
          Outputs : Block_State := [others => [others => True]];
          Inputs : Block_State := [others => [others => True]];
-         Changed : Boolean;
-         Live : array (1 .. Blocks) of Boolean := [others => False];
+         Graph : constant Control_Flow.Graph :=
+           Control_Flow.Make (Of_Unit, Item);
+         Queue : array (1 .. Blocks) of Positive;
+         Queued : array (1 .. Blocks) of Boolean := [others => False];
+         Read_At, Write_At : Positive := 1;
+         Pending : Natural := 0;
 
-         function Edge (From, To : Positive) return Boolean;
+         procedure Enqueue (Block : Positive);
 
-         function Edge (From, To : Positive) return Boolean is
-            Last : constant Value_Id := Nth_Value
-              (Of_Unit, Item, Block_Id (From),
-               Length (Of_Unit, Item, Block_Id (From)));
+         procedure Enqueue (Block : Positive) is
          begin
-            return (Op_Of (Of_Unit, Item, Last) in Jump | Branch
-                    and then Target_Of (Of_Unit, Item, Last) = Block_Id (To))
-              or else (Op_Of (Of_Unit, Item, Last) = Branch
-                and then Alternative_Of (Of_Unit, Item, Last) = Block_Id (To));
-         end Edge;
+            if not Queued (Block) then
+               Queue (Write_At) := Block;
+               Write_At := (if Write_At = Blocks then 1 else Write_At + 1);
+               Pending := Pending + 1;
+               Queued (Block) := True;
+            end if;
+         end Enqueue;
 
          function Tracked (Slot : Slot_Id) return Boolean
            is (Slot /= No_Slot
@@ -2414,62 +2418,62 @@ package body Landin.IR.Verifier is
             end if;
             Entry_State (Positive (Nth_Parameter (Of_Unit, Item, P))) := True;
          end loop;
-         Live (1) := True;
-         loop
-            Changed := False;
-            for B in 1 .. Blocks loop
-               if Live (B) then
-                  for Next in 1 .. Blocks loop
-                     if not Live (Next) and then Edge (B, Next) then
-                        Live (Next) := True;
-                        Changed := True;
-                     end if;
-                  end loop;
-               end if;
-            end loop;
-            exit when not Changed;
-         end loop;
          for B in 1 .. Blocks loop
-            if not Live (B) then
+            if not Control_Flow.Is_Reachable (Graph, Block_Id (B)) then
                return (Kind => Block_Unreachable, Item => Item,
                        Block => Block_Id (B), others => <>);
             end if;
+            Enqueue (B);
          end loop;
-         loop
-            Changed := False;
-            for B in 1 .. Blocks loop
-               declare
-                  State : Slot_State :=
-                    (if B = 1 then Entry_State else [others => True]);
-               begin
-                  if B /= 1 then
-                     for Prior in 1 .. Blocks loop
-                        if Edge (Prior, B) then
-                           for S in State'Range loop
-                              State (S) := State (S) and Outputs (Prior) (S);
-                           end loop;
-                        end if;
-                     end loop;
-                  end if;
-                  Inputs (B) := State;
-                  for P in 1 .. Length (Of_Unit, Item, Block_Id (B)) loop
+         while Pending > 0 loop
+            declare
+               B : constant Positive := Queue (Read_At);
+               State : Slot_State :=
+                 (if B = 1 then Entry_State else [others => True]);
+               Edge : Natural := Control_Flow.First_Predecessor
+                 (Graph, Block_Id (B));
+            begin
+               Read_At := (if Read_At = Blocks then 1 else Read_At + 1);
+               Pending := Pending - 1;
+               Queued (B) := False;
+               if B /= 1 then
+                  while Edge /= 0 loop
                      declare
-                        V : constant Value_Id := Nth_Value
-                          (Of_Unit, Item, Block_Id (B), P);
+                        Prior : constant Positive := Positive
+                          (Control_Flow.Predecessor (Graph, Edge));
                      begin
-                        if Op_Of (Of_Unit, Item, V) = Store then
-                           State (Positive (Slot_Of (Of_Unit, Item, V))) :=
-                             True;
+                        for S in State'Range loop
+                           State (S) := State (S) and Outputs (Prior) (S);
+                        end loop;
+                     end;
+                     Edge := Control_Flow.Next_Predecessor (Graph, Edge);
+                  end loop;
+               end if;
+               Inputs (B) := State;
+               for P in 1 .. Length (Of_Unit, Item, Block_Id (B)) loop
+                  declare
+                     V : constant Value_Id := Nth_Value
+                       (Of_Unit, Item, Block_Id (B), P);
+                  begin
+                     if Op_Of (Of_Unit, Item, V) = Store then
+                        State (Positive (Slot_Of (Of_Unit, Item, V))) := True;
+                     end if;
+                  end;
+               end loop;
+               if State /= Outputs (B) then
+                  Outputs (B) := State;
+                  for Index in 1 .. 2 loop
+                     declare
+                        Next : constant Block_Id := Control_Flow.Successor
+                          (Graph, Block_Id (B), Index);
+                     begin
+                        if Next /= No_Block then
+                           Enqueue (Positive (Next));
                         end if;
                      end;
                   end loop;
-                  if State /= Outputs (B) then
-                     Outputs (B) := State;
-                     Changed := True;
-                  end if;
-               end;
-            end loop;
-            exit when not Changed;
+               end if;
+            end;
          end loop;
          for B in 1 .. Blocks loop
             declare
@@ -2586,6 +2590,10 @@ package body Landin.IR.Verifier is
                   end if;
                end;
             end loop;
+            if not Evidence_Bindings_Are_Valid (Of_Unit, Id) then
+               return (Kind => Evidence_Entry_Signature_Disagrees,
+                       Item => Id, others => <>);
+            end if;
             for Index in 1 .. Held.Blocks.Count loop
                declare
                   Block : constant Block_Record :=

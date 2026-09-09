@@ -1,0 +1,5 @@
+class: positive
+summary: all enabled array arithmetic forms reach verified IR
+constructs: 0300, 0370, 0520, 0590, 0760, 1890
+program: program.ldn
+targets: linux-x86-64, macos-arm64

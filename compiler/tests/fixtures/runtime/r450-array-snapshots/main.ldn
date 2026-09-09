@@ -1,0 +1,32 @@
+row: type = [3]i32
+mut source: row = [1, 2, 3]
+mut calls: i32 = 0
+right: () -> (r: row) =
+    calls = calls * 10 + 2
+    source[0] = 100
+    r = [10, 20, 30]
+end right
+left: () -> (r: row) =
+    calls = calls * 10 + 1
+    r = source
+end left
+scalar: () -> (r: i32) =
+    inc calls
+    source[1] = 200
+    r = 2
+end scalar
+public main: () -> (code: i32) =
+    a := source + right()
+    source = [1, 2, 3]
+    calls = 0
+    b := left() + right()
+    ordered: bool = calls == 12
+    source = [1, 2, 3]
+    calls = 0
+    source = source + scalar()
+    if a[0] == 11 and a[1] == 22 and a[2] == 33
+      and b[0] == 11 and b[1] == 22 and b[2] == 33 and ordered
+      and calls == 1 and source[0] == 3 and source[1] == 4
+      and source[2] == 5
+    then code = 42 else code = 1 end if
+end main

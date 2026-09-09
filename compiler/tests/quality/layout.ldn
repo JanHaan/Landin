@@ -1,0 +1,14 @@
+record: type = layout(optimal) struct
+    first: u8
+    middle: u64
+    last: u8
+end record
+
+public main: () -> (code: i32) =
+    value := record(first: 1, middle: 2, last: 3)
+    code = 0
+    if sizeof record <> 16 or alignof record <> 8 then code = 1 end if
+    if value.first <> 1 or value.middle <> 2 or value.last <> 3 then
+        code = 2
+    end if
+end main

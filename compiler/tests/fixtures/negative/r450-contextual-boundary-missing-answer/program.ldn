@@ -1,0 +1,21 @@
+box: type = struct value: [3]i32 end box
+empty_box: type = struct value: [0]i32 end empty_box
+outer: type = struct child: box end outer
+consume: (a: [3]i32) -> none = end consume
+consume_empty: (a: [0]i32) -> none = end consume_empty
+
+field: () -> none =
+    b: empty_box = (value: -(-(-(begin end))))
+end field
+
+nested: () -> none =
+    b: outer = (child: (value: -(-(-(begin end)))))
+end nested
+
+argument: () -> none =
+    consume(-(-(-(begin end))))
+end argument
+
+empty_argument: () -> none =
+    consume_empty(-(-(-(begin end))))
+end empty_argument

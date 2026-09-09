@@ -1,0 +1,20 @@
+row: type = [3]i32
+mut rows: [2]row
+mut indices: i32 = 0
+mut rights: i32 = 0
+index: () -> (r: usize) = inc indices r = 1 end index
+right: () -> (r: row) =
+    inc rights
+    rows[1][0] = 100
+    r = [10, 20, 30]
+end right
+public main: () -> (code: i32) =
+    rows[1] = [1, 2, 3]
+    rows[index()] += right()
+    p: ptr mut row = addr rows[1]
+    p.val *= 2
+    if indices == 1 and rights == 1
+      and rows[1][0] == 22 and rows[1][1] == 44 and rows[1][2] == 66
+      and rows[0][0] == 0 and rows[0][1] == 0 and rows[0][2] == 0
+    then code = 42 else code = 1 end if
+end main

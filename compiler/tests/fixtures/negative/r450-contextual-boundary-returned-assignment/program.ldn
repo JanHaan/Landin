@@ -1,0 +1,8 @@
+box: type = struct value: [0]i32 end box
+f: (stop: bool) -> (code: i32) =
+    code = 42
+    mut x: i32
+    a: [0]i32 = zeroed
+    b: box = (value: a + -(if stop then x = 1 return else 0 end if))
+    _ = x
+end f

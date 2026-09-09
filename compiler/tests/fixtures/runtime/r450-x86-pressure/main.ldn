@@ -1,0 +1,49 @@
+-- Every early argument remains live while later calls and arithmetic execute.
+sum_eight: (a: i64, b: i64, c: i64, d: i64,
+            e: i64, f: i64, g: i64, h: i64) -> (r: i64) =
+    r = a + b + c + d + e + f + g + h
+end sum_eight
+
+step: (x: i64) -> (r: i64) = r = x + 1 end step
+
+pressure: (x: i64) -> (r: i64) =
+    indirect := step
+    r = sum_eight(x + 1, x + 2, x + 3, x + 4,
+                 x + 5, x + 6, indirect(x + 6), step(x + 7))
+end pressure
+
+bad: atom
+problem: type = bad
+
+checked: (x: i64) -> (r: i64) ! problem =
+    mut i: i64 = 0
+    mut total: i64 = x
+    while i < 10 do
+        total = total + step(i)
+        inc i
+    end while
+    fail bad when x < 0
+    r = total
+end checked
+
+narrow: (x: i8, amount: i8) -> (r: i8) =
+    -- Keep multiple narrow values live when a remainder produces AH.
+    a: i8 = x + 1
+    b: i8 = x + 2
+    c: i8 = x % 3
+    d: i8 = a + b
+    r = d + c + (x << amount) + (x >> 8)
+end narrow
+
+public main: () -> (code: i32) =
+    direct: i64 = pressure(10)
+    ok: i64 = checked(10) else 999
+    failed: i64 = checked(-1) else 77
+    if direct == 116 and ok == 65 and failed == 77
+       and narrow(4, 1) == 20
+    then
+        code = 0
+    else
+        code = 1
+    end if
+end main

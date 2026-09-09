@@ -1,5 +1,7 @@
 package body Landin.IR is
 
+   use type Landin.Layouts.Policy;
+
    procedure Note_Caller_Source
      (Into : in out Unit; Source : Landin.Source.Source_Id) is
    begin
@@ -116,11 +118,48 @@ package body Landin.IR is
       end;
    end Nominal_Field_Run_Is_Valid;
 
+   function Layout_Of
+     (Of_Unit : Unit; Id : Nominal_Type_Id) return Landin.Layouts.Policy is
+   begin
+      if not Nominal_Field_Run_Is_Valid (Of_Unit, Id) then
+         raise Landin.Compiler_Defect with "invalid nominal layout query";
+      end if;
+      return Of_Unit.Nominal_Shapes
+        (Nominal_Identities.Position (Of_Unit, Id)).Policy;
+   end Layout_Of;
+
+   function Layout_Of
+     (Of_Unit : Unit; Shape : Field_Shape) return Landin.Layouts.Policy
+     is (if Shape.Kind = Aggregate_Field_Shape
+           and then Shape.Nominal /= No_Nominal_Type
+         then Layout_Of (Of_Unit, Shape.Nominal)
+         else Landin.Layouts.Natural);
+
+   function Layout_Of
+     (Of_Unit : Unit; Item : Item_Id) return Landin.Layouts.Policy
+     is (if Nominal_Of (Of_Unit, Item) /= No_Nominal_Type
+         then Layout_Of (Of_Unit, Nominal_Of (Of_Unit, Item))
+         else Landin.Layouts.Natural);
+
+   function Layout_Of
+     (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id)
+      return Landin.Layouts.Policy
+     is (if Is_Address (Of_Unit, Item, Slot)
+         then Layout_Of (Of_Unit, Address_Shape (Of_Unit, Item, Slot))
+         elsif Nominal_Of (Of_Unit, Item, Slot) /= No_Nominal_Type
+         then Layout_Of (Of_Unit, Nominal_Of (Of_Unit, Item, Slot))
+         else Landin.Layouts.Natural);
+
+   function Layout_Of
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
+      return Landin.Layouts.Policy
+     is (Of_Unit.Code
+           (Value_At (Of_Unit, Item, Value)).Measurement_Layout);
+
    function Has_C_Layout
      (Of_Unit : Unit; Id : Nominal_Type_Id) return Boolean
      is (Nominal_Field_Run_Is_Valid (Of_Unit, Id)
-         and then Of_Unit.Nominal_Shapes
-           (Nominal_Identities.Position (Of_Unit, Id)).C_Layout);
+         and then Layout_Of (Of_Unit, Id) = Landin.Layouts.C);
 
    function Nominal_Field_Count
      (Of_Unit : Unit; Id : Nominal_Type_Id) return Natural is
@@ -152,6 +191,20 @@ package body Landin.IR is
       Id       : Nominal_Type_Id;
       Fields   : Field_Shape_Array;
       C_Layout : Boolean := False;
+      Cases    : Case_Run_Array := No_Case_Runs;
+      Payloads : Field_Shape_Array := No_Field_Shapes) is
+   begin
+      Set_Nominal_Shape
+        (Into, Id, Fields,
+         (if C_Layout then Landin.Layouts.C else Landin.Layouts.Natural),
+         Cases, Payloads);
+   end Set_Nominal_Shape;
+
+   procedure Set_Nominal_Shape
+     (Into     : in out Unit;
+      Id       : Nominal_Type_Id;
+      Fields   : Field_Shape_Array;
+      Policy   : Landin.Layouts.Policy;
       Cases    : Case_Run_Array := No_Case_Runs;
       Payloads : Field_Shape_Array := No_Field_Shapes)
    is
@@ -234,7 +287,7 @@ package body Landin.IR is
       end loop;
       declare
          Made : constant Nominal_Shape_Record :=
-           (Present => True, C_Layout => C_Layout,
+           (Present => True, Policy => Policy,
             Fields => (First => Natural (Into.Nominal_Fields.Length),
                        Count => Fields'Length));
       begin
@@ -1085,6 +1138,7 @@ package body Landin.IR is
       Held : Item_Record := Element (Into, Made);
    begin
       Held.Generic_Template := Template;
+      Held.Instance_Position := Instance_Position;
       Into.Items (Positive (Made)) := Held;
       Into.Routine_Instance_Items.Append
         (Routine_Instance_Item'
@@ -1097,6 +1151,235 @@ package body Landin.IR is
    function Generic_Template_Of (Of_Unit : Unit; Id : Item_Id)
      return Declaration_Id
      is (Element (Of_Unit, Id).Generic_Template);
+
+   function Instance_Position_Of (Of_Unit : Unit; Id : Item_Id)
+     return Natural is
+   begin
+      if not Holds (Of_Unit, Id) then
+         raise Landin.Compiler_Defect with "invalid instance item query";
+      end if;
+      return Element (Of_Unit, Id).Instance_Position;
+   end Instance_Position_Of;
+
+   function Bound_Evidence
+     (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Evidence_Id is
+   begin
+      if not Holds (Of_Unit, Item, Slot) then
+         raise Landin.Compiler_Defect with "invalid evidence slot query";
+      end if;
+      return Of_Unit.Slots (Slot_At (Of_Unit, Item, Slot)).Concrete_Evidence;
+   end Bound_Evidence;
+
+   procedure Bind_Evidence_Parameter
+     (Into      : in out Unit;
+      Item      : Item_Id;
+      Parameter : Positive;
+      Evidence  : Evidence_Id)
+   is
+   begin
+      if not Holds (Into, Item)
+        or else Kind_Of (Into, Item) /= Routine
+        or else Generic_Template_Of (Into, Item) = No_Declaration
+        or else Parameter > Parameter_Count (Into, Item)
+        or else not Holds (Into, Evidence)
+        or else Evidence_Is_Erased (Into, Evidence)
+      then
+         raise Landin.Compiler_Defect with "invalid concrete evidence binding";
+      end if;
+      declare
+         Slot : constant Slot_Id := Nth_Parameter (Into, Item, Parameter);
+         Held : Slot_Record := Into.Slots (Slot_At (Into, Item, Slot));
+      begin
+         if Held.Aggregate or else Held.Array_Shape or else Held.Addressed
+           or else Held.Of_Type /= Landin.Types.Usize
+           or else Held.Declaration /= No_Declaration
+           or else Held.Signature /= No_Signature
+           or else Held.Atom_Set /= No_Atom_Set
+           or else Held.Pointee /= No_Pointee
+           or else Held.Concrete_Evidence /= No_Evidence
+         then
+            raise Landin.Compiler_Defect with "invalid hidden evidence slot";
+         end if;
+         Held.Concrete_Evidence := Evidence;
+         Into.Slots (Slot_At (Into, Item, Slot)) := Held;
+      end;
+   end Bind_Evidence_Parameter;
+
+   function Evidence_Binding_Count
+     (Of_Unit : Unit; Item : Item_Id) return Natural
+   is
+      Count : Natural := 0;
+   begin
+      if not Holds (Of_Unit, Item) then
+         raise Landin.Compiler_Defect with "invalid evidence item query";
+      end if;
+      for Index in 1 .. Parameter_Count (Of_Unit, Item) loop
+         if Bound_Evidence
+           (Of_Unit, Item, Nth_Parameter (Of_Unit, Item, Index)) /= No_Evidence
+         then
+            Count := Count + 1;
+         end if;
+      end loop;
+      return Count;
+   end Evidence_Binding_Count;
+
+   function Nth_Evidence_Binding
+     (Of_Unit : Unit; Item : Item_Id; Index : Positive)
+      return Evidence_Binding
+   is
+      Count : Natural := 0;
+   begin
+      if not Holds (Of_Unit, Item) then
+         raise Landin.Compiler_Defect with "invalid evidence item query";
+      end if;
+      for Parameter in 1 .. Parameter_Count (Of_Unit, Item) loop
+         declare
+            Bound : constant Evidence_Id := Bound_Evidence
+              (Of_Unit, Item, Nth_Parameter (Of_Unit, Item, Parameter));
+         begin
+            if Bound /= No_Evidence then
+               Count := Count + 1;
+               if Count = Index then
+                  return (Parameter, Bound);
+               end if;
+            end if;
+         end;
+      end loop;
+      raise Landin.Compiler_Defect with "invalid evidence binding index";
+   end Nth_Evidence_Binding;
+
+   function Evidence_Bindings_Are_Valid
+     (Of_Unit : Unit; Item : Item_Id) return Boolean
+   is
+   begin
+      if not Holds (Of_Unit, Item) then
+         return False;
+      end if;
+      declare
+         Held : constant Item_Record := Element (Of_Unit, Item);
+         Slot_Limit : constant Natural := Natural (Of_Unit.Slots.Length);
+         Param_Limit : constant Natural := Natural (Of_Unit.Parameters.Length);
+         Is_Parameter : array (1 .. Held.Slots.Count) of Boolean :=
+           [others => False];
+      begin
+         if Held.Slots.First > Slot_Limit
+           or else Held.Slots.Count > Slot_Limit - Held.Slots.First
+           or else Held.Parameters.First > Param_Limit
+           or else Held.Parameters.Count > Param_Limit - Held.Parameters.First
+         then
+            return False;
+         end if;
+         for Index in 1 .. Held.Parameters.Count loop
+            declare
+               Slot : constant Slot_Id := Nth_Parameter (Of_Unit, Item, Index);
+            begin
+               if not Holds (Of_Unit, Item, Slot) then
+                  return False;
+               end if;
+               Is_Parameter (Positive (Slot)) := True;
+            end;
+         end loop;
+         for Index in 1 .. Held.Slots.Count loop
+            declare
+               Slot : constant Slot_Record :=
+                 Of_Unit.Slots (Held.Slots.First + Index);
+               Bound : constant Evidence_Id := Slot.Concrete_Evidence;
+            begin
+               if Bound /= No_Evidence
+                 and then
+                   (Held.Kind /= Routine
+                    or else Held.Generic_Template = No_Declaration
+                    or else not Is_Parameter (Index)
+                    or else not Holds (Of_Unit, Bound)
+                    or else Evidence_Is_Erased (Of_Unit, Bound)
+                    or else Slot.Aggregate or else Slot.Array_Shape
+                    or else Slot.Addressed
+                    or else Slot.Of_Type /= Landin.Types.Usize
+                    or else Slot.Declaration /= No_Declaration
+                    or else Slot.Signature /= No_Signature
+                    or else Slot.Atom_Set /= No_Atom_Set
+                    or else Slot.Pointee /= No_Pointee)
+               then
+                  return False;
+               end if;
+            end;
+         end loop;
+      end;
+      return True;
+   end Evidence_Bindings_Are_Valid;
+
+   procedure Mark_Address_Exposed (Into : in out Unit; Item : Item_Id) is
+   begin
+      if not Holds (Into, Item) or else Kind_Of (Into, Item) /= Routine then
+         raise Landin.Compiler_Defect with "invalid exposed routine";
+      end if;
+      Into.Items (Positive (Item)).Address_Exposed := True;
+   end Mark_Address_Exposed;
+
+   function Has_Address_Exposure
+     (Of_Unit : Unit; Item : Item_Id) return Boolean is
+   begin
+      if not Holds (Of_Unit, Item) or else Kind_Of (Of_Unit, Item) /= Routine
+      then
+         raise Landin.Compiler_Defect with "invalid routine exposure query";
+      end if;
+      if Element (Of_Unit, Item).Address_Exposed
+        or else Is_External (Of_Unit, Item)
+      then
+         return True;
+      end if;
+      --  Query actual retained references rather than trusting a lowering
+      --  hint.  Transformations that build images directly remain covered.
+      for Entry_Item of Of_Unit.Items loop
+         if Entry_Item.Function_Image = Item then
+            return True;
+         end if;
+      end loop;
+      for Image of Of_Unit.Aggregate_Images loop
+         if Image.Target = Item then
+            return True;
+         end if;
+      end loop;
+      for Entry_Item of Of_Unit.Evidence_Entries loop
+         if Entry_Item.Target = Item then
+            return True;
+         end if;
+      end loop;
+      for Value of Of_Unit.Code loop
+         if Value.Op = Function_Address and then Value.Named = Item then
+            return True;
+         end if;
+      end loop;
+      return False;
+   end Has_Address_Exposure;
+
+   procedure Set_Loop_Depth
+     (Into : in out Unit; Item : Item_Id; Depth : Natural) is
+   begin
+      if not Holds (Into, Item) or else Kind_Of (Into, Item) /= Routine then
+         raise Landin.Compiler_Defect with "invalid loop depth item";
+      end if;
+      Into.Items (Positive (Item)).Source_Loop_Depth := Depth;
+   end Set_Loop_Depth;
+
+   function Loop_Depth (Of_Unit : Unit; Item : Item_Id) return Natural is
+   begin
+      if not Holds (Of_Unit, Item) then
+         raise Landin.Compiler_Defect with "invalid loop depth query";
+      end if;
+      return Element (Of_Unit, Item).Source_Loop_Depth;
+   end Loop_Depth;
+
+   function Call_Loop_Depth
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Natural is
+   begin
+      if not Holds (Of_Unit, Item, Value)
+        or else Op_Of (Of_Unit, Item, Value) not in Call | Indirect_Call
+      then
+         raise Landin.Compiler_Defect with "invalid call depth query";
+      end if;
+      return Of_Unit.Code (Value_At (Of_Unit, Item, Value)).Call_Depth;
+   end Call_Loop_Depth;
 
    function Kind_Of (Of_Unit : Unit; Id : Item_Id) return Item_Kind
      is (Element (Of_Unit, Id).Kind);
@@ -3018,6 +3301,9 @@ package body Landin.IR is
       Made  : Instruction := What;
    begin
       Made.In_Block := Held.Open;
+      if Made.Op in Call | Indirect_Call then
+         Made.Call_Depth := Held.Source_Loop_Depth;
+      end if;
 
       --  D187: the region is recorded where an instruction is emitted,
       --  and lowering is what makes that the place the source was
@@ -3149,7 +3435,9 @@ package body Landin.IR is
       Gives   : Landin.Types.Scalar_Name;
       Site    : Landin.Provenance.Origin;
       Cases   : Case_Run_Array := No_Case_Runs;
-      Payloads : Field_Shape_Array := No_Field_Shapes) return Value_Id
+      Payloads : Field_Shape_Array := No_Field_Shapes;
+      Policy : Landin.Layouts.Policy := Landin.Layouts.Natural)
+      return Value_Id
    is
       Payload_Base : constant Natural :=
         Natural (Into.Variant_Fields.Length);
@@ -3160,7 +3448,9 @@ package body Landin.IR is
          declare
             Stored : Field_Shape := Payload;
          begin
-            if Stored.Kind = Aggregate_Field_Shape then
+            if Stored.Kind = Aggregate_Field_Shape
+              and then Payloads'Length /= 0
+            then
                Stored.Payloads_First :=
                  Payload_Base + Stored.Payloads_First;
             end if;
@@ -3184,10 +3474,14 @@ package body Landin.IR is
             declare
                Stored : Field_Shape := Field;
             begin
-               if Stored.Kind = Variant_Field_Shape then
+               if Stored.Kind = Variant_Field_Shape
+                 and then Cases'Length /= 0
+               then
                   Stored.Payloads_First :=
                     Case_Base + Stored.Payloads_First;
-               elsif Stored.Kind = Aggregate_Field_Shape then
+               elsif Stored.Kind = Aggregate_Field_Shape
+                 and then Payloads'Length /= 0
+               then
                   Stored.Payloads_First :=
                     Payload_Base + Stored.Payloads_First;
                end if;
@@ -3203,6 +3497,7 @@ package body Landin.IR is
                          First_Measurement_Field => First,
                          Measurement_Field_Total => Fields'Length,
                          Aggregate_Measurement   => True,
+                         Measurement_Layout      => Policy,
                          others                  => <>));
       end;
    end Emit_Aggregate_Measurement;

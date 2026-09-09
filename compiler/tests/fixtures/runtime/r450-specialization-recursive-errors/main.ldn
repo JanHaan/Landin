@@ -1,0 +1,35 @@
+bad: atom
+problems: type = bad
+mut trace: i32 = 0
+
+stepper: type = concept (t: type)
+    step: (value: t) -> (result: t) ! problems
+end stepper
+
+step_i32: (value: i32) -> (result: i32) ! problems =
+    inc trace
+    fail bad when value < 0
+    result = value + 1
+end step_i32
+
+i32 is stepper (step: step_i32)
+
+finished: () -> none = trace = trace + 10 end finished
+failed: () -> none = trace = trace + 100 end failed
+
+probe: (t: type is stepper, value: t, depth: i32)
+    -> (result: t) ! problems =
+    defer finished()
+    undo failed()
+    if depth == 0 then
+        result = try t.step(value)
+    else
+        result = try probe(t: t, value: value, depth: depth - 1)
+    end if
+end probe
+
+public main: () -> (code: i32) =
+    first := probe(t: i32, value: 41, depth: 2) else 0
+    second := probe(t: i32, value: -1, depth: 2) else 7
+    code = if first == 42 and second == 7 and trace == 362 then 0 else 1 end if
+end main

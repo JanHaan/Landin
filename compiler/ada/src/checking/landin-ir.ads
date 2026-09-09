@@ -131,6 +131,7 @@
 
 private with Ada.Containers.Vectors;
 
+with Landin.Layouts;
 with Landin.Provenance;
 with Landin.Resolution;
 with Landin.Source;
@@ -700,6 +701,33 @@ package Landin.IR is
       Payloads : Field_Shape_Array := No_Field_Shapes)
      with Pre => Holds (Into, Id) and then not Has_Nominal_Shape (Into, Id);
 
+   --  The Boolean overload above is the compatibility spelling.  Both
+   --  construct the same single policy field; there are no competing flags.
+   procedure Set_Nominal_Shape
+     (Into     : in out Unit;
+      Id       : Nominal_Type_Id;
+      Fields   : Field_Shape_Array;
+      Policy   : Landin.Layouts.Policy;
+      Cases    : Case_Run_Array := No_Case_Runs;
+      Payloads : Field_Shape_Array := No_Field_Shapes)
+     with Pre => Holds (Into, Id) and then not Has_Nominal_Shape (Into, Id);
+
+   function Layout_Of
+     (Of_Unit : Unit; Id : Nominal_Type_Id) return Landin.Layouts.Policy;
+
+   --  Anonymous field runs retain natural layout.  Named shapes replay the
+   --  canonical nominal policy; measurements retain the selected policy.
+   function Layout_Of
+     (Of_Unit : Unit; Shape : Field_Shape) return Landin.Layouts.Policy;
+   function Layout_Of
+     (Of_Unit : Unit; Item : Item_Id) return Landin.Layouts.Policy;
+   function Layout_Of
+     (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id)
+      return Landin.Layouts.Policy;
+   function Layout_Of
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
+      return Landin.Layouts.Policy;
+
    function Has_Nominal_Shape
      (Of_Unit : Unit; Id : Nominal_Type_Id) return Boolean;
 
@@ -937,6 +965,46 @@ package Landin.IR is
    function Generic_Template_Of (Of_Unit : Unit; Id : Item_Id)
      return Declaration_Id
      with Pre => Holds (Of_Unit, Id);
+
+   --  Concrete semantic instance position, never a specialization clone
+   --  number.  Zero for an ordinary routine or datum.
+   function Instance_Position_Of (Of_Unit : Unit; Id : Item_Id)
+     return Natural;
+
+   type Evidence_Binding is record
+      Parameter : Positive := 1;
+      Evidence  : Evidence_Id := No_Evidence;
+   end record;
+
+   --  Bind a hidden runtime parameter to this semantic instance's concrete
+   --  evidence environment.  This is not proof of an arbitrary incoming
+   --  call: a specializer must still prove its actual arguments or retain
+   --  the indirect fallback.  Builders validate bounds/carriers in release.
+   procedure Bind_Evidence_Parameter
+     (Into      : in out Unit;
+      Item      : Item_Id;
+      Parameter : Positive;
+      Evidence  : Evidence_Id);
+
+   function Bound_Evidence
+     (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Evidence_Id;
+
+   function Evidence_Binding_Count
+     (Of_Unit : Unit; Item : Item_Id) return Natural;
+
+   function Nth_Evidence_Binding
+     (Of_Unit : Unit; Item : Item_Id; Index : Positive)
+      return Evidence_Binding;
+
+   function Evidence_Bindings_Are_Valid
+     (Of_Unit : Unit; Item : Item_Id) return Boolean;
+
+   --  Explicit entry identity plus existing function values, static image
+   --  relocations and evidence-table entries conservatively expose an
+   --  address.  Public/exported entries must be marked by lowering too.
+   procedure Mark_Address_Exposed (Into : in out Unit; Item : Item_Id);
+   function Has_Address_Exposure
+     (Of_Unit : Unit; Item : Item_Id) return Boolean;
 
    function Kind_Of (Of_Unit : Unit; Id : Item_Id) return Item_Kind
      with Pre => Holds (Of_Unit, Id);
@@ -2355,6 +2423,15 @@ package Landin.IR is
                  and then Op_Of (Of_Unit, Item, Value)
                             in Call | Indirect_Call;
 
+   --  Source loop nesting is profitability metadata only, never an
+   --  execution-count or reachability fact.  Calls snapshot the current
+   --  item's depth at emission; separately lowered routines start at zero.
+   procedure Set_Loop_Depth
+     (Into : in out Unit; Item : Item_Id; Depth : Natural);
+   function Loop_Depth (Of_Unit : Unit; Item : Item_Id) return Natural;
+   function Call_Loop_Depth
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Natural;
+
    function Failure_Slot_Of
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Slot_Id
      with Pre => Holds (Of_Unit, Item, Value)
@@ -2768,7 +2845,9 @@ package Landin.IR is
       Gives   : Landin.Types.Scalar_Name;
       Site    : Landin.Provenance.Origin;
       Cases   : Case_Run_Array := No_Case_Runs;
-      Payloads : Field_Shape_Array := No_Field_Shapes) return Value_Id
+      Payloads : Field_Shape_Array := No_Field_Shapes;
+      Policy : Landin.Layouts.Policy := Landin.Layouts.Natural)
+      return Value_Id
      with Pre  => Is_Emitting (Into, Item)
                   and then Of_Code in Measure_Size | Measure_Align
                   and then Fields'Length > 0
@@ -3644,6 +3723,7 @@ private
       Atom_Set    : Atom_Set_Id               := No_Atom_Set;
       Evidence    : Evidence_Id               := No_Evidence;
       Evidence_Entry : Natural                := 0;
+      Call_Depth  : Natural                    := 0;
       Atom_Identity : Declaration_Id           := No_Declaration;
       Source      : Storage                   := (others => <>);
       Source_Field : Natural                  := 0;
@@ -3664,6 +3744,7 @@ private
       First_Measurement_Field : Natural        := 0;
       Measurement_Field_Total : Natural        := 0;
       Aggregate_Measurement : Boolean          := False;
+      Measurement_Layout : Landin.Layouts.Policy := Landin.Layouts.Natural;
       Indexed_Address : Boolean                := False;
       Negated     : Boolean                   := False;
       Truth       : Boolean                   := False;
@@ -3677,6 +3758,7 @@ private
    end record;
 
    type Slot_Record is record
+      Concrete_Evidence : Evidence_Id := No_Evidence;
       Of_Type     : Landin.Types.Scalar_Name  := Landin.Types.Bool;
       --  True when the cell holds [0670]'s aggregate, whose fields are a
       --  run of their own; Of_Type says nothing then.
@@ -3715,6 +3797,9 @@ private
       Kind        : Item_Kind                 := Datum;
       Declaration : Declaration_Id            := No_Declaration;
       Generic_Template : Declaration_Id       := No_Declaration;
+      Instance_Position : Natural              := 0;
+      Address_Exposed : Boolean                := False;
+      Source_Loop_Depth : Natural              := 0;
       Result      : Landin.Types.Type_Kind    := Landin.Types.Not_Typed;
       Nominal     : Nominal_Type_Id           := No_Nominal_Type;
       Signature   : Signature_Id              := No_Signature;
@@ -3846,7 +3931,7 @@ private
 
    type Nominal_Shape_Record is record
       Present  : Boolean := False;
-      C_Layout : Boolean := False;
+      Policy   : Landin.Layouts.Policy := Landin.Layouts.Natural;
       Fields   : Run;
    end record;
 

@@ -1,0 +1,3 @@
+public row: type = [2]i32
+public values: row = [1, 2]
+public mut changing: row = [10, 20]

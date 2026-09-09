@@ -1,0 +1,6 @@
+class: runtime
+summary: static evidence specialization preserves recursive errors and both cleanup paths
+program: main.ldn
+status: 0
+constructs: 0940, 0960, 1100, 1110, 1230, 1260, 1290, 1310
+targets: linux-x86-64

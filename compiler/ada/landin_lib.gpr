@@ -5,7 +5,7 @@ with "landin_common.gpr";
 
 library project Landin_Lib is
 
-   for Languages use ("Ada");
+   for Languages use ("Ada", "C");
    for Source_Dirs use
      ("src/base", "src/source", "src/diagnostics", "src/platform",
       "src/stages", "src/syntax", "src/modules", "src/resolution", "src/checking",

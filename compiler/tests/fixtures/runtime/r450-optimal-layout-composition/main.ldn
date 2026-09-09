@@ -1,0 +1,28 @@
+natural: type = struct a: u8 b: u64 c: u8 d: u64 end natural
+foreign: type = layout(c) struct a: u8 b: u64 c: u8 d: u64 end foreign
+compact: type = layout(optimal) struct a: u8 b: u64 c: u8 d: u64 end compact
+outer: type = struct tag: u8 value: compact tail: u8 end outer
+image: outer = outer(tag: 9, value: compact(a: 1, b: 2, c: 3, d: 4), tail: 8)
+images: [2]compact = [compact(a: 5, b: 6, c: 7, d: 8),
+                       compact(a: 9, b: 10, c: 11, d: 12)]
+measures: [4]usize = [sizeof natural, sizeof foreign, sizeof compact, sizeof outer]
+mut order: u64 = 0
+byte: (n: u8) -> (r: u8) = order = order * 10 + u64(n) r = n end byte
+wide: (n: u64) -> (r: u64) = order = order * 10 + n r = n end wide
+copy: (value: compact) -> (r: compact) = r = value end copy
+public main: () -> (code: i32) =
+    value: compact = compact(a: byte(1), b: wide(2), c: byte(3), d: wide(4))
+    mut held: outer = image
+    held.value = copy(value)
+    p: ptr mut compact = addr held.value
+    p.val = copy(images[1])
+    if order == 1234 and value.a == 1 and value.b == 2
+      and value.c == 3 and value.d == 4
+      and p.val.a == 9 and p.val.b == 10 and p.val.c == 11 and p.val.d == 12
+      and image.value.a == 1 and image.value.b == 2 and image.value.c == 3
+      and image.value.d == 4 and held.tag == 9 and held.tail == 8
+      and measures[0] == 32 and measures[1] == 32
+      and measures[2] == 24 and measures[3] == 40
+      and sizeof compact == 24 and alignof compact == 8
+    then code = 42 else code = 1 end if
+end main

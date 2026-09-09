@@ -302,9 +302,12 @@ module.exports = grammar({
       optional($.c_layout),
       'struct', repeat1(choice($.field, $.variant_part)), 'end', optional($.identifier),
     ),
+    // Keep the existing node name for editor-query compatibility; the
+    // contextual policy is now either C or explicit optimal placement.
     c_layout: $ => seq(
       field('attribute', alias('layout', $.identifier)), '(',
-      field('convention', alias('c', $.identifier)),
+      field('convention', choice(alias('c', $.identifier),
+                                  alias('optimal', $.identifier))),
       ')',
     ),
     field: $ => seq(field('name', $._declaration_name), ':', field('type', $._type)),

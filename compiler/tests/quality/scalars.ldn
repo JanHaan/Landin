@@ -1,0 +1,29 @@
+-- Runtime inputs keep these bodies measurable without constant execution.
+link(symbol: "quality_chain") chain: (x: i64) -> (r: i64) =
+    a := x +% 1
+    b := a *% 3
+    c := b -% 7
+    d := c +% 11
+    e := d *% 5
+    f := e -% 13
+    g := f +% 17
+    h := g *% 7
+    r = h -% 19
+end chain
+
+link(symbol: "quality_loop") sum: (n: usize) -> (r: usize) =
+    r = 0
+    zero: usize = 0
+    for i in zero..<n do
+        r +%= i
+    end for
+end sum
+
+link(symbol: "quality_leaf") leaf: (x: i64) -> (r: i64) = r = x end leaf
+
+public main: () -> (code: i32) =
+    code = 0
+    if chain(2) <> 464 or sum(100) <> 4950 or leaf(23) <> 23 then
+        code = 1
+    end if
+end main

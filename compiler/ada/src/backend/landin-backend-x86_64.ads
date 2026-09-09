@@ -7,14 +7,15 @@
 --  before destination, because that is what the tool named by
 --  `Landin.Platform`'s runner accepts without a switch.
 --
---  Every value is computed in the accumulator and stored to its frame
---  cell, and every operand is loaded back from one.  `Landin.Backend`'s
---  header argues that shape and states its cost; the consequence here is
---  that instruction selection never has to ask which register holds
---  what, and that the text is a function of the IR alone.  Deterministic
---  is a requirement and not a nicety: R1.80's exit evidence asks for
---  deterministic assembly, and nothing below reads a clock, a hash order
---  or an address.
+--  The legacy overload selects none/off: accumulator computation and one
+--  frame cell per scalar value.  Explicit size/speed emission uses a typed,
+--  deterministic GP allocation plan with block-local intervals, reused spill
+--  homes and eligible cross-block scalar slots.  Scratch/argument/SSE banks
+--  and failure transport remain reserved; only used callee saves get homes.
+--  The same allocation and target-byte frame planner serve preflight and
+--  emission.  Final selected instruction evidence controls body sharing and
+--  reports actual emitted sites.  Nothing reads a clock, hash iteration order
+--  or host address; public and address-observed entries stay distinct.
 --
 --  Ordinary add, subtract and multiply each test signed overflow or unsigned
 --  carry/borrow at the operation and reach an explicit `ud2` before storing
@@ -67,6 +68,10 @@
 --  a register is chosen by a target fact rather than by the machine this
 --  compiler is running on.
 
+with Ada.Strings.Unbounded;
+
+with Landin.Build_Reports;
+with Landin.Optimization;
 with Landin.IR;
 with Landin.Resolution;
 with Landin.Source.Names;
@@ -74,11 +79,11 @@ with Landin.Targets;
 
 package Landin.Backend.X86_64 is
 
-   --  Every frame cell is addressed from %rbp and the prologue subtracts the
-   --  whole extent as an immediate.  Both encodings carry a signed 32-bit
-   --  displacement; the driver asks this before writing assembly so a larger
-   --  verified frame is an explicit backend refusal rather than bad text or
-   --  host arithmetic overflow.
+   --  Frame cells and probe endpoints use signed 32-bit displacements from
+   --  %rbp/%rsp.  The driver asks before emission so a larger verified frame
+   --  is an explicit refusal rather than bad text or host arithmetic overflow.
+   --  Large reservations probe in at most 4096-byte decrements, including
+   --  a final partial interval; this safety correction also applies to none.
    function Frame_Is_Addressable
      (Of_Unit : Landin.IR.Unit;
       Item    : Landin.IR.Item_Id;
@@ -94,5 +99,30 @@ package Landin.Backend.X86_64 is
       Names    : Landin.Source.Names.Table;
       Facts    : Landin.Targets.Target_Facts;
       Hosted_Entry : Landin.IR.Item_Id := Landin.IR.No_Item) return String;
+
+   function Frame_Is_Addressable
+     (Of_Unit : Landin.IR.Unit;
+      Item    : Landin.IR.Item_Id;
+      Facts   : Landin.Targets.Target_Facts;
+      Options : Landin.Optimization.Options) return Boolean;
+
+   function Text
+     (Of_Unit  : Landin.IR.Unit;
+      Meanings : Landin.Resolution.Table;
+      Names    : Landin.Source.Names.Table;
+      Facts    : Landin.Targets.Target_Facts;
+      Options  : Landin.Optimization.Options;
+      Hosted_Entry : Landin.IR.Item_Id := Landin.IR.No_Item) return String;
+
+   --  Append actual emitted routine statistics; preserve earlier pass reports.
+   procedure Emit
+     (Of_Unit  : Landin.IR.Unit;
+      Meanings : Landin.Resolution.Table;
+      Names    : Landin.Source.Names.Table;
+      Facts    : Landin.Targets.Target_Facts;
+      Options  : Landin.Optimization.Options;
+      Assembly : out Ada.Strings.Unbounded.Unbounded_String;
+      Report   : in out Landin.Build_Reports.Report;
+      Hosted_Entry : Landin.IR.Item_Id := Landin.IR.No_Item);
 
 end Landin.Backend.X86_64;

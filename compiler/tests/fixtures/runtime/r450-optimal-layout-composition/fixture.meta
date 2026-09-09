@@ -1,0 +1,6 @@
+class: runtime
+summary: optimal placement preserves source evaluation, nested images, copies and calls
+constructs: 0300, 0370, 0520, 0590, 0760, 1890
+program: main.ldn
+status: 42
+targets: linux-x86-64

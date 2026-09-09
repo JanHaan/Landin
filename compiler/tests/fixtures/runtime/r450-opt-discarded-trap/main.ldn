@@ -1,0 +1,10 @@
+divide: (left: i32, right: i32) -> none =
+    unchecked begin
+        _ = left / right
+    end unchecked
+end divide
+
+public main: () -> (code: i32) =
+    divide(1, 0)
+    code = 0
+end main

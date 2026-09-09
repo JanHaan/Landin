@@ -72,7 +72,13 @@ evidence at R2. Generic code is a value plus evidence that its type
 satisfies a concept; `any C` is the same evidence with the type erased,
 which makes static generics and runtime dispatch one mechanism seen from
 two sides. The evidence table is the foundation and specialising is an
-optimisation weighed per instantiation against code size.
+optimisation weighed per instantiation against code size. D211 distinguishes
+semantic instantiation from optional dispatch specialization: incoming evidence
+must be proved, hidden evidence/result ABI positions remain, and heterogeneous
+`any` dispatch needs no specialization. Size/auto defaults are independent of
+build mode. `unchecked` establishes no optimizer facts. D210 reorders only an
+explicitly optimal struct on a strict padded-size win, and reports remain
+off-target rather than imposing runtime machinery on a 32 KB device.
 
 **Capabilities** replace effects. An allocator, an Io, a diagnostics
 log, a peripheral handle are values a function is given, so a function

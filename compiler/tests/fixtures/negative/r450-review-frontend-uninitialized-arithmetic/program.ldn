@@ -1,0 +1,4 @@
+f: () -> none =
+    mut a: [3]i32
+    _ = a + 1
+end f

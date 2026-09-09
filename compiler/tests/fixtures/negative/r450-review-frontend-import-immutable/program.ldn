@@ -1,0 +1,4 @@
+import lib
+f: () -> none =
+    lib.values += 1
+end f

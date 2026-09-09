@@ -1,0 +1,41 @@
+extern(c) r450_step: (x: i64) -> (r: i64)
+extern(c) r450_registers: () -> (r: i32)
+
+large: type = layout(c) struct
+    bytes: [8199]u8
+    marker: u64
+end large
+
+extern(c) r450_large: (value: large) -> (r: large)
+
+-- C enters with sentinels in every allocated callee-save register.  Repeated
+-- foreign calls clobber the caller-save bank while loop bindings remain live.
+public extern(c) r450_loop: (limit: i64) -> (r: i64) =
+    mut i: i64 = 0
+    mut total: i64 = 0
+    while i < limit do
+        total = total + i + r450_step(i) + i
+        inc i
+    end while
+    r = total
+end r450_loop
+
+public main: () -> (code: i32) =
+    registers: i32 = r450_registers()
+    mut value: large = zeroed
+    value.bytes[0] = 7
+    value.bytes[4095] = 11
+    value.bytes[8198] = 13
+    value.marker = 17
+    -- Both the local frame and C's outgoing inline MEMORY argument cross
+    -- pages; the returned MEMORY object also exercises the hidden address.
+    returned := r450_large(value)
+    if registers == 0 and returned.bytes[0] == 8
+       and returned.bytes[4095] == 12 and returned.bytes[8198] == 14
+       and returned.marker == 18 and value.marker == 17
+    then
+        code = 0
+    else
+        code = 1
+    end if
+end main

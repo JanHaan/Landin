@@ -17,6 +17,12 @@ naked, ordinary Landin and C function conventions are not interchangeable merely
 because a vector entry or field holds a code address. The future target must
 settle its own entry and layout rules without inferring them from host widths.
 
+D210's explicit optimal layout likewise never reorders a register image or a
+vector table. Natural/C layouts keep their existing rules, and packed storage
+remains separate work. D211's build evidence stays off target: neither a
+profiler nor allocation/report metadata becomes mandatory runtime storage on
+this 32 KB device. A synthetic-32 layout test is not Cortex-M execution proof.
+
 ---
 
 ## chip/vendor/gpio  —  generated from the SVD

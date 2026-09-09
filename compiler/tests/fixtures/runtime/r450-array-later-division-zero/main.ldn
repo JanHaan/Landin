@@ -1,0 +1,6 @@
+calculate: (a: [3]i32) -> (r: [3]i32) = r = 12 / a end calculate
+public main: () -> (code: i32) =
+    input: [3]i32 = [2, 1, 0]
+    result := calculate(input)
+    code = i32(result[0])
+end main
