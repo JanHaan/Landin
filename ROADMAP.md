@@ -2809,7 +2809,7 @@ that has no implementation owner.
 | `[0560]` | hosted-now | R2.20 | matrix evidence and named refusal |
 | `[0570]` | hosted-now | R2.20 | matrix evidence and named refusal |
 | `[0580]` | hosted-now | R2.20 | matrix evidence |
-| `[0590]` | later-r4 | R4.50 | scheduled vector-performance work |
+| `[0590]` | hosted-now | R4.50 | D209 and matrix evidence |
 | `[0600]` | hosted-now | R4.10 | matrix evidence |
 | `[0610]` | hosted-now | R4.10 | matrix evidence |
 | `[0620]` | deferred | R7.20 | explicitly deferred structure-of-arrays design |
@@ -4755,7 +4755,7 @@ all passed, including clean debug and release validation. The job is
 <https://builds.sr.ht/~sinnfrei/job/1884079>. That revision identifies the
 pre-rewrite gate input, not an ancestor claimed in the rewritten history;
 `origin/main` after the history rewrite is
-`7bef5c0c67d35aa800847b9d22af1dfab1bcd2e4`. R4.50 is now active.
+`7bef5c0c67d35aa800847b9d22af1dfab1bcd2e4`. R4.50 was then active.
 
 Sources: `[0480]`, `[0790]`, `[1580]`, `[1600]`, `[1610]`, `[1975]`,
 legacy B2; `R§9`, `R§10`.
@@ -4768,7 +4768,7 @@ pointer union carrying what it stood for.
 
 ### R4.50 — Implement baseline code generation and specialization
 
-Status: active
+Status: complete
 Depends on: R1.70, R2.70, R4.10
 
 Implement deterministic local simplification, instruction selection, a simple
@@ -4786,7 +4786,7 @@ the hidden ABI. `unchecked` establishes no optimizer facts. Defaults are
 is the explicit reference. The driver writes source-aware factual JSON through
 the platform, never through the diagnostic stream.
 
-The implementation is integrated; completion evidence is still pending. The
+Implementation and verification are complete. The
 fixture-execution harness specifies four mandatory profiles for every runtime
 and ABI case:
 none/off, size/off, size/auto and speed/auto. Focused generic/erased cases add
@@ -4938,9 +4938,15 @@ passed. Confirmed findings were repaired and did not regress in the completed
 gates. The locally reported source fingerprints use different algorithms, but
 their exact per-file inventories reconcile; this records no source drift.
 
-R4.50 remains active. The authoritative native Linux x86-64 SourceHut gate for
-the exact committed revision is still required and is the remaining completion
-evidence to record here; no local or filtered pass closes this item.
+The authoritative native Linux x86-64 SourceHut gate closed R4.50: `hut builds
+show 1884559` reports `SUCCESS` for the exact committed revision
+`1722e1f4ebabed03ebd2812e530818094517b94d`, titled "Implement R4.50 baseline
+code generation and specialization". Its `toolchain`, `identify`, `build`,
+`test`, `release`, `report-identity`, `quality`, `bindings`, `checks`,
+`identity` and `pages` tasks all succeeded, including clean debug and release
+validation. The `pages` task correctly skipped publication on this feature
+branch; no site publication is claimed. The job is
+<https://builds.sr.ht/~sinnfrei/job/1884559>.
 
 Sources: `[0590]`, `[0750]`, `[1120]`, `[1310]`, `[1720]`.
 

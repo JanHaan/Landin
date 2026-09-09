@@ -108,6 +108,7 @@ tasks:
   - checks: |
       cd landin
       python3 scripts/tests/test_build_inventory.py
+      python3 scripts/tests/test_roadmap_progress.py
       python3 check.py
 
   #  The chassis must still refuse to claim a version.

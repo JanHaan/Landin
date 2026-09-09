@@ -3274,9 +3274,8 @@ separate deterministic clang-AST generator for declarations and explicit C
 adapters, with policy for facts a header does not say: nullability, ownership,
 `from`, retention and incoming-varargs extraction. That policy is not a
 handwritten replacement signature. [1975] defines the selected Linux x86-64
-SysV AMD64 LP64 boundary; ROADMAP.md records R4.40's authoritative native
-closure and R4.50's remaining optimization integration rather than treating
-normative rules alone as completion.
+SysV AMD64 LP64 boundary; ROADMAP.md records the authoritative native closures
+of R4.40 and R4.50 rather than treating normative rules alone as completion.
 
 A C pointer may be null and a Landin pointer may not. A foreign declaration
 that permits absence therefore names [0480]'s one-atom pointer union, which

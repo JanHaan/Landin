@@ -135,8 +135,8 @@ verification checks the same signature facts for direct and indirect calls.
 `compiler.c_sysv_lp64` is an early fixed configuration bool, with no runtime
 storage. Ordinary `core/c` asserts it before exporting LP64 aliases. Header
 parsing and C adapter generation belong to the separate bindings tool, not to
-the scanner, parser, type checker or native backend. R4.40's authoritative
-closure is recorded in ROADMAP.md; R4.50 is the active implementation item.
+the scanner, parser, type checker or native backend. The authoritative closures
+of R4.40 and R4.50 are recorded in ROADMAP.md.
 
 D209--D211 add independent `--optimize=none|size|speed` (default size) and
 `--specialize=off|auto|all` (default auto) controls. The driver runs verified
