@@ -1,0 +1,5 @@
+class: positive
+summary: R4.40 a fixed array of C callbacks remains a labelled generic type argument
+program: program.ldn
+constructs: 0190, 1290, 1350, 1580
+targets: linux-x86-64

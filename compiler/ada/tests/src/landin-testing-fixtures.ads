@@ -40,14 +40,18 @@ package Landin.Testing.Fixtures is
    --  that doubles a count is invisible to a set.
    function Codes   (Item : Fixture) return String;
 
+   --  Canonicalize the token boundaries in a comma-separated code list.  This
+   --  removes spacing differences only: order and multiplicity are preserved.
+   function Normalized_Codes (Text : String) return String;
+
    --  The arguments `refine` is run with, and the status it must exit with.
    --  A fixture that records an expectation and no way to produce it is
    --  dead data, so `expect` without `args` is a reported fault.
    function Args    (Item : Fixture) return String;
-   --  Arguments handed to a compiled runtime program, separately from the
-   --  `args` used to invoke refine for recorded command-line fixtures.
+   --  Arguments handed to a compiled runtime or ABI program, separately from
+   --  the `args` used to invoke refine for recorded command-line fixtures.
    function Run_Args (Item : Fixture) return String;
-   --  Bytes expected from that runtime program's merged output.  This is
+   --  Bytes expected from that compiled program's merged output.  This is
    --  separate from `expect`, which records refine's own output.
    function Run_Expect (Item : Fixture) return String;
    function Status  (Item : Fixture) return Integer;
@@ -74,10 +78,28 @@ package Landin.Testing.Fixtures is
    --  named for, and these are handed to `refine` after it.
    function With_Sources (Item : Fixture) return String;
 
-   --  An optional import root, relative to the fixture directory. A runtime
-   --  fixture that names one is compiled as a directory entry module, so it
-   --  can execute the same repository-owned library modules users import.
+   --  An optional import root, relative to the fixture directory. A positive,
+   --  negative, runtime or ABI fixture that names one is compiled as a
+   --  directory entry module, so it can use the same repository-owned library
+   --  modules users import. Rooted positive and negative fixtures still name a
+   --  nonempty program as their compile-only corpus file.
    function Module_Root (Item : Fixture) return String;
+
+   --  Append the source-selection arguments for this fixture to a refine
+   --  invocation.  A rooted fixture contributes `--root=<directory>/<root>`
+   --  followed by its directory entry module.  Otherwise its program and each
+   --  source named by `with` are appended in metadata order.
+   procedure Append_Module_Arguments
+     (Item         : Fixture;
+      Fixture_Root : String;
+      To           : in out Landin.Platform.Path_List);
+
+   --  ABI fixtures pair emitted Landin assembly with these ordered C11
+   --  companions.  The source names are comma-separated relative `.c` paths;
+   --  compiler and linker arguments are whitespace-separated and are kept as
+   --  argument-vector elements rather than reparsed by a shell.
+   function C_Sources (Item : Fixture) return String;
+   function C_Args    (Item : Fixture) return String;
 
    --  Which stream the expectation is about.  `output` means the bytes
    --  must arrive on standard output and standard error must be empty;
@@ -130,10 +152,12 @@ private
       Codes   : Unbounded.Unbounded_String;
       Status  : Integer := 0;
       Traps   : Boolean := False;
-      Made_Of : Ada.Strings.Unbounded.Unbounded_String;
-      Beside  : Ada.Strings.Unbounded.Unbounded_String;
-      Root    : Ada.Strings.Unbounded.Unbounded_String;
-      Stream  : Stream_Choice := Merged;
+      Made_Of   : Ada.Strings.Unbounded.Unbounded_String;
+      Beside    : Ada.Strings.Unbounded.Unbounded_String;
+      Root      : Ada.Strings.Unbounded.Unbounded_String;
+      C_Files   : Ada.Strings.Unbounded.Unbounded_String;
+      C_Options : Ada.Strings.Unbounded.Unbounded_String;
+      Stream    : Stream_Choice := Merged;
    end record;
 
    package Fixture_Vectors is new Ada.Containers.Indefinite_Vectors

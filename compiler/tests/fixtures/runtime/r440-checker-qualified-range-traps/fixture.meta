@@ -1,0 +1,7 @@
+class: runtime
+summary: A dynamic conversion through a qualified imported range alias retains its runtime bound check
+program: main.ldn
+root: .
+traps: yes
+constructs: 0660, 0700, 1420
+targets: linux-x86-64

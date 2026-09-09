@@ -1,0 +1,5 @@
+class: positive
+summary: R4.40 C convention identity, recursive C layouts, optional pointers, callbacks, native linkage and direct/indirect promoted varargs survive checking and lowering
+program: program.ldn
+constructs: 0170, 0480, 0670, 1000, 1570, 1580, 1610
+targets: linux-x86-64

@@ -1,0 +1,6 @@
+bad: () -> none =
+    unchecked begin
+        pointer: ptr u8 = ptr(0)
+        _ = pointer
+    end unchecked
+end bad

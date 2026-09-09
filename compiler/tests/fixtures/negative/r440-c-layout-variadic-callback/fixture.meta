@@ -1,0 +1,6 @@
+class: negative
+summary: R4.40 allows variadic function values for calls but requires fixed C signatures for callback fields
+program: program.ldn
+codes: L0301
+constructs: 0670, 1000, 1580
+targets: linux-x86-64

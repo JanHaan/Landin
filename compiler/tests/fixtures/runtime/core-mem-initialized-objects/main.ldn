@@ -2,6 +2,15 @@ import core/failing
 import core/heap
 import core/mem
 
+no_object: atom
+object_result: type = no_object | ptr mut u32
+is_absent: (value: object_result) -> (empty: bool) =
+    match value
+        no_object: empty = true
+        ptr: empty = false
+    end match
+end is_absent
+
 counter: type = concept (t: type)
     bump: (self: ptr mut t) -> (result: i32)
 end counter
@@ -44,24 +53,32 @@ public main: () -> (code: i32) =
     four: usize = 4
     mut state := failing.count_down(addr heap_state, zero)
     mut refused: bool = false
-    failed: ptr mut u32 = mem.new(state, initial_value()) else (problem)
+    failed: object_result = mem.new(state, initial_value()) else (problem)
         _ = problem
         refused = true
-        ptr(0)
+        no_object
     end
     failing.permit(state, four)
-    scalar: ptr mut u32 = mem.new(state, initial_value()) else ptr(0)
-    return when usize(scalar) == 0
+    scalar: ptr mut u32 = mem.new(state, initial_value()) else (problem)
+        _ = problem
+        return
+    end
     initial: bundle = (sentinel: 101, head: addr target,
                        action: any(addr target), bytes: data[0..<2])
-    object: ptr mut bundle = mem.new(state, initial) else ptr(0)
-    return when usize(object) == 0
+    object: ptr mut bundle = mem.new(state, initial) else (problem)
+        _ = problem
+        return
+    end
     nothing: empty = zeroed
-    empty_object: ptr mut empty = mem.new(state, nothing) else ptr(0)
-    return when usize(empty_object) == 0
+    empty_object: ptr mut empty = mem.new(state, nothing) else (problem)
+        _ = problem
+        return
+    end
     text: utf8 = "needle"
-    filter_object: ptr mut filter = keep_text(state, text) else ptr(0)
-    return when usize(filter_object) == 0
+    filter_object: ptr mut filter = keep_text(state, text) else (problem)
+        _ = problem
+        return
+    end
     text_ok: bool = begin
         saved := filter_object.val.needle
         c0: []u8 = saved[0]
@@ -89,7 +106,7 @@ public main: () -> (code: i32) =
     mem.delete(state, object)
     mem.delete(state, empty_object)
     mem.delete(state, filter_object)
-    if refused and usize(failed) == 0 and evaluations == 2
+    if refused and is_absent(failed) and evaluations == 2
       and scalar_ok and object_ok and text_ok and target.value == 14
       and data[0] == 17 and data[1] == 31
       and failing.attempts(state) == 5 and failing.successes(state) == 4

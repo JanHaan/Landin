@@ -5,16 +5,18 @@ packet: type = struct
     end kind
 end packet
 
-pointer_backed: (source: ptr mut packet)
-                -> (result: []mut u32 from source) =
+pointer_backed: () -> (result: []mut u32) =
+    mut local: packet = zeroed
+    source := addr local
     match source.val.kind
         empty: result = []
         row(inout values): result = values[0..<2]
     end match
 end pointer_backed
 
-slice_backed: (source: []mut packet)
-              -> (result: []mut u32 from source) =
+slice_backed: () -> (result: []mut u32) =
+    mut local: [1]packet = zeroed
+    source := local[0..<1]
     match source[0].kind
         empty: result = []
         row(inout values): result = values[0..<2]

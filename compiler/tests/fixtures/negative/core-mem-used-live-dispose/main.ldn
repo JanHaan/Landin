@@ -1,7 +1,11 @@
 import core/mem
 bad: (inout storage: mem.storage(u8)) -> (result: usize) =
     view := mem.used(storage)
-    released: ptr mut u8 = mem.dispose(storage) else ptr(0)
+    released: ptr mut u8 = mem.dispose(storage) else (problem)
+        _ = problem
+        result = 0
+        return
+    end
     _ = released
     result = lenof view
 end bad

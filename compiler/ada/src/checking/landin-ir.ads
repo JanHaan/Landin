@@ -134,6 +134,7 @@ private with Ada.Containers.Vectors;
 with Landin.Provenance;
 with Landin.Resolution;
 with Landin.Source;
+with Landin.Source.Names;
 with Landin.Types;
 
 package Landin.IR is
@@ -308,6 +309,9 @@ package Landin.IR is
       --  index is retained; only a backend turns it into a target offset.
       Evidence_Address,
       Evidence_Function,
+      --  D147's self carrier is bound to the immediately preceding erased
+      --  function projection, never to an independently supplied data word.
+      Evidence_Self,
       --  [1920]: every parameter named once and in order, and the type
       --  of the named return, or no value at all.  Both forms carry a
       --  descriptor; only the direct form also names a routine item.
@@ -365,6 +369,9 @@ package Landin.IR is
    type Signature_Id is range 0 .. Integer'Last;
    type Atom_Set_Id is range 0 .. Integer'Last;
    type Evidence_Id is range 0 .. Integer'Last;
+   type Pointee_Id is range 0 .. Integer'Last;
+
+   No_Pointee : constant Pointee_Id := 0;
 
    type Unit is tagged limited private;
 
@@ -425,6 +432,10 @@ package Landin.IR is
       --  Nonzero only when a scalar-shaped `u32` field carries an atom value
       --  inside [0990]'s anonymous result aggregate.
       Atoms     : Atom_Set_Id               := 0;
+      --  A data pointer's complete reached shape, separate from a callable
+      --  signature on the pointer-sized value itself. No target layout and
+      --  no nonnull, lifetime or source definite-assignment promise.
+      Pointee   : Pointee_Id                 := No_Pointee;
       --  Aggregate_Field_Shape's own identity, or Array_Field_Shape's
       --  aggregate element identity.  Scalar and variant shapes have none.
       Nominal   : Nominal_Type_Id            := No_Nominal_Type;
@@ -493,6 +504,9 @@ package Landin.IR is
       Escaping   : Boolean := False;
       --  Nonzero only when Kind is the u32 carrier for [0630]/[0640].
       Atoms   : Atom_Set_Id             := No_Atom_Set;
+      --  On a usize source pointer this names its referent; on Inout_Place
+      --  it names the complete passed place (including callback/atom type).
+      Pointee : Pointee_Id              := No_Pointee;
    end record;
 
    type Signature_Part_Array is
@@ -580,6 +594,29 @@ package Landin.IR is
      with Pre => Holds (Of_Unit, Id);
 
    ------------------------------------------------------------------
+   --  Reached pointer shapes
+   ------------------------------------------------------------------
+
+   --  One complete immediate referent, not one entry per array element.
+   --  Nominal referents may name a canonical body without copying it.
+   --  Pointer edges are not by-value layout edges: recursive records stay
+   --  finite and signature identity compares a nominal referent by identity.
+   function Pointee_Count (Of_Unit : Unit) return Natural;
+
+   function Holds (Of_Unit : Unit; Id : Pointee_Id) return Boolean
+     is (Id /= No_Pointee
+         and then Natural (Id) <= Pointee_Count (Of_Unit));
+
+   function Add_Pointee
+     (Into : in out Unit; Shape : Field_Shape) return Pointee_Id;
+
+   function Pointee_Shape
+     (Of_Unit : Unit; Id : Pointee_Id) return Field_Shape;
+
+   function Pointees_Agree
+     (Of_Unit : Unit; Left, Right : Pointee_Id) return Boolean;
+
+   ------------------------------------------------------------------
    --  Atom sets and signatures
    ------------------------------------------------------------------
 
@@ -625,7 +662,9 @@ package Landin.IR is
       Parameters : Signature_Part_Array;
       Results    : Signature_Part_Array;
       Errors     : Atom_Set_Id := No_Atom_Set;
-      Sources    : Return_Source_Array := No_Return_Sources)
+      Sources    : Return_Source_Array := No_Return_Sources;
+      C_ABI      : Boolean := False;
+      Variadic   : Boolean := False)
       return Signature_Id
      with Pre  => Is_Prepared (Into)
                   and then (Errors = No_Atom_Set
@@ -638,13 +677,59 @@ package Landin.IR is
       Parameters : Signature_Part_Array;
       Result     : Signature_Part;
       Errors     : Atom_Set_Id := No_Atom_Set;
-      Sources    : Return_Source_Array := No_Return_Sources)
+      Sources    : Return_Source_Array := No_Return_Sources;
+      C_ABI      : Boolean := False;
+      Variadic   : Boolean := False)
       return Signature_Id
      with Pre  => Is_Prepared (Into)
                   and then (Errors = No_Atom_Set
                             or else Holds (Into, Errors)),
           Post => Signature_Count (Into) = Signature_Count (Into)'Old + 1
                   and then Holds (Into, Add_Signature'Result);
+
+   --  Canonical nominal bodies do not depend on an item having storage.
+   --  With local Cases/Payloads, run starts are one-based positions in the
+   --  supplied arrays (regardless of their lower bounds).  Otherwise starts
+   --  already refer to Add_Shape_Run/Add_Case_Run storage and stay absolute.
+   procedure Set_Nominal_Shape
+     (Into     : in out Unit;
+      Id       : Nominal_Type_Id;
+      Fields   : Field_Shape_Array;
+      C_Layout : Boolean := False;
+      Cases    : Case_Run_Array := No_Case_Runs;
+      Payloads : Field_Shape_Array := No_Field_Shapes)
+     with Pre => Holds (Into, Id) and then not Has_Nominal_Shape (Into, Id);
+
+   function Has_Nominal_Shape
+     (Of_Unit : Unit; Id : Nominal_Type_Id) return Boolean;
+
+   --  A bounds predicate, not a semantic or recursive shape validator.
+   --  All these queries guard their indexes with assertions disabled too.
+   function Nominal_Field_Run_Is_Valid
+     (Of_Unit : Unit; Id : Nominal_Type_Id) return Boolean;
+
+   function Has_C_Layout
+     (Of_Unit : Unit; Id : Nominal_Type_Id) return Boolean;
+
+   function Nominal_Field_Count
+     (Of_Unit : Unit; Id : Nominal_Type_Id) return Natural;
+
+   function Nth_Nominal_Field
+     (Of_Unit : Unit; Id : Nominal_Type_Id; Index : Positive)
+      return Field_Shape;
+
+   function Signature_Uses_C_ABI
+     (Of_Unit : Unit; Signature : Signature_Id) return Boolean
+     with Pre => Holds (Of_Unit, Signature);
+
+   --  Dispatch-only: not an ordinary routine or a stored callable type.
+   function Signature_Has_Erased_Self
+     (Of_Unit : Unit; Signature : Signature_Id) return Boolean
+     with Pre => Holds (Of_Unit, Signature);
+
+   function Signature_Is_Variadic
+     (Of_Unit : Unit; Signature : Signature_Id) return Boolean
+     with Pre => Holds (Of_Unit, Signature);
 
    function Signature_Parameter_Count
      (Of_Unit : Unit; Signature : Signature_Id) return Natural
@@ -708,10 +793,15 @@ package Landin.IR is
          and then Natural (Id) <= Evidence_Count (Of_Unit));
 
    function Add_Evidence
-     (Into : in out Unit; Represented : Field_Shape) return Evidence_Id
+     (Into : in out Unit; Represented : Field_Shape;
+      Erased : Boolean := False) return Evidence_Id
      with Pre  => Is_Prepared (Into),
           Post => Evidence_Count (Into) = Evidence_Count (Into)'Old + 1
                   and then Holds (Into, Add_Evidence'Result);
+
+   function Evidence_Is_Erased
+     (Of_Unit : Unit; Id : Evidence_Id) return Boolean
+     with Pre => Holds (Of_Unit, Id);
 
    function Evidence_Represented
      (Of_Unit : Unit; Id : Evidence_Id) return Field_Shape
@@ -738,6 +828,14 @@ package Landin.IR is
                  and then Which <= Evidence_Entry_Count (Of_Unit, Id);
 
    function Evidence_Entry_Signature
+     (Of_Unit : Unit; Id : Evidence_Id; Which : Positive)
+      return Signature_Id
+     with Pre => Holds (Of_Unit, Id)
+                 and then Which <= Evidence_Entry_Count (Of_Unit, Id);
+
+   --  Ordinary entries return their provider signature; erased entries
+   --  derive a marked copy clearing only parameter one's concrete pointee.
+   function Evidence_Entry_Dispatch_Signature
      (Of_Unit : Unit; Id : Evidence_Id; Which : Positive)
       return Signature_Id
      with Pre => Holds (Of_Unit, Id)
@@ -878,9 +976,19 @@ package Landin.IR is
                   and then not Is_Read_Only (Into, Item),
           Post => Is_Read_Only (Into, Item);
 
-   --  An external routine is a declaration-only item whose calls retain the
-   --  ordinary neutral signature.  It owns no blocks or frame slots; the
-   --  selected backend supplies the foreign calling convention [1580].
+   --  Link spelling is separate from callable convention and bodylessness.
+   --  No_Name preserves the backend's ordinary item naming.
+   procedure Set_Link_Symbol
+     (Into   : in out Unit;
+      Item   : Item_Id;
+      Symbol : Landin.Source.Names.Name_Id)
+     with Pre => Holds (Into, Item);
+
+   function Link_Symbol
+     (Of_Unit : Unit; Item : Item_Id) return Landin.Source.Names.Name_Id;
+
+   --  External means declaration-only, with no blocks or frame slots.
+   --  C convention belongs to the signature, including on defined routines.
    function Is_External (Of_Unit : Unit; Item : Item_Id) return Boolean
      with Pre => Holds (Of_Unit, Item);
 
@@ -1029,6 +1137,14 @@ package Landin.IR is
      with Post => (if Shapes'Length = 0 then Add_Shape_Run'Result = 0
                    else Add_Shape_Run'Result > 0);
 
+   --  The complete immediate child is authoritative.  Only a metadata-free
+   --  scalar uses the inline representation; all other children share one
+   --  arena entry, independent of the target-sized element count.
+   function Make_Array_Shape
+     (Into    : in out Unit;
+      Length  : Element_Total;
+      Element : Field_Shape) return Field_Shape;
+
    function Add_Case_Run
      (Into : in out Unit; Runs : Case_Run_Array) return Natural
      with Post => (if Runs'Length = 0 then Add_Case_Run'Result = 0
@@ -1157,7 +1273,18 @@ package Landin.IR is
                  and then Has_Bool_Image (Of_Unit, Item);
 
    type Field_Image_Form is
-     (Absent, Finite, Repeated, Hybrid, Selected, Nested);
+     (Absent, Finite, Repeated, Hybrid, Selected, Nested, Element_Sequence);
+
+   --  Element_Sequence describes an array using complete child descriptors.
+   --  Offset is relative to the descendant run, Count is its source-sized
+   --  direct-child count, and Value is the target-sized multiplicity of the
+   --  last child.  Every preceding child occurs once.  Thus a nonempty run
+   --  covers Count - 1 + Value elements; an empty run has Value = 0 and
+   --  covers none.  Finite images use Value = 1, repetitions Count = 1,
+   --  and mixed repetitions one prefix plus one suffix descriptor.  Value
+   --  may be zero for an evaluated but empty suffix.  No count expands a
+   --  repetition into descriptors.  Leaves retain Value or Target exactly
+   --  as scalar descendants of Nested do.
 
    --  D67: the target-neutral image carried beside one aggregate field.
    --  Offset and Count select a finite fold run for Finite and Hybrid.  D68
@@ -1256,11 +1383,40 @@ package Landin.IR is
                            = Element_Total
                                (Fields'Length + Elements'Length);
 
+   --  Recursive array data has one root descriptor, followed by the same
+   --  descendant and fold arenas as an aggregate image.  It has no flat
+   --  field-value prefix.  Image_Length counts stored folds, not elements;
+   --  Array_Length remains the logical extent.  Legacy numeric array image
+   --  readers must first exclude Has_Recursive_Array_Image.
+   procedure Set_Array_Image
+     (Into        : in out Unit;
+      Item        : Item_Id;
+      Image       : Aggregate_Field_Image;
+      Descendants : Aggregate_Field_Image_Array;
+      Elements    : Landin.Types.Folded_Array)
+     with Pre => Holds (Into, Item)
+                 and then Result_Of (Into, Item) = Landin.Types.Fixed_Array
+                 and then not Has_Image (Into, Item);
+
+   function Has_Recursive_Array_Image
+     (Of_Unit : Unit; Item : Item_Id) return Boolean
+     with Pre => Holds (Of_Unit, Item);
+
+   function Array_Image_Of
+     (Of_Unit : Unit; Item : Item_Id) return Aggregate_Field_Image
+     with Pre => Has_Recursive_Array_Image (Of_Unit, Item);
+
+   --  The descriptor prefix, not the numeric fold prefix: fields for an
+   --  aggregate and one root for a recursive array.
+   function Image_Root_Count
+     (Of_Unit : Unit; Item : Item_Id) return Natural
+     with Pre => Holds (Of_Unit, Item);
+
    function Aggregate_Field_Image_Count
      (Of_Unit : Unit; Item : Item_Id) return Natural
      with Pre => Holds (Of_Unit, Item)
                  and then Result_Of (Of_Unit, Item)
-                          = Landin.Types.Aggregate
+                          in Landin.Types.Aggregate | Landin.Types.Fixed_Array
                  and then Has_Image (Of_Unit, Item);
 
    --  The complete descriptor run.  Its first Field_Count entries describe
@@ -1271,7 +1427,7 @@ package Landin.IR is
       return Aggregate_Field_Image
      with Pre => Holds (Of_Unit, Item)
                  and then Result_Of (Of_Unit, Item)
-                          = Landin.Types.Aggregate
+                          in Landin.Types.Aggregate | Landin.Types.Fixed_Array
                  and then Has_Image (Of_Unit, Item)
                  and then Position <= Aggregate_Field_Image_Count
                                         (Of_Unit, Item);
@@ -1294,11 +1450,11 @@ package Landin.IR is
       Position : Positive) return Aggregate_Field_Image
      with Pre => Holds (Of_Unit, Item)
                  and then Result_Of (Of_Unit, Item)
-                          = Landin.Types.Aggregate
+                          in Landin.Types.Aggregate | Landin.Types.Fixed_Array
                  and then Has_Image (Of_Unit, Item)
-                 and then Parent.Form in Selected | Nested
+                 and then Parent.Form in Selected | Nested | Element_Sequence
                  and then Position <= Parent.Count
-                 and then Field_Count (Of_Unit, Item) + Parent.Offset
+                 and then Image_Root_Count (Of_Unit, Item) + Parent.Offset
                             + Position
                           <= Aggregate_Field_Image_Count (Of_Unit, Item);
 
@@ -1307,7 +1463,7 @@ package Landin.IR is
       return Landin.Types.Folded
      with Pre => Holds (Of_Unit, Item)
                  and then Result_Of (Of_Unit, Item)
-                          = Landin.Types.Aggregate
+                          in Landin.Types.Aggregate | Landin.Types.Fixed_Array
                  and then Has_Image (Of_Unit, Item)
                  and then Element_Total (Position)
                           <= Image_Length (Of_Unit, Item)
@@ -1320,7 +1476,7 @@ package Landin.IR is
       Position : Part_Position) return Landin.Types.Folded
      with Pre => Holds (Of_Unit, Item)
                  and then Result_Of (Of_Unit, Item)
-                          = Landin.Types.Aggregate
+                          in Landin.Types.Aggregate | Landin.Types.Fixed_Array
                  and then Has_Image (Of_Unit, Item)
                  and then Image.Form in Finite | Hybrid
                  and then Element_Total (Position)
@@ -1602,7 +1758,8 @@ package Landin.IR is
       Declares : Declaration_Id;
       Site     : Landin.Provenance.Origin;
       Signature : Signature_Id := No_Signature;
-      Atoms     : Atom_Set_Id := No_Atom_Set) return Slot_Id
+      Atoms     : Atom_Set_Id := No_Atom_Set;
+      Pointee   : Pointee_Id := No_Pointee) return Slot_Id
      with Pre  => Holds (Into, Item)
                   and then (Signature = No_Signature
                             or else Holds (Into, Signature))
@@ -1831,7 +1988,8 @@ package Landin.IR is
       Declares : Declaration_Id;
       Site     : Landin.Provenance.Origin;
       Signature : Signature_Id := No_Signature;
-      Atoms     : Atom_Set_Id := No_Atom_Set) return Slot_Id
+      Atoms     : Atom_Set_Id := No_Atom_Set;
+      Pointee   : Pointee_Id := No_Pointee) return Slot_Id
      with Pre  => Holds (Into, Item)
                   and then Kind_Of (Into, Item) = Routine
                   and then (Signature = No_Signature
@@ -2179,6 +2337,18 @@ package Landin.IR is
    --  The descriptor a direct or indirect call consumes.  This is distinct
    --  from Signature_Of on a function-valued call result, which answers the
    --  nested result descriptor.
+   --  Optional promoted tail descriptors.  No descriptors is compatible
+   --  with the scalar-tail path that reads each actual's Result_Of kind.
+   function Call_Variadic_Types_Are_Valid
+     (Of_Unit : Unit; Item : Item_Id; Call : Value_Id) return Boolean;
+
+   function Call_Variadic_Count
+     (Of_Unit : Unit; Item : Item_Id; Call : Value_Id) return Natural;
+
+   function Nth_Call_Variadic_Type
+     (Of_Unit : Unit; Item : Item_Id; Call : Value_Id; Index : Positive)
+      return Signature_Part;
+
    function Call_Signature
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Signature_Id
      with Pre => Holds (Of_Unit, Item, Value)
@@ -2427,6 +2597,11 @@ package Landin.IR is
    --  a run of exactly one describing it.  A scalar element stays in
    --  Element, so every existing array shape is unchanged and the question
    --  "is the element an aggregate" is answered without a target.
+   function Array_Element_Run_Is_Valid
+     (Of_Unit : Unit; Shape : Field_Shape) return Boolean;
+
+   --  Historical name: this asks whether there is an explicit complete
+   --  child, which can also be a metadata-bearing scalar callable.
    function Array_Element_Is_Aggregate
      (Of_Unit : Unit; Shape : Field_Shape) return Boolean
      with Pre => Shape.Kind = Array_Field_Shape;
@@ -2537,16 +2712,7 @@ package Landin.IR is
 
    function Variant_Case_Run_Is_Valid
      (Of_Unit : Unit; Shape : Field_Shape; Which : Positive)
-      return Boolean
-     with Pre => Shape.Kind = Variant_Field_Shape
-                 and then Shape.Cases > 0
-                 and then Which <= Shape.Cases
-                 and then Shape.Payloads_First > 0
-                 and then Shape.Payloads_First
-                            <= Variant_Case_Run_Count (Of_Unit)
-                 and then Shape.Cases
-                            <= Variant_Case_Run_Count (Of_Unit)
-                                 - Shape.Payloads_First + 1;
+      return Boolean;
 
    function Variant_Case_Field_Count
      (Of_Unit : Unit; Shape : Field_Shape; Which : Positive)
@@ -2847,6 +3013,42 @@ package Landin.IR is
                  and then Holds (Into, Item, Address)
                  and then Holds (Into, Item, Value)
                  and then Landin.Provenance.Is_Known (Site);
+
+   --  Typed indirect access derives its scalar metadata from an address
+   --  slot, not from caller-supplied result metadata.  Operand 1 is a Load
+   --  of that slot in this block; the instruction retains Slot as a witness.
+   function Emit_Load_Indirect
+     (Into    : in out Unit;
+      Item    : Item_Id;
+      Address : Slot_Id;
+      Site    : Landin.Provenance.Origin) return Value_Id
+     with Pre => Is_Emitting (Into, Item)
+                 and then Holds (Into, Item, Address)
+                 and then Is_Address (Into, Item, Address)
+                 and then Address_Shape (Into, Item, Address).Kind
+                   = Scalar_Field_Shape
+                 and then Landin.Provenance.Is_Known (Site);
+
+   procedure Emit_Store_Indirect
+     (Into    : in out Unit;
+      Item    : Item_Id;
+      Address : Slot_Id;
+      Value   : Value_Id;
+      Site    : Landin.Provenance.Origin)
+     with Pre => Is_Emitting (Into, Item)
+                 and then Holds (Into, Item, Address)
+                 and then Is_Address (Into, Item, Address)
+                 and then Address_Shape (Into, Item, Address).Kind
+                   = Scalar_Field_Shape
+                 and then Holds (Into, Item, Value)
+                 and then Landin.Provenance.Is_Known (Site);
+
+   --  No_Slot denotes the original, metadata-free indirect operation.
+   function Indirect_Address_Slot
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Slot_Id
+     with Pre => Holds (Of_Unit, Item, Value)
+                 and then Op_Of (Of_Unit, Item, Value)
+                   in Load_Indirect | Store_Indirect;
 
    function Emit_Load_Datum
      (Into  : in out Unit;
@@ -3240,7 +3442,33 @@ package Landin.IR is
      with Pre => Is_Emitting (Into, Item)
                  and then Holds (Into, Item, Table)
                  and then Holds (Into, Evidence)
+                 and then not Evidence_Is_Erased (Into, Evidence)
                  and then Which <= Evidence_Entry_Count (Into, Evidence)
+                 and then Landin.Provenance.Is_Known (Site);
+
+   --  Receiver addresses one complete private [2]usize descriptor. This
+   --  binds table and data transport, not authenticity of fabricated memory.
+   function Emit_Erased_Evidence_Function
+     (Into     : in out Unit;
+      Item     : Item_Id;
+      Receiver : Value_Id;
+      Evidence : Evidence_Id;
+      Which    : Positive;
+      Site     : Landin.Provenance.Origin) return Value_Id
+     with Pre => Is_Emitting (Into, Item)
+                 and then Holds (Into, Item, Receiver)
+                 and then Holds (Into, Evidence)
+                 and then Evidence_Is_Erased (Into, Evidence)
+                 and then Which <= Evidence_Entry_Count (Into, Evidence)
+                 and then Landin.Provenance.Is_Known (Site);
+
+   function Emit_Evidence_Self
+     (Into           : in out Unit;
+      Item           : Item_Id;
+      Function_Value : Value_Id;
+      Site           : Landin.Provenance.Origin) return Value_Id
+     with Pre => Is_Emitting (Into, Item)
+                 and then Holds (Into, Item, Function_Value)
                  and then Landin.Provenance.Is_Known (Site);
 
    function Emit_Call
@@ -3249,7 +3477,9 @@ package Landin.IR is
       Callee : Item_Id;
       Result : Landin.Types.Type_Kind;
       Site   : Landin.Provenance.Origin;
-      Failure : Slot_Id := No_Slot) return Value_Id
+      Failure : Slot_Id := No_Slot;
+      Variadic_Types : Signature_Part_Array := No_Signature_Parts)
+      return Value_Id
      with Pre  => Is_Emitting (Into, Item)
                   and then Holds (Into, Callee)
                   and then (Result in Landin.Types.Scalar_Name
@@ -3265,7 +3495,9 @@ package Landin.IR is
       Signature : Signature_Id;
       Result    : Landin.Types.Type_Kind;
       Site      : Landin.Provenance.Origin;
-      Failure   : Slot_Id := No_Slot) return Value_Id
+      Failure   : Slot_Id := No_Slot;
+      Variadic_Types : Signature_Part_Array := No_Signature_Parts)
+      return Value_Id
      with Pre  => Is_Emitting (Into, Item)
                   and then Holds (Into, Signature)
                   and then (Result in Landin.Types.Scalar_Name
@@ -3338,6 +3570,35 @@ package Landin.IR is
      is (Holds (Of_Unit, Item)
          and then Open_Block (Of_Unit, Item) /= No_Block);
 
+   function Pointee_Of
+     (Of_Unit : Unit; Item : Item_Id) return Pointee_Id
+     with Pre => Holds (Of_Unit, Item);
+
+   function Pointee_Of
+     (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Pointee_Id
+     with Pre => Holds (Of_Unit, Item, Slot);
+
+   function Pointee_Of
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Pointee_Id
+     with Pre => Holds (Of_Unit, Item, Value);
+
+   --  An annotation, never an unchecked conversion. The release verifier
+   --  proves it against the producer: typed storage, a declared result,
+   --  addr, or the mandatory [1..target maximum] integer conversion check.
+   procedure Set_Pointee
+     (Into : in out Unit; Item : Item_Id; Pointee : Pointee_Id)
+     with Pre => Holds (Into, Item) and then Holds (Into, Pointee);
+
+   procedure Set_Pointee
+     (Into : in out Unit; Item : Item_Id; Slot : Slot_Id;
+      Pointee : Pointee_Id)
+     with Pre => Holds (Into, Item, Slot) and then Holds (Into, Pointee);
+
+   procedure Set_Pointee
+     (Into : in out Unit; Item : Item_Id; Value : Value_Id;
+      Pointee : Pointee_Id)
+     with Pre => Holds (Into, Item, Value) and then Holds (Into, Pointee);
+
    --  What every Emit that defines a value promises: the value is the
    --  next one, it carries the opcode asked for, and it is the last
    --  instruction of the block that was open.
@@ -3375,6 +3636,7 @@ private
                       Landin.Provenance.No_Origin;
       In_Block    : Block_Id                  := No_Block;
       First_Arg   : Natural                   := 0;
+      Variadic_Types : Run;
       Args        : Natural                   := 0;
       Slot        : Slot_Id                   := No_Slot;
       Named       : Item_Id                   := No_Item;
@@ -3411,6 +3673,7 @@ private
       --  D187: this instruction sits lexically inside [1120]'s region
       --  and the check edge its opcode would have carried is not emitted.
       Unchecked   : Boolean                   := False;
+      Pointee     : Pointee_Id                 := No_Pointee;
    end record;
 
    type Slot_Record is record
@@ -3436,6 +3699,7 @@ private
       Nominal     : Nominal_Type_Id           := No_Nominal_Type;
       Site        : Landin.Provenance.Origin  :=
                       Landin.Provenance.No_Origin;
+      Pointee     : Pointee_Id                 := No_Pointee;
    end record;
 
    type Block_Record is record
@@ -3455,6 +3719,8 @@ private
       Nominal     : Nominal_Type_Id           := No_Nominal_Type;
       Signature   : Signature_Id              := No_Signature;
       External    : Boolean                   := False;
+      Link_Name   : Landin.Source.Names.Name_Id :=
+                      Landin.Source.Names.No_Name;
       Read_Only   : Boolean                   := False;
       Atom_Set    : Atom_Set_Id               := No_Atom_Set;
       Function_Image : Item_Id                := No_Item;
@@ -3491,6 +3757,7 @@ private
       --  D187's region depth while this item is being filled.  Nesting
       --  is idempotent, so only zero-or-more matters.
       Unchecked_Depth : Natural                := 0;
+      Pointee     : Pointee_Id                 := No_Pointee;
    end record;
 
    package Item_Vectors is new Ada.Containers.Vectors
@@ -3534,6 +3801,9 @@ private
       Results    : Run;
       Sources    : Run;
       Errors     : Atom_Set_Id := No_Atom_Set;
+      C_ABI      : Boolean := False;
+      Variadic   : Boolean := False;
+      Erased_Self : Boolean := False;
    end record;
 
    package Signature_Vectors is new Ada.Containers.Vectors
@@ -3545,6 +3815,7 @@ private
    type Evidence_Entry_Record is record
       Target    : Item_Id := No_Item;
       Signature : Signature_Id := No_Signature;
+      Dispatch  : Signature_Id := No_Signature;
    end record;
 
    package Evidence_Entry_Vectors is new Ada.Containers.Vectors
@@ -3553,6 +3824,7 @@ private
    type Evidence_Record is record
       Represented : Field_Shape;
       Entries     : Run;
+      Erased      : Boolean := False;
    end record;
 
    package Evidence_Vectors is new Ada.Containers.Vectors
@@ -3571,6 +3843,15 @@ private
      (Index_Type   => Positive,
       Element_Type => Declaration_Id,
       "="          => Landin.Provenance."=");
+
+   type Nominal_Shape_Record is record
+      Present  : Boolean := False;
+      C_Layout : Boolean := False;
+      Fields   : Run;
+   end record;
+
+   package Nominal_Shape_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Nominal_Shape_Record);
 
    package Field_Shape_Vectors is new Ada.Containers.Vectors
      (Index_Type   => Positive,
@@ -3607,6 +3888,9 @@ private
       Code       : Code_Vectors.Vector;
       Operands   : Value_Ref_Vectors.Vector;
       Nominal_Templates : Nominal_Template_Vectors.Vector;
+      Nominal_Shapes : Nominal_Shape_Vectors.Vector;
+      Nominal_Fields : Field_Shape_Vectors.Vector;
+      Pointees   : Field_Shape_Vectors.Vector;
       Atom_Sets  : Atom_Set_Vectors.Vector;
       Atoms      : Atom_Vectors.Vector;
       Signatures : Signature_Vectors.Vector;

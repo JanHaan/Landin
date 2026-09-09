@@ -1,0 +1,6 @@
+class: runtime
+summary: erased calls pair distinct layouts and snapshot receivers before argument effects and control flow
+program: main.ldn
+status: 42
+constructs: 0430, 0670, 1230, 1240, 1260, 1370, 1380, 1390
+targets: linux-x86-64

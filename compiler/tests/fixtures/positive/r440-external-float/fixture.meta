@@ -1,0 +1,5 @@
+class: positive
+summary: R4.40 accepts native f64 parameters and results at the C ABI boundary
+constructs: 0170, 1580
+program: program.ldn
+targets: linux-x86-64

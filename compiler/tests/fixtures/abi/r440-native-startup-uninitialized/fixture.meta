@@ -1,0 +1,9 @@
+class: abi
+summary: Actual core/io argument capability acquisition traps before C initialization
+program: program.ldn
+root: ../../../../..
+c-sources: peer.c
+c-args: -O2
+traps: yes
+constructs: 1570, 1580, 1650, 1660, 1960, 1975
+targets: linux-x86-64

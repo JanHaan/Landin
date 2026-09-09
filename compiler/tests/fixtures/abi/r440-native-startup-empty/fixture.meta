@@ -1,0 +1,10 @@
+class: abi
+summary: Initialized zero user arguments retain the real nonnull C table
+program: program.ldn
+root: ../../../../..
+c-sources: peer.c
+c-args: -O2
+run_expect: expected.txt
+status: 42
+constructs: 0470, 1570, 1580, 1650, 1660, 1975
+targets: linux-x86-64

@@ -1,0 +1,194 @@
+-- C owns main; every carrier crosses directly, indirectly and reentrantly.
+i8_handler: type = extern(c) (value: i8) -> (result: i8)
+extern(c) c_i8: (value: i8) -> (result: i8)
+extern(c) callback_i8: (handler: i8_handler, value: i8) -> (result: i8)
+public extern(c) l_i8: (value: i8) -> (result: i8) =
+    result = value + 2
+end l_i8
+
+u8_handler: type = extern(c) (value: u8) -> (result: u8)
+extern(c) c_u8: (value: u8) -> (result: u8)
+extern(c) callback_u8: (handler: u8_handler, value: u8) -> (result: u8)
+public extern(c) l_u8: (value: u8) -> (result: u8) =
+    result = value + 2
+end l_u8
+
+i16_handler: type = extern(c) (value: i16) -> (result: i16)
+extern(c) c_i16: (value: i16) -> (result: i16)
+extern(c) callback_i16: (handler: i16_handler, value: i16) -> (result: i16)
+public extern(c) l_i16: (value: i16) -> (result: i16) =
+    result = value + 2
+end l_i16
+
+u16_handler: type = extern(c) (value: u16) -> (result: u16)
+extern(c) c_u16: (value: u16) -> (result: u16)
+extern(c) callback_u16: (handler: u16_handler, value: u16) -> (result: u16)
+public extern(c) l_u16: (value: u16) -> (result: u16) =
+    result = value + 2
+end l_u16
+
+i32_handler: type = extern(c) (value: i32) -> (result: i32)
+extern(c) c_i32: (value: i32) -> (result: i32)
+extern(c) callback_i32: (handler: i32_handler, value: i32) -> (result: i32)
+public extern(c) l_i32: (value: i32) -> (result: i32) =
+    result = value + 2
+end l_i32
+
+u32_handler: type = extern(c) (value: u32) -> (result: u32)
+extern(c) c_u32: (value: u32) -> (result: u32)
+extern(c) callback_u32: (handler: u32_handler, value: u32) -> (result: u32)
+public extern(c) l_u32: (value: u32) -> (result: u32) =
+    result = value + 2
+end l_u32
+
+i64_handler: type = extern(c) (value: i64) -> (result: i64)
+extern(c) c_i64: (value: i64) -> (result: i64)
+extern(c) callback_i64: (handler: i64_handler, value: i64) -> (result: i64)
+public extern(c) l_i64: (value: i64) -> (result: i64) =
+    result = value + 2
+end l_i64
+
+u64_handler: type = extern(c) (value: u64) -> (result: u64)
+extern(c) c_u64: (value: u64) -> (result: u64)
+extern(c) callback_u64: (handler: u64_handler, value: u64) -> (result: u64)
+public extern(c) l_u64: (value: u64) -> (result: u64) =
+    result = value + 2
+end l_u64
+
+isize_handler: type = extern(c) (value: isize) -> (result: isize)
+extern(c) c_isize: (value: isize) -> (result: isize)
+extern(c) callback_isize: (handler: isize_handler, value: isize) -> (result: isize)
+public extern(c) l_isize: (value: isize) -> (result: isize) =
+    result = value + 2
+end l_isize
+
+usize_handler: type = extern(c) (value: usize) -> (result: usize)
+extern(c) c_usize: (value: usize) -> (result: usize)
+extern(c) callback_usize: (handler: usize_handler, value: usize) -> (result: usize)
+public extern(c) l_usize: (value: usize) -> (result: usize) =
+    result = value + 2
+end l_usize
+
+f32_handler: type = extern(c) (value: f32) -> (result: f32)
+extern(c) c_f32: (value: f32) -> (result: f32)
+extern(c) callback_f32: (handler: f32_handler, value: f32) -> (result: f32)
+public extern(c) l_f32: (value: f32) -> (result: f32) =
+    result = value + 2.0
+end l_f32
+
+f64_handler: type = extern(c) (value: f64) -> (result: f64)
+extern(c) c_f64: (value: f64) -> (result: f64)
+extern(c) callback_f64: (handler: f64_handler, value: f64) -> (result: f64)
+public extern(c) l_f64: (value: f64) -> (result: f64) =
+    result = value + 2.0
+end l_f64
+
+bool_handler: type = extern(c) (value: bool) -> (result: bool)
+extern(c) c_bool: (value: bool) -> (result: bool)
+public extern(c) l_bool: (value: bool) -> (result: bool) =
+    result = not value
+end l_bool
+
+public extern(c) landin_check: () -> (result: i32) =
+    result = 42
+    value_0: i8 = -100
+    handler_0: i8_handler = c_i8
+    if c_i8(value_0) <> value_0 + 1
+       or handler_0(value_0) <> value_0 + 1
+       or callback_i8(l_i8, value_0) <> value_0 + 2
+    then
+        result = 1
+    end if
+    value_1: u8 = 230
+    handler_1: u8_handler = c_u8
+    if c_u8(value_1) <> value_1 + 1
+       or handler_1(value_1) <> value_1 + 1
+       or callback_u8(l_u8, value_1) <> value_1 + 2
+    then
+        result = 2
+    end if
+    value_2: i16 = -30000
+    handler_2: i16_handler = c_i16
+    if c_i16(value_2) <> value_2 + 1
+       or handler_2(value_2) <> value_2 + 1
+       or callback_i16(l_i16, value_2) <> value_2 + 2
+    then
+        result = 3
+    end if
+    value_3: u16 = 60000
+    handler_3: u16_handler = c_u16
+    if c_u16(value_3) <> value_3 + 1
+       or handler_3(value_3) <> value_3 + 1
+       or callback_u16(l_u16, value_3) <> value_3 + 2
+    then
+        result = 4
+    end if
+    value_4: i32 = -2000000000
+    handler_4: i32_handler = c_i32
+    if c_i32(value_4) <> value_4 + 1
+       or handler_4(value_4) <> value_4 + 1
+       or callback_i32(l_i32, value_4) <> value_4 + 2
+    then
+        result = 5
+    end if
+    value_5: u32 = 4000000000
+    handler_5: u32_handler = c_u32
+    if c_u32(value_5) <> value_5 + 1
+       or handler_5(value_5) <> value_5 + 1
+       or callback_u32(l_u32, value_5) <> value_5 + 2
+    then
+        result = 6
+    end if
+    value_6: i64 = -5000000000
+    handler_6: i64_handler = c_i64
+    if c_i64(value_6) <> value_6 + 1
+       or handler_6(value_6) <> value_6 + 1
+       or callback_i64(l_i64, value_6) <> value_6 + 2
+    then
+        result = 7
+    end if
+    value_7: u64 = 10000000000
+    handler_7: u64_handler = c_u64
+    if c_u64(value_7) <> value_7 + 1
+       or handler_7(value_7) <> value_7 + 1
+       or callback_u64(l_u64, value_7) <> value_7 + 2
+    then
+        result = 8
+    end if
+    value_8: isize = -6000000000
+    handler_8: isize_handler = c_isize
+    if c_isize(value_8) <> value_8 + 1
+       or handler_8(value_8) <> value_8 + 1
+       or callback_isize(l_isize, value_8) <> value_8 + 2
+    then
+        result = 9
+    end if
+    value_9: usize = 11000000000
+    handler_9: usize_handler = c_usize
+    if c_usize(value_9) <> value_9 + 1
+       or handler_9(value_9) <> value_9 + 1
+       or callback_usize(l_usize, value_9) <> value_9 + 2
+    then
+        result = 10
+    end if
+    value_10: f32 = 12.5
+    handler_10: f32_handler = c_f32
+    if c_f32(value_10) <> value_10 + 1.0
+       or handler_10(value_10) <> value_10 + 1.0
+       or callback_f32(l_f32, value_10) <> value_10 + 2.0
+    then
+        result = 11
+    end if
+    value_11: f64 = -123.25
+    handler_11: f64_handler = c_f64
+    if c_f64(value_11) <> value_11 + 1.0
+       or handler_11(value_11) <> value_11 + 1.0
+       or callback_f64(l_f64, value_11) <> value_11 + 2.0
+    then
+        result = 12
+    end if
+    bool_call: bool_handler = c_bool
+    if c_bool(true) or bool_call(true) or not bool_call(false) then
+        result = 20
+    end if
+end landin_check

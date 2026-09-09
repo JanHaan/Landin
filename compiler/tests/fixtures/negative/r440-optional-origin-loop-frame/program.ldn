@@ -1,0 +1,14 @@
+absent: atom
+maybe_pointer: type = absent | ptr u32
+
+bad: (count: u32) -> (result: maybe_pointer) =
+    cell: u32 = 42
+    mut left: u32 = count
+    mut local: maybe_pointer = absent
+    while left > 0 do
+        local = addr cell
+        dec left
+        continue
+    end while
+    result = local
+end bad

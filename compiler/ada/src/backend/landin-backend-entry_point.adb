@@ -8,6 +8,7 @@ package body Landin.Backend.Entry_Point is
    use type Landin.IR.Signature_Id;
    use type Landin.IR.Slot_Id;
    use type Landin.Modules.Module_Id;
+   use type Landin.Source.Names.Name_Id;
    use type Landin.Types.Type_Kind;
 
    function Hosted_Main
@@ -43,6 +44,13 @@ package body Landin.Backend.Entry_Point is
               and then Landin.IR.Result_Of (Of_Unit, Item) = Landin.Types.I32
               and then Landin.IR.Signature_Of (Of_Unit, Item)
                          /= Landin.IR.No_Signature
+              and then not Landin.IR.Signature_Uses_C_ABI
+                (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item))
+              and then
+                (Landin.IR.Link_Symbol (Of_Unit, Item)
+                   = Landin.Source.Names.No_Name
+                 or else Landin.Source.Names.Spelling
+                   (Names, Landin.IR.Link_Symbol (Of_Unit, Item)) = "main")
               and then Landin.IR.Signature_Errors
                 (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item))
                   = Landin.IR.No_Atom_Set

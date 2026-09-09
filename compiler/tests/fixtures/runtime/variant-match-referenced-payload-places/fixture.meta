@@ -1,0 +1,6 @@
+class: runtime
+summary: referenced payload places support indexed inc and dec and scalar addresses with one subject and index evaluation
+program: main.ldn
+status: 42
+constructs: 0380, 0430, 0470, 0510, 0520, 0550, 0570, 0770, 0790, 0830, 1220, 1810
+targets: linux-x86-64

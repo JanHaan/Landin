@@ -1,0 +1,5 @@
+class: positive
+summary: R4.40 compatible C declarations and one definition share a link symbol without making source parameter names structural identity
+program: program.ldn
+constructs: 1000, 1580, 1610
+targets: linux-x86-64

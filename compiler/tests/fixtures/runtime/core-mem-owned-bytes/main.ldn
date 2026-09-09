@@ -2,18 +2,33 @@ import core/failing
 import core/heap
 import core/mem
 
+no_allocation: atom
+allocation: type = no_allocation | ptr mut u8
+same_block: (saved: allocation, block: ptr mut u8) -> (same: bool) =
+    match saved
+        no_allocation: same = false
+        ptr (present): same = usize(present) == usize(block)
+    end match
+end same_block
+is_absent: (value: allocation) -> (empty: bool) =
+    match value
+        no_allocation: empty = true
+        ptr: empty = false
+    end match
+end is_absent
+
 audit: type = struct
     inner: heap.system
-    first: ptr mut u8
-    second: ptr mut u8
-    third: ptr mut u8
+    first: allocation
+    second: allocation
+    third: allocation
     allocated: usize
     freed: usize
     exact: bool
 end audit
 checked_host: () -> (result: audit) =
-    null: ptr mut u8 = ptr(0)
-    result = (inner: heap.host(), first: null, second: null, third: null,
+    result = (inner: heap.host(), first: no_allocation,
+              second: no_allocation, third: no_allocation,
               allocated: 0, freed: 0, exact: true)
 end checked_host
 checked_alloc: (inout state: audit, size: usize, alignment: usize)
@@ -33,14 +48,17 @@ checked_alloc: (inout state: audit, size: usize, alignment: usize)
 end checked_alloc
 checked_free: (inout state: audit, block: ptr mut u8, size: usize) -> none =
     if state.freed == 0 then
-        state.exact = state.exact and usize(block) == usize(state.second)
+        state.exact = state.exact and same_block(state.second, block)
                       and size == 4096
+        state.second = no_allocation
     elsif state.freed == 1 then
-        state.exact = state.exact and usize(block) == usize(state.first)
+        state.exact = state.exact and same_block(state.first, block)
                       and size == 1
+        state.first = no_allocation
     else
-        state.exact = state.exact and usize(block) == usize(state.third)
+        state.exact = state.exact and same_block(state.third, block)
                       and size == 1
+        state.third = no_allocation
     end if
     inc state.freed
     mem.free(state.inner, block, size)
@@ -129,6 +147,8 @@ public main: () -> (code: i32) =
       and failing.frees(state) == 3 and failing.live(state) == 0
       and heap_state.exact and heap_state.allocated == 3
       and heap_state.freed == 3
+      and is_absent(heap_state.first) and is_absent(heap_state.second)
+      and is_absent(heap_state.third)
     then
         code = 42
     end if

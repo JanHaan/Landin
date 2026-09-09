@@ -1,0 +1,21 @@
+absent: atom
+maybe_pointer: type = absent | ptr u32
+
+pair: (inout cells: [1]u32)
+      -> (got: bool, item: maybe_pointer from cells) =
+    got = true
+    item = addr cells[0]
+end pair
+
+retain: (escaping pointer: ptr u32) -> none =
+    _ = pointer
+end retain
+
+bad: () -> none =
+    mut cells: [1]u32 = [42]
+    (item: local, _) := pair(cells)
+    match local
+        absent: _ = 0
+        ptr (pointer): retain(pointer)
+    end match
+end bad

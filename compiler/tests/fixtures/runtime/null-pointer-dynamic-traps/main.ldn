@@ -1,0 +1,11 @@
+--  The conversion must trap even though the pointer is never dereferenced.
+--  Without the explicit guard this program returns normally, not a fault.
+opaque: (value: usize) -> (result: usize) =
+    result = value
+end opaque
+
+public main: () -> (code: i32) =
+    address: usize = opaque(0)
+    pointer: ptr u8 = ptr(address)
+    code = i32(usize(pointer)) + 42
+end main

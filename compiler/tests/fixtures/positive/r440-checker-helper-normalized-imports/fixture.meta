@@ -1,0 +1,5 @@
+class: positive
+summary: All fourteen helper contracts normalize aliases, preserve optional allocation and cstring, and accept compatible duplicate imports
+program: program.ldn
+constructs: 0480, 0780, 0790, 1610, 1975
+targets: linux-x86-64

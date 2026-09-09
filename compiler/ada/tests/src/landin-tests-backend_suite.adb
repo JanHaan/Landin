@@ -14,15 +14,18 @@
 --  same item differently on this 64-bit host; that is the rule
 --  `compiler/ada/README.md` states, checked here rather than assumed.
 
+with Ada.Exceptions;
 with Ada.Strings.Fixed;
 
 with Landin.Backend;
+with Landin.Backend.C_ABI;
 with Landin.Backend.Entry_Point;
 with Landin.Backend.X86_64;
 with Landin.IR;
 with Landin.Provenance;
 with Landin.Resolution;
 with Landin.Source;
+with Landin.Source.Names;
 with Landin.Stages.Checking;
 with Landin.Stages.Configuration;
 with Landin.Stages.Lowering;
@@ -931,11 +934,15 @@ package body Landin.Tests.Backend_Suite is
         (Work,
          "extern(c) narrow: (a: i8, b: u16, c: i32, d: i32, e: i32,"
          & " f: i32, g: u8) -> (r: i32)" & LF
+         & "handler: type = extern(c) (a: i8, b: u16, c: i32, d: i32,"
+         & " e: i32, f: i32, g: u8) -> (r: i32)" & LF
          & "own: (a: i8, b: u16) -> (r: i32) =" & LF
          & "    r = i32(a) + i32(b)" & LF
          & "end own" & LF
          & "use: (x: i8, y: u16, z: u8) -> (r: i32) =" & LF
+         & "    call: handler = narrow" & LF
          & "    r = narrow(x, y, 1, 2, 3, 4, z) + own(x, y)" & LF
+         & "        + call(x, y, 1, 2, 3, 4, z)" & LF
          & "end use" & LF,
          Ran);
 
@@ -945,15 +952,17 @@ package body Landin.Tests.Backend_Suite is
       begin
          Landin.Testing.Check
            (Item,
-            Contains (Text, "movsbl") and then Contains (Text, ", %edi" & LF)
-              and then Contains (Text, "movzwl")
-              and then Contains (Text, ", %esi" & LF),
+            Occurrences (Text, "movsbl %r10b, %r10d" & LF) >= 2
+              and then Contains (Text, "call *")
+              and then Contains (Text, "movq %r10, %rdi" & LF)
+              and then Contains (Text, "movzwq")
+              and then Contains (Text, "movq %r10, %rsi" & LF),
             "register arguments to a C callee are sign or zero extended to"
             & " 32 bits");
          Landin.Testing.Check
            (Item,
             Contains (Text, "movzbq")
-              and then Contains (Text, "movq %rax, 0(%rsp)" & LF),
+              and then Contains (Text, "movq %r10, 0(%rsp)" & LF),
             "a stack argument to a C callee is extended to its whole slot");
          Landin.Testing.Check
            (Item,
@@ -1634,6 +1643,414 @@ package body Landin.Tests.Backend_Suite is
       end;
    end A_Recursive_Module_Image_Follows_Its_Target;
 
+   --  Build neutral images directly so these cases isolate the descriptor
+   --  protocol from source construction and cloning.  One root is not one
+   --  numeric prefix entry; large repetitions must not grow compiler output.
+   procedure Recursive_Array_Descriptors_Use_Target_Strides
+     (Item : in out Landin.Testing.Context);
+
+   procedure Recursive_Array_Descriptors_Use_Target_Strides
+     (Item : in out Landin.Testing.Context)
+   is
+      use type IR.Element_Total;
+      use type Landin.Types.Type_Kind;
+   begin
+      for Wide in Boolean loop
+         for Example in 1 .. 4 loop
+            declare
+               Work : Landin.Stages.Compilation := Landin.Stages.Create
+                 ((if Wide then Landin.Targets.Linux_X86_64
+                   else Landin.Targets.Synthetic_32));
+               Ran : Natural;
+               Width : constant String := (if Wide then ".quad" else ".long");
+               Prefix : constant String :=
+                 HT & Width & " 11" & LF
+                 & HT & Width & " 13" & LF
+                 & HT & Width & " 17" & LF;
+            begin
+               Lower (Work, "mut image: [1]usize" & LF, Ran);
+               Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
+               Landin.Testing.Check
+                 (Item, not Landin.Stages.Failed (Work),
+                  "the seed datum lowers before its neutral image is set");
+               if Landin.Stages.Failed (Work) then
+                  return;
+               end if;
+               declare
+                  Code : IR.Unit renames Landin.Stages.Code (Work).all;
+                  Row : constant IR.Field_Shape := IR.Make_Array_Shape
+                    (Code, 3, (Element => Landin.Types.Usize, others => <>));
+               begin
+                  Landin.Testing.Check_Equal
+                    (Item, IR.Item_Count (Code), 1, "one neutral image datum");
+                  Landin.Testing.Check
+                    (Item, IR.Result_Of (Code, 1) = Landin.Types.Fixed_Array,
+                     "the datum is array storage");
+                  IR.Set_Array
+                    (Code, 1, Row,
+                     (case Example is
+                         when 1 => 2, when 2 => 100_000_000,
+                         when 3 => 1, when 4 => 0));
+                  case Example is
+                     when 1 =>
+                        IR.Set_Array_Image
+                          (Code, 1,
+                           (Form => IR.Element_Sequence, Count => 2,
+                            Value => 1, others => <>),
+                           [(Form => IR.Finite, Count => 3, others => <>),
+                            (Form => IR.Finite, Offset => 3, Count => 3,
+                             others => <>)],
+                           [11, 13, 17, 19, 23, 29]);
+                     when 2 =>
+                        IR.Set_Array_Image
+                          (Code, 1,
+                           (Form => IR.Element_Sequence, Count => 1,
+                            Value => 100_000_000, others => <>),
+                           [(Form => IR.Element_Sequence, Offset => 1,
+                             Count => 1, Value => 3, others => <>),
+                            (Value => 37, others => <>)],
+                           []);
+                     when 3 =>
+                        IR.Set_Array_Image
+                          (Code, 1,
+                           (Form => IR.Element_Sequence, Count => 2,
+                            Value => 0, others => <>),
+                           [(Form => IR.Finite, Count => 3, others => <>),
+                            (Form => IR.Repeated, Value => 97, others => <>)],
+                           [11, 13, 17]);
+                     when 4 =>
+                        IR.Set_Array_Image
+                          (Code, 1,
+                           (Form => IR.Element_Sequence, others => <>),
+                           [], []);
+                  end case;
+                  Landin.Testing.Check
+                    (Item, IR.Has_Recursive_Array_Image (Code, 1)
+                     and then IR.Image_Root_Count (Code, 1) = 1
+                     and then IR.Field_Count (Code, 1) = 0
+                     and then IR.Image_Length (Code, 1) =
+                       (case Example is when 1 => 6, when 3 => 3,
+                          when others => 0),
+                     "descriptor roots and stored numeric folds are distinct");
+                  declare
+                     Text : constant String := Emitted (Work);
+                  begin
+                     case Example is
+                        when 1 =>
+                           Landin.Testing.Check
+                             (Item, Contains
+                                (Text, "image:" & LF & Prefix
+                                 & HT & Width & " 19" & LF
+                                 & HT & Width & " 23" & LF
+                                 & HT & Width & " 29" & LF
+                                 & HT & ".size image, "
+                                 & (if Wide then "48" else "24") & LF),
+                              "nested finite folds use no array-root prefix");
+                        when 2 =>
+                           Landin.Testing.Check
+                             (Item, Contains
+                                (Text, "image:" & LF
+                                 & HT & ".rept 100000000" & LF
+                                 & HT & ".rept 3" & LF
+                                 & HT & Width & " 37" & LF
+                                 & HT & ".endr" & LF & HT & ".endr" & LF
+                                 & HT & ".size image, "
+                                 & (if Wide then "2400000000"
+                                    else "1200000000") & LF),
+                              "nested repetitions retain target-sized stride");
+                           Landin.Testing.Check
+                             (Item, Text'Length < 1024
+                              and then Occurrences (Text, Width & " 37") = 1,
+                              "output is bounded by descriptors, not extent");
+                        when 3 =>
+                           Landin.Testing.Check
+                             (Item, Contains
+                                (Text, "image:" & LF & Prefix
+                                 & HT & ".size image, "
+                                 & (if Wide then "24" else "12") & LF)
+                              and then not Contains (Text, Width & " 97")
+                              and then not Contains (Text, ".rept 0"),
+                              "a zero suffix stores nothing");
+                        when 4 =>
+                           Landin.Testing.Check
+                             (Item, Contains
+                                (Text, "image:" & LF
+                                 & HT & ".size image, 0" & LF),
+                              "an empty descriptor sequence has zero extent");
+                     end case;
+                  end;
+               end;
+            end;
+         end loop;
+      end loop;
+   end Recursive_Array_Descriptors_Use_Target_Strides;
+
+   procedure Recursive_Array_Source_Images_Are_Cloned
+     (Item : in out Landin.Testing.Context);
+
+   procedure Recursive_Array_Source_Images_Are_Cloned
+     (Item : in out Landin.Testing.Context)
+   is
+      Source : constant String :=
+        "cell: type = struct" & LF
+        & "    lead: u8" & LF & "    value: usize" & LF
+        & "    tail: [3]u8" & LF & "end cell" & LF
+        & "row: type = [2]cell" & LF
+        & "matrix: type = [2]row" & LF
+        & "packet: type = struct" & LF
+        & "    pre: u8" & LF & "    rows: matrix" & LF
+        & "    post: u16" & LF & "end packet" & LF
+        & "selection: type = struct" & LF
+        & "    extracted: row" & LF & "    leaf: cell" & LF
+        & "end selection" & LF
+        & "catalog: type = struct chosen: selection end catalog" & LF
+        & "image: packet = packet(pre: 7, rows: [" & LF
+        & "    [2 of cell(lead: 11, value: 41, tail: [3, 5, 7])]," & LF
+        & "    [2 of cell(lead: 13, value: 43, tail: [11, 17, 19])]]," & LF
+        & "    post: 23)" & LF
+        & "copy: packet = image" & LF
+        & "chosen: selection = selection(" & LF
+        & "    extracted: [2 of cell(lead: 13, value: 43," & LF
+        & "        tail: [11, 17, 19])]," & LF
+        & "    leaf: cell(lead: 13, value: 43, tail: [11, 17, 19]))" & LF
+        & "selected: catalog = catalog(chosen: selection(" & LF
+        & "    extracted: [2 of cell(lead: 13, value: 43," & LF
+        & "        tail: [11, 17, 19])]," & LF
+        & "    leaf: cell(lead: 13, value: 43, tail: [11, 17, 19])))" & LF
+        & "extracted: row = chosen.extracted" & LF
+        & "duplicate: row = extracted" & LF
+        & "leaf: cell = cell(lead: 13, value: 43," & LF
+        & "    tail: [11, 17, 19])" & LF
+        & "read: (value: packet, row_index: usize, cell_index: usize)" & LF
+        & "    -> (result: usize) =" & LF
+        & "    result = value.rows[row_index][cell_index].value" & LF
+        & "end read" & LF;
+   begin
+      for Wide in Boolean loop
+         declare
+            Work : Landin.Stages.Compilation := Landin.Stages.Create
+              ((if Wide then Landin.Targets.Linux_X86_64
+                else Landin.Targets.Synthetic_32));
+            Ran : Natural;
+            Gap : constant String :=
+              HT & ".zero " & (if Wide then "7" else "3") & LF;
+            Padding : constant String :=
+              HT & ".zero " & (if Wide then "5" else "1") & LF;
+            Width : constant String := (if Wide then ".quad" else ".long");
+            First : constant String :=
+              HT & ".byte 11" & LF & Gap & HT & Width & " 41" & LF
+              & HT & ".byte 3" & LF & HT & ".byte 5" & LF
+              & HT & ".byte 7" & LF & Padding;
+            Second : constant String :=
+              HT & ".byte 13" & LF & Gap & HT & Width & " 43" & LF
+              & HT & ".byte 11" & LF & HT & ".byte 17" & LF
+              & HT & ".byte 19" & LF & Padding;
+            Repeated_Second : constant String :=
+              HT & ".rept 2" & LF & Second & HT & ".endr" & LF;
+            Packet_Image : constant String :=
+              HT & ".byte 7" & LF & Gap
+              & HT & ".rept 2" & LF & First & HT & ".endr" & LF
+              & Repeated_Second & HT & ".word 23" & LF
+              & HT & ".zero " & (if Wide then "6" else "2") & LF;
+         begin
+            Lower (Work, Source, Ran);
+            Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
+            Landin.Testing.Check
+              (Item, not Landin.Stages.Failed (Work),
+               "recursive source arrays and direct field aliases are"
+               & " accepted");
+            if Landin.Stages.Failed (Work) then
+               return;
+            end if;
+            declare
+               Text : constant String := Emitted (Work);
+            begin
+               Landin.Testing.Check
+                 (Item, Contains
+                    (Text, "image:" & LF & Packet_Image
+                     & HT & ".size image, "
+                     & (if Wide then "112" else "56") & LF)
+                  and then Contains
+                    (Text, "copy:" & LF & Packet_Image
+                     & HT & ".size copy, "
+                     & (if Wide then "112" else "56") & LF),
+                  "record copies preserve every child value, gap and stride");
+               Landin.Testing.Check
+                 (Item, Contains
+                    (Text, "extracted:" & LF & Repeated_Second
+                     & HT & ".size extracted, "
+                     & (if Wide then "48" else "24") & LF)
+                  and then Contains
+                    (Text, "duplicate:" & LF & Repeated_Second
+                     & HT & ".size duplicate, "
+                     & (if Wide then "48" else "24") & LF),
+                  "extracted and cloned array roots rebase descriptor runs");
+               Landin.Testing.Check
+                 (Item, Contains
+                    (Text, "leaf:" & LF & Second
+                     & HT & ".size leaf, "
+                     & (if Wide then "24" else "12") & LF),
+                  "the direct child image retains its numeric folds");
+            end;
+         end;
+      end loop;
+   end Recursive_Array_Source_Images_Are_Cloned;
+
+   procedure Recursive_Callback_Images_Keep_Safe_Symbols
+     (Item : in out Landin.Testing.Context);
+
+   procedure Recursive_Callback_Images_Keep_Safe_Symbols
+     (Item : in out Landin.Testing.Context)
+   is
+      use type IR.Opcode;
+      use type IR.Signature_Id;
+      use type IR.Slot_Id;
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+      Witnessed_Load : Boolean := False;
+      Witnessed_Store : Boolean := False;
+
+      --  The private C name uses the resolved declaration identity, not
+      --  its item position or a number predating the type declarations.
+      function Bump_Symbol return String;
+
+      function Bump_Symbol return String is
+         use type IR.Declaration_Id;
+         Code : IR.Unit renames Landin.Stages.Code (Work).all;
+      begin
+         for Position in 1 .. IR.Item_Count (Code) loop
+            declare
+               Declared : constant IR.Declaration_Id :=
+                 IR.Declares (Code, IR.Item_Id (Position));
+            begin
+               if Declared /= IR.No_Declaration
+                 and then Landin.Source.Names.Spelling
+                   (Landin.Stages.Identities (Work).all,
+                    Landin.Resolution.Name_Of
+                      (Landin.Stages.Meanings (Work).all, Declared)) = "bump"
+               then
+                  return "landin_" & Ada.Strings.Fixed.Trim
+                    (IR.Declaration_Id'Image (Declared), Ada.Strings.Both)
+                    & "_bump";
+               end if;
+            end;
+         end loop;
+         raise Landin.Compiler_Defect with "missing callback test routine";
+      end Bump_Symbol;
+   begin
+      Lower
+        (Work,
+         "callback: type = extern(c) (x: i32) -> (r: i32)" & LF
+         & "row: type = [2]callback" & LF
+         & "table: type = layout(c) struct" & LF
+         & "    tag: u8" & LF & "    callbacks: [2]row" & LF
+         & "    tail: u16" & LF & "end table" & LF
+         & "selection: type = layout(c) struct" & LF
+         & "    direct: row" & LF & "    repeated: row" & LF
+         & "end selection" & LF
+         & "catalog: type = layout(c) struct"
+         & " chosen: selection end catalog" & LF
+         & "extern(c) bump: (x: i32) -> (r: i32) = r = x + 1 end bump" & LF
+         & "extern(c) link(symbol: ""bump"") foreign: (x: i32) -> (r: i32)"
+         & LF & "extern(c) link(symbol: ""$callback"") renamed:"
+         & " (x: i32) -> (r: i32) = r = x + 2 end renamed" & LF
+         & "image: table = table(tag: 11, callbacks: [[bump, foreign],"
+         & " [2 of renamed]], tail: 17)" & LF
+         & "copy: table = image" & LF
+         & "chosen: selection = selection(" & LF
+         & "    direct: [bump, foreign], repeated: [2 of renamed])" & LF
+         & "selected: catalog = catalog(chosen: selection(" & LF
+         & "    direct: [bump, foreign], repeated: [2 of renamed]))" & LF
+         & "extracted: row = chosen.direct" & LF
+         & "duplicate: row = extracted" & LF
+         & "repeated: row = chosen.repeated" & LF
+         & "public extern(c) invoke: (value: table, index: usize, x: i32)"
+         & " -> (r: i32) =" & LF
+         & "    r = value.callbacks[usize(0)][index](x)" & LF
+         & "end invoke" & LF
+         & "replace: (inout value: table, row_index: usize," & LF
+         & "    index: usize, next: callback) -> none =" & LF
+         & "    value.callbacks[row_index][index] = next" & LF
+         & "end replace" & LF,
+         Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "recursive C callback fields retain storage and callable identity");
+      if Landin.Stages.Failed (Work) then
+         return;
+      end if;
+      declare
+         Code : IR.Unit renames Landin.Stages.Code (Work).all;
+         Text : constant String := Emitted (Work);
+         Private_Bump : constant String := Bump_Symbol;
+         Row : constant String :=
+           HT & ".quad " & Private_Bump & LF & HT & ".quad bump" & LF;
+         Repeated_Row : constant String :=
+           HT & ".rept 2" & LF & HT & ".quad ""$callback""" & LF
+           & HT & ".endr" & LF;
+         Image : constant String :=
+           HT & ".byte 11" & LF & HT & ".zero 7" & LF
+           & Row & Repeated_Row & HT & ".word 17" & LF
+           & HT & ".zero 6" & LF;
+      begin
+         Landin.Testing.Check
+           (Item, Contains
+              (Text, "image:" & LF & Image & HT & ".size image, 48" & LF)
+            and then Contains
+              (Text, "copy:" & LF & Image & HT & ".size copy, 48" & LF),
+            "callback relocations preserve target offsets and private names");
+         Landin.Testing.Check
+           (Item, Contains
+              (Text, "extracted:" & LF & Row
+               & HT & ".size extracted, 16" & LF)
+            and then Contains
+              (Text, "duplicate:" & LF & Row
+               & HT & ".size duplicate, 16" & LF)
+            and then Contains
+              (Text, "repeated:" & LF & Repeated_Row
+               & HT & ".size repeated, 16" & LF),
+            "extracted and cloned roots retain forced and quoted relocations");
+         Landin.Testing.Check
+           (Item, Contains
+              (Text, HT & ".type " & Private_Bump & ", @function" & LF)
+            and then Occurrences (Text, LF & Private_Bump & ":" & LF) = 1
+            and then not Contains (Text, LF & "bump:" & LF)
+            and then not Contains (Text, HT & ".globl " & Private_Bump & LF)
+            and then Occurrences (Text, LF & """$callback"":" & LF) = 1
+            and then not Contains (Text, HT & ".quad $callback")
+            and then Contains (Text, HT & "call *"),
+            "safe symbol allocation and typed indirect C transport coexist");
+         for Routine in 1 .. IR.Item_Count (Code) loop
+            for Position in 1 .. IR.Value_Count (Code, IR.Item_Id (Routine))
+            loop
+               declare
+                  Owner : constant IR.Item_Id := IR.Item_Id (Routine);
+                  Value : constant IR.Value_Id := IR.Value_Id (Position);
+                  Op : constant IR.Opcode := IR.Op_Of (Code, Owner, Value);
+               begin
+                  if Op in IR.Load_Indirect | IR.Store_Indirect
+                    and then IR.Indirect_Address_Slot (Code, Owner, Value)
+                      /= IR.No_Slot
+                  then
+                     if Op = IR.Load_Indirect then
+                        Witnessed_Load := Witnessed_Load
+                          or else IR.Signature_Of (Code, Owner, Value)
+                            /= IR.No_Signature;
+                     else
+                        Witnessed_Store := True;
+                     end if;
+                  end if;
+               end;
+            end loop;
+         end loop;
+         Landin.Testing.Check
+           (Item, Witnessed_Load and then Witnessed_Store,
+            "callback loads and stores keep their existing typed witnesses");
+      end;
+   end Recursive_Callback_Images_Keep_Safe_Symbols;
+
    --  [0750] puts each field at its own offset, and a selection reaches
    --  one by adding that many bytes to the datum's name.  The first field
    --  needs no displacement at all, which is what says the offset is the
@@ -1760,9 +2177,9 @@ package body Landin.Tests.Backend_Suite is
       end;
    end An_Array_Field_After_A_Wide_Field_Uses_Registers;
 
-   --  D52 reuses D48's field-qualified element-store path for every literal
-   --  position.  A far module field is register-formed for each store;
-   --  a frame field and its element scale follow the selected target.
+   --  D52 reuses D48's field-qualified path for every constant literal
+   --  position.  Each far module leaf is register-formed at its complete
+   --  target offset; frame leaves use their direct target-derived cells.
    procedure Array_Field_Literal_Stores_Follow_Their_Target
      (Item : in out Landin.Testing.Context);
 
@@ -1790,14 +2207,16 @@ package body Landin.Tests.Backend_Suite is
         & "end write" & LF;
 
       procedure Check_Local
-        (Facts : Landin.Targets.Target_Facts;
-         Field : String;
-         Scale : String);
+        (Facts       : Landin.Targets.Target_Facts;
+         First       : String;
+         Second      : String;
+         Instruction : String);
 
       procedure Check_Local
-        (Facts : Landin.Targets.Target_Facts;
-         Field : String;
-         Scale : String)
+        (Facts       : Landin.Targets.Target_Facts;
+         First       : String;
+         Second      : String;
+         Instruction : String)
       is
          Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
          Ran : Natural;
@@ -1809,10 +2228,12 @@ package body Landin.Tests.Backend_Suite is
          begin
             Landin.Testing.Check
               (Item,
-               Occurrences (Text, HT & "leaq " & Field & "(%rbp), %rcx") = 2
+               Occurrences
+                 (Text, HT & Instruction & ", " & First & "(%rbp)" & LF) = 1
                and then Occurrences
-                 (Text, HT & "imulq $" & Scale & ", %rax, %rax") = 2,
-               "both local stores use the target field and element width");
+                 (Text, HT & Instruction & ", " & Second & "(%rbp)" & LF) = 1
+               and then not Contains (Text, HT & "imulq $"),
+               "both local leaves use exact target-derived frame offsets");
          end;
       end Check_Local;
 
@@ -1827,15 +2248,21 @@ package body Landin.Tests.Backend_Suite is
       begin
          Landin.Testing.Check
            (Item,
-            Occurrences (Text, HT & "leaq state(%rip), %rcx") = 2
+            Occurrences (Text, HT & "leaq state(%rip), %rcx" & LF) = 2
             and then Occurrences
-              (Text, HT & "movabsq $2147483648, %rdx") = 2
-            and then Occurrences (Text, HT & "addq %rdx, %rcx") = 2,
-            "each far module-field store forms the full-width address");
+              (Text, HT & "movabsq $2147483648, %rdx" & LF) = 1
+            and then Occurrences
+              (Text, HT & "movabsq $2147483649, %rdx" & LF) = 1
+            and then Occurrences
+              (Text, HT & "addq %rdx, %rcx" & LF) = 2
+            and then not Contains (Text, HT & "imulq $"),
+            "each module leaf forms its exact full-width target offset");
       end;
 
-      Check_Local (Landin.Targets.Linux_X86_64, "-24", "8");
-      Check_Local (Landin.Targets.Synthetic_32, "-12", "4");
+      Check_Local
+        (Landin.Targets.Linux_X86_64, "-24", "-16", "movq %rax");
+      Check_Local
+        (Landin.Targets.Synthetic_32, "-12", "-8", "movl %eax");
    end Array_Field_Literal_Stores_Follow_Their_Target;
 
    --  D53 composes the target-derived containing-field address with D37's
@@ -3962,6 +4389,50 @@ package body Landin.Tests.Backend_Suite is
       end;
    end A_Module_Value_Folds_Every_Level;
 
+   --  Integer-to-pointer conversion keeps its mandatory nonnull range check.
+   --  A module image nevertheless has no execution point, so a known value in
+   --  that range must fold through the check before the datum is emitted.
+   procedure A_Module_Pointer_Folds_Through_Its_Null_Check
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Module_Pointer_Folds_Through_Its_Null_Check
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "folded_address: usize = 0x0800 + 0x0800" & LF
+         & "mut direct_pointer: ptr i32 = ptr(0x1000)" & LF
+         & "mut named_pointer: ptr i32 = ptr(folded_address)" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "nonzero static pointers are accepted");
+      if Landin.Stages.Failed (Work) then
+         return;
+      end if;
+
+      declare
+         Text : constant String := Emitted (Work);
+      begin
+         Landin.Testing.Check
+           (Item,
+            Contains
+              (Text, "direct_pointer:" & LF & HT & ".quad 4096" & LF),
+            "a literal pointer folds through its mandatory range check");
+         Landin.Testing.Check
+           (Item,
+            Contains
+              (Text, "named_pointer:" & LF & HT & ".quad 4096" & LF),
+            "a named folded pointer keeps the checked nonzero address");
+      end;
+   end A_Module_Pointer_Folds_Through_Its_Null_Check;
+
    --  R1.80's exit evidence asks for deterministic assembly, and until this
    --  case nothing held it to that.  Two runs of one source through two
    --  separate compilations must agree byte for byte: an address, a hash
@@ -4054,9 +4525,25 @@ package body Landin.Tests.Backend_Suite is
       begin
          Landin.Testing.Check
            (Item,
-            Contains (Wide, HT & "imulq $8, %rax, %rax")
-              and then Contains (Thin, HT & "imulq $4, %rax, %rax"),
-            "nested element stores use the target usize scale");
+            not Contains (Wide, HT & "imulq $8, %rax, %rax")
+              and then not Contains (Thin, HT & "imulq $4, %rax, %rax")
+              and then Contains (Wide, HT & "movabsq $16, %rdx" & LF)
+              and then Contains (Wide, HT & "movabsq $24, %rdx" & LF)
+              and then Contains (Wide, HT & "movabsq $32, %rdx" & LF)
+              and then Contains (Thin, HT & "movabsq $8, %rdx" & LF)
+              and then Contains (Thin, HT & "movabsq $12, %rdx" & LF)
+              and then Contains (Thin, HT & "movabsq $16, %rdx" & LF)
+              and then Occurrences
+                (Wide, HT & "movq %rax, (%rcx)" & LF) = 3
+              and then Occurrences
+                (Thin, HT & "movl %eax, (%rcx)" & LF) = 3
+              and then not Contains (Wide, "state+16(%rip)")
+              and then not Contains (Wide, "state+24(%rip)")
+              and then not Contains (Wide, "state+32(%rip)")
+              and then not Contains (Thin, "state+8(%rip)")
+              and then not Contains (Thin, "state+12(%rip)")
+              and then not Contains (Thin, "state+16(%rip)"),
+            "constant payload leaves form exact target offsets in registers");
          Landin.Testing.Check
            (Item,
             Contains (Wide, HT & "rep stosq")
@@ -4158,6 +4645,21 @@ package body Landin.Tests.Backend_Suite is
               Landin.Stages.Meanings (Narrow).all,
               Landin.Stages.Identities (Narrow).all,
               Landin.Targets.Synthetic_32);
+         Wide_Whole_Clear : constant String :=
+           HT & "xorl %eax, %eax" & LF
+           & HT & "movabsq $40, %rcx" & LF
+           & HT & "cld" & LF
+           & HT & "rep stosb" & LF;
+         Thin_Whole_Clear : constant String :=
+           HT & "xorl %eax, %eax" & LF
+           & HT & "movabsq $20, %rcx" & LF
+           & HT & "cld" & LF
+           & HT & "rep stosb" & LF;
+         Payload_Clear : constant String :=
+           HT & "xorl %eax, %eax" & LF
+           & HT & "movabsq $6, %rcx" & LF
+           & HT & "cld" & LF
+           & HT & "rep stosb" & LF;
       begin
          Landin.Testing.Check
            (Item, Contains (Wide, "here:" & LF & HT & ".quad 8" & LF),
@@ -4229,11 +4731,14 @@ package body Landin.Tests.Backend_Suite is
             "variant-bearing module storage reserves its padded extent");
          Landin.Testing.Check
            (Item,
-            Occurrences (Wide, HT & "movabsq $40, %rcx") = 2
-              and then Occurrences (Thin, HT & "movabsq $20, %rcx") = 2
-              and then Occurrences (Wide, HT & "rep stosb") = 4
-              and then Occurrences (Thin, HT & "rep stosb") = 4,
-            "module and local zero images clear one target-derived extent");
+            Occurrences (Wide, Wide_Whole_Clear) = 2
+              and then Occurrences (Thin, Thin_Whole_Clear) = 2,
+            "module and local zero images each clear one exact whole extent");
+         Landin.Testing.Check
+           (Item,
+            Occurrences (Wide, Payload_Clear) = 1
+              and then Occurrences (Thin, Payload_Clear) = 1,
+            "the selected u16 array payload has one separate six-byte clear");
          Landin.Testing.Check
            (Item,
             Occurrences (Wide, HT & "movabsq $24, %rcx") = 4
@@ -5259,11 +5764,785 @@ package body Landin.Tests.Backend_Suite is
               and then Occurrences (Text, "call malloc") = 1
               and then Occurrences (Text, "jmp free") = 1,
             "ordinary same-named routines cannot interpose on libc");
+         Landin.Testing.Check
+           (Item, Contains
+              (Text, "main:" & LF & HT & "pushq %rbp" & LF
+               & HT & "movq %rsp, %rbp" & LF
+               & HT & "call _landin_host_initialize_arguments" & LF)
+            and then Occurrences
+              (Text, HT & "call _landin_host_initialize_arguments" & LF) = 1
+            and then Occurrences
+              (Text, "movl %edi, .Llandin_host_argc(%rip)") = 1
+            and then Occurrences
+              (Text, "movq %rsi, .Llandin_host_argv(%rip)") = 1,
+            "only main calls the same aligned C argument initializer");
       end;
    end A_Hosted_Heap_Shim_Checks_Before_Libc;
 
+   procedure C_Classification_And_Assignment_Agree
+     (Item : in out Landin.Testing.Context);
+
+   procedure C_Classification_And_Assignment_Agree
+     (Item : in out Landin.Testing.Context)
+   is
+      package ABI renames Landin.Backend.C_ABI;
+      use type ABI.Eightbyte_Class;
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Unit : IR.Unit;
+      Ran : Natural;
+      Facts : constant Landin.Targets.Target_Facts :=
+        Landin.Targets.Linux_X86_64;
+      Integer_Part : constant IR.Signature_Part :=
+        (Kind => Landin.Types.U64, others => <>);
+      Float_Part : constant IR.Signature_Part :=
+        (Kind => Landin.Types.F64, others => <>);
+
+      function Aggregate
+        (Fields   : IR.Field_Shape_Array;
+         Payloads : IR.Field_Shape_Array := IR.No_Field_Shapes)
+         return IR.Signature_Part;
+
+      function Aggregate
+        (Fields   : IR.Field_Shape_Array;
+         Payloads : IR.Field_Shape_Array := IR.No_Field_Shapes)
+         return IR.Signature_Part
+      is
+         Nominal : constant IR.Nominal_Type_Id :=
+           IR.Add_Nominal_Type (Unit, 1);
+      begin
+         IR.Set_Nominal_Shape
+           (Unit, Nominal, Fields, C_Layout => True, Payloads => Payloads);
+         return (Kind => Landin.Types.Aggregate,
+                 Nominal => Nominal, others => <>);
+      end Aggregate;
+   begin
+      Lower (Work, "f: () -> none = end f" & LF, Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
+      IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+      for First in ABI.Integer_Class .. ABI.SSE_Class loop
+         for Second in ABI.Integer_Class .. ABI.SSE_Class loop
+            declare
+               Part : constant IR.Signature_Part := Aggregate
+                 ([(Element => (if First = ABI.Integer_Class
+                                then Landin.Types.U64 else Landin.Types.F64),
+                    others => <>),
+                   (Element => (if Second = ABI.Integer_Class
+                                then Landin.Types.U64 else Landin.Types.F64),
+                    others => <>)]);
+               Plan : constant ABI.Plan :=
+                 ABI.Assign (Unit, [Part], Part, Facts);
+            begin
+               Landin.Testing.Check
+                 (Item, Plan.Result.Shape.Size = 16
+                  and then Plan.Result.Shape.Classes (1) = First
+                  and then Plan.Result.Shape.Classes (2) = Second
+                  and then not Plan.Arguments (1).On_Stack,
+                  "each two-eightbyte INTEGER/SSE combination is native");
+               Landin.Testing.Check
+                 (Item, Plan.Result.Registers (1) = 1
+                  and then Plan.Result.Registers (2) =
+                    (if First = Second then 2 else 1),
+                  "result banks advance independently");
+            end;
+         end loop;
+      end loop;
+      for Integer_First in Boolean loop
+         declare
+            Part : constant IR.Signature_Part := Aggregate
+              ([(Element => (if Integer_First then Landin.Types.U32
+                             else Landin.Types.F32), others => <>),
+                (Element => (if Integer_First then Landin.Types.F32
+                             else Landin.Types.U32), others => <>)]);
+            Shape : constant ABI.Classification :=
+              ABI.Classify (Unit, Part, Facts);
+         begin
+            Landin.Testing.Check
+              (Item, Shape.Size = 8 and then Shape.Count = 1
+               and then Shape.Classes (1) = ABI.Integer_Class,
+               "INTEGER dominates SSE in either field order");
+         end;
+      end loop;
+      declare
+         Pair : constant IR.Signature_Part := Aggregate
+           ([(Element => Landin.Types.U64, others => <>),
+             (Element => Landin.Types.F64, others => <>)]);
+         Parameters : constant IR.Signature_Part_Array :=
+           [Integer_Part, Integer_Part, Integer_Part,
+            Integer_Part, Integer_Part, Integer_Part, Pair, Float_Part];
+         Plan : constant ABI.Plan := ABI.Assign
+           (Unit, Parameters, (others => <>), Facts);
+      begin
+         Landin.Testing.Check
+           (Item, Plan.Arguments (7).On_Stack
+            and then Plan.Arguments (7).Stack_At = 0
+            and then not Plan.Arguments (8).On_Stack
+            and then Plan.Arguments (8).Registers (1) = 1
+            and then Plan.Stack_Bytes = 16,
+            "GP exhaustion rolls back the mixed aggregate's SSE bank");
+      end;
+      declare
+         Pair : constant IR.Signature_Part := Aggregate
+           ([(Element => Landin.Types.U64, others => <>),
+             (Element => Landin.Types.U64, others => <>)]);
+         Plan : constant ABI.Plan := ABI.Assign
+           (Unit,
+            [Integer_Part, Integer_Part, Integer_Part,
+             Integer_Part, Integer_Part, Pair, Integer_Part],
+            (others => <>), Facts);
+      begin
+         Landin.Testing.Check
+           (Item, Plan.Arguments (6).On_Stack
+            and then not Plan.Arguments (7).On_Stack
+            and then Plan.Arguments (7).Registers (1) = 6,
+            "two GP chunks roll back rather than splitting an aggregate");
+      end;
+      declare
+         Pair : constant IR.Signature_Part := Aggregate
+           ([(Element => Landin.Types.F64, others => <>),
+             (Element => Landin.Types.F64, others => <>)]);
+         Plan : constant ABI.Plan := ABI.Assign
+           (Unit,
+            [Float_Part, Float_Part, Float_Part, Float_Part,
+             Float_Part, Float_Part, Float_Part, Pair, Float_Part,
+             Integer_Part], (others => <>), Facts);
+      begin
+         Landin.Testing.Check
+           (Item, Plan.Arguments (8).On_Stack
+            and then Plan.Arguments (9).Registers (1) = 8
+            and then Plan.Arguments (10).Registers (1) = 1,
+            "SSE exhaustion rolls back and does not exhaust the GP bank");
+      end;
+      declare
+         Leaf : constant IR.Signature_Part := Aggregate
+           ([1 => (Element => Landin.Types.F32, others => <>)]);
+         --  Array children require a one-shape run: Nominal alone leaves
+         --  the element as the default scalar bool, not the leaf struct.
+         --  abi/r440-native-nested-shape pins this exact shape against C.
+         Nested : constant IR.Signature_Part := Aggregate
+           ([1 => (Kind => IR.Array_Field_Shape, Length => 3,
+                   Cases => 1, Payloads_First => 1,
+                   Nominal => Leaf.Nominal, others => <>)],
+            Payloads =>
+              [1 => (Kind => IR.Aggregate_Field_Shape,
+                     Nominal => Leaf.Nominal, others => <>)]);
+         Large : constant IR.Signature_Part := Aggregate
+           ([1 => (Kind => IR.Array_Field_Shape, Length => 3,
+                   Element => Landin.Types.F64, others => <>)]);
+         Partial : constant IR.Signature_Part := Aggregate
+           ([1 => (Kind => IR.Array_Field_Shape, Length => 3,
+                   Element => Landin.Types.U8, others => <>)]);
+         Nested_Class : constant ABI.Classification :=
+           ABI.Classify (Unit, Nested, Facts);
+         Nested_Plan : constant ABI.Plan := ABI.Assign
+           (Unit, [Nested], Nested, Facts);
+         Partial_Class : constant ABI.Classification :=
+           ABI.Classify (Unit, Partial, Facts);
+         Plan : constant ABI.Plan := ABI.Assign
+           (Unit, [Integer_Part, Float_Part, Large], Large, Facts);
+      begin
+         Landin.Testing.Check
+           (Item, IR.Array_Element_Is_Aggregate
+              (Unit, IR.Nth_Nominal_Field (Unit, Nested.Nominal, 1)),
+            "the nested array retains an explicit struct element");
+         Landin.Testing.Check
+           (Item, Nested_Class.Size = 12
+            and then Nested_Class.Alignment = 4
+            and then Nested_Class.Count = 2
+            and then not Nested_Class.Memory
+            and then Nested_Class.Classes (1) = ABI.SSE_Class
+            and then Nested_Class.Classes (2) = ABI.SSE_Class,
+            "nested struct arrays merge their leaves into eightbytes");
+         Landin.Testing.Check
+           (Item, Nested_Plan.GP_Used = 0
+            and then Nested_Plan.SSE_Used = 2
+            and then Nested_Plan.Stack_Bytes = 0
+            and then not Nested_Plan.Arguments (1).On_Stack
+            and then Nested_Plan.Arguments (1).Registers (1) = 1
+            and then Nested_Plan.Arguments (1).Registers (2) = 2
+            and then Nested_Plan.Result.Registers (1) = 1
+            and then Nested_Plan.Result.Registers (2) = 2,
+            "nested arguments and results use two SSE registers, no sret");
+         Landin.Testing.Check
+           (Item, Partial_Class.Size = 3
+            and then Partial_Class.Count = 1
+            and then Partial_Class.Classes (1) = ABI.Integer_Class,
+            "a partial chunk retains its exact extent");
+         Landin.Testing.Check
+           (Item, Plan.Result.Shape.Memory
+            and then Plan.Arguments (1).Registers (1) = 2
+            and then Plan.Arguments (2).Registers (1) = 1
+            and then Plan.Arguments (3).On_Stack
+            and then Plan.Stack_Bytes = 32,
+            "MEMORY result alone consumes physical sret and stack is aligned");
+      end;
+   end C_Classification_And_Assignment_Agree;
+
+   procedure C_Entry_Saves_Both_Banks_Before_Copy
+     (Item : in out Landin.Testing.Context);
+
+   procedure C_Entry_Saves_Both_Banks_Before_Copy
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "large: type = layout(c) struct" & LF
+         & "    values: [3]u64" & LF & "end large" & LF
+         & "public extern(c) receive: (value: large, real: f64,"
+         & " integer: u64) -> (result: u64) =" & LF
+         & "    result = value.values[0] + u64(real) + integer" & LF
+         & "end receive" & LF, Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work), "C entry is accepted");
+      if Landin.Stages.Failed (Work) then
+         return;
+      end if;
+      declare
+         Text : constant String := Emitted (Work);
+         Copy_At : constant Natural := Index (Text, "rep movsb");
+         Last_GP : constant Natural := Index (Text, "movq %r9, 40(%rsp)");
+         Last_SSE : constant Natural :=
+           Index (Text, "movq %xmm7, 104(%rsp)");
+      begin
+         Landin.Testing.Check
+           (Item, Last_GP > 0 and then Last_SSE > Last_GP
+            and then Copy_At > Last_SSE,
+            "every incoming GP and SSE register is saved before a copy");
+         Landin.Testing.Check
+           (Item, Contains (Text, "leaq 16(%rbp), %rsi")
+            and then Contains (Text, "movabsq $24, %rcx"),
+            "MEMORY arguments are inline above the return address");
+      end;
+   end C_Entry_Saves_Both_Banks_Before_Copy;
+
+   --  These mutations use the public IR builder seam after valid source has
+   --  lowered.  The backend's always-on defense must survive a frontend bug;
+   --  a source-facing diagnostic belongs to linkage checking, not this test.
+   procedure Compiler_Owned_Linkage_Is_Guarded
+     (Item : in out Landin.Testing.Context);
+
+   procedure Compiler_Owned_Linkage_Is_Guarded
+     (Item : in out Landin.Testing.Context)
+   is
+      Initializer : constant String := "_landin_host_initialize_arguments";
+
+      procedure Reject_Definition (Spelling : String);
+      procedure Check_Import (Signature : String; Compatible : Boolean);
+
+      procedure Reject_Definition (Spelling : String) is
+      begin
+         for Hosted in Boolean loop
+            declare
+               Work : Landin.Stages.Compilation :=
+                 Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+               Ran : Natural;
+            begin
+               Lower
+                 (Work,
+                  "public extern(c) callback: () -> none = end callback"
+                  & LF & (if Hosted then
+                    "public main: () -> (code: i32) = code = 0 end main"
+                    & LF else ""), Ran);
+               Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
+               IR.Set_Link_Symbol
+                 (Landin.Stages.Code (Work).all, 1,
+                  Landin.Source.Names.Intern
+                    (Landin.Stages.Identities (Work).all, Spelling));
+               begin
+                  declare
+                     Text : constant String := Landin.Backend.X86_64.Text
+                       (Landin.Stages.Code (Work).all,
+                        Landin.Stages.Meanings (Work).all,
+                        Landin.Stages.Identities (Work).all,
+                        Landin.Stages.Target (Work),
+                        Hosted_Entry => (if Hosted then 2 else IR.No_Item));
+                  begin
+                     Landin.Testing.Fail
+                       (Item,
+                        "an override emitted " & Natural'Image (Text'Length)
+                        & " bytes instead of refusing " & Spelling);
+                  end;
+               exception
+                  when Problem : Landin.Compiler_Defect =>
+                     Landin.Testing.Check_Equal
+                       (Item, Ada.Exceptions.Exception_Message (Problem),
+                        "a definition overrides compiler-owned symbol "
+                        & Spelling,
+                        "explicit definitions cannot replace runtime bridges");
+               end;
+            end;
+         end loop;
+      end Reject_Definition;
+
+      procedure Check_Import (Signature : String; Compatible : Boolean) is
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Ran : Natural;
+      begin
+         Lower (Work, "extern(c) imported: " & Signature & LF, Ran);
+         Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
+         IR.Set_Link_Symbol
+           (Landin.Stages.Code (Work).all, 1,
+            Landin.Source.Names.Intern
+              (Landin.Stages.Identities (Work).all, Initializer));
+         begin
+            declare
+               Text : constant String := Emitted (Work);
+            begin
+               Landin.Testing.Check
+                 (Item, Compatible,
+                  "an incompatible initializer import refused");
+               Landin.Testing.Check_Equal
+                 (Item, Occurrences (Text, LF & Initializer & ":" & LF), 1,
+                  "a compatible bodyless import receives exactly one bridge");
+               Landin.Testing.Check_Equal
+                 (Item, Occurrences (Text, HT & "call " & Initializer & LF), 0,
+                  "retaining the bridge does not call it implicitly");
+            end;
+         exception
+            when Problem : Landin.Compiler_Defect =>
+               Landin.Testing.Check
+                 (Item, not Compatible, "compatible initializer imports work");
+               Landin.Testing.Check_Equal
+                 (Item, Ada.Exceptions.Exception_Message (Problem),
+                  "an import disagrees with compiler-owned symbol "
+                  & Initializer, "the guard identifies the bridge mismatch");
+         end;
+      end Check_Import;
+   begin
+      Reject_Definition (Initializer);
+      Reject_Definition ("_landin_host_argument_count");
+      Reject_Definition ("_landin_host_text_length");
+      Reject_Definition ("_landin_host_heap_release");
+      Check_Import ("(argc: i32, escaping argv: ptr ptr u8) -> none", True);
+      Check_Import ("(argc: i64, argv: ptr ptr u8) -> none", False);
+      Check_Import ("(argc: f64, argv: ptr ptr u8) -> none", False);
+      Check_Import ("(argc: i32) -> none", False);
+      Check_Import ("(argc: i32, argv: ptr ptr u8) -> (r: i32)", False);
+      Check_Import ("(argc: i32, argv: ptr ptr u8, ...) -> none", False);
+      for Imported in Boolean loop
+         declare
+            Work : Landin.Stages.Compilation :=
+              Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+            Ran : Natural;
+         begin
+            Lower
+              (Work,
+               "extern(c) alias: () -> (r: i32)"
+               & (if Imported then "" else " = r = 42 end alias") & LF
+               & "public main: () -> (code: i32) = code = 0 end main" & LF,
+               Ran);
+            Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
+            IR.Set_Link_Symbol
+              (Landin.Stages.Code (Work).all, 1,
+               Landin.Source.Names.Intern
+                 (Landin.Stages.Identities (Work).all, "main"));
+            begin
+               declare
+                  Text : constant String := Landin.Backend.X86_64.Text
+                    (Landin.Stages.Code (Work).all,
+                     Landin.Stages.Meanings (Work).all,
+                     Landin.Stages.Identities (Work).all,
+                     Landin.Stages.Target (Work), Hosted_Entry => 2);
+               begin
+                  Landin.Testing.Fail
+                    (Item, "an entry collision emitted "
+                     & Natural'Image (Text'Length) & " bytes");
+               end;
+            exception
+               when Problem : Landin.Compiler_Defect =>
+                  Landin.Testing.Check_Equal
+                    (Item, Ada.Exceptions.Exception_Message (Problem),
+                     "a link symbol overrides the hosted main entry",
+                     "neither an import nor a definition can capture main");
+            end;
+         end;
+      end loop;
+   end Compiler_Owned_Linkage_Is_Guarded;
+
+   procedure Dollar_Link_Names_Are_Assembler_Symbols
+     (Item : in out Landin.Testing.Context);
+
+   procedure Dollar_Link_Names_Are_Assembler_Symbols
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "callback: type = extern(c) (x: i32) -> (r: i32)" & LF
+         & "extern(c) link(symbol: ""$foreign"") imported: (x: i32)"
+         & " -> (r: i32)" & LF
+         & "saved: callback = imported" & LF
+         & "public extern(c) link(symbol: ""$export"") exported: (x: i32)"
+         & " -> (r: i32) =" & LF
+         & "    local: callback = imported" & LF
+         & "    r = imported(x) + saved(x) + local(x)" & LF
+         & "end exported" & LF, Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "the documented leading dollar remains an accepted ELF identity");
+      if Landin.Stages.Failed (Work) then
+         return;
+      end if;
+      declare
+         Text : constant String := Emitted (Work);
+      begin
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "call ""$foreign""" & LF)
+            and then Contains (Text, HT & "leaq ""$foreign""(%rip), %rax")
+            and then Contains (Text, HT & ".quad ""$foreign""" & LF)
+            and then not Contains (Text, HT & "call $foreign"),
+            "direct calls, runtime addresses and static relocations quote");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & ".globl ""$export""" & LF)
+            and then Contains (Text, HT & ".type ""$export"", @function")
+            and then Contains (Text, LF & """$export"":" & LF)
+            and then Contains (Text, HT & ".size ""$export"", .-""$export"""),
+            "the definition and all directives keep the identical ELF name");
+      end;
+   end Dollar_Link_Names_Are_Assembler_Symbols;
+
+   procedure Forced_Link_Names_Reserve_The_Whole_Namespace
+     (Item : in out Landin.Testing.Context);
+
+   procedure Forced_Link_Names_Reserve_The_Whole_Namespace
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "foo: () -> (r: i32) = r = 1 end foo" & LF
+         & "extern(c) link(symbol: ""foo"") foreign: () -> (r: i32)" & LF
+         & "extern(c) link(symbol: ""landin_1_foo"") reserved: ()"
+         & " -> (r: i32)" & LF
+         & "landin_1_foo_1: i32 = 5" & LF
+         & "payload: i32 = 7" & LF
+         & "extern(c) link(symbol: ""payload"") foreign_data: ()"
+         & " -> (r: i32)" & LF
+         & "extern(c) link(symbol: "".L1_1"") block_name: ()"
+         & " -> (r: i32)" & LF
+         & "extern(c) link(symbol: "".L_1_1"") retry_name: ()"
+         & " -> (r: i32)" & LF
+         & "public extern(c) run: () -> (r: i32) =" & LF
+         & "    r = foo() + foreign() + reserved() + landin_1_foo_1" & LF
+         & "        + payload + foreign_data() + block_name() + retry_name()"
+         & LF & "end run" & LF,
+         Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "foreign names do not prohibit unrelated source names");
+      if Landin.Stages.Failed (Work) then
+         return;
+      end if;
+      declare
+         Text : constant String := Emitted (Work);
+      begin
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "call foo" & LF)
+            and then Contains (Text, HT & "call landin_1_foo" & LF)
+            and then Contains (Text, HT & "call payload" & LF)
+            and then not Contains (Text, LF & "foo:" & LF)
+            and then not Contains (Text, LF & "landin_1_foo:" & LF)
+            and then not Contains (Text, LF & "payload:" & LF),
+            "forced C symbols remain external, never local definitions");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & ".type landin_1_foo_1, @object")
+            and then not Contains
+              (Text, HT & ".type landin_1_foo_1, @function"),
+            "mangling retries also reserve unallocated ordinary data names");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "call .L1_1" & LF)
+            and then Contains (Text, HT & "call .L_1_1" & LF)
+            and then not Contains (Text, LF & ".L1_1:" & LF)
+            and then not Contains (Text, LF & ".L_1_1:" & LF),
+            "generated local labels also leave every forced identity free");
+         Landin.Testing.Check_Equal
+           (Item, Text, Emitted (Work),
+            "whole-unit symbol allocation is deterministic");
+      end;
+   end Forced_Link_Names_Reserve_The_Whole_Namespace;
+
+   --  A source name is not a platform entry contract.  In particular a
+   --  renamed C callback has no argc/argv carriers for implicit startup.
+   procedure Only_A_Native_Main_Receives_Hosted_Startup
+     (Item : in out Landin.Testing.Context);
+
+   procedure Only_A_Native_Main_Receives_Hosted_Startup
+     (Item : in out Landin.Testing.Context)
+   is
+      use type IR.Item_Id;
+   begin
+      for C_Convention in Boolean loop
+         for Linkage in 0 .. 2 loop
+            declare
+               Work : Landin.Stages.Compilation :=
+                 Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+               Ran : Natural;
+               Selected : constant Boolean :=
+                 not C_Convention and then Linkage /= 2;
+            begin
+               Lower
+                 (Work,
+                  "public " & (if C_Convention then "extern(c) " else "")
+                  & (case Linkage is
+                       when 0 => "",
+                       when 1 => "link(symbol: ""main"") ",
+                       when 2 => "link(symbol: ""callback_entry"") ")
+                  & "main: () -> (code: i32) = code = 42 end main" & LF,
+                  Ran);
+               Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
+               Landin.Testing.Check
+                 (Item, not Landin.Stages.Failed (Work),
+                  "linkage and C convention are independent legal choices");
+               if not Landin.Stages.Failed (Work) then
+                  declare
+                     Hosted : constant IR.Item_Id :=
+                       Landin.Backend.Entry_Point.Hosted_Main
+                         (Landin.Stages.Code (Work).all,
+                          Landin.Stages.Meanings (Work).all,
+                          Landin.Stages.Modules (Work).all,
+                          Landin.Stages.Identities (Work).all);
+                     Text : constant String := Landin.Backend.X86_64.Text
+                       (Landin.Stages.Code (Work).all,
+                        Landin.Stages.Meanings (Work).all,
+                        Landin.Stages.Identities (Work).all,
+                        Landin.Stages.Target (Work), Hosted_Entry => Hosted);
+                  begin
+                     Landin.Testing.Check
+                       (Item, (Hosted /= IR.No_Item) = Selected,
+                        "only native main with effective link main is entry");
+                     Landin.Testing.Check_Equal
+                       (Item, Occurrences
+                          (Text, HT & "call _landin_host_initialize_arguments"
+                           & LF),
+                        (if Selected then 1 else 0),
+                        "ordinary exports and renamed native entries do not"
+                        & " acquire an implicit argument root");
+                     if Linkage = 2 then
+                        Landin.Testing.Check
+                          (Item, Contains
+                             (Text, HT & ".globl callback_entry" & LF)
+                           and then not Contains
+                             (Text, HT & ".globl main" & LF),
+                           "a rename retains only its actual exported name");
+                     end if;
+                  end;
+               end if;
+            end;
+         end loop;
+      end loop;
+   end Only_A_Native_Main_Receives_Hosted_Startup;
+
+   procedure C_Exports_Keep_Helpers_And_Link_Names
+     (Item : in out Landin.Testing.Context);
+
+   procedure C_Exports_Keep_Helpers_And_Link_Names
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "extern(c) _landin_host_text_length: (data: ptr u8)"
+         & " -> (length: usize)" & LF
+         & "extern(c) _landin_host_argument_count: () -> (n: usize)" & LF
+         & "extern(c) _landin_host_argument_table: ()"
+         & " -> (table: ptr ptr u8)" & LF
+         & "extern(c) _landin_host_argument_at: (index: usize)"
+         & " -> (data: ptr u8)" & LF
+         & "_landin_host_initialize_arguments: () -> none ="
+         & " end _landin_host_initialize_arguments" & LF
+         & "strlen: () -> (r: usize) = r = 99 end strlen" & LF
+         & "public extern(c) length: (data: ptr u8) -> (r: usize) =" & LF
+         & "    _ = strlen()" & LF
+         & "    r = _landin_host_text_length(data)" & LF
+         & "end length" & LF
+         & "public extern(c) link(symbol: ""r440_first"")"
+         & " first: (x: i32) -> (r: i32) = r = x + 1 end first" & LF
+         & "public extern(c) link(symbol: ""r440_second"")"
+         & " second: (x: i32) -> (r: i32) = r = x + 1 end second" & LF,
+         Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work), "C exports are accepted");
+      if Landin.Stages.Failed (Work) then
+         return;
+      end if;
+      declare
+         Text : constant String := Emitted (Work);
+      begin
+         Landin.Testing.Check
+           (Item, Contains (Text, "_landin_host_text_length:" & LF)
+            and then Contains (Text, HT & "jmp strlen" & LF)
+            and then not Contains (Text, HT & ".type strlen, @function")
+            and then not Contains (Text, HT & ".globl main" & LF),
+            "startup-independent helpers need no Landin main or libc alias");
+         Landin.Testing.Check
+           (Item, Contains
+              (Text, HT & ".globl _landin_host_initialize_arguments" & LF)
+            and then Contains
+              (Text, HT & ".hidden _landin_host_initialize_arguments" & LF)
+            and then Occurrences
+              (Text, HT & ".type _landin_host_initialize_arguments,") = 1
+            and then not Contains
+              (Text, HT & "call _landin_host_initialize_arguments" & LF),
+            "C startup gets one isolated initializer, never a callback hook");
+         Landin.Testing.Check
+           (Item, Contains
+              (Text, "_landin_host_initialize_arguments:" & LF
+               & HT & "cmpq $0, .Llandin_host_argv(%rip)" & LF
+               & HT & "jne .Llandin_host_arguments_initialized" & LF
+               & HT & "testl %edi, %edi" & LF
+               & HT & "js .Llandin_host_arguments_invalid" & LF
+               & HT & "testq %rsi, %rsi" & LF
+               & HT & "jz .Llandin_host_arguments_invalid" & LF
+               & HT & "movl %edi, .Llandin_host_argc(%rip)" & LF
+               & HT & "movq %rsi, .Llandin_host_argv(%rip)" & LF
+               & HT & "ret" & LF)
+            and then Contains
+              (Text, ".Llandin_host_arguments_invalid:" & LF
+               & HT & "ud2" & LF),
+            "first initialization validates and stores the actual C carriers");
+         Landin.Testing.Check
+           (Item, Contains
+              (Text, "_landin_host_argument_count:" & LF
+               & HT & "cmpq $0, .Llandin_host_argv(%rip)" & LF
+               & HT & "je .Llandin_host_arguments_invalid" & LF)
+            and then Contains
+              (Text, "_landin_host_argument_table:" & LF
+               & HT & "movq .Llandin_host_argv(%rip), %rax" & LF
+               & HT & "testq %rax, %rax" & LF
+               & HT & "jz .Llandin_host_arguments_invalid" & LF)
+            and then Contains
+              (Text, "_landin_host_argument_at:" & LF
+               & HT & "cmpq $0, .Llandin_host_argv(%rip)" & LF
+               & HT & "je .Llandin_host_arguments_invalid" & LF),
+            "every global argument API guards real initialization");
+         Landin.Testing.Check
+           (Item, Occurrences
+              (Text, "movl %edi, .Llandin_host_argc(%rip)") = 1
+            and then Occurrences
+              (Text, "movq %rsi, .Llandin_host_argv(%rip)") = 1
+            and then Contains
+              (Text, ".Llandin_host_arguments_initialized:" & LF
+               & HT & "cmpl %edi, .Llandin_host_argc(%rip)" & LF
+               & HT & "jne .Llandin_host_arguments_invalid" & LF
+               & HT & "cmpq %rsi, .Llandin_host_argv(%rip)" & LF
+               & HT & "jne .Llandin_host_arguments_invalid" & LF
+               & HT & "ret" & LF)
+            and then Contains (Text, ".Llandin_host_argv:" & LF)
+            and then Contains (Text, ".Llandin_host_argc:" & LF),
+            "only first initialization stores the persistent argument root");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & ".globl r440_first" & LF)
+            and then Contains (Text, HT & ".globl r440_second" & LF)
+            and then Contains (Text, HT & ".type r440_first, @function")
+            and then Contains (Text, HT & ".type r440_second, @function"),
+            "both explicit public link symbols retain function visibility");
+      end;
+   end C_Exports_Keep_Helpers_And_Link_Names;
+
+   procedure A_C_Stack_Area_Must_Be_Addressable
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_C_Stack_Area_Must_Be_Addressable
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+      Checked : Natural := 0;
+      use type IR.Item_Kind;
+   begin
+      Lower
+        (Work,
+         "large: type = layout(c) struct" & LF
+         & "    bytes: [2147483648]u8" & LF & "end large" & LF
+         & "mut state: large" & LF
+         & "extern(c) foreign: (value: large) -> none" & LF
+         & "invoke: () -> none = foreign(state) end invoke" & LF, Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work), "large C shape is legal IR");
+      if Landin.Stages.Failed (Work) then
+         return;
+      end if;
+      declare
+         Code : IR.Unit renames Landin.Stages.Code (Work).all;
+      begin
+         for Position in 1 .. IR.Item_Count (Code) loop
+            declare
+               Routine : constant IR.Item_Id := IR.Item_Id (Position);
+            begin
+               if IR.Kind_Of (Code, Routine) = IR.Routine
+                 and then not IR.Is_External (Code, Routine)
+               then
+                  Checked := Checked + 1;
+                  Landin.Testing.Check
+                    (Item, Landin.Backend.Extent (Landin.Backend.Laid_Out
+                       (Code, Routine, Landin.Targets.Linux_X86_64)) < 1024,
+                     "the caller frame does not contain the module object");
+                  Landin.Testing.Check
+                    (Item, not Landin.Backend.X86_64.Frame_Is_Addressable
+                       (Code, Routine, Landin.Targets.Linux_X86_64),
+                     "the outgoing inline C object exceeds displacement");
+               end if;
+            end;
+         end loop;
+      end;
+      Landin.Testing.Check_Equal (Item, Checked, 1, "one caller checked");
+   end A_C_Stack_Area_Must_Be_Addressable;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "backend", "recursive array descriptors use target strides",
+         Recursive_Array_Descriptors_Use_Target_Strides'Access);
+      Landin.Testing.Register
+        (Into, "backend", "recursive array source images are cloned",
+         Recursive_Array_Source_Images_Are_Cloned'Access);
+      Landin.Testing.Register
+        (Into, "backend", "recursive callback images keep safe symbols",
+         Recursive_Callback_Images_Keep_Safe_Symbols'Access);
+      Landin.Testing.Register
+        (Into, "backend", "C entry saves both banks before copy",
+         C_Entry_Saves_Both_Banks_Before_Copy'Access);
+      Landin.Testing.Register
+        (Into, "backend", "compiler-owned linkage is guarded",
+         Compiler_Owned_Linkage_Is_Guarded'Access);
+      Landin.Testing.Register
+        (Into, "backend", "dollar link names are assembler symbols",
+         Dollar_Link_Names_Are_Assembler_Symbols'Access);
+      Landin.Testing.Register
+        (Into, "backend", "forced link names reserve the whole namespace",
+         Forced_Link_Names_Reserve_The_Whole_Namespace'Access);
+      Landin.Testing.Register
+        (Into, "backend", "only a native main receives hosted startup",
+         Only_A_Native_Main_Receives_Hosted_Startup'Access);
+      Landin.Testing.Register
+        (Into, "backend", "C exports keep helpers and link names",
+         C_Exports_Keep_Helpers_And_Link_Names'Access);
+      Landin.Testing.Register
+        (Into, "backend", "a C stack area must be addressable",
+         A_C_Stack_Area_Must_Be_Addressable'Access);
+      Landin.Testing.Register
+        (Into, "backend", "C classification and assignment agree",
+         C_Classification_And_Assignment_Agree'Access);
       Landin.Testing.Register
         (Into, "backend", "a hosted heap shim checks before libc",
          A_Hosted_Heap_Shim_Checks_Before_Libc'Access);
@@ -5443,6 +6722,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "a module value folds every level",
          A_Module_Value_Folds_Every_Level'Access);
+      Landin.Testing.Register
+        (Into, "backend", "a module pointer folds through its null check",
+         A_Module_Pointer_Folds_Through_Its_Null_Check'Access);
       Landin.Testing.Register
         (Into, "backend", "a call fills its argument registers in order",
          A_Call_Fills_Its_Argument_Registers_In_Order'Access);

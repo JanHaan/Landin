@@ -13,6 +13,7 @@ with Landin.IR;
 with Landin.Provenance;
 with Landin.Resolution;
 with Landin.Source;
+with Landin.Source.Names;
 with Landin.Stages.Checking;
 with Landin.Stages.Configuration;
 with Landin.Stages.Resolution;
@@ -99,6 +100,271 @@ package body Landin.Tests.Checking_Suite is
      & "    child: nested" & LF
      & "    tail: u8" & LF
      & "end outer" & LF;
+
+   procedure Match_Aliases_Keep_Backing_Origins
+     (Item : in out Landin.Testing.Context);
+
+   procedure Match_Aliases_Keep_Backing_Origins
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Source
+        (Parameters, Prelude, Holder : String; Accepted : Boolean);
+
+      procedure Check_Source
+        (Parameters, Prelude, Holder : String; Accepted : Boolean)
+      is
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Synthetic_32);
+         Order : Landin.Stages.Pipeline;
+         Ran : Natural;
+         Src : Landin.Source.Source_Id;
+         pragma Unreferenced (Src);
+      begin
+         Src := Landin.Stages.Add_Source
+           (Work, "match-origins.ldn",
+            "missing: atom" & LF
+            & "packet: type = struct" & LF
+            & "    kind: variant" & LF
+            & "        empty | row: (values: [2]u32)" & LF
+            & "    end kind" & LF
+            & "end packet" & LF
+            & "f: (" & Parameters & ") -> (result: []mut u32"
+            & (if Accepted then " from source" else "")
+            & ") ! missing =" & LF
+            & Prelude
+            & "    match " & Holder & ".kind" & LF
+            & "        empty: fail missing" & LF
+            & "        row(inout values): result = values[0..<2]" & LF
+            & "    end match" & LF
+            & "end f" & LF);
+         Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
+         Landin.Stages.Append (Order, Names'Access);
+         Landin.Stages.Append (Order, Checker'Access);
+         Ran := Landin.Stages.Run (Order, Work);
+         declare
+            Reports : constant Landin.Diagnostics.Diagnostic_List :=
+              Landin.Stages.Report (Work);
+         begin
+            Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
+            Landin.Testing.Check
+              (Item, Landin.Stages.Failed (Work) /= Accepted
+                 and then
+                   (if Accepted then Landin.Diagnostics.Count (Reports) = 0
+                    else Landin.Diagnostics.Count (Reports) = 1
+                      and then Landin.Diagnostics.Code
+                        (Landin.Diagnostics.Get (Reports, 1)) = "L0314"
+                      and then Landin.Diagnostics.Message
+                        (Landin.Diagnostics.Primary
+                           (Landin.Diagnostics.Get (Reports, 1))) =
+                             "this returned reference still has frame origin"),
+               "match aliases retain backing origin through " & Holder);
+         end;
+      end Check_Source;
+   begin
+      Check_Source ("source: ptr mut packet", "", "source.val", True);
+      Check_Source
+        ("source: []mut packet, index: usize", "", "source[index]", True);
+      Check_Source
+        ("inout source: [1]packet, index: usize", "", "source[index]", True);
+      Check_Source
+        ("", "    mut local: packet = zeroed" & LF
+         & "    source := addr local" & LF, "source.val", False);
+      Check_Source
+        ("index: usize", "    mut local: [1]packet = zeroed" & LF
+         & "    source := local[0..<1]" & LF, "source[index]", False);
+      Check_Source
+        ("source: [1]packet, index: usize", "", "source[index]", False);
+   end Match_Aliases_Keep_Backing_Origins;
+
+   procedure C_Metadata_Is_Independent_Of_Storage
+     (Item : in out Landin.Testing.Context);
+
+   procedure C_Metadata_Is_Independent_Of_Storage
+     (Item : in out Landin.Testing.Context)
+   is
+      package C renames Landin.Checking;
+      package IR renames Landin.IR;
+      use type Landin.Source.Names.Name_Id;
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Src : Landin.Source.Source_Id;
+      Ran : Natural;
+   begin
+      Src := Landin.Stages.Add_Source (Work, "c-metadata.ldn", Program);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Configurer'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+      Landin.Testing.Check_Equal (Item, Ran, 3, "metadata source resolves");
+      if Landin.Stages.Failed (Work) then
+         Landin.Testing.Fail (Item, "metadata source was refused");
+         return;
+      end if;
+      declare
+         Tree : constant not null access constant Landin.Syntax.Tree :=
+           Landin.Syntax.Forest.Tree_Of
+             (Landin.Stages.Trees (Work).all, Src);
+         Types : constant not null access C.Table :=
+           Landin.Stages.Types (Work);
+         Unit : constant not null access IR.Unit := Landin.Stages.Code (Work);
+         Site : constant Landin.Provenance.Origin := Landin.Syntax.Origin
+           (Tree.all, Landin.Syntax.Nth_Declaration (Tree.all, 1));
+         Symbol : constant Landin.Source.Names.Name_Id :=
+           Landin.Source.Names.Intern
+             (Landin.Stages.Identities (Work).all, "foreign_point");
+      begin
+         C.Prepare
+           (Types.all, Landin.Stages.Trees (Work).all,
+            Landin.Stages.Meanings (Work).all,
+            Landin.Stages.Identities (Work).all);
+         IR.Prepare (Unit.all, Landin.Stages.Meanings (Work).all);
+         declare
+            Part : constant C.Signature_Part :=
+              (Kind => Landin.Types.I32, Site => Site, others => <>);
+            Native : constant C.Signature_Id := C.Add_Signature
+              (Types.all, [Part], Part, Site);
+            Foreign : constant C.Signature_Id := C.Add_Signature
+              (Types.all, [Part], C.Signature_Part_Array'([Part]), Site,
+               C_ABI => True);
+            Variadic : constant C.Signature_Id := C.Add_Signature
+              (Types.all, [Part], Part, Site,
+               C_ABI => True, Variadic => True);
+            Nested_Native : constant C.Signature_Id := C.Add_Signature
+              (Types.all,
+               [(Kind => Landin.Types.Function_Value, Signature => Native,
+                 Site => Site, others => <>)], Part, Site);
+            Nested_Foreign : constant C.Signature_Id := C.Add_Signature
+              (Types.all,
+               [(Kind => Landin.Types.Function_Value, Signature => Foreign,
+                 Site => Site, others => <>)], Part, Site);
+            Nominal : constant C.Nominal_Type_Id :=
+              C.Nth_Nominal_Type (Types.all, 1);
+            Fits : Boolean;
+         begin
+            Landin.Testing.Check
+              (Item, not C.Signature_Uses_C_ABI (Types.all, Native)
+                 and then not C.Signature_Is_Variadic (Types.all, Native)
+                 and then C.Signature_Uses_C_ABI (Types.all, Foreign)
+                 and then C.Signature_Is_Variadic (Types.all, Variadic),
+               "checking builders preserve explicit flags and defaults");
+            Landin.Testing.Check
+              (Item, not C.Signatures_Agree (Types.all, Native, Foreign)
+                 and then not C.Signatures_Agree (Types.all, Foreign, Variadic)
+                 and then not C.Signatures_Agree
+                   (Types.all, Nested_Native, Nested_Foreign),
+               "C convention and varargs participate in recursive identity");
+            Landin.Testing.Check
+              (Item, C.Link_Symbol (Types.all, 1)
+                       = Landin.Source.Names.No_Name,
+               "checking link names default to absent");
+            C.Note_Link_Symbol (Types.all, 1, Symbol);
+            Landin.Testing.Check
+              (Item, C.Link_Symbol (Types.all, 1) = Symbol,
+               "checking preserves an explicit link symbol");
+            C.Lay_Out
+              (Types.all, Nominal,
+               [(Element => Landin.Types.U8, others => <>),
+                (Element => Landin.Types.U32, others => <>),
+                (Element => Landin.Types.U8, others => <>)],
+               Landin.Targets.Linux_X86_64, Fits, C_Layout => True);
+            Landin.Testing.Check
+              (Item, Fits and then C.Has_C_Layout (Types.all, Nominal)
+                 and then C.Field_Offset (Types.all, Nominal, 2) = 4
+                 and then C.Layout_Size (Types.all, Nominal) = 12,
+               "C layout metadata retains natural placement and tail padding");
+         end;
+         declare
+            Part : constant IR.Signature_Part :=
+              (Kind => Landin.Types.I32, others => <>);
+            Native : constant IR.Signature_Id :=
+              IR.Add_Signature (Unit.all, [Part], Part);
+            Foreign : constant IR.Signature_Id :=
+              IR.Add_Signature_With_Results
+                (Unit.all, [Part], [Part], C_ABI => True);
+            Variadic : constant IR.Signature_Id := IR.Add_Signature
+              (Unit.all, [Part], Part, C_ABI => True, Variadic => True);
+            First : constant IR.Nominal_Type_Id :=
+              IR.Add_Nominal_Type (Unit.all, 1);
+            Second : constant IR.Nominal_Type_Id :=
+              IR.Add_Nominal_Type (Unit.all, 1);
+            Third : constant IR.Nominal_Type_Id :=
+              IR.Add_Nominal_Type (Unit.all, 1);
+            Scalar : constant IR.Field_Shape :=
+              (Element => Landin.Types.F64, others => <>);
+            Prefix : constant Natural := IR.Add_Shape_Run
+              (Unit.all, [(Element => Landin.Types.U8, others => <>)]);
+            Root : constant IR.Field_Shape :=
+              (Kind => IR.Aggregate_Field_Shape, Cases => 1,
+               Payloads_First => 1, others => <>);
+            Shape : IR.Field_Shape;
+         begin
+            Landin.Testing.Check
+              (Item, not IR.Signature_Uses_C_ABI (Unit.all, Native)
+                 and then IR.Signature_Uses_C_ABI (Unit.all, Foreign)
+                 and then IR.Signature_Is_Variadic (Unit.all, Variadic)
+                 and then not IR.Signatures_Agree (Unit.all, Native, Foreign)
+                 and then not IR.Signatures_Agree
+                   (Unit.all, Foreign, Variadic),
+               "IR builders preserve flags in signature identity");
+            Landin.Testing.Check
+              (Item, Prefix = 1
+                 and then not IR.Has_Nominal_Shape (Unit.all, First)
+                 and then not IR.Nominal_Field_Run_Is_Valid
+                   (Unit.all, IR.No_Nominal_Type),
+               "unregistered and absent nominal shapes are distinct");
+            IR.Set_Nominal_Shape (Unit.all, First, [Scalar], C_Layout => True);
+            Landin.Testing.Check
+              (Item, IR.Item_Count (Unit.all) = 0
+                 and then IR.Has_C_Layout (Unit.all, First)
+                 and then IR.Aggregate_Field_Count
+                   (Unit.all,
+                    (Kind => IR.Aggregate_Field_Shape, Nominal => First,
+                     others => <>)) = 1,
+               "import-only nominals have canonical fields without storage");
+            IR.Set_Nominal_Shape
+              (Unit.all, Second, [7 => Root],
+               Cases => [5 => (First => 4, Count => 1)],
+               Payloads =>
+                 [8 => (Kind => IR.Array_Field_Shape, Length => 2,
+                        Cases => 1, Payloads_First => 2, others => <>),
+                  9 => (Kind => IR.Aggregate_Field_Shape,
+                        Cases => 1, Payloads_First => 3, others => <>),
+                  10 => (Kind => IR.Variant_Field_Shape,
+                         Cases => 1, Payloads_First => 1, others => <>),
+                  11 => Scalar]);
+            Shape := IR.Nth_Nominal_Field (Unit.all, Second, 1);
+            IR.Set_Nominal_Shape (Unit.all, Third, [Shape]);
+            Landin.Testing.Check
+              (Item, IR.Same_Shape
+                 (Unit.all, Shape, IR.Nth_Nominal_Field (Unit.all, Third, 1)),
+               "already absolute shared payload runs are not rebased twice");
+            Shape := IR.Nth_Aggregate_Field (Unit.all, Shape, 1);
+            Shape := IR.Array_Element_Shape (Unit.all, Shape);
+            Shape := IR.Nth_Aggregate_Field (Unit.all, Shape, 1);
+            Shape := IR.Nth_Variant_Case_Field (Unit.all, Shape, 1, 1);
+            Landin.Testing.Check
+              (Item, Shape.Element = Landin.Types.F64,
+               "every recursive local payload index is normalized");
+            Landin.Testing.Check
+              (Item, not IR.Variant_Case_Run_Is_Valid
+                 (Unit.all,
+                  (Kind => IR.Variant_Field_Shape, Cases => Natural'Last,
+                   Payloads_First => Natural'Last, others => <>), 1),
+               "malformed case runs are safe to query in every build mode");
+            begin
+               Shape := IR.Nth_Nominal_Field (Unit.all, First, 2);
+               pragma Assert (Shape.Element = Landin.Types.F64);
+               Landin.Testing.Fail (Item, "an invalid nominal index escaped");
+            exception
+               when Landin.Compiler_Defect =>
+                  Landin.Testing.Check
+                    (Item, True, "nominal access has a release-mode guard");
+            end;
+         end;
+      end;
+   end C_Metadata_Is_Independent_Of_Storage;
 
    procedure Declarations_Give_Structs_Their_Identity
      (Item : in out Landin.Testing.Context);
@@ -5683,6 +5949,67 @@ package body Landin.Tests.Checking_Suite is
         (Item, Seen, 4, "four contextual field initializers were checked");
    end Array_Field_Initializers_Carry_Their_Source_Shape;
 
+   --  [0460]/[0480]: integer-to-pointer conversion uses the target's usize,
+   --  not the host's.  A nonzero u64 whose low 32 bits are zero is therefore
+   --  the reserved null carrier on Synthetic_32, while the next address is
+   --  still a nonnull pointer value.
+   procedure Pointer_Construction_Folds_To_Target_Usize
+     (Item : in out Landin.Testing.Context);
+
+   procedure Pointer_Construction_Folds_To_Target_Usize
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Address (Address : String; Accepted : Boolean);
+
+      procedure Check_Address (Address : String; Accepted : Boolean) is
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Synthetic_32);
+         Order : Landin.Stages.Pipeline;
+         Ran : Natural;
+         Src : Landin.Source.Source_Id;
+         pragma Unreferenced (Src);
+      begin
+         Src := Landin.Stages.Add_Source
+           (Work, "pointer-width.ldn",
+            "address: u64 = " & Address & LF
+            & "f: () -> none =" & LF
+            & "    pointer: ptr u8 = ptr(address)" & LF
+            & "    _ = pointer" & LF
+            & "end f" & LF);
+         Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
+         Landin.Stages.Append (Order, Names'Access);
+         Landin.Stages.Append (Order, Checker'Access);
+         Ran := Landin.Stages.Run (Order, Work);
+
+         declare
+            Reports : constant Landin.Diagnostics.Diagnostic_List :=
+              Landin.Stages.Report (Work);
+         begin
+            Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
+            Landin.Testing.Check
+              (Item,
+               Landin.Stages.Failed (Work) /= Accepted
+                 and then
+                   (if Accepted then
+                       Landin.Diagnostics.Count (Reports) = 0
+                    else
+                       Landin.Diagnostics.Count (Reports) = 1
+                       and then Landin.Diagnostics.Code
+                         (Landin.Diagnostics.Get (Reports, 1)) = "L0301"
+                       and then Landin.Diagnostics.Message
+                         (Landin.Diagnostics.Primary
+                            (Landin.Diagnostics.Get (Reports, 1))) =
+                              "a pointer cannot be constructed from"
+                              & " a known zero address"),
+               "pointer construction folds after target-width conversion");
+         end;
+      end Check_Address;
+   begin
+      Check_Address ("4294967296", False);
+      Check_Address ("4294967297", True);
+   end Pointer_Construction_Folds_To_Target_Usize;
+
    --  D18: an array may occupy every byte a target's `usize` can name, and
    --  not one beyond it.  The same 2**32-byte array therefore belongs to a
    --  64-bit target and is refused by a 32-bit one; neither answer comes from
@@ -7418,8 +7745,1170 @@ package body Landin.Tests.Checking_Suite is
       end;
    end Inferred_Erased_Results_Use_Exact_Entry_Shapes;
 
+   procedure R440_Result_Locals_Are_Contextual
+     (Item : in out Landin.Testing.Context);
+
+   procedure R440_Result_Locals_Are_Contextual
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Local (By_Inout, Copy_First : Boolean);
+
+      procedure Check_Local (By_Inout, Copy_First : Boolean) is
+         Text : constant String :=
+           "absent: atom" & LF
+           & "maybe_pointer: type = absent | ptr u32" & LF
+           & "pair: ("
+           & (if By_Inout then "inout cell: [1]u32" else "cell: ptr u32")
+           & ") -> (got: bool, item: maybe_pointer from cell) =" & LF
+           & "    got = true" & LF
+           & "    item = "
+           & (if By_Inout then "addr cell[0]" else "cell") & LF
+           & "end pair" & LF
+           & "inspect: ("
+           & (if By_Inout then "inout cell: [1]u32" else "cell: ptr u32")
+           & ") -> none =" & LF
+           & "    (item: local, _) := pair(cell)" & LF
+           & (if Copy_First then "    copied := local" & LF else "")
+           & "    match " & (if Copy_First then "copied" else "local") & LF
+           & "        absent: _ = 0" & LF
+           & "        ptr (pointer): _ = pointer.val" & LF
+           & "    end match" & LF
+           & "end inspect" & LF;
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Order : Landin.Stages.Pipeline;
+         Src : Landin.Source.Source_Id;
+         Ran : Natural;
+         Locals : Natural := 0;
+      begin
+         Src := Landin.Stages.Add_Source (Work, "r440-result-local.ldn", Text);
+         Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
+         Landin.Stages.Append (Order, Names'Access);
+         Landin.Stages.Append (Order, Checker'Access);
+         Ran := Landin.Stages.Run (Order, Work);
+         Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
+         if Landin.Stages.Failed (Work) then
+            Landin.Testing.Fail
+              (Item, "result locals need no initializer during discovery");
+            return;
+         end if;
+         declare
+            Types : constant not null access Landin.Checking.Table :=
+              Landin.Stages.Types (Work);
+            Meanings : constant not null access Landin.Resolution.Table :=
+              Landin.Stages.Meanings (Work);
+         begin
+            for Id in Landin.Resolution.Declaration_Id'(1)
+              .. Landin.Resolution.Declaration_Id
+                (Landin.Resolution.Declaration_Count (Meanings.all))
+            loop
+               if Landin.Resolution.Source_Of (Meanings.all, Id) = Src
+                 and then Landin.Resolution.Sort_Of (Meanings.all, Id)
+                   = Landin.Resolution.Result_Binding
+               then
+                  Locals := Locals + 1;
+                  Landin.Testing.Check
+                    (Item, Landin.Checking.Type_Of (Types.all, Id)
+                       = Landin.Types.Pointer_Value
+                     and then Landin.Checking.Reference_Of (Types.all, Id)
+                       /= Landin.Checking.No_Reference
+                     and then Landin.Checking.Descriptor_Of
+                       (Types.all, Landin.Checking.Reference_Of
+                          (Types.all, Id)).Empty_Atom
+                       /= Landin.Resolution.No_Declaration,
+                     "the selected later result keeps its optional identity");
+               end if;
+            end loop;
+         end;
+         Landin.Testing.Check_Equal
+           (Item, Locals, 1, "one selected local is settled contextually");
+      end Check_Local;
+   begin
+      for By_Inout in Boolean loop
+         for Copy_First in Boolean loop
+            Check_Local (By_Inout, Copy_First);
+         end loop;
+      end loop;
+   end R440_Result_Locals_Are_Contextual;
+
+   procedure R440_Result_Binding_Refusals_Are_Stable
+     (Item : in out Landin.Testing.Context);
+
+   procedure R440_Result_Binding_Refusals_Are_Stable
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Refusal (Duplicate : Boolean);
+
+      procedure Check_Refusal (Duplicate : Boolean) is
+         Text : constant String :=
+           "absent: atom" & LF
+           & "maybe_pointer: type = absent | ptr u32" & LF
+           & "pair: (cell: ptr u32)"
+           & " -> (got: bool, item: maybe_pointer from cell) =" & LF
+           & "    got = true" & LF
+           & "    item = cell" & LF
+           & "end pair" & LF
+           & "bad: (cell: ptr u32) -> none =" & LF
+           & (if Duplicate then
+               "    (item: first, item: local, _) := pair(cell)" & LF
+             else "    (missing: local, _) := pair(cell)" & LF)
+           & "    match local" & LF
+           & "        absent: _ = 0" & LF
+           & "        ptr (pointer): _ = pointer.val" & LF
+           & "    end match" & LF
+           & "end bad" & LF;
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Order : Landin.Stages.Pipeline;
+         Src : Landin.Source.Source_Id;
+         Ran : Natural;
+      begin
+         Src := Landin.Stages.Add_Source
+           (Work, "r440-result-refusal.ldn", Text);
+         pragma Unreferenced (Src);
+         Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
+         Landin.Stages.Append (Order, Names'Access);
+         Landin.Stages.Append (Order, Checker'Access);
+         Ran := Landin.Stages.Run (Order, Work);
+         Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
+         declare
+            Reports : constant Landin.Diagnostics.Diagnostic_List :=
+              Landin.Stages.Report (Work);
+         begin
+            Landin.Testing.Check
+              (Item, Landin.Stages.Failed (Work)
+                 and then Landin.Diagnostics.Count (Reports) = 1
+                 and then Landin.Diagnostics.Code
+                   (Landin.Diagnostics.Get (Reports, 1))
+                     = (if Duplicate then "L0301" else "L0308"),
+               "lazy and ordinary walks report an invalid result label once");
+         end;
+      end Check_Refusal;
+   begin
+      Check_Refusal (False);
+      Check_Refusal (True);
+   end R440_Result_Binding_Refusals_Are_Stable;
+
+   procedure R440_C_Array_Literals_Keep_Nominals
+     (Item : in out Landin.Testing.Context);
+
+   procedure R440_C_Array_Literals_Keep_Nominals
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Elements (Matching : Boolean);
+
+      procedure Check_Elements (Matching : Boolean) is
+         Text : constant String :=
+           "leaf: type = layout(c) struct" & LF
+           & "    value: f64" & LF
+           & "end leaf" & LF
+           & "other: type = layout(c) struct" & LF
+           & "    value: f64" & LF
+           & "end other" & LF
+           & "outer: type = layout(c) struct" & LF
+           & "    values: [2]leaf" & LF
+           & "end outer" & LF
+           & "construct: (value: f64) -> (result: outer) =" & LF
+           & "    result = outer(values: [leaf(value: value), "
+           & (if Matching then "leaf" else "other")
+           & "(value: value + 1.0)])" & LF
+           & "end construct" & LF;
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Order : Landin.Stages.Pipeline;
+         Src : Landin.Source.Source_Id;
+         Ran : Natural;
+         Literals : Natural := 0;
+      begin
+         Src := Landin.Stages.Add_Source
+           (Work, "r440-array-element.ldn", Text);
+         Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
+         Landin.Stages.Append (Order, Names'Access);
+         Landin.Stages.Append (Order, Checker'Access);
+         Ran := Landin.Stages.Run (Order, Work);
+         Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
+         declare
+            Reports : constant Landin.Diagnostics.Diagnostic_List :=
+              Landin.Stages.Report (Work);
+         begin
+            Landin.Testing.Check
+              (Item, Landin.Stages.Failed (Work) /= Matching
+                 and then (if Matching then
+                   Landin.Diagnostics.Count (Reports) = 0
+                 else
+                   Landin.Diagnostics.Count (Reports) = 1
+                   and then Landin.Diagnostics.Code
+                     (Landin.Diagnostics.Get (Reports, 1)) = "L0301"),
+               "array elements keep nominal identity, not a scalar carrier");
+         end;
+         if not Matching or else Landin.Stages.Failed (Work) then
+            return;
+         end if;
+         declare
+            Tree : constant not null access constant Landin.Syntax.Tree :=
+              Landin.Syntax.Forest.Tree_Of
+                (Landin.Stages.Trees (Work).all, Src);
+            Types : constant not null access Landin.Checking.Table :=
+              Landin.Stages.Types (Work);
+         begin
+            for Node in Landin.Syntax.Node_Id'(1)
+              .. Landin.Syntax.Last_Node (Tree.all)
+            loop
+               if Landin.Syntax.Kind (Tree.all, Node)
+                 = Landin.Syntax.Array_Literal
+               then
+                  Literals := Literals + 1;
+                  declare
+                     Nominal : constant Landin.Checking.Nominal_Type_Id :=
+                       Landin.Checking.Array_Element_Nominal
+                         (Types.all, Tree.all, Node);
+                  begin
+                     Landin.Testing.Check
+                       (Item, Nominal /= Landin.Checking.No_Nominal_Type
+                          and then Landin.Checking.Array_Length
+                            (Types.all, Tree.all, Node) = 2,
+                        "the literal keeps its nominal array shape");
+                     for Position in 1 .. 2 loop
+                        Landin.Testing.Check
+                          (Item, Landin.Checking.Nominal_Of
+                             (Types.all, Tree.all, Landin.Syntax.Nth_Element
+                                (Tree.all, Node, Position)) = Nominal,
+                           "each inline element keeps the nominal identity");
+                     end loop;
+                  end;
+               end if;
+            end loop;
+         end;
+         Landin.Testing.Check_Equal
+           (Item, Literals, 1, "the nested array literal was checked");
+      end Check_Elements;
+   begin
+      Check_Elements (True);
+      Check_Elements (False);
+   end R440_C_Array_Literals_Keep_Nominals;
+
+   procedure R440_Variadic_Carrier_Refusal_Is_Precise
+     (Item : in out Landin.Testing.Context);
+
+   procedure R440_Variadic_Carrier_Refusal_Is_Precise
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Tail (Argument : String);
+
+      procedure Check_Tail (Argument : String) is
+         Text : constant String :=
+           "pair: type = layout(c) struct" & LF
+           & "    left: i32" & LF
+           & "    right: i32" & LF
+           & "end pair" & LF
+           & "extern(c) collect: (count: i32, ...) -> none" & LF
+           & "bad: () -> none =" & LF
+           & "    value: pair = pair(left: 1, right: 2)" & LF
+           & "    collect(1, " & Argument & ")" & LF
+           & "end bad" & LF;
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Order : Landin.Stages.Pipeline;
+         Src : Landin.Source.Source_Id;
+         Ran : Natural;
+      begin
+         Src := Landin.Stages.Add_Source
+           (Work, "r440-variadic-tail.ldn", Text);
+         pragma Unreferenced (Src);
+         Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
+         Landin.Stages.Append (Order, Names'Access);
+         Landin.Stages.Append (Order, Checker'Access);
+         Ran := Landin.Stages.Run (Order, Work);
+         Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
+         declare
+            Reports : constant Landin.Diagnostics.Diagnostic_List :=
+              Landin.Stages.Report (Work);
+         begin
+            Landin.Testing.Check
+              (Item, Landin.Stages.Failed (Work)
+                 and then Landin.Diagnostics.Count (Reports) = 1
+                 and then Landin.Diagnostics.Code
+                   (Landin.Diagnostics.Get (Reports, 1)) = "L0301"
+                 and then Landin.Diagnostics.Message
+                   (Landin.Diagnostics.Primary
+                      (Landin.Diagnostics.Get (Reports, 1))) =
+                        "this C variadic tail argument is not"
+                        & " an enabled scalar carrier",
+               "the carrier boundary owns the aggregate refusal");
+         end;
+      end Check_Tail;
+   begin
+      Check_Tail ("value");
+      Check_Tail ("pair(left: 1, right: 2)");
+   end R440_Variadic_Carrier_Refusal_Is_Precise;
+
+   procedure R440_Recursive_Array_Foundations
+     (Item : in out Landin.Testing.Context);
+
+   procedure R440_Recursive_Array_Foundations
+     (Item : in out Landin.Testing.Context)
+   is
+      package C renames Landin.Checking;
+      package Ty renames Landin.Types;
+      use type C.Field_Shape;
+      Text : constant String := Program
+        & "identity: (t: type, value: t) -> (result: t) =" & LF
+        & "    result = value" & LF & "end identity" & LF;
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Src : Landin.Source.Source_Id;
+      Ran : Natural;
+   begin
+      Src := Landin.Stages.Add_Source (Work, "r440-shapes.ldn", Text);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Configurer'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+      Landin.Testing.Check_Equal (Item, Ran, 3, "foundation source resolves");
+      if Landin.Stages.Failed (Work) then
+         Landin.Testing.Fail (Item, "recursive foundation source was refused");
+         return;
+      end if;
+      declare
+         Tree : constant not null access constant Landin.Syntax.Tree :=
+           Landin.Syntax.Forest.Tree_Of (Landin.Stages.Trees (Work).all, Src);
+         Types : constant not null access C.Table :=
+           Landin.Stages.Types (Work);
+         Other : C.Table;
+         Node : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Nth_Declaration (Tree.all, 1);
+         Site : constant Landin.Provenance.Origin :=
+           Landin.Syntax.Origin (Tree.all, Node);
+         Template : Landin.Provenance.Declaration_Id :=
+           Landin.Provenance.No_Declaration;
+      begin
+         C.Prepare
+           (Types.all, Landin.Stages.Trees (Work).all,
+            Landin.Stages.Meanings (Work).all,
+            Landin.Stages.Identities (Work).all);
+         C.Prepare
+           (Other, Landin.Stages.Trees (Work).all,
+            Landin.Stages.Meanings (Work).all,
+            Landin.Stages.Identities (Work).all);
+         for Id in Landin.Provenance.Declaration_Id'(1)
+           .. Landin.Provenance.Declaration_Id
+             (Landin.Resolution.Declaration_Count
+                (Landin.Stages.Meanings (Work).all))
+         loop
+            if Landin.Resolution.Sort_Of
+              (Landin.Stages.Meanings (Work).all, Id)
+                = Landin.Resolution.Module_Function
+            then
+               Template := Id;
+            end if;
+         end loop;
+         declare
+            Part : constant C.Signature_Part :=
+              (Kind => Ty.I32, Site => Site, others => <>);
+            Renamed : C.Signature_Part := Part;
+            First : constant C.Signature_Id :=
+              C.Add_Signature (Types.all, [Part], Part, Site, C_ABI => True);
+            Native : constant C.Signature_Id :=
+              C.Add_Signature (Types.all, [Part], Part, Site);
+            Variadic : constant C.Signature_Id := C.Add_Signature
+              (Types.all, [Part], Part, Site, C_ABI => True, Variadic => True);
+            Pointer : constant C.Reference_Id := C.Add_Reference
+              (Types.all, (Referent => Ty.U8, others => <>));
+            Pointer_Part : constant C.Signature_Part :=
+              (Kind => Ty.Pointer_Value, Reference => Pointer,
+               Site => Site, others => <>);
+            With_Pointer : constant C.Signature_Id := C.Add_Signature
+              (Types.all, [Pointer_Part], Part, Site, C_ABI => True);
+            Callback : constant C.Field_Shape :=
+              (Element => Ty.Usize, Signature => First, others => <>);
+            Row : constant C.Field_Shape :=
+              C.Make_Array_Field (Types.all, 3, Callback);
+            Matrix : constant C.Field_Shape :=
+              C.Make_Array_Field (Types.all, 2, Row);
+            Again : constant C.Field_Shape :=
+              C.Make_Array_Field (Types.all, 100_000, Row);
+            Nominal : constant C.Nominal_Type_Id :=
+              C.Nth_Nominal_Type (Types.all, 1);
+            Leaves : constant C.Field_Shape_Array :=
+              [(Element => Ty.U16, others => <>),
+               (Kind => C.Reference_Field, Reference => Pointer, others => <>),
+               (Kind => C.Aggregate_Field, Nominal => Nominal, others => <>),
+               Callback, Row, Matrix];
+            Size : Landin.Targets.Byte_Count;
+            Alignment : Landin.Targets.Byte_Alignment;
+            Fits : Boolean;
+            Bad, Got : C.Field_Shape;
+            Previous : C.Routine_Instance_Id;
+         begin
+            C.Lay_Out
+              (Types.all, Nominal,
+               [(Element => Ty.U8, others => <>)],
+               Landin.Targets.Linux_X86_64, Fits);
+            Landin.Testing.Check (Item, Fits, "nominal leaf has a layout");
+            for Leaf of Leaves loop
+               declare
+                  Shape : constant C.Field_Shape :=
+                    C.Make_Array_Field (Types.all, 7, Leaf);
+               begin
+                  Landin.Testing.Check
+                    (Item, C.Holds (Types.all, Shape)
+                       and then C.Array_Field_Element
+                         (Types.all, Shape) = Leaf,
+                     "complete immediate children round trip without loss");
+                  if Shape.Cases = 0 then
+                     Landin.Testing.Check
+                       (Item, C.Array_Field_Element (Shape) = Leaf,
+                        "metadata-free children keep the compact accessor");
+                  end if;
+               end;
+            end loop;
+            Landin.Testing.Check
+              (Item, Row.Cases = 1 and then Matrix.Cases = 1
+                 and then Matrix.Payloads_First = Again.Payloads_First
+                 and then Matrix.Signature = C.No_Signature
+                 and then Row.Signature = C.No_Signature,
+               "repetition shares one child, not one descriptor per element");
+            C.Shape_Extent
+              (Types.all, Matrix, Landin.Targets.Synthetic_32,
+               Size, Alignment);
+            Landin.Testing.Check
+              (Item, Size = 24 and then Alignment = 4,
+               "nested callbacks use target pointer width, not host width");
+            C.Shape_Extent
+              (Types.all, Matrix, Landin.Targets.Linux_X86_64,
+               Size, Alignment);
+            Landin.Testing.Check
+              (Item, Size = 48 and then Alignment = 8,
+               "the same complete shape measures on the 64-bit target");
+            declare
+               Wide_Row : constant C.Field_Shape := C.Make_Array_Field
+                 (Types.all, 65_536, (Element => Ty.U8, others => <>));
+               Huge : constant C.Field_Shape :=
+                 C.Make_Array_Field (Types.all, 65_536, Wide_Row);
+            begin
+               C.Shape_Extent
+                 (Types.all, Huge, Landin.Targets.Linux_X86_64,
+                  Size, Alignment);
+               Landin.Testing.Check
+                 (Item, Size = 4_294_967_296, "extent stays target-sized");
+               begin
+                  C.Shape_Extent
+                    (Types.all, Huge, Landin.Targets.Synthetic_32,
+                     Size, Alignment);
+                  Landin.Testing.Fail (Item, "32-bit nested extent overflow");
+               exception
+                  when Landin.Compiler_Defect =>
+                     Landin.Testing.Check
+                       (Item, True, "nested multiplication checks before use");
+               end;
+               C.Lay_Out
+                 (Types.all, C.Nth_Nominal_Type (Types.all, 2), [Huge],
+                  Landin.Targets.Synthetic_32, Fits);
+               Landin.Testing.Check
+                 (Item, not Fits and then not C.Has_Layout
+                    (Types.all, C.Nth_Nominal_Type (Types.all, 2)),
+                  "32-bit overflowing records never publish a partial layout");
+            end;
+            for Fault in 1 .. 7 loop
+               Bad := Matrix;
+               case Fault is
+                  when 1 => Bad.Cases := 2;
+                  when 2 => Bad.Payloads_First := 0;
+                  when 3 => Bad.Payloads_First := Natural'Last;
+                  when 4 => Bad.Signature := First;
+                  when 5 => Bad.Reference := Pointer;
+                  when 6 => Bad.Nominal := Nominal;
+                  when 7 => Bad.Cases := 0;
+               end case;
+               Landin.Testing.Check
+                 (Item, not C.Holds (Types.all, Bad)
+                    and then not C.Field_Shapes_Agree (Types.all, Bad, Bad),
+                  "malformed complete-child runs are safely rejected");
+               begin
+                  Got := C.Array_Field_Element (Types.all, Bad);
+                  pragma Assert (Got.Kind = C.Fixed_Array_Field);
+                  Landin.Testing.Fail (Item, "malformed child access escaped");
+               exception
+                  when Landin.Compiler_Defect
+                     | Ada.Assertions.Assertion_Error =>
+                     Landin.Testing.Check
+                       (Item, True, "child access has a checked boundary");
+               end;
+            end loop;
+            begin
+               Got := C.Array_Field_Element (Matrix);
+               pragma Assert (Got.Kind = C.Fixed_Array_Field);
+               Landin.Testing.Fail (Item, "compact accessor erased a child");
+            exception
+               when Landin.Compiler_Defect | Ada.Assertions.Assertion_Error =>
+                  Landin.Testing.Check
+                    (Item, True, "compact accessor refuses complete children");
+            end;
+            Renamed.Name := Landin.Source.Names.Intern
+              (Landin.Stages.Identities (Work).all, "renamed");
+            Renamed.Site := Landin.Syntax.Origin
+              (Tree.all, Landin.Syntax.Nth_Declaration (Tree.all, 2));
+            declare
+               Second : constant C.Signature_Id := C.Add_Signature
+                 (Types.all, [Renamed], Renamed, Renamed.Site, C_ABI => True);
+               Twin : constant C.Field_Shape := C.Make_Array_Field
+                 (Types.all, 3,
+                  (Element => Ty.Usize, Signature => Second, others => <>));
+               Wrong : constant C.Field_Shape := C.Make_Array_Field
+                 (Types.all, 3,
+                  (Element => Ty.Usize, Signature => Native, others => <>));
+               A, B, D : C.Actual_Tuple := C.Empty_Actuals;
+               Plain : constant C.Actual_Key :=
+                 C.Fixed_Array_Type_Actual (2, Ty.U8);
+               Key : constant C.Actual_Key :=
+                 C.Fixed_Array_Type_Actual (Types.all, 2, Row);
+               Instance, Same, Different : C.Routine_Instance_Id;
+            begin
+               Landin.Testing.Check
+                 (Item, First /= Second
+                    and then C.Field_Shapes_Agree (Types.all, Row, Twin)
+                    and then not C.Field_Shapes_Agree (Types.all, Row, Wrong)
+                    and then not C.Signatures_Agree
+                      (Types.all, First, Variadic),
+                  "callback identity is structural but convention-sensitive");
+               Landin.Testing.Check
+                 (Item, C.Holds (Other, Plain)
+                    and then C.Holds (Types.all, Key)
+                    and then not C.Holds (Other, Key)
+                    and then C.Array_Element_Shape_Of (Types.all, Key) = Row,
+                  "descriptor keys are table-owned; scalar keys are portable");
+               begin
+                  Got := C.Array_Element_Shape_Of (Other, Key);
+                  pragma Assert (Got.Kind = C.Fixed_Array_Field);
+                  Landin.Testing.Fail (Item, "foreign array key escaped");
+               exception
+                  when Landin.Compiler_Defect
+                     | Ada.Assertions.Assertion_Error =>
+                     Landin.Testing.Check
+                       (Item, True, "key ownership is guarded");
+               end;
+               begin
+                  Got := C.Array_Element_Shape_Of
+                    (Types.all, C.Scalar_Type_Actual (Ty.U8));
+                  pragma Assert (Got.Element = Ty.U8);
+                  Landin.Testing.Fail (Item, "nonarray key escaped");
+               exception
+                  when Landin.Compiler_Defect
+                     | Ada.Assertions.Assertion_Error =>
+                     Landin.Testing.Check (Item, True, "key kind is guarded");
+               end;
+               C.Append_Actual (A, Key);
+               C.Append_Actual
+                 (B, C.Fixed_Array_Type_Actual (Types.all, 2, Twin));
+               C.Append_Actual
+                 (D, C.Fixed_Array_Type_Actual (Types.all, 2, Wrong));
+               Instance := C.Intern_Routine_Instance (Types.all, Template, A);
+               Same := C.Intern_Routine_Instance (Types.all, Template, B);
+               Different := C.Intern_Routine_Instance (Types.all, Template, D);
+               Landin.Testing.Check
+                 (Item, Instance = Same and then Instance /= Different
+                    and then C.Intern_Nominal_Instance
+                      (Types.all, C.Template_Of (Types.all, Nominal), A)
+                        = C.Intern_Nominal_Instance
+                          (Types.all, C.Template_Of (Types.all, Nominal), B),
+                  "recursive actuals intern routine and nominal keys");
+               C.Note_Array (Types.all, Template, 2, Ty.Bool);
+               C.Note_Array_Element_Nominal (Types.all, Template, Nominal);
+               C.Note_Array (Types.all, Tree.all, Node, 2, Ty.Bool);
+               C.Note_Array_Element_Nominal
+                 (Types.all, Tree.all, Node, Nominal);
+               C.Activate_Routine_View (Types.all, Instance, Previous);
+               C.Note_Array_Element_Shape (Types.all, Template, Callback);
+               C.Note_Array_Element_Shape
+                 (Types.all, Tree.all, Node, Callback);
+               Landin.Testing.Check
+                 (Item, C.Array_Length (Types.all, Template) = 2
+                    and then C.Array_Element_Shape
+                      (Types.all, Template) = Callback
+                    and then C.Array_Element_Shape
+                      (Types.all, Tree.all, Node) = Callback
+                    and then C.Array_Element_Nominal
+                      (Types.all, Template) = C.No_Nominal_Type
+                    and then C.Array_Element_Nominal
+                      (Types.all, Tree.all, Node) = C.No_Nominal_Type,
+                  "child overlays retain length and replace nominal facts");
+               C.Note_Array (Types.all, Template, 4, Ty.Bool, Row);
+               C.Note_Array (Types.all, Tree.all, Node, 4, Ty.Bool, Row);
+               C.Restore_Routine_View (Types.all, Previous);
+               Landin.Testing.Check
+                 (Item, C.Array_Element_Nominal
+                    (Types.all, Template) = Nominal
+                    and then C.Array_Element_Nominal
+                      (Types.all, Tree.all, Node) = Nominal,
+                  "restoring the global view retains its nominal facts");
+               C.Activate_Routine_View (Types.all, Instance, Previous);
+               Landin.Testing.Check
+                 (Item, C.Array_Length (Types.all, Template) = 4
+                    and then C.Array_Element_Shape (Types.all, Template) = Row
+                    and then C.Array_Element_Shape
+                      (Types.all, Tree.all, Node) = Row,
+                  "whole-array overlays preserve the recursive child");
+               C.Note_Array_Element_Shape
+                 (Types.all, Template, (Element => Ty.U16, others => <>));
+               C.Note_Array_Element_Shape
+                 (Types.all, Tree.all, Node,
+                  (Element => Ty.U16, others => <>));
+               Landin.Testing.Check
+                 (Item, C.Array_Element (Types.all, Template) = Ty.U16
+                    and then C.Array_Element
+                      (Types.all, Tree.all, Node) = Ty.U16,
+                  "scalar replacement updates the compact carrier too");
+               C.Restore_Routine_View (Types.all, Previous);
+            end;
+            declare
+               Retained : C.Signature_Part := Pointer_Part;
+               Moved : C.Signature_Part := Pointer_Part;
+               Base : constant C.Signature_Id := C.Add_Signature
+                 (Types.all, [Pointer_Part], Pointer_Part, Site,
+                  C_ABI => True);
+               Borrowed : constant C.Signature_Id := C.Add_Signature
+                 (Types.all, [Pointer_Part], Pointer_Part, Site,
+                  Sources => [(Result => 1, Parameter => 1)], C_ABI => True);
+               Retaining, Moving : C.Signature_Id;
+               Bad_Carrier : C.Field_Shape := Callback;
+            begin
+               Retained.Escaping := True;
+               Moved.Convention := Landin.Syntax.Inout_Convention;
+               Retaining := C.Add_Signature
+                 (Types.all, [Retained], Pointer_Part, Site, C_ABI => True);
+               Moving := C.Add_Signature
+                 (Types.all, [Moved], Pointer_Part, Site, C_ABI => True);
+               Landin.Testing.Check
+                 (Item, not C.Signatures_Agree (Types.all, Base, Borrowed)
+                    and then not C.Signatures_Agree
+                      (Types.all, Base, Retaining)
+                    and then not C.Signatures_Agree (Types.all, Base, Moving),
+                  "callback identity retains from, escaping"
+                    & " and parameter mode");
+               Bad_Carrier.Element := Ty.U8;
+               Landin.Testing.Check
+                 (Item, not C.Holds (Types.all, Bad_Carrier),
+                  "a callback leaf cannot masquerade as a byte scalar");
+            end;
+            declare
+               Functions : constant C.Field_Shape := C.Make_Array_Field
+                 (Types.all, 2,
+                  (Element => Ty.Usize, Signature => With_Pointer,
+                   others => <>));
+               Pointers : constant C.Field_Shape := C.Make_Array_Field
+                 (Types.all, 2,
+                  (Kind => C.Reference_Field, Reference => Pointer,
+                   others => <>));
+               Nested : constant C.Field_Shape :=
+                 C.Make_Array_Field (Types.all, 2, Pointers);
+            begin
+               Landin.Testing.Check
+                 (Item, not C.Contains_References (Types.all, Functions)
+                    and then C.Contains_References (Types.all, Nested),
+                  "callback parameter types are not references stored in it");
+            end;
+         end;
+      end;
+   end R440_Recursive_Array_Foundations;
+
+   procedure R440_Check_Source
+     (Item : in out Landin.Testing.Context;
+      Text : String;
+      Expected : String := "";
+      Code : String := "L0301");
+
+   procedure R440_Check_Source
+     (Item : in out Landin.Testing.Context;
+      Text : String;
+      Expected : String := "";
+      Code : String := "L0301")
+   is
+      package D renames Landin.Diagnostics;
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Src : Landin.Source.Source_Id;
+      Ran : Natural;
+   begin
+      Src := Landin.Stages.Add_Source (Work, "r440-source-contract.ldn", Text);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Configurer'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Landin.Stages.Append (Order, Checker'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+      Landin.Testing.Check_Equal (Item, Ran, 4, "the source reaches checking");
+      declare
+         Reports : constant D.Diagnostic_List := Landin.Stages.Report (Work);
+      begin
+         Landin.Testing.Check
+           (Item, Landin.Stages.Failed (Work) = (Expected /= "")
+              and then D.Count (Reports) = (if Expected = "" then 0 else 1),
+            "the source has exactly the expected diagnostic count: " & Text);
+         if Expected /= "" and then D.Count (Reports) = 1 then
+            declare
+               Report : constant D.Diagnostic := D.Get (Reports, 1);
+            begin
+               Landin.Testing.Check
+                 (Item, D.Code (Report) = Code
+                    and then D.Message (D.Primary (Report)) = Expected
+                    and then D.Source_Of (D.Primary (Report)) = Src
+                    and then D.Span_Of (D.Primary (Report))
+                      /= Landin.Source.Empty_Span,
+                  "precise refusal: " & D.Message (D.Primary (Report)));
+               if Expected'Length >= 21
+                 and then Expected (Expected'First .. Expected'First + 20)
+                   = "compiler-owned helper"
+               then
+                  Landin.Testing.Check
+                    (Item, D.Label_Count (Report) = 1
+                       and then D.Message (D.Nth_Label (Report, 1))
+                         = "this helper contract"
+                       and then D.Source_Of (D.Nth_Label (Report, 1)) = Src
+                       and then D.Note_Count (Report) = 1
+                       and then D.Nth_Note (Report, 1) =
+                         "[1610]/[1975]: a helper import must preserve its"
+                         & " source types, pointer permissions"
+                         & " and nullability;"
+                         & " [0780] retains argv and [0790] preserves from",
+                     "helper refusal retains the exact related contract note");
+               end if;
+            end;
+         end if;
+      end;
+   end R440_Check_Source;
+
+   procedure R440_Array_Field_Copies_Compare_Complete_Children
+     (Item : in out Landin.Testing.Context);
+
+   procedure R440_Array_Field_Copies_Compare_Complete_Children
+     (Item : in out Landin.Testing.Context)
+   is
+      Foundation : constant String :=
+        "counter: type = concept (t: type)" & LF
+        & "    bump: (self: ptr mut t) -> (value: i32)" & LF
+        & "end counter" & LF
+        & "node: type = struct" & LF
+        & "    value: i32" & LF
+        & "end node" & LF
+        & "bump_node: (self: ptr mut node) -> (value: i32) =" & LF
+        & "    inc self.val.value" & LF
+        & "    value = self.val.value" & LF
+        & "end bump_node" & LF
+        & "node is counter (bump: bump_node)" & LF
+        & "row: type (t: type, fixed n: usize) = [n]t" & LF
+        & "copy: (fixed n: usize, t: type, source: row(t, n))" & LF
+        & "      -> (result: row(t, n) from source) =" & LF
+        & "    result = source" & LF
+        & "end copy" & LF
+        & "identity: (t: type, value: t) -> (result: t from value) =" & LF
+        & "    result = value" & LF
+        & "end identity" & LF
+        & "shelf: type (t: type) = struct" & LF
+        & "    values: [2]t" & LF
+        & "end shelf" & LF;
+   begin
+      --  A complex element's scalar carrier is storage bookkeeping, not part
+      --  of D17's identity.  Generic result overlays may spell that carrier
+      --  differently while retaining the same complete reference/concept
+      --  child.  This is the path exercised by both existing runtime fixtures.
+      R440_Check_Source
+        (Item, Foundation
+         & "use: () -> none =" & LF
+         & "    mut local: node = (value: 0)" & LF
+         & "    mut pointers: [2]ptr mut node" & LF
+         & "    pointers[0] = addr local" & LF
+         & "    pointers[1] = addr local" & LF
+         & "    mut pointer_copy: [2]ptr mut node =" & LF
+         & "      identity(copy(pointers))" & LF
+         & "    pointer_shelf: shelf(ptr mut node) =" & LF
+         & "      (values: pointer_copy)" & LF
+         & "    mut erased: [2]any counter" & LF
+         & "    erased[0] = any(addr local)" & LF
+         & "    erased[1] = any(addr local)" & LF
+         & "    mut erased_copy: [2]any counter = identity(copy(erased))" & LF
+         & "    erased_shelf: shelf(any counter) = (values: erased_copy)" & LF
+         & "end use" & LF);
+
+      R440_Check_Source
+        (Item, Foundation
+         & "bad: () -> none =" & LF
+         & "    mut local: node = (value: 0)" & LF
+         & "    mut values: [2]ptr node" & LF
+         & "    values[0] = addr local" & LF
+         & "    values[1] = addr local" & LF
+         & "    stored: shelf(ptr mut node) = (values: values)" & LF
+         & "end bad" & LF,
+         "this is not an array of the type named by the struct field");
+   end R440_Array_Field_Copies_Compare_Complete_Children;
+
+   procedure R440_Helper_Source_Contracts
+     (Item : in out Landin.Testing.Context);
+
+   procedure R440_Helper_Source_Contracts
+     (Item : in out Landin.Testing.Context)
+   is
+      function Helper (Index : Positive) return String;
+
+      function Helper (Index : Positive) return String
+        is ("_landin_host_" & (case Index is
+              when 1 => "initialize_arguments", when 2 => "argument_count",
+              when 3 => "argument_table", when 4 => "argument_at",
+              when 5 => "argument_at_from", when 6 => "text_length",
+              when 7 => "open_read", when 8 => "open_write",
+              when 9 => "read", when 10 => "write", when 11 => "close",
+              when 12 => "errno", when 13 => "heap_allocate",
+              when 14 => "heap_release", when others => "not_a_helper"));
+
+      procedure Refuse
+        (Index : Positive; Signature, Requirement : String;
+         Prefix : String := "");
+
+      procedure Refuse
+        (Index : Positive; Signature, Requirement : String;
+         Prefix : String := "") is
+      begin
+         R440_Check_Source
+           (Item, Prefix & "extern(c) link(symbol: """ & Helper (Index)
+            & """) bridge: " & Signature & LF,
+            "compiler-owned helper `" & Helper (Index) & "` " & Requirement);
+      end Refuse;
+
+      procedure Initializer (Argv : String; Prefix : String := "");
+
+      procedure Initializer (Argv : String; Prefix : String := "") is
+      begin
+         Refuse
+           (1, "(argc: i32, escaping argv: " & Argv & ") -> none",
+            "requires parameter 2 to be `ptr ptr u8`", Prefix);
+      end Initializer;
+   begin
+      for Index in 1 .. 14 loop
+         for Form in 1 .. 3 loop
+            declare
+               Name : constant String :=
+                 (if Form = 2 then Helper (Index) else "bridge");
+               Prefix : constant String :=
+                 (if Form = 1 then "link(symbol: """ & Helper (Index) & """) "
+                  elsif Form = 2 then "public extern(c) "
+                  else "extern(c) link(symbol: """ & Helper (Index) & """) ");
+            begin
+               R440_Check_Source
+                 (Item, Prefix & Name & ": () -> none =" & LF
+                  & "end " & Name & LF,
+                  "compiler-owned helper `" & Helper (Index)
+                  & "` cannot be defined by source");
+            end;
+         end loop;
+         --  Source spelling alone is not a forced linker identity.
+         R440_Check_Source
+           (Item, Helper (Index) & ": () -> none =" & LF
+            & "end " & Helper (Index) & LF);
+         R440_Check_Source
+           (Item, "extern(c) " & Helper (Index) & ": () -> none =" & LF
+            & "end " & Helper (Index) & LF);
+      end loop;
+      R440_Check_Source
+        (Item, "link(symbol: ""_landin_host_not_a_helper"") local:"
+         & " () -> none =" & LF & "end local" & LF
+         & "extern(c) malloc: () -> none" & LF
+         & "extern(c) link(symbol: ""$foreign.entry"") odd: () -> none" & LF);
+      Refuse
+        (1, "(argc: i32, argv: ptr ptr u8) -> none",
+         "requires escaping argv");
+      Refuse
+        (1, "(argc: usize, escaping argv: ptr ptr u8) -> none",
+         "requires parameter 1 to be `i32`");
+      Refuse
+        (1, "(argc: i32, escaping argv: usize) -> none",
+         "requires parameter 2 to be `ptr ptr u8`");
+      Initializer ("ptr u8");
+      Initializer ("ptr ptr u32");
+      Initializer ("ptr mut ptr u8");
+      Initializer ("ptr ptr mut u8");
+      Initializer
+        ("maybe_table", "missing: atom" & LF
+         & "maybe_table: type = missing | ptr ptr u8" & LF);
+      Initializer
+        ("ptr maybe_byte", "missing: atom" & LF
+         & "maybe_byte: type = missing | ptr u8" & LF);
+      Initializer
+        ("ptr ptr byte_record", "byte_record: type = layout(c) struct" & LF
+         & "    value: u8" & LF & "end byte_record" & LF);
+      Refuse (1, "(argc: i32) -> none", "requires 2 parameters and no result");
+      Refuse
+        (1, "(argc: i32, escaping argv: ptr ptr u8) -> (value: i32)",
+         "requires 2 parameters and no result");
+      Refuse
+        (1, "(argc: i32, escaping argv: ptr ptr u8, ...) -> none",
+         "requires a fixed infallible C import");
+      Refuse (2, "() -> (count: u64)", "requires result `usize`");
+      Refuse (3, "() -> (table: ptr u8)", "requires result `ptr ptr u8`");
+      Refuse
+        (4, "(index: usize) -> (value: ptr mut u8)",
+         "requires result `ptr u8 or cstring`");
+      Refuse
+        (5, "(table: ptr ptr u8, index: usize) -> (value: ptr u8)",
+         "requires its result from parameter 1");
+      Refuse
+        (5, "(table: ptr ptr u8, index: usize)"
+         & " -> (value: ptr u8 from index)",
+         "requires its result from parameter 1");
+      Refuse
+        (5, "(table: ptr ptr u8, index: usize)"
+         & " -> (value: ptr u8 from table, index)",
+         "requires its result from parameter 1");
+      Refuse
+        (6, "(data: ptr u32) -> (length: usize)",
+         "requires parameter 1 to be `ptr u8`");
+      Refuse
+        (7, "(path: ptr mut u8) -> (fd: i32)",
+         "requires parameter 1 to be `ptr u8`");
+      Refuse
+        (8, "(path: ptr u8) -> (fd: u32)", "requires result `i32`");
+      Refuse
+        (9, "(fd: i32, data: ptr u8, length: usize) -> (count: usize)",
+         "requires parameter 2 to be `ptr mut u8`");
+      Refuse
+        (10, "(fd: i32, data: ptr u8, length: u64) -> (count: usize)",
+         "requires parameter 3 to be `usize`");
+      Refuse (11, "(fd: u32) -> (status: i32)",
+              "requires parameter 1 to be `i32`");
+      Refuse (12, "() -> (number: u32)", "requires result `i32`");
+      Refuse
+        (13, "(length: usize, alignment: usize) -> (data: ptr mut u8)",
+         "requires result `one atom | ptr mut u8`");
+      Refuse (14, "(data: ptr u8) -> none",
+              "requires parameter 1 to be `ptr mut u8`");
+      R440_Check_Source
+        (Item, "byte: type = u8" & LF & "size: type = usize" & LF
+         & "bytes: type = ptr byte" & LF & "table: type = ptr bytes" & LF
+         & "no_memory: atom" & LF
+         & "allocation: type = no_memory | ptr mut byte" & LF
+         & "extern(c) " & Helper (1)
+         & ": (escaping argc: i32, escaping argv: table) -> none" & LF
+         & "extern(c) " & Helper (2) & ": () -> (count: size)" & LF
+         & "extern(c) " & Helper (3) & ": () -> (argv: table)" & LF
+         & "extern(c) " & Helper (4) & ": (i: size) -> (data: bytes)" & LF
+         & "extern(c) " & Helper (5)
+         & ": (argv: table, i: size) -> (data: bytes from argv)" & LF
+         & "extern(c) " & Helper (6) & ": (p: bytes) -> (n: size)" & LF
+         & "extern(c) " & Helper (7) & ": (p: bytes) -> (fd: i32)" & LF
+         & "extern(c) " & Helper (8) & ": (p: bytes) -> (fd: i32)" & LF
+         & "extern(c) " & Helper (9)
+         & ": (fd: i32, p: ptr mut byte, n: size) -> (count: size)" & LF
+         & "extern(c) " & Helper (10)
+         & ": (fd: i32, p: bytes, n: size) -> (count: size)" & LF
+         & "extern(c) " & Helper (11) & ": (fd: i32) -> (status: i32)" & LF
+         & "extern(c) " & Helper (12) & ": () -> (error: i32)" & LF
+         & "extern(c) " & Helper (13)
+         & ": (n: size, a: size) -> (data: allocation)" & LF
+         & "extern(c) " & Helper (14) & ": (p: ptr mut byte) -> none" & LF
+         & "extern(c) link(symbol: """ & Helper (1) & """) initialize:"
+         & " (escaping count: i32, escaping pointers: ptr ptr u8) -> none"
+         & LF);
+      R440_Check_Source
+        (Item, "extern(c) " & Helper (4)
+         & ": (index: usize) -> (value: cstring)" & LF);
+      R440_Check_Source
+        (Item, "extern(c) " & Helper (4)
+         & ": (index: usize) -> (value: ptr u8)" & LF
+         & "extern(c) link(symbol: """ & Helper (4) & """) text:"
+         & " (index: usize) -> (value: cstring)" & LF,
+         "this C link symbol collides with another declaration or definition");
+      R440_Check_Source
+        (Item, "extern(c) " & Helper (1)
+         & ": (argc: i32, escaping argv: ptr ptr u8) -> none" & LF
+         & "forward: (argv: ptr ptr u8) -> none =" & LF
+         & "    " & Helper (1) & "(0, argv)" & LF & "end forward" & LF,
+         "this parameter is non-escaping, so its reference cannot be retained"
+         & " by the called function", "L0314");
+   end R440_Helper_Source_Contracts;
+
+   procedure R440_Hosted_Main_Linkage
+     (Item : in out Landin.Testing.Context);
+
+   procedure R440_Hosted_Main_Linkage
+     (Item : in out Landin.Testing.Context)
+   is
+      Main : constant String := "public main: () -> (code: i32) =" & LF
+        & "    code = 0" & LF & "end main" & LF;
+      Import_Main : constant String :=
+        "extern(c) link(symbol: ""main"") foreign: () -> (result: i32)" & LF;
+      Define_Main : constant String :=
+        "link(symbol: ""main"") foreign: () -> (result: i32) =" & LF
+        & "    result = 0" & LF & "end foreign" & LF;
+      Expected : constant String :=
+        "link symbol `main` collides with the selected native hosted entry";
+   begin
+      R440_Check_Source (Item, Main & Import_Main, Expected);
+      R440_Check_Source (Item, Import_Main & Main, Expected);
+      R440_Check_Source (Item, Main & Define_Main, Expected);
+      R440_Check_Source (Item, Define_Main & Main, Expected);
+      R440_Check_Source
+        (Item, "public link(symbol: ""renamed"") main: () -> (code: i32) ="
+         & LF & "    code = 0" & LF & "end main" & LF & Import_Main);
+      R440_Check_Source
+        (Item, "public extern(c) link(symbol: ""c_entry"") main:"
+         & " () -> (code: i32) =" & LF & "    code = 0" & LF
+         & "end main" & LF & Import_Main);
+      R440_Check_Source
+        (Item, "public extern(c) main: () -> (code: i32) =" & LF
+         & "    code = 0" & LF & "end main" & LF & Import_Main);
+      R440_Check_Source (Item, Define_Main);
+      R440_Check_Source
+        (Item, "public main: () -> (result: i32) =" & LF
+         & "    result = 0" & LF & "end main" & LF & Import_Main);
+   end R440_Hosted_Main_Linkage;
+
+   procedure R440_Recursive_Source_Contexts
+     (Item : in out Landin.Testing.Context);
+
+   procedure R440_Recursive_Source_Contexts
+     (Item : in out Landin.Testing.Context)
+   is
+      Numeric : constant String :=
+        "row: type = [3]i32" & LF & "matrix: type = [2]row" & LF
+        & "record: type = layout(c) struct" & LF
+        & "    values: matrix" & LF & "end record" & LF
+        & "alias: type = record" & LF
+        & "image: alias = alias(values: [[1 + 2, 4, 5], [3 of 6]])" & LF
+        & "copy: record = image" & LF & "again: alias = copy" & LF;
+      Callbacks : constant String :=
+        "handler: type = extern(c) (value: i32) -> (result: i32)" & LF
+        & "callbacks: type = layout(c) struct" & LF
+        & "    values: [2][2]handler" & LF & "end callbacks" & LF
+        & "extern(c) add: (value: i32) -> (result: i32) =" & LF
+        & "    result = value + 1" & LF & "end add" & LF;
+   begin
+      R440_Check_Source
+        (Item, Numeric
+         & "identity: (t: type, value: t) -> (result: t) =" & LF
+         & "    result = value" & LF & "end identity" & LF
+         & "make: (flag: bool) -> (result: matrix) =" & LF
+         & "    result = if flag then [[1, 2, 3], [3 of 4]]" & LF
+         & "             else [of [1, of 2]] end if" & LF & "end make" & LF
+         & "use: (flag: bool, index: usize) -> (result: i32) =" & LF
+         & "    mut values: matrix = [[1, 2, 3], of [of 4]]" & LF
+         & "    zero: matrix = zeroed" & LF
+         & "    copied: matrix = identity(values)" & LF
+         & "    values[0] = [3 of 7]" & LF
+         & "    pointer: ptr mut matrix = addr values" & LF
+         & "    pointer.val[index][1] = copied[1][2]" & LF
+         & "    chosen: matrix = make(flag)" & LF
+         & "    result = pointer.val[index][1] + chosen[0][0]"
+         & " + zero[1][2] + again.values[1][0]" & LF & "end use" & LF);
+      R440_Check_Source
+        (Item, Callbacks
+         & "image: callbacks = callbacks(values: [[add, add], [2 of add]])"
+         & LF & "copy: callbacks = image" & LF
+         & "select: (input: callbacks) -> (result: callbacks) =" & LF
+         & "    result = callbacks(values: [input.values[1],"
+         & " [input.values[0][1], input.values[0][0]]])" & LF
+         & "end select" & LF
+         & "use: (row: usize, column: usize) -> (result: i32) =" & LF
+         & "    mut local: callbacks = select(copy)" & LF
+         & "    pointer: ptr mut callbacks = addr local" & LF
+         & "    pointer.val.values[row][column] = add" & LF
+         & "    mut values: [2][2]handler = local.values" & LF
+         & "    array_pointer: ptr mut [2][2]handler = addr values" & LF
+         & "    array_pointer.val[row][column] = add" & LF
+         & "    result = array_pointer.val[row][column](41)" & LF
+         & "end use" & LF);
+      R440_Check_Source
+        (Item, "leaf: type = layout(c) struct" & LF
+         & "    value: i32" & LF & "end leaf" & LF
+         & "use: () -> (result: i32) =" & LF
+         & "    values: [2][2]leaf = zeroed" & LF
+         & "    result = values[1][1].value" & LF & "end use" & LF);
+      R440_Check_Source
+        (Item, Callbacks & "use: () -> none =" & LF
+         & "    values: [2][2]handler = zeroed" & LF & "end use" & LF,
+         "this array has no all-bits-zero value");
+      R440_Check_Source
+        (Item, "use: () -> none =" & LF
+         & "    values: [2][2]ptr u8 = zeroed" & LF & "end use" & LF,
+         "this array has no all-bits-zero value");
+      R440_Check_Source
+        (Item, Callbacks
+         & "wrapper: type = struct" & LF
+         & "    tag: i32" & LF & "    values: [2][2]handler" & LF
+         & "end wrapper" & LF
+         & "use: () -> none =" & LF
+         & "    value: wrapper = wrapper(tag: 0, of zeroed)" & LF
+         & "end use" & LF,
+         "`of zeroed` cannot fill field `values`, which has no zero image");
+      R440_Check_Source
+        (Item, "use: () -> none =" & LF
+         & "    values: [2][2]i32 = [[1, 2], [3]]" & LF & "end use" & LF,
+         "this literal has 1 element, and its array context has a"
+         & " different length");
+      R440_Check_Source
+        (Item, "bad: type = layout(c) struct" & LF
+         & "    values: [2][0]i32" & LF & "end bad" & LF,
+         "this layout(c) struct has a non-C representation");
+      R440_Check_Source
+        (Item, Callbacks & "use: () -> none =" & LF
+         & "    values := [add, add]" & LF & "end use" & LF,
+         "a non-scalar array literal needs an explicit element type", "L0304");
+      R440_Check_Source
+        (Item, Callbacks & "use: (flag: bool) -> none =" & LF
+         & "    values := if flag then [add, add] else [add, add] end if" & LF
+         & "end use" & LF,
+         "a non-scalar array literal needs an explicit element type", "L0304");
+      R440_Check_Source
+        (Item, "record: type = layout(c) struct" & LF
+         & "    values: [1][1]u8" & LF & "end record" & LF
+         & "alias: type = record" & LF
+         & "image: alias = alias(values: [[255 + 1]])" & LF,
+         "this image value works out to 256, and no `u8` holds it", "L0300");
+      R440_Check_Source
+        (Item, "record: type = layout(c) struct" & LF
+         & "    values: [2][1]i32" & LF & "end record" & LF
+         & "first: record = second" & LF & "second: record = first" & LF,
+         "the initial image of `first` is worked out from itself", "L0305");
+   end R440_Recursive_Source_Contexts;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "checking", "match aliases keep backing origins",
+         Match_Aliases_Keep_Backing_Origins'Access);
+      Landin.Testing.Register
+        (Into, "checking",
+         "R4.40 array field copies compare complete children",
+         R440_Array_Field_Copies_Compare_Complete_Children'Access);
+      Landin.Testing.Register
+        (Into, "checking", "R4.40 recursive array foundations",
+         R440_Recursive_Array_Foundations'Access);
+      Landin.Testing.Register
+        (Into, "checking", "R4.40 recursive source contexts",
+         R440_Recursive_Source_Contexts'Access);
+      Landin.Testing.Register
+        (Into, "checking", "R4.40 helper source contracts",
+         R440_Helper_Source_Contracts'Access);
+      Landin.Testing.Register
+        (Into, "checking", "R4.40 hosted main linkage",
+         R440_Hosted_Main_Linkage'Access);
+      Landin.Testing.Register
+        (Into, "checking", "R4.40 result locals are contextual",
+         R440_Result_Locals_Are_Contextual'Access);
+      Landin.Testing.Register
+        (Into, "checking", "R4.40 result binding refusals are stable",
+         R440_Result_Binding_Refusals_Are_Stable'Access);
+      Landin.Testing.Register
+        (Into, "checking", "R4.40 C array literals keep nominals",
+         R440_C_Array_Literals_Keep_Nominals'Access);
+      Landin.Testing.Register
+        (Into, "checking", "R4.40 variadic carrier refusal is precise",
+         R440_Variadic_Carrier_Refusal_Is_Precise'Access);
+      Landin.Testing.Register
+        (Into, "checking", "C metadata is independent of storage",
+         C_Metadata_Is_Independent_Of_Storage'Access);
       Landin.Testing.Register
         (Into, "checking", "float arithmetic uses ieee bits",
          Float_Arithmetic_Uses_IEEE_Bits'Access);
@@ -7585,6 +9074,9 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Register
         (Into, "checking", "array field initializers carry source shape",
          Array_Field_Initializers_Carry_Their_Source_Shape'Access);
+      Landin.Testing.Register
+        (Into, "checking", "pointer construction folds to target usize",
+         Pointer_Construction_Folds_To_Target_Usize'Access);
       Landin.Testing.Register
         (Into, "checking", "array extent follows usize",
          Array_Extent_Follows_Usize'Access);

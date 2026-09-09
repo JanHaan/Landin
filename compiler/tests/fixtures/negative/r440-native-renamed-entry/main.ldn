@@ -1,0 +1,3 @@
+public link(symbol: "renamed_entry") main: () -> (code: i32) =
+    code = 42
+end main

@@ -1,0 +1,2 @@
+error[L0502]: a hosted program needs public main: () -> (code: i32)
+  --> <unknown source>

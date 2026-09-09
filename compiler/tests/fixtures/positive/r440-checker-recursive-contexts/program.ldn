@@ -1,0 +1,27 @@
+row: type = [3]i32
+matrix: type = [2]row
+record: type = layout(c) struct
+    values: matrix
+end record
+alias: type = record
+image: alias = alias(values: [[1 + 2, 4, 5], [3 of 6]])
+copy: record = image
+again: alias = copy
+identity: (t: type, value: t) -> (result: t) =
+    result = value
+end identity
+make: (flag: bool) -> (result: matrix) =
+    result = if flag then [[1, 2, 3], [3 of 4]]
+             else [of [1, of 2]] end if
+end make
+use: (flag: bool, index: usize) -> (result: i32) =
+    mut values: matrix = [[1, 2, 3], of [of 4]]
+    zero: matrix = zeroed
+    copied: matrix = identity(values)
+    values[0] = [3 of 7]
+    pointer: ptr mut matrix = addr values
+    pointer.val[index][1] = copied[1][2]
+    chosen: matrix = make(flag)
+    result = pointer.val[index][1] + chosen[0][0] + zero[1][2]
+             + again.values[1][0]
+end use

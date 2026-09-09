@@ -4,8 +4,11 @@
 
 import core/mem
 
+no_allocation: atom
+allocation: type = no_allocation | ptr mut u8
+
 extern(c) _landin_host_heap_allocate:
-    (size: usize, alignment: usize) -> (block: ptr mut u8)
+    (size: usize, alignment: usize) -> (block: allocation)
 extern(c) _landin_host_heap_release: (block: ptr mut u8) -> none
 
 --  Every usize alignment is accepted.  Zero and one mean no stricter than
@@ -21,8 +24,11 @@ end system
 system_alloc: (inout state: system, size: usize, alignment: usize)
               -> (block: ptr mut u8) ! mem.out_of_memory =
     _ = state.reserved
-    block = _landin_host_heap_allocate(size, alignment)
-    fail mem.out_of_memory when usize(block) == 0
+    allocated: allocation = _landin_host_heap_allocate(size, alignment)
+    match allocated
+        no_allocation: fail mem.out_of_memory
+        ptr (address): block = address
+    end match
 end system_alloc
 
 system_free: (inout state: system, block: ptr mut u8, size: usize) -> none =

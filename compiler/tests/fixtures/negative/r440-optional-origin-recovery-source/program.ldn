@@ -1,0 +1,17 @@
+absent: atom
+unavailable: atom
+maybe_pointer: type = absent | ptr u32
+
+obtain: (cell: ptr u32, reject: bool)
+        -> (result: ptr u32 from cell) ! unavailable =
+    fail unavailable when reject
+    result = cell
+end obtain
+
+bad: (cell: ptr u32, other: ptr u32, reject: bool)
+     -> (result: maybe_pointer from cell) =
+    result = obtain(other, reject) else begin
+        local: maybe_pointer = absent
+        local
+    end
+end bad

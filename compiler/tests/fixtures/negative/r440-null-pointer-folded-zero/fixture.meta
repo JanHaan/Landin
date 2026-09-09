@@ -1,0 +1,6 @@
+class: negative
+summary: R4.40 uses the shared constant folder to refuse a named arithmetic zero as a pointer address
+program: program.ldn
+codes: L0301
+constructs: 0460, 0480, 1940
+targets: linux-x86-64, synthetic-32

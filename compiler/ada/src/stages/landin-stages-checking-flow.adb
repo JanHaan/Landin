@@ -2265,9 +2265,8 @@ package body Landin.Stages.Checking.Flow is
                               Formal : constant Natural :=
                                 (if Syn.Kind (Of_Tree, Raw)
                                       = Syn.Call_Argument
-                                 then Positive
-                                   (Res.Position_Of
-                                      (Meanings.all, Of_Tree, Raw))
+                                 then Res.Position_Of
+                                   (Meanings.all, Of_Tree, Raw)
                                  else Plain_Position (Index));
                            begin
                               if Landin.Checking.Holds

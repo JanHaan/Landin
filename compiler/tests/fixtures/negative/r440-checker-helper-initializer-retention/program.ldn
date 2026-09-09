@@ -1,0 +1,1 @@
+extern(c) link(symbol: "_landin_host_initialize_arguments") bridge: (argc: i32, argv: ptr ptr u8) -> none

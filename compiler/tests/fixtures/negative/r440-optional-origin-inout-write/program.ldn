@@ -1,0 +1,13 @@
+absent: atom
+maybe_pointer: type = absent | ptr u32
+stored: u32 = 42
+
+replace: (inout target: maybe_pointer) -> none =
+    target = addr stored
+end replace
+
+bad: (cell: ptr u32) -> (result: maybe_pointer from cell) =
+    mut local: maybe_pointer = absent
+    replace(local)
+    result = local
+end bad

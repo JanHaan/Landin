@@ -1,0 +1,5 @@
+class: positive
+summary: Multiple results preserve distinct from positions through forwarding copies joins selection destructuring and try while indexes capture their base first
+constructs: 0410, 0470, 0480, 0790, 0880, 0920, 0990
+program: program.ldn
+targets: linux-x86-64, macos-arm64, synthetic-32

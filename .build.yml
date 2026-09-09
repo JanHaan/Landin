@@ -5,9 +5,10 @@
 #  manifest is that authority: builds.sr.ht runs it on real x86-64 hardware,
 #  with no translation between the compiler and the instruction set.
 #
-#  The pinned toolchain comes from environments/pins.sh, the same file the
+#  The pinned Ada toolchain comes from environments/pins.sh, the same file the
 #  container recipe reads, and every archive is checksum-verified before it
-#  is unpacked.
+#  is unpacked.  R4.40's external Clang frontend instead comes from this
+#  image's versioned Debian package set, as compiler/ada/TOOLCHAIN.md records.
 #
 #  It also publishes the reading copies, last and only from main.  That is a
 #  convenience and not part of the gate's authority: it produces no evidence,
@@ -19,6 +20,8 @@ image: debian/stable
 packages:
   - binutils
   - ca-certificates
+  #  R4.40's external header frontend; libc6-dev below is its Linux sysroot.
+  - clang-19
   - curl
   #  hut publishes the reading copies; see the pages task.
   - hut
@@ -60,6 +63,9 @@ tasks:
       cd landin
       uname -a
       ./scripts/toolchain.sh
+      #  The generator consumes Clang's external JSON AST, so its exact
+      #  frontend belongs in the captured gate log too.
+      clang-19 --version
 
   #  From clean, because a gate that reports on somebody else's objects is
   #  not a gate.
@@ -77,6 +83,12 @@ tasks:
   - release: |
       cd landin
       LANDIN_BUILD_MODE=release ./scripts/test.sh
+
+  #  Real header extraction and generated C execution require the external
+  #  frontend; the document checker deliberately does not.
+  - bindings: |
+      cd landin
+      CLANG=clang-19 python3 bindings/test.py
 
   - checks: |
       cd landin

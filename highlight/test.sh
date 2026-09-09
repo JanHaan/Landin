@@ -57,6 +57,7 @@ if test -x "$tree_cli"; then
         if test "$integration" = true; then
             find "$root/compiler/tests/fixtures/positive" \
                  "$root/compiler/tests/fixtures/runtime" \
+                 "$root/compiler/tests/fixtures/abi" \
                  "$root/core" -name '*.ldn' -print \
               | sort \
               | xargs "$tree_cli" parse --quiet

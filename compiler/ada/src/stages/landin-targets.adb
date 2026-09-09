@@ -15,6 +15,7 @@ package body Landin.Targets is
    function Linux_X86_64 return Target_Facts is
      (Label            => Padded ("linux-x86-64"),
       Machine          => X86_64,
+      C_ABI            => SysV_AMD64_LP64,
       Pointer          => 64,
       Pointer_Align    => 8,
       Stack_Align      => 16,
@@ -25,6 +26,7 @@ package body Landin.Targets is
    function Synthetic_32 return Target_Facts is
      (Label            => Padded ("synthetic-32"),
       Machine          => Synthetic_32_Architecture,
+      C_ABI            => No_C_ABI,
       Pointer          => 32,
       Pointer_Align    => 4,
       Stack_Align      => 8,
@@ -46,6 +48,9 @@ package body Landin.Targets is
 
    function Architecture_Of (Facts : Target_Facts) return Architecture
      is (Facts.Machine);
+
+   function C_ABI_Of (Facts : Target_Facts) return C_ABI_Kind
+     is (Facts.C_ABI);
 
    function Pointer_Width (Facts : Target_Facts) return Bit_Width
      is (Facts.Pointer);

@@ -1,0 +1,6 @@
+class: runtime
+summary: referenced nested variant payloads mutate caller storage and return its element pointer after one subject evaluation
+program: main.ldn
+status: 42
+constructs: 0430, 0470, 0510, 0520, 0550, 0570, 0770, 0790, 0830, 0940, 1220, 1810
+targets: linux-x86-64

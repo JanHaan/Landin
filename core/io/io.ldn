@@ -1,6 +1,8 @@
---  R4.20's Linux hosted service layer.  The foreign declarations are the
---  compiler/runtime seam: fixed scalar and pointer carriers only.  Files and
---  streams above it remain ordinary values reached through a world capability.
+--  R4.40's Linux hosted service layer.  The foreign declarations are the
+--  compiler/runtime seam.  Files and streams above it remain ordinary values
+--  reached through a world capability.  The system provider captures errno
+--  before making another host call, retries only interruptible open/read/write
+--  attempts, and exposes the terminal detail through its explicit state.
 
 import core/text
 
@@ -17,6 +19,14 @@ extern(c) _landin_host_write: (descriptor: i32, data: ptr u8,
                                length: usize) -> (write_count: usize)
 extern(c) _landin_host_close: (descriptor: i32) -> (status: i32)
 extern(c) _landin_host_errno: () -> (number: i32)
+
+--  Values from the selected Linux ABI.  They are kept here, at the only
+--  provider that interprets libc errno, rather than leaking into world users.
+linux_eperm: i32 = 1
+linux_enoent: i32 = 2
+linux_eintr: i32 = 4
+linux_eacces: i32 = 13
+linux_erofs: i32 = 30
 
 public not_found: atom
 public no_access: atom
@@ -187,78 +197,146 @@ end open_write_text
 system_value: type = struct
     arguments: ptr ptr u8
     argument_length: usize
+    failure_errno: i32
 end system_value
 
 public system: type = system_value
 
+--  Zero means that the most recent open/read/write/close did not report a
+--  failing libc call.  A nonzero value is the exact errno captured for the
+--  terminal call before the provider made any other host call.  Retriable
+--  EINTR attempts are internal and do not replace a previously reported
+--  operation with a failure.
+public last_errno: (state: system) -> (number: i32) =
+    number = state.failure_errno
+end last_errno
+
 system_open_read: (self: ptr mut system, path: ptr u8)
                   -> (opened: file) ! not_found | no_access | io_failed =
-    _ = self.val.argument_length
-    descriptor: i32 = _landin_host_open_read(path)
-    if descriptor < 0 then
+    self.val.failure_errno = 0
+    loop do
+        descriptor: i32 = _landin_host_open_read(path)
+        if descriptor >= 0 then
+            opened = (descriptor: descriptor)
+            return
+        end if
+
+        --  Nothing may call into the host between the failed operation and
+        --  this capture.  Linux open reports EINTR before publishing a file
+        --  descriptor, so retrying this same request is safe.
         number: i32 = _landin_host_errno()
-        fail not_found when number == 2
-        fail no_access when number == 1 or number == 13 or number == 30
-        fail io_failed
-    end if
-    opened = (descriptor: descriptor)
+        if number <> linux_eintr then
+            self.val.failure_errno = number
+            fail not_found when number == linux_enoent
+            fail no_access when number == linux_eperm or number == linux_eacces
+                                or number == linux_erofs
+            fail io_failed
+        end if
+    end loop
 end system_open_read
 
 system_open_write: (self: ptr mut system, path: ptr u8)
                    -> (opened: file)
                    ! not_found | no_access | io_failed =
-    _ = self.val.argument_length
-    descriptor: i32 = _landin_host_open_write(path)
-    if descriptor < 0 then
+    self.val.failure_errno = 0
+    loop do
+        descriptor: i32 = _landin_host_open_write(path)
+        if descriptor >= 0 then
+            opened = (descriptor: descriptor)
+            return
+        end if
+
+        --  The bridge's write-open request is fixed across attempts.  An
+        --  interrupted open has not returned a descriptor, so retry it; every
+        --  other errno is retained before mapping to the stable atom set.
         number: i32 = _landin_host_errno()
-        fail not_found when number == 2
-        fail no_access when number == 1 or number == 13 or number == 30
-        fail io_failed
-    end if
-    opened = (descriptor: descriptor)
+        if number <> linux_eintr then
+            self.val.failure_errno = number
+            fail not_found when number == linux_enoent
+            fail no_access when number == linux_eperm or number == linux_eacces
+                                or number == linux_erofs
+            fail io_failed
+        end if
+    end loop
 end system_open_write
 
 system_close: (self: ptr mut system, sink opened: file)
               -> none ! io_failed =
-    _ = self.val.argument_length
+    self.val.failure_errno = 0
     status: i32 = _landin_host_close(opened.descriptor)
-    fail io_failed when status <> 0
+    if status <> 0 then
+        --  Capture first, then report.  A failed Linux close may already have
+        --  released the descriptor; retrying could close an unrelated reused
+        --  descriptor, so EINTR is deliberately terminal here.
+        self.val.failure_errno = _landin_host_errno()
+        fail io_failed
+    end if
 end system_close
 
 system_read: (self: ptr mut system, opened: file, into: []mut u8)
              -> (count: usize) ! io_failed =
-    _ = self.val.argument_length
+    self.val.failure_errno = 0
     if lenof into == 0 then
         count = 0
         return
     end if
     base: ptr mut u8 = addr into[0]
-    read_count: usize = _landin_host_read
-        (opened.descriptor, base, lenof into)
     failed: usize = 0 -% 1
-    fail io_failed when read_count == failed or read_count > lenof into
-    count = read_count
+    loop do
+        read_count: usize = _landin_host_read
+            (opened.descriptor, base, lenof into)
+        if read_count <> failed then
+            fail io_failed when read_count > lenof into
+            --  Zero from a nonempty read is genuine EOF, not stalled progress.
+            count = read_count
+            return
+        end if
+
+        --  Linux read returns EINTR only before transferring a byte, so the
+        --  same buffer and extent may be retried.  A positive partial read is
+        --  returned above and is never discarded by an unnecessary retry.
+        number: i32 = _landin_host_errno()
+        if number <> linux_eintr then
+            self.val.failure_errno = number
+            fail io_failed
+        end if
+    end loop
 end system_read
 
-write_all: (descriptor: i32, bytes: []u8) -> none ! io_failed =
+write_all: (self: ptr mut system, descriptor: i32, bytes: []u8)
+           -> none ! io_failed =
     failed: usize = 0 -% 1
     mut written: usize = 0
     while written < lenof bytes do
         remaining: []u8 = bytes[written..<lenof bytes]
         count: usize = lenof remaining
         base: ptr u8 = addr remaining[0]
-        write_count: usize = _landin_host_write(descriptor, base, count)
-        fail io_failed when write_count == 0 or write_count == failed
-                            or write_count > count
-        written += write_count
+        mut accepted: usize = failed
+        loop do
+            accepted = _landin_host_write(descriptor, base, count)
+            break when accepted <> failed
+
+            --  Linux reports EINTR only before this attempt transfers data.
+            --  Retry the same remaining suffix; a preceding positive partial
+            --  write has already advanced `written` and is never repeated.
+            number: i32 = _landin_host_errno()
+            if number <> linux_eintr then
+                self.val.failure_errno = number
+                fail io_failed
+            end if
+        end loop
+        --  A nonempty zero-progress success cannot complete write-all, and an
+        --  oversized count violates the host seam.  Neither fabricates errno.
+        fail io_failed when accepted == 0 or accepted > count
+        written += accepted
     end while
 end write_all
 
 system_write: (self: ptr mut system, opened: file, bytes: []u8)
               -> none ! io_failed =
-    _ = self.val.argument_length
+    self.val.failure_errno = 0
     return when lenof bytes == 0
-    try write_all(opened.descriptor, bytes)
+    try write_all(self, opened.descriptor, bytes)
 end system_write
 
 system_out: (self: ptr system) -> (stream: file) =
@@ -298,5 +376,6 @@ system is world
 
 public host: () -> (state: system) =
     state = (arguments: _landin_host_argument_table(),
-             argument_length: _landin_host_argument_count())
+             argument_length: _landin_host_argument_count(),
+             failure_errno: 0)
 end host

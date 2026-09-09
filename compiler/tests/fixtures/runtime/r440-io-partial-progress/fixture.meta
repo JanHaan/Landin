@@ -1,0 +1,7 @@
+class: runtime
+summary: fake I/O preserves completed write prefixes and distinguishes EOF from zero progress
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0790, 0940, 0960, 1370, 1390, 1660, 1975
+targets: linux-x86-64

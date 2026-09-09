@@ -11,11 +11,29 @@ reproduced from a clean environment, and named without a provider.
 | compiler | GNAT (GCC) 16.1.0, FSF build `gnat-16.1.0-1` |
 | builder | GPRbuild 26.0.0, build `gprbuild-26.0.0-1` |
 | runtime profile | full standard runtime; no restricted or zero-footprint profile |
-| dependencies | none beyond the GNAT runtime |
+| bootstrap dependencies | none beyond the GNAT runtime |
 
 The bootstrap uses no Alire authority, no AUnit, no GNATCOLL and no SPARK.
 Alire's published FSF archives are one convenient way to obtain the pinned
 compiler; the pin is the compiler version, not the distributor.
+
+## External binding-generator frontend
+
+R4.40's `bindings/generate.py` is a separate source tool, not part of the Ada
+bootstrap and not a C or LLVM product backend.  The Linux environments provide
+Clang 19.1.7 as the external C11 header frontend and compiler for its generated
+C adapters.  The selected target is always `x86_64-pc-linux-gnu`; on the
+gate and local container, `clang-19` comes from the existing `debian/stable`
+package channel and `libc6-dev` supplies the matching headers and root
+sysroot.  The versioned package name prevents a moving default Clang major;
+`.build.yml` records the exact installed revision with `clang-19 --version`.
+
+The Linux nix shell selects `llvmPackages."19".clang`, with `glibc.dev`, from
+the package set fixed by `flake.lock`.  The Darwin shell deliberately gains no
+Linux C frontend or sysroot: Apple headers are not evidence about the selected
+Linux ABI, so use `scripts/linux-loop.sh` there.  No independent Clang archive
+is downloaded and no new checksum authority is introduced; each environment
+uses its existing package-set provenance.
 
 ### Archives and checksums
 

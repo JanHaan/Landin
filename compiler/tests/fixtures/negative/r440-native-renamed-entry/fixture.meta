@@ -1,0 +1,9 @@
+class: negative
+summary: A renamed native main is valid source but cannot satisfy the hosted executable entry contract
+program: main.ldn
+constructs: 1610, 1970
+codes: L0502
+expect: expected.txt
+args: ../tests/fixtures/negative/r440-native-renamed-entry/main.ldn --target=linux-x86-64 --emit=exe
+status: 1
+targets: linux-x86-64

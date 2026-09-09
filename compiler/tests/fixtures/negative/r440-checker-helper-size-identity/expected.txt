@@ -1,0 +1,10 @@
+error[L0301]: compiler-owned helper `_landin_host_argument_count` requires result `usize`
+  --> ../tests/fixtures/negative/r440-checker-helper-size-identity/program.ldn:1:24
+  |
+1 | extern(c) link(symbol: "_landin_host_argument_count") bridge: () -> (count: u64)
+  |                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/r440-checker-helper-size-identity/program.ldn:1:70
+  |
+1 | extern(c) link(symbol: "_landin_host_argument_count") bridge: () -> (count: u64)
+  |                                                                      ^^^^^^^^^^ this helper contract
+  = note: [1610]/[1975]: a helper import must preserve its source types, pointer permissions and nullability; [0780] retains argv and [0790] preserves from

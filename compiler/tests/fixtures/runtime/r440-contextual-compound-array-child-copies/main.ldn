@@ -1,0 +1,46 @@
+payload: type = struct
+    views: [1][]u8
+    rows: [2][2]u16
+end payload
+
+envelope: type = struct
+    value: payload
+end envelope
+
+public main: () -> (code: i32) =
+    bytes: []u8 = "AZ"
+    mut first: [2]u16 = [10, 11]
+    mut second: [2]u16 = [20, 22]
+
+    views: [1][]u8 = [bytes]
+    rows: [2][2]u16 = [first, second]
+    nested: envelope =
+        (value: (views: [bytes], rows: [first, second]))
+
+    first[0] = 90
+    second[1] = 90
+
+    direct_view: []u8 = views[0]
+    direct_first: [2]u16 = rows[0]
+    direct_second: [2]u16 = rows[1]
+    nested_view: []u8 = nested.value.views[0]
+    nested_second: [2]u16 = nested.value.rows[1]
+
+    if lenof direct_view <> 2 or direct_view[0] <> 65
+        or direct_view[1] <> 90 then
+        code = 1
+        return
+    end if
+    if direct_first[0] <> 10 or direct_first[1] <> 11
+        or direct_second[0] <> 20 or direct_second[1] <> 22 then
+        code = 2
+        return
+    end if
+    if lenof nested_view <> 2 or nested_view[0] <> 65
+        or nested_view[1] <> 90 or nested_second[0] <> 20
+        or nested_second[1] <> 22 then
+        code = 3
+        return
+    end if
+    code = 42
+end main

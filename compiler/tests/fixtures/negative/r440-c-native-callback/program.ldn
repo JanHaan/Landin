@@ -1,0 +1,1 @@
+extern(c) bad: (apply: (value: i32) -> (result: i32)) -> none

@@ -1,0 +1,10 @@
+extern(c) link(symbol: "shared_c_entry") first: (value: i32) -> (result: i32)
+extern(c) link(symbol: "shared_c_entry") second: (item: i32) -> (answer: i32)
+public extern(c) link(symbol: "shared_c_entry") implementation:
+    (input: i32) -> (output: i32) =
+    output = input
+end implementation
+
+check: () -> (result: i32) =
+    result = first(second(42))
+end check

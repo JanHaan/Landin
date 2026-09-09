@@ -72,14 +72,16 @@ package Landin.Platform is
    --  A program that a signal killed has no exit status at all, and on a
    --  POSIX host the two are separate fields of one wait result; folding
    --  them into an integer is what makes a killed program indistinguishable
-   --  from one that exited with some number.
+   --  from one that exited with some number.  A watchdog expiration is also
+   --  separate: the adapter sends a signal to stop the child, but that does
+   --  not make an overlong run a program-generated trap.
    --
    --  R1.80 needs the distinction and not the encoding: `spec.md` [1960]
    --  says a trap's operating-system signal or status is not stable program
    --  behaviour, so a caller may ask whether a program ended normally and
    --  may not ask which signal ended it.  Nothing here carries a signal
    --  number, deliberately.
-   type Termination is (Exited, Signaled);
+   type Termination is (Exited, Signaled, Timed_Out);
 
    type Tool_Result is record
       Ended     : Termination := Exited;

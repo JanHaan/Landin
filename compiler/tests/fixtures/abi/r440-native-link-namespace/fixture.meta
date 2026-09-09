@@ -1,0 +1,7 @@
+class: abi
+summary: Foreign link names cannot capture native routines, generated mangled candidates or module data
+program: main.ldn
+c-sources: companion.c
+constructs: 1610, 1650, 1975
+status: 42
+targets: linux-x86-64

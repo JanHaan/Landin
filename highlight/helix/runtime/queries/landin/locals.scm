@@ -1,5 +1,6 @@
 (source_file) @local.scope
 (function_declaration) @local.scope
+(extern_declaration body: (block)) @local.scope
 (anonymous_function) @local.scope
 (bare_block) @local.scope
 

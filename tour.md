@@ -563,6 +563,10 @@ end read
 A pointer goes into the union without being written down as anything; coming
 back out is a match, and both cases have to be named. `ptr` is the arm for
 the present case, and the name in brackets after it is the pointer itself.
+On a return edge, an exact `from` clause applies only when this optional value
+actually carries the pointer. An edge provably returning `none_found` has no
+reference origin to compare: absence is not the untracked pointer produced by
+[0470].
 
 ### [0490] Pointers are a system tool
 
@@ -618,7 +622,9 @@ the representation. `capacity` and `initialized` report the two counts,
 `admit` initializes exactly the next slot, `get` reads only the initialized
 prefix, `replace` writes an existing initialized slot, and `used` exposes that
 prefix as a mutable slice `from storage`. `release` removes only its tail, and
-`dispose` returns the backing byte pointer only when the prefix is empty.
+`dispose` returns the backing byte pointer only when the prefix is empty and
+backing is present. It clears that backing to the private union's absent atom;
+a repeated disposal reports `raw_empty`, never a zero or fabricated pointer.
 `transfer` copies one initialized source
 slot directly into the next slot of a private replacement, without exposing a
 reference-valued item between the two states. The four invalid requests are
@@ -1260,7 +1266,11 @@ Fields keep the order you wrote them, with natural alignment
 and padding in between, so a hexdump matches the source and
 the layout does not shift under a new compiler.
 layout(optimal) lets the compiler reorder to save padding.
-layout(c) applies the C rules. Byte order is per field.
+layout(c) applies the selected C rules [1975]; it does not choose a function's
+calling convention. The enabled C subset uses native-endian scalar fields,
+fixed arrays, nested nonempty C structs and explicitly C-convention callback
+fields. `layout(optimal)` and per-field byte-order attributes below remain the
+broader design, not enabled R4.40 C record forms. Byte order is per field.
 
 ```landin
 packet: type = layout(c) struct
@@ -1362,7 +1372,9 @@ Both halves are checked where the function is written.
 Returning something derived from a parameter without saying
 so is an error, and naming a parameter it did not come from
 is an error too, so the clause cannot drift away from the
-body.
+body. For [0480]'s optional pointer this exact comparison is made only on an
+edge that actually returns the pointer; an edge provably returning the empty
+atom has no reference origin at all.
 In obligation it is the mirror of escaping. escaping says
 the callee keeps a reference to what the caller handed in;
 from says the caller keeps a reference to what the callee
@@ -1748,6 +1760,8 @@ runtime position. A call through a stored or selected function uses the paramete
 labels of that value's static function type; changing those labels does not
 change function-type identity [1000].
 Named arguments work in a call statement as well as in a call expression.
+A C variadic call additionally supplies an unnamed tail under [1580]'s default
+promotions; this does not add optional or defaulted fixed parameters.
 
 ```landin
 r1 := divide(10, 3)
@@ -1794,6 +1808,11 @@ The names written inside the signature describe its parameter and return
 positions; in a type they do not declare local names. Two function types agree
 by those positions' types, not by their labels. Function values may themselves
 be parameters and named returns, so that structural comparison is recursive.
+Convention and variadicness are part of that identity too: a C callback type
+writes `extern(c) (parameters) -> returns`, and an ordinary Landin function
+with the same visible arguments does not agree with it. A pointer to such a
+function type points to a cell holding the code address, not to C callback
+code itself.
 A module binding initialized by a named or anonymous function is a static code
 address; mutable local or module storage may later receive any address with the
 same complete signature.
@@ -2079,7 +2098,8 @@ range of an integer conversion. What stays is everything the compiler
 decides rather than emits — types, definite assignment, permissions,
 origins — and the edges whose absence is not one thing on every machine:
 a zero divisor, a negative shift count, a conversion to bool or from a
-float, and a text boundary. It reaches only the code written inside it,
+float, a text boundary, and a zero integer-to-pointer result after target-width
+conversion. It reaches only the code written inside it,
 so a function called from a region is checked as that function is
 written, and a deferred call is checked where you wrote it rather than
 where the exit that runs it stands. That is what keeps the word honest
@@ -2708,7 +2728,7 @@ under valid-free use and cannot discover an inner provider's rejection of a
 malformed free.
 
 The separately imported hosted `core/heap` provider reaches libc through
-[1975]'s fixed scalar/pointer bridge, returns independent aligned blocks, and
+[1975]'s hosted C bridge, returns independent aligned blocks, and
 really releases each block. It accepts every `usize` alignment, treats zero
 and one as byte alignment, gives a successful zero-byte request a distinct
 non-null freeable token, and reports an unrepresentable request or host refusal
@@ -3067,7 +3087,9 @@ end if
 The compiler exposes `compiler.arch`, whose compiler-owned values are
 `x86_64`, `arm64`, `cortex_m0` and `synthetic_32`, `compiler.word_size` in
 bits, `compiler.byte_order` (`little` or `big`), and `compiler.build_mode`
-(`debug` or `release`). Build mode is an explicit request value, defaulting
+(`debug` or `release`), plus `compiler.c_sysv_lp64`, a bool identifying the
+selected C ABI rather than inferring it from pointer width. Build mode is an
+explicit request value, defaulting
 to debug; it does not change runtime checks or optimization policy.
 Conditions also see the program's declared options [1530]. They use a closed
 no-execution fold: literals, parentheses, unary `-`, mathematical integer
@@ -3218,24 +3240,60 @@ there is nothing to gain there.
 
 ### [1580] Importing from C
 
-Importing from C. Declarations are written by hand; no
-header is ever read.
-A C pointer may be null and a Landin pointer may not, so the
-two are not the same type and a declaration says which it
-means. malloc returns something that may be nothing, which
-is the union of [0480] and costs no bits.
+Importing from C. `refine` reads Landin, not headers. R4.40 supplies a
+separate deterministic clang-AST generator for declarations and explicit C
+adapters, with policy for facts a header does not say: nullability, ownership,
+`from`, retention and incoming-varargs extraction. That policy is not a
+handwritten replacement signature. [1975] defines the selected Linux x86-64
+SysV AMD64 LP64 boundary; ROADMAP.md retains its pending implementation and
+native evidence rather than treating this rule as completion.
+
+A C pointer may be null and a Landin pointer may not. A foreign declaration
+that permits absence therefore names [0480]'s one-atom pointer union, which
+costs no extra bits. A small declaration illustrates the generated shape:
 
 ```landin
 none_returned: atom
-extern(c) malloc: (n: usize) -> (p: none_returned | ptr mut u8)
+allocation: type = none_returned | ptr mut u8
+extern(c) malloc: (n: usize) -> (p: allocation)
 extern(c) free:   (p: ptr mut u8) -> none
 ```
 
-ptr(0) is refused, so null cannot be minted on this side
-either. Where a foreign interface hands back a pointer that
-may be null, it is declared as the union and matched on; the
-compiler represents that as the plain pointer it already
-was.
+Match the result before using the pointer. `ptr(0)` is refused, including a
+closed folded expression or a value that becomes zero at target `usize`
+width. Dynamic construction checks the converted address and traps on zero,
+even in `unchecked`; losing origin is not permission to create null. Absent
+allocator backing uses a named union, not a fake `ptr(1)` allocation.
+
+The ordinary `core/c` aliases name C's signed and unsigned integer widths,
+`c_size`, `c_ptrdiff`, `c_float`, `c_double` and `c_bool`. Its assertion of
+`compiler.c_sysv_lp64` prevents using the LP64 spelling layer with another
+selected ABI. Plain `c_char` is signed numeric i8, not a Unicode scalar.
+
+C-compatible values include integers, bool, pointers, f32/f64, C function
+values and recursive nonempty `layout(c)` structs, including nested struct,
+nonempty fixed-array and fixed C-callback fields. Variadic function values may
+be stored and called within Landin but do not fill a C callback field or
+signature position. Arrays themselves are not by-value C
+arguments or results. C enums retain their integer values; unions, bitfields,
+globals, TLS and nullable callbacks use explicit generated representations and
+adapters, not new native grammar or a pointer to a stored function value.
+Selected extended/x87 and 128-bit scalars, complex/vector/atomic/volatile types,
+old-style or non-C-convention functions, packed/overaligned/flexible/zero-size
+by-value records, anonymous unaliased declarations, unsupported arrays and
+`va_list` forwarding, and unsafe, stale or missing policy are refused explicitly
+rather than guessed. The required enum, union, bitfield, global/TLS,
+nullable-callback and incoming-schema categories cannot be refused wholesale as
+a shortcut.
+
+An outgoing variadic signature writes `, ...` after at least one fixed
+parameter. Both direct and indirect variadic calls are positional-only,
+including the fixed prefix. The unnamed tail admits scalars, pointers and fixed
+C callbacks, not structs, arrays, slices, atoms or `any`. C's default promotions
+make f32 into f64 and bool/narrow integers into C int; untyped literals take i32
+or f64. This is not an inferred error set. Native definitions receiving
+arbitrary varargs are
+refused; generated C entry adapters require an explicit extraction schema.
 
 ### [1590] Linking a static library
 
@@ -3257,8 +3315,16 @@ inactive directive adds nothing.
 
 ### [1600] Exporting to C
 
-Exporting to C. No error channel crosses the boundary, so
-the error set must be empty.
+Exporting to C. `extern(c)` chooses the convention; it does not mean
+bodyless, public or imported. A bodyless declaration imports a C routine. A
+Landin body defines one, and may remain private when only its callback address
+is needed. `public` separately exposes a definition. Conversely, [1610]'s
+standalone `link(symbol: text)` leaves an ordinary definition on the native
+Landin convention; linkage never selects C. C signatures are nongeneric, use
+`in` parameters and at most one return. No declared or inferred
+Landin error channel crosses the boundary; recover inside the body and return
+the explicit C status/value promised by the interface. Neither foreign
+exception unwinding nor `longjmp` across Landin frames is promised.
 
 ```landin
 public extern(c) my_add: (a: i32, b: i32) -> (r: i32) =
@@ -3269,12 +3335,33 @@ end my_add
 
 ### [1610] A symbol name the language's identifiers cannot spell
 
-A symbol name the language's identifiers cannot spell.
+A linker spelling independent of the Landin name and function convention. It
+may stand alone before a native function name, or follow `extern(c)` for a C
+import or definition:
 
 ```landin
-link(symbol: "__aeabi_uidiv") udiv: (a: u32, b: u32) -> (q: u32) = ... end
+link(symbol: "native_identity") identity: (value: i32) -> (result: i32) =
+    result = value
+end identity
+
+extern(c) link(symbol: "foreign_add") add: (a: i32, b: i32) -> (r: i32)
 
 ```
+
+The standalone form still requires the ordinary `= body end` and keeps the
+native Landin convention: `link` never implies C, bodylessness or export. In
+either form it changes neither lookup nor signature nor visibility. The decoded
+link name has the precise safe ASCII shape `[A-Za-z_.$][A-Za-z0-9_.$]*`: its
+first byte is a letter, underscore, dot or dollar, and only a later byte may
+additionally be a digit. It identifies a linker symbol; it is not assembler
+operand text. Whitespace, `@` suffixes and arbitrary assembler expressions are
+excluded. The backend quotes the identity where target assembly syntax requires
+it without changing the link name. Compatible bodyless C declarations may share
+one spelling and one definition, but incompatible signatures and multiple
+definitions are refused.
+C imports and public C definitions default to their declared name; private C
+definitions without an override use collision-safe internal names. This enables
+no section-placement or Cortex-M ABI.
 
 ### [1620] Atomics are builtins
 
@@ -3341,16 +3428,23 @@ and [0760] separated those two on purpose.
 
 ### [1650] Entry point
 
-Entry point. Hosted, main follows the system C ABI. The
-no-argument form is the ordinary one, because argc and argv
-in the C shape cannot be indexed without slice_from, which
-is not enabled — so the hosted world retains the argument table
-and offers bounded indexed pointer-and-length views instead.
-Those views derive from the world; a caller that must mutate the
-same backing-aware provider while retaining one first copies what
-it needs into its own storage. The C form stays available for
-whoever wants it. Freestanding there is no main; the build description
-names the entry.
+Entry point. Hosted, `main` follows the system C ABI at the machine boundary.
+The no-argument Landin form is the ordinary one, because `argc` and `argv` in
+the C shape cannot be indexed without `slice_from`, which is not enabled — so
+the hosted world retains the argument table and offers bounded indexed
+pointer-and-length views instead. The selected Linux backend calls its emitted
+hidden C entry
+`void _landin_host_initialize_arguments(int argc, char **argv);` with the real
+incoming carriers before that no-argument source body begins.
+
+A C-owned `main` that drives exported Landin routines calls the same entry
+explicitly before `io.host` acquires an argument capability and before starting
+a thread that may acquire one. It need not do so for startup-independent bridge
+work merely because `core/io` is linked, and no ordinary export or callback
+initializes or resets the root. Those views derive from the resulting world; a
+caller that must mutate the same backing-aware provider while retaining one
+first copies what it needs into its own storage. Freestanding there is no
+`main`; the build description names the entry.
 
 ### [1660] And this is where capabilities come from
 
@@ -3373,6 +3467,15 @@ public main: () -> (code: i32) =
     end program
 end main
 ```
+
+`io.host` acquires the real argument-table capability; it does not create or
+copy that storage. The first nonnegative-count, non-null-table startup call
+establishes one exact `(argc, argv)` root. Repeating that exact pair is harmless;
+using the argument services before initialization or trying to replace either
+carrier traps. The C owner therefore keeps the table and the strings it names
+readable for as long as a derived world, view or callback can use them. The
+published sequence starts at `argv[1]`; an ordinary C invocation with only its
+program name consequently gives Landin an empty user-argument sequence.
 
 Which is what makes the same run testable and portable
 without it knowing: hand it a different root and it does
@@ -3397,6 +3500,15 @@ type, so something else can satisfy it. It travels as
 in front of a system call costs nothing, where an allocator
 is threaded generically because it sits in hot loops. Same
 machinery, [1690], chosen per case.
+
+The system provider captures errno immediately after a libc failure and keeps
+the exact terminal value in explicit state, available through `io.last_errno`.
+Success clears it; a local refusal fabricates no host errno. Open/read/write
+retry EINTR only when the selected host guarantees that attempt made no
+progress. Positive partial transfers are preserved; a write continues from its
+remaining suffix. Close consumes the handle once even on failure, and never
+blindly retries EINTR. The public failure atoms remain payload-free; detailed
+diagnostics use ordinary state rather than a new exception mechanism.
 
 The bounded library provider is `core/io.memory`, constructed with
 `memory_world(files, arguments, output, errors)`. Its caller supplies every
@@ -3551,7 +3663,7 @@ no function name overloading and no multiple dispatch
 no user-defined operators and no macros
 no compile-time execution
 no separate interface files
-no header parsing
+no header parsing inside refine (the separate binding generator reads headers)
 
 ## WHAT IS STILL OPEN
 

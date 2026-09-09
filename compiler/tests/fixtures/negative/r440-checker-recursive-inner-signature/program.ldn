@@ -1,0 +1,8 @@
+handler: type = extern(c) (value: i32) -> (result: i32)
+extern(c) add: (value: i32) -> (result: i32)
+native: (value: i32) -> (result: i32) =
+    result = value
+end native
+use: () -> none =
+    values: [2][2]handler = [[add, add], [add, native]]
+end use

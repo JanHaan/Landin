@@ -1,0 +1,9 @@
+class: negative
+summary: compiler-owned helper `_landin_host_initialize_arguments` requires parameter 2 to be `ptr ptr u8`
+program: program.ldn
+codes: L0301
+constructs: 0780, 0790, 1610, 1975
+targets: linux-x86-64
+args: ../tests/fixtures/negative/r440-checker-helper-nested-referent/program.ldn
+expect: expected.txt
+status: 1

@@ -1,0 +1,373 @@
+{
+  "abi": {
+    "data_model": "lp64",
+    "enum_policy": "clang-default",
+    "plain_char": "signed",
+    "target": "x86_64-pc-linux-gnu"
+  },
+  "declarations": [
+    {
+      "fields": {
+        "data": {
+          "from": [],
+          "nullability": "nonnullable",
+          "ownership": "borrowed",
+          "retention": "stored"
+        }
+      },
+      "kind": "record",
+      "landin_name": "binding_view",
+      "name": "BindingView",
+      "representation": "auto"
+    },
+    {
+      "fields": {
+        "data": {
+          "from": [],
+          "nullability": "nonnullable",
+          "ownership": "borrowed",
+          "retention": "call"
+        }
+      },
+      "kind": "record",
+      "landin_name": "binding_native_view",
+      "name": "BindingNativeView",
+      "representation": "native"
+    },
+    {
+      "kind": "callback",
+      "name": "binding_borrow_callback",
+      "nullable": true,
+      "parameters": {
+        "argument_1": {
+          "from": [],
+          "nullability": "nonnullable",
+          "ownership": "borrowed",
+          "retention": "call"
+        }
+      },
+      "result": {
+        "from": [
+          "argument_1"
+        ],
+        "nullability": "nonnullable",
+        "ownership": "borrowed",
+        "retention": "returned"
+      }
+    },
+    {
+      "direction": "import",
+      "kind": "function",
+      "name": "binding_borrow_view",
+      "parameters": {
+        "src": {
+          "from": [],
+          "nullability": "nonnullable",
+          "ownership": "borrowed",
+          "retention": "call"
+        }
+      },
+      "result": {
+        "from": [
+          "src"
+        ],
+        "nullability": "nonnullable",
+        "ownership": "borrowed",
+        "retention": "returned"
+      }
+    },
+    {
+      "direction": "import",
+      "kind": "function",
+      "name": "binding_borrow_native",
+      "parameters": {
+        "src": {
+          "from": [],
+          "nullability": "nonnullable",
+          "ownership": "borrowed",
+          "retention": "call"
+        }
+      },
+      "result": {
+        "from": [
+          "src"
+        ],
+        "nullability": "nonnullable",
+        "ownership": "borrowed",
+        "retention": "returned"
+      }
+    },
+    {
+      "kind": "variable",
+      "name": "binding_saved_pointer",
+      "storage": "import",
+      "value": {
+        "from": [],
+        "nullability": "nonnullable",
+        "ownership": "borrowed",
+        "retention": "stored"
+      },
+      "writable": true
+    },
+    {
+      "direction": "export",
+      "kind": "function",
+      "name": "landin_binding_origins",
+      "parameters": {
+        "cell": {
+          "from": [],
+          "nullability": "nonnullable",
+          "ownership": "borrowed",
+          "retention": "call"
+        },
+        "output": {
+          "from": [],
+          "nullability": "nonnullable",
+          "ownership": "borrowed",
+          "retention": "call"
+        },
+        "result_pointer": {
+          "from": [],
+          "nullability": "nonnullable",
+          "ownership": "borrowed",
+          "retention": "call"
+        },
+        "src": {
+          "from": [],
+          "nullability": "nonnullable",
+          "ownership": "borrowed",
+          "retention": "stored"
+        }
+      }
+    },
+    {
+      "fields": {},
+      "kind": "record",
+      "landin_name": "binding_matrix",
+      "name": "BindingMatrix",
+      "representation": "native"
+    },
+    {
+      "kind": "enum",
+      "landin_name": "binding_small",
+      "name": "BindingSmall"
+    },
+    {
+      "direction": "import",
+      "kind": "function",
+      "name": "binding_adjust_matrix",
+      "parameters": {}
+    },
+    {
+      "direction": "export",
+      "kind": "function",
+      "name": "landin_binding_matrix",
+      "parameters": {}
+    },
+    {
+      "direction": "import",
+      "kind": "function",
+      "name": "binding_highbit",
+      "parameters": {}
+    },
+    {
+      "direction": "export",
+      "kind": "function",
+      "name": "landin_binding_highbit",
+      "parameters": {}
+    },
+    {
+      "fields": {},
+      "kind": "record",
+      "landin_name": "binding_pair",
+      "name": "BindingPair",
+      "representation": "auto"
+    },
+    {
+      "kind": "enum",
+      "landin_name": "binding_mode",
+      "name": "BindingMode"
+    },
+    {
+      "fields": {},
+      "kind": "record",
+      "landin_name": "binding_value",
+      "name": "BindingValue",
+      "representation": "auto"
+    },
+    {
+      "fields": {},
+      "kind": "record",
+      "landin_name": "binding_bits",
+      "name": "BindingBits",
+      "representation": "auto"
+    },
+    {
+      "kind": "callback",
+      "landin_name": "binding_callback",
+      "name": "binding_callback",
+      "nullable": true,
+      "parameters": {}
+    },
+    {
+      "direction": "import",
+      "kind": "function",
+      "landin_name": "binding_adjust_pair",
+      "name": "binding_adjust_pair",
+      "parameters": {}
+    },
+    {
+      "direction": "import",
+      "kind": "function",
+      "landin_name": "binding_rotate_value",
+      "name": "binding_rotate_value",
+      "parameters": {}
+    },
+    {
+      "direction": "import",
+      "kind": "function",
+      "landin_name": "binding_call_optional",
+      "name": "binding_call_optional",
+      "parameters": {
+        "action": {
+          "from": [],
+          "nullability": "nullable",
+          "ownership": "borrowed",
+          "retention": "call"
+        }
+      }
+    },
+    {
+      "direction": "import",
+      "kind": "function",
+      "landin_name": "binding_select_callback",
+      "name": "binding_select_callback",
+      "parameters": {},
+      "result": {
+        "from": [],
+        "nullability": "nullable",
+        "ownership": "static",
+        "retention": "static"
+      }
+    },
+    {
+      "direction": "import",
+      "kind": "function",
+      "landin_name": "binding_borrowed_pointer",
+      "name": "binding_borrowed_pointer",
+      "parameters": {
+        "base": {
+          "from": [],
+          "nullability": "nonnullable",
+          "ownership": "caller_owned",
+          "retention": "call"
+        }
+      },
+      "result": {
+        "from": [
+          "base"
+        ],
+        "nullability": "nullable",
+        "ownership": "borrowed",
+        "retention": "returned"
+      }
+    },
+    {
+      "kind": "variable",
+      "landin_name": "binding_global_counter",
+      "name": "binding_global_counter",
+      "storage": "import",
+      "writable": true
+    },
+    {
+      "kind": "variable",
+      "landin_name": "binding_tls_counter",
+      "name": "binding_tls_counter",
+      "storage": "define",
+      "writable": true
+    },
+    {
+      "count_parameter": "count",
+      "handler": "landin_binding_receive_handler",
+      "kind": "incoming_varargs",
+      "landin_name": "binding_receive_many",
+      "name": "binding_receive_many",
+      "parameters": {},
+      "schema": [
+        {
+          "name": "i1",
+          "promoted": "c_int"
+        },
+        {
+          "name": "i2",
+          "promoted": "c_int"
+        },
+        {
+          "name": "i3",
+          "promoted": "c_int"
+        },
+        {
+          "name": "i4",
+          "promoted": "c_int"
+        },
+        {
+          "name": "d1",
+          "promoted": "c_double"
+        },
+        {
+          "name": "d2",
+          "promoted": "c_double"
+        },
+        {
+          "name": "d3",
+          "promoted": "c_double"
+        },
+        {
+          "name": "d4",
+          "promoted": "c_double"
+        },
+        {
+          "name": "d5",
+          "promoted": "c_double"
+        },
+        {
+          "name": "d6",
+          "promoted": "c_double"
+        },
+        {
+          "name": "d7",
+          "promoted": "c_double"
+        },
+        {
+          "name": "d8",
+          "promoted": "c_double"
+        },
+        {
+          "name": "d9",
+          "promoted": "c_double"
+        },
+        {
+          "name": "d10",
+          "promoted": "c_double"
+        },
+        {
+          "name": "l1",
+          "promoted": "c_long"
+        },
+        {
+          "name": "l2",
+          "promoted": "c_long"
+        }
+      ]
+    },
+    {
+      "direction": "export",
+      "kind": "function",
+      "landin_name": "landin_bindings_check",
+      "name": "landin_bindings_check",
+      "parameters": {}
+    }
+  ],
+  "namespace": "r440_bindings",
+  "schema_version": 1
+}

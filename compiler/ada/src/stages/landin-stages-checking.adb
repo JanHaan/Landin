@@ -36,6 +36,8 @@ package body Landin.Stages.Checking is
    use type Landin.Tokens.Text.Problem;
    use type Landin.Tokens.Assignment_Operator;
    use type Landin.Targets.Byte_Count;
+   use type Landin.Targets.C_ABI_Kind;
+   use type Landin.Source.Span;
    use type Landin.Types.Type_Kind;
    use type Landin.Types.Reference_View;
    use type Landin.Types.Folded;
@@ -453,6 +455,185 @@ package body Landin.Stages.Checking is
       --  Forward declarations
       ------------------------------------------------------------
 
+      function C_Field_Allowed
+        (Shape : Landin.Checking.Field_Shape) return Boolean;
+      function C_Nominal_Allowed
+        (Nominal : Landin.Checking.Nominal_Type_Id) return Boolean;
+      function C_Part_Allowed
+        (Part : Landin.Checking.Signature_Part) return Boolean;
+      procedure Validate_C_Signature
+        (Of_Tree : Syn.Tree;
+         Node : Syn.Node_Id;
+         Parameters, Results : Landin.Checking.Signature_Part_Array;
+         Valid : in out Boolean);
+      procedure Validate_C_Layout
+        (Of_Tree : Syn.Tree;
+         Node : Syn.Node_Id;
+         Fields : Landin.Checking.Field_Shape_Array);
+
+      function C_Callback_Allowed
+        (Signature : Landin.Checking.Signature_Id) return Boolean
+        is (Landin.Checking.Holds (Types.all, Signature)
+            and then Landin.Checking.Signature_Uses_C_ABI
+              (Types.all, Signature)
+            and then not Landin.Checking.Signature_Is_Variadic
+              (Types.all, Signature)
+            and then Landin.Checking.Signature_Error_Form
+              (Types.all, Signature) = Landin.Checking.Infallible);
+
+      function C_Nominal_Allowed
+        (Nominal : Landin.Checking.Nominal_Type_Id) return Boolean is
+      begin
+         if not Landin.Checking.Has_Layout (Types.all, Nominal)
+           or else not Landin.Checking.Has_C_Layout (Types.all, Nominal)
+           or else Landin.Checking.Layout_Field_Count (Types.all, Nominal) = 0
+         then
+            return False;
+         end if;
+         for Index in 1 .. Landin.Checking.Layout_Field_Count
+           (Types.all, Nominal)
+         loop
+            if not C_Field_Allowed
+              (Landin.Checking.Field_Shape_Of (Types.all, Nominal, Index))
+            then
+               return False;
+            end if;
+         end loop;
+         return True;
+      end C_Nominal_Allowed;
+
+      function C_Field_Allowed
+        (Shape : Landin.Checking.Field_Shape) return Boolean is
+      begin
+         case Shape.Kind is
+            when Landin.Checking.Scalar_Field =>
+               return Shape.Signature = Landin.Checking.No_Signature
+                 or else C_Callback_Allowed (Shape.Signature);
+            when Landin.Checking.Reference_Field =>
+               return Landin.Checking.Holds (Types.all, Shape.Reference)
+                 and then Landin.Checking.Descriptor_Of
+                   (Types.all, Shape.Reference).Kind = Ty.Pointer_Value;
+            when Landin.Checking.Fixed_Array_Field =>
+               return Shape.Length > 0
+                 and then C_Field_Allowed
+                   (Landin.Checking.Array_Field_Element (Types.all, Shape));
+            when Landin.Checking.Aggregate_Field =>
+               return C_Nominal_Allowed (Shape.Nominal);
+            when Landin.Checking.Variant_Field =>
+               return False;
+         end case;
+      end C_Field_Allowed;
+
+      function C_Part_Allowed
+        (Part : Landin.Checking.Signature_Part) return Boolean is
+      begin
+         if Part.Constraint /= Landin.Checking.No_Constraint
+           or else Part.Caller
+           or else Part.Convention not in Syn.Implicit_In | Syn.Explicit_In
+         then
+            return False;
+         end if;
+         case Part.Kind is
+            when Ty.Scalar_Name =>
+               return True;
+            when Ty.Pointer_Value =>
+               return Landin.Checking.Holds (Types.all, Part.Reference)
+                 and then Landin.Checking.Descriptor_Of
+                   (Types.all, Part.Reference).Kind = Ty.Pointer_Value;
+            when Ty.Function_Value =>
+               return C_Callback_Allowed (Part.Signature);
+            when Ty.Aggregate =>
+               --  A callback's code pointer is not a by-value layout edge.
+               --  Its parent record may still be building; the final C
+               --  signature pass validates that complete nominal identity.
+               return (Struct_Layout_Depth > 0
+                         and then not Landin.Checking.Has_Layout
+                           (Types.all, Part.Nominal))
+                 or else C_Nominal_Allowed (Part.Nominal);
+            when others =>
+               return False;
+         end case;
+      end C_Part_Allowed;
+
+      procedure Reject_C_Signature (Site : Landin.Provenance.Origin);
+
+      procedure Reject_C_Signature (Site : Landin.Provenance.Origin) is
+      begin
+         Bad.Report
+           (Item => Bad.Type_Mismatch,
+            Source => Site.Source,
+            Where => Site.Where,
+            Message => "this signature is not representable by the"
+                       & " selected target's native C ABI",
+            Note => "[1580]: C signatures are infallible and nongeneric;"
+                    & " only implicit/in parameters, no caller or"
+                    & " constraints; scalars, pointers (including named"
+                    & " optional unions), fixed C callbacks or layout(c)"
+                    & " structs, and at most one result; no slices, any,"
+                    & " atoms or by-value arrays; variadic definitions"
+                    & " require a generated adapter",
+            Related => Site, Because => "this C signature", Into => Found);
+      end Reject_C_Signature;
+
+      procedure Validate_C_Signature
+        (Of_Tree : Syn.Tree;
+         Node : Syn.Node_Id;
+         Parameters, Results : Landin.Checking.Signature_Part_Array;
+         Valid : in out Boolean)
+      is
+         Supported : Boolean :=
+           Landin.Targets.C_ABI_Of (Facts) /= Landin.Targets.No_C_ABI
+           and then Syn.Error_Set_Of (Of_Tree, Node) = Syn.No_Node
+           and then Results'Length <= 1
+           and then (not Syn.Is_Variadic (Of_Tree, Node)
+                     or else Parameters'Length > 0);
+      begin
+         if not Syn.Uses_C_ABI (Of_Tree, Node) then
+            return;
+         end if;
+         if Syn.Kind (Of_Tree, Node) = Syn.Function_Declaration then
+            Supported := Supported
+              and then Syn.Generic_Formal_Count (Of_Tree, Node) = 0
+              and then (not Syn.Is_Variadic (Of_Tree, Node)
+                        or else Syn.Is_External (Of_Tree, Node));
+         end if;
+         for Part of Parameters loop
+            Supported := Supported and then C_Part_Allowed (Part);
+         end loop;
+         for Part of Results loop
+            Supported := Supported and then C_Part_Allowed (Part);
+         end loop;
+         if not Supported then
+            Reject_C_Signature (Syn.Origin (Of_Tree, Node));
+            Valid := False;
+         end if;
+      end Validate_C_Signature;
+
+      procedure Validate_C_Layout
+        (Of_Tree : Syn.Tree;
+         Node : Syn.Node_Id;
+         Fields : Landin.Checking.Field_Shape_Array) is
+      begin
+         if Syn.Has_C_Layout (Of_Tree, Node)
+           and then (Landin.Targets.C_ABI_Of (Facts) = Landin.Targets.No_C_ABI
+                     or else Fields'Length = 0
+                     or else (for some Field of Fields =>
+                       not C_Field_Allowed (Field)))
+         then
+            Bad.Report
+              (Item => Bad.Type_Mismatch,
+               Source => Syn.Source_Of (Of_Tree),
+               Where => Syn.Where (Of_Tree, Node),
+               Message => "this layout(c) struct has a non-C representation",
+               Note => "[1580]: C fields are scalars, pointers, fixed C"
+                       & " callbacks, nonempty fixed arrays or recursively"
+                       & " layout(c) structs; tagged variants are not"
+                       & " C unions",
+               Related => Syn.Origin (Of_Tree, Node),
+               Because => "this C layout", Into => Found);
+         end if;
+      end Validate_C_Layout;
+
       function Settled_Type (Id : Res.Declaration_Id) return Ty.Type_Kind;
       function Declared_As (Id : Res.Declaration_Id) return Ty.Type_Kind;
       function Signature_At
@@ -494,6 +675,8 @@ package body Landin.Stages.Checking is
       function Conversion_Constraint
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
          return Landin.Checking.Constraint_Id;
+      function Pointer_Is_Known_Zero
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
       procedure Fold_Float
         (Of_Tree    : Syn.Tree;
          Node       : Syn.Node_Id;
@@ -508,7 +691,10 @@ package body Landin.Stages.Checking is
          Node    : Syn.Node_Id;
          Wanted  : Ty.Scalar_Name);
       function Synthesise
-        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind;
+        (Of_Tree : Syn.Tree;
+         Node : Syn.Node_Id;
+         Expected_Reference : Landin.Checking.Reference_Id :=
+           Landin.Checking.No_Reference) return Ty.Type_Kind;
       function Selected_From
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind;
       function Admit_Array_Field
@@ -751,7 +937,9 @@ package body Landin.Stages.Checking is
       function Check_Call
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
-         Signature : Landin.Checking.Signature_Id) return Ty.Type_Kind;
+         Signature : Landin.Checking.Signature_Id;
+         Expected_Reference : Landin.Checking.Reference_Id :=
+           Landin.Checking.No_Reference) return Ty.Type_Kind;
       function Effective_Call_Signature
         (Of_Tree : Syn.Tree; Call : Syn.Node_Id)
          return Landin.Checking.Signature_Id;
@@ -815,14 +1003,17 @@ package body Landin.Stages.Checking is
          Stepping       : Boolean;
          Variant_Context : Boolean := False);
       procedure Check_Array_Literal
-        (Of_Tree      : Syn.Tree;
-         Context      : Syn.Node_Id;
-         Literal      : Syn.Node_Id;
-         Expected     : Landin.Checking.Element_Count;
-         Element      : Ty.Scalar_Name;
-         Static_Image : Boolean;
-         Context_Site : Landin.Provenance.Origin :=
-           Landin.Provenance.No_Origin);
+        (Of_Tree         : Syn.Tree;
+         Context         : Syn.Node_Id;
+         Literal         : Syn.Node_Id;
+         Expected        : Landin.Checking.Element_Count;
+         Element         : Ty.Scalar_Name;
+         Static_Image    : Boolean;
+         Context_Site    : Landin.Provenance.Origin :=
+           Landin.Provenance.No_Origin;
+         Element_Nominal : Landin.Checking.Nominal_Type_Id :=
+           Landin.Checking.No_Nominal_Type;
+         Shape : Landin.Checking.Field_Shape := (others => <>));
       procedure Check_Struct_Literal
         (Of_Tree      : Syn.Tree;
          Literal      : Syn.Node_Id;
@@ -852,7 +1043,10 @@ package body Landin.Stages.Checking is
          Element      : Ty.Scalar_Name;
          Static_Image : Boolean;
          Context_Site : Landin.Provenance.Origin :=
-           Landin.Provenance.No_Origin);
+           Landin.Provenance.No_Origin;
+         Element_Nominal : Landin.Checking.Nominal_Type_Id :=
+           Landin.Checking.No_Nominal_Type;
+         Shape : Landin.Checking.Field_Shape := (others => <>));
       procedure Check_Array_Repetition
         (Of_Tree      : Syn.Tree;
          Site_Node    : Syn.Node_Id;
@@ -861,7 +1055,10 @@ package body Landin.Stages.Checking is
          Element      : Ty.Scalar_Name;
          Static_Image : Boolean;
          Context_Site : Landin.Provenance.Origin :=
-           Landin.Provenance.No_Origin);
+           Landin.Provenance.No_Origin;
+         Element_Nominal : Landin.Checking.Nominal_Type_Id :=
+           Landin.Checking.No_Nominal_Type;
+         Shape : Landin.Checking.Field_Shape := (others => <>));
       procedure Check_Statement
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id; Returns : Ty.Type_Kind);
       procedure Check_Condition
@@ -1015,6 +1212,23 @@ package body Landin.Stages.Checking is
          Requirement : Type_Requirement := Value_Layout)
          return Type_Descriptor;
 
+      function Has_Element_Metadata
+        (Shape : Landin.Checking.Field_Shape) return Boolean
+        is (Shape.Kind /= Landin.Checking.Scalar_Field
+            or else Shape.Signature /= Landin.Checking.No_Signature);
+
+      function Complete_Element
+        (Element : Ty.Scalar_Name;
+         Nominal : Landin.Checking.Nominal_Type_Id;
+         Shape   : Landin.Checking.Field_Shape)
+         return Landin.Checking.Field_Shape
+        is (if Has_Element_Metadata (Shape) then Shape
+            elsif Nominal /= Landin.Checking.No_Nominal_Type
+            then (Kind => Landin.Checking.Aggregate_Field,
+                  Nominal => Nominal, others => <>)
+            else (Kind => Landin.Checking.Scalar_Field,
+                  Element => Element, others => <>));
+
       function Complex_Element
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
          return Landin.Checking.Field_Shape;
@@ -1035,8 +1249,8 @@ package body Landin.Stages.Checking is
          Shape : constant Landin.Checking.Field_Shape :=
            Landin.Checking.Array_Element_Shape (Types.all, Of_Tree, Node);
       begin
-         return (if Shape.Kind in Landin.Checking.Scalar_Field
-                    | Landin.Checking.Aggregate_Field
+         return (if not Has_Element_Metadata (Shape)
+                   or else Shape.Kind = Landin.Checking.Aggregate_Field
                  then (others => <>) else Shape);
       end Complex_Element;
 
@@ -1045,20 +1259,33 @@ package body Landin.Stages.Checking is
       begin
          case Shape.Kind is
             when Landin.Checking.Scalar_Field =>
-               return (Kind => Shape.Element, others => <>);
+               return (Kind => (if Shape.Signature
+                                  = Landin.Checking.No_Signature
+                                then Shape.Element else Ty.Function_Value),
+                       Signature => Shape.Signature, others => <>);
             when Landin.Checking.Aggregate_Field =>
                return (Kind => Ty.Aggregate, Nominal => Shape.Nominal,
                        others => <>);
             when Landin.Checking.Fixed_Array_Field =>
-               return (Kind => Ty.Fixed_Array, Length => Shape.Length,
-                       Element => Shape.Element,
-                       Element_Nominal => Shape.Nominal,
-                       Element_Shape =>
-                         (if Shape.Reference = Landin.Checking.No_Reference
-                          then (others => <>)
-                          else (Kind => Landin.Checking.Reference_Field,
-                                Reference => Shape.Reference, others => <>)),
-                       others => <>);
+               declare
+                  Child : constant Landin.Checking.Field_Shape :=
+                    Landin.Checking.Array_Field_Element (Types.all, Shape);
+               begin
+                  return
+                    (Kind => Ty.Fixed_Array, Length => Shape.Length,
+                     Element => (if not Has_Element_Metadata (Child)
+                                 then Child.Element else Ty.U8),
+                     Element_Nominal =>
+                       (if Child.Kind = Landin.Checking.Aggregate_Field
+                        then Child.Nominal
+                        else Landin.Checking.No_Nominal_Type),
+                     Element_Shape =>
+                       (if Has_Element_Metadata (Child)
+                          and then Child.Kind
+                            /= Landin.Checking.Aggregate_Field
+                        then Child else (others => <>)),
+                     others => <>);
+               end;
             when Landin.Checking.Reference_Field =>
                declare
                   Item : constant Landin.Checking.Reference_Descriptor :=
@@ -1083,12 +1310,15 @@ package body Landin.Stages.Checking is
             when Ty.Aggregate =>
                return (Kind => Landin.Checking.Aggregate_Field,
                        Nominal => Item.Nominal, others => <>);
-            when Ty.Fixed_Array =>
-               return (Kind => Landin.Checking.Fixed_Array_Field,
-                       Length => Item.Length, Element => Item.Element,
-                       Nominal => Item.Element_Nominal,
-                       Reference => Item.Element_Shape.Reference,
+            when Ty.Function_Value =>
+               return (Kind => Landin.Checking.Scalar_Field,
+                       Element => Ty.Usize, Signature => Item.Signature,
                        others => <>);
+            when Ty.Fixed_Array =>
+               return Landin.Checking.Make_Array_Field
+                 (Types.all, Item.Length,
+                  Complete_Element
+                    (Item.Element, Item.Element_Nominal, Item.Element_Shape));
             when Ty.Pointer_Value | Ty.Slice_Value =>
                return (Kind => Landin.Checking.Reference_Field,
                        Reference => Item.Reference, others => <>);
@@ -1105,41 +1335,50 @@ package body Landin.Stages.Checking is
       end Descriptor_Shape;
 
       function Shape_Bytes
-        (Shape : Landin.Checking.Field_Shape) return Ty.Magnitude is
+        (Shape : Landin.Checking.Field_Shape) return Ty.Magnitude
+      is
+         Size : Landin.Targets.Byte_Count;
+         Alignment : Landin.Targets.Byte_Alignment;
       begin
-         case Shape.Kind is
-            when Landin.Checking.Reference_Field =>
-               if Landin.Checking.Descriptor_Of
-                 (Types.all, Shape.Reference).Kind = Ty.Any_Value
-               then
-                  return Ty.Magnitude (Landin.Targets.Any_Value_Size (Facts));
-               end if;
-               return Ty.Magnitude (Landin.Targets.Bytes
-                 (Landin.Targets.Pointer_Size (Facts))) *
-                   (if Landin.Checking.Descriptor_Of
-                     (Types.all, Shape.Reference).Kind = Ty.Pointer_Value
-                    then 1 else 2);
-            when Landin.Checking.Aggregate_Field =>
-               return Ty.Magnitude
-                 (Landin.Checking.Layout_Size (Types.all, Shape.Nominal));
-            when Landin.Checking.Fixed_Array_Field =>
-               return Ty.Magnitude (Shape.Length) * Shape_Bytes
-                 ((if Shape.Reference /= Landin.Checking.No_Reference
-                   then (Kind => Landin.Checking.Reference_Field,
-                         Reference => Shape.Reference, others => <>)
-                   elsif Shape.Nominal /= Landin.Checking.No_Nominal_Type
-                   then (Kind => Landin.Checking.Aggregate_Field,
-                         Nominal => Shape.Nominal, others => <>)
-                   else (Kind => Landin.Checking.Scalar_Field,
-                         Element => Shape.Element, others => <>)));
-            when Landin.Checking.Scalar_Field =>
-               return Ty.Magnitude (Landin.Targets.Bytes
-                 (Ty.Storage_Size (Shape.Element, Facts)));
-            when Landin.Checking.Variant_Field =>
-               raise Landin.Compiler_Defect with
-                 "a variant is not an immediate array element";
-         end case;
+         Landin.Checking.Shape_Extent
+           (Types.all, Shape, Facts, Size, Alignment);
+         return Ty.Magnitude (Size);
       end Shape_Bytes;
+
+      function Context_For_Shape
+        (Shape : Landin.Checking.Field_Shape) return Value_Context;
+
+      function Context_For_Shape
+        (Shape : Landin.Checking.Field_Shape) return Value_Context
+      is
+         Item : constant Type_Descriptor := Shape_Descriptor (Shape);
+      begin
+         return (Kind => Item.Kind, Nominal => Item.Nominal,
+                 Length => Item.Length, Element => Item.Element,
+                 Element_Nominal => Item.Element_Nominal,
+                 Element_Shape => Item.Element_Shape,
+                 Reference => Item.Reference, Signature => Item.Signature,
+                 Concept => Item.Concept, others => <>);
+      end Context_For_Shape;
+
+      procedure Note_Array_Shape
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Shape   : Landin.Checking.Field_Shape);
+
+      procedure Note_Array_Shape
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Shape   : Landin.Checking.Field_Shape)
+      is
+         Item : constant Type_Descriptor := Shape_Descriptor (Shape);
+      begin
+         Landin.Checking.Note_Array
+           (Types.all, Of_Tree, Node, Item.Length, Item.Element,
+            Shape => Item.Element_Shape);
+         Landin.Checking.Note_Array_Element_Nominal
+           (Types.all, Of_Tree, Node, Item.Element_Nominal);
+      end Note_Array_Shape;
 
       function Type_Descriptors_Agree
         (Left, Right : Type_Descriptor) return Boolean;
@@ -1695,10 +1934,13 @@ package body Landin.Stages.Checking is
                    (Types.all, Left.Atoms, Right.Atoms);
             when Ty.Fixed_Array =>
                return Left.Length = Right.Length
-                 and then Left.Element = Right.Element
-                 and then Left.Element_Nominal = Right.Element_Nominal
                  and then Landin.Checking.Field_Shapes_Agree
-                   (Types.all, Left.Element_Shape, Right.Element_Shape);
+                   (Types.all,
+                    Complete_Element
+                      (Left.Element, Left.Element_Nominal, Left.Element_Shape),
+                    Complete_Element
+                      (Right.Element, Right.Element_Nominal,
+                       Right.Element_Shape));
             when Ty.Aggregate =>
                return Left.Nominal = Right.Nominal;
             when Ty.Any_Value =>
@@ -1730,8 +1972,7 @@ package body Landin.Stages.Checking is
                return Landin.Checking.Atom_Set_Type_Actual
                  (Types.all, Descriptor.Atoms);
             when Ty.Fixed_Array =>
-               if Descriptor.Element_Shape.Kind
-                 /= Landin.Checking.Scalar_Field
+               if Has_Element_Metadata (Descriptor.Element_Shape)
                then
                   return Landin.Checking.Fixed_Array_Type_Actual
                     (Types.all, Descriptor.Length, Descriptor.Element_Shape);
@@ -2118,9 +2359,7 @@ package body Landin.Stages.Checking is
          elsif Descriptor.Kind = Ty.Aggregate then
             Ensure_Nominal (Descriptor.Nominal, Valid);
          elsif Descriptor.Kind = Ty.Fixed_Array then
-            if Descriptor.Element_Shape.Kind
-              /= Landin.Checking.Scalar_Field
-            then
+            if Has_Element_Metadata (Descriptor.Element_Shape) then
                declare
                   Element : constant Type_Descriptor := Require_Value_Layout
                     (Shape_Descriptor (Descriptor.Element_Shape),
@@ -2138,8 +2377,7 @@ package body Landin.Stages.Checking is
             if Valid then
                declare
                   Element_Bytes : constant Ty.Magnitude :=
-                    (if Descriptor.Element_Shape.Kind
-                           /= Landin.Checking.Scalar_Field
+                    (if Has_Element_Metadata (Descriptor.Element_Shape)
                      then Shape_Bytes (Descriptor.Element_Shape)
                      elsif Descriptor.Element_Nominal
                            /= Landin.Checking.No_Nominal_Type
@@ -2342,7 +2580,7 @@ package body Landin.Stages.Checking is
                elsif Element.Kind /= Ty.Undecided
                  and then Element.Kind not in Ty.Scalar_Name | Ty.Aggregate
                    | Ty.Fixed_Array | Ty.Pointer_Value | Ty.Slice_Value
-                   | Ty.Any_Value
+                   | Ty.Any_Value | Ty.Function_Value
                then
                   if Landin.Provenance.Is_Known (Application) then
                      Bad.Report
@@ -2460,7 +2698,10 @@ package body Landin.Stages.Checking is
                is
                   Descriptor : constant Type_Descriptor := Normalized_Type
                     (Of_Tree, Syn.Declared_Type (Of_Tree, Node), Actuals,
-                     Application, Identity_Only);
+                     Application,
+                     (if Syn.Uses_C_ABI (Of_Tree, Written)
+                         and then Struct_Layout_Depth = 0
+                      then Value_Layout else Identity_Only));
                begin
                   if Descriptor.Kind = Ty.Undecided then
                      Concrete := False;
@@ -2482,6 +2723,23 @@ package body Landin.Stages.Checking is
                           Semantic_Convention (Of_Tree, Node);
                         Part.Escaping := Syn.Is_Escaping (Of_Tree, Node);
                         Part.Caller := Syn.Is_Caller (Of_Tree, Node);
+                     end if;
+                     if Descriptor.Kind in Ty.Integer_Name then
+                        declare
+                           Type_Node : constant Syn.Node_Id :=
+                             Syn.Declared_Type (Of_Tree, Node);
+                        begin
+                           Part.Constraint := Landin.Checking.Constraint_Of
+                             (Types.all, Of_Tree, Type_Node);
+                           if Part.Constraint = Landin.Checking.No_Constraint
+                             and then Res.Verdict_Of
+                               (Meanings.all, Of_Tree, Type_Node) = Res.Bound
+                           then
+                              Part.Constraint := Landin.Checking.Constraint_Of
+                                (Types.all, Res.Bound_To
+                                   (Meanings.all, Of_Tree, Type_Node));
+                           end if;
+                        end;
                      end if;
                      Validate_Caller_Parameter
                        (Of_Tree, Node, Part, Valid);
@@ -2540,6 +2798,8 @@ package body Landin.Stages.Checking is
                   end;
                end if;
 
+               Validate_C_Signature
+                 (Of_Tree, Written, Parameters, Results, Valid);
                if not Valid then
                   return Invalid;
                elsif not Concrete then
@@ -2556,7 +2816,9 @@ package body Landin.Stages.Checking is
                       else Landin.Checking.Concrete),
                      (if Source_Count = 0
                       then Landin.Checking.No_Return_Sources
-                      else Sources (1 .. Source_Count))),
+                      else Sources (1 .. Source_Count)),
+                     C_ABI => Syn.Uses_C_ABI (Of_Tree, Written),
+                     Variadic => Syn.Is_Variadic (Of_Tree, Written)),
                   others    => <>);
             end;
          end if;
@@ -2667,6 +2929,9 @@ package body Landin.Stages.Checking is
                              (Types.all, Means),
                            Element_Nominal =>
                              Landin.Checking.Array_Element_Nominal
+                               (Types.all, Means),
+                           Element_Shape =>
+                             Landin.Checking.Array_Element_Shape
                                (Types.all, Means),
                            others => <>);
                      when Ty.Aggregate =>
@@ -3357,22 +3622,7 @@ package body Landin.Stages.Checking is
                         others    => <>);
                   end if;
                when Ty.Fixed_Array =>
-                  if Descriptor.Element_Shape.Kind
-                    = Landin.Checking.Fixed_Array_Field
-                  then
-                     Report_Field
-                       (Field, "a nested fixed-array struct field is not"
-                               & " enabled");
-                     Valid := False;
-                     return;
-                  end if;
-                  Into :=
-                    (Kind    => Landin.Checking.Fixed_Array_Field,
-                     Element => Descriptor.Element,
-                     Length  => Descriptor.Length,
-                     Nominal => Descriptor.Element_Nominal,
-                     Reference => Descriptor.Element_Shape.Reference,
-                     others  => <>);
+                  Into := Descriptor_Shape (Descriptor);
                when Ty.Aggregate =>
                   if Descriptor.Nominal
                        = Landin.Checking.No_Nominal_Type
@@ -3530,9 +3780,11 @@ package body Landin.Stages.Checking is
          declare
             Fits : Boolean;
          begin
+            Validate_C_Layout (Of_Tree, Struct_Node, Fields);
             Landin.Checking.Lay_Out
               (Types.all, Instance, Fields, Facts, Fits,
-               Cases => Cases, Payloads => Payloads);
+               Cases => Cases, Payloads => Payloads,
+               C_Layout => Syn.Has_C_Layout (Of_Tree, Struct_Node));
             Valid := Fits;
             if not Fits then
                if Landin.Provenance.Is_Known (Application) then
@@ -4476,24 +4728,13 @@ package body Landin.Stages.Checking is
                         end if;
                      end;
                   elsif Held = Ty.Fixed_Array then
-                     Into :=
-                       (Kind    => Landin.Checking.Fixed_Array_Field,
-                        Element => Landin.Checking.Array_Element
-                                     (Types.all, Of_Tree,
-                                      Syn.Declared_Type (Of_Tree, Each)),
-                        Length  => Landin.Checking.Array_Length
-                                     (Types.all, Of_Tree,
-                                      Syn.Declared_Type (Of_Tree, Each)),
-                        Reference => Complex_Element
-                          (Of_Tree, Syn.Declared_Type
-                             (Of_Tree, Each)).Reference,
-                        --  D121: an ordinary-struct element carries the
-                        --  declaration that wrote it, as a child does.
-                        Nominal =>
-                          Landin.Checking.Array_Element_Nominal
-                            (Types.all, Of_Tree,
-                             Syn.Declared_Type (Of_Tree, Each)),
-                        others  => <>);
+                     Into := Landin.Checking.Make_Array_Field
+                       (Types.all, Landin.Checking.Array_Length
+                          (Types.all, Of_Tree,
+                           Syn.Declared_Type (Of_Tree, Each)),
+                        Landin.Checking.Array_Element_Shape
+                          (Types.all, Of_Tree,
+                           Syn.Declared_Type (Of_Tree, Each)));
                   elsif Held = Ty.Aggregate
                     and then Aggregate_Allowed
                   then
@@ -4632,9 +4873,11 @@ package body Landin.Stages.Checking is
                           in Landin.Checking.Instance_Unseen
                              | Landin.Checking.Instance_Building
                      then
+                        Validate_C_Layout (Of_Tree, Written, Fields);
                         Landin.Checking.Lay_Out
                           (Types.all, Nominal, Fields, Facts, Fits,
-                           Cases => Cases, Payloads => Payloads);
+                           Cases => Cases, Payloads => Payloads,
+                           C_Layout => Syn.Has_C_Layout (Of_Tree, Written));
 
                         if not Fits then
                            Bad.Report
@@ -4699,7 +4942,7 @@ package body Landin.Stages.Checking is
                  and then not Aggregate_Element
                  and then Held not in
                    Ty.Fixed_Array | Ty.Pointer_Value
-                   | Ty.Slice_Value | Ty.Any_Value
+                   | Ty.Slice_Value | Ty.Any_Value | Ty.Function_Value
                then
                   --  Three passes reach a written type; the first to
                   --  refuse it records that, so a reader sees one report.
@@ -4757,6 +5000,9 @@ package body Landin.Stages.Checking is
                                 * Shape_Bytes
                                   (Landin.Checking.Array_Element_Shape
                                      (Types.all, Of_Tree, Element))
+                              elsif Held = Ty.Function_Value
+                              then Ty.Magnitude (Landin.Targets.Bytes
+                                (Ty.Storage_Size (Ty.Usize, Facts)))
                               elsif Held = Ty.Any_Value
                               then Ty.Magnitude
                                 (Landin.Targets.Any_Value_Size (Facts))
@@ -4799,7 +5045,7 @@ package body Landin.Stages.Checking is
                   (if Aggregate_Element then Ty.U8 else Ty.Scalar_Name
                      (if Held in
                        Ty.Fixed_Array | Ty.Pointer_Value
-                   | Ty.Slice_Value | Ty.Any_Value
+                   | Ty.Slice_Value | Ty.Any_Value | Ty.Function_Value
                       then Ty.U8 else Held)));
                if Aggregate_Element then
                   Landin.Checking.Note_Array_Element_Nominal
@@ -4807,16 +5053,18 @@ package body Landin.Stages.Checking is
                elsif Held = Ty.Fixed_Array then
                   Landin.Checking.Note_Array_Element_Shape
                     (Types.all, Of_Tree, Written,
-                     (Kind    => Landin.Checking.Fixed_Array_Field,
-                      Reference => Complex_Element
-                        (Of_Tree, Element).Reference,
-                      Length  => Landin.Checking.Array_Length
-                        (Types.all, Of_Tree, Element),
-                      Element => Landin.Checking.Array_Element
-                        (Types.all, Of_Tree, Element),
-                      Nominal => Landin.Checking.Array_Element_Nominal
-                        (Types.all, Of_Tree, Element),
-                      others  => <>));
+                     Landin.Checking.Make_Array_Field
+                       (Types.all, Landin.Checking.Array_Length
+                          (Types.all, Of_Tree, Element),
+                        Landin.Checking.Array_Element_Shape
+                          (Types.all, Of_Tree, Element)));
+               elsif Held = Ty.Function_Value then
+                  Landin.Checking.Note_Array_Element_Shape
+                    (Types.all, Of_Tree, Written,
+                     (Kind => Landin.Checking.Scalar_Field,
+                      Element => Ty.Usize,
+                      Signature => Landin.Checking.Signature_Of
+                        (Types.all, Of_Tree, Element), others => <>));
                elsif Held in Ty.Pointer_Value | Ty.Slice_Value then
                   Landin.Checking.Note_Array_Element_Shape
                     (Types.all, Of_Tree, Written,
@@ -5152,7 +5400,12 @@ package body Landin.Stages.Checking is
                   Landin.Checking.Note_Array
                     (Types.all, Of_Tree, Written,
                      Landin.Checking.Array_Length (Types.all, Means),
-                     Landin.Checking.Array_Element (Types.all, Means));
+                     Landin.Checking.Array_Element (Types.all, Means),
+                     Shape => Landin.Checking.Array_Element_Shape
+                       (Types.all, Means));
+                  Landin.Checking.Note_Array_Element_Nominal
+                    (Types.all, Of_Tree, Written,
+                     Landin.Checking.Array_Element_Nominal (Types.all, Means));
                end if;
 
                --  D188: [0660]'s constraint is part of what the named
@@ -5225,7 +5478,10 @@ package body Landin.Stages.Checking is
             Written : constant Syn.Node_Id :=
               Syn.Declared_Type (Of_Tree, Declared);
             Held : constant Ty.Type_Kind := Type_At
-              (Of_Tree, Written, Requirement => Identity_Only);
+              (Of_Tree, Written,
+               Requirement => (if Syn.Uses_C_ABI (Of_Tree, Node)
+                                   and then Struct_Layout_Depth = 0
+                               then Value_Layout else Identity_Only));
             Part : Landin.Checking.Signature_Part :=
               (Kind => Held,
                Name => Syn.Name (Of_Tree, Declared),
@@ -5587,6 +5843,7 @@ package body Landin.Stages.Checking is
             end;
          end if;
 
+         Validate_C_Signature (Of_Tree, Node, Parts, Results, Valid);
          if not Valid then
             return Landin.Checking.No_Signature;
          end if;
@@ -5598,7 +5855,9 @@ package body Landin.Stages.Checking is
                  Errors, Error_Form,
                  (if Source_Count = 0
                   then Landin.Checking.No_Return_Sources
-                  else Sources (1 .. Source_Count)));
+                  else Sources (1 .. Source_Count)),
+                 C_ABI => Syn.Uses_C_ABI (Of_Tree, Node),
+                 Variadic => Syn.Is_Variadic (Of_Tree, Node));
          begin
             Landin.Checking.Note_Signature
               (Types.all, Of_Tree, Node, Made);
@@ -6279,10 +6538,7 @@ package body Landin.Stages.Checking is
                        Landin.Checking.Array_Element_Shape
                          (Types.all, Of_Tree.all, Written);
                   begin
-                     if Element_Shape.Kind
-                       in Landin.Checking.Fixed_Array_Field
-                          | Landin.Checking.Reference_Field
-                     then
+                     if Has_Element_Metadata (Element_Shape) then
                         Landin.Checking.Note_Array_Element_Shape
                           (Types.all, Id, Element_Shape);
                      end if;
@@ -7067,10 +7323,14 @@ package body Landin.Stages.Checking is
                     (Types.all, Left.Atoms, Right.Atoms);
                when Ty.Fixed_Array =>
                   return Left.Length = Right.Length
-                    and then Left.Element = Right.Element
-                    and then Left.Element_Nominal = Right.Element_Nominal
-                 and then Landin.Checking.Field_Shapes_Agree
-                   (Types.all, Left.Element_Shape, Right.Element_Shape);
+                    and then Landin.Checking.Field_Shapes_Agree
+                      (Types.all,
+                       Complete_Element
+                         (Left.Element, Left.Element_Nominal,
+                          Left.Element_Shape),
+                       Complete_Element
+                         (Right.Element, Right.Element_Nominal,
+                          Right.Element_Shape));
                when Ty.Aggregate =>
                   return Left.Nominal = Right.Nominal;
                when Ty.Function_Value =>
@@ -7756,8 +8016,7 @@ package body Landin.Stages.Checking is
                end if;
                declare
                   Element : constant Type_Descriptor :=
-                    (if Actual.Element_Shape.Kind
-                          /= Landin.Checking.Scalar_Field
+                    (if Has_Element_Metadata (Actual.Element_Shape)
                      then Shape_Descriptor (Actual.Element_Shape)
                      elsif Actual.Element_Nominal
                           /= Landin.Checking.No_Nominal_Type
@@ -7789,6 +8048,19 @@ package body Landin.Stages.Checking is
                     Landin.Checking.Signature_Error_Form
                       (Types.all, Signature);
                begin
+                  if Syn.Uses_C_ABI (Pattern_Tree, Pattern)
+                       /= Landin.Checking.Signature_Uses_C_ABI
+                         (Types.all, Signature)
+                    or else Syn.Is_Variadic (Pattern_Tree, Pattern)
+                       /= Landin.Checking.Signature_Is_Variadic
+                         (Types.all, Signature)
+                  then
+                     Report_Pattern_Failure
+                       (Argument, Position, Pattern_Tree, Pattern,
+                        "this argument's function convention or variadicness"
+                        & " differs from its pattern");
+                     return False;
+                  end if;
                   if Syn.Parameter_Count (Pattern_Tree, Pattern)
                        /= Landin.Checking.Signature_Parameter_Count
                          (Types.all, Signature)
@@ -8658,6 +8930,9 @@ package body Landin.Stages.Checking is
                      end;
                   end if;
 
+                  Validate_C_Signature
+                    (Template_Tree.all, Function_Node,
+                     Parameters, Results, Valid);
                   if Valid then
                      Signature := Landin.Checking.Add_Signature
                        (Types.all, Parameters, Results,
@@ -8665,7 +8940,11 @@ package body Landin.Stages.Checking is
                         Errors, Error_Form,
                         (if Source_Count = 0
                          then Landin.Checking.No_Return_Sources
-                         else Sources (1 .. Source_Count)));
+                         else Sources (1 .. Source_Count)),
+                        C_ABI => Syn.Uses_C_ABI
+                          (Template_Tree.all, Function_Node),
+                        Variadic => Syn.Is_Variadic
+                          (Template_Tree.all, Function_Node));
                   elsif Landin.Diagnostics.Count (Found) = Reports_Before
                   then
                      Bad.Report
@@ -9036,12 +9315,15 @@ package body Landin.Stages.Checking is
          if Syn.Kind (Of_Tree, Node) /= Syn.Call
            or else Syn.Argument_Count (Of_Tree, Node) /= 1
            or else Syn.Kind
-             (Of_Tree, Syn.Callee_Of (Of_Tree, Node)) /= Syn.Name_Reference
+             (Of_Tree, Syn.Callee_Of (Of_Tree, Node))
+               not in Syn.Name_Reference | Syn.Member_Selection
          then
             return Ty.Ill_Typed;
          end if;
 
-         if Landin.Checking.Named
+         if Syn.Kind (Of_Tree, Syn.Callee_Of (Of_Tree, Node))
+              = Syn.Name_Reference
+           and then Landin.Checking.Named
               (Types.all,
                Syn.Name (Of_Tree, Syn.Callee_Of (Of_Tree, Node)))
                 in Ty.Scalar_Name
@@ -9088,7 +9370,8 @@ package body Landin.Stages.Checking is
          if Syn.Kind (Of_Tree, Node) /= Syn.Call
            or else Syn.Argument_Count (Of_Tree, Node) /= 1
            or else Syn.Kind
-             (Of_Tree, Syn.Callee_Of (Of_Tree, Node)) /= Syn.Name_Reference
+             (Of_Tree, Syn.Callee_Of (Of_Tree, Node))
+               not in Syn.Name_Reference | Syn.Member_Selection
          then
             return Invalid;
          end if;
@@ -9096,7 +9379,9 @@ package body Landin.Stages.Checking is
          declare
             Callee : constant Syn.Node_Id := Syn.Callee_Of (Of_Tree, Node);
             Name : constant Landin.Source.Names.Name_Id :=
-              Syn.Name (Of_Tree, Callee);
+              (if Syn.Kind (Of_Tree, Callee) = Syn.Name_Reference
+               then Syn.Name (Of_Tree, Callee)
+               else Landin.Source.Names.No_Name);
          begin
             if Landin.Checking.Is_Text_Name (Types.all, Name) then
                return Text_Descriptor
@@ -9655,7 +9940,9 @@ package body Landin.Stages.Checking is
       function Check_Call
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
-         Signature : Landin.Checking.Signature_Id) return Ty.Type_Kind
+         Signature : Landin.Checking.Signature_Id;
+         Expected_Reference : Landin.Checking.Reference_Id :=
+           Landin.Checking.No_Reference) return Ty.Type_Kind
       is
          Callee : constant Syn.Node_Id := Syn.Callee_Of (Of_Tree, Node);
          Erased_Self : constant Boolean :=
@@ -9669,6 +9956,8 @@ package body Landin.Stages.Checking is
          Total_Parameters : constant Natural :=
            Landin.Checking.Signature_Parameter_Count
              (Types.all, Signature);
+         Variadic : constant Boolean :=
+           Landin.Checking.Signature_Is_Variadic (Types.all, Signature);
          Wanted : Natural := 0;
          Written_Count : constant Natural :=
            Syn.Argument_Count (Of_Tree, Node);
@@ -9679,6 +9968,22 @@ package body Landin.Stages.Checking is
             then Landin.Checking.Nth_Signature_Result
               (Types.all, Signature, 1)
             else (Kind => Ty.No_Value, others => <>));
+         --  A call-else expression joins in its destination's optional
+         --  pointer union, not in the narrower successful pointer type.
+         --  Keep the stored join when deferred error inference revisits it.
+         Context_Reference : constant Landin.Checking.Reference_Id :=
+           (if Expected_Reference /= Landin.Checking.No_Reference
+            then Expected_Reference
+            else Landin.Checking.Reference_Of (Types.all, Of_Tree, Node));
+         Joined_Reference : constant Landin.Checking.Reference_Id :=
+           (if Result.Kind = Ty.Pointer_Value
+              and then Syn.Recovery_Of (Of_Tree, Node) /= Syn.No_Node
+              and then Landin.Checking.Holds (Types.all, Context_Reference)
+              and then Landin.Checking.Is_Optional_Pointer
+                (Types.all, Context_Reference)
+              and then Landin.Checking.Reference_Satisfies
+                (Types.all, Result.Reference, Context_Reference)
+            then Context_Reference else Result.Reference);
          Inout_Places : array (1 .. Written_Count) of Syn.Node_Id :=
            [others => Syn.No_Node];
          Inout_Count : Natural := 0;
@@ -9733,6 +10038,9 @@ package body Landin.Stages.Checking is
                   end if;
                end if;
             end loop;
+            if Variadic then
+               return Index;
+            end if;
             raise Landin.Compiler_Defect with
               "a written call position has no source parameter";
          end Nth_Written_Parameter;
@@ -9777,7 +10085,51 @@ package body Landin.Stages.Checking is
             Next_Positional : Natural := 0;
             Valid : Boolean := True;
          begin
-            if Syn.Kind (Of_Tree, Node) = Syn.Call then
+            if Variadic then
+               for Written in 1 .. Written_Count loop
+                  declare
+                     Argument : constant Syn.Node_Id :=
+                       Syn.Nth_Argument (Of_Tree, Node, Written);
+                  begin
+                     if Syn.Kind (Of_Tree, Argument) = Syn.Call_Argument then
+                        if Syn.Argument_Label (Of_Tree, Argument)
+                             /= Landin.Source.Names.No_Name
+                          or else Syn.Expression_Projection
+                            (Of_Tree, Argument) = Syn.No_Node
+                          or else Res.Role_Of
+                            (Meanings.all, Of_Tree, Argument)
+                              in Res.Type_Argument | Res.Fixed_Argument
+                        then
+                           Bad.Report
+                             (Item => Bad.Type_Mismatch,
+                              Source => Syn.Source_Of (Of_Tree),
+                              Where => Syn.Where (Of_Tree, Argument),
+                              Message => "a C variadic call takes only"
+                                         & " positional runtime arguments",
+                              Note => "[1580]: labels and static arguments"
+                                      & " are not supported in variadic calls",
+                              Related => Landin.Checking.Signature_Origin
+                                (Types.all, Signature),
+                              Because => "this variadic signature",
+                              Into => Found);
+                           Res.Finish_Call_Match
+                             (Meanings.all, Of_Tree, Node, Accepted => False);
+                           return False;
+                        end if;
+                        Res.Match_Runtime_Argument
+                          (Meanings.all, Of_Tree, Argument, Written);
+                     end if;
+                  end;
+               end loop;
+               if Written_Count >= Wanted then
+                  if Syn.Kind (Of_Tree, Node) = Syn.Labeled_Application then
+                     Res.Finish_Call_Match
+                       (Meanings.all, Of_Tree, Node, Accepted => True);
+                  end if;
+                  return True;
+               end if;
+            end if;
+            if Syn.Kind (Of_Tree, Node) = Syn.Call or else Variadic then
                if Written_Count /= Wanted then
                   Bad.Report
                     (Item    => Bad.Type_Mismatch,
@@ -10011,6 +10363,80 @@ package body Landin.Stages.Checking is
             then
                goto Next_Runtime_Argument;
             end if;
+            if Variadic and then Written > Total_Parameters then
+               declare
+                  Raw : constant Syn.Node_Id :=
+                    Syn.Nth_Argument (Of_Tree, Node, Written);
+                  Argument : constant Syn.Node_Id :=
+                    (if Syn.Kind (Of_Tree, Raw) = Syn.Call_Argument
+                     then Syn.Expression_Projection (Of_Tree, Raw)
+                     else Raw);
+                  Got : Ty.Type_Kind;
+               begin
+                  --  The C carrier check needs the actual value shape even
+                  --  when that shape is refused at this boundary.  Reuse the
+                  --  contextual storage/construction paths rather than the
+                  --  general-expression aggregate refusal in Synthesise.
+                  if Is_Struct_Construction (Of_Tree, Argument)
+                    and then Construction_Type (Of_Tree, Argument)
+                      /= Syn.No_Node
+                  then
+                     declare
+                        Wrote : constant Landin.Checking.Nominal_Type_Id :=
+                          Construction_Body (Of_Tree, Argument);
+                     begin
+                        if Wrote = Landin.Checking.No_Nominal_Type then
+                           Got := Ty.Ill_Typed;
+                        else
+                           Check_Struct_Literal
+                             (Of_Tree, Argument, Wrote, Static_Image => False);
+                           Got := Landin.Checking.Type_Of
+                             (Types.all, Of_Tree, Argument);
+                        end if;
+                     end;
+                  else
+                     Got := (if Syn.Kind (Of_Tree, Argument)
+                                  in Syn.Name_Reference | Syn.Member_Selection
+                             then Selected_From (Of_Tree, Argument)
+                             else Synthesise (Of_Tree, Argument));
+                  end if;
+                  --  Only untyped literals take the promoted context here.
+                  --  Lowering promotes typed narrow integers/bool and f32
+                  --  from their original Type_Of, without changing identity.
+                  if Got = Ty.Untyped_Integer then
+                     Commit_To (Of_Tree, Argument, Ty.I32);
+                     Got := Landin.Checking.Type_Of
+                       (Types.all, Of_Tree, Argument);
+                  elsif Got = Ty.Untyped_Float then
+                     Commit_To (Of_Tree, Argument, Ty.F64);
+                     Got := Landin.Checking.Type_Of
+                       (Types.all, Of_Tree, Argument);
+                  end if;
+                  if Got /= Ty.Ill_Typed
+                    and then not
+                      (Got in Ty.Scalar_Name | Ty.Pointer_Value
+                       or else (Got = Ty.Function_Value
+                         and then C_Callback_Allowed
+                           (Landin.Checking.Signature_Of
+                              (Types.all, Of_Tree, Argument))))
+                  then
+                     Bad.Report
+                       (Item => Bad.Type_Mismatch,
+                        Source => Syn.Source_Of (Of_Tree),
+                        Where => Syn.Where (Of_Tree, Argument),
+                        Message => "this C variadic tail argument is not"
+                                   & " an enabled scalar carrier",
+                        Note => "[1580]: tails support scalars, pointers and"
+                                & " fixed C callbacks, not structs, arrays,"
+                                & " slices, atoms or any values",
+                        Related => Landin.Checking.Signature_Origin
+                          (Types.all, Signature),
+                        Because => "this variadic signature", Into => Found);
+                     Landin.Checking.Refuse (Types.all, Of_Tree, Argument);
+                  end if;
+               end;
+               goto Next_Runtime_Argument;
+            end if;
             declare
                Raw_Argument : constant Syn.Node_Id :=
                  Syn.Nth_Argument (Of_Tree, Node, Written);
@@ -10136,6 +10562,15 @@ package body Landin.Stages.Checking is
                      (Kind => Ty.Any_Value, Concept => Parameter.Concept,
                       others => <>),
                      Parameter.Site, "this runtime-dispatch parameter");
+               elsif Wants = Ty.Pointer_Value
+                 and then Landin.Checking.Is_Optional_Pointer
+                   (Types.all, Parameter.Reference)
+               then
+                  Check_Contextual_Value
+                    (Of_Tree, Argument,
+                     (Kind => Wants, Reference => Parameter.Reference,
+                      others => <>),
+                     Parameter.Site, "this reference parameter");
                elsif Wants in Ty.Pointer_Value | Ty.Slice_Value then
                   declare
                      Got : constant Ty.Type_Kind :=
@@ -10261,17 +10696,23 @@ package body Landin.Stages.Checking is
                            Check_Array_Literal
                              (Of_Tree, Node, Argument,
                               Expected, Element, Static_Image => False,
-                              Context_Site => Parameter.Site);
+                              Context_Site => Parameter.Site,
+                              Element_Nominal => Parameter.Nominal,
+                              Shape => Parameter.Element_Shape);
                         when Syn.Array_Repetition =>
                            Check_Array_Repetition
                              (Of_Tree, Node, Argument,
                               Expected, Element, Static_Image => False,
-                              Context_Site => Parameter.Site);
+                              Context_Site => Parameter.Site,
+                              Element_Nominal => Parameter.Nominal,
+                              Shape => Parameter.Element_Shape);
                         when Syn.Mixed_Array_Repetition =>
                            Check_Mixed_Array_Repetition
                              (Of_Tree, Node, Argument,
                               Expected, Element, Static_Image => False,
-                              Context_Site => Parameter.Site);
+                              Context_Site => Parameter.Site,
+                              Element_Nominal => Parameter.Nominal,
+                              Shape => Parameter.Element_Shape);
                         when others =>
                            raise Landin.Compiler_Defect;
                      end case;
@@ -10279,17 +10720,16 @@ package body Landin.Stages.Checking is
                elsif Wants in Ty.Aggregate | Ty.Fixed_Array
                  and then Syn.Kind (Of_Tree, Argument) = Syn.Zeroed_Literal
                then
-                  Landin.Checking.Note
-                    (Types.all, Of_Tree, Argument, Wants);
                   if Wants = Ty.Aggregate then
-                        Landin.Checking.Note_Nominal
-                          (Types.all, Of_Tree, Argument,
-                           Parameter.Nominal);
+                     Check_Aggregate_Zeroed
+                       (Of_Tree, Argument, Parameter.Nominal,
+                        Parameter.Site, "this parameter");
                   else
-                        Landin.Checking.Note_Array
-                          (Types.all, Of_Tree, Argument,
-                           Parameter.Length, Parameter.Element,
-                           Shape => Parameter.Element_Shape);
+                     Check_Array_Zeroed
+                       (Of_Tree, Argument, Parameter.Length,
+                        Parameter.Element, Parameter.Nominal,
+                        Parameter.Site, "this parameter",
+                        Shape => Parameter.Element_Shape);
                   end if;
                elsif Wants in Ty.Aggregate | Ty.Fixed_Array
                  and then Syn.Kind (Of_Tree, Argument)
@@ -10332,14 +10772,12 @@ package body Landin.Stages.Checking is
                          (Landin.Checking.Array_Length
                             (Types.all, Of_Tree, Argument)
                             /= Parameter.Length
-                          or else Landin.Checking.Array_Element
-                            (Types.all, Of_Tree, Argument)
-                            /= Parameter.Element
-                          or else Landin.Checking.Array_Element_Nominal
-                            (Types.all, Of_Tree, Argument) /= Parameter.Nominal
                           or else not Landin.Checking.Field_Shapes_Agree
-                            (Types.all, Complex_Element (Of_Tree, Argument),
-                             Parameter.Element_Shape))
+                            (Types.all, Landin.Checking.Array_Element_Shape
+                               (Types.all, Of_Tree, Argument),
+                             Complete_Element
+                               (Parameter.Element, Parameter.Nominal,
+                                Parameter.Element_Shape)))
                      then
                         Landin.Checking.Refuse
                           (Types.all, Of_Tree, Argument);
@@ -10504,7 +10942,7 @@ package body Landin.Stages.Checking is
                      when Ty.Function_Value =>
                         Expected.Signature := Result.Signature;
                      when Ty.Pointer_Value | Ty.Slice_Value =>
-                        Expected.Reference := Result.Reference;
+                        Expected.Reference := Joined_Reference;
                      when Ty.Any_Value =>
                         Expected.Concept := Result.Concept;
                      when others =>
@@ -10556,7 +10994,7 @@ package body Landin.Stages.Checking is
               (Types.all, Of_Tree, Node, Result.Signature);
          elsif Result.Kind in Ty.Pointer_Value | Ty.Slice_Value then
             Landin.Checking.Note_Reference
-              (Types.all, Of_Tree, Node, Result.Reference);
+              (Types.all, Of_Tree, Node, Joined_Reference);
          end if;
          return Result.Kind;
       end Check_Call;
@@ -10853,6 +11291,9 @@ package body Landin.Stages.Checking is
              (Types.all, Wrote, Field);
 
          function Shape_Has_Zero
+           (Part : Landin.Checking.Field_Shape) return Boolean;
+
+         function Shape_Has_Zero
            (Part : Landin.Checking.Field_Shape) return Boolean
          is (case Part.Kind is
                 when Landin.Checking.Scalar_Field =>
@@ -10862,9 +11303,8 @@ package body Landin.Stages.Checking is
                   --  [0520]/[0540]: fixed-array zeroability follows its
                   --  element even at length zero; an empty extent does not
                   --  manufacture a zero image for its element type.
-                  Part.Reference = Landin.Checking.No_Reference
-                  and then (Part.Nominal = Landin.Checking.No_Nominal_Type
-                            or else Has_Zero_Image (Part.Nominal)),
+                  Shape_Has_Zero
+                    (Landin.Checking.Array_Field_Element (Types.all, Part)),
                 when Landin.Checking.Aggregate_Field =>
                   Has_Zero_Image (Part.Nominal),
                 when Landin.Checking.Variant_Field => False);
@@ -10915,13 +11355,11 @@ package body Landin.Stages.Checking is
             when Ty.Scalar_Name =>
                return True;
             when Ty.Fixed_Array =>
-               if Item.Element_Shape.Kind /= Landin.Checking.Scalar_Field then
-                  return Descriptor_Has_Zero_Image
-                    (Shape_Descriptor (Item.Element_Shape));
-               end if;
-               return Item.Element_Nominal
-                        = Landin.Checking.No_Nominal_Type
-                 or else Has_Zero_Image (Item.Element_Nominal);
+               return Descriptor_Has_Zero_Image
+                 (Shape_Descriptor
+                    (Complete_Element
+                       (Item.Element, Item.Element_Nominal,
+                        Item.Element_Shape)));
             when Ty.Aggregate =>
                return Has_Zero_Image (Item.Nominal);
             when others =>
@@ -14551,7 +14989,7 @@ package body Landin.Stages.Checking is
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
          Length  : Landin.Checking.Element_Count;
-         Element : Ty.Scalar_Name) return Boolean;
+         Shape   : Landin.Checking.Field_Shape) return Boolean;
 
       --  D49/D50 admit that same fixed-array field as a whole place only
       --  when assignment supplies `zeroed` or another fixed-array storage
@@ -14699,10 +15137,7 @@ package body Landin.Stages.Checking is
                             Landin.Checking.Array_Element_Shape
                               (Types.all, Means);
                      begin
-                        if Element_Shape.Kind
-                          in Landin.Checking.Fixed_Array_Field
-                             | Landin.Checking.Reference_Field
-                        then
+                        if Has_Element_Metadata (Element_Shape) then
                            Landin.Checking.Note_Array_Element_Shape
                              (Types.all, Of_Tree, Node, Element_Shape);
                         end if;
@@ -14967,30 +15402,10 @@ package body Landin.Stages.Checking is
                                 (Types.all, Of_Tree, Node, Ty.Fixed_Array);
                               Landin.Checking.Note_Field
                                 (Types.all, Of_Tree, Node, Which);
-                              Landin.Checking.Note_Array
-                                (Types.all, Of_Tree, Node,
-                                 Landin.Checking.Field_Array_Length
-                                   (Types.all, Wrote, Which),
-                                 Landin.Checking.Field_Array_Element
-                                   (Types.all, Wrote, Which),
-                                 Shape =>
-                                   (if Landin.Checking.Field_Shape_Of
-                                      (Types.all, Wrote, Which).Reference
-                                        = Landin.Checking.No_Reference
-                                    then (others => <>)
-                                    else
-                                      (Kind => Landin.Checking.Reference_Field,
-                                       Reference =>
-                                         Landin.Checking.Field_Shape_Of
-                                         (Types.all, Wrote, Which).Reference,
-                                       others => <>)));
-                              --  D121: an ordinary-struct element is part
-                              --  of that field's shape.
-                              Landin.Checking.Note_Array_Element_Nominal
-                                (Types.all, Of_Tree, Node,
+                              Note_Array_Shape
+                                (Of_Tree, Node,
                                  Landin.Checking.Field_Shape_Of
-                                   (Types.all, Wrote, Which)
-                                     .Nominal);
+                                   (Types.all, Wrote, Which));
                               return True;
                            end if;
                         end;
@@ -15083,15 +15498,16 @@ package body Landin.Stages.Checking is
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
          Length  : Landin.Checking.Element_Count;
-         Element : Ty.Scalar_Name) return Boolean
+         Shape   : Landin.Checking.Field_Shape) return Boolean
       is
       begin
          return Is_Direct_Module_Field (Of_Tree, Node)
            and then Admit_Array_Field (Of_Tree, Node)
            and then Landin.Checking.Array_Length
              (Types.all, Of_Tree, Node) = Length
-           and then Landin.Checking.Array_Element
-             (Types.all, Of_Tree, Node) = Element;
+           and then Landin.Checking.Field_Shapes_Agree
+             (Types.all, Landin.Checking.Array_Element_Shape
+                (Types.all, Of_Tree, Node), Shape);
       end Is_Module_Array_Field;
 
       function Indexed_From
@@ -15219,7 +15635,10 @@ package body Landin.Stages.Checking is
       end Is_Zeroed_Scalar_Place;
 
       function Synthesise
-        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind
+        (Of_Tree : Syn.Tree;
+         Node : Syn.Node_Id;
+         Expected_Reference : Landin.Checking.Reference_Id :=
+           Landin.Checking.No_Reference) return Ty.Type_Kind
       is
          Already : constant Ty.Type_Kind :=
            Landin.Checking.Type_Of (Types.all, Of_Tree, Node);
@@ -15706,23 +16125,26 @@ package body Landin.Stages.Checking is
                      begin
                         case Shape.Kind is
                            when Landin.Checking.Scalar_Field =>
-                              Item.Referent := Shape.Element;
+                              Item.Referent :=
+                                (if Shape.Signature
+                                      = Landin.Checking.No_Signature
+                                 then Shape.Element else Ty.Function_Value);
+                              Item.Signature := Shape.Signature;
                            when Landin.Checking.Aggregate_Field =>
                               Item.Referent := Ty.Aggregate;
                               Item.Nominal := Shape.Nominal;
                            when Landin.Checking.Fixed_Array_Field =>
-                              Item.Referent := Ty.Fixed_Array;
-                              Item.Length := Shape.Length;
-                              Item.Element := Shape.Element;
-                              Item.Element_Nominal := Shape.Nominal;
-                              if Shape.Reference
-                                /= Landin.Checking.No_Reference
-                              then
-                                 Item.Element_Shape :=
-                                   (Kind => Landin.Checking.Reference_Field,
-                                    Reference => Shape.Reference,
-                                    others => <>);
-                              end if;
+                              declare
+                                 Nested : constant Type_Descriptor :=
+                                   Shape_Descriptor (Shape);
+                              begin
+                                 Item.Referent := Ty.Fixed_Array;
+                                 Item.Length := Nested.Length;
+                                 Item.Element := Nested.Element;
+                                 Item.Element_Nominal :=
+                                   Nested.Element_Nominal;
+                                 Item.Element_Shape := Nested.Element_Shape;
+                              end;
                            when Landin.Checking.Reference_Field =>
                               declare
                                  Nested : constant
@@ -15979,22 +16401,7 @@ package body Landin.Stages.Checking is
                         end if;
                         return Kept (Ty.Aggregate);
                      elsif Shape.Kind = Landin.Checking.Fixed_Array_Field then
-                        Landin.Checking.Note_Array
-                          (Types.all, Of_Tree, Node,
-                           Shape.Length, Shape.Element,
-                           Shape =>
-                             (if Shape.Reference
-                                   = Landin.Checking.No_Reference
-                              then (others => <>)
-                              else (Kind => Landin.Checking.Reference_Field,
-                                    Reference => Shape.Reference,
-                                    others => <>)));
-                        if Shape.Nominal
-                          /= Landin.Checking.No_Nominal_Type
-                        then
-                           Landin.Checking.Note_Array_Element_Nominal
-                             (Types.all, Of_Tree, Node, Shape.Nominal);
-                        end if;
+                        Note_Array_Shape (Of_Tree, Node, Shape);
                         return Kept (Ty.Fixed_Array);
                      elsif Shape.Kind = Landin.Checking.Reference_Field then
                         declare
@@ -16015,6 +16422,10 @@ package body Landin.Stages.Checking is
                            end if;
                            return Kept (Descriptor.Kind);
                         end;
+                     elsif Shape.Signature /= Landin.Checking.No_Signature then
+                        Landin.Checking.Note_Signature
+                          (Types.all, Of_Tree, Node, Shape.Signature);
+                        return Kept (Ty.Function_Value);
                      end if;
                   end;
 
@@ -16923,7 +17334,9 @@ package body Landin.Stages.Checking is
                      return Kept (Ty.Ill_Typed);
                   end if;
 
-                  return Kept (Check_Call (Of_Tree, Node, Signature));
+                  return Kept
+                    (Check_Call (Of_Tree, Node, Signature,
+                                 Expected_Reference));
                end;
 
             when Syn.Address_Of =>
@@ -17406,6 +17819,14 @@ package body Landin.Stages.Checking is
             return;
          end if;
 
+         --  A conversion's callee is a resolved type, not a storage read.
+         --  Its qualified spelling has no bearing on the static image.
+         if Conversion_Target (Of_Tree, Where) in Ty.Scalar_Name then
+            Refuse_Static_Image_Subtree
+              (Of_Tree, Syn.Nth_Argument (Of_Tree, Where, 1), Context);
+            return;
+         end if;
+
          --  [0240]'s IEEE names are constants selected from a type, not
          --  fields read from runtime storage.  Their qualified spelling is
          --  therefore a scalar static-image leaf just as a float literal is.
@@ -17434,14 +17855,17 @@ package body Landin.Stages.Checking is
       end Refuse_Static_Image_Subtree;
 
       procedure Check_Array_Literal
-        (Of_Tree      : Syn.Tree;
-         Context      : Syn.Node_Id;
-         Literal      : Syn.Node_Id;
-         Expected     : Landin.Checking.Element_Count;
-         Element      : Ty.Scalar_Name;
-         Static_Image : Boolean;
-         Context_Site : Landin.Provenance.Origin :=
-           Landin.Provenance.No_Origin)
+        (Of_Tree         : Syn.Tree;
+         Context         : Syn.Node_Id;
+         Literal         : Syn.Node_Id;
+         Expected        : Landin.Checking.Element_Count;
+         Element         : Ty.Scalar_Name;
+         Static_Image    : Boolean;
+         Context_Site    : Landin.Provenance.Origin :=
+           Landin.Provenance.No_Origin;
+         Element_Nominal : Landin.Checking.Nominal_Type_Id :=
+           Landin.Checking.No_Nominal_Type;
+         Shape : Landin.Checking.Field_Shape := (others => <>))
       is
          Related : constant Landin.Provenance.Origin :=
            (if Landin.Provenance.Is_Known (Context_Site)
@@ -17458,7 +17882,10 @@ package body Landin.Stages.Checking is
             Landin.Checking.Note
               (Types.all, Of_Tree, Literal, Ty.Fixed_Array);
             Landin.Checking.Note_Array
-              (Types.all, Of_Tree, Literal, Expected, Element);
+              (Types.all, Of_Tree, Literal, Expected, Element,
+               Shape => Shape);
+            Landin.Checking.Note_Array_Element_Nominal
+              (Types.all, Of_Tree, Literal, Element_Nominal);
          end if;
 
          if Landin.Checking.Element_Count
@@ -17481,25 +17908,21 @@ package body Landin.Stages.Checking is
          end if;
 
          for Position in 1 .. Syn.Element_Count (Of_Tree, Literal) loop
-            Require
-              (Of_Tree, Syn.Nth_Element (Of_Tree, Literal, Position), Element,
-               Related, "the array element type");
+            --  Each element receives its complete destination, including
+            --  nominal identity, a nested array child or a code signature.
+            Check_Contextual_Value
+              (Of_Tree, Syn.Nth_Element (Of_Tree, Literal, Position),
+               Context_For_Shape
+                 (Complete_Element (Element, Element_Nominal, Shape)),
+               Related, "the array element type", Static_Image);
          end loop;
 
-         --  D24: an element must be a compile-time known scalar the
-         --  target-aware fold can compute; that admits every [1820]
-         --  operator applied to literals and to another module scalar
-         --  binding, and it excludes a member selection, an array
-         --  element index and a nested array literal.  A call has been
-         --  refused above by [1940] and reports L0305; these three are
-         --  refused here so the reader sees a boundary rather than a
-         --  compiler defect during image resolution.  The walk is
-         --  recursive because a subtree hides the same construct: `p.x
-         --  + 1` and `source[0] & 0xFF` reach the fold as an Add and a
-         --  Bitwise_And whose top-level kind is admitted, and only the
-         --  subtree carries the refusal.  A runtime literal (D23/D29)
-         --  accepts every well-typed expression and does not run this walk.
-         if Static_Image then
+         --  Scalar images retain D24's foldable-expression boundary.  A
+         --  compound element checks its own leaves contextually; a code
+         --  address is a relocation, not a scalar expression to fold.
+         if Static_Image and then not Has_Element_Metadata (Shape)
+           and then Element_Nominal = Landin.Checking.No_Nominal_Type
+         then
             for Position in 1 .. Syn.Element_Count (Of_Tree, Literal) loop
                Refuse_Static_Image_Subtree
                  (Of_Tree,
@@ -17664,6 +18087,10 @@ package body Landin.Stages.Checking is
             Given : Syn.Node_Id;
             Shape : Landin.Checking.Field_Shape)
          is
+            Item : constant Type_Descriptor := Shape_Descriptor (Shape);
+            Child : constant Landin.Checking.Field_Shape :=
+              Landin.Checking.Array_Field_Element (Types.all, Shape);
+
             procedure Require_Known (Each : Syn.Node_Id);
 
             procedure Require_Known (Each : Syn.Node_Id) is
@@ -17693,8 +18120,10 @@ package body Landin.Stages.Checking is
             case Syn.Kind (Of_Tree, Given) is
                when Syn.Array_Literal =>
                   Check_Array_Literal
-                    (Of_Tree, Label, Given, Shape.Length, Shape.Element,
-                     Static_Image => Static_Image);
+                    (Of_Tree, Label, Given, Item.Length, Item.Element,
+                     Static_Image => Static_Image,
+                     Element_Nominal => Item.Element_Nominal,
+                     Shape => Child);
                   if Static_Image then
                      for Position in
                        1 .. Syn.Element_Count (Of_Tree, Given)
@@ -17706,16 +18135,20 @@ package body Landin.Stages.Checking is
 
                when Syn.Array_Repetition =>
                   Check_Array_Repetition
-                    (Of_Tree, Label, Given, Shape.Length, Shape.Element,
-                     Static_Image => Static_Image);
+                    (Of_Tree, Label, Given, Item.Length, Item.Element,
+                     Static_Image => Static_Image,
+                     Element_Nominal => Item.Element_Nominal,
+                     Shape => Child);
                   if Static_Image then
                      Require_Known (Syn.Repeated_Element (Of_Tree, Given));
                   end if;
 
                when Syn.Mixed_Array_Repetition =>
                   Check_Mixed_Array_Repetition
-                    (Of_Tree, Label, Given, Shape.Length, Shape.Element,
-                     Static_Image => Static_Image);
+                    (Of_Tree, Label, Given, Item.Length, Item.Element,
+                     Static_Image => Static_Image,
+                     Element_Nominal => Item.Element_Nominal,
+                     Shape => Child);
                   if Static_Image then
                      for Position in
                        1 .. Syn.Element_Count (Of_Tree, Given)
@@ -17728,9 +18161,9 @@ package body Landin.Stages.Checking is
 
                when Syn.Zeroed_Literal =>
                   Check_Array_Zeroed
-                    (Of_Tree, Given, Shape.Length, Shape.Element,
-                     Shape.Nominal, Syn.Origin (Of_Tree, Label),
-                     "the fixed-array payload field");
+                    (Of_Tree, Given, Item.Length, Item.Element,
+                     Item.Element_Nominal, Syn.Origin (Of_Tree, Label),
+                     "the fixed-array payload field", Shape => Child);
 
                when Syn.Name_Reference =>
                   declare
@@ -17756,8 +18189,9 @@ package body Landin.Stages.Checking is
                          (Got /= Ty.Fixed_Array
                           or else Landin.Checking.Array_Length
                             (Types.all, Of_Tree, Given) /= Shape.Length
-                          or else Landin.Checking.Array_Element
-                            (Types.all, Of_Tree, Given) /= Shape.Element)
+                          or else not Landin.Checking.Field_Shapes_Agree
+                            (Types.all, Landin.Checking.Array_Element_Shape
+                               (Types.all, Of_Tree, Given), Child))
                      then
                         Bad.Report
                           (Item    => Bad.Type_Mismatch,
@@ -17798,8 +18232,9 @@ package body Landin.Stages.Checking is
                          (Got /= Ty.Fixed_Array
                           or else Landin.Checking.Array_Length
                             (Types.all, Of_Tree, Given) /= Shape.Length
-                          or else Landin.Checking.Array_Element
-                            (Types.all, Of_Tree, Given) /= Shape.Element)
+                          or else not Landin.Checking.Field_Shapes_Agree
+                            (Types.all, Landin.Checking.Array_Element_Shape
+                               (Types.all, Of_Tree, Given), Child))
                      then
                         Bad.Report
                           (Item    => Bad.Type_Mismatch,
@@ -18189,11 +18624,8 @@ package body Landin.Stages.Checking is
                                     when Landin.Checking.Reference_Field =>
                                       False,
                                     when Landin.Checking.Fixed_Array_Field =>
-                                      Shape.Length = 0
-                                      or else Shape.Nominal =
-                                        Landin.Checking.No_Nominal_Type
-                                      or else Has_Zero_Image
-                                        (Shape.Nominal),
+                                      Descriptor_Has_Zero_Image
+                                        (Shape_Descriptor (Shape)),
                                     when Landin.Checking.Aggregate_Field =>
                                       Has_Zero_Image (Shape.Nominal),
                                     when Landin.Checking.Variant_Field =>
@@ -18401,19 +18833,19 @@ package body Landin.Stages.Checking is
          procedure Check_Array_Field
            (Field : Syn.Node_Id; Value : Syn.Node_Id; Which : Positive)
          is
-            Expected : constant Landin.Checking.Element_Count :=
-              Landin.Checking.Field_Array_Length
-                (Types.all, Wrote, Which);
-            Element : constant Ty.Scalar_Name :=
-              Landin.Checking.Field_Array_Element
-                (Types.all, Wrote, Which);
+            Array_Shape : constant Landin.Checking.Field_Shape :=
+              Landin.Checking.Field_Shape_Of (Types.all, Wrote, Which);
+            Item : constant Type_Descriptor := Shape_Descriptor (Array_Shape);
+            Expected : constant Landin.Checking.Element_Count := Item.Length;
+            Element : constant Ty.Scalar_Name := Item.Element;
             Element_Nominal : constant Landin.Checking.Nominal_Type_Id :=
-              Landin.Checking.Field_Shape_Of
-                (Types.all, Wrote, Which).Nominal;
-
+              Item.Element_Nominal;
             Element_Shape : constant Landin.Checking.Field_Shape :=
-              Landin.Checking.Array_Field_Element
-                (Landin.Checking.Field_Shape_Of (Types.all, Wrote, Which));
+              Landin.Checking.Array_Field_Element (Types.all, Array_Shape);
+            --  D17 identity is Expected plus this complete child.  Element is
+            --  retained to contextualize literal leaves; for a
+            --  metadata-bearing child its scalar carrier is storage
+            --  bookkeeping and may differ across otherwise identical overlays.
 
             procedure Require_Known (Each : Syn.Node_Id);
 
@@ -18447,7 +18879,9 @@ package body Landin.Stages.Checking is
                   when Syn.Array_Literal =>
                      Check_Array_Literal
                        (Of_Tree, Field, Value, Expected, Element,
-                        Static_Image => True);
+                        Static_Image => True,
+                        Element_Nominal => Element_Nominal,
+                        Shape => Element_Shape);
 
                      for Position in
                        1 .. Syn.Element_Count (Of_Tree, Value)
@@ -18464,7 +18898,9 @@ package body Landin.Stages.Checking is
                   when Syn.Array_Repetition =>
                      Check_Array_Repetition
                        (Of_Tree, Field, Value, Expected, Element,
-                        Static_Image => True);
+                        Static_Image => True,
+                        Element_Nominal => Element_Nominal,
+                        Shape => Element_Shape);
                      Require_Known
                        (Syn.Repeated_Element (Of_Tree, Value));
 
@@ -18476,7 +18912,9 @@ package body Landin.Stages.Checking is
                   when Syn.Mixed_Array_Repetition =>
                      Check_Mixed_Array_Repetition
                        (Of_Tree, Field, Value, Expected, Element,
-                        Static_Image => True);
+                        Static_Image => True,
+                        Element_Nominal => Element_Nominal,
+                        Shape => Element_Shape);
                      for Position in
                        1 .. Syn.Element_Count (Of_Tree, Value)
                      loop
@@ -18522,8 +18960,6 @@ package body Landin.Stages.Checking is
                             (Got /= Ty.Fixed_Array
                              or else Landin.Checking.Array_Length
                                (Types.all, Of_Tree, Value) /= Expected
-                             or else Landin.Checking.Array_Element
-                               (Types.all, Of_Tree, Value) /= Element
                              or else not Landin.Checking.Field_Shapes_Agree
                                (Types.all, Landin.Checking.Array_Element_Shape
                                   (Types.all, Of_Tree, Value), Element_Shape))
@@ -18562,7 +18998,7 @@ package body Landin.Stages.Checking is
                            null;
                         elsif Is_Module_Storage
                           and then not Is_Module_Array_Field
-                            (Of_Tree, Value, Expected, Element)
+                            (Of_Tree, Value, Expected, Element_Shape)
                         then
                            Bad.Report
                              (Item    => Bad.Type_Mismatch,
@@ -18601,17 +19037,23 @@ package body Landin.Stages.Checking is
                when Syn.Array_Literal =>
                   Check_Array_Literal
                     (Of_Tree, Field, Value, Expected, Element,
-                     Static_Image => False);
+                     Static_Image => False,
+                     Element_Nominal => Element_Nominal,
+                     Shape => Element_Shape);
 
                when Syn.Array_Repetition =>
                   Check_Array_Repetition
                     (Of_Tree, Field, Value, Expected, Element,
-                     Static_Image => False);
+                     Static_Image => False,
+                     Element_Nominal => Element_Nominal,
+                     Shape => Element_Shape);
 
                when Syn.Mixed_Array_Repetition =>
                   Check_Mixed_Array_Repetition
                     (Of_Tree, Field, Value, Expected, Element,
-                     Static_Image => False);
+                     Static_Image => False,
+                     Element_Nominal => Element_Nominal,
+                     Shape => Element_Shape);
 
                when Syn.Zeroed_Literal =>
                   Check_Array_Zeroed
@@ -18635,8 +19077,6 @@ package body Landin.Stages.Checking is
                      elsif Got /= Ty.Fixed_Array
                        or else Landin.Checking.Array_Length
                          (Types.all, Of_Tree, Value) /= Expected
-                       or else Landin.Checking.Array_Element
-                         (Types.all, Of_Tree, Value) /= Element
                        or else not Landin.Checking.Field_Shapes_Agree
                          (Types.all, Landin.Checking.Array_Element_Shape
                             (Types.all, Of_Tree, Value), Element_Shape)
@@ -18963,7 +19403,10 @@ package body Landin.Stages.Checking is
          Element      : Ty.Scalar_Name;
          Static_Image : Boolean;
          Context_Site : Landin.Provenance.Origin :=
-           Landin.Provenance.No_Origin)
+           Landin.Provenance.No_Origin;
+         Element_Nominal : Landin.Checking.Nominal_Type_Id :=
+           Landin.Checking.No_Nominal_Type;
+         Shape : Landin.Checking.Field_Shape := (others => <>))
       is
          Prefix : constant Natural := Syn.Element_Count (Of_Tree, Repetition);
          Related : constant Landin.Provenance.Origin :=
@@ -18979,7 +19422,10 @@ package body Landin.Stages.Checking is
             Landin.Checking.Note
               (Types.all, Of_Tree, Repetition, Ty.Fixed_Array);
             Landin.Checking.Note_Array
-              (Types.all, Of_Tree, Repetition, Expected, Element);
+              (Types.all, Of_Tree, Repetition, Expected, Element,
+               Shape => Shape);
+            Landin.Checking.Note_Array_Element_Nominal
+              (Types.all, Of_Tree, Repetition, Element_Nominal);
          end if;
 
          --  The parser makes the prefix nonempty.  D36/D37 also require at
@@ -18999,17 +19445,22 @@ package body Landin.Stages.Checking is
          end if;
 
          for Position in 1 .. Prefix loop
-            Require
+            Check_Contextual_Value
               (Of_Tree, Syn.Nth_Element (Of_Tree, Repetition, Position),
-               Element, Related,
-               "the array element type");
+               Context_For_Shape
+                 (Complete_Element (Element, Element_Nominal, Shape)),
+               Related, "the array element type", Static_Image);
          end loop;
 
-         Require
-           (Of_Tree, Syn.Repeated_Element (Of_Tree, Repetition), Element,
-            Related, "the array element type");
+         Check_Contextual_Value
+           (Of_Tree, Syn.Repeated_Element (Of_Tree, Repetition),
+            Context_For_Shape
+              (Complete_Element (Element, Element_Nominal, Shape)),
+            Related, "the array element type", Static_Image);
 
-         if Static_Image then
+         if Static_Image and then not Has_Element_Metadata (Shape)
+           and then Element_Nominal = Landin.Checking.No_Nominal_Type
+         then
             declare
                procedure Refuse_Excluded_Subtree (Where : Syn.Node_Id);
 
@@ -19058,7 +19509,10 @@ package body Landin.Stages.Checking is
          Element      : Ty.Scalar_Name;
          Static_Image : Boolean;
          Context_Site : Landin.Provenance.Origin :=
-           Landin.Provenance.No_Origin)
+           Landin.Provenance.No_Origin;
+         Element_Nominal : Landin.Checking.Nominal_Type_Id :=
+           Landin.Checking.No_Nominal_Type;
+         Shape : Landin.Checking.Field_Shape := (others => <>))
       is
          Count : constant Syn.Node_Id :=
            Syn.Repetition_Count (Of_Tree, Repetition);
@@ -19075,7 +19529,10 @@ package body Landin.Stages.Checking is
             Landin.Checking.Note
               (Types.all, Of_Tree, Repetition, Ty.Fixed_Array);
             Landin.Checking.Note_Array
-              (Types.all, Of_Tree, Repetition, Expected, Element);
+              (Types.all, Of_Tree, Repetition, Expected, Element,
+               Shape => Shape);
+            Landin.Checking.Note_Array_Element_Nominal
+              (Types.all, Of_Tree, Repetition, Element_Nominal);
          end if;
 
          --  D136 admits [0520]'s zero-length fixed-array type. Repetition
@@ -19125,11 +19582,15 @@ package body Landin.Stages.Checking is
             end;
          end if;
 
-         Require
-           (Of_Tree, Syn.Repeated_Element (Of_Tree, Repetition), Element,
-            Related, "the array element type");
+         Check_Contextual_Value
+           (Of_Tree, Syn.Repeated_Element (Of_Tree, Repetition),
+            Context_For_Shape
+              (Complete_Element (Element, Element_Nominal, Shape)),
+            Related, "the array element type", Static_Image);
 
-         if Static_Image then
+         if Static_Image and then not Has_Element_Metadata (Shape)
+           and then Element_Nominal = Landin.Checking.No_Nominal_Type
+         then
             declare
                procedure Refuse_Excluded_Subtree (Where : Syn.Node_Id);
 
@@ -19925,20 +20386,21 @@ package body Landin.Stages.Checking is
                                        Landin.Checking.Note
                                          (Types.all, Of_Tree, Binding,
                                           Ty.Fixed_Array);
-                                       Landin.Checking.Note_Array
-                                         (Types.all, Id,
-                                          Shape.Length, Shape.Element,
-                           Shape =>
-                             (if Shape.Reference
-                                   = Landin.Checking.No_Reference
-                              then (others => <>)
-                              else (Kind => Landin.Checking.Reference_Field,
-                                    Reference => Shape.Reference,
-                                    others => <>)));
-
-                                       Landin.Checking
-                                         .Note_Array_Element_Nominal
-                                         (Types.all, Id, Shape.Nominal);
+                                       declare
+                                          Item : constant Type_Descriptor :=
+                                            Shape_Descriptor (Shape);
+                                       begin
+                                          Landin.Checking.Note_Array
+                                            (Types.all, Id,
+                                             Item.Length, Item.Element,
+                                             Shape => Item.Element_Shape);
+                                          Landin.Checking
+                                            .Note_Array_Element_Nominal
+                                              (Types.all, Id,
+                                               Item.Element_Nominal);
+                                          Note_Array_Shape
+                                            (Of_Tree, Binding, Shape);
+                                       end;
 
                                     when Landin.Checking.Aggregate_Field =>
                                        --  D120: the alias names the whole
@@ -20138,22 +20600,11 @@ package body Landin.Stages.Checking is
                       (Types.all, Of_Tree, Source);
                begin
                   case Shape.Kind is
-                     when Landin.Checking.Scalar_Field =>
-                        Kind := Shape.Element;
-                        Item := (Kind => Kind, others => <>);
-                     when Landin.Checking.Aggregate_Field =>
-                        Kind := Ty.Aggregate;
-                        Item :=
-                          (Kind => Kind, Nominal => Shape.Nominal,
-                           others => <>);
-                     when Landin.Checking.Fixed_Array_Field =>
-                        Kind := Ty.Fixed_Array;
-                        Item :=
-                          (Kind            => Kind,
-                           Length          => Shape.Length,
-                           Element         => Shape.Element,
-                           Element_Nominal => Shape.Nominal,
-                           others          => <>);
+                     when Landin.Checking.Scalar_Field
+                        | Landin.Checking.Aggregate_Field
+                        | Landin.Checking.Fixed_Array_Field =>
+                        Item := Shape_Descriptor (Shape);
+                        Kind := Item.Kind;
                      when Landin.Checking.Reference_Field =>
                         Descriptor := Landin.Checking.Descriptor_Of
                           (Types.all, Shape.Reference);
@@ -20473,7 +20924,11 @@ package body Landin.Stages.Checking is
                               Landin.Checking.Array_Element
                                 (Types.all, Of_Tree, Value),
                               Static_Image =>
-                                not Is_Local_Binding (Of_Tree, Node));
+                                not Is_Local_Binding (Of_Tree, Node),
+                              Element_Nominal =>
+                                Landin.Checking.Array_Element_Nominal
+                                  (Types.all, Of_Tree, Value),
+                              Shape => Complex_Element (Of_Tree, Value));
                         elsif Inferred_Array then
                            Check_Array_Repetition
                              (Of_Tree, Node, Value,
@@ -20482,7 +20937,11 @@ package body Landin.Stages.Checking is
                               Landin.Checking.Array_Element
                                 (Types.all, Of_Tree, Value),
                               Static_Image =>
-                                not Is_Local_Binding (Of_Tree, Node));
+                                not Is_Local_Binding (Of_Tree, Node),
+                              Element_Nominal =>
+                                Landin.Checking.Array_Element_Nominal
+                                  (Types.all, Of_Tree, Value),
+                              Shape => Complex_Element (Of_Tree, Value));
                         else
                            declare
                               Got : constant Ty.Type_Kind :=
@@ -20651,7 +21110,11 @@ package body Landin.Stages.Checking is
                               Landin.Checking.Array_Element
                                 (Types.all, Of_Tree, Written),
                               Static_Image =>
-                                not Is_Local_Binding (Of_Tree, Node));
+                                not Is_Local_Binding (Of_Tree, Node),
+                              Element_Nominal =>
+                                Landin.Checking.Array_Element_Nominal
+                                  (Types.all, Of_Tree, Written),
+                              Shape => Complex_Element (Of_Tree, Written));
                         elsif Syn.Kind (Of_Tree, Value) = Syn.Array_Repetition
                         then
                            --  D34: the written nonzero shape supplies a count
@@ -20665,7 +21128,11 @@ package body Landin.Stages.Checking is
                               Landin.Checking.Array_Element
                                 (Types.all, Of_Tree, Written),
                               Static_Image =>
-                                not Is_Local_Binding (Of_Tree, Node));
+                                not Is_Local_Binding (Of_Tree, Node),
+                              Element_Nominal =>
+                                Landin.Checking.Array_Element_Nominal
+                                  (Types.all, Of_Tree, Written),
+                              Shape => Complex_Element (Of_Tree, Written));
                         elsif Syn.Kind (Of_Tree, Value) = Syn.Array_Literal
                         then
                            --  D23 for a local, D24 for a module binding:
@@ -20681,7 +21148,11 @@ package body Landin.Stages.Checking is
                               Landin.Checking.Array_Element
                                 (Types.all, Of_Tree, Written),
                               Static_Image =>
-                                not Is_Local_Binding (Of_Tree, Node));
+                                not Is_Local_Binding (Of_Tree, Node),
+                              Element_Nominal =>
+                                Landin.Checking.Array_Element_Nominal
+                                  (Types.all, Of_Tree, Written),
+                              Shape => Complex_Element (Of_Tree, Written));
                         else
                            --  D21: the other initializer form is a
                            --  whole-array copy from a storage name, so the
@@ -20705,10 +21176,6 @@ package body Landin.Stages.Checking is
                                 or else Landin.Checking.Array_Length
                                           (Types.all, Of_Tree, Value)
                                         /= Landin.Checking.Array_Length
-                                             (Types.all, Of_Tree, Written)
-                                or else Landin.Checking.Array_Element
-                                          (Types.all, Of_Tree, Value)
-                                        /= Landin.Checking.Array_Element
                                              (Types.all, Of_Tree, Written)
                                 or else not Landin.Checking.Field_Shapes_Agree
                                   (Types.all,
@@ -20870,6 +21337,15 @@ package body Landin.Stages.Checking is
                end;
 
             when Syn.Destructuring_Binding =>
+               --  Lazy inference may already have checked this owner while
+               --  preparing a selected local for generic discovery or for
+               --  another inferred binding.  Do not replay its labels or
+               --  diagnostics when the ordinary body walk reaches it.
+               if Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
+                 /= Ty.Undecided
+               then
+                  return;
+               end if;
                declare
                   Value : constant Syn.Node_Id :=
                     Syn.Destructured_Value (Of_Tree, Node);
@@ -20972,14 +21448,13 @@ package body Landin.Stages.Checking is
                                           Id : constant Res.Declaration_Id :=
                                             Declaration_At
                                               (Syn.Source_Of (Of_Tree), Local);
-                                          Part : constant
-                                            Landin.Checking.Signature_Part :=
-                                              Landin.Checking
-                                                .Nth_Signature_Result
-                                                  (Types.all, Shape, Which);
                                        begin
+                                          --  The duplicate owns the report.
+                                          --  A partial descriptor here would
+                                          --  make an early match treat this
+                                          --  local as a valid reference.
                                           Landin.Checking.Settle
-                                            (Types.all, Id, Part.Kind);
+                                            (Types.all, Id, Ty.Ill_Typed);
                                        end;
                                     end if;
                                  else
@@ -21349,7 +21824,11 @@ package body Landin.Stages.Checking is
                              (Types.all, Of_Tree, Place),
                            Landin.Checking.Array_Element
                              (Types.all, Of_Tree, Place),
-                           Static_Image => False);
+                           Static_Image => False,
+                           Element_Nominal =>
+                             Landin.Checking.Array_Element_Nominal
+                               (Types.all, Of_Tree, Place),
+                           Shape => Complex_Element (Of_Tree, Place));
                      elsif Syn.Kind (Of_Tree, Value)
                              = Syn.Array_Repetition
                      then
@@ -21359,7 +21838,11 @@ package body Landin.Stages.Checking is
                              (Types.all, Of_Tree, Place),
                            Landin.Checking.Array_Element
                              (Types.all, Of_Tree, Place),
-                           Static_Image => False);
+                           Static_Image => False,
+                           Element_Nominal =>
+                             Landin.Checking.Array_Element_Nominal
+                               (Types.all, Of_Tree, Place),
+                           Shape => Complex_Element (Of_Tree, Place));
                      elsif Syn.Kind (Of_Tree, Value) = Syn.Array_Literal then
                         Check_Array_Literal
                           (Of_Tree, Place, Value,
@@ -21367,7 +21850,11 @@ package body Landin.Stages.Checking is
                              (Types.all, Of_Tree, Place),
                            Landin.Checking.Array_Element
                              (Types.all, Of_Tree, Place),
-                           Static_Image => False);
+                           Static_Image => False,
+                           Element_Nominal =>
+                             Landin.Checking.Array_Element_Nominal
+                               (Types.all, Of_Tree, Place),
+                           Shape => Complex_Element (Of_Tree, Place));
                      elsif Syn.Kind (Of_Tree, Value) = Syn.Zeroed_Literal
                      then
                         Check_Array_Zeroed
@@ -21401,16 +21888,12 @@ package body Landin.Stages.Checking is
                                        (Types.all, Of_Tree, Place)
                                      /= Landin.Checking.Array_Length
                                           (Types.all, Of_Tree, Value)
-                             or else Landin.Checking.Array_Element
-                                       (Types.all, Of_Tree, Place)
-                                     /= Landin.Checking.Array_Element
-                                          (Types.all, Of_Tree, Value)
-                                or else not Landin.Checking.Field_Shapes_Agree
-                                  (Types.all,
-                                   Landin.Checking.Array_Element_Shape
-                                     (Types.all, Of_Tree, Place),
-                                   Landin.Checking.Array_Element_Shape
-                                     (Types.all, Of_Tree, Value))
+                             or else not Landin.Checking.Field_Shapes_Agree
+                               (Types.all,
+                                Landin.Checking.Array_Element_Shape
+                                  (Types.all, Of_Tree, Place),
+                                Landin.Checking.Array_Element_Shape
+                                  (Types.all, Of_Tree, Value))
                            then
                               Bad.Report
                                 (Item    => Bad.Type_Mismatch,
@@ -22384,17 +22867,26 @@ package body Landin.Stages.Checking is
                   when Syn.Array_Literal =>
                      Check_Array_Literal
                        (Of_Tree, Node, Node, Expected.Length,
-                        Expected.Element, Static_Image);
+                        Expected.Element, Static_Image,
+                        Context_Site => Site,
+                        Element_Nominal => Expected.Element_Nominal,
+                        Shape => Expected.Element_Shape);
                      return;
                   when Syn.Array_Repetition =>
                      Check_Array_Repetition
                        (Of_Tree, Node, Node, Expected.Length,
-                        Expected.Element, Static_Image);
+                        Expected.Element, Static_Image,
+                        Context_Site => Site,
+                        Element_Nominal => Expected.Element_Nominal,
+                        Shape => Expected.Element_Shape);
                      return;
                   when Syn.Mixed_Array_Repetition =>
                      Check_Mixed_Array_Repetition
                        (Of_Tree, Node, Node, Expected.Length,
-                        Expected.Element, Static_Image);
+                        Expected.Element, Static_Image,
+                        Context_Site => Site,
+                        Element_Nominal => Expected.Element_Nominal,
+                        Shape => Expected.Element_Shape);
                      return;
                   when Syn.Zeroed_Literal =>
                      Check_Array_Zeroed
@@ -22422,14 +22914,12 @@ package body Landin.Stages.Checking is
                       (Got /= Ty.Fixed_Array
                        or else Landin.Checking.Array_Length
                          (Types.all, Of_Tree, Node) /= Expected.Length
-                       or else Landin.Checking.Array_Element
-                         (Types.all, Of_Tree, Node) /= Expected.Element
-                       or else Landin.Checking.Array_Element_Nominal
-                         (Types.all, Of_Tree, Node)
-                           /= Expected.Element_Nominal
                        or else not Landin.Checking.Field_Shapes_Agree
-                         (Types.all, Complex_Element (Of_Tree, Node),
-                          Expected.Element_Shape))
+                         (Types.all, Landin.Checking.Array_Element_Shape
+                            (Types.all, Of_Tree, Node),
+                          Complete_Element
+                            (Expected.Element, Expected.Element_Nominal,
+                             Expected.Element_Shape)))
                   then
                      Context_Mismatch
                        (Of_Tree, Node, Expected, Site, Because);
@@ -22935,6 +23425,21 @@ package body Landin.Stages.Checking is
                           (Types.all, Of_Tree, Node);
                         return;
                      end if;
+                     if Pointer_Is_Known_Zero (Of_Tree, Value) then
+                        Bad.Report
+                          (Item => Bad.Type_Mismatch,
+                           Source => Syn.Source_Of (Of_Tree),
+                           Where => Syn.Where (Of_Tree, Node),
+                           Message => "a pointer cannot be constructed from"
+                                      & " a known zero address",
+                           Note => "[0460]/[0480]: zero after conversion to"
+                                   & " target usize is reserved for the empty"
+                                   & " atom of a named pointer union, even"
+                                   & " inside unchecked",
+                           Related => Site, Because => Because, Into => Found);
+                        Landin.Checking.Refuse (Types.all, Of_Tree, Node);
+                        return;
+                     end if;
                      Landin.Checking.Note
                        (Types.all, Of_Tree, Node, Ty.Pointer_Value);
                      Landin.Checking.Note_Reference
@@ -22978,7 +23483,8 @@ package body Landin.Stages.Checking is
                   return;
                end if;
                declare
-                  Got : constant Ty.Type_Kind := Synthesise (Of_Tree, Node);
+                  Got : constant Ty.Type_Kind :=
+                    Synthesise (Of_Tree, Node, Expected.Reference);
                begin
                   if Got /= Ty.Ill_Typed
                     and then
@@ -23028,6 +23534,24 @@ package body Landin.Stages.Checking is
          end case;
       end Check_Contextual_Value;
 
+      --  Inference still owns D25/D26's scalar first-element rule.  Recursive
+      --  storage has complete contextual types; it is not a common-type search
+      --  or permission to settle an unsupported literal without a diagnostic.
+      procedure Refuse_Inferred_Array_Element
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
+
+      procedure Refuse_Inferred_Array_Element
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) is
+      begin
+         Bad.Report
+           (Item => Bad.Unsupported_Use,
+            Source => Syn.Source_Of (Of_Tree),
+            Where => Syn.Where (Of_Tree, Node),
+            Message => "a non-scalar array literal needs an explicit"
+                       & " element type",
+            Refused => Bad.Array_Value, Into => Found);
+      end Refuse_Inferred_Array_Element;
+
       function Synthesise_Control
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind
       is
@@ -23057,6 +23581,9 @@ package body Landin.Stages.Checking is
                end if;
 
                if Element_Type not in Ty.Scalar_Name then
+                  if Element_Type /= Ty.Ill_Typed then
+                     Refuse_Inferred_Array_Element (Of_Tree, Element_Node);
+                  end if;
                   return Ty.Ill_Typed;
                end if;
 
@@ -23285,6 +23812,13 @@ package body Landin.Stages.Checking is
          procedure Refuse_Unreadable_Subtree (Where : Syn.Node_Id) is
          begin
             if Where = Syn.No_Node then
+               return;
+            end if;
+
+            --  A scalar conversion reads its operand, not its type callee.
+            if Conversion_Target (Of_Tree, Where) in Ty.Scalar_Name then
+               Refuse_Unreadable_Subtree
+                 (Syn.Nth_Argument (Of_Tree, Where, 1));
                return;
             end if;
 
@@ -23531,7 +24065,7 @@ package body Landin.Stages.Checking is
          Of_Tree : constant not null access constant Syn.Tree :=
            Tree_For (Res.Source_Of (Meanings.all, Id));
          Node    : constant Syn.Node_Id := Res.Node_Of (Meanings.all, Id);
-         Value   : constant Syn.Node_Id := Syn.Value_Of (Of_Tree.all, Node);
+         Value   : Syn.Node_Id;
 
          function Is_Traversal_Binding return Boolean;
 
@@ -23555,6 +24089,51 @@ package body Landin.Stages.Checking is
             return False;
          end Is_Traversal_Binding;
       begin
+         --  A selected result name has no initializer of its own.  An early
+         --  match-discovery walk, or another inferred local, can need its
+         --  descriptor before the statement walk checks the destructuring.
+         --  Check that owning statement once, preserving every result part
+         --  rather than asking Destructured_Name for Value_Of.
+         if Syn.Kind (Of_Tree.all, Node) = Syn.Destructured_Name then
+            for Candidate in Syn.Node_Id'(1) .. Syn.Last_Node (Of_Tree.all)
+            loop
+               if Syn.Kind (Of_Tree.all, Candidate)
+                 = Syn.Destructuring_Binding
+               then
+                  for Position in
+                    1 .. Syn.Destructured_Field_Count (Of_Tree.all, Candidate)
+                  loop
+                     declare
+                        Field : constant Syn.Node_Id :=
+                          Syn.Nth_Destructured_Field
+                            (Of_Tree.all, Candidate, Position);
+                     begin
+                        if Syn.Kind (Of_Tree.all, Field)
+                             = Syn.Destructured_Field
+                          and then Syn.Destructured_Local
+                            (Of_Tree.all, Field) = Node
+                        then
+                           Check_Statement
+                             (Of_Tree.all, Candidate, Ty.No_Value);
+                           if Landin.Checking.State_Of (Types.all, Id)
+                             /= Landin.Checking.Settled
+                           then
+                              --  A refused source or missing result label
+                              --  already owns the diagnostic.
+                              Landin.Checking.Settle
+                                (Types.all, Id, Ty.Ill_Typed);
+                           end if;
+                           return;
+                        end if;
+                     end;
+                  end loop;
+               end if;
+            end loop;
+            raise Landin.Compiler_Defect with
+              "a selected result local has no destructuring owner";
+         end if;
+
+         Value := Syn.Value_Of (Of_Tree.all, Node);
          --  A traversal header declares its locals without an initializer;
          --  Check_Loop settles them from the checked source/range before it
          --  checks the body that can name them.
@@ -23636,8 +24215,11 @@ package body Landin.Stages.Checking is
                         Related => Syn.Origin (Of_Tree.all, Node),
                         Because => "this inferred binding",
                         Into    => Found);
+                  elsif Got /= Ty.Ill_Typed then
+                     Refuse_Inferred_Array_Element (Of_Tree.all, First);
                   end if;
 
+                  Landin.Checking.Refuse (Types.all, Of_Tree.all, Value);
                   Landin.Checking.Settle (Types.all, Id, Ty.Ill_Typed);
                   return;
                end if;
@@ -24117,6 +24699,110 @@ package body Landin.Stages.Checking is
          Wrote   : Landin.Checking.Nominal_Type_Id;
          Literal : Syn.Node_Id) return Boolean;
 
+      function Validate_Stored_Image
+        (Of_Tree : Syn.Tree;
+         Given   : Syn.Node_Id;
+         Shape   : Landin.Checking.Field_Shape) return Boolean;
+
+      function Validate_Stored_Image
+        (Of_Tree : Syn.Tree;
+         Given   : Syn.Node_Id;
+         Shape   : Landin.Checking.Field_Shape) return Boolean
+      is
+         Reaches : Boolean := True;
+      begin
+         if Given = Syn.No_Node then
+            return True;
+         elsif Landin.Checking.Type_Of (Types.all, Of_Tree, Given)
+           = Ty.Ill_Typed
+         then
+            return False;
+         elsif Syn.Kind (Of_Tree, Given) = Syn.Zeroed_Literal then
+            return True;
+         end if;
+
+         if Shape.Kind in Landin.Checking.Scalar_Field
+           | Landin.Checking.Reference_Field
+         then
+            --  Scalar folds and code-address aliases have their own walks.
+            --  Neither a code signature nor a pointer is a stored-image edge.
+            return True;
+         elsif Shape.Kind = Landin.Checking.Fixed_Array_Field
+           and then Syn.Kind (Of_Tree, Given)
+             in Syn.Array_Literal | Syn.Array_Repetition
+                | Syn.Mixed_Array_Repetition
+         then
+            declare
+               Child : constant Landin.Checking.Field_Shape :=
+                 Landin.Checking.Array_Field_Element (Types.all, Shape);
+            begin
+               if Syn.Kind (Of_Tree, Given) /= Syn.Array_Repetition then
+                  for Position in 1 .. Syn.Element_Count (Of_Tree, Given) loop
+                     Reaches := Validate_Stored_Image
+                       (Of_Tree, Syn.Nth_Element (Of_Tree, Given, Position),
+                        Child) and then Reaches;
+                  end loop;
+               end if;
+               if Syn.Kind (Of_Tree, Given) /= Syn.Array_Literal then
+                  Reaches := Validate_Stored_Image
+                    (Of_Tree, Syn.Repeated_Element (Of_Tree, Given), Child)
+                    and then Reaches;
+               end if;
+            end;
+            return Reaches;
+         elsif Shape.Kind = Landin.Checking.Aggregate_Field
+           and then Is_Struct_Construction (Of_Tree, Given)
+         then
+            return Validate_Recursive_Struct_Image
+              (Of_Tree, Shape.Nominal, Given);
+         elsif Syn.Kind (Of_Tree, Given) = Syn.Name_Reference
+           and then Res.Verdict_Of (Meanings.all, Of_Tree, Given) = Res.Bound
+         then
+            declare
+               Id : constant Res.Declaration_Id :=
+                 Res.Bound_To (Meanings.all, Of_Tree, Given);
+            begin
+               if Res.Sort_Of (Meanings.all, Id) /= Res.Module_Binding then
+                  return False;
+               elsif Shape.Kind = Landin.Checking.Fixed_Array_Field then
+                  return Landin.Checking.Type_Of (Types.all, Id)
+                    = Ty.Fixed_Array
+                    and then Landin.Checking.Array_Length
+                      (Types.all, Id) = Shape.Length
+                    and then Landin.Checking.Field_Shapes_Agree
+                      (Types.all, Landin.Checking.Array_Element_Shape
+                         (Types.all, Id),
+                       Landin.Checking.Array_Field_Element (Types.all, Shape))
+                    and then Validate_Module_Image (Id);
+               else
+                  return Landin.Checking.Type_Of (Types.all, Id) = Ty.Aggregate
+                    and then Landin.Checking.Nominal_Of
+                      (Types.all, Id) = Shape.Nominal
+                    and then Validate_Module_Image (Id);
+               end if;
+            end;
+         elsif Is_Direct_Module_Field (Of_Tree, Given) then
+            declare
+               Root : constant Syn.Node_Id := Syn.Target_Of (Of_Tree, Given);
+               Id : constant Res.Declaration_Id :=
+                 Res.Bound_To (Meanings.all, Of_Tree, Root);
+               Wrote : constant Landin.Checking.Nominal_Type_Id :=
+                 Landin.Checking.Nominal_Of (Types.all, Id);
+               Which : constant Natural :=
+                 (if Wrote = Landin.Checking.No_Nominal_Type then 0
+                  else Field_At (Wrote, Syn.Name (Of_Tree, Given)));
+            begin
+               return Which > 0
+                 and then Landin.Checking.Has_Layout (Types.all, Wrote)
+                 and then Landin.Checking.Field_Shapes_Agree
+                   (Types.all, Shape, Landin.Checking.Field_Shape_Of
+                      (Types.all, Wrote, Which))
+                 and then Validate_Module_Image (Id);
+            end;
+         end if;
+         return False;
+      end Validate_Stored_Image;
+
       function Body_Image_Contains_Aggregate
         (Wrote : Landin.Checking.Nominal_Type_Id) return Boolean;
 
@@ -24134,7 +24820,13 @@ package body Landin.Stages.Checking is
                  Landin.Checking.Field_Shape_Of
                    (Types.all, Wrote, Field);
             begin
-               if Shape.Kind = Landin.Checking.Aggregate_Field then
+               if Shape.Kind = Landin.Checking.Aggregate_Field
+                 or else Shape.Signature /= Landin.Checking.No_Signature
+                 or else (Shape.Kind = Landin.Checking.Fixed_Array_Field
+                          and then Has_Element_Metadata
+                            (Landin.Checking.Array_Field_Element
+                               (Types.all, Shape)))
+               then
                   return True;
                elsif Shape.Kind = Landin.Checking.Variant_Field then
                   for Variant_Case in 1 .. Shape.Cases loop
@@ -24142,13 +24834,24 @@ package body Landin.Stages.Checking is
                        1 .. Landin.Checking.Variant_Case_Field_Count
                               (Types.all, Wrote, Field, Variant_Case)
                      loop
-                        if Landin.Checking.Nth_Variant_Case_Field
-                          (Types.all, Wrote, Field, Variant_Case,
-                           Payload).Kind
-                             = Landin.Checking.Aggregate_Field
-                        then
-                           return True;
-                        end if;
+                        declare
+                           Child : constant Landin.Checking.Field_Shape :=
+                             Landin.Checking.Nth_Variant_Case_Field
+                               (Types.all, Wrote, Field,
+                                Variant_Case, Payload);
+                        begin
+                           if Child.Kind = Landin.Checking.Aggregate_Field
+                             or else Child.Signature
+                               /= Landin.Checking.No_Signature
+                             or else
+                               (Child.Kind = Landin.Checking.Fixed_Array_Field
+                                and then Has_Element_Metadata
+                                  (Landin.Checking.Array_Field_Element
+                                     (Types.all, Child)))
+                           then
+                              return True;
+                           end if;
+                        end;
                      end loop;
                   end loop;
                end if;
@@ -24294,51 +24997,8 @@ package body Landin.Stages.Checking is
                            null;
 
                         when Landin.Checking.Fixed_Array_Field =>
-                           if Syn.Kind (Of_Tree, Given)
-                                = Syn.Name_Reference
-                             and then Res.Verdict_Of
-                               (Meanings.all, Of_Tree, Given) = Res.Bound
-                           then
-                              declare
-                                 Source_Id : constant Res.Declaration_Id :=
-                                   Res.Bound_To
-                                     (Meanings.all, Of_Tree, Given);
-                              begin
-                                 if Res.Sort_Of (Meanings.all, Source_Id)
-                                      = Res.Module_Binding
-                                   and then Landin.Checking.Type_Of
-                                     (Types.all, Source_Id) = Ty.Fixed_Array
-                                   and then Landin.Checking.Array_Length
-                                     (Types.all, Source_Id) = Shape.Length
-                                   and then Landin.Checking.Array_Element
-                                     (Types.all, Source_Id) = Shape.Element
-                                 then
-                                    Reaches := Validate_Module_Image
-                                      (Source_Id) and then Reaches;
-                                 else
-                                    Reaches := False;
-                                 end if;
-                              end;
-                           elsif Syn.Kind (Of_Tree, Given)
-                                   = Syn.Member_Selection
-                           then
-                              declare
-                                 Root : constant Syn.Node_Id :=
-                                   Syn.Target_Of (Of_Tree, Given);
-                              begin
-                                 if Is_Module_Array_Field
-                                   (Of_Tree, Given, Shape.Length,
-                                    Shape.Element)
-                                 then
-                                    Reaches := Validate_Module_Image
-                                      (Res.Bound_To
-                                         (Meanings.all, Of_Tree, Root))
-                                      and then Reaches;
-                                 else
-                                    Reaches := False;
-                                 end if;
-                              end;
-                           end if;
+                           Reaches := Validate_Stored_Image
+                             (Of_Tree, Given, Shape) and then Reaches;
 
                         when Landin.Checking.Aggregate_Field =>
                            Reaches := Validate_Aggregate_Value
@@ -24430,65 +25090,11 @@ package body Landin.Stages.Checking is
                                              elsif Payload_Shape.Kind =
                                                 Landin.Checking
                                                   .Fixed_Array_Field
-                                               and then Syn.Kind
-                                                 (Of_Tree, Given_Payload)
-                                                   = Syn.Name_Reference
-                                               and then Res.Verdict_Of
-                                                 (Meanings.all, Of_Tree,
-                                                  Given_Payload) = Res.Bound
-                                             then
-                                                declare
-                                                   Source_Id : constant
-                                                     Res.Declaration_Id :=
-                                                       Res.Bound_To
-                                                         (Meanings.all,
-                                                          Of_Tree,
-                                                          Given_Payload);
-                                                begin
-                                                   if Res.Sort_Of
-                                                     (Meanings.all, Source_Id)
-                                                       = Res.Module_Binding
-                                                     and then Landin.Checking
-                                                       .Type_Of
-                                                       (Types.all, Source_Id)
-                                                         = Ty.Fixed_Array
-                                                     and then Landin.Checking
-                                                       .Array_Length
-                                                       (Types.all, Source_Id)
-                                                         = Payload_Shape.Length
-                                                     and then Landin.Checking
-                                                       .Array_Element
-                                                       (Types.all, Source_Id)
-                                                         = Payload_Shape
-                                                             .Element
-                                                   then
-                                                      Reaches :=
-                                                        Validate_Module_Image
-                                                          (Source_Id)
-                                                        and then Reaches;
-                                                   else
-                                                      Reaches := False;
-                                                   end if;
-                                                end;
-                                             elsif Payload_Shape.Kind =
-                                                Landin.Checking
-                                                  .Fixed_Array_Field
-                                               and then Syn.Kind
-                                                 (Of_Tree, Given_Payload)
-                                                   = Syn.Member_Selection
-                                               and then Is_Module_Array_Field
-                                                 (Of_Tree, Given_Payload,
-                                                  Payload_Shape.Length,
-                                                  Payload_Shape.Element)
                                              then
                                                 Reaches :=
-                                                  Validate_Module_Image
-                                                    (Res.Bound_To
-                                                       (Meanings.all,
-                                                        Of_Tree,
-                                                        Syn.Target_Of
-                                                          (Of_Tree,
-                                                           Given_Payload)))
+                                                  Validate_Stored_Image
+                                                    (Of_Tree, Given_Payload,
+                                                     Payload_Shape)
                                                   and then Reaches;
                                              end if;
                                           end;
@@ -24553,9 +25159,21 @@ package body Landin.Stages.Checking is
             return True;
          end if;
 
-         if Syn.Kind (Of_Tree.all, Value)
-              in Syn.Array_Literal | Syn.Zeroed_Literal
+         if Landin.Checking.Type_Of (Types.all, Id) = Ty.Fixed_Array
+           and then Syn.Kind (Of_Tree.all, Value)
+             in Syn.Array_Literal | Syn.Array_Repetition
+                | Syn.Mixed_Array_Repetition
          then
+            declare
+               Reaches : constant Boolean := Validate_Stored_Image
+                 (Of_Tree.all, Value, Landin.Checking.Make_Array_Field
+                    (Types.all, Landin.Checking.Array_Length (Types.all, Id),
+                     Landin.Checking.Array_Element_Shape (Types.all, Id)));
+            begin
+               Image_States (Id) := (if Reaches then Valid else Invalid);
+               return Reaches;
+            end;
+         elsif Syn.Kind (Of_Tree.all, Value) = Syn.Zeroed_Literal then
             Image_States (Id) := Valid;
             return True;
          end if;
@@ -24651,8 +25269,9 @@ package body Landin.Stages.Checking is
                                (Of_Tree.all, Image_Value,
                                 Landin.Checking.Field_Array_Length
                                   (Types.all, Wrote, Which),
-                                Landin.Checking.Field_Array_Element
-                                  (Types.all, Wrote, Which));
+                                Landin.Checking.Array_Field_Element
+                                  (Types.all, Landin.Checking.Field_Shape_Of
+                                     (Types.all, Wrote, Which)));
                         begin
                            if Edge_Is_Valid then
                               Reaches_Image :=
@@ -24840,7 +25459,10 @@ package body Landin.Stages.Checking is
                                                        Is_Module_Array_Field
                                                          (Of_Tree.all, Given,
                                                           Shape.Length,
-                                                          Shape.Element);
+                                                          Landin.Checking.
+                                                            Array_Field_Element
+                                                            (Types.all,
+                                                             Shape));
                                                 begin
                                                    if Edge_Is_Valid then
                                                       Reaches_Image :=
@@ -24891,7 +25513,7 @@ package body Landin.Stages.Checking is
                  and then Is_Module_Array_Field
                    (Of_Tree.all, Value,
                     Landin.Checking.Array_Length (Types.all, Id),
-                    Landin.Checking.Array_Element (Types.all, Id));
+                    Landin.Checking.Array_Element_Shape (Types.all, Id));
                Reaches_Image : Boolean := False;
             begin
                if Edge_Is_Valid then
@@ -25067,6 +25689,21 @@ package body Landin.Stages.Checking is
          Enter              => Enter_Fold,
          Leave              => Leave_Fold);
 
+      function Pointer_Is_Known_Zero
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
+      is
+         Value : Ty.Folded;
+         Known, Overflowed : Boolean;
+         Width : constant Natural := Natural (Ty.Width (Ty.Usize, Facts));
+      begin
+         Folder.Fold (Of_Tree, Node, 0, Value, Known, Overflowed);
+         --  Integer-to-pointer first converts to target usize.  Folded can
+         --  represent every enabled integer, but not the modulus 2**64.
+         return Known and then not Overflowed
+           and then (if Width = 64 then Value = 0
+                     else Value mod (Ty.Folded'(2) ** Width) = 0);
+      end Pointer_Is_Known_Zero;
+
       procedure Fold_Float
         (Of_Tree    : Syn.Tree;
          Node       : Syn.Node_Id;
@@ -25116,7 +25753,7 @@ package body Landin.Stages.Checking is
            (Each : Syn.Node_Id; Element : Ty.Scalar_Name);
 
          procedure Check_Array_Image
-           (Given : Syn.Node_Id; Element : Ty.Scalar_Name);
+           (Given : Syn.Node_Id; Element : Landin.Checking.Field_Shape);
 
          procedure Check_Struct_Image
            (Literal : Syn.Node_Id; Wrote : Landin.Checking.Nominal_Type_Id);
@@ -25126,9 +25763,6 @@ package body Landin.Stages.Checking is
             Wrote : Landin.Checking.Nominal_Type_Id;
             Field : Positive);
 
-         function Body_Contains_Aggregate
-           (Wrote : Landin.Checking.Nominal_Type_Id) return Boolean;
-
          procedure Check_Image_Scalar
            (Each : Syn.Node_Id; Element : Ty.Scalar_Name)
          is
@@ -25136,6 +25770,12 @@ package body Landin.Stages.Checking is
             Element_Known     : Boolean;
             Element_Overflowed : Boolean;
          begin
+            if Landin.Checking.Type_Of (Types.all, Of_Tree, Each)
+              = Ty.Function_Value
+            then
+               --  Code values are relocations, never folded usize values.
+               return;
+            end if;
             if Element in Ty.Float_Name then
                if Landin.Checking.Type_Of
                     (Types.all, Of_Tree, Each) /= Ty.Ill_Typed
@@ -25204,26 +25844,50 @@ package body Landin.Stages.Checking is
          end Check_Image_Scalar;
 
          procedure Check_Array_Image
-           (Given : Syn.Node_Id; Element : Ty.Scalar_Name)
+           (Given : Syn.Node_Id; Element : Landin.Checking.Field_Shape)
          is
+            procedure Visit (Each : Syn.Node_Id);
+
+            procedure Visit (Each : Syn.Node_Id) is
+            begin
+               if Landin.Checking.Type_Of (Types.all, Of_Tree, Each)
+                 = Ty.Ill_Typed
+               then
+                  return;
+               end if;
+               case Element.Kind is
+                  when Landin.Checking.Scalar_Field =>
+                     if Element.Signature = Landin.Checking.No_Signature
+                       and then Element.Element in Ty.Numeric_Name
+                     then
+                        Check_Image_Scalar (Each, Element.Element);
+                     end if;
+                  when Landin.Checking.Fixed_Array_Field =>
+                     Check_Array_Image
+                       (Each, Landin.Checking.Array_Field_Element
+                          (Types.all, Element));
+                  when Landin.Checking.Aggregate_Field =>
+                     if Is_Struct_Construction (Of_Tree, Each) then
+                        Check_Struct_Image (Each, Element.Nominal);
+                     end if;
+                  when Landin.Checking.Reference_Field =>
+                     null;
+                  when Landin.Checking.Variant_Field =>
+                     raise Landin.Compiler_Defect with
+                       "a variant became an array image element";
+               end case;
+            end Visit;
          begin
-            if Element not in Ty.Numeric_Name then
-               return;
-            elsif Syn.Kind (Of_Tree, Given) = Syn.Array_Repetition then
-               Check_Image_Scalar
-                 (Syn.Repeated_Element (Of_Tree, Given), Element);
+            if Syn.Kind (Of_Tree, Given) = Syn.Array_Repetition then
+               Visit (Syn.Repeated_Element (Of_Tree, Given));
             elsif Syn.Kind (Of_Tree, Given)
                     in Syn.Array_Literal | Syn.Mixed_Array_Repetition
             then
                for Position in 1 .. Syn.Element_Count (Of_Tree, Given) loop
-                  Check_Image_Scalar
-                    (Syn.Nth_Element (Of_Tree, Given, Position), Element);
+                  Visit (Syn.Nth_Element (Of_Tree, Given, Position));
                end loop;
-               if Syn.Kind (Of_Tree, Given)
-                    = Syn.Mixed_Array_Repetition
-               then
-                  Check_Image_Scalar
-                    (Syn.Repeated_Element (Of_Tree, Given), Element);
+               if Syn.Kind (Of_Tree, Given) = Syn.Mixed_Array_Repetition then
+                  Visit (Syn.Repeated_Element (Of_Tree, Given));
                end if;
             end if;
          end Check_Array_Image;
@@ -25265,11 +25929,11 @@ package body Landin.Stages.Checking is
                         when Landin.Checking.Reference_Field =>
                            null;
                         when Landin.Checking.Fixed_Array_Field =>
-                           Check_Array_Image (Given, Shape.Element);
+                           Check_Array_Image
+                             (Given, Landin.Checking.Array_Field_Element
+                                (Types.all, Shape));
                         when Landin.Checking.Aggregate_Field =>
-                           if Syn.Kind (Of_Tree, Given)
-                                = Syn.Struct_Literal
-                           then
+                           if Is_Struct_Construction (Of_Tree, Given) then
                               Check_Struct_Image
                                 (Given, Shape.Nominal);
                            end if;
@@ -25287,31 +25951,35 @@ package body Landin.Stages.Checking is
          is
          begin
             for Position in
-              1 .. Syn.Field_Value_Count (Of_Tree, Literal)
+              1 .. Construction_Field_Count (Of_Tree, Literal)
             loop
                declare
                   Field : constant Syn.Node_Id :=
-                    Syn.Nth_Field_Value (Of_Tree, Literal, Position);
+                    Nth_Construction_Field (Of_Tree, Literal, Position);
                   Which : constant Positive := Positive
                     (Landin.Checking.Field_Index
                        (Types.all, Of_Tree, Field));
                   Given : constant Syn.Node_Id :=
-                    Syn.Value_Of (Of_Tree, Field);
+                    Construction_Field_Value (Of_Tree, Field);
                   Shape : constant Landin.Checking.Field_Shape :=
                     Landin.Checking.Field_Shape_Of
                       (Types.all, Wrote, Which);
                begin
                   case Shape.Kind is
                      when Landin.Checking.Scalar_Field =>
-                        if Shape.Element in Ty.Integer_Name then
+                        if Shape.Signature = Landin.Checking.No_Signature
+                          and then Shape.Element in Ty.Numeric_Name
+                        then
                            Check_Image_Scalar (Given, Shape.Element);
                         end if;
                      when Landin.Checking.Reference_Field =>
                         null;
                      when Landin.Checking.Fixed_Array_Field =>
-                        Check_Array_Image (Given, Shape.Element);
+                        Check_Array_Image
+                             (Given, Landin.Checking.Array_Field_Element
+                                (Types.all, Shape));
                      when Landin.Checking.Aggregate_Field =>
-                        if Syn.Kind (Of_Tree, Given) = Syn.Struct_Literal then
+                        if Is_Struct_Construction (Of_Tree, Given) then
                            Check_Struct_Image
                              (Given, Shape.Nominal);
                         end if;
@@ -25322,40 +25990,6 @@ package body Landin.Stages.Checking is
             end loop;
          end Check_Struct_Image;
 
-         function Body_Contains_Aggregate
-           (Wrote : Landin.Checking.Nominal_Type_Id) return Boolean
-         is
-         begin
-            for Field in
-              1 .. Landin.Checking.Layout_Field_Count (Types.all, Wrote)
-            loop
-               declare
-                  Shape : constant Landin.Checking.Field_Shape :=
-                    Landin.Checking.Field_Shape_Of
-                      (Types.all, Wrote, Field);
-               begin
-                  if Shape.Kind = Landin.Checking.Aggregate_Field then
-                     return True;
-                  elsif Shape.Kind = Landin.Checking.Variant_Field then
-                     for Variant_Case in 1 .. Shape.Cases loop
-                        for Payload in
-                          1 .. Landin.Checking.Variant_Case_Field_Count
-                                 (Types.all, Wrote, Field, Variant_Case)
-                        loop
-                           if Landin.Checking.Nth_Variant_Case_Field
-                             (Types.all, Wrote, Field, Variant_Case,
-                              Payload).Kind
-                                = Landin.Checking.Aggregate_Field
-                           then
-                              return True;
-                           end if;
-                        end loop;
-                     end loop;
-                  end if;
-               end;
-            end loop;
-            return False;
-         end Body_Contains_Aggregate;
       begin
          if Value = Syn.No_Node then
             return;
@@ -25388,32 +26022,9 @@ package body Landin.Stages.Checking is
                     in Syn.Array_Literal | Syn.Array_Repetition
                        | Syn.Mixed_Array_Repetition
          then
-            declare
-               Element : constant Ty.Scalar_Name :=
-                 Landin.Checking.Array_Element
-                   (Types.all, Of_Tree, Value);
-            begin
-               if Element in Ty.Numeric_Name then
-                  if Syn.Kind (Of_Tree, Value) = Syn.Array_Repetition then
-                     Check_Image_Scalar
-                       (Syn.Repeated_Element (Of_Tree, Value), Element);
-                  else
-                     for Position in
-                       1 .. Syn.Element_Count (Of_Tree, Value)
-                     loop
-                        Check_Image_Scalar
-                          (Syn.Nth_Element (Of_Tree, Value, Position),
-                           Element);
-                     end loop;
-                     if Syn.Kind (Of_Tree, Value)
-                          = Syn.Mixed_Array_Repetition
-                     then
-                        Check_Image_Scalar
-                          (Syn.Repeated_Element (Of_Tree, Value), Element);
-                     end if;
-                  end if;
-               end if;
-            end;
+            Check_Array_Image
+              (Value, Landin.Checking.Array_Element_Shape
+                 (Types.all, Of_Tree, Value));
             return;
          end if;
 
@@ -25422,185 +26033,12 @@ package body Landin.Stages.Checking is
          --  fold and range owner to every finite array-field element.  Labels
          --  map to layout order through Note_Field/Field_Index.
          if Wanted = Ty.Aggregate
-           and then Syn.Kind (Of_Tree, Value) = Syn.Struct_Literal
+           and then Is_Struct_Construction (Of_Tree, Value)
            and then Landin.Checking.Type_Of (Types.all, Of_Tree, Value)
                     = Ty.Aggregate
          then
-            declare
-               Wrote : constant Landin.Checking.Nominal_Type_Id :=
-                 Landin.Checking.Nominal_Of (Types.all, Of_Tree, Value);
-            begin
-               if Body_Contains_Aggregate (Wrote) then
-                  Check_Struct_Image (Value, Wrote);
-                  return;
-               end if;
-
-               for Position in
-                 1 .. Syn.Field_Value_Count (Of_Tree, Value)
-               loop
-                  declare
-                     Field : constant Syn.Node_Id :=
-                       Syn.Nth_Field_Value (Of_Tree, Value, Position);
-                     Which : constant Positive :=
-                       Landin.Checking.Field_Index
-                         (Types.all, Of_Tree, Field);
-                     Image_Value : constant Syn.Node_Id :=
-                       Syn.Value_Of (Of_Tree, Field);
-                  begin
-                     case Landin.Checking.Field_Kind_Of
-                       (Types.all, Wrote, Which)
-                     is
-                        when Landin.Checking.Scalar_Field =>
-                           declare
-                              Element : constant Ty.Scalar_Name :=
-                                Landin.Checking.Field_Type
-                                  (Types.all, Wrote, Which);
-                           begin
-                              if Element in Ty.Numeric_Name then
-                                 Check_Image_Scalar (Image_Value, Element);
-                              end if;
-                           end;
-
-                        when Landin.Checking.Reference_Field =>
-                           null;
-
-                        when Landin.Checking.Fixed_Array_Field =>
-                           if Syn.Kind (Of_Tree, Image_Value)
-                                in Syn.Array_Literal
-                                   | Syn.Array_Repetition
-                                   | Syn.Mixed_Array_Repetition
-                           then
-                              declare
-                                 Element : constant Ty.Scalar_Name :=
-                                   Landin.Checking.Field_Array_Element
-                                     (Types.all, Wrote, Which);
-                              begin
-                                 if Element in Ty.Integer_Name then
-                                    if Syn.Kind (Of_Tree, Image_Value)
-                                         = Syn.Array_Repetition
-                                    then
-                                       Check_Image_Scalar
-                                         (Syn.Repeated_Element
-                                            (Of_Tree, Image_Value),
-                                          Element);
-                                    else
-                                       for Each in
-                                         1 .. Syn.Element_Count
-                                                (Of_Tree, Image_Value)
-                                       loop
-                                          Check_Image_Scalar
-                                            (Syn.Nth_Element
-                                               (Of_Tree, Image_Value, Each),
-                                             Element);
-                                       end loop;
-
-                                       if Syn.Kind (Of_Tree, Image_Value)
-                                            = Syn.Mixed_Array_Repetition
-                                       then
-                                          Check_Image_Scalar
-                                            (Syn.Repeated_Element
-                                               (Of_Tree, Image_Value),
-                                             Element);
-                                       end if;
-                                    end if;
-                                 end if;
-                              end;
-                           end if;
-
-                        when Landin.Checking.Aggregate_Field =>
-                           raise Landin.Compiler_Defect with
-                             "a nested aggregate image reached checking";
-
-                        when Landin.Checking.Variant_Field =>
-                           declare
-                              Selected : constant Positive :=
-                                Positive
-                                  (Landin.Checking.Field_Index
-                                     (Types.all, Of_Tree, Image_Value));
-                           begin
-                              if Syn.Kind (Of_Tree, Image_Value)
-                                   = Syn.Struct_Literal
-                              then
-                                 for Each in
-                                   1 .. Syn.Field_Value_Count
-                                          (Of_Tree, Image_Value)
-                                 loop
-                                    declare
-                                       Label : constant Syn.Node_Id :=
-                                         Syn.Nth_Field_Value
-                                           (Of_Tree, Image_Value, Each);
-                                       Payload : constant Positive :=
-                                         Positive
-                                           (Landin.Checking.Field_Index
-                                              (Types.all, Of_Tree, Label));
-                                       Shape : constant
-                                         Landin.Checking.Field_Shape :=
-                                           Landin.Checking
-                                             .Nth_Variant_Case_Field
-                                               (Types.all, Wrote, Which,
-                                                Selected, Payload);
-                                    begin
-                                       if Shape.Kind =
-                                            Landin.Checking.Scalar_Field
-                                         and then Shape.Element
-                                           in Ty.Numeric_Name
-                                       then
-                                          Check_Image_Scalar
-                                            (Syn.Value_Of (Of_Tree, Label),
-                                             Shape.Element);
-                                       elsif Shape.Kind =
-                                         Landin.Checking.Fixed_Array_Field
-                                         and then Shape.Element
-                                           in Ty.Numeric_Name
-                                       then
-                                          declare
-                                             Given : constant Syn.Node_Id :=
-                                               Syn.Value_Of
-                                                 (Of_Tree, Label);
-                                          begin
-                                             if Syn.Kind (Of_Tree, Given)
-                                                  = Syn.Array_Repetition
-                                             then
-                                                Check_Image_Scalar
-                                                  (Syn.Repeated_Element
-                                                     (Of_Tree, Given),
-                                                   Shape.Element);
-                                             elsif Syn.Kind (Of_Tree, Given)
-                                               in Syn.Array_Literal
-                                                  | Syn
-                                                    .Mixed_Array_Repetition
-                                             then
-                                                for Position in
-                                                  1 .. Syn.Element_Count
-                                                         (Of_Tree, Given)
-                                                loop
-                                                   Check_Image_Scalar
-                                                     (Syn.Nth_Element
-                                                        (Of_Tree, Given,
-                                                         Position),
-                                                      Shape.Element);
-                                                end loop;
-
-                                                if Syn.Kind (Of_Tree, Given)
-                                                     = Syn
-                                                       .Mixed_Array_Repetition
-                                                then
-                                                   Check_Image_Scalar
-                                                     (Syn.Repeated_Element
-                                                        (Of_Tree, Given),
-                                                      Shape.Element);
-                                                end if;
-                                             end if;
-                                          end;
-                                       end if;
-                                    end;
-                                 end loop;
-                              end if;
-                           end;
-                     end case;
-                  end;
-               end loop;
-            end;
+            Check_Struct_Image
+              (Value, Landin.Checking.Nominal_Of (Types.all, Of_Tree, Value));
             return;
          end if;
 
@@ -25846,7 +26284,7 @@ package body Landin.Stages.Checking is
          --  its declaration carries, which is what makes [1730]'s habit
          --  cost nothing after the first check.
          if Syn.Kind (Of_Tree, Node)
-              in Syn.Name_Reference | Syn.Type_Reference
+              in Syn.Name_Reference | Syn.Type_Reference | Syn.Member_Selection
            and then Res.Verdict_Of (Meanings.all, Of_Tree, Node) = Res.Bound
          then
             return Landin.Checking.Constraint_Of
@@ -26978,98 +27416,492 @@ package body Landin.Stages.Checking is
          Check_Operands (Of_Tree, Runs, Whole_Fold => False);
       end Check_Routine_Body;
 
-      --  R3.50 establishes only the ABI subset needed by the hosted service
-      --  module.  Keeping the refusal here prevents the neutral call IR from
-      --  accidentally promising R4.40's aggregate and callback matrix.
+      --  These are exactly the compiler-owned bridge identities, not a
+      --  prefix namespace and not the libc functions a bridge itself calls.
+      type Host_Helper is
+        (No_Host_Helper, Initialize_Arguments, Argument_Count, Argument_Table,
+         Argument_At, Argument_At_From, Text_Length, Open_Read, Open_Write,
+         Read_Bytes, Write_Bytes, Close_File, Errno, Heap_Allocate,
+         Heap_Release);
+
+      function Helper_Name (Helper : Host_Helper) return String
+        is (case Helper is
+              when No_Host_Helper => "",
+              when Initialize_Arguments => "_landin_host_initialize_arguments",
+              when Argument_Count => "_landin_host_argument_count",
+              when Argument_Table => "_landin_host_argument_table",
+              when Argument_At => "_landin_host_argument_at",
+              when Argument_At_From => "_landin_host_argument_at_from",
+              when Text_Length => "_landin_host_text_length",
+              when Open_Read => "_landin_host_open_read",
+              when Open_Write => "_landin_host_open_write",
+              when Read_Bytes => "_landin_host_read",
+              when Write_Bytes => "_landin_host_write",
+              when Close_File => "_landin_host_close",
+              when Errno => "_landin_host_errno",
+              when Heap_Allocate => "_landin_host_heap_allocate",
+              when Heap_Release => "_landin_host_heap_release");
+
+      function Helper_Of (Symbol : String) return Host_Helper;
+
+      function Helper_Of (Symbol : String) return Host_Helper is
+      begin
+         for Helper in Initialize_Arguments .. Heap_Release loop
+            if Symbol = Helper_Name (Helper) then
+               return Helper;
+            end if;
+         end loop;
+         return No_Host_Helper;
+      end Helper_Of;
+
+      --  Check before lowering: neutral pointer carriers erase referent,
+      --  permission, nullability and retention information.
       procedure Check_External_Declaration
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
       is
+         Id : constant Res.Declaration_Id :=
+           Declaration_At (Syn.Source_Of (Of_Tree), Node);
          Signature : constant Landin.Checking.Signature_Id :=
-           Landin.Checking.Signature_Of
-             (Types.all,
-              Declaration_At (Syn.Source_Of (Of_Tree), Node));
-         Supported : Boolean :=
-           Syn.Generic_Formal_Count (Of_Tree, Node) = 0
-           and then Syn.Error_Set_Of (Of_Tree, Node) = Syn.No_Node
-           and then Syn.Return_Count (Of_Tree, Node) <= 1;
-      begin
-         for Index in 1 .. Syn.Parameter_Count (Of_Tree, Node) loop
-            declare
-               Parameter : constant Syn.Node_Id :=
-                 Syn.Nth_Parameter (Of_Tree, Node, Index);
-               Held : constant Ty.Type_Kind :=
-                 Landin.Checking.Type_Of
-                   (Types.all,
-                    Declaration_At (Syn.Source_Of (Of_Tree), Parameter));
-            begin
-               Supported := Supported
-                 and then Held in Ty.Integer_Name | Ty.Bool | Ty.Pointer_Value
-                 and then Syn.Convention_Of (Of_Tree, Parameter)
-                            in Syn.Implicit_In | Syn.Explicit_In
-                 and then not Syn.Is_Escaping (Of_Tree, Parameter);
-            end;
-         end loop;
+           Landin.Checking.Signature_Of (Types.all, Id);
+         Explicit : constant Landin.Source.Span :=
+           Syn.Link_Symbol_Span (Of_Tree, Node);
+         Symbol : Landin.Source.Names.Name_Id :=
+           Landin.Source.Names.No_Name;
 
-         for Index in 1 .. Syn.Return_Count (Of_Tree, Node) loop
-            declare
-               Returned : constant Syn.Node_Id :=
-                 Syn.Nth_Return (Of_Tree, Node, Index);
-               Held : constant Ty.Type_Kind :=
-                 Landin.Checking.Type_Of
-                   (Types.all,
-                    Declaration_At (Syn.Source_Of (Of_Tree), Returned));
-            begin
-               Supported := Supported
-                 and then Held in Ty.Integer_Name | Ty.Bool | Ty.Pointer_Value;
-            end;
-         end loop;
+         procedure Reject (Message : String);
 
-         if Signature = Landin.Checking.No_Signature then
-            Supported := False;
-         end if;
-
-         --  D188: a foreign routine's named return is never assigned in
-         --  Landin, so a range subtype in an external signature would be a
-         --  constraint nothing ever checks.
-         if Signature /= Landin.Checking.No_Signature then
-            for Index in 1 .. Landin.Checking.Signature_Parameter_Count
-              (Types.all, Signature)
-            loop
-               if Landin.Checking.Nth_Signature_Parameter
-                 (Types.all, Signature, Index).Constraint
-                   /= Landin.Checking.No_Constraint
-               then
-                  Supported := False;
-               end if;
-            end loop;
-            for Index in 1 .. Landin.Checking.Signature_Result_Count
-              (Types.all, Signature)
-            loop
-               if Landin.Checking.Nth_Signature_Result
-                 (Types.all, Signature, Index).Constraint
-                   /= Landin.Checking.No_Constraint
-               then
-                  Supported := False;
-               end if;
-            end loop;
-         end if;
-
-         if not Supported then
+         procedure Reject (Message : String) is
+         begin
             Bad.Report
-              (Item    => Bad.Type_Mismatch,
-               Source  => Syn.Source_Of (Of_Tree),
-               Where   => Syn.Where (Of_Tree, Node),
-               Message => "this external signature is outside the hosted"
-                          & " scalar C boundary",
-               Note    => "[1580]: R3.50 admits fixed scalar and pointer"
-                          & " parameters and at most one such result; the"
-                          & " general C ABI matrix belongs to R4.40",
+              (Item => Bad.Type_Mismatch,
+               Source => Syn.Source_Of (Of_Tree),
+               Where => (if Explicit = Landin.Source.Empty_Span
+                         then Syn.Anchor (Of_Tree, Node) else Explicit),
+               Message => Message,
+               Note => "[1610]: a link symbol denotes one compatible"
+                       & " function and at most one definition; linkage does"
+                       & " not change the calling convention",
                Related => Syn.Origin (Of_Tree, Node),
-               Because => "this external declaration",
-               Refused => Bad.External_C_ABI,
-               Into    => Found);
+               Because => "this linked declaration", Into => Found);
+         end Reject;
+
+         procedure Reject_Helper
+           (Requirement : String;
+            Site : Landin.Provenance.Origin := Syn.Origin (Of_Tree, Node));
+
+         procedure Reject_Helper
+           (Requirement : String;
+            Site : Landin.Provenance.Origin := Syn.Origin (Of_Tree, Node)) is
+         begin
+            Bad.Report
+              (Item => Bad.Type_Mismatch,
+               Source => Syn.Source_Of (Of_Tree),
+               Where => (if Explicit = Landin.Source.Empty_Span
+                         then Syn.Anchor (Of_Tree, Node) else Explicit),
+               Message => "compiler-owned helper `" & Spelled (Symbol)
+                          & "` " & Requirement,
+               Note => "[1610]/[1975]: a helper import must preserve its"
+                       & " source types, pointer permissions and nullability;"
+                       & " [0780] retains argv and [0790] preserves from",
+               Related => Site, Because => "this helper contract",
+               Into => Found);
+         end Reject_Helper;
+
+         type Helper_Part is
+           (Nothing, Signed_Count, Size_Value, Byte_Pointer, Mutable_Bytes,
+            Table_Pointer, Optional_Bytes, Argument_Pointer);
+         type Helper_Parts is array (Positive range <>) of Helper_Part;
+
+         function Part_Name (Part : Helper_Part) return String
+           is (case Part is
+                 when Nothing => "none",
+                 when Signed_Count => "i32",
+                 when Size_Value => "usize",
+                 when Byte_Pointer => "ptr u8",
+                 when Mutable_Bytes => "ptr mut u8",
+                 when Table_Pointer => "ptr ptr u8",
+                 when Optional_Bytes => "one atom | ptr mut u8",
+                 when Argument_Pointer => "ptr u8 or cstring");
+
+         function Pointer_Agrees
+           (Reference : Landin.Checking.Reference_Id;
+            Mutable : Boolean := False;
+            Depth : Positive := 1;
+            Optional : Boolean := False;
+            Text : Boolean := False) return Boolean;
+
+         function Pointer_Agrees
+           (Reference : Landin.Checking.Reference_Id;
+            Mutable : Boolean := False;
+            Depth : Positive := 1;
+            Optional : Boolean := False;
+            Text : Boolean := False) return Boolean
+         is
+         begin
+            if not Landin.Checking.Holds (Types.all, Reference) then
+               return False;
+            end if;
+            declare
+               Part : constant Landin.Checking.Reference_Descriptor :=
+                 Landin.Checking.Descriptor_Of (Types.all, Reference);
+            begin
+               if Part.Kind /= Ty.Pointer_Value
+                 or else Part.Mutable /= Mutable
+                 or else (Part.Empty_Atom /= Res.No_Declaration) /= Optional
+                 or else (Part.View /= Ty.Ordinary_View
+                          and then (not Text or else Part.View
+                                      /= Ty.C_String_View))
+               then
+                  return False;
+               elsif Depth > 1 then
+                  return Part.Referent = Ty.Pointer_Value
+                    and then Pointer_Agrees
+                      (Part.Reference, Depth => Depth - 1);
+               end if;
+               return Part.Referent = Ty.U8;
+            end;
+         end Pointer_Agrees;
+
+         function Part_Agrees
+           (Part : Landin.Checking.Signature_Part; Expected : Helper_Part)
+            return Boolean;
+
+         function Part_Agrees
+           (Part : Landin.Checking.Signature_Part; Expected : Helper_Part)
+            return Boolean is
+         begin
+            case Expected is
+               when Nothing =>
+                  return False;
+               when Signed_Count =>
+                  return Part.Kind = Ty.I32;
+               when Size_Value =>
+                  return Part.Kind = Ty.Usize;
+               when Byte_Pointer | Mutable_Bytes | Table_Pointer
+                  | Optional_Bytes | Argument_Pointer =>
+                  return Part.Kind = Ty.Pointer_Value
+                    and then Pointer_Agrees
+                      (Part.Reference,
+                       Mutable => Expected in Mutable_Bytes | Optional_Bytes,
+                       Depth => (if Expected = Table_Pointer then 2 else 1),
+                       Optional => Expected = Optional_Bytes,
+                       Text => Expected = Argument_Pointer);
+            end case;
+         end Part_Agrees;
+
+         function Check_Contract
+           (Parameters : Helper_Parts; Result : Helper_Part) return Boolean;
+
+         function Check_Contract
+           (Parameters : Helper_Parts; Result : Helper_Part) return Boolean is
+         begin
+            if Landin.Checking.Signature_Parameter_Count (Types.all, Signature)
+                 /= Parameters'Length
+              or else Landin.Checking.Signature_Result_Count
+                (Types.all, Signature) /= (if Result = Nothing then 0 else 1)
+            then
+               Reject_Helper
+                 ("requires " & Counted (Parameters'Length, "parameter")
+                  & " and " & (if Result = Nothing then "no result"
+                               else "one result"));
+               return False;
+            end if;
+            for Index in Parameters'Range loop
+               declare
+                  Part : constant Landin.Checking.Signature_Part :=
+                    Landin.Checking.Nth_Signature_Parameter
+                      (Types.all, Signature, Index);
+               begin
+                  if not Part_Agrees (Part, Parameters (Index)) then
+                     Reject_Helper
+                       ("requires parameter " & Written (Ty.Folded (Index))
+                        & " to be `" & Part_Name (Parameters (Index)) & "`",
+                        Part.Site);
+                     return False;
+                  end if;
+               end;
+            end loop;
+            if Result /= Nothing then
+               declare
+                  Part : constant Landin.Checking.Signature_Part :=
+                    Landin.Checking.Nth_Signature_Result
+                      (Types.all, Signature, 1);
+               begin
+                  if not Part_Agrees (Part, Result) then
+                     Reject_Helper
+                       ("requires result `" & Part_Name (Result) & "`",
+                        Part.Site);
+                     return False;
+                  end if;
+               end;
+            end if;
+            return True;
+         end Check_Contract;
+
+         function Check_Helper (Helper : Host_Helper) return Boolean;
+
+         function Check_Helper (Helper : Host_Helper) return Boolean is
+            Valid : Boolean;
+         begin
+            if Helper = No_Host_Helper then
+               return True;
+            elsif not Syn.Is_External (Of_Tree, Node) then
+               Reject_Helper ("cannot be defined by source");
+               return False;
+            elsif not Landin.Checking.Signature_Uses_C_ABI
+              (Types.all, Signature)
+              or else Landin.Checking.Signature_Is_Variadic
+                (Types.all, Signature)
+              or else Landin.Checking.Signature_Error_Form
+                (Types.all, Signature) /= Landin.Checking.Infallible
+            then
+               Reject_Helper ("requires a fixed infallible C import");
+               return False;
+            end if;
+            case Helper is
+               when Initialize_Arguments =>
+                  Valid := Check_Contract
+                    ([Signed_Count, Table_Pointer], Nothing);
+               when Argument_Count =>
+                  Valid := Check_Contract ([], Size_Value);
+               when Argument_Table =>
+                  Valid := Check_Contract ([], Table_Pointer);
+               when Argument_At =>
+                  Valid := Check_Contract ([Size_Value], Argument_Pointer);
+               when Argument_At_From =>
+                  Valid := Check_Contract
+                    ([Table_Pointer, Size_Value], Byte_Pointer);
+               when Text_Length =>
+                  Valid := Check_Contract ([Byte_Pointer], Size_Value);
+               when Open_Read | Open_Write =>
+                  Valid := Check_Contract ([Byte_Pointer], Signed_Count);
+               when Read_Bytes =>
+                  Valid := Check_Contract
+                    ([Signed_Count, Mutable_Bytes, Size_Value], Size_Value);
+               when Write_Bytes =>
+                  Valid := Check_Contract
+                    ([Signed_Count, Byte_Pointer, Size_Value], Size_Value);
+               when Close_File =>
+                  Valid := Check_Contract ([Signed_Count], Signed_Count);
+               when Errno =>
+                  Valid := Check_Contract ([], Signed_Count);
+               when Heap_Allocate =>
+                  Valid := Check_Contract
+                    ([Size_Value, Size_Value], Optional_Bytes);
+               when Heap_Release =>
+                  Valid := Check_Contract ([Mutable_Bytes], Nothing);
+               when No_Host_Helper =>
+                  raise Landin.Compiler_Defect;
+            end case;
+            if not Valid then
+               return False;
+            elsif Helper = Initialize_Arguments then
+               declare
+                  Argv : constant Landin.Checking.Signature_Part :=
+                    Landin.Checking.Nth_Signature_Parameter
+                      (Types.all, Signature, 2);
+               begin
+                  if not Argv.Escaping then
+                     Reject_Helper ("requires escaping argv", Argv.Site);
+                     return False;
+                  end if;
+               end;
+            elsif Landin.Checking.Signature_Result_Count
+              (Types.all, Signature) = 1
+            then
+               declare
+                  Count : constant Natural :=
+                    Landin.Checking.Signature_Return_Source_Count
+                      (Types.all, Signature, 1);
+               begin
+                  if Helper = Argument_At_From then
+                     if Count /= 1
+                       or else Landin.Checking.Nth_Signature_Return_Source
+                         (Types.all, Signature, 1, 1) /= 1
+                     then
+                        Reject_Helper ("requires its result from parameter 1");
+                        return False;
+                     end if;
+                  elsif Count /= 0 then
+                     Reject_Helper ("requires an independent result");
+                     return False;
+                  end if;
+               end;
+            end if;
+            return True;
+         end Check_Helper;
+      begin
+         if Syn.Generic_Formal_Count (Of_Tree, Node) /= 0 then
+            Reject ("a linked or C declaration cannot have generic formals");
+            return;
          end if;
+         if Signature = Landin.Checking.No_Signature then
+            return;
+         end if;
+         if Explicit /= Landin.Source.Empty_Span then
+            declare
+               Lexeme : constant String := Landin.Source.Slice
+                 (Source (Context, Syn.Source_Of (Of_Tree)), Explicit);
+               Bytes : String (1 .. Lexeme'Length);
+               Length, Fault_First, Fault_Last : Natural;
+               Fault : Landin.Tokens.Text.Problem;
+            begin
+               Landin.Tokens.Text.Decode
+                 (Lexeme, Bytes, Length, Fault, Fault_First, Fault_Last);
+               if Fault /= Landin.Tokens.Text.Well_Formed or else Length = 0
+                 or else Bytes (1) not in 'A' .. 'Z' | 'a' .. 'z'
+                                         | '_' | '.' | '$'
+                 or else (for some C of Bytes (1 .. Length) =>
+                   C not in 'A' .. 'Z' | 'a' .. 'z' | '0' .. '9'
+                          | '_' | '.' | '$')
+               then
+                  Reject ("this link symbol is not a supported ELF spelling");
+                  return;
+               end if;
+               Symbol := Landin.Source.Names.Intern
+                 (Spellings.all, Bytes (1 .. Length));
+            end;
+         elsif Syn.Is_External (Of_Tree, Node)
+           or else Syn.Is_Public (Of_Tree, Node)
+         then
+            Symbol := Syn.Name (Of_Tree, Node);
+         else
+            return;
+         end if;
+
+         if not Check_Helper (Helper_Of (Spelled (Symbol))) then
+            return;
+         end if;
+
+         for Prior in Res.Declaration_Id'(1)
+           .. Res.Declaration_Id (Res.Declaration_Count (Meanings.all))
+         loop
+            if Prior /= Id
+              and then Landin.Checking.Link_Symbol (Types.all, Prior) = Symbol
+            then
+               declare
+                  Prior_Tree : constant not null access constant Syn.Tree :=
+                    Tree_For (Res.Source_Of (Meanings.all, Prior));
+                  Prior_Node : constant Syn.Node_Id :=
+                    Res.Node_Of (Meanings.all, Prior);
+                  Prior_Signature : constant Landin.Checking.Signature_Id :=
+                    Landin.Checking.Signature_Of (Types.all, Prior);
+               begin
+                  if not Signatures_Agree (Signature, Prior_Signature)
+                    or else (not Syn.Is_External (Of_Tree, Node)
+                             and then not Syn.Is_External
+                               (Prior_Tree.all, Prior_Node))
+                  then
+                     Reject ("this C link symbol collides with another"
+                             & " declaration or definition");
+                     return;
+                  end if;
+               end;
+            end if;
+         end loop;
+         Landin.Checking.Note_Link_Symbol (Types.all, Id, Symbol);
       end Check_External_Declaration;
+
+      procedure Check_Hosted_Main_Linkage;
+
+      procedure Check_Hosted_Main_Linkage is
+         Selected : Res.Declaration_Id := Res.No_Declaration;
+      begin
+         --  Existing signature/link errors own their diagnostics.  In
+         --  particular an explicitly linked main may already have collided.
+         if Landin.Diagnostics.Has_Errors (Found) then
+            return;
+         end if;
+         for Id in Res.Declaration_Id'(1)
+           .. Res.Declaration_Id (Res.Declaration_Count (Meanings.all))
+         loop
+            if Res.Sort_Of (Meanings.all, Id) = Res.Module_Function
+              and then Res.Is_Public (Meanings.all, Id)
+              and then Spelled (Res.Name_Of (Meanings.all, Id)) = "main"
+              and then Landin.Modules.Module_Of
+                (Grouped.all, Res.Source_Of (Meanings.all, Id))
+                  = Landin.Modules.Entry_Module
+            then
+               declare
+                  Of_Tree : constant not null access constant Syn.Tree :=
+                    Tree_For (Res.Source_Of (Meanings.all, Id));
+                  Node : constant Syn.Node_Id :=
+                    Res.Node_Of (Meanings.all, Id);
+                  Signature : constant Landin.Checking.Signature_Id :=
+                    Landin.Checking.Signature_Of (Types.all, Id);
+                  Symbol : constant Landin.Source.Names.Name_Id :=
+                    Landin.Checking.Link_Symbol (Types.all, Id);
+               begin
+                  if not Syn.Is_External (Of_Tree.all, Node)
+                    and then Syn.Generic_Formal_Count (Of_Tree.all, Node) = 0
+                    and then Landin.Checking.Holds (Types.all, Signature)
+                    and then not Landin.Checking.Signature_Uses_C_ABI
+                      (Types.all, Signature)
+                    and then Landin.Checking.Signature_Parameter_Count
+                      (Types.all, Signature) = 0
+                    and then Landin.Checking.Signature_Result_Count
+                      (Types.all, Signature) = 1
+                    and then Landin.Checking.Signature_Errors
+                      (Types.all, Signature) = Landin.Checking.No_Atom_Set
+                    and then (Symbol = Landin.Source.Names.No_Name
+                              or else Spelled (Symbol) = "main")
+                  then
+                     declare
+                        Result : constant Landin.Checking.Signature_Part :=
+                          Landin.Checking.Nth_Signature_Result
+                            (Types.all, Signature, 1);
+                     begin
+                        if Result.Kind = Ty.I32
+                          and then Spelled (Result.Name) = "code"
+                        then
+                           Selected := Id;
+                           exit;
+                        end if;
+                     end;
+                  end if;
+               end;
+            end if;
+         end loop;
+         if Selected = Res.No_Declaration then
+            return;
+         end if;
+         for Id in Res.Declaration_Id'(1)
+           .. Res.Declaration_Id (Res.Declaration_Count (Meanings.all))
+         loop
+            if Id /= Selected
+              and then Landin.Checking.Link_Symbol (Types.all, Id)
+                /= Landin.Source.Names.No_Name
+              and then Spelled (Landin.Checking.Link_Symbol (Types.all, Id))
+                = "main"
+            then
+               declare
+                  Of_Tree : constant not null access constant Syn.Tree :=
+                    Tree_For (Res.Source_Of (Meanings.all, Id));
+                  Node : constant Syn.Node_Id :=
+                    Res.Node_Of (Meanings.all, Id);
+                  Explicit : constant Landin.Source.Span :=
+                    Syn.Link_Symbol_Span (Of_Tree.all, Node);
+                  Main_Tree : constant not null access constant Syn.Tree :=
+                    Tree_For (Res.Source_Of (Meanings.all, Selected));
+               begin
+                  Bad.Report
+                    (Item => Bad.Type_Mismatch,
+                     Source => Syn.Source_Of (Of_Tree.all),
+                     Where => (if Explicit = Landin.Source.Empty_Span
+                               then Syn.Anchor (Of_Tree.all, Node)
+                               else Explicit),
+                     Message => "link symbol `main` collides with the selected"
+                                & " native hosted entry",
+                     Note => "[1610]/[1975]: only the entry module's public"
+                             & " native main():code:i32 retaining main linkage"
+                             & " selects hosted startup",
+                     Related => Syn.Origin
+                       (Main_Tree.all, Res.Node_Of (Meanings.all, Selected)),
+                     Because => "the selected hosted entry", Into => Found);
+               end;
+            end if;
+         end loop;
+      end Check_Hosted_Main_Linkage;
 
       --  D139 presents its active declarations through the same traversal
       --  as ordinary module declarations.  This action deliberately knows
@@ -27093,9 +27925,15 @@ package body Landin.Stages.Checking is
                Check_Operands (Of_Tree, Syn.Value_Of (Of_Tree, Node),
                                Whole_Fold => True);
             when Syn.Function_Declaration =>
-               if Syn.Is_External (Of_Tree, Node) then
+               if Syn.Uses_C_ABI (Of_Tree, Node)
+                 or else Syn.Link_Symbol_Span (Of_Tree, Node)
+                   /= Landin.Source.Empty_Span
+               then
                   Check_External_Declaration (Of_Tree, Node);
-               elsif Syn.Generic_Formal_Count (Of_Tree, Node) = 0 then
+               end if;
+               if not Syn.Is_External (Of_Tree, Node)
+                 and then Syn.Generic_Formal_Count (Of_Tree, Node) = 0
+               then
                   Check_Routine_Body (Of_Tree, Node);
                end if;
             when others =>
@@ -27459,6 +28297,8 @@ package body Landin.Stages.Checking is
          end;
       end loop;
 
+      Check_Hosted_Main_Linkage;
+
       --  An `any` construction can materialize a parameterized conformance
       --  provider while the ordinary body pass above is checking its
       --  contextual target.  Close that late finite frontier before lowering
@@ -27496,6 +28336,40 @@ package body Landin.Stages.Checking is
                        (Types.all, Previous);
                      raise;
                end;
+            end if;
+         end;
+      end loop;
+
+      --  D137 still treats a callback field as one code-address carrier,
+      --  not a by-value edge to each of the callback's parameter types.
+      --  Those C signatures can mention a record while it is building;
+      --  validate their retained identities now that all layouts are final.
+      pragma Assert (Struct_Layout_Depth = 0);
+      for Position in 1 .. Landin.Checking.Signature_Count (Types.all) loop
+         declare
+            Signature : constant Landin.Checking.Signature_Id :=
+              Landin.Checking.Signature_Id (Position);
+            Valid : Boolean := True;
+         begin
+            if Landin.Checking.Signature_Uses_C_ABI (Types.all, Signature) then
+               for Index in 1 .. Landin.Checking.Signature_Parameter_Count
+                 (Types.all, Signature)
+               loop
+                  Valid := Valid and then C_Part_Allowed
+                    (Landin.Checking.Nth_Signature_Parameter
+                       (Types.all, Signature, Index));
+               end loop;
+               for Index in 1 .. Landin.Checking.Signature_Result_Count
+                 (Types.all, Signature)
+               loop
+                  Valid := Valid and then C_Part_Allowed
+                    (Landin.Checking.Nth_Signature_Result
+                       (Types.all, Signature, Index));
+               end loop;
+               if not Valid then
+                  Reject_C_Signature
+                    (Landin.Checking.Signature_Origin (Types.all, Signature));
+               end if;
             end if;
          end;
       end loop;

@@ -1,0 +1,508 @@
+-- Genuine C differential coverage: every register-class combination,
+-- partial eightbytes, nested arrays and MEMORY results.
+
+one_i: type = layout(c) struct
+    value: u64
+end one_i
+
+one_s: type = layout(c) struct
+    value: f64
+end one_s
+
+two_ii: type = layout(c) struct
+    first: u64
+    second: u64
+end two_ii
+
+two_is: type = layout(c) struct
+    first: u64
+    second: f64
+end two_is
+
+two_si: type = layout(c) struct
+    first: f64
+    second: u64
+end two_si
+
+two_ss: type = layout(c) struct
+    first: f64
+    second: f64
+end two_ss
+
+floats2: type = layout(c) struct
+    values: [2]f32
+end floats2
+
+floats3: type = layout(c) struct
+    values: [3]f32
+end floats3
+
+partial3: type = layout(c) struct
+    values: [3]u8
+end partial3
+
+partial5: type = layout(c) struct
+    values: [5]u8
+end partial5
+
+partial7: type = layout(c) struct
+    values: [7]u8
+end partial7
+
+partial12: type = layout(c) struct
+    values: [3]i32
+end partial12
+
+large: type = layout(c) struct
+    values: [3]f64
+end large
+
+nested: type = layout(c) struct
+    values: [2]one_s
+end nested
+
+nested_large: type = layout(c) struct
+    values: [2]two_is
+end nested_large
+
+one_i_handler: type = extern(c) (value: one_i) -> (result: one_i)
+extern(c) c_one_i: (value: one_i) -> (result: one_i)
+extern(c) callback_one_i: (handler: one_i_handler, value: one_i) -> (result: one_i)
+public extern(c) l_one_i: (value: one_i) -> (result: one_i) =
+    result = one_i(value: value.value + 2)
+end l_one_i
+
+one_s_handler: type = extern(c) (value: one_s) -> (result: one_s)
+extern(c) c_one_s: (value: one_s) -> (result: one_s)
+extern(c) callback_one_s: (handler: one_s_handler, value: one_s) -> (result: one_s)
+public extern(c) l_one_s: (value: one_s) -> (result: one_s) =
+    result = one_s(value: value.value + 2.0)
+end l_one_s
+
+two_ii_handler: type = extern(c) (value: two_ii) -> (result: two_ii)
+extern(c) c_two_ii: (value: two_ii) -> (result: two_ii)
+extern(c) callback_two_ii: (handler: two_ii_handler, value: two_ii) -> (result: two_ii)
+public extern(c) l_two_ii: (value: two_ii) -> (result: two_ii) =
+    result = two_ii(first: value.first + 2, second: value.second + 2)
+end l_two_ii
+
+two_is_handler: type = extern(c) (value: two_is) -> (result: two_is)
+extern(c) c_two_is: (value: two_is) -> (result: two_is)
+extern(c) callback_two_is: (handler: two_is_handler, value: two_is) -> (result: two_is)
+public extern(c) l_two_is: (value: two_is) -> (result: two_is) =
+    result = two_is(first: value.first + 2, second: value.second + 2.0)
+end l_two_is
+
+two_si_handler: type = extern(c) (value: two_si) -> (result: two_si)
+extern(c) c_two_si: (value: two_si) -> (result: two_si)
+extern(c) callback_two_si: (handler: two_si_handler, value: two_si) -> (result: two_si)
+public extern(c) l_two_si: (value: two_si) -> (result: two_si) =
+    result = two_si(first: value.first + 2.0, second: value.second + 2)
+end l_two_si
+
+two_ss_handler: type = extern(c) (value: two_ss) -> (result: two_ss)
+extern(c) c_two_ss: (value: two_ss) -> (result: two_ss)
+extern(c) callback_two_ss: (handler: two_ss_handler, value: two_ss) -> (result: two_ss)
+public extern(c) l_two_ss: (value: two_ss) -> (result: two_ss) =
+    result = two_ss(first: value.first + 2.0, second: value.second + 2.0)
+end l_two_ss
+
+floats2_handler: type = extern(c) (value: floats2) -> (result: floats2)
+extern(c) c_floats2: (value: floats2) -> (result: floats2)
+extern(c) callback_floats2: (handler: floats2_handler, value: floats2) -> (result: floats2)
+public extern(c) l_floats2: (value: floats2) -> (result: floats2) =
+    result = floats2(values: [value.values[0] + 2.0, value.values[1] + 2.0])
+end l_floats2
+
+floats3_handler: type = extern(c) (value: floats3) -> (result: floats3)
+extern(c) c_floats3: (value: floats3) -> (result: floats3)
+extern(c) callback_floats3: (handler: floats3_handler, value: floats3) -> (result: floats3)
+public extern(c) l_floats3: (value: floats3) -> (result: floats3) =
+    result = floats3(values: [value.values[0] + 2.0, value.values[1] + 2.0, value.values[2] + 2.0])
+end l_floats3
+
+partial3_handler: type = extern(c) (value: partial3) -> (result: partial3)
+extern(c) c_partial3: (value: partial3) -> (result: partial3)
+extern(c) callback_partial3: (handler: partial3_handler, value: partial3) -> (result: partial3)
+public extern(c) l_partial3: (value: partial3) -> (result: partial3) =
+    result = partial3(values: [value.values[0] + 2, value.values[1] + 2, value.values[2] + 2])
+end l_partial3
+
+partial5_handler: type = extern(c) (value: partial5) -> (result: partial5)
+extern(c) c_partial5: (value: partial5) -> (result: partial5)
+extern(c) callback_partial5: (handler: partial5_handler, value: partial5) -> (result: partial5)
+public extern(c) l_partial5: (value: partial5) -> (result: partial5) =
+    result = partial5(values: [value.values[0] + 2, value.values[1] + 2, value.values[2] + 2, value.values[3] + 2, value.values[4] + 2])
+end l_partial5
+
+partial7_handler: type = extern(c) (value: partial7) -> (result: partial7)
+extern(c) c_partial7: (value: partial7) -> (result: partial7)
+extern(c) callback_partial7: (handler: partial7_handler, value: partial7) -> (result: partial7)
+public extern(c) l_partial7: (value: partial7) -> (result: partial7) =
+    result = partial7(values: [value.values[0] + 2, value.values[1] + 2, value.values[2] + 2, value.values[3] + 2, value.values[4] + 2, value.values[5] + 2, value.values[6] + 2])
+end l_partial7
+
+partial12_handler: type = extern(c) (value: partial12) -> (result: partial12)
+extern(c) c_partial12: (value: partial12) -> (result: partial12)
+extern(c) callback_partial12: (handler: partial12_handler, value: partial12) -> (result: partial12)
+public extern(c) l_partial12: (value: partial12) -> (result: partial12) =
+    result = partial12(values: [value.values[0] + 2, value.values[1] + 2, value.values[2] + 2])
+end l_partial12
+
+large_handler: type = extern(c) (value: large) -> (result: large)
+extern(c) c_large: (value: large) -> (result: large)
+extern(c) callback_large: (handler: large_handler, value: large) -> (result: large)
+public extern(c) l_large: (value: large) -> (result: large) =
+    result = large(values: [value.values[0] + 2.0, value.values[1] + 2.0, value.values[2] + 2.0])
+end l_large
+
+nested_handler: type = extern(c) (value: nested) -> (result: nested)
+extern(c) c_nested: (value: nested) -> (result: nested)
+extern(c) callback_nested: (handler: nested_handler, value: nested) -> (result: nested)
+public extern(c) l_nested: (value: nested) -> (result: nested) =
+    result = nested(values: [one_s(value: value.values[0].value + 2.0), one_s(value: value.values[1].value + 2.0)])
+end l_nested
+
+nested_large_handler: type = extern(c) (value: nested_large) -> (result: nested_large)
+extern(c) c_nested_large: (value: nested_large) -> (result: nested_large)
+extern(c) callback_nested_large: (handler: nested_large_handler, value: nested_large) -> (result: nested_large)
+public extern(c) l_nested_large: (value: nested_large) -> (result: nested_large) =
+    result = nested_large(values: [two_is(first: value.values[0].first + 2, second: value.values[0].second + 2.0), two_is(first: value.values[1].first + 2, second: value.values[1].second + 2.0)])
+end l_nested_large
+
+merged0: type = layout(c) struct
+    real: f32
+    integer: u32
+end merged0
+merged0_handler: type = extern(c) (value: merged0) -> (result: merged0)
+extern(c) c_merged0: (value: merged0) -> (result: merged0)
+public extern(c) l_merged0: (value: merged0) -> (result: merged0) =
+    result = merged0(real: value.real + 2.0, integer: value.integer + 2)
+end l_merged0
+
+merged1: type = layout(c) struct
+    integer: u32
+    real: f32
+end merged1
+merged1_handler: type = extern(c) (value: merged1) -> (result: merged1)
+extern(c) c_merged1: (value: merged1) -> (result: merged1)
+public extern(c) l_merged1: (value: merged1) -> (result: merged1) =
+    result = merged1(real: value.real + 2.0, integer: value.integer + 2)
+end l_merged1
+
+extern(c) c_layout: (which: i32, size: usize, alignment: usize) -> (ok: bool)
+
+public extern(c) landin_check: () -> (result: i32) =
+    result = 42
+    input_0: one_i = one_i(value: 10)
+    direct_0 := c_one_i(input_0)
+    handler_0: one_i_handler = c_one_i
+    indirect_0 := handler_0(input_0)
+    callback_0 := callback_one_i(l_one_i, input_0)
+    if direct_0.value <> input_0.value + 1
+       or indirect_0.value <> input_0.value + 1
+       or callback_0.value <> input_0.value + 2
+    then
+        result = 1
+    end if
+    input_1: one_s = one_s(value: 10.0)
+    direct_1 := c_one_s(input_1)
+    handler_1: one_s_handler = c_one_s
+    indirect_1 := handler_1(input_1)
+    callback_1 := callback_one_s(l_one_s, input_1)
+    if direct_1.value <> input_1.value + 1.0
+       or indirect_1.value <> input_1.value + 1.0
+       or callback_1.value <> input_1.value + 2.0
+    then
+        result = 2
+    end if
+    input_2: two_ii = two_ii(first: 10, second: 11)
+    direct_2 := c_two_ii(input_2)
+    handler_2: two_ii_handler = c_two_ii
+    indirect_2 := handler_2(input_2)
+    callback_2 := callback_two_ii(l_two_ii, input_2)
+    if direct_2.first <> input_2.first + 1
+       or indirect_2.first <> input_2.first + 1
+       or callback_2.first <> input_2.first + 2
+       or direct_2.second <> input_2.second + 1
+       or indirect_2.second <> input_2.second + 1
+       or callback_2.second <> input_2.second + 2
+    then
+        result = 3
+    end if
+    input_3: two_is = two_is(first: 10, second: 11.0)
+    direct_3 := c_two_is(input_3)
+    handler_3: two_is_handler = c_two_is
+    indirect_3 := handler_3(input_3)
+    callback_3 := callback_two_is(l_two_is, input_3)
+    if direct_3.first <> input_3.first + 1
+       or indirect_3.first <> input_3.first + 1
+       or callback_3.first <> input_3.first + 2
+       or direct_3.second <> input_3.second + 1.0
+       or indirect_3.second <> input_3.second + 1.0
+       or callback_3.second <> input_3.second + 2.0
+    then
+        result = 4
+    end if
+    input_4: two_si = two_si(first: 10.0, second: 11)
+    direct_4 := c_two_si(input_4)
+    handler_4: two_si_handler = c_two_si
+    indirect_4 := handler_4(input_4)
+    callback_4 := callback_two_si(l_two_si, input_4)
+    if direct_4.first <> input_4.first + 1.0
+       or indirect_4.first <> input_4.first + 1.0
+       or callback_4.first <> input_4.first + 2.0
+       or direct_4.second <> input_4.second + 1
+       or indirect_4.second <> input_4.second + 1
+       or callback_4.second <> input_4.second + 2
+    then
+        result = 5
+    end if
+    input_5: two_ss = two_ss(first: 10.0, second: 11.0)
+    direct_5 := c_two_ss(input_5)
+    handler_5: two_ss_handler = c_two_ss
+    indirect_5 := handler_5(input_5)
+    callback_5 := callback_two_ss(l_two_ss, input_5)
+    if direct_5.first <> input_5.first + 1.0
+       or indirect_5.first <> input_5.first + 1.0
+       or callback_5.first <> input_5.first + 2.0
+       or direct_5.second <> input_5.second + 1.0
+       or indirect_5.second <> input_5.second + 1.0
+       or callback_5.second <> input_5.second + 2.0
+    then
+        result = 6
+    end if
+    input_6: floats2 = floats2(values: [10.0, 11.0])
+    direct_6 := c_floats2(input_6)
+    handler_6: floats2_handler = c_floats2
+    indirect_6 := handler_6(input_6)
+    callback_6 := callback_floats2(l_floats2, input_6)
+    if direct_6.values[0] <> input_6.values[0] + 1.0
+       or indirect_6.values[0] <> input_6.values[0] + 1.0
+       or callback_6.values[0] <> input_6.values[0] + 2.0
+       or direct_6.values[1] <> input_6.values[1] + 1.0
+       or indirect_6.values[1] <> input_6.values[1] + 1.0
+       or callback_6.values[1] <> input_6.values[1] + 2.0
+    then
+        result = 7
+    end if
+    input_7: floats3 = floats3(values: [10.0, 11.0, 12.0])
+    direct_7 := c_floats3(input_7)
+    handler_7: floats3_handler = c_floats3
+    indirect_7 := handler_7(input_7)
+    callback_7 := callback_floats3(l_floats3, input_7)
+    if direct_7.values[0] <> input_7.values[0] + 1.0
+       or indirect_7.values[0] <> input_7.values[0] + 1.0
+       or callback_7.values[0] <> input_7.values[0] + 2.0
+       or direct_7.values[1] <> input_7.values[1] + 1.0
+       or indirect_7.values[1] <> input_7.values[1] + 1.0
+       or callback_7.values[1] <> input_7.values[1] + 2.0
+       or direct_7.values[2] <> input_7.values[2] + 1.0
+       or indirect_7.values[2] <> input_7.values[2] + 1.0
+       or callback_7.values[2] <> input_7.values[2] + 2.0
+    then
+        result = 8
+    end if
+    input_8: partial3 = partial3(values: [10, 11, 12])
+    direct_8 := c_partial3(input_8)
+    handler_8: partial3_handler = c_partial3
+    indirect_8 := handler_8(input_8)
+    callback_8 := callback_partial3(l_partial3, input_8)
+    if direct_8.values[0] <> input_8.values[0] + 1
+       or indirect_8.values[0] <> input_8.values[0] + 1
+       or callback_8.values[0] <> input_8.values[0] + 2
+       or direct_8.values[1] <> input_8.values[1] + 1
+       or indirect_8.values[1] <> input_8.values[1] + 1
+       or callback_8.values[1] <> input_8.values[1] + 2
+       or direct_8.values[2] <> input_8.values[2] + 1
+       or indirect_8.values[2] <> input_8.values[2] + 1
+       or callback_8.values[2] <> input_8.values[2] + 2
+    then
+        result = 9
+    end if
+    input_9: partial5 = partial5(values: [10, 11, 12, 13, 14])
+    direct_9 := c_partial5(input_9)
+    handler_9: partial5_handler = c_partial5
+    indirect_9 := handler_9(input_9)
+    callback_9 := callback_partial5(l_partial5, input_9)
+    if direct_9.values[0] <> input_9.values[0] + 1
+       or indirect_9.values[0] <> input_9.values[0] + 1
+       or callback_9.values[0] <> input_9.values[0] + 2
+       or direct_9.values[1] <> input_9.values[1] + 1
+       or indirect_9.values[1] <> input_9.values[1] + 1
+       or callback_9.values[1] <> input_9.values[1] + 2
+       or direct_9.values[2] <> input_9.values[2] + 1
+       or indirect_9.values[2] <> input_9.values[2] + 1
+       or callback_9.values[2] <> input_9.values[2] + 2
+       or direct_9.values[3] <> input_9.values[3] + 1
+       or indirect_9.values[3] <> input_9.values[3] + 1
+       or callback_9.values[3] <> input_9.values[3] + 2
+       or direct_9.values[4] <> input_9.values[4] + 1
+       or indirect_9.values[4] <> input_9.values[4] + 1
+       or callback_9.values[4] <> input_9.values[4] + 2
+    then
+        result = 10
+    end if
+    input_10: partial7 = partial7(values: [10, 11, 12, 13, 14, 15, 16])
+    direct_10 := c_partial7(input_10)
+    handler_10: partial7_handler = c_partial7
+    indirect_10 := handler_10(input_10)
+    callback_10 := callback_partial7(l_partial7, input_10)
+    if direct_10.values[0] <> input_10.values[0] + 1
+       or indirect_10.values[0] <> input_10.values[0] + 1
+       or callback_10.values[0] <> input_10.values[0] + 2
+       or direct_10.values[1] <> input_10.values[1] + 1
+       or indirect_10.values[1] <> input_10.values[1] + 1
+       or callback_10.values[1] <> input_10.values[1] + 2
+       or direct_10.values[2] <> input_10.values[2] + 1
+       or indirect_10.values[2] <> input_10.values[2] + 1
+       or callback_10.values[2] <> input_10.values[2] + 2
+       or direct_10.values[3] <> input_10.values[3] + 1
+       or indirect_10.values[3] <> input_10.values[3] + 1
+       or callback_10.values[3] <> input_10.values[3] + 2
+       or direct_10.values[4] <> input_10.values[4] + 1
+       or indirect_10.values[4] <> input_10.values[4] + 1
+       or callback_10.values[4] <> input_10.values[4] + 2
+       or direct_10.values[5] <> input_10.values[5] + 1
+       or indirect_10.values[5] <> input_10.values[5] + 1
+       or callback_10.values[5] <> input_10.values[5] + 2
+       or direct_10.values[6] <> input_10.values[6] + 1
+       or indirect_10.values[6] <> input_10.values[6] + 1
+       or callback_10.values[6] <> input_10.values[6] + 2
+    then
+        result = 11
+    end if
+    input_11: partial12 = partial12(values: [10, 11, 12])
+    direct_11 := c_partial12(input_11)
+    handler_11: partial12_handler = c_partial12
+    indirect_11 := handler_11(input_11)
+    callback_11 := callback_partial12(l_partial12, input_11)
+    if direct_11.values[0] <> input_11.values[0] + 1
+       or indirect_11.values[0] <> input_11.values[0] + 1
+       or callback_11.values[0] <> input_11.values[0] + 2
+       or direct_11.values[1] <> input_11.values[1] + 1
+       or indirect_11.values[1] <> input_11.values[1] + 1
+       or callback_11.values[1] <> input_11.values[1] + 2
+       or direct_11.values[2] <> input_11.values[2] + 1
+       or indirect_11.values[2] <> input_11.values[2] + 1
+       or callback_11.values[2] <> input_11.values[2] + 2
+    then
+        result = 12
+    end if
+    input_12: large = large(values: [10.0, 11.0, 12.0])
+    direct_12 := c_large(input_12)
+    handler_12: large_handler = c_large
+    indirect_12 := handler_12(input_12)
+    callback_12 := callback_large(l_large, input_12)
+    if direct_12.values[0] <> input_12.values[0] + 1.0
+       or indirect_12.values[0] <> input_12.values[0] + 1.0
+       or callback_12.values[0] <> input_12.values[0] + 2.0
+       or direct_12.values[1] <> input_12.values[1] + 1.0
+       or indirect_12.values[1] <> input_12.values[1] + 1.0
+       or callback_12.values[1] <> input_12.values[1] + 2.0
+       or direct_12.values[2] <> input_12.values[2] + 1.0
+       or indirect_12.values[2] <> input_12.values[2] + 1.0
+       or callback_12.values[2] <> input_12.values[2] + 2.0
+    then
+        result = 13
+    end if
+    input_13: nested = nested(values: [one_s(value: 10.0), one_s(value: 11.0)])
+    direct_13 := c_nested(input_13)
+    handler_13: nested_handler = c_nested
+    indirect_13 := handler_13(input_13)
+    callback_13 := callback_nested(l_nested, input_13)
+    if direct_13.values[0].value <> input_13.values[0].value + 1.0
+       or indirect_13.values[0].value <> input_13.values[0].value + 1.0
+       or callback_13.values[0].value <> input_13.values[0].value + 2.0
+       or direct_13.values[1].value <> input_13.values[1].value + 1.0
+       or indirect_13.values[1].value <> input_13.values[1].value + 1.0
+       or callback_13.values[1].value <> input_13.values[1].value + 2.0
+    then
+        result = 14
+    end if
+    input_14: nested_large = nested_large(values: [two_is(first: 10, second: 11.0), two_is(first: 11, second: 12.0)])
+    direct_14 := c_nested_large(input_14)
+    handler_14: nested_large_handler = c_nested_large
+    indirect_14 := handler_14(input_14)
+    callback_14 := callback_nested_large(l_nested_large, input_14)
+    if direct_14.values[0].first <> input_14.values[0].first + 1
+       or indirect_14.values[0].first <> input_14.values[0].first + 1
+       or callback_14.values[0].first <> input_14.values[0].first + 2
+       or direct_14.values[0].second <> input_14.values[0].second + 1.0
+       or indirect_14.values[0].second <> input_14.values[0].second + 1.0
+       or callback_14.values[0].second <> input_14.values[0].second + 2.0
+       or direct_14.values[1].first <> input_14.values[1].first + 1
+       or indirect_14.values[1].first <> input_14.values[1].first + 1
+       or callback_14.values[1].first <> input_14.values[1].first + 2
+       or direct_14.values[1].second <> input_14.values[1].second + 1.0
+       or indirect_14.values[1].second <> input_14.values[1].second + 1.0
+       or callback_14.values[1].second <> input_14.values[1].second + 2.0
+    then
+        result = 15
+    end if
+    if not c_layout(0, sizeof one_i, alignof one_i) then
+        result = 60
+    end if
+    if not c_layout(1, sizeof one_s, alignof one_s) then
+        result = 61
+    end if
+    if not c_layout(2, sizeof two_ii, alignof two_ii) then
+        result = 62
+    end if
+    if not c_layout(3, sizeof two_is, alignof two_is) then
+        result = 63
+    end if
+    if not c_layout(4, sizeof two_si, alignof two_si) then
+        result = 64
+    end if
+    if not c_layout(5, sizeof two_ss, alignof two_ss) then
+        result = 65
+    end if
+    if not c_layout(6, sizeof floats2, alignof floats2) then
+        result = 66
+    end if
+    if not c_layout(7, sizeof floats3, alignof floats3) then
+        result = 67
+    end if
+    if not c_layout(8, sizeof partial3, alignof partial3) then
+        result = 68
+    end if
+    if not c_layout(9, sizeof partial5, alignof partial5) then
+        result = 69
+    end if
+    if not c_layout(10, sizeof partial7, alignof partial7) then
+        result = 70
+    end if
+    if not c_layout(11, sizeof partial12, alignof partial12) then
+        result = 71
+    end if
+    if not c_layout(12, sizeof large, alignof large) then
+        result = 72
+    end if
+    if not c_layout(13, sizeof nested, alignof nested) then
+        result = 73
+    end if
+    if not c_layout(14, sizeof nested_large, alignof nested_large) then
+        result = 74
+    end if
+    input_merged0: merged0 = merged0(real: 4.5, integer: 25)
+    call_merged0: merged0_handler = c_merged0
+    direct_merged0 := c_merged0(input_merged0)
+    indirect_merged0 := call_merged0(input_merged0)
+    if direct_merged0.real <> 5.5 or direct_merged0.integer <> 26
+       or indirect_merged0.real <> 5.5 or indirect_merged0.integer <> 26
+       or sizeof merged0 <> 8 or alignof merged0 <> 4
+    then
+        result = 20
+    end if
+    input_merged1: merged1 = merged1(integer: 25, real: 4.5)
+    call_merged1: merged1_handler = c_merged1
+    direct_merged1 := c_merged1(input_merged1)
+    indirect_merged1 := call_merged1(input_merged1)
+    if direct_merged1.real <> 5.5 or direct_merged1.integer <> 26
+       or indirect_merged1.real <> 5.5 or indirect_merged1.integer <> 26
+       or sizeof merged1 <> 8 or alignof merged1 <> 4
+    then
+        result = 21
+    end if
+end landin_check

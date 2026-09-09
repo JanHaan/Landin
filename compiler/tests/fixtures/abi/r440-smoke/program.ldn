@@ -1,0 +1,12 @@
+-- The harness smoke crosses the boundary in both directions: Landin main
+-- calls C, and C calls the exported Landin routine before returning.
+
+extern(c) link(symbol: "r440_c_roundtrip") c_roundtrip: (value: i32) -> (result: i32)
+
+public extern(c) link(symbol: "r440_landin_step") landin_step: (value: i32) -> (result: i32) =
+    result = value + 1
+end landin_step
+
+public main: () -> (status: i32) =
+    status = c_roundtrip(40)
+end main

@@ -1,0 +1,9 @@
+class: abi
+summary: Landin main calls C, which calls a Landin export
+program: program.ldn
+c-sources: peer.c
+c-args: -DSMOKE_INCREMENT=1
+run_expect: expected.txt
+status: 42
+constructs: 1570, 1580, 1600, 1610
+targets: linux-x86-64

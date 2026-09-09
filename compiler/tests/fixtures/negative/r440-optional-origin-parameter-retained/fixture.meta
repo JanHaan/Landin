@@ -1,0 +1,6 @@
+class: negative
+summary: A narrowed optional still derives from its nonescaping parameter and cannot satisfy an escaping formal
+constructs: 0480, 0780, 1210
+program: program.ldn
+codes: L0314
+targets: linux-x86-64, macos-arm64, synthetic-32

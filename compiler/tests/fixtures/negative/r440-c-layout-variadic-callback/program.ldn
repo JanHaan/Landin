@@ -1,0 +1,4 @@
+callback: type = extern(c) (count: i32, ...) -> (result: i32)
+bad: type = layout(c) struct
+    apply: callback
+end bad

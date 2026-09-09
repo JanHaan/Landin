@@ -335,6 +335,10 @@ package body Landin.Syntax.Parser is
                  Tok.Plain_Assignment;
                Exported  : Boolean := False;
                External  : Boolean := False;
+               C_ABI     : Boolean := False;
+               Variadic  : Boolean := False;
+               C_Layout  : Boolean := False;
+               Link_Name : Landin.Source.Span := Landin.Source.Empty_Span;
                Mutable   : Boolean := False;
                Escapes   : Boolean := False;
                Caller    : Boolean := False;
@@ -414,9 +418,16 @@ package body Landin.Syntax.Parser is
             function Parse_Function
               (Exported  : Boolean;
                Public_At : Landin.Source.Span;
-               External  : Boolean := False;
+               C_ABI     : Boolean := False;
                Extern_At : Landin.Source.Span := Landin.Source.Empty_Span)
                return Node_Id;
+            procedure Recover_Annotation_Closer;
+            procedure Parse_C_Convention;
+            procedure Parse_Parameters
+              (Into         : in out Slot_Vectors.Vector;
+               C_ABI        : Boolean;
+               Variadic     : out Boolean;
+               Allow_Static : Boolean := False);
             function Parse_Anonymous_Function return Node_Id;
             function Parse_Parameter
               (Allow_Static : Boolean := False) return Node_Id;
@@ -584,7 +595,7 @@ package body Landin.Syntax.Parser is
             begin
                if Peek = Tok.Left_Paren then
                   return Starts_Signature;
-               elsif Peek = Tok.Kw_Any then
+               elsif Peek in Tok.Kw_Any | Tok.Kw_Extern then
                   return True;
                elsif Peek = Tok.Kw_Ptr then
                   return Ahead (1) /= Tok.Left_Paren;
@@ -601,7 +612,8 @@ package body Landin.Syntax.Parser is
                      if Level = 0 then
                         return Ahead (Step + 1)
                           in Tok.Identifier | Tok.Left_Bracket
-                             | Tok.Left_Paren | Tok.Kw_Any | Tok.Kw_Ptr;
+                             | Tok.Left_Paren | Tok.Kw_Any | Tok.Kw_Ptr
+                             | Tok.Kw_Extern;
                      end if;
                   end if;
                   Step := Step + 1;
@@ -763,6 +775,10 @@ package body Landin.Syntax.Parser is
                  Tok.Plain_Assignment;
                Exported  : Boolean := False;
                External  : Boolean := False;
+               C_ABI     : Boolean := False;
+               Variadic  : Boolean := False;
+               C_Layout  : Boolean := False;
+               Link_Name : Landin.Source.Span := Landin.Source.Empty_Span;
                Mutable   : Boolean := False;
                Escapes   : Boolean := False;
                Caller    : Boolean := False;
@@ -806,6 +822,10 @@ package body Landin.Syntax.Parser is
                    Sound      => Sound,
                    Exported   => Exported,
                    External   => External,
+                   C_ABI      => C_ABI,
+                   Variadic   => Variadic,
+                   C_Layout   => C_Layout,
+                   Link_Name  => Link_Name,
                    Mutable    => Mutable,
                    Escaping   => Escapes,
                    Caller     => Caller,
@@ -1347,55 +1367,25 @@ package body Landin.Syntax.Parser is
                   return Parse_Fixed_Conditional;
                end if;
 
-               --  R3.50's imported boundary is deliberately one explicit
-               --  convention and no body: `extern(c) name: signature`.
+               --  Convention, linkage and bodylessness are independent:
+               --  an extern(c) definition has an ordinary checked body.
                if Peek = Tok.Kw_Extern then
                   declare
                      Extern_At : constant Landin.Source.Span := Here;
                   begin
-                     Advance;
-
-                     if Expect
-                       (Wanted  => Tok.Left_Paren,
-                        Message => "`extern` names its convention in `(`",
-                        Note    => "[1580]: `extern(c)` imports a C routine",
-                        Related => Extern_At,
-                        Because => "introduced here")
-                     then
-                        if Peek /= Tok.Identifier
-                          or else Landin.Source.Names.Spelling
-                                    (Names, Named_Here) /= "c"
-                        then
-                           Complain
-                             (Item    => Syn.Token_Expected,
-                              Where   => Here,
-                              Message => "the hosted boundary supports the"
-                                         & " `c` convention",
-                              Note    => "[1580]: write `extern(c)`",
-                              Related => Extern_At,
-                              Because => "introduced here");
-                        end if;
-
-                        if Peek = Tok.Identifier then
-                           Advance;
-                        end if;
-
-                        if not Expect
-                          (Wanted  => Tok.Right_Paren,
-                           Message => "the external convention is never"
-                                      & " closed",
-                           Note    => "[1580]: write `extern(c)`",
-                           Related => Extern_At,
-                           Because => "opened here")
-                        then
-                           Resync_Declaration;
-                        end if;
-                     end if;
-
+                     Parse_C_Convention;
                      return Parse_Function
-                       (Exported, Public_At, External => True,
+                       (Exported, Public_At, C_ABI => True,
                         Extern_At => Extern_At);
                   end;
+               end if;
+
+               if Peek = Tok.Identifier
+                 and then Landin.Source.Names.Spelling
+                   (Names, Named_Here) = "link"
+                 and then Ahead (1) = Tok.Left_Paren
+               then
+                  return Parse_Function (Exported, Public_At);
                end if;
 
                if Peek in Tok.Left_Paren | Tok.Left_Bracket | Tok.Kw_Ptr
@@ -1931,6 +1921,7 @@ package body Landin.Syntax.Parser is
                      Advance;
                   elsif Peek in Tok.Identifier | Tok.Left_Bracket
                                | Tok.Left_Paren | Tok.Kw_Any | Tok.Kw_Ptr
+                               | Tok.Kw_Extern
                   then
                      Arguments.Append (Parse_Type (False, Starts));
                   else
@@ -2001,14 +1992,118 @@ package body Landin.Syntax.Parser is
                return Result;
             end Parse_Type;
 
+            --  An annotation owns its recovered `)`, not the declaration
+            --  after it.  If the closer is absent, leave the next signature,
+            --  struct body or declaration in hand rather than swallowing its
+            --  parameter list in search of a different `)`.
+            procedure Recover_Annotation_Closer is
+            begin
+               while Peek not in Tok.Right_Paren | Tok.Left_Paren
+                 | Tok.Kw_Struct | Tok.Kw_End | Tok.Kw_Public | Tok.Kw_Extern
+                 | Tok.Kw_Mut | Tok.Kw_Fixed | Tok.Minus_Greater | Tok.Equal
+                 | Tok.End_Of_Input
+               loop
+                  exit when Peek = Tok.Identifier
+                    and then Ahead (1) in Tok.Colon | Tok.Colon_Equal
+                       | Tok.Left_Paren;
+                  Advance;
+               end loop;
+               if Peek = Tok.Right_Paren then
+                  Advance;
+               end if;
+            end Recover_Annotation_Closer;
+
+            procedure Parse_C_Convention is
+               Opened : constant Landin.Source.Span := Here;
+            begin
+               Advance;
+               if not Expect
+                 (Tok.Left_Paren, "a C annotation opens with `(`",
+                  "[1580]: write `extern(c)` or `layout(c)`",
+                  Opened, "this annotation")
+               then
+                  return;
+               end if;
+               if Peek /= Tok.Identifier
+                 or else Landin.Source.Names.Spelling
+                   (Names, Named_Here) /= "c"
+               then
+                  Complain
+                    (Syn.Token_Expected, Here,
+                     "the supported convention is `c`",
+                     Note => "[1580]: write `extern(c)` or `layout(c)`",
+                     Related => Opened, Because => "this annotation");
+               end if;
+               if Peek = Tok.Identifier then
+                  Advance;
+               end if;
+               if not Expect
+                 (Tok.Right_Paren, "a C annotation closes with `)`",
+                  "[1580]: write `extern(c)` or `layout(c)`",
+                  Opened, "this annotation")
+               then
+                  Recover_Annotation_Closer;
+               end if;
+            end Parse_C_Convention;
+
+            procedure Parse_Parameters
+              (Into         : in out Slot_Vectors.Vector;
+               C_ABI        : Boolean;
+               Variadic     : out Boolean;
+               Allow_Static : Boolean := False)
+            is
+               Opened : constant Landin.Source.Span := Previous;
+            begin
+               Variadic := False;
+               if Peek = Tok.Right_Paren then
+                  return;
+               end if;
+               loop
+                  if Peek = Tok.Dot_Dot_Dot then
+                     Variadic := True;
+                     if not C_ABI or else Into.Is_Empty then
+                        Complain
+                          (Syn.Token_Expected, Here,
+                           "`...` requires an extern(c) signature with"
+                           & " at least one fixed parameter",
+                           Note => "[1580]: the variadic tail is final",
+                           Related => Opened,
+                           Because => "this parameter list");
+                     end if;
+                     Advance;
+                     if Peek /= Tok.Right_Paren then
+                        Complain
+                          (Syn.Token_Expected, Here,
+                           "`...` must be the final parameter",
+                           Note => "[1580]: the variadic tail is final",
+                           Related => Opened,
+                           Because => "this parameter list");
+                     end if;
+                     exit;
+                  end if;
+                  declare
+                     Before : constant Tok.Token_Index := Index;
+                  begin
+                     Into.Append (Parse_Parameter (Allow_Static));
+                     exit when Index = Before;
+                  end;
+                  exit when Peek /= Tok.Comma;
+                  Advance;
+               end loop;
+            end Parse_Parameters;
+
             function Parse_Type_Inner
               (In_Parameter : Boolean;
                Declared_At  : Landin.Source.Span) return Node_Id
             is
                At_Type : constant Landin.Source.Span := Here;
+               C_ABI   : constant Boolean := Peek = Tok.Kw_Extern;
 
             begin
                Type_Refused := False;
+               if C_ABI then
+                  Parse_C_Convention;
+               end if;
 
                --  [1795] makes `type` a keyword, so a type position that
                --  holds one is met here by kind rather than by spelling.
@@ -2038,22 +2133,10 @@ package body Landin.Syntax.Parser is
                         Returns_At   : Landin.Source.Span :=
                           Landin.Source.Empty_Span;
                         Errors_Node  : Node_Id := No_Node;
+                        Variadic     : Boolean := False;
                      begin
                         Advance;
-
-                        if Peek /= Tok.Right_Paren then
-                           loop
-                              declare
-                                 Before : constant Tok.Token_Index := Index;
-                              begin
-                                 Params.Append (Parse_Parameter);
-                                 exit when Index = Before;
-                              end;
-
-                              exit when Peek /= Tok.Comma;
-                              Advance;
-                           end loop;
-                        end if;
+                        Parse_Parameters (Params, C_ABI, Variadic);
 
                         if not Expect
                           (Wanted  => Tok.Right_Paren,
@@ -2093,7 +2176,8 @@ package body Landin.Syntax.Parser is
                              (Of_Kind  => Function_Type,
                               At_Token => At_Type,
                               Extent   => Join (At_Type, After_Previous),
-                              Children => Head & To_List (Params));
+                              Children => Head & To_List (Params),
+                              C_ABI => C_ABI, Variadic => Variadic);
                         end;
                      end;
                   end if;
@@ -2116,6 +2200,16 @@ package body Landin.Syntax.Parser is
                if Peek not in Tok.Kernel_Kind then
                   Mark_Reported;
                   Advance;
+                  return Add (Error_Type, At_Type);
+               end if;
+
+               if C_ABI then
+                  Complain
+                    (Syn.Type_Expected, At_Type,
+                     "`extern(c)` in a type position requires a signature",
+                     Note => "[1580]: a C function type starts with extern(c)"
+                             & " and retains its parameter and return lists",
+                     Related => Declared_At, Because => "this type");
                   return Add (Error_Type, At_Type);
                end if;
 
@@ -2565,6 +2659,24 @@ package body Landin.Syntax.Parser is
                   --  either a bare declaration or D135's formal list.  The
                   --  latter carries syntax and resolution only in this slice;
                   --  checking decides its later nominal meaning.
+                  elsif Peek = Tok.Identifier
+                    and then Landin.Source.Names.Spelling
+                      (Names, Named_Here) = "layout"
+                    and then Ahead (1) = Tok.Left_Paren
+                  then
+                     Parse_C_Convention;
+                     if Peek = Tok.Kw_Struct then
+                        Aliased_Type := Parse_Struct_Body (Named, At_Name);
+                        Result.Items (Positive (Aliased_Type)).C_Layout :=
+                          True;
+                     else
+                        Complain
+                          (Syn.Type_Expected, Here,
+                           "`layout(c)` requires a struct body",
+                           Note => "[1580]: layout(c) struct fields end",
+                           Related => At_Name, Because => "this type");
+                        Aliased_Type := Add (Error_Type, Here);
+                     end if;
                   elsif Peek = Tok.Kw_Struct then
                      Aliased_Type := Parse_Struct_Body (Named, At_Name);
                   else
@@ -2751,6 +2863,8 @@ package body Landin.Syntax.Parser is
                   Extent   => Join (Start, After_Previous),
                   Children => [Aliased_Type] & To_List (Formals),
                   Named    => Named,
+                  C_Layout => Aliased_Type /= No_Node
+                    and then Result.Items (Positive (Aliased_Type)).C_Layout,
                   Exported => Exported);
             end Parse_Type_Declaration;
 
@@ -4178,6 +4292,7 @@ package body Landin.Syntax.Parser is
                   --  instead begin a binding or an assignment.
                   if Pre.Begins_Expression (Peek)
                     and then Peek not in Tok.Identifier | Tok.Kw_If
+                    and then not Starts_Destructuring
                   then
                      return Parse_Expression;
                   end if;
@@ -4219,13 +4334,13 @@ package body Landin.Syntax.Parser is
             function Parse_Function
               (Exported  : Boolean;
                Public_At : Landin.Source.Span;
-               External  : Boolean := False;
+               C_ABI     : Boolean := False;
                Extern_At : Landin.Source.Span := Landin.Source.Empty_Span)
                return Node_Id
             is
                Start : constant Landin.Source.Span :=
                  (if Exported then Public_At
-                  elsif External then Extern_At
+                  elsif C_ABI then Extern_At
                   else Here);
                Named        : Landin.Source.Names.Name_Id;
                At_Name      : Landin.Source.Span;
@@ -4236,7 +4351,58 @@ package body Landin.Syntax.Parser is
                Errors_Node  : Node_Id := No_Node;
                Body_Node    : Node_Id := No_Node;
                Context      : Frame;
+               External     : Boolean := False;
+               Variadic     : Boolean := False;
+               Link_Name    : Landin.Source.Span := Landin.Source.Empty_Span;
             begin
+               if Peek = Tok.Identifier
+                 and then Landin.Source.Names.Spelling
+                   (Names, Named_Here) = "link"
+                 and then Ahead (1) = Tok.Left_Paren
+               then
+                  declare
+                     Opened : constant Landin.Source.Span := Here;
+                  begin
+                     Advance;
+                     Advance;
+                     if Peek = Tok.Identifier
+                       and then Landin.Source.Names.Spelling
+                         (Names, Named_Here) = "symbol"
+                     then
+                        Advance;
+                     else
+                        Complain
+                          (Syn.Token_Expected, Here,
+                           "`link` requires the label `symbol`",
+                           Note => "[1610]: link(symbol: string)",
+                           Related => Opened, Because => "this annotation");
+                     end if;
+                     if Expect
+                       (Tok.Colon, "`symbol` is followed by `:`",
+                        "[1580]: link(symbol: string)", Opened,
+                        "this annotation")
+                     then
+                        if Peek = Tok.Text_Literal then
+                           Link_Name := Here;
+                           Advance;
+                        else
+                           Complain
+                             (Syn.Token_Expected, Here,
+                              "a link symbol is a string literal",
+                              Note => "[1610]: link(symbol: string)",
+                              Related => Opened,
+                              Because => "this annotation");
+                        end if;
+                     end if;
+                     if not Expect
+                       (Tok.Right_Paren, "a link annotation closes with `)`",
+                        "[1580]: link(symbol: string)", Opened,
+                        "this annotation")
+                     then
+                        Recover_Annotation_Closer;
+                     end if;
+                  end;
+               end if;
                At_Name := Parse_Declared_Name (Named);
 
                if not Expect
@@ -4263,20 +4429,8 @@ package body Landin.Syntax.Parser is
                      Related => At_Name,
                      Because => "declared here")
                then
-                  if Peek /= Tok.Right_Paren then
-                     loop
-                        declare
-                           Before : constant Tok.Token_Index := Index;
-                        begin
-                           Params.Append
-                             (Parse_Parameter (Allow_Static => True));
-                           exit when Index = Before;
-                        end;
-
-                        exit when Peek /= Tok.Comma;
-                        Advance;
-                     end loop;
-                  end if;
+                  Parse_Parameters
+                    (Params, C_ABI, Variadic, Allow_Static => True);
 
                   if not Expect
                            (Wanted  => Tok.Right_Paren,
@@ -4314,6 +4468,7 @@ package body Landin.Syntax.Parser is
                   Result  => Returns_At,
                   Returns => Returns_Node /= No_Node);
 
+               External := C_ABI and then Peek /= Tok.Equal;
                if External then
                   --  Keep Body_Of total for every function node while later
                   --  stages use the explicit flag to avoid treating this
@@ -4386,7 +4541,9 @@ package body Landin.Syntax.Parser is
                      Children => Head & To_List (Params),
                      Named    => Named,
                      Exported => Exported,
-                     External => External);
+                     External => External,
+                     C_ABI => C_ABI, Variadic => Variadic,
+                     Link_Name => Link_Name);
                end;
             end Parse_Function;
 

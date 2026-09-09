@@ -1,0 +1,6 @@
+class: runtime
+summary: Pointer-union dispatch preserves scalar and recursive pointee witnesses through both present-arm orders.
+program: main.ldn
+status: 42
+constructs: 0390, 0480, 0900
+targets: linux-x86-64

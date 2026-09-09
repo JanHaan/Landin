@@ -1,0 +1,8 @@
+absent: atom
+maybe_pointer: type = absent | ptr u32
+
+bad: (missing: bool) -> (result: maybe_pointer) =
+    cell: u32 = 42
+    local: maybe_pointer = if missing then absent else addr cell end if
+    result = local
+end bad

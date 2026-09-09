@@ -1,0 +1,6 @@
+class: runtime
+summary: R4.40 a dynamically zero integer cannot mint a bare pointer even when no dereference occurs
+program: main.ldn
+constructs: 0470, 1580, 1960
+traps: yes
+targets: linux-x86-64

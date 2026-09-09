@@ -1,0 +1,10 @@
+error[L0301]: compiler-owned helper `_landin_host_initialize_arguments` requires escaping argv
+  --> ../tests/fixtures/negative/r440-checker-helper-initializer-retention/program.ldn:1:24
+  |
+1 | extern(c) link(symbol: "_landin_host_initialize_arguments") bridge: (argc: i32, argv: ptr ptr u8) -> none
+  |                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/r440-checker-helper-initializer-retention/program.ldn:1:81
+  |
+1 | extern(c) link(symbol: "_landin_host_initialize_arguments") bridge: (argc: i32, argv: ptr ptr u8) -> none
+  |                                                                                 ^^^^^^^^^^^^^^^^ this helper contract
+  = note: [1610]/[1975]: a helper import must preserve its source types, pointer permissions and nullability; [0780] retains argv and [0790] preserves from

@@ -25,6 +25,9 @@ public value: type = struct
     end body
 end value
 
+no_entry: atom
+entry: type = no_entry | ptr mut value
+
 public document: type = struct
     items: vec.list(ptr mut value)
 end document
@@ -101,14 +104,13 @@ end parse_digits
 
 parse_entry: (source: []u8, inout parser: parser_state,
               inout logger: any diag.log,
-             inout arena: mem.arena)
-             -> (item: ptr mut value from arena, got: bool)
+             escaping inout arena: mem.arena)
+             -> (item: entry from arena)
                 ! entry_failure =
-    got = false
     if parser.look.what <> lexer.identifier then
         try report(logger, parser.look.begins, expected_name[0..<16])
         recover_to_boundary(source, parser)
-        item = ptr(0)
+        item = no_entry
         return
     end if
 
@@ -118,7 +120,7 @@ parse_entry: (source: []u8, inout parser: parser_state,
     if parser.look.what <> lexer.equals then
         try report(logger, parser.look.begins, expected_equals[0..<13])
         recover_to_boundary(source, parser)
-        item = ptr(0)
+        item = no_entry
         return
     end if
     advance(source, parser)
@@ -129,10 +131,10 @@ parse_entry: (source: []u8, inout parser: parser_state,
         advance(source, parser)
         block: ptr mut u8 = try mem.allocate
             (arena, sizeof value, alignof value)
-        item = ptr(usize(block))
-        item.val = (name_begins: name_begins, name_ends: name_ends,
+        allocated: ptr mut value = ptr(usize(block))
+        allocated.val = (name_begins: name_begins, name_ends: name_ends,
                     body: text_value(begins: begins, ends: ends))
-        got = true
+        item = allocated
         return
     end if
     if parser.look.what == lexer.number then
@@ -142,16 +144,16 @@ parse_entry: (source: []u8, inout parser: parser_state,
             _ = problem
             try report(logger, parser.look.begins, bad_number[0..<20])
             recover_to_boundary(source, parser)
-            item = ptr(0)
+            item = no_entry
             return
         end)
         advance(source, parser)
         block: ptr mut u8 = try mem.allocate
             (arena, sizeof value, alignof value)
-        item = ptr(usize(block))
-        item.val = (name_begins: name_begins, name_ends: name_ends,
+        allocated: ptr mut value = ptr(usize(block))
+        allocated.val = (name_begins: name_begins, name_ends: name_ends,
                     body: integer_value(number: number))
-        got = true
+        item = allocated
         return
     end if
     if parser.look.what == lexer.left_brace then
@@ -163,11 +165,11 @@ parse_entry: (source: []u8, inout parser: parser_state,
         try parse_sequence(source, parser, logger, arena, children, true)
         block: ptr mut u8 = try mem.allocate
             (arena, sizeof value, alignof value)
-        item = ptr(usize(block))
-        item.val = (name_begins: name_begins, name_ends: name_ends,
+        allocated: ptr mut value = ptr(usize(block))
+        allocated.val = (name_begins: name_begins, name_ends: name_ends,
                     body: group_value(count: vec.length(children),
                                       items: children))
-        got = true
+        item = allocated
         return
     end if
     if parser.look.what == lexer.unterminated_string then
@@ -176,12 +178,12 @@ parse_entry: (source: []u8, inout parser: parser_state,
         try report(logger, parser.look.begins, expected_value[0..<17])
     end if
     recover_to_boundary(source, parser)
-    item = ptr(0)
+    item = no_entry
 end parse_entry
 
 continue_after_failure:
     (problem: entry_failure, source: []u8, inout parser: parser_state,
-     inout logger: any diag.log, inout arena: mem.arena,
+     inout logger: any diag.log, escaping inout arena: mem.arena,
      inout items: vec.list(ptr mut value), nested: bool)
     -> none ! mem.out_of_memory | io.io_failed =
     match problem
@@ -198,7 +200,7 @@ end continue_after_failure
 
 parse_sequence: (source: []u8, inout parser: parser_state,
                  inout logger: any diag.log,
-                 inout arena: mem.arena,
+                 escaping inout arena: mem.arena,
                  inout items: vec.list(ptr mut value),
                  nested: bool)
                 -> none ! mem.out_of_memory | io.io_failed =
@@ -232,9 +234,10 @@ parse_sequence: (source: []u8, inout parser: parser_state,
                                    items, nested)
         return
     end
-    if parsed.got then
-        try vec.push(items, arena, parsed.item)
-    end if
+    match parsed
+        no_entry: _ = no_entry
+        ptr(item): try vec.push(items, arena, item)
+    end match
     try parse_sequence(source, parser, logger, arena, items, nested)
 end parse_sequence
 
@@ -243,7 +246,7 @@ public empty: () -> (result: document) =
 end empty
 
 public parse_file: (source: []u8, inout logger: any diag.log,
-                    inout arena: mem.arena, inout result: document)
+                    escaping inout arena: mem.arena, inout result: document)
                    -> none ! mem.out_of_memory | io.io_failed =
     mut scanning := lexer.open()
     first: lexer.token = lexer.next(source, scanning)

@@ -1,0 +1,19 @@
+--  Keep foo first: landin_1_foo is its first declaration-id mangle. Both
+--  that candidate and its first retry are occupied in other namespaces.
+foo: () -> (value: i32) =
+    value = 1
+end foo
+
+extern(c) link(symbol: "foo") foreign: () -> (value: i32)
+extern(c) link(symbol: "landin_1_foo") mangled_foreign: () -> (value: i32)
+landin_1_foo_1: i32 = 5
+
+payload: i32 = 7
+extern(c) link(symbol: "payload") foreign_payload: () -> (value: i32)
+extern(c) link(symbol: ".L1_1") block_foreign: () -> (value: i32)
+extern(c) link(symbol: ".L_1_1") retry_foreign: () -> (value: i32)
+
+public extern(c) r440_link_identity: () -> (value: i32) =
+    value = foo() + foreign() + mangled_foreign() + landin_1_foo_1
+        + payload + foreign_payload() + block_foreign() + retry_foreign()
+end r440_link_identity

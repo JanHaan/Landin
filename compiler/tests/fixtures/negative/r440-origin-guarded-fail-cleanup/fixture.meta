@@ -1,0 +1,6 @@
+class: negative
+summary: Untaken guarded failure cleanup cannot erase the frame pointer returned on success
+constructs: 0480, 0770, 0790, 0940, 0970, 1100
+program: program.ldn
+codes: L0314
+targets: linux-x86-64, macos-arm64, synthetic-32

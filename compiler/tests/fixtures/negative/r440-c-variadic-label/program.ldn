@@ -1,0 +1,4 @@
+extern(c) collect: (count: i32, ...) -> none
+bad: () -> none =
+    collect(count: 1)
+end bad

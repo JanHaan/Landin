@@ -1,0 +1,6 @@
+class: negative
+summary: Complete starts from the final false condition's effects rather than stale loop-head emptiness
+constructs: 0480, 0770, 0790, 1140, 1170
+program: program.ldn
+codes: L0314
+targets: linux-x86-64, macos-arm64, synthetic-32

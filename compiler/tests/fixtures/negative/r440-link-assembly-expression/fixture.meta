@@ -1,0 +1,6 @@
+class: negative
+summary: R4.40 link overrides accept symbol spellings and refuse assembly expressions
+program: program.ldn
+codes: L0301
+constructs: 1610
+targets: linux-x86-64

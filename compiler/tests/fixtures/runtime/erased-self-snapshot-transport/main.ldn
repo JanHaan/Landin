@@ -1,0 +1,92 @@
+reader: type = concept (t: type)
+    read: (self: ptr t, extra: i32) -> (value: i32)
+    parts: (self: ptr t, extra: i32) -> (value: i32, tag: i32)
+end reader
+
+small: type = struct
+    value: i32
+end small
+
+large: type = struct
+    prefix: [3]i32
+    value: i32
+end large
+
+read_small: (self: ptr small, extra: i32) -> (value: i32) =
+    value = self.val.value + extra
+end read_small
+
+read_large: (self: ptr large, extra: i32) -> (value: i32) =
+    value = self.val.value + extra + self.val.prefix[2]
+end read_large
+
+parts_small: (self: ptr small, extra: i32) -> (value: i32, tag: i32) =
+    value = self.val.value + extra
+    tag = 1
+end parts_small
+
+parts_large: (self: ptr large, extra: i32) -> (value: i32, tag: i32) =
+    value = self.val.value + extra + self.val.prefix[2]
+    tag = 3
+end parts_large
+
+small is reader (read: read_small, parts: parts_small)
+large is reader (read: read_large, parts: parts_large)
+
+mut receiver_calls: i32 = 0
+mut argument_calls: i32 = 0
+mut trace: i32 = 0
+
+marked: (index: usize) -> (result: usize) =
+    inc receiver_calls
+    trace = trace * 10 + 1
+    result = index
+end marked
+
+argument: () -> (value: i32) =
+    inc argument_calls
+    trace = trace * 10 + 2
+    value = 2
+end argument
+
+replace: (inout target: any reader, replacement: any reader)
+         -> (value: i32) =
+    target = replacement
+    value = 2
+end replace
+
+public main: () -> (code: i32) =
+    first: small = (value: 40)
+    second: large = (prefix: [101, 202, 3], value: 17)
+    a: any reader = any(addr first)
+    b: any reader = any(addr second)
+    receivers: [2]any reader = [a, b]
+
+    --  Different sizes and offsets require the dynamically paired table/data.
+    mut selected: any reader = a
+    narrow := selected.read(2)
+    selected = b
+    wide := selected.read(22)
+
+    --  The receiver is captured once before a written argument opens blocks.
+    once := receivers[marked(0)].read(
+        if receiver_calls == 1 then argument() else 100 end if)
+
+    --  Replacing the original must not alter either half of the saved receiver.
+    selected = a
+    saved := selected.read(replace(selected, b))
+    replaced := selected.read(22)
+
+    --  Hidden return storage precedes self without losing the same binding.
+    selected = a
+    parts := selected.parts(
+        if receiver_calls == 1 then replace(selected, b) else 100 end if)
+    large_parts := selected.parts(22)
+
+    code = if narrow == 42 and wide == 42 and once == 42
+              and saved == 42 and replaced == 42
+              and parts.value == 42 and parts.tag == 1
+              and large_parts.value == 42 and large_parts.tag == 3
+              and receiver_calls == 1 and argument_calls == 1 and trace == 12
+           then 42 else 1 end if
+end main

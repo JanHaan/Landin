@@ -4,7 +4,9 @@ This is the incremental concrete-syntax grammar for Landin editor tooling. It
 is a checked transcription of the enabled kernel in `../../spec.md`, not a
 second language authority. The parser intentionally accepts a little extra
 around contextual `lenof` and `of` so an incomplete editor buffer remains
-useful; the compiler and normative grammar decide legality.
+useful; its C-boundary rules keep `c`, `layout`, `link`, and `symbol` as
+identifiers outside their annotated positions. The compiler and normative
+grammar decide legality.
 
 With Node.js available:
 

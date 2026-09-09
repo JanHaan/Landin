@@ -1,0 +1,71 @@
+ordered: type = concept (t: type)
+    less: (left: t, right: t) -> (yes: bool)
+end ordered
+
+less_i32: (left: i32, right: i32) -> (yes: bool) =
+    yes = left < right
+end less_i32
+
+i32 is ordered (less: less_i32)
+
+unused_any_identity: (value: any ordered)
+                     -> (result: any ordered from value) =
+    result = value
+end unused_any_identity
+
+counter: type = concept (t: type)
+    read: (self: ptr t) -> (value: i32)
+    bump: (self: ptr mut t) -> (value: i32)
+end counter
+
+read_scalar: (self: ptr i32) -> (value: i32) =
+    value = self.val
+end read_scalar
+
+bump_scalar: (self: ptr mut i32) -> (value: i32) =
+    inc self.val
+    value = self.val
+end bump_scalar
+
+i32 is counter (read: read_scalar, bump: bump_scalar)
+
+first: type = struct
+    value: i32
+end first
+
+second: type = struct
+    value: i32
+end second
+
+read_first: (self: ptr first) -> (value: i32) =
+    value = self.val.value
+end read_first
+
+bump_first: (self: ptr mut first) -> (value: i32) =
+    inc self.val.value
+    value = self.val.value
+end bump_first
+
+read_second: (self: ptr second) -> (value: i32) =
+    value = self.val.value
+end read_second
+
+bump_second: (self: ptr mut second) -> (value: i32) =
+    inc self.val.value
+    value = self.val.value
+end bump_second
+
+first is counter (read: read_first, bump: bump_first)
+second is counter (read: read_second, bump: bump_second)
+
+public main: () -> (code: i32) =
+    mut left: first = (value: 18)
+    mut right: second = (value: 22)
+    a: any counter = any(addr left)
+    b: any counter = any(addr right)
+    mut selected: any counter = a
+    _ = selected.bump()
+    selected = b
+    _ = selected.bump()
+    code = a.read() + selected.read()
+end main

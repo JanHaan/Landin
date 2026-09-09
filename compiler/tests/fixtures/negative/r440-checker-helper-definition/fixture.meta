@@ -1,0 +1,9 @@
+class: negative
+summary: compiler-owned helper `_landin_host_errno` cannot be defined by source
+program: program.ldn
+codes: L0301
+constructs: 0780, 0790, 1610, 1975
+targets: linux-x86-64
+args: ../tests/fixtures/negative/r440-checker-helper-definition/program.ldn
+expect: expected.txt
+status: 1

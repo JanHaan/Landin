@@ -1,0 +1,5 @@
+record: type = layout(c) struct
+    values: [2][1]i32
+end record
+first: record = second
+second: record = first

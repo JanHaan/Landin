@@ -1,0 +1,5 @@
+handler: type = extern(c) (value: i32) -> (result: i32)
+extern(c) add: (value: i32) -> (result: i32)
+use: () -> none =
+    values := [add, add]
+end use

@@ -1,0 +1,13 @@
+--  unchecked does not permit a zero bare pointer. No dereference can supply
+--  an incidental machine fault in place of the required conversion guard.
+opaque: (value: usize) -> (result: usize) =
+    result = value
+end opaque
+
+public main: () -> (code: i32) =
+    unchecked begin
+        address: usize = opaque(0)
+        pointer: ptr mut u8 = ptr(address)
+        code = i32(usize(pointer)) + 42
+    end unchecked
+end main

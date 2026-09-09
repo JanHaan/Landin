@@ -1,0 +1,6 @@
+node: type = layout(c) struct
+    value: i32
+    visit: extern(c) (value: node) -> none
+end node
+
+extern(c) consume: (value: node) -> none

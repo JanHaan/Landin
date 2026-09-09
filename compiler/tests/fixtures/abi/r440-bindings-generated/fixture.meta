@@ -1,0 +1,9 @@
+class: abi
+summary: Generated Clang-AST bindings cover native, opaque, callback, TLS, global, and incoming-varargs adapters
+program: program.ldn
+root: ../../../../..
+c-sources: adapters.c, peer.c
+c-args: -pthread
+status: 42
+constructs: 1570, 1580, 1600, 1610
+targets: linux-x86-64

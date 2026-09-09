@@ -1,0 +1,11 @@
+class: abi
+summary: C-owned startup initializes real core/io arguments once across callbacks
+program: program.ldn
+root: ../../../../..
+c-sources: peer.c
+c-args: -O2
+run_args: alpha 42
+run_expect: expected.txt
+status: 42
+constructs: 1570, 1580, 1600, 1650, 1660, 1680, 1975
+targets: linux-x86-64

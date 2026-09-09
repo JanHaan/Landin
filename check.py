@@ -1894,13 +1894,13 @@ def check_grammar_corpus(full_run):
                           "/landin-diagnostics-syntactic.ads"))))
 
 
-    #  A runtime fixture's program is legal source that the compiler is
-    #  expected to accept, compile and run, so the grammar must derive it
-    #  exactly as it derives a positive one.  Its own directory rather
-    #  than positive/, because what it pins is what the program *does*
-    #  when it runs and not merely that it was accepted.
+    #  Runtime and ABI fixtures both contain legal Landin programs.  ABI
+    #  directories additionally contain C companions (and may contain
+    #  headers), but the suffix filter below deliberately presents only
+    #  `.ldn` sources to the grammar recogniser.
     for kind, default_derive in (("positive", True),
                                  ("runtime", True),
+                                 ("abi", True),
                                  ("negative", False)):
         directory = os.path.join(fixtures, kind)
         if not os.path.isdir(directory):
@@ -2939,11 +2939,13 @@ def lowering_verifies():
 
 
 def fixture_sources():
-    """Every file a fixture names is a file that is there.
+    """Every Landin or companion file a fixture names is a file that is there.
 
-    `with` names the rest of a module [1840], and a name that points at
-    nothing is the same dead data `expect` without `args` already is: the
-    fixture would compile one file and claim to have compiled two.
+    `with` names the rest of a module [1840], and `c-sources` names the ordered
+    C companions of an ABI fixture. A name that points at nothing is the same
+    dead data `expect` without `args` already is: the fixture would compile one
+    file and claim to have compiled two. The grammar corpus independently sees
+    only `.ldn`; C sources and included headers are not Landin inputs.
     """
     out = []
     fixtures = os.path.join(ROOT, "compiler/tests/fixtures")
@@ -2962,7 +2964,8 @@ def fixture_sources():
             text = io.open(meta, encoding="utf-8").read()
             where = "compiler/tests/fixtures/%s/%s/fixture.meta" % (kind,
                                                                     name)
-            for key in ("program", "with", "expect", "run_expect"):
+            for key in ("program", "with", "c-sources", "expect",
+                        "run_expect"):
                 named = re.search(r"^%s: (.+)$" % key, text, re.M)
                 if not named:
                     continue
@@ -3019,11 +3022,13 @@ def pinned_fixtures():
 
 def construct_evidence():
     """What the fixture corpus and named-refusal tables claim per construct."""
-    #  A runtime fixture is compiled, emitted and run.  A positive fixture
-    #  reaches emission, while a negative or end-to-end diagnostic fixture
-    #  says that the construct's refusal is deliberate and executable.
+    #  A runtime or ABI fixture is compiled, emitted and run; ABI additionally
+    #  links the named C companions.  A positive fixture reaches emission,
+    #  while a negative or end-to-end diagnostic fixture says that the
+    #  construct's refusal is deliberate and executable.
     says = {"positive": ("accepted", "emitted"),
             "runtime": ("accepted", "emitted", "executed"),
+            "abi": ("accepted", "emitted", "executed"),
             "negative": ("refused",),
             "end-to-end": ("refused",)}
     evidence = {}
@@ -3459,8 +3464,9 @@ def check_coverage_registers(full_run):
             "slices.bounds-known",
             "slices.bounds-runtime", "atoms.sets", "aggregates.variants",
             "origins.escape", "origins.aliasing-limit", "functions.abi",
-            "functions.caller",
-            "extern.c-boundary", "host.io", "host.io-failure",
+            "functions.caller", "functions.linkage",
+            "extern.c-boundary", "host.arguments-startup", "host.io",
+            "host.io-failure",
             "diagnostics.retention", "diagnostics.delivery-failure",
             "execution.resource-exhaustion", "consume.local",
             "consume.copy-before", "errors.control", "results.destructure",
@@ -4499,7 +4505,8 @@ def check_highlight_vocabulary(full_run):
     a highlighter does not know is a word the pages show in the wrong
     face.  The tree-sitter `reserved` list is a transcription of the
     keyword production and is held to it exactly (R4.21). R4.30's tool
-    namespaces agree with the shared vocabulary and structural grammar.
+    namespaces agree with the shared vocabulary and structural grammar;
+    R4.40's C annotations remain structural rather than reserved words.
     """
     if not full_run:
         return []
@@ -4571,6 +4578,55 @@ def check_highlight_vocabulary(full_run):
             out.append((grammar, 1,
                         "scalar names the tree-sitter grammar lacks: %s"
                         % " ".join(lost)))
+
+    #  R4.40 adds a type prefix and three contextual annotations without
+    #  reserving `c`, `layout`, `link`, or `symbol`.  Keep the structural
+    #  grammar connected in both directions: merely defining a dead rule
+    #  would colour an isolated sample but still omit the source construct.
+    def structural_rule(name):
+        found = re.search(r"^    %s:.*?(?=^    [_a-z][a-z_]*:|\Z)"
+                          % re.escape(name), grammar_text, re.M | re.S)
+        return found.group(0) if found else ""
+
+    required_rules = {
+        "function_declaration": ("link_symbol",),
+        "function_type": ("c_convention", "c_signature"),
+        "extern_declaration": ("c_convention", "link_symbol",
+                                "c_declared_signature"),
+        "struct_body": ("c_layout",),
+        "c_signature": ("variadic_marker",),
+        "c_declared_signature": ("variadic_marker",),
+    }
+    for rule, references in required_rules.items():
+        normative = rule in rules or any(rule in rules.get(owner, "")
+                                         for owner in rules)
+        if not normative:
+            continue
+        body = structural_rule(rule)
+        if not body:
+            out.append((grammar, 1,
+                        "the tree-sitter grammar lacks the normative `%s` rule"
+                        % rule))
+            continue
+        missing_refs = [reference for reference in references
+                        if "$." + reference not in body]
+        if missing_refs:
+            out.append((grammar, 1,
+                        "the tree-sitter `%s` rule omits %s"
+                        % (rule, ", ".join(missing_refs))))
+
+    contextual = {"c", "layout", "link", "symbol"}
+    reserved_contextual = sorted(contextual & listed) if reserved else []
+    if reserved_contextual:
+        out.append((grammar, 1,
+                    "contextual C-boundary words were made globally reserved: %s"
+                    % " ".join(reserved_contextual)))
+    for word in sorted(contextual):
+        if not re.search(r"alias\('%s',\s*\$\.identifier\)" % word,
+                         grammar_text):
+            out.append((grammar, 1,
+                        "the structural C boundary does not retain `%s` as an"
+                        " identifier node" % word))
     return out
 
 
@@ -4628,6 +4684,44 @@ def check_highlighters(full_run):
     for relative in required:
         if not os.path.isfile(os.path.join(ROOT, relative)):
             out.append((relative, 1, "required editor package artifact is missing"))
+    return out
+
+
+def check_binding_generator(full_run):
+    """The separate binding generator and its opt-in tests stay discoverable.
+
+    R4.40 keeps header extraction in a Clang-AST tool, while the repository's
+    ordinary Python check must still run on a host without that frontend. Hold
+    the canonical tool, test, documented explicit invocation and entry points in
+    place, and compile their Python source without executing the Clang-backed
+    suite.
+    """
+    if not full_run:
+        return []
+    required = ["bindings/generate.py", "bindings/test.py",
+                "bindings/README.md"]
+    missing = absent(required)
+    if missing:
+        return missing
+
+    out = []
+    for relative in required[:2]:
+        try:
+            source = io.open(relative, encoding="utf-8").read()
+            compile(source, relative, "exec")
+        except (OSError, SyntaxError) as error:
+            out.append((relative, getattr(error, "lineno", 1) or 1,
+                        "binding generator Python is invalid: %s" % error))
+    readme = io.open(required[2], encoding="utf-8").read()
+    for option in ("--clang", "--target", "--sysroot", "--header",
+                   "--policy", "--out-dir"):
+        if option not in readme:
+            out.append((required[2], 1,
+                        "the binding-generator invocation omits required %s"
+                        % option))
+    if "python3 bindings/test.py" not in readme:
+        out.append((required[2], 1,
+                    "the opt-in Clang-backed test command is not documented"))
     return out
 
 
@@ -4772,6 +4866,7 @@ def main(argv):
     extra += check_fonts(full_run)
     extra += check_highlighters(full_run)
     extra += check_highlight_vocabulary(full_run)
+    extra += check_binding_generator(full_run)
     extra += check_register_entries(full_run)
     extra += check_borrowed_icons(full_run)
     extra += check_named_files(full_run)

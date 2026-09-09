@@ -1,0 +1,6 @@
+class: negative
+summary: Adding a Boolean result does not erase a call's frame-derived optional field before narrowing and retention
+constructs: 0480, 0770, 0780, 0790, 0990, 1210
+program: program.ldn
+codes: L0314
+targets: linux-x86-64, macos-arm64, synthetic-32

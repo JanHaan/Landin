@@ -1,0 +1,55 @@
+import core/mem
+
+public main: () -> (code: i32) =
+    code = 1
+    zero: usize = 0
+    initial: u8 = 7
+    mut empty := mem.empty_storage(item: u8)
+    mut absent_refused: bool = false
+    _ = mem.dispose(empty) else (problem)
+        absent_refused = problem == mem.raw_empty
+    end
+    mut admit_refused: bool = false
+    _ = mem.admit(empty, initial) else (problem)
+        admit_refused = problem == mem.raw_full
+    end
+    mut get_refused: bool = false
+    _ = mem.get(empty, zero) else (problem)
+        get_refused = problem == mem.uninitialized
+    end
+    mut release_refused: bool = false
+    _ = mem.release(empty) else (problem)
+        release_refused = problem == mem.raw_empty
+    end
+    empty_view: bool = begin
+        view := mem.used(empty)
+        lenof view == 0
+    end
+
+    --  A zero-slot descriptor WITH a genuine backing address still returns
+    --  that address exactly once. It is distinct from no allocation at all.
+    mut bytes: [1]u8 = [11]
+    base: ptr mut u8 = addr bytes[0]
+    mut allocated := mem.reserve(item: u8, base: base, slots: zero)
+    released: ptr mut u8 = mem.dispose(allocated) else (problem)
+        _ = problem
+        return
+    end
+    exact: bool = usize(released) == usize(base)
+    mut twice_refused: bool = false
+    _ = mem.dispose(allocated) else (problem)
+        twice_refused = problem == mem.raw_empty
+    end
+    disposed_view: bool = begin
+        view := mem.used(allocated)
+        lenof view == 0
+    end
+    both_empty: bool = empty_view and disposed_view
+    if absent_refused and admit_refused and get_refused and release_refused
+      and both_empty and mem.capacity(empty) == 0
+      and exact and twice_refused
+      and mem.capacity(allocated) == 0 and bytes[0] == 11
+    then
+        code = 42
+    end if
+end main

@@ -11,9 +11,7 @@ public list: type (item: type) = struct
 end list
 
 public new_list: (item: type) -> (result: list(item)) =
-    nothing: usize = 0
-    base: ptr mut u8 = ptr(nothing)
-    store := mem.reserve(item: item, base: base, slots: nothing)
+    store := mem.empty_storage(item: item)
     result = (values: store)
 end new_list
 

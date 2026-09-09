@@ -159,6 +159,19 @@ package body Landin.Syntax is
    function Is_External (Of_Tree : Tree; Id : Node_Id) return Boolean
      is (Element (Of_Tree, Id).External);
 
+   function Uses_C_ABI (Of_Tree : Tree; Id : Node_Id) return Boolean
+     is (Element (Of_Tree, Id).C_ABI);
+
+   function Is_Variadic (Of_Tree : Tree; Id : Node_Id) return Boolean
+     is (Element (Of_Tree, Id).Variadic);
+
+   function Has_C_Layout (Of_Tree : Tree; Id : Node_Id) return Boolean
+     is (Element (Of_Tree, Id).C_Layout);
+
+   function Link_Symbol_Span (Of_Tree : Tree; Id : Node_Id)
+     return Landin.Source.Span
+     is (Element (Of_Tree, Id).Link_Name);
+
    function Is_Mutable (Of_Tree : Tree; Id : Node_Id) return Boolean
      is (Element (Of_Tree, Id).Mutable);
 

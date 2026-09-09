@@ -1,0 +1,90 @@
+import core/io
+
+mut contents: [2]u8 = [65, 66]
+mut output: [5]u8 = zeroed
+mut errors: [1]u8 = zeroed
+path: [2]u8 = [102, 0]
+
+public main: () -> (code: i32) =
+    code = 1
+    name: []u8 = "f"
+    source: io.memory_file =
+      (name: name, contents: contents[0..<2], length: 2, cursor: 0,
+       readable: true, writable: false, opened: false, writing: false)
+    mut files: [1]io.memory_file
+    files[0] = source
+    mut arguments: [1]io.argument
+    arguments[0] = (data: addr path[0], length: 0)
+    mut state: io.memory = io.memory_world
+        (files[0..<1], arguments[0..<0], output[0..<5], errors[0..<1])
+    mut world: any io.world = any(addr state)
+
+    --  Two completed short chunks survive the injected third-chunk failure.
+    state.write_limit = 2
+    state.fail_write_at = 3
+    stream: io.file = world.out()
+    bytes: [5]u8 = [87, 88, 89, 90, 33]
+    mut stopped: bool = false
+    world.write(stream, bytes[0..<5]) else (problem)
+        stopped = problem == io.io_failed
+    end
+    return when not stopped or state.write_calls <> 3 or state.output_used <> 4
+      or output[0] <> 87 or output[1] <> 88 or output[2] <> 89
+      or output[3] <> 90 or output[4] <> 0
+
+    --  Empty work is a no-op, and an explicit retry of only the uncompleted
+    --  suffix finishes without duplicating the retained prefix.
+    world.write(stream, bytes[0..<0]) else (problem)
+        _ = problem
+        return
+    end
+    return when state.write_calls <> 3
+    state.fail_write_at = 0
+    world.write(stream, bytes[4..<5]) else (problem)
+        _ = problem
+        return
+    end
+    return when state.output_used <> 5 or output[4] <> 33
+
+    opened: io.file = world.open_read(addr path[0]) else (problem)
+        _ = problem
+        return
+    end
+    mut into: [1]u8 = [99]
+    state.read_limit = 1
+    first: usize = world.read(opened, into[0..<1]) else (problem)
+        _ = problem
+        return
+    end
+    return when first <> 1 or into[0] <> 65 or files[0].cursor <> 1
+
+    --  Stalled nonempty input is failure and cannot consume or overwrite it.
+    state.read_limit = 0
+    mut stalled: bool = false
+    ignored: usize = world.read(opened, into[0..<1]) else (problem)
+        stalled = problem == io.io_failed
+        0
+    end
+    return when not stalled or ignored <> 0 or into[0] <> 65
+      or files[0].cursor <> 1
+
+    state.read_limit = 1
+    second: usize = world.read(opened, into[0..<1]) else (problem)
+        _ = problem
+        return
+    end
+    return when second <> 1 or into[0] <> 66 or files[0].cursor <> 2
+
+    --  At true EOF the same zero limit is irrelevant: count zero is success.
+    state.read_limit = 0
+    eof: usize = world.read(opened, into[0..<1]) else (problem)
+        _ = problem
+        return
+    end
+    return when eof <> 0 or files[0].cursor <> 2
+    world.close(opened) else (problem)
+        _ = problem
+        return
+    end
+    code = 42
+end main

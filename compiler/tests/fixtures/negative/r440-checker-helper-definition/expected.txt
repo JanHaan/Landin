@@ -1,0 +1,10 @@
+error[L0301]: compiler-owned helper `_landin_host_errno` cannot be defined by source
+  --> ../tests/fixtures/negative/r440-checker-helper-definition/program.ldn:1:14
+  |
+1 | link(symbol: "_landin_host_errno") bridge: () -> none =
+  |              ^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/r440-checker-helper-definition/program.ldn:1:1
+  |
+1 | link(symbol: "_landin_host_errno") bridge: () -> none =
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this helper contract
+  = note: [1610]/[1975]: a helper import must preserve its source types, pointer permissions and nullability; [0780] retains argv and [0790] preserves from

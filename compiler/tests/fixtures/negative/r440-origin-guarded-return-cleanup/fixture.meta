@@ -1,0 +1,6 @@
+class: negative
+summary: Untaken guarded return cleanup cannot erase a frame pointer copied on fallthrough
+constructs: 0480, 0770, 0790, 0970, 1100
+program: program.ldn
+codes: L0314
+targets: linux-x86-64, macos-arm64, synthetic-32

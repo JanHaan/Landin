@@ -1,0 +1,6 @@
+class: positive
+summary: R4.40 exposes the selected Linux x86-64 SysV LP64 C scalar spellings as ordinary public aliases
+program: main.ldn
+root: ../../../../..
+constructs: 0120, 0370, 0700, 1420, 1500, 1510, 1795
+targets: linux-x86-64

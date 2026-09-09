@@ -1,0 +1,6 @@
+class: negative
+summary: Recursive record image aliases still reject a dependency cycle once
+program: program.ldn
+codes: L0305
+constructs: 0520, 1580, 1940
+targets: linux-x86-64

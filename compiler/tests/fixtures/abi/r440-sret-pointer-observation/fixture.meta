@@ -1,0 +1,9 @@
+class: abi
+summary: Aligned assembly observes the original hidden sret pointer in rax and C checks every result field
+program: program.ldn
+c-sources: peer.c
+c-args: -O2
+run_expect: expected.txt
+status: 42
+constructs: 1570, 1600, 1975
+targets: linux-x86-64

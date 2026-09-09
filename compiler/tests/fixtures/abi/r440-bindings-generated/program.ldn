@@ -1,0 +1,113 @@
+-- This file and generated bindings.ldn are one rooted fixture module.
+-- The declarations and type dependencies in bindings.ldn came only from
+-- r440-bindings.h through Clang's JSON AST.
+
+import core/c
+
+public extern(c) landin_binding_receive_handler:
+    (count: c.c_int,
+     i1: c.c_int, i2: c.c_int, i3: c.c_int, i4: c.c_int,
+     d1: c.c_double, d2: c.c_double, d3: c.c_double, d4: c.c_double,
+     d5: c.c_double, d6: c.c_double, d7: c.c_double, d8: c.c_double,
+     d9: c.c_double, d10: c.c_double,
+     l1: c.c_long, l2: c.c_long) -> (result: c.c_int) =
+    result = 73
+    if count <> 16
+       or i1 <> 1 or i2 <> 2 or i3 <> 3 or i4 <> 4
+       or d1 <> 5.0 or d2 <> 6.0 or d3 <> 7.0 or d4 <> 8.0
+       or d5 <> 9.0 or d6 <> 10.0 or d7 <> 11.0 or d8 <> 12.0
+       or d9 <> 13.0 or d10 <> 14.0
+       or l1 <> 15 or l2 <> 16
+    then
+        result = 1
+    end if
+end landin_binding_receive_handler
+
+public extern(c) landin_binding_matrix: (value: binding_matrix) -> (result: binding_matrix) =
+    result = value
+    result.values[0][2] = value.values[0][2] + 30
+    result.values[1][0] = value.values[1][0] + 40
+    result.values[1][2] = value.values[1][2] + 60
+end landin_binding_matrix
+
+public extern(c) landin_binding_highbit: (value: binding_small) -> (result: c.c_ulong) =
+    result = c.c_ulong(value)
+end landin_binding_highbit
+
+-- Output adapters deliberately require an escaping source: their shallow
+-- stores cannot express a result-from relationship on an output parameter.
+-- The C peer supplies static storage and checks both retained pointer values.
+public extern(c) landin_binding_origins:
+    (output: ptr mut u8, cell: ptr u8, result_pointer: ptr mut ptr c.c_int,
+     escaping src: ptr c.c_int) -> (result: bool) =
+    binding_borrow_view(output, src)
+    binding_saved_pointer_write(src)
+    native := binding_borrow_native(src)
+    result = binding_borrow_callback_cell_invoke(cell, src, result_pointer)
+    if native.data.val <> src.val then
+        result = false
+    end if
+end landin_binding_origins
+
+public extern(c) landin_bindings_check: () -> (result: c.c_int) =
+    result = 42
+
+    matrix: binding_matrix = binding_matrix(values: [[1, 2, 3], [4, 5, 6]])
+    changed := binding_adjust_matrix(matrix)
+    if changed.values[0][0] <> 1 or changed.values[0][1] <> 2
+       or changed.values[0][2] <> 33 or changed.values[1][0] <> 44
+       or changed.values[1][1] <> 5 or changed.values[1][2] <> 66
+       or sizeof binding_matrix <> 24 or alignof binding_matrix <> 4
+    then
+        result = 21
+    end if
+    highbit := binding_highbit()
+    if highbit <= 0 or c.c_ulong(highbit) <> 2147483648 then
+        result = 22
+    end if
+
+    input: binding_pair = binding_pair(real: 3.5, count: 4)
+    adjusted := binding_adjust_pair(input)
+    if adjusted.real <> 4.5 or adjusted.count <> 5 then
+        result = 2
+    end if
+
+    if binding_mode_negative <> -1
+       or binding_mode_zero <> binding_mode_alias
+       or binding_mode_large <> 4000000000
+    then
+        result = 3
+    end if
+
+    if sizeof binding_pair <> 16 or alignof binding_pair <> 8 then
+        result = 4
+    end if
+
+    binding_global_counter_write(31)
+    if binding_global_counter_read() <> 31 then
+        result = 5
+    end if
+
+    present_pointer := binding_borrowed_pointer(binding_global_counter_address())
+    match present_pointer
+        r440_bindings_binding_borrowed_pointer_result_absent: result = 7
+        ptr (present): begin
+            if present.val <> 31 then
+                result = 8
+            end if
+        end
+    end match
+
+    binding_global_counter_write(0)
+    missing_pointer := binding_borrowed_pointer(binding_global_counter_address())
+    match missing_pointer
+        r440_bindings_binding_borrowed_pointer_result_absent: result = result
+        ptr: result = 9
+    end match
+    binding_global_counter_write(31)
+
+    binding_tls_counter_write(17)
+    if binding_tls_counter_read() <> 17 then
+        result = 6
+    end if
+end landin_bindings_check

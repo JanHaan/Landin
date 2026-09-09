@@ -6,6 +6,29 @@ prototype-1 | cortex-m
 prototype-2 | linux-x86-64, macos-arm64
 prototype-3 | linux-x86-64, macos-arm64, cortex-m, synthetic-32
 prototype-4 | linux-x86-64, macos-arm64
+abi/r440-bindings-generated | linux-x86-64
+abi/r440-errno-interposition | linux-x86-64
+abi/r440-errno-thread-local | linux-x86-64
+abi/r440-native-aggregates | linux-x86-64
+abi/r440-native-banks | linux-x86-64
+abi/r440-native-bounds | linux-x86-64
+abi/r440-native-callback-array-fields | linux-x86-64
+abi/r440-native-callbacks | linux-x86-64
+abi/r440-native-dollar-link | linux-x86-64
+abi/r440-native-hosted | linux-x86-64
+abi/r440-native-link-namespace | linux-x86-64
+abi/r440-native-nested-shape | linux-x86-64
+abi/r440-native-recursive-array-fields | linux-x86-64
+abi/r440-native-renamed-main | linux-x86-64
+abi/r440-native-scalars | linux-x86-64
+abi/r440-native-startup-empty | linux-x86-64
+abi/r440-native-startup-initialized | linux-x86-64
+abi/r440-native-startup-replaced | linux-x86-64
+abi/r440-native-startup-uninitialized | linux-x86-64
+abi/r440-native-varargs | linux-x86-64
+abi/r440-smoke | linux-x86-64
+abi/r440-sret-pointer-observation | linux-x86-64
+abi/r440-varargs-pointer-callback | linux-x86-64
 end-to-end/r430-option-override-range | linux-x86-64, synthetic-32
 end-to-end/r430-option-override-type | linux-x86-64, synthetic-32
 end-to-end/refine-identity | linux-x86-64, macos-arm64
@@ -205,7 +228,6 @@ negative/escaping-argument-in-while-condition | linux-x86-64, macos-arm64
 negative/escaping-frame-reference | linux-x86-64, macos-arm64, synthetic-32
 negative/external-aggregate-boundary | linux-x86-64
 negative/external-convention-not-closed | linux-x86-64
-negative/external-float-abi-not-enabled | linux-x86-64, macos-arm64
 negative/fail-needs-one-atom | linux-x86-64, synthetic-32
 negative/fail-outside-declared-set | linux-x86-64, synthetic-32
 negative/failing-function-signature-mismatch | linux-x86-64, synthetic-32
@@ -481,6 +503,7 @@ negative/nominal-struct-recursive-zero-array | linux-x86-64, macos-arm64
 negative/non-ascii-outside-comment | linux-x86-64, macos-arm64
 negative/nonzeroable-constraint | linux-x86-64, macos-arm64, synthetic-32
 negative/nonzeroable-zero-length-constraint | linux-x86-64, macos-arm64, synthetic-32
+negative/null-pointer-union-call-else-frame-escape | linux-x86-64, macos-arm64, synthetic-32
 negative/operands-of-two-types | linux-x86-64, macos-arm64
 negative/option-outside-configuration | linux-x86-64, macos-arm64, synthetic-32
 negative/packed-field-width-is-not-a-scalar-name | linux-x86-64, macos-arm64
@@ -561,6 +584,80 @@ negative/r430-option-range | linux-x86-64, synthetic-32
 negative/r430-option-reserved | linux-x86-64, synthetic-32
 negative/r430-option-type | linux-x86-64, synthetic-32
 negative/r430-tool-member | linux-x86-64, synthetic-32
+negative/r440-c-array-parameter | linux-x86-64
+negative/r440-c-callback-incomplete-native-record | linux-x86-64
+negative/r440-c-error-channel | linux-x86-64
+negative/r440-c-inout-parameter | linux-x86-64
+negative/r440-c-layout-empty | linux-x86-64
+negative/r440-c-layout-variadic-callback | linux-x86-64
+negative/r440-c-layout-zero-array | linux-x86-64
+negative/r440-c-multiple-results | linux-x86-64
+negative/r440-c-native-callback | linux-x86-64
+negative/r440-c-sink-parameter | linux-x86-64
+negative/r440-c-slice-parameter | linux-x86-64
+negative/r440-c-unknown-convention | linux-x86-64
+negative/r440-c-variadic-aggregate-tail | linux-x86-64
+negative/r440-c-variadic-definition | linux-x86-64
+negative/r440-c-variadic-identity | linux-x86-64
+negative/r440-c-variadic-label | linux-x86-64
+negative/r440-c-variadic-missing-fixed | linux-x86-64
+negative/r440-c-variadic-no-fixed | linux-x86-64
+negative/r440-checker-callback-inference-boundary | linux-x86-64
+negative/r440-checker-helper-allocation-optional | linux-x86-64
+negative/r440-checker-helper-definition | linux-x86-64
+negative/r440-checker-helper-initializer-retention | linux-x86-64
+negative/r440-checker-helper-nested-optional | linux-x86-64
+negative/r440-checker-helper-nested-permission | linux-x86-64
+negative/r440-checker-helper-nested-referent | linux-x86-64
+negative/r440-checker-helper-result-origin | linux-x86-64
+negative/r440-checker-helper-size-identity | linux-x86-64
+negative/r440-checker-hosted-main-collision | linux-x86-64
+negative/r440-checker-qualified-range-overflow | linux-x86-64, macos-arm64
+negative/r440-checker-recursive-image-cycle | linux-x86-64
+negative/r440-checker-recursive-inner-length | linux-x86-64
+negative/r440-checker-recursive-inner-signature | linux-x86-64
+negative/r440-checker-recursive-named-image-overflow | linux-x86-64
+negative/r440-checker-recursive-zero-refusal | linux-x86-64
+negative/r440-link-assembly-expression | linux-x86-64
+negative/r440-link-does-not-change-convention | linux-x86-64
+negative/r440-link-duplicate-definitions | linux-x86-64
+negative/r440-link-incompatible-declarations | linux-x86-64
+negative/r440-native-renamed-entry | linux-x86-64
+negative/r440-null-pointer-call-else-fallback-escape | linux-x86-64, synthetic-32
+negative/r440-null-pointer-folded-zero | linux-x86-64, synthetic-32
+negative/r440-null-pointer-unchecked-zero | linux-x86-64, synthetic-32
+negative/r440-optional-origin-aliased-write | linux-x86-64, macos-arm64, synthetic-32
+negative/r440-optional-origin-frame-join | linux-x86-64, macos-arm64, synthetic-32
+negative/r440-optional-origin-frame-retained | linux-x86-64, macos-arm64, synthetic-32
+negative/r440-optional-origin-inout-write | linux-x86-64, macos-arm64, synthetic-32
+negative/r440-optional-origin-loop-frame | linux-x86-64, macos-arm64, synthetic-32
+negative/r440-optional-origin-missing-from | linux-x86-64, macos-arm64, synthetic-32
+negative/r440-optional-origin-module-write | linux-x86-64, macos-arm64, synthetic-32
+negative/r440-optional-origin-multi-frame | linux-x86-64, macos-arm64, synthetic-32
+negative/r440-optional-origin-multi-inout | linux-x86-64, macos-arm64, synthetic-32
+negative/r440-optional-origin-multi-parameter | linux-x86-64, macos-arm64, synthetic-32
+negative/r440-optional-origin-parameter-retained | linux-x86-64, macos-arm64, synthetic-32
+negative/r440-optional-origin-recovery-source | linux-x86-64, macos-arm64, synthetic-32
+negative/r440-optional-origin-static-present | linux-x86-64, macos-arm64, synthetic-32
+negative/r440-optional-origin-wrong-parameter | linux-x86-64, macos-arm64, synthetic-32
+negative/r440-origin-deferred-address-index | linux-x86-64, macos-arm64, synthetic-32
+negative/r440-origin-deferred-pointer-conversion | linux-x86-64, macos-arm64, synthetic-32
+negative/r440-origin-deferred-slice-bound | linux-x86-64, macos-arm64, synthetic-32
+negative/r440-origin-elsif-false-mutation | linux-x86-64, macos-arm64, synthetic-32
+negative/r440-origin-expression-multi-from | linux-x86-64, macos-arm64, synthetic-32
+negative/r440-origin-expression-second-from | linux-x86-64, macos-arm64, synthetic-32
+negative/r440-origin-guarded-break-cleanup | linux-x86-64, macos-arm64, synthetic-32
+negative/r440-origin-guarded-break-value | linux-x86-64, macos-arm64, synthetic-32
+negative/r440-origin-guarded-continue-cleanup | linux-x86-64, macos-arm64, synthetic-32
+negative/r440-origin-guarded-fail-cleanup | linux-x86-64, macos-arm64, synthetic-32
+negative/r440-origin-guarded-fail-value | linux-x86-64, macos-arm64, synthetic-32
+negative/r440-origin-guarded-return-cleanup | linux-x86-64, macos-arm64, synthetic-32
+negative/r440-origin-if-false-mutation | linux-x86-64, macos-arm64, synthetic-32
+negative/r440-origin-pointer-conversion-escaping-call | linux-x86-64, macos-arm64, synthetic-32
+negative/r440-origin-short-circuit-empty-proof | linux-x86-64, macos-arm64, synthetic-32
+negative/r440-origin-while-complete-mutation | linux-x86-64, macos-arm64, synthetic-32
+negative/r440-origin-while-false-mutation | linux-x86-64, macos-arm64, synthetic-32
+negative/r440-parser-frame-arena | linux-x86-64
 negative/range-subtype-address | linux-x86-64, macos-arm64
 negative/range-subtype-base-is-not-an-integer | linux-x86-64, macos-arm64
 negative/range-subtype-bound-outside-base | linux-x86-64, macos-arm64
@@ -925,6 +1022,23 @@ positive/precedence-shift-over-conjunction | linux-x86-64, macos-arm64
 positive/precedence-sum-over-shift | linux-x86-64, macos-arm64
 positive/r430-fixed-options | linux-x86-64, synthetic-32
 positive/r430-inactive-tools | linux-x86-64, synthetic-32
+positive/r440-array-callback-type-argument | linux-x86-64
+positive/r440-c-aliases | linux-x86-64
+positive/r440-c-layout-recursive-callback | linux-x86-64
+positive/r440-c-signatures | linux-x86-64
+positive/r440-checker-helper-normalized-imports | linux-x86-64
+positive/r440-checker-recursive-callback-contexts | linux-x86-64
+positive/r440-checker-recursive-contexts | linux-x86-64
+positive/r440-compatible-link-declarations | linux-x86-64
+positive/r440-external-float | linux-x86-64
+positive/r440-optional-origin-edges | linux-x86-64, macos-arm64, synthetic-32
+positive/r440-origin-actual-empty-edges | linux-x86-64, macos-arm64, synthetic-32
+positive/r440-origin-forwarding-positions | linux-x86-64, macos-arm64, synthetic-32
+positive/r440-origin-untaken-cleanups | linux-x86-64, macos-arm64, synthetic-32
+positive/r440-parameterized-struct-dependent-supported-arrays | linux-x86-64, macos-arm64
+positive/r440-parameterized-struct-template-order-inner-first-arrays | linux-x86-64, macos-arm64
+positive/r440-parameterized-struct-template-order-outer-first-arrays | linux-x86-64, macos-arm64
+positive/r440-parameterized-struct-unused-numeric-array-shape | linux-x86-64, macos-arm64
 positive/range-subtype-exit-before-the-check | linux-x86-64, macos-arm64
 positive/range-subtypes | linux-x86-64, macos-arm64
 positive/recursive-module-images | linux-x86-64, synthetic-32
@@ -998,6 +1112,7 @@ runtime/any-inferred-entry-staging | linux-x86-64
 runtime/any-parameterized-provider | linux-x86-64
 runtime/any-return-origin | linux-x86-64
 runtime/any-untracked-pointer-origin | linux-x86-64
+runtime/any-unused-object-unsafe-transport | linux-x86-64
 runtime/arena-is-an-ordinary-name | linux-x86-64
 runtime/array-arguments-cross-calls | linux-x86-64
 runtime/array-elements-hold-their-own | linux-x86-64
@@ -1040,6 +1155,7 @@ runtime/copy-before-sink-remains-live | linux-x86-64
 runtime/core-io-erased-system | linux-x86-64
 runtime/core-mem-allocators | linux-x86-64
 runtime/core-mem-arena-boundaries | linux-x86-64
+runtime/core-mem-dispose-empty | linux-x86-64
 runtime/core-mem-initialized-objects | linux-x86-64
 runtime/core-mem-initialized-prefix | linux-x86-64
 runtime/core-mem-owned-bytes | linux-x86-64
@@ -1071,6 +1187,8 @@ runtime/diagnostic-loggers-dispatch | linux-x86-64
 runtime/division-and-remainder-exit-with-their-results | linux-x86-64
 runtime/erased-named-recovery | linux-x86-64
 runtime/erased-parameterized-recovery | linux-x86-64
+runtime/erased-self-snapshot-transport | linux-x86-64
+runtime/erased-shaped-argument-spills | linux-x86-64
 runtime/evaluation-order-is-left-then-right | linux-x86-64
 runtime/fixed-array-any-shapes | linux-x86-64
 runtime/fixed-array-bound-expression | linux-x86-64
@@ -1203,6 +1321,9 @@ runtime/nested-struct-returns-cross-calls | linux-x86-64
 runtime/nested-struct-scalar-fields | linux-x86-64
 runtime/nested-struct-zero-storage-keeps-neighbours | linux-x86-64
 runtime/nested-variant-parts | linux-x86-64
+runtime/null-pointer-dynamic-traps | linux-x86-64
+runtime/null-pointer-unchecked-traps | linux-x86-64
+runtime/null-pointer-union-call-else | linux-x86-64
 runtime/one-module-across-two-files | linux-x86-64
 runtime/parameterized-struct-lazy-value-layout | linux-x86-64
 runtime/parameterized-struct-values | linux-x86-64
@@ -1244,6 +1365,18 @@ runtime/r420-vec-growth-transaction | linux-x86-64
 runtime/r420-vec-large-list | linux-x86-64
 runtime/r430-fixed-tools | linux-x86-64
 runtime/r430-static-library | linux-x86-64
+runtime/r440-aggregate-shaped-copy-endpoints | linux-x86-64
+runtime/r440-c-aliases | linux-x86-64
+runtime/r440-callback-pointer-witness | linux-x86-64
+runtime/r440-checker-qualified-alias-conversions | linux-x86-64
+runtime/r440-checker-qualified-c-conversions | linux-x86-64
+runtime/r440-checker-qualified-range-traps | linux-x86-64
+runtime/r440-contextual-compound-array-child-copies | linux-x86-64
+runtime/r440-errno-detail | linux-x86-64
+runtime/r440-io-partial-progress | linux-x86-64
+runtime/r440-optional-origin-edges | linux-x86-64
+runtime/r440-pointer-union-saved-witness | linux-x86-64
+runtime/r440-reached-scalar-places | linux-x86-64
 runtime/range-subtype-checks | linux-x86-64
 runtime/range-subtype-conversion-traps | linux-x86-64
 runtime/range-subtype-store-traps | linux-x86-64
@@ -1332,6 +1465,8 @@ runtime/variant-inside-an-element | linux-x86-64
 runtime/variant-match-array-payload-bindings-update-storage | linux-x86-64
 runtime/variant-match-origin-channels | linux-x86-64
 runtime/variant-match-payload-bindings-update-storage | linux-x86-64
+runtime/variant-match-referenced-payload-places | linux-x86-64
+runtime/variant-match-referenced-payload-storage | linux-x86-64
 runtime/variant-match-selects-tag | linux-x86-64
 runtime/variant-module-array-payload-image-copy-is-distinct | linux-x86-64
 runtime/variant-module-array-payload-image-selects-case | linux-x86-64

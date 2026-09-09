@@ -1,0 +1,22 @@
+unavailable: atom
+absent: atom
+maybe_pointer: type = absent | ptr u32
+
+obtain: (cell: ptr u32, reject: bool)
+        -> (result: ptr u32 from cell) ! unavailable =
+    fail unavailable when reject
+    result = cell
+end obtain
+
+retain: (escaping pointer: ptr u32) -> none =
+    _ = pointer
+end retain
+
+bad: (reject: bool) -> none =
+    cell: u32 = 42
+    value: maybe_pointer = obtain(addr cell, reject) else absent
+    match value
+        absent: _ = 0
+        ptr (pointer): retain(pointer)
+    end match
+end bad

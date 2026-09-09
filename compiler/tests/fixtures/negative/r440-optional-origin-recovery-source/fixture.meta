@@ -1,0 +1,6 @@
+class: negative
+summary: A proven-empty recovery value cannot erase the successful call result's wrong parameter origin
+constructs: 0480, 0790, 1050
+program: program.ldn
+codes: L0316
+targets: linux-x86-64, macos-arm64, synthetic-32

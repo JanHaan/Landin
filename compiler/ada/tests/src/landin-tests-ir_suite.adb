@@ -30,6 +30,13 @@ with Landin.Types;
 
 package body Landin.Tests.IR_Suite is
 
+   package IR renames Landin.IR;
+
+   use type IR.Atom_Set_Id;
+   use type IR.Field_Shape;
+   use type IR.Field_Shape_Kind;
+   use type IR.Nominal_Type_Id;
+   use type IR.Signature_Id;
    use type Landin.IR.Element_Total;
    use type Landin.IR.Field_Image_Form;
    use type Landin.IR.Item_Id;
@@ -1346,8 +1353,613 @@ package body Landin.Tests.IR_Suite is
          "undo selects failure propagation and no other exit");
    end Cleanup_Exit_Selection_Is_Target_Neutral;
 
+   procedure Recursive_Array_Shapes_Keep_Complete_Children
+     (Item : in out Landin.Testing.Context);
+
+   procedure Recursive_Array_Shapes_Keep_Complete_Children
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Site : Landin.Provenance.Origin;
+      Unit : IR.Unit;
+      C_First, C_Second, Native, Outer_First, Outer_Second : IR.Signature_Id;
+      Callback, Plain, Row, Matrix, Again, Different : IR.Field_Shape;
+      First_Nominal, Second_Nominal : IR.Nominal_Type_Id;
+      Datum, Routine : IR.Item_Id;
+      Slot : IR.Slot_Id;
+      Before : Natural;
+   begin
+      Frontend_Over (Work, Site);
+      IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+      C_First := IR.Add_Signature
+        (Unit, [1 => (Kind => Landin.Types.I32, others => <>)],
+         (Kind => Landin.Types.I32, others => <>), C_ABI => True);
+      C_Second := IR.Add_Signature
+        (Unit, [1 => (Kind => Landin.Types.I32, others => <>)],
+         (Kind => Landin.Types.I32, others => <>), C_ABI => True);
+      Native := IR.Add_Signature
+        (Unit, [1 => (Kind => Landin.Types.I32, others => <>)],
+         (Kind => Landin.Types.I32, others => <>));
+      Callback := (Element => Landin.Types.Usize,
+                   Signature => C_First, others => <>);
+      Plain := IR.Make_Array_Shape
+        (Unit, IR.Element_Total'Last,
+         (Element => Landin.Types.U8, others => <>));
+      Landin.Testing.Check
+        (Item, Plain.Cases = 0 and then Plain.Payloads_First = 0
+         and then IR.Array_Element_Shape (Unit, Plain).Element
+           = Landin.Types.U8,
+         "plain scalar arrays keep their inline child");
+      Before := IR.Variant_Field_Shape_Count (Unit);
+      Row := IR.Make_Array_Shape (Unit, IR.Element_Total'Last, Callback);
+      Again := IR.Make_Array_Shape (Unit, IR.Element_Total'Last, Callback);
+      Landin.Testing.Check
+        (Item, Row = Again and then Row.Cases = 1
+         and then Row.Signature = IR.No_Signature
+         and then IR.Array_Element_Is_Aggregate (Unit, Row)
+         and then IR.Array_Element_Shape (Unit, Row) = Callback
+         and then IR.Variant_Field_Shape_Count (Unit) = Before + 1,
+         "a scalar callback owns one reused child, not one per element");
+      Matrix := IR.Make_Array_Shape (Unit, 2 ** 32, Row);
+      Landin.Testing.Check
+        (Item, IR.Array_Element_Shape (Unit, Matrix) = Row
+         and then IR.Variant_Field_Shape_Count (Unit) = Before + 2,
+         "nested dimensions retain one complete immediate child each");
+      Different := IR.Make_Array_Shape
+        (Unit, IR.Element_Total'Last,
+         (Element => Landin.Types.Usize,
+          Signature => C_Second, others => <>));
+      Landin.Testing.Check
+        (Item, IR.Same_Shape (Unit, Row, Different),
+         "array equality compares callback signatures structurally");
+      Outer_First := IR.Add_Signature
+        (Unit, [1 => (Kind => Landin.Types.Fixed_Array,
+                      Element => Landin.Types.Usize, Length => 3,
+                      Element_Shape => Row, others => <>)],
+         (Kind => Landin.Types.No_Value, others => <>));
+      Outer_Second := IR.Add_Signature
+        (Unit, [1 => (Kind => Landin.Types.Fixed_Array,
+                      Element => Landin.Types.Usize, Length => 3,
+                      Element_Shape => Different, others => <>)],
+         (Kind => Landin.Types.No_Value, others => <>));
+      Landin.Testing.Check
+        (Item, IR.Signatures_Agree (Unit, Outer_First, Outer_Second),
+         "callable identity recurses through arrays of callbacks");
+      Different := IR.Make_Array_Shape
+        (Unit, IR.Element_Total'Last,
+         (Element => Landin.Types.Usize,
+          Signature => Native, others => <>));
+      Landin.Testing.Check
+        (Item, not IR.Same_Shape (Unit, Row, Different),
+         "array equality never erases C convention from a callback child");
+
+      --  Arbitrary input lower bounds are positions, not arena indexes.
+      First_Nominal := IR.Add_Nominal_Type (Unit, 1);
+      Second_Nominal := IR.Add_Nominal_Type (Unit, 1);
+      IR.Set_Nominal_Shape
+        (Unit, First_Nominal,
+         Fields => [7 => (Kind => IR.Array_Field_Shape, Length => 2,
+                          Element => Landin.Types.Usize,
+                          Cases => 1, Payloads_First => 1, others => <>)],
+         C_Layout => True,
+         Payloads =>
+           [9 => (Kind => IR.Array_Field_Shape, Length => 3,
+                  Element => Landin.Types.Usize,
+                  Cases => 1, Payloads_First => 2, others => <>),
+            10 => Callback]);
+      IR.Set_Nominal_Shape
+        (Unit, Second_Nominal,
+         [1 => IR.Nth_Nominal_Field (Unit, First_Nominal, 1)],
+         C_Layout => True);
+      Row := IR.Nth_Nominal_Field (Unit, First_Nominal, 1);
+      Again := IR.Array_Element_Shape (Unit, Row);
+      Landin.Testing.Check
+        (Item, IR.Has_C_Layout (Unit, First_Nominal)
+         and then Again.Kind = IR.Array_Field_Shape
+         and then Again.Length = 3
+         and then IR.Array_Element_Shape (Unit, Again) = Callback,
+         "canonical registration rebases both array dimensions");
+      Landin.Testing.Check
+        (Item, First_Nominal /= Second_Nominal
+         and then not IR.Same_Shape
+           (Unit, (Kind => IR.Aggregate_Field_Shape,
+                   Nominal => First_Nominal, others => <>),
+            (Kind => IR.Aggregate_Field_Shape,
+             Nominal => Second_Nominal, others => <>)),
+         "identical canonical C bodies keep distinct nominal identities");
+      Datum := IR.Add_Item
+        (Unit, IR.Datum, 1, Landin.Types.Fixed_Array, Site);
+      IR.Set_Array (Unit, Datum, Again, 2);
+      Routine := IR.Add_Item
+        (Unit, IR.Routine, 2, Landin.Types.No_Value, Site);
+      Slot := IR.Add_Array_Slot
+        (Unit, Routine, Again, 2, IR.No_Declaration, Site);
+      Landin.Testing.Check
+        (Item, IR.Array_Element_Shape (Unit, Datum) = Again
+         and then IR.Slot_Array_Element_Shape (Unit, Routine, Slot) = Again
+         and then IR.Same_Shape
+           (Unit, IR.Whole_Array_Shape (Unit, Datum),
+            IR.Whole_Slot_Array_Shape (Unit, Routine, Slot)),
+         "array items and slots round-trip their complete child runs");
+   end Recursive_Array_Shapes_Keep_Complete_Children;
+
+   procedure Recursive_Array_Runs_Are_Bounded
+     (Item : in out Landin.Testing.Context);
+
+   procedure Recursive_Array_Runs_Are_Bounded
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Site : Landin.Provenance.Origin;
+      Unit : IR.Unit;
+      Bad : IR.Field_Shape :=
+        (Kind => IR.Array_Field_Shape, Length => 2, Cases => 1,
+         Payloads_First => 1, others => <>);
+      First : Natural;
+   begin
+      Frontend_Over (Work, Site);
+      IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+      Landin.Testing.Check
+        (Item, not IR.Array_Element_Run_Is_Valid (Unit, Bad),
+         "an unallocated explicit child is out of bounds");
+      begin
+         declare
+            Returned : constant IR.Field_Shape :=
+              IR.Array_Element_Shape (Unit, Bad);
+         begin
+            Landin.Testing.Fail
+              (Item, "a malformed child returned "
+               & IR.Field_Shape_Kind'Image (Returned.Kind));
+         end;
+      exception
+         when Landin.Compiler_Defect =>
+            Landin.Testing.Check
+              (Item, True, "the child reader always checks bounds");
+      end;
+      First := IR.Add_Shape_Run (Unit, [1 => Bad]);
+      Landin.Testing.Check
+        (Item, First = 1 and then IR.Array_Element_Run_Is_Valid (Unit, Bad)
+         and then not IR.Same_Shape (Unit, Bad, Bad),
+         "a bounded self-cycle fails recursive equality rather than looping");
+      Bad.Cases := 2;
+      Landin.Testing.Check
+        (Item, not IR.Array_Element_Run_Is_Valid (Unit, Bad),
+         "an array cannot pretend to have two immediate child shapes");
+   end Recursive_Array_Runs_Are_Bounded;
+
+   --  Builder metadata only: the atom address need not point at initialized
+   --  storage here.  Semantic instruction validity belongs to verifier tests.
+   procedure Typed_Indirect_Accesses_Retain_Witnesses
+     (Item : in out Landin.Testing.Context);
+
+   procedure Typed_Indirect_Accesses_Retain_Witnesses
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Site : Landin.Provenance.Origin;
+      Unit : IR.Unit;
+      Signature : IR.Signature_Id;
+      Atoms : IR.Atom_Set_Id;
+      Routine : IR.Item_Id;
+      Callback, Address, Atom_Address : IR.Slot_Id;
+      Block : IR.Block_Id;
+      Pointer, Loaded, Stored, Plain, Legacy, Atom_Load : IR.Value_Id;
+      Before : Natural;
+   begin
+      Frontend_Over (Work, Site);
+      IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+      Signature := IR.Add_Signature
+        (Unit, IR.No_Signature_Parts,
+         (Kind => Landin.Types.I32, others => <>), C_ABI => True);
+      Atoms := IR.Add_Atom_Set (Unit, [1 => 1]);
+      Routine := IR.Add_Item
+        (Unit, IR.Routine, 1, Landin.Types.No_Value, Site);
+      Callback := IR.Add_Slot
+        (Unit, Routine, Landin.Types.Usize, IR.No_Declaration, Site,
+         Signature => Signature);
+      Address := IR.Add_Address_Slot
+        (Unit, Routine, (Element => Landin.Types.Usize,
+                         Signature => Signature, others => <>), Site);
+      Atom_Address := IR.Add_Address_Slot
+        (Unit, Routine, (Element => Landin.Types.U32,
+                         Atoms => Atoms, others => <>), Site);
+      Block := IR.Add_Block
+        (Unit, Routine, Landin.Resolution.Program_Scope, Site);
+      IR.Enter (Unit, Routine, Block);
+      Pointer := IR.Emit_Place_Address
+        (Unit, Routine, (Kind => IR.Frame_Slot, Slot => Callback), Site);
+      IR.Emit_Store (Unit, Routine, Address, Pointer, Site);
+      Loaded := IR.Emit_Load_Indirect (Unit, Routine, Address, Site);
+      IR.Emit_Store_Indirect (Unit, Routine, Address, Loaded, Site);
+      Stored := IR.Value_Id (IR.Value_Count (Unit, Routine));
+      Landin.Testing.Check
+        (Item, IR.Indirect_Address_Slot (Unit, Routine, Loaded) = Address
+         and then IR.Result_Of (Unit, Routine, Loaded) = Landin.Types.Usize
+         and then IR.Signature_Of (Unit, Routine, Loaded) = Signature,
+         "the typed load derives callable metadata from its address slot");
+      for Position in 1 .. 2 loop
+         declare
+            Value : constant IR.Value_Id :=
+              (if Position = 1 then Loaded else Stored);
+            Operand : constant IR.Value_Id :=
+              IR.Nth_Operand (Unit, Routine, Value, 1);
+         begin
+            Landin.Testing.Check
+              (Item, IR.Op_Of (Unit, Routine, Operand) = IR.Load
+               and then IR.Slot_Of (Unit, Routine, Operand) = Address
+               and then IR.Indirect_Address_Slot
+                 (Unit, Routine, Value) = Address,
+               "both indirect opcodes load exactly their retained witness");
+         end;
+      end loop;
+      Landin.Testing.Check
+        (Item, IR.Operand_Count (Unit, Routine, Stored) = 2
+         and then IR.Nth_Operand (Unit, Routine, Stored, 2) = Loaded,
+         "a typed store retains operand two as the stored callback");
+      Atom_Load := IR.Emit_Load_Indirect (Unit, Routine, Atom_Address, Site);
+      Landin.Testing.Check
+        (Item, IR.Atom_Set_Of (Unit, Routine, Atom_Load) = Atoms
+         and then IR.Signature_Of (Unit, Routine, Atom_Load) = IR.No_Signature,
+         "atom witnesses retain the set without inventing a callback");
+      Legacy := IR.Emit_Load_Indirect
+        (Unit, Routine, Pointer, Landin.Types.Usize, Site);
+      IR.Emit_Store_Indirect (Unit, Routine, Pointer, Legacy, Site);
+      Landin.Testing.Check
+        (Item, IR.Indirect_Address_Slot (Unit, Routine, Legacy) = IR.No_Slot
+         and then IR.Indirect_Address_Slot
+           (Unit, Routine, IR.Value_Id (IR.Value_Count (Unit, Routine)))
+             = IR.No_Slot,
+         "legacy integer-address operations remain explicitly unwitnessed");
+      Plain := IR.Emit_Number
+        (Unit, Routine, Landin.Types.Usize, 1, False, Site);
+      Before := IR.Value_Count (Unit, Routine);
+      begin
+         IR.Emit_Store_Indirect (Unit, Routine, Address, Plain, Site);
+         Landin.Testing.Fail (Item, "an integer replaced a typed callback");
+      exception
+         when Landin.Compiler_Defect =>
+            Landin.Testing.Check
+              (Item, IR.Value_Count (Unit, Routine) = Before,
+               "metadata mismatch is refused before appending instructions");
+      end;
+      IR.Emit_Leave (Unit, Routine, IR.No_Value, Site);
+      IR.Leave_Block (Unit, Routine);
+      declare
+         Text : constant String := Landin.IR.Dump.Text
+           (Unit, Landin.Stages.Meanings (Work).all,
+            Landin.Stages.Identities (Work).all);
+      begin
+         Landin.Testing.Check
+           (Item,
+            Ada.Strings.Fixed.Index
+              (Text, "slot 2 - address of usize signature 1") /= 0
+            and then Ada.Strings.Fixed.Index
+              (Text, "LOAD_INDIRECT usize address slot 2 <-") /= 0
+            and then Ada.Strings.Fixed.Index
+              (Text, "STORE_INDIRECT address slot 2 <-") /= 0
+            and then Ada.Strings.Fixed.Index
+              (Text, "LOAD_INDIRECT usize <-") /= 0
+            and then Ada.Strings.Fixed.Index
+              (Text, "STORE_INDIRECT <-") /= 0
+            and then Ada.Strings.Fixed.Index
+              (Text, "address slot 0") = 0,
+            "the dump distinguishes typed witnesses from legacy operands");
+      end;
+   end Typed_Indirect_Accesses_Retain_Witnesses;
+
+   procedure Recursive_Array_Images_Keep_Separate_Roots
+     (Item : in out Landin.Testing.Context);
+
+   procedure Recursive_Array_Images_Keep_Separate_Roots
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Site : Landin.Provenance.Origin;
+      Unit : IR.Unit;
+      Earlier, Datum, Callbacks, Target : IR.Item_Id;
+      Signature : IR.Signature_Id;
+      Row : IR.Field_Shape;
+      Root, Child : IR.Aggregate_Field_Image;
+   begin
+      Frontend_Over (Work, Site);
+      IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+      Earlier := IR.Add_Item
+        (Unit, IR.Datum, 1, Landin.Types.Fixed_Array, Site);
+      IR.Set_Array (Unit, Earlier, Landin.Types.U16, 2);
+      IR.Set_Array_Image
+        (Unit, Earlier, Landin.Types.Folded_Array'(91, 92));
+      Row := IR.Make_Array_Shape
+        (Unit, 2, (Element => Landin.Types.U16, others => <>));
+      Datum := IR.Add_Item
+        (Unit, IR.Datum, 2, Landin.Types.Fixed_Array, Site);
+      IR.Set_Array (Unit, Datum, Row, IR.Element_Total'Last);
+      Root := (Form => IR.Element_Sequence, Count => 2,
+               Value => Landin.Types.Folded (IR.Element_Total'Last) - 1,
+               others => <>);
+      IR.Set_Array_Image
+        (Unit, Datum, Root,
+         [5 => (Form => IR.Finite, Count => 2, others => <>),
+          6 => (Form => IR.Repeated, Offset => 2, Value => 33, others => <>)],
+         Landin.Types.Folded_Array'(11, 22));
+      Child := IR.Descendant_Image_Of (Unit, Datum, Root, 1);
+      Landin.Testing.Check
+        (Item, IR.Has_Recursive_Array_Image (Unit, Datum)
+         and then IR.Image_Root_Count (Unit, Datum) = 1
+         and then IR.Field_Count (Unit, Datum) = 0
+         and then IR.Aggregate_Field_Image_Count (Unit, Datum) = 3
+         and then IR.Image_Length (Unit, Datum) = 2
+         and then not IR.Is_Repeated_Image (Unit, Datum),
+         "recursive repetition stores three descriptors and two folds");
+      Landin.Testing.Check
+        (Item, Child.Form = IR.Finite
+         and then IR.Nth_Descriptor_Element (Unit, Datum, Child, 1) = 11
+         and then IR.Nth_Descriptor_Element (Unit, Datum, Child, 2) = 22
+         and then IR.Nth_Aggregate_Image_Element (Unit, Datum, 1) = 11,
+         "numeric folds skip zero fields, never the array root descriptor");
+      Landin.Testing.Check
+        (Item, IR.Descendant_Image_Of (Unit, Datum, Root, 2).Value = 33
+         and then Landin.Types.Folded (Root.Count - 1) + Root.Value
+           = Landin.Types.Folded (IR.Array_Length (Unit, Datum)),
+         "the final child multiplicity covers the target-sized suffix");
+      Signature := IR.Add_Signature
+        (Unit, IR.No_Signature_Parts,
+         (Kind => Landin.Types.I32, others => <>), C_ABI => True);
+      Target := IR.Add_Item
+        (Unit, IR.Routine, 3, Landin.Types.I32, Site);
+      IR.Set_Signature (Unit, Target, Signature);
+      IR.Mark_External (Unit, Target);
+      Callbacks := IR.Add_Item
+        (Unit, IR.Datum, 4, Landin.Types.Fixed_Array, Site);
+      IR.Set_Array
+        (Unit, Callbacks, (Element => Landin.Types.Usize,
+                          Signature => Signature, others => <>), 1);
+      Root := (Form => IR.Element_Sequence, Count => 2, others => <>);
+      IR.Set_Array_Image
+        (Unit, Callbacks, Root,
+         [1 .. 2 => (Target => Target, others => <>)], []);
+      Landin.Testing.Check
+        (Item, IR.Image_Length (Unit, Callbacks) = 0
+         and then IR.Array_Image_Of (Unit, Callbacks).Value = 0
+         and then IR.Descendant_Image_Of
+           (Unit, Callbacks, Root, 1).Target = Target
+         and then IR.Descendant_Image_Of
+           (Unit, Callbacks, Root, 2).Target = Target,
+         "callback relocations and an evaluated zero suffix need no folds");
+      declare
+         Text : constant String := Landin.IR.Dump.Text
+           (Unit, Landin.Stages.Meanings (Work).all,
+            Landin.Stages.Identities (Work).all);
+      begin
+         Landin.Testing.Check
+           (Item,
+            Ada.Strings.Fixed.Index
+              (Text, "image elements 2 last repeat 0") /= 0
+            and then Ada.Strings.Fixed.Index
+              (Text, "image element 1 function target 3") /= 0
+            and then Ada.Strings.Fixed.Index
+              (Text, "image element 2 function target 3") /= 0,
+            "the dump reads empty-fold recursive images through descriptors");
+      end;
+
+      --  The same descriptors occur below aggregate fields and selected
+      --  payloads.  Their relocation targets cannot be recovered from the
+      --  empty numeric fold arena, while an evaluated empty scalar array has
+      --  a real Finite descriptor whose rendered image text is empty.
+      declare
+         Field_Unit : IR.Unit;
+         Field_Signature : IR.Signature_Id;
+         Field_Target, Container : IR.Item_Id;
+         Callback_Array : IR.Field_Shape;
+      begin
+         IR.Prepare (Field_Unit, Landin.Stages.Meanings (Work).all);
+         Field_Signature := IR.Add_Signature
+           (Field_Unit, IR.No_Signature_Parts,
+            (Kind => Landin.Types.I32, others => <>), C_ABI => True);
+         Field_Target := IR.Add_Item
+           (Field_Unit, IR.Routine, 1, Landin.Types.I32, Site);
+         IR.Set_Signature (Field_Unit, Field_Target, Field_Signature);
+         IR.Mark_External (Field_Unit, Field_Target);
+         Callback_Array := IR.Make_Array_Shape
+           (Field_Unit, 2, (Element => Landin.Types.Usize,
+                            Signature => Field_Signature, others => <>));
+         Container := IR.Add_Item
+           (Field_Unit, IR.Datum, 3, Landin.Types.Aggregate, Site);
+         IR.Add_Field (Field_Unit, Container, Callback_Array);
+         IR.Add_Field
+           (Field_Unit, Container,
+            (Kind => IR.Variant_Field_Shape, Element => Landin.Types.U8,
+             Cases => 1, Payloads_First => 1, others => <>),
+            Cases => [1 => (First => 1, Count => 1)],
+            Payloads => [1 => Callback_Array]);
+         IR.Add_Field
+           (Field_Unit, Container,
+            (Kind => IR.Array_Field_Shape, Element => Landin.Types.U8,
+             Length => 0, others => <>));
+         IR.Set_Aggregate_Image
+           (Field_Unit, Container, Landin.Types.Folded_Array'(0, 0, 0),
+            Images =>
+              [1 => (Form => IR.Element_Sequence, Count => 2, Value => 1,
+                     others => <>),
+               2 => (Form => IR.Selected, Offset => 2, Count => 1, Value => 1,
+                     others => <>),
+               3 => (Form => IR.Finite, others => <>)],
+            Descendants =>
+              [1 .. 2 => (Target => Field_Target, others => <>),
+               3 => (Form => IR.Element_Sequence, Offset => 3, Count => 2,
+                     Value => 1, others => <>),
+               4 .. 5 => (Target => Field_Target, others => <>)],
+            Elements => []);
+         Landin.Testing.Check
+           (Item, IR.Image_Length (Field_Unit, Container) = 3
+            and then IR.Aggregate_Field_Image_Count
+              (Field_Unit, Container) = 8,
+            "field and payload descriptors need no descendant folds");
+         declare
+            Text : constant String := Landin.IR.Dump.Text
+              (Field_Unit, Landin.Stages.Meanings (Work).all,
+               Landin.Stages.Identities (Work).all);
+         begin
+            Landin.Testing.Check
+              (Item,
+               Ada.Strings.Fixed.Index
+                 (Text, "field 1 elements 2 last repeat 1") /= 0
+               and then Ada.Strings.Fixed.Index
+                 (Text, "field 1 element 1 function target 1") /= 0
+               and then Ada.Strings.Fixed.Index
+                 (Text, "field 1 element 2 function target 1") /= 0
+               and then Ada.Strings.Fixed.Index
+                 (Text, "field 2 case 1") /= 0
+               and then Ada.Strings.Fixed.Index
+                 (Text, "    payload 1 elements 2 last repeat 1") /= 0
+               and then Ada.Strings.Fixed.Index
+                 (Text, "    payload 1 element 1 function target 1") /= 0
+               and then Ada.Strings.Fixed.Index
+                 (Text, "    payload 1 element 2 function target 1") /= 0,
+               "array fields and payloads expose callback relocations");
+            Landin.Testing.Check
+              (Item,
+               Ada.Strings.Fixed.Index (Text, "  field 3 image" & LF) /= 0
+               and then Ada.Strings.Fixed.Index (Text, " " & LF) = 0,
+               "an empty image descriptor leaves no trailing separator");
+         end;
+      end;
+   end Recursive_Array_Images_Keep_Separate_Roots;
+
+   procedure Pointer_Shapes_Survive_Storage
+     (Item : in out Landin.Testing.Context);
+
+   procedure Pointer_Shapes_Survive_Storage
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Site : Landin.Provenance.Origin;
+      Unit : IR.Unit;
+      Callback, Equivalent, Signature : IR.Signature_Id;
+      Reached, Same, Large : IR.Pointee_Id;
+      Child : IR.Field_Shape;
+      Routine : IR.Item_Id;
+      Parameter, Array_Cell, Record_Cell, Variant_Cell : IR.Slot_Id;
+      Address : IR.Slot_Id;
+      Block : IR.Block_Id;
+      Pointer, Index, Loaded, Origin : IR.Value_Id;
+   begin
+      Frontend_Over (Work, Site);
+      IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+      Callback := IR.Add_Signature
+        (Unit, IR.No_Signature_Parts,
+         (Kind => Landin.Types.No_Value, others => <>), C_ABI => True);
+      Equivalent := IR.Add_Signature
+        (Unit, IR.No_Signature_Parts,
+         (Kind => Landin.Types.No_Value, others => <>), C_ABI => True);
+      Reached := IR.Add_Pointee
+        (Unit, (Element => Landin.Types.Usize,
+                Signature => Callback, others => <>));
+      Same := IR.Add_Pointee
+        (Unit, (Element => Landin.Types.Usize,
+                Signature => Equivalent, others => <>));
+      Landin.Testing.Check
+        (Item, IR.Pointees_Agree (Unit, Reached, Same),
+         "referent equality uses recursive callable identity");
+      Child := (Element => Landin.Types.Usize,
+                Pointee => Reached, others => <>);
+      Large := IR.Add_Pointee
+        (Unit, IR.Make_Array_Shape (Unit, 2 ** 64 - 1, Child));
+      Landin.Testing.Check
+        (Item, IR.Pointee_Shape (Unit, Large).Length = 2 ** 64 - 1
+           and then IR.Variant_Field_Shape_Count (Unit) = 1,
+         "pointer referent arrays keep one complete child, not an expansion");
+      Signature := IR.Add_Signature
+        (Unit, [1 => (Kind => Landin.Types.Usize,
+                      Pointee => Reached, others => <>)],
+         (Kind => Landin.Types.No_Value, others => <>));
+      Routine := IR.Add_Item
+        (Unit, IR.Routine, 1, Landin.Types.No_Value, Site);
+      IR.Set_Signature (Unit, Routine, Signature);
+      Parameter := IR.Add_Parameter
+        (Unit, Routine, Landin.Types.Usize, 2, Site, Pointee => Reached);
+      Array_Cell := IR.Add_Array_Slot
+        (Unit, Routine, Child, 2, IR.No_Declaration, Site);
+      Record_Cell := IR.Add_Aggregate_Slot
+        (Unit, Routine, IR.No_Declaration, Site);
+      IR.Add_Slot_Field (Unit, Routine, Record_Cell, Child);
+      Variant_Cell := IR.Add_Aggregate_Slot
+        (Unit, Routine, IR.No_Declaration, Site);
+      IR.Add_Slot_Field
+        (Unit, Routine, Variant_Cell,
+         (Kind => IR.Variant_Field_Shape, Element => Landin.Types.U8,
+          Cases => 1, Payloads_First => 1, others => <>),
+         Cases => [1 => (First => 1, Count => 1)], Payloads => [1 => Child]);
+      Address := IR.Add_Address_Slot
+        (Unit, Routine, IR.Pointee_Shape (Unit, Reached), Site);
+      Block := IR.Add_Block
+        (Unit, Routine, Landin.Resolution.Program_Scope, Site);
+      IR.Enter (Unit, Routine, Block);
+      Pointer := IR.Emit_Load (Unit, Routine, Parameter, Site);
+      Index := IR.Emit_Number
+        (Unit, Routine, Landin.Types.Usize, 0, False, Site);
+      IR.Emit_Store_Slot_Field
+        (Unit, Routine, Record_Cell, 1, Pointer, Site);
+      Loaded := IR.Emit_Load_Slot_Field
+        (Unit, Routine, Record_Cell, 1, Landin.Types.Usize, Site);
+      Landin.Testing.Check
+        (Item, IR.Pointees_Agree
+           (Unit, Reached, IR.Pointee_Of (Unit, Routine, Loaded)),
+         "field loads derive pointer metadata without caller annotations");
+      IR.Emit_Store_Slot_Element
+        (Unit, Routine, Array_Cell, Index, Pointer, Site);
+      Loaded := IR.Emit_Load_Slot_Element
+        (Unit, Routine, Array_Cell, Index, Landin.Types.Usize, Site);
+      Landin.Testing.Check
+        (Item, IR.Pointees_Agree
+           (Unit, Reached, IR.Pointee_Of (Unit, Routine, Loaded)),
+         "element loads derive their complete pointer child");
+      IR.Emit_Variant_Select
+        (Unit, Routine, (Kind => IR.Frame_Slot, Slot => Variant_Cell),
+         1, 1, Site);
+      IR.Emit_Variant_Field_Store
+        (Unit, Routine, (Kind => IR.Frame_Slot, Slot => Variant_Cell),
+         1, 1, 1, Pointer, Site);
+      Loaded := IR.Emit_Variant_Field_Load
+        (Unit, Routine, (Kind => IR.Frame_Slot, Slot => Variant_Cell),
+         1, 1, 1, Landin.Types.Usize, Site);
+      Landin.Testing.Check
+        (Item, IR.Pointees_Agree
+           (Unit, Reached, IR.Pointee_Of (Unit, Routine, Loaded)),
+         "variant payload loads retain pointer referents");
+      Origin := IR.Emit_Pointer_Address (Unit, Routine, Loaded, Site);
+      IR.Emit_Store (Unit, Routine, Address, Origin, Site);
+      Loaded := IR.Emit_Load_Indirect (Unit, Routine, Address, Site);
+      IR.Emit_Store_Indirect (Unit, Routine, Address, Loaded, Site);
+      IR.Emit_Leave (Unit, Routine, IR.No_Value, Site);
+      IR.Leave_Block (Unit, Routine);
+      Landin.Testing.Check
+        (Item, Landin.IR.Verifier.Check (Unit).Kind
+           = Landin.IR.Verifier.Nothing_Wrong,
+         "storage-derived callback pointers pass release verification");
+   end Pointer_Shapes_Survive_Storage;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "ir", "pointer shapes survive storage",
+         Pointer_Shapes_Survive_Storage'Access);
+      Landin.Testing.Register
+        (Into, "ir", "recursive array shapes retain complete children",
+         Recursive_Array_Shapes_Keep_Complete_Children'Access);
+      Landin.Testing.Register
+        (Into, "ir", "recursive array child runs are bounded",
+         Recursive_Array_Runs_Are_Bounded'Access);
+      Landin.Testing.Register
+        (Into, "ir", "typed indirect accesses retain witnesses",
+         Typed_Indirect_Accesses_Retain_Witnesses'Access);
+      Landin.Testing.Register
+        (Into, "ir", "recursive array images separate descriptor roots",
+         Recursive_Array_Images_Keep_Separate_Roots'Access);
       Landin.Testing.Register
         (Into, "ir", "items do not share a run",
          Items_Do_Not_Share_A_Run'Access);

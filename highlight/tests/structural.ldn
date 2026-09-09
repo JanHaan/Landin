@@ -11,9 +11,30 @@ pair: type = struct
     right: i32
 end pair
 
-extern(c) host_write: (value: i32) -> (written: i32)
+c_pair: type = layout(c) struct
+    left: f64
+    right: i32
+end c_pair
 
-add: (left: i32, right: i32) -> (result: i32) =
+c_callback: type = extern(c) (value: i32) -> (result: i32)
+c_callback_array: type = [2]extern(c) (value: i32) -> (result: i32)
+
+extern(c) link(symbol: "host_write") host_write: (
+    value: i32,
+    format: cstring,
+    ...
+) -> (written: i32)
+
+public extern(c) landin_increment: (value: i32) -> (result: i32) =
+    result = value + 1
+end landin_increment
+
+layout: i32 = 0
+c: i32 = 0
+link: i32 = 0
+symbol: i32 = 0
+
+link(symbol: "native_add") add: (left: i32, right: i32) -> (result: i32) =
     result = left + right
 end add
 

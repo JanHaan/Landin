@@ -1,0 +1,111 @@
+absent: atom
+maybe_pointer: type = absent | ptr u32
+
+if_empty: (cell: ptr u32, choose: bool) -> (result: maybe_pointer from cell) =
+    local: u32 = 42
+    mut candidate: maybe_pointer = addr local
+    if begin
+        candidate = absent
+        choose
+    end then
+        result = cell
+        return
+    end if
+    result = candidate
+end if_empty
+
+elsif_empty: (cell: ptr u32, first: bool, second: bool)
+             -> (result: maybe_pointer from cell) =
+    local: u32 = 42
+    mut candidate: maybe_pointer = addr local
+    if begin
+        candidate = absent
+        first
+    end then
+        result = cell
+        return
+    elsif second then
+        result = candidate
+        return
+    end if
+    result = candidate
+end elsif_empty
+
+while_empty: (cell: ptr u32, choose: bool) -> (result: maybe_pointer from cell) =
+    local: u32 = 42
+    mut candidate: maybe_pointer = addr local
+    while begin
+        candidate = absent
+        choose
+    end do
+        result = cell
+        return
+    end while
+    result = candidate
+end while_empty
+
+complete_empty: (cell: ptr u32, choose: bool)
+                -> (result: maybe_pointer from cell) =
+    local: u32 = 42
+    mut candidate: maybe_pointer = addr local
+    result = cell
+    while begin
+        candidate = absent
+        choose
+    end do
+        return
+    complete
+        result = candidate
+    end while
+end complete_empty
+
+nested_return: (cell: ptr u32, choose: bool)
+               -> (result: maybe_pointer from cell) =
+    local: u32 = 42
+    mut candidate: maybe_pointer = absent
+    if choose then
+        candidate = addr local
+        begin
+            result = cell
+            return
+        end
+    end if
+    result = candidate
+end nested_return
+
+consume: (value: i32) -> none =
+    _ = value
+end consume
+
+cleanup_empty: (cell: ptr u32) -> (result: maybe_pointer from cell) =
+    local: u32 = 42
+    result = addr local
+    defer consume(begin
+        result = absent
+        0
+    end)
+end cleanup_empty
+
+consume_pointer: (value: ptr u32) -> none =
+    _ = value
+end consume_pointer
+
+index_empty: (cell: ptr u32) -> (result: maybe_pointer from cell) =
+    slots: [1]u32 = [7]
+    result = cell
+    defer consume_pointer(addr slots[begin
+        result = absent
+        0
+    end])
+end index_empty
+
+conversion_empty: (cell: ptr u32) -> (result: maybe_pointer from cell) =
+    result = cell
+    defer consume_pointer(begin
+        converted: ptr u32 = ptr(begin
+            result = absent
+            usize(cell)
+        end)
+        converted
+    end)
+end conversion_empty

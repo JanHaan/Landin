@@ -1447,6 +1447,8 @@ package body Landin.Tests.Driver_Suite is
         ("facts.ldn",
          "compiler.assert(compiler.word_size == 8 * sizeof usize)" & LF
          & "compiler.assert(compiler.byte_order == little)" & LF
+         & "compiler.assert(compiler.c_sysv_lp64"
+         & " == (compiler.arch == x86_64))" & LF
          & "compiler.assert(true or (1 / 0 == 0))" & LF
          & "compiler.assert(not (false and (1 / 0 == 0)))" & LF
          & "compiler.assert(compiler.build_mode == debug)" & LF
@@ -1548,6 +1550,10 @@ package body Landin.Tests.Driver_Suite is
       Refuse ("compiler.assert(1)", "", "compiler.assert needs bool");
       Refuse ("compiler.assert(true or f())", "", "closed fixed");
       Refuse ("compiler.assert(sizeof thing == 8)", "", "scalar name");
+      Refuse ("compiler.assert(compiler.c_sysv_lp64 + 1 == 2)", "",
+              "incompatible types");
+      Refuse ("compiler.assert(compiler.c_sysv_lp64)", "",
+              "assertion is false", "--target=synthetic-32");
    end Invalid_Options_Are_Refused;
 
    procedure Libraries_Keep_Their_Written_Order
@@ -1649,8 +1655,283 @@ package body Landin.Tests.Driver_Suite is
       end loop;
    end Builtin_Imports_Never_Search_Roots;
 
+   procedure R440_Helper_Refusals_Have_No_Effects
+     (Item : in out Landin.Testing.Context);
+
+   procedure R440_Helper_Refusals_Have_No_Effects
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check (Source, Message : String; Executable : Boolean);
+
+      procedure Check (Source, Message : String; Executable : Boolean) is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : Landin.Platform.Path_List := Arguments_Of ("bad.ldn");
+      begin
+         Host.Add_File ("bad.ldn", Source);
+         --  Any attempted write adds an output diagnostic; it cannot hide
+         --  behind a discarded buffer or a successful fake tool invocation.
+         Host.Refuse_Writes;
+         Tools.Raise_On_Run;
+         Args.Append ("--target=linux-x86-64");
+         Args.Append (if Executable then "--emit=exe" else "--emit=asm");
+         Args.Append ("-o");
+         Args.Append ("refused");
+         declare
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Driver.Execute (Args, Host, Tools);
+            Report : constant String := Unbounded.To_String (Result.Report);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Result.Status, Landin.Driver.Status_Reported,
+               "helper source errors are reports, not backend defects");
+            Landin.Testing.Check
+              (Item, Occurrences (Report, "error[") = 1
+                 and then Contains (Report, "error[L0301]: " & Message)
+                 and then not Contains (Report, "L0502")
+                 and then not Contains (Report, "internal compiler defect"),
+               "only the precise source helper contract owns the refusal");
+            Landin.Testing.Check_Equal
+              (Item, Tools.Run_Count, 0, "no assembler or linker is invoked");
+            Landin.Testing.Check
+              (Item, Unbounded.To_String (Result.Output) = ""
+                 and then Host.Written ("refused") = ""
+                 and then Host.Written ("refused.s") = "",
+               "neither output nor intermediate assembly is written");
+         end;
+      end Check;
+   begin
+      for Executable in Boolean loop
+         Check
+           ("extern(c) _landin_host_initialize_arguments:"
+            & " (argc: i32, argv: ptr ptr u8) -> none" & LF,
+            "compiler-owned helper `_landin_host_initialize_arguments`"
+            & " requires escaping argv", Executable);
+         Check
+           ("extern(c) _landin_host_initialize_arguments:"
+            & " (argc: i32, escaping argv: ptr ptr u32) -> none" & LF,
+            "compiler-owned helper `_landin_host_initialize_arguments`"
+            & " requires parameter 2 to be `ptr ptr u8`", Executable);
+         Check
+           ("extern(c) _landin_host_argument_at_from:"
+            & " (table: ptr ptr u8, index: usize) -> (data: ptr u8)" & LF,
+            "compiler-owned helper `_landin_host_argument_at_from`"
+            & " requires its result from parameter 1", Executable);
+         Check
+           ("extern(c) _landin_host_heap_allocate:"
+            & " (length: usize, alignment: usize) -> (data: ptr mut u8)" & LF,
+            "compiler-owned helper `_landin_host_heap_allocate`"
+            & " requires result `one atom | ptr mut u8`", Executable);
+         Check
+           ("link(symbol: ""_landin_host_errno"") replacement: () -> none ="
+            & LF & "end replacement" & LF,
+            "compiler-owned helper `_landin_host_errno`"
+            & " cannot be defined by source", Executable);
+      end loop;
+   end R440_Helper_Refusals_Have_No_Effects;
+
+   procedure R440_Hosted_Linkage_Has_No_Effects
+     (Item : in out Landin.Testing.Context);
+
+   procedure R440_Hosted_Linkage_Has_No_Effects
+     (Item : in out Landin.Testing.Context)
+   is
+      Main : constant String := "public main: () -> (code: i32) =" & LF
+        & "    code = 0" & LF & "end main" & LF;
+      Foreign : constant String :=
+        "extern(c) link(symbol: ""main"") foreign: () -> (code: i32)" & LF;
+
+      procedure Check (Executable, Rooted, Reverse_Order : Boolean);
+
+      procedure Check (Executable, Rooted, Reverse_Order : Boolean) is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : Landin.Platform.Path_List;
+      begin
+         if Rooted then
+            Host.Add_Directory ("entry");
+            Host.Add_Directory ("root");
+            Host.Add_Directory ("root/foreign");
+            Host.Add_File ("entry/main.ldn", "import foreign" & LF & Main);
+            Host.Add_File ("root/foreign/bridge.ldn", Foreign);
+            Args.Append ("--root=root");
+            Args.Append ("entry");
+         else
+            Host.Add_File ("main.ldn", Main);
+            Host.Add_File ("foreign.ldn", Foreign);
+            Args.Append (if Reverse_Order then "foreign.ldn" else "main.ldn");
+            Args.Append (if Reverse_Order then "main.ldn" else "foreign.ldn");
+         end if;
+         Host.Refuse_Writes;
+         Tools.Raise_On_Run;
+         Args.Append ("--target=linux-x86-64");
+         Args.Append (if Executable then "--emit=exe" else "--emit=asm");
+         Args.Append ("-o");
+         Args.Append ("collision");
+         declare
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Driver.Execute (Args, Host, Tools);
+            Report : constant String := Unbounded.To_String (Result.Report);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Result.Status, Landin.Driver.Status_Reported,
+               "a forced main collision is a source report");
+            Landin.Testing.Check
+              (Item, Occurrences (Report, "error[") = 1
+                 and then Contains
+                   (Report, "error[L0301]: link symbol `main` collides with"
+                    & " the selected native hosted entry")
+                 and then Contains (Report, "the selected hosted entry")
+                 and then not Contains (Report, "L0502"),
+               "entry selection is independent of file and discovery order");
+            Landin.Testing.Check
+              (Item, Tools.Run_Count = 0
+                 and then Unbounded.To_String (Result.Output) = ""
+                 and then Host.Written ("collision") = ""
+                 and then Host.Written ("collision.s") = "",
+               "main collision cannot reach output or host tools");
+         end;
+      end Check;
+   begin
+      for Executable in Boolean loop
+         Check (Executable, False, False);
+         Check (Executable, False, True);
+         Check (Executable, True, False);
+      end loop;
+      declare
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      begin
+         Host.Add_File
+           ("renamed.ldn", "public link(symbol: ""elsewhere"") main:"
+            & " () -> (code: i32) =" & LF & "    code = 0" & LF
+            & "end main" & LF);
+         declare
+            Result : constant Landin.Driver.Outcome := Landin.Driver.Execute
+              (Both ("renamed.ldn", "--emit=exe"), Host, Tools);
+            Report : constant String := Unbounded.To_String (Result.Report);
+         begin
+            Landin.Testing.Check
+              (Item, Result.Status = Landin.Driver.Status_Reported
+                 and then Occurrences (Report, "error[") = 1
+                 and then Contains (Report, "L0502")
+                 and then not Contains (Report, "L0301")
+                 and then Tools.Run_Count = 0
+                 and then Host.Written
+                   (Landin.Driver.Default_Executable & ".s") = "",
+               "renamed native main keeps the missing-entry refusal");
+         end;
+      end;
+      declare
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : Landin.Platform.Path_List;
+      begin
+         Host.Add_Directory ("entry");
+         Host.Add_Directory ("root");
+         Host.Add_Directory ("root/library");
+         Host.Add_File
+           ("entry/bridge.ldn", "import library" & LF & Foreign);
+         Host.Add_File ("root/library/main.ldn", Main);
+         Args.Append ("--root=root");
+         Args.Append ("entry");
+         Args.Append ("--emit=asm");
+         declare
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Driver.Execute (Args, Host, Tools);
+         begin
+            Landin.Testing.Check
+              (Item, Result.Status = Landin.Driver.Status_Success
+                 and then Unbounded.To_String (Result.Report) = ""
+                 and then Tools.Run_Count = 0,
+               "another module's native main does not select hosted startup");
+         end;
+      end;
+   end R440_Hosted_Linkage_Has_No_Effects;
+
+   procedure R440_Qualified_Alias_Conversions
+     (Item : in out Landin.Testing.Context);
+
+   procedure R440_Qualified_Alias_Conversions
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check (Source, Code, Message : String);
+
+      procedure Check (Source, Code, Message : String) is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : Landin.Platform.Path_List := Arguments_Of ("--root=root");
+      begin
+         Host.Add_Directory ("entry");
+         Host.Add_Directory ("root");
+         Host.Add_Directory ("root/aliases");
+         Host.Add_File ("entry/main.ldn", "import aliases" & LF & Source);
+         Host.Add_File
+           ("root/aliases/types.ldn",
+            "public percent: type = u8 range 0..100" & LF
+            & "public ratio: type = percent" & LF
+            & "public word: type = usize" & LF
+            & "hidden: type = u8" & LF
+            & "public value: u8 = 7" & LF
+            & "public convert: (value: u8) -> (result: u8) =" & LF
+            & "    result = value + 1" & LF & "end convert" & LF);
+         Host.Refuse_Writes;
+         Tools.Raise_On_Run;
+         Args.Append ("--target=linux-x86-64");
+         Args.Append ("entry");
+         declare
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Driver.Execute (Args, Host, Tools);
+            Report : constant String := Unbounded.To_String (Result.Report);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Result.Status,
+               (if Code = "" then Landin.Driver.Status_Success
+                else Landin.Driver.Status_Reported),
+               "qualified aliases retain their declaration category");
+            Landin.Testing.Check
+              (Item, (if Code = "" then Report = ""
+                      else Occurrences (Report, "error[") = 1
+                        and then Contains (Report, "error[" & Code & "]")
+                        and then Contains (Report, Message)),
+               "a qualified conversion has exactly its own diagnostic");
+            Landin.Testing.Check_Equal
+              (Item, Tools.Run_Count, 0, "checking invokes no host tools");
+         end;
+      end Check;
+   begin
+      Check
+        ("image: u8 = aliases.ratio(42)" & LF
+         & "use: (input: u16) -> (result: usize) =" & LF
+         & "    narrowed: u8 = aliases.ratio(input)" & LF
+         & "    called: u8 = aliases.convert(narrowed)" & LF
+         & "    result = aliases.word(called)" & LF & "end use" & LF,
+         "", "");
+      Check
+        ("use: () -> (result: u8) =" & LF
+         & "    result = aliases.ratio(101)" & LF & "end use" & LF,
+         "L0300", "this is 101, and the declared range is 0 .. 100");
+      Check
+        ("use: () -> (result: u8) =" & LF
+         & "    result = aliases.value(1)" & LF & "end use" & LF,
+         "L0301", "this value is not a function, so this is not a call");
+      Check
+        ("use: () -> (result: u8) =" & LF
+         & "    result = aliases.hidden(1)" & LF & "end use" & LF,
+         "L0202", "hidden");
+   end R440_Qualified_Alias_Conversions;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "driver", "R4.40 qualified alias conversions",
+         R440_Qualified_Alias_Conversions'Access);
+      Landin.Testing.Register
+        (Into, "driver", "R4.40 helper refusals have no effects",
+         R440_Helper_Refusals_Have_No_Effects'Access);
+      Landin.Testing.Register
+        (Into, "driver", "R4.40 hosted linkage has no effects",
+         R440_Hosted_Linkage_Has_No_Effects'Access);
       Landin.Testing.Register
         (Into, "driver", "fixed options are deterministic",
          Fixed_Options_Are_Deterministic'Access);

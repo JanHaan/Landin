@@ -1,0 +1,6 @@
+class: negative
+summary: R4.40 permits extra variadic actuals but still requires the complete fixed prefix
+program: program.ldn
+codes: L0301
+constructs: 1580, 1920
+targets: linux-x86-64

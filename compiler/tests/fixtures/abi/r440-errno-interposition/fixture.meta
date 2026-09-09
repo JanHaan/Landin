@@ -1,0 +1,10 @@
+class: abi
+summary: actual hosted bridge preserves errno and partial I/O policy under C interposition
+program: program.ldn
+root: ../../../../..
+c-sources: interpose.c
+c-args: -Wl,--wrap=open -Wl,--wrap=read -Wl,--wrap=write -Wl,--wrap=close
+run_expect: expected.txt
+status: 42
+constructs: 0940, 1570, 1580, 1660, 1975
+targets: linux-x86-64

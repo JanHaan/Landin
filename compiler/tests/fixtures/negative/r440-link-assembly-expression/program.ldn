@@ -1,0 +1,1 @@
+extern(c) link(symbol: "foreign_entry+8") bad: () -> none

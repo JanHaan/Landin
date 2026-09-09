@@ -15,9 +15,14 @@ is an ordinary repository command.
 | builds.sr.ht, `debian/stable` on x86-64 hardware | the authoritative Linux gate | working |
 
 The gate runs from `.build.yml` on every push. It installs the pinned
-toolchain from `environments/pins.sh`, builds from clean, runs the suite in
+Ada toolchain from `environments/pins.sh`, builds from clean, runs the suite in
 debug and in release, runs `check.py`, and prints `refine --identify` so that
 the no-version-claim rule is visible in the log rather than only in a test.
+For R4.40 it also selects Debian stable's versioned `clang-19` package and
+prints its exact revision, so a binding-generator test log identifies the
+frontend it exercised. The existing `libc6-dev` package is that frontend's
+Linux header set and root sysroot; it is not inferred from the machine running
+`refine`.
 
 Last, and only from `main`, it renders the reading copies and publishes them
 to pages.sr.ht. That step produces no evidence and carries no authority: it
@@ -111,10 +116,21 @@ gate. This is written down because the message reads exactly like a compiler
 defect in one file and cost an investigation once already.
 
 `environments/linux-amd64/Containerfile` pins its base image by digest and
-verifies both toolchain archives against the checksums in
-`environments/pins.sh` before unpacking either of them. That file is the one
-place a version or a checksum is written; `check.py` holds the recipe,
-`compiler/ada/TOOLCHAIN.md`, the CI manifest and the nix shell to the same
+verifies both Ada toolchain archives against the checksums in
+`environments/pins.sh` before unpacking either of them. It also installs the
+versioned Debian stable `clang-19` package beside `libc6-dev` for R4.40 header
+extraction and generated-adapter tests. The frontend is deliberately separate
+from the pinned GNAT that builds `refine`: Clang supplies an external JSON AST,
+not a product backend. Its package comes from the container's existing Debian
+channel rather than a third download authority. R4.40 refreshed that one base
+pin from Debian 12 to the official Debian 13 `trixie-20260824` image index so
+the local loop and the native `debian/stable` gate select the same Clang
+19.1.7 frontend and Debian 13 C-header baseline. GNAT and GPRbuild retain their
+existing versions and archive checksums.
+
+`environments/pins.sh` remains the one place an independently downloaded Ada
+toolchain version or checksum is written; `check.py` holds the recipe,
+`compiler/ada/TOOLCHAIN.md`, the CI manifest and the nix shell to those same
 values. Objects are kept
 apart per host by `LANDIN_BUILD_TAG`, which `scripts/env.sh` defaults to
 `os-arch`: one checkout is built by two hosts, and `.ali` files from both in
@@ -164,7 +180,12 @@ GNAT 16.1.0 with GPRbuild 26.0.0.
 
 It sets `LANDIN_BUILD_TAG=nix`, so its object files stay out of the ones the
 other environments leave in the same checkout. `python3` and `hut` come with
-it, so `check.py` and `scripts/site.sh` work in that shell too.
+it, so `check.py` and `scripts/site.sh` work in that shell too. On Linux it
+also selects `llvmPackages."19".clang` and `glibc.dev` from the package set
+fixed by `flake.lock`, matching the Debian environments' Clang major without
+following nixpkgs' default. The Darwin shell does not pretend that its SDK is a
+Linux sysroot; run binding-generator tests through `scripts/linux-loop.sh`
+there.
 
 Its Linux behaviour is not settled by the local container, and that is not a
 formality. The pinned gprbuild dies with a segmentation fault when argv[0]

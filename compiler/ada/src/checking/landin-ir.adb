@@ -86,9 +86,164 @@ package body Landin.IR is
    is
    begin
       Into.Nominal_Templates.Append (Template);
+      Into.Nominal_Shapes.Append (Nominal_Shape_Record'(others => <>));
       return Nominal_Identities.Nth
         (Into, Into.Nominal_Templates.Last_Index);
    end Add_Nominal_Type;
+
+   function Has_Nominal_Shape
+     (Of_Unit : Unit; Id : Nominal_Type_Id) return Boolean
+     is (Holds (Of_Unit, Id)
+         and then Nominal_Identities.Position (Of_Unit, Id)
+           <= Natural (Of_Unit.Nominal_Shapes.Length)
+         and then Of_Unit.Nominal_Shapes
+           (Nominal_Identities.Position (Of_Unit, Id)).Present);
+
+   function Nominal_Field_Run_Is_Valid
+     (Of_Unit : Unit; Id : Nominal_Type_Id) return Boolean
+   is
+   begin
+      if not Has_Nominal_Shape (Of_Unit, Id) then
+         return False;
+      end if;
+      declare
+         Fields : constant Run := Of_Unit.Nominal_Shapes
+           (Nominal_Identities.Position (Of_Unit, Id)).Fields;
+         Limit : constant Natural := Natural (Of_Unit.Nominal_Fields.Length);
+      begin
+         return Fields.First <= Limit
+           and then Fields.Count <= Limit - Fields.First;
+      end;
+   end Nominal_Field_Run_Is_Valid;
+
+   function Has_C_Layout
+     (Of_Unit : Unit; Id : Nominal_Type_Id) return Boolean
+     is (Nominal_Field_Run_Is_Valid (Of_Unit, Id)
+         and then Of_Unit.Nominal_Shapes
+           (Nominal_Identities.Position (Of_Unit, Id)).C_Layout);
+
+   function Nominal_Field_Count
+     (Of_Unit : Unit; Id : Nominal_Type_Id) return Natural is
+   begin
+      if not Nominal_Field_Run_Is_Valid (Of_Unit, Id) then
+         raise Landin.Compiler_Defect with "invalid nominal field run";
+      end if;
+      return Of_Unit.Nominal_Shapes
+        (Nominal_Identities.Position (Of_Unit, Id)).Fields.Count;
+   end Nominal_Field_Count;
+
+   function Nth_Nominal_Field
+     (Of_Unit : Unit; Id : Nominal_Type_Id; Index : Positive)
+      return Field_Shape
+   is
+   begin
+      if not Nominal_Field_Run_Is_Valid (Of_Unit, Id)
+        or else Index > Nominal_Field_Count (Of_Unit, Id)
+      then
+         raise Landin.Compiler_Defect with "invalid nominal field index";
+      end if;
+      return Of_Unit.Nominal_Fields
+        (Of_Unit.Nominal_Shapes
+           (Nominal_Identities.Position (Of_Unit, Id)).Fields.First + Index);
+   end Nth_Nominal_Field;
+
+   procedure Set_Nominal_Shape
+     (Into     : in out Unit;
+      Id       : Nominal_Type_Id;
+      Fields   : Field_Shape_Array;
+      C_Layout : Boolean := False;
+      Cases    : Case_Run_Array := No_Case_Runs;
+      Payloads : Field_Shape_Array := No_Field_Shapes)
+   is
+      Payload_Base : constant Natural := Natural (Into.Variant_Fields.Length);
+      Case_Base : constant Natural := Natural (Into.Variant_Cases.Length);
+      Normal_Fields : Field_Shape_Array (1 .. Fields'Length);
+      Normal_Payloads : Field_Shape_Array (1 .. Payloads'Length);
+      Normal_Cases : Case_Run_Array (1 .. Cases'Length);
+
+      function Rebased
+        (First, Count, Local_Count, Base : Natural) return Natural;
+
+      function Rebased
+        (First, Count, Local_Count, Base : Natural) return Natural is
+      begin
+         if Local_Count = 0 then
+            return First;
+         elsif Count = 0 then
+            if First /= 0 then
+               raise Landin.Compiler_Defect with "nonempty zero field run";
+            end if;
+            return 0;
+         elsif First = 0 or else First > Local_Count
+           or else Count > Local_Count - First + 1
+           or else First > Natural'Last - Base
+         then
+            raise Landin.Compiler_Defect with "invalid local shape run";
+         end if;
+         return Base + First;
+      end Rebased;
+
+      function Normalize (Shape : Field_Shape) return Field_Shape;
+
+      function Normalize (Shape : Field_Shape) return Field_Shape is
+         Made : Field_Shape := Shape;
+      begin
+         case Made.Kind is
+            when Scalar_Field_Shape =>
+               null;
+            when Variant_Field_Shape =>
+               Made.Payloads_First := Rebased
+                 (Made.Payloads_First, Made.Cases, Cases'Length, Case_Base);
+            when Array_Field_Shape | Aggregate_Field_Shape =>
+               Made.Payloads_First := Rebased
+                 (Made.Payloads_First, Made.Cases,
+                  Payloads'Length, Payload_Base);
+         end case;
+         return Made;
+      end Normalize;
+   begin
+      if not Holds (Into, Id) or else Has_Nominal_Shape (Into, Id) then
+         raise Landin.Compiler_Defect with "invalid nominal registration";
+      end if;
+      --  Normalize every descendant, not just the top-level fields.  The
+      --  input arrays may have arbitrary lower bounds; run indexes count
+      --  positions.  Existing absolute shared runs are never rebased twice.
+      for Index in Normal_Fields'Range loop
+         Normal_Fields (Index) :=
+           Normalize (Fields (Fields'First + Index - 1));
+      end loop;
+      for Index in Normal_Payloads'Range loop
+         Normal_Payloads (Index) :=
+           Normalize (Payloads (Payloads'First + Index - 1));
+      end loop;
+      for Index in Normal_Cases'Range loop
+         declare
+            Source : constant Case_Run := Cases (Cases'First + Index - 1);
+         begin
+            Normal_Cases (Index) :=
+              (First => Rebased
+                 (Source.First, Source.Count, Payloads'Length, Payload_Base),
+               Count => Source.Count);
+         end;
+      end loop;
+      for Shape of Normal_Payloads loop
+         Into.Variant_Fields.Append (Shape);
+      end loop;
+      for Run of Normal_Cases loop
+         Into.Variant_Cases.Append (Run);
+      end loop;
+      declare
+         Made : constant Nominal_Shape_Record :=
+           (Present => True, C_Layout => C_Layout,
+            Fields => (First => Natural (Into.Nominal_Fields.Length),
+                       Count => Fields'Length));
+      begin
+         for Shape of Normal_Fields loop
+            Into.Nominal_Fields.Append (Shape);
+         end loop;
+         Into.Nominal_Shapes (Nominal_Identities.Position (Into, Id)) := Made;
+      end;
+   end Set_Nominal_Shape;
 
    function Template_Of
      (Of_Unit : Unit; Id : Nominal_Type_Id) return Declaration_Id
@@ -115,6 +270,264 @@ package body Landin.IR is
    ------------------------------------------------------------------
    --  Atom sets and signatures
    ------------------------------------------------------------------
+
+   function Pointee_Count (Of_Unit : Unit) return Natural
+     is (Natural (Of_Unit.Pointees.Length));
+
+   function Add_Pointee
+     (Into : in out Unit; Shape : Field_Shape) return Pointee_Id
+   is
+   begin
+      for Index in 1 .. Pointee_Count (Into) loop
+         if Into.Pointees (Index) = Shape then
+            return Pointee_Id (Index);
+         end if;
+      end loop;
+      Into.Pointees.Append (Shape);
+      return Pointee_Id (Into.Pointees.Last_Index);
+   end Add_Pointee;
+
+   function Pointee_Shape
+     (Of_Unit : Unit; Id : Pointee_Id) return Field_Shape is
+   begin
+      if not Holds (Of_Unit, Id) then
+         raise Landin.Compiler_Defect with "invalid reached pointer shape";
+      end if;
+      return Of_Unit.Pointees (Positive (Id));
+   end Pointee_Shape;
+
+   function Pointee_Of
+     (Of_Unit : Unit; Item : Item_Id) return Pointee_Id
+     is (if Kind_Of (Of_Unit, Item) = Routine
+           and then Holds (Of_Unit, Signature_Of (Of_Unit, Item))
+           and then Signature_Result_Count
+             (Of_Unit, Signature_Of (Of_Unit, Item)) = 1
+         then Signature_Result
+           (Of_Unit, Signature_Of (Of_Unit, Item)).Pointee
+         else Element (Of_Unit, Item).Pointee);
+
+   function Pointee_Of
+     (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Pointee_Id
+     is (Of_Unit.Slots (Slot_At (Of_Unit, Item, Slot)).Pointee);
+
+   --  Scalar access metadata is derived from storage, never selected by a
+   --  load's caller. The verifier proves the same runs before using this
+   --  accessor; its guards also keep malformed builder inputs index-safe.
+   function Access_Pointee
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Pointee_Id;
+
+   function Access_Pointee
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Pointee_Id
+   is
+      Code : constant Instruction := Of_Unit.Code
+        (Value_At (Of_Unit, Item, Value));
+      Place : Storage;
+      Field : constant Element_Total :=
+        (if Code.Op in Load_Field | Store_Field
+         then Element_Total (Code.Part)
+         else Element_Total (Code.Element_Field));
+      Shape : Field_Shape;
+   begin
+      if Code.Op = Load_Variant_Field then
+         Place := Code.Source;
+      elsif Code.Op = Store_Variant_Field then
+         Place := Code.Destination;
+      elsif Code.Slot = No_Slot then
+         Place := (Kind => Module_Datum, Datum => Code.Named);
+      elsif Holds (Of_Unit, Item, Code.Slot) then
+         Place :=
+           (if Is_Address (Of_Unit, Item, Code.Slot)
+            then (Kind => Runtime_Address, Address => Code.Slot)
+            else (Kind => Frame_Slot, Slot => Code.Slot));
+      else
+         return No_Pointee;
+      end if;
+      case Place.Kind is
+         when Module_Datum =>
+            if not Holds (Of_Unit, Place.Datum) then
+               return No_Pointee;
+            elsif Result_Of (Of_Unit, Place.Datum) = Landin.Types.Fixed_Array
+            then
+               Shape := Whole_Array_Shape (Of_Unit, Place.Datum);
+            elsif Field > 0
+              and then Field <= Element_Total (Field_Count
+                (Of_Unit, Place.Datum))
+            then
+               Shape := Nth_Field_Shape
+                 (Of_Unit, Place.Datum, Positive (Field));
+            else
+               return No_Pointee;
+            end if;
+         when Frame_Slot =>
+            if not Holds (Of_Unit, Item, Place.Slot) then
+               return No_Pointee;
+            elsif Is_Array (Of_Unit, Item, Place.Slot) then
+               Shape := Whole_Slot_Array_Shape (Of_Unit, Item, Place.Slot);
+            elsif Field > 0
+              and then Field <= Element_Total (Slot_Field_Count
+                (Of_Unit, Item, Place.Slot))
+            then
+               Shape := Nth_Slot_Field_Shape
+                 (Of_Unit, Item, Place.Slot, Positive (Field));
+            else
+               return No_Pointee;
+            end if;
+         when Runtime_Address =>
+            if not Holds (Of_Unit, Item, Place.Address)
+              or else not Is_Address (Of_Unit, Item, Place.Address)
+            then
+               return No_Pointee;
+            end if;
+            Shape := Address_Shape (Of_Unit, Item, Place.Address);
+            if Field > 0 and then Shape.Kind = Aggregate_Field_Shape then
+               if not Aggregate_Field_Run_Is_Valid (Of_Unit, Shape)
+                 or else Field > Element_Total
+                   (Aggregate_Field_Count (Of_Unit, Shape))
+               then
+                  return No_Pointee;
+               end if;
+               Shape := Nth_Aggregate_Field
+                 (Of_Unit, Shape, Positive (Field));
+            end if;
+      end case;
+      --  A field instruction on whole array storage selects one element.
+      --  Aggregate array fields were already selected above.
+      if Field > 0 and then Shape.Kind = Array_Field_Shape
+        and then
+          (case Place.Kind is
+              when Module_Datum => Result_Of (Of_Unit, Place.Datum)
+                = Landin.Types.Fixed_Array,
+              when Frame_Slot => Is_Array (Of_Unit, Item, Place.Slot),
+              when Runtime_Address => Address_Shape
+                (Of_Unit, Item, Place.Address).Kind = Array_Field_Shape)
+      then
+         if Field > Shape.Length
+           or else not Array_Element_Run_Is_Valid (Of_Unit, Shape)
+         then
+            return No_Pointee;
+         end if;
+         Shape := Array_Element_Shape (Of_Unit, Shape);
+      end if;
+      if Code.Nested.First > Natural (Of_Unit.Paths.Length)
+        or else Code.Nested.Count
+          > Natural (Of_Unit.Paths.Length) - Code.Nested.First
+        or else not Path_Is_Valid
+          (Of_Unit, Shape, Path_Of (Of_Unit, Item, Value))
+      then
+         return No_Pointee;
+      end if;
+      Shape := Shape_At (Of_Unit, Shape, Path_Of (Of_Unit, Item, Value));
+      if Code.Variant_Case > 0 then
+         if not Variant_Case_Run_Is_Valid
+           (Of_Unit, Shape, Code.Variant_Case)
+           or else Code.Variant_Payload_Field = 0
+           or else Code.Variant_Payload_Field > Variant_Case_Field_Count
+             (Of_Unit, Shape, Code.Variant_Case)
+         then
+            return No_Pointee;
+         end if;
+         Shape := Nth_Variant_Case_Field
+           (Of_Unit, Shape, Code.Variant_Case, Code.Variant_Payload_Field);
+      end if;
+      if Code.Op in Load_Element | Store_Element then
+         if not Array_Element_Run_Is_Valid (Of_Unit, Shape) then
+            return No_Pointee;
+         end if;
+         Shape := Array_Element_Shape (Of_Unit, Shape);
+         if Code.Below_Element.First > Natural (Of_Unit.Paths.Length)
+           or else Code.Below_Element.Count
+             > Natural (Of_Unit.Paths.Length) - Code.Below_Element.First
+           or else not Path_Is_Valid
+             (Of_Unit, Shape, Element_Path_Of (Of_Unit, Item, Value))
+         then
+            return No_Pointee;
+         end if;
+         Shape := Shape_At
+           (Of_Unit, Shape, Element_Path_Of (Of_Unit, Item, Value));
+      end if;
+      return Shape.Pointee;
+   end Access_Pointee;
+
+   function Pointee_Of
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Pointee_Id
+   is
+      Code : constant Instruction := Of_Unit.Code
+        (Value_At (Of_Unit, Item, Value));
+   begin
+      case Code.Op is
+         when Call | Indirect_Call =>
+            if Holds (Of_Unit, Code.Signature)
+              and then Signature_Result_Count (Of_Unit, Code.Signature) = 1
+            then
+               return Signature_Result (Of_Unit, Code.Signature).Pointee;
+            end if;
+            return No_Pointee;
+         when Load | Store =>
+            if Holds (Of_Unit, Item, Code.Slot) then
+               return
+                 (if Is_Address (Of_Unit, Item, Code.Slot)
+                  then Code.Pointee
+                  else Pointee_Of (Of_Unit, Item, Code.Slot));
+            end if;
+            return No_Pointee;
+         when Load_Datum | Store_Datum =>
+            if Holds (Of_Unit, Code.Named) then
+               return Pointee_Of (Of_Unit, Code.Named);
+            end if;
+            return No_Pointee;
+         when Load_Indirect | Store_Indirect =>
+            if Holds (Of_Unit, Item, Code.Slot)
+              and then Is_Address (Of_Unit, Item, Code.Slot)
+            then
+               return Address_Shape (Of_Unit, Item, Code.Slot).Pointee;
+            end if;
+            return No_Pointee;
+         when Load_Field | Store_Field | Load_Element | Store_Element
+            | Load_Variant_Field | Store_Variant_Field =>
+            return Access_Pointee (Of_Unit, Item, Value);
+         when others =>
+            return Code.Pointee;
+      end case;
+   end Pointee_Of;
+
+   procedure Set_Pointee
+     (Into : in out Unit; Item : Item_Id; Pointee : Pointee_Id) is
+   begin
+      if not Holds (Into, Item) or else not Holds (Into, Pointee)
+        or else Result_Of (Into, Item) /= Landin.Types.Usize
+        or else Kind_Of (Into, Item) /= Datum
+      then
+         raise Landin.Compiler_Defect with "invalid pointer datum annotation";
+      end if;
+      Into.Items (Positive (Item)).Pointee := Pointee;
+   end Set_Pointee;
+
+   procedure Set_Pointee
+     (Into : in out Unit; Item : Item_Id; Slot : Slot_Id;
+      Pointee : Pointee_Id) is
+   begin
+      if not Holds (Into, Item, Slot) or else not Holds (Into, Pointee)
+        or else Is_Aggregate (Into, Item, Slot)
+        or else Is_Array (Into, Item, Slot)
+        or else Is_Address (Into, Item, Slot)
+        or else Type_Of (Into, Item, Slot) /= Landin.Types.Usize
+      then
+         raise Landin.Compiler_Defect with "invalid pointer slot annotation";
+      end if;
+      Into.Slots (Slot_At (Into, Item, Slot)).Pointee := Pointee;
+   end Set_Pointee;
+
+   procedure Set_Pointee
+     (Into : in out Unit; Item : Item_Id; Value : Value_Id;
+      Pointee : Pointee_Id) is
+   begin
+      if not Holds (Into, Item, Value) or else not Holds (Into, Pointee)
+        or else Result_Of (Into, Item, Value) /= Landin.Types.Usize
+      then
+         raise Landin.Compiler_Defect with "invalid pointer value annotation";
+      end if;
+      Into.Code (Value_At (Into, Item, Value)).Pointee := Pointee;
+   end Set_Pointee;
 
    function Atom_Set_Count (Of_Unit : Unit) return Natural
      is (Natural (Of_Unit.Atom_Sets.Length));
@@ -185,14 +598,19 @@ package body Landin.IR is
       Parameters : Signature_Part_Array;
       Results    : Signature_Part_Array;
       Errors     : Atom_Set_Id := No_Atom_Set;
-      Sources    : Return_Source_Array := No_Return_Sources)
+      Sources    : Return_Source_Array := No_Return_Sources;
+      C_ABI      : Boolean := False;
+      Variadic   : Boolean := False)
       return Signature_Id
    is
       Made : Signature_Record :=
         (Parameters => (First => 0, Count => 0),
          Results    => (First => 0, Count => 0),
          Sources    => (First => 0, Count => 0),
-         Errors     => Errors);
+         Errors     => Errors,
+         C_ABI      => C_ABI,
+         Variadic   => Variadic,
+         Erased_Self => False);
 
       procedure Append (Parts : Signature_Part_Array; To_Run : in out Run);
 
@@ -225,18 +643,36 @@ package body Landin.IR is
       Parameters : Signature_Part_Array;
       Result     : Signature_Part;
       Errors     : Atom_Set_Id := No_Atom_Set;
-      Sources    : Return_Source_Array := No_Return_Sources)
+      Sources    : Return_Source_Array := No_Return_Sources;
+      C_ABI      : Boolean := False;
+      Variadic   : Boolean := False)
       return Signature_Id
    is
    begin
       if Result.Kind = Landin.Types.No_Value then
          return Add_Signature_With_Results
-           (Into, Parameters, No_Signature_Parts, Errors, Sources);
+           (Into, Parameters, No_Signature_Parts, Errors, Sources,
+            C_ABI, Variadic);
       end if;
       return Add_Signature_With_Results
         (Into, Parameters, Signature_Part_Array'[1 => Result], Errors,
-         Sources);
+         Sources, C_ABI, Variadic);
    end Add_Signature;
+
+   function Signature_Uses_C_ABI
+     (Of_Unit : Unit; Signature : Signature_Id) return Boolean
+     is (Holds (Of_Unit, Signature)
+         and then Of_Unit.Signatures (Positive (Signature)).C_ABI);
+
+   function Signature_Has_Erased_Self
+     (Of_Unit : Unit; Signature : Signature_Id) return Boolean
+     is (Holds (Of_Unit, Signature)
+         and then Of_Unit.Signatures (Positive (Signature)).Erased_Self);
+
+   function Signature_Is_Variadic
+     (Of_Unit : Unit; Signature : Signature_Id) return Boolean
+     is (Holds (Of_Unit, Signature)
+         and then Of_Unit.Signatures (Positive (Signature)).Variadic);
 
    function Signature_Parameter_Count
      (Of_Unit : Unit; Signature : Signature_Id) return Natural
@@ -324,6 +760,46 @@ package body Landin.IR is
      (Of_Unit : Unit; Signature : Signature_Id) return Atom_Set_Id
      is (Of_Unit.Signatures (Positive (Signature)).Errors);
 
+   function Same_Shape
+     (Of_Unit : Unit; Left, Right : Field_Shape; Budget : Natural)
+      return Boolean;
+
+   function Pointees_Agree
+     (Of_Unit : Unit; Left, Right : Pointee_Id; Budget : Natural)
+      return Boolean;
+
+   function Pointees_Agree
+     (Of_Unit : Unit; Left, Right : Pointee_Id; Budget : Natural)
+      return Boolean
+   is
+   begin
+      if Left = No_Pointee or else Right = No_Pointee then
+         return Left = Right;
+      elsif not Holds (Of_Unit, Left) or else not Holds (Of_Unit, Right)
+        or else Budget = 0
+      then
+         return False;
+      end if;
+      declare
+         A : constant Field_Shape := Pointee_Shape (Of_Unit, Left);
+         B : constant Field_Shape := Pointee_Shape (Of_Unit, Right);
+      begin
+         if A.Kind = Aggregate_Field_Shape
+           and then B.Kind = Aggregate_Field_Shape
+         then
+            return A.Nominal = B.Nominal;
+         end if;
+         return Same_Shape (Of_Unit, A, B, Budget - 1);
+      end;
+   end Pointees_Agree;
+
+   function Pointees_Agree
+     (Of_Unit : Unit; Left, Right : Pointee_Id) return Boolean
+     is (Pointees_Agree
+       (Of_Unit, Left, Right, Pointee_Count (Of_Unit)
+        + Signature_Count (Of_Unit) + Variant_Field_Shape_Count (Of_Unit)
+        + Natural (Of_Unit.Nominal_Fields.Length) + 1));
+
    function Signatures_Agree
      (Of_Unit : Unit;
       Left, Right : Signature_Id;
@@ -338,6 +814,8 @@ package body Landin.IR is
         is (A.Kind = B.Kind
             and then A.Convention = B.Convention
             and then A.Escaping = B.Escaping
+            and then Pointees_Agree
+              (Of_Unit, A.Pointee, B.Pointee, Budget)
             and then
               (case A.Kind is
                   when Landin.Types.No_Value => True,
@@ -356,9 +834,17 @@ package body Landin.IR is
                      and then A.Nominal = B.Nominal
                      and then
                        ((A.Element_Shape.Kind = Scalar_Field_Shape
-                         and then B.Element_Shape.Kind = Scalar_Field_Shape)
-                        or else Same_Shape
-                          (Of_Unit, A.Element_Shape, B.Element_Shape)),
+                         and then B.Element_Shape.Kind = Scalar_Field_Shape
+                         and then A.Element_Shape.Signature = No_Signature
+                         and then B.Element_Shape.Signature = No_Signature
+                         and then A.Element_Shape.Atoms = No_Atom_Set
+                         and then B.Element_Shape.Atoms = No_Atom_Set
+                         and then A.Element_Shape.Pointee = No_Pointee
+                         and then B.Element_Shape.Pointee = No_Pointee)
+                        or else
+                          (Budget > 0 and then Same_Shape
+                             (Of_Unit, A.Element_Shape, B.Element_Shape,
+                              Budget - 1))),
                   when Landin.Types.Function_Value =>
                      Budget > 0
                      and then Holds (Of_Unit, A.Signature)
@@ -367,7 +853,13 @@ package body Landin.IR is
                        (Of_Unit, A.Signature, B.Signature, Budget - 1),
                   when others => False));
    begin
-      if (Signature_Errors (Of_Unit, Left) = No_Atom_Set)
+      if Signature_Has_Erased_Self (Of_Unit, Left)
+           /= Signature_Has_Erased_Self (Of_Unit, Right)
+        or else Signature_Uses_C_ABI (Of_Unit, Left)
+           /= Signature_Uses_C_ABI (Of_Unit, Right)
+        or else Signature_Is_Variadic (Of_Unit, Left)
+           /= Signature_Is_Variadic (Of_Unit, Right)
+        or else (Signature_Errors (Of_Unit, Left) = No_Atom_Set)
            /= (Signature_Errors (Of_Unit, Right) = No_Atom_Set)
         or else
           (Signature_Errors (Of_Unit, Left) /= No_Atom_Set
@@ -416,22 +908,30 @@ package body Landin.IR is
    function Signatures_Agree
      (Of_Unit : Unit; Left, Right : Signature_Id) return Boolean
      is (Signatures_Agree
-           (Of_Unit, Left, Right, Signature_Count (Of_Unit) + 1));
+           (Of_Unit, Left, Right, Signature_Count (Of_Unit)
+            + Variant_Field_Shape_Count (Of_Unit)
+            + Natural (Of_Unit.Nominal_Fields.Length) + 1));
 
    function Evidence_Count (Of_Unit : Unit) return Natural
      is (Natural (Of_Unit.Evidence.Length));
 
    function Add_Evidence
-     (Into : in out Unit; Represented : Field_Shape) return Evidence_Id
+     (Into : in out Unit; Represented : Field_Shape;
+      Erased : Boolean := False) return Evidence_Id
    is
    begin
       Into.Evidence.Append
         (Evidence_Record'
-           (Represented => Represented,
+           (Represented => Represented, Erased => Erased,
             Entries => (First => Natural (Into.Evidence_Entries.Length),
                         Count => 0)));
       return Evidence_Id (Into.Evidence.Last_Index);
    end Add_Evidence;
+
+   function Evidence_Is_Erased
+     (Of_Unit : Unit; Id : Evidence_Id) return Boolean
+     is (Holds (Of_Unit, Id)
+         and then Of_Unit.Evidence (Positive (Id)).Erased);
 
    function Evidence_Represented
      (Of_Unit : Unit; Id : Evidence_Id) return Field_Shape
@@ -448,6 +948,7 @@ package body Landin.IR is
       Signature : Signature_Id)
    is
       Held : Evidence_Record := Into.Evidence (Positive (Evidence));
+      Dispatch : Signature_Id := Signature;
    begin
       if Kind_Of (Into, Target) /= Routine then
          raise Landin.Compiler_Defect with
@@ -459,8 +960,38 @@ package body Landin.IR is
          raise Landin.Compiler_Defect with
            "evidence entries were appended out of table order";
       end if;
+      if Held.Erased then
+         declare
+            Concrete : constant Signature_Record :=
+              Into.Signatures (Positive (Signature));
+            Parameters : Signature_Part_Array (1 .. Concrete.Parameters.Count);
+            Results : Signature_Part_Array (1 .. Concrete.Results.Count);
+            Sources : Return_Source_Array (1 .. Concrete.Sources.Count);
+         begin
+            for Index in Parameters'Range loop
+               Parameters (Index) :=
+                 Nth_Signature_Parameter (Into, Signature, Index);
+            end loop;
+            if Parameters'Length > 0 then
+               Parameters (1).Pointee := No_Pointee;
+            end if;
+            for Index in Results'Range loop
+               Results (Index) :=
+                 Nth_Signature_Result (Into, Signature, Index);
+            end loop;
+            for Index in Sources'Range loop
+               Sources (Index) :=
+                 Into.Return_Sources (Concrete.Sources.First + Index);
+            end loop;
+            Dispatch := Add_Signature_With_Results
+              (Into, Parameters, Results, Concrete.Errors, Sources,
+               Concrete.C_ABI, Concrete.Variadic);
+            Into.Signatures (Positive (Dispatch)).Erased_Self := True;
+         end;
+      end if;
       Into.Evidence_Entries.Append
-        (Evidence_Entry_Record'(Target => Target, Signature => Signature));
+        (Evidence_Entry_Record'
+           (Target => Target, Signature => Signature, Dispatch => Dispatch));
       Held.Entries.Count := Held.Entries.Count + 1;
       Into.Evidence (Positive (Evidence)) := Held;
    end Add_Evidence_Entry;
@@ -481,6 +1012,15 @@ package body Landin.IR is
    begin
       return Of_Unit.Evidence_Entries (Members.First + Which).Signature;
    end Evidence_Entry_Signature;
+
+   function Evidence_Entry_Dispatch_Signature
+     (Of_Unit : Unit; Id : Evidence_Id; Which : Positive)
+      return Signature_Id
+   is
+      Members : constant Run := Of_Unit.Evidence (Positive (Id)).Entries;
+   begin
+      return Of_Unit.Evidence_Entries (Members.First + Which).Dispatch;
+   end Evidence_Entry_Dispatch_Signature;
 
    function Add_Item
      (Into     : in out Unit;
@@ -579,6 +1119,22 @@ package body Landin.IR is
    function Signature_Of (Of_Unit : Unit; Item : Item_Id)
       return Signature_Id
      is (Element (Of_Unit, Item).Signature);
+
+   procedure Set_Link_Symbol
+     (Into   : in out Unit;
+      Item   : Item_Id;
+      Symbol : Landin.Source.Names.Name_Id) is
+   begin
+      if not Holds (Into, Item) then
+         raise Landin.Compiler_Defect with "invalid link item";
+      end if;
+      Into.Items (Positive (Item)).Link_Name := Symbol;
+   end Set_Link_Symbol;
+
+   function Link_Symbol
+     (Of_Unit : Unit; Item : Item_Id) return Landin.Source.Names.Name_Id
+     is (if Holds (Of_Unit, Item) then Element (Of_Unit, Item).Link_Name
+         else Landin.Source.Names.No_Name);
 
    function Is_External (Of_Unit : Unit; Item : Item_Id) return Boolean
      is (Element (Of_Unit, Item).External);
@@ -820,15 +1376,24 @@ package body Landin.IR is
       Declares : Declaration_Id;
       Site     : Landin.Provenance.Origin;
       Signature : Signature_Id := No_Signature;
-      Atoms     : Atom_Set_Id := No_Atom_Set) return Slot_Id
+      Atoms     : Atom_Set_Id := No_Atom_Set;
+      Pointee   : Pointee_Id := No_Pointee) return Slot_Id
    is
       Held : Item_Record := Element (Into, Item);
    begin
+      if Pointee /= No_Pointee
+        and then (not Holds (Into, Pointee)
+          or else Of_Type /= Landin.Types.Usize
+          or else Signature /= No_Signature or else Atoms /= No_Atom_Set)
+      then
+         raise Landin.Compiler_Defect with "invalid pointer slot metadata";
+      end if;
       Open_Run (Held.Slots, Natural (Into.Slots.Length));
       Into.Slots.Append
         (Slot_Record'(Of_Type     => Of_Type,
                       Signature   => Signature,
                       Atom_Set    => Atoms,
+                      Pointee     => Pointee,
                       Declaration => Declares,
                       Site        => Site,
                       others      => <>));
@@ -925,9 +1490,9 @@ package body Landin.IR is
    is
       --  D127: an aggregate element is kept in the shared run as well, so
       --  Whole_Array_Shape can name it without fabricating one.
-      Where : constant Natural :=
-        (if Element.Kind = Scalar_Field_Shape then 0
-         else Add_Shape_Run (Into, [1 => Element]));
+      Shape : constant Field_Shape :=
+        Make_Array_Shape (Into, Length, Element);
+      Where : constant Natural := Shape.Payloads_First;
       Held : Item_Record := Landin.IR.Element (Into, Item);
    begin
       Held.Element := Element;
@@ -1060,6 +1625,51 @@ package body Landin.IR is
       Into.Items (Positive (Item)) := Held;
    end Set_Aggregate_Image;
 
+   procedure Set_Array_Image
+     (Into        : in out Unit;
+      Item        : Item_Id;
+      Image       : Aggregate_Field_Image;
+      Descendants : Aggregate_Field_Image_Array;
+      Elements    : Landin.Types.Folded_Array)
+   is
+      Held : Item_Record := Element (Into, Item);
+   begin
+      if Held.Result /= Landin.Types.Fixed_Array or else Held.Has_Image then
+         raise Landin.Compiler_Defect with
+           "a recursive array image has no uninitialized array datum";
+      end if;
+      Open_Run (Held.Image, Natural (Into.Images.Length));
+      for Value of Elements loop
+         Into.Images.Append (Value);
+         Held.Image.Count := Held.Image.Count + 1;
+      end loop;
+      Open_Run
+        (Held.Aggregate_Images, Natural (Into.Aggregate_Images.Length));
+      Into.Aggregate_Images.Append (Image);
+      Held.Aggregate_Images.Count := 1;
+      for Child of Descendants loop
+         Into.Aggregate_Images.Append (Child);
+         Held.Aggregate_Images.Count := Held.Aggregate_Images.Count + 1;
+      end loop;
+      Held.Has_Image := True;
+      Into.Items (Positive (Item)) := Held;
+   end Set_Array_Image;
+
+   function Has_Recursive_Array_Image
+     (Of_Unit : Unit; Item : Item_Id) return Boolean
+     is (Result_Of (Of_Unit, Item) = Landin.Types.Fixed_Array
+         and then Element (Of_Unit, Item).Has_Image
+         and then Element (Of_Unit, Item).Aggregate_Images.Count > 0);
+
+   function Array_Image_Of
+     (Of_Unit : Unit; Item : Item_Id) return Aggregate_Field_Image
+     is (Nth_Image_Descriptor (Of_Unit, Item, 1));
+
+   function Image_Root_Count
+     (Of_Unit : Unit; Item : Item_Id) return Natural
+     is (if Has_Recursive_Array_Image (Of_Unit, Item) then 1
+         else Field_Count (Of_Unit, Item));
+
    function Aggregate_Field_Image_Count
      (Of_Unit : Unit; Item : Item_Id) return Natural
      is (Element (Of_Unit, Item).Aggregate_Images.Count);
@@ -1082,7 +1692,7 @@ package body Landin.IR is
       Position : Positive) return Aggregate_Field_Image
      is (Nth_Image_Descriptor
            (Of_Unit, Item,
-            Field_Count (Of_Unit, Item) + Parent.Offset + Position));
+            Image_Root_Count (Of_Unit, Item) + Parent.Offset + Position));
 
    function Nth_Aggregate_Image_Element
      (Of_Unit : Unit; Item : Item_Id; Position : Part_Position)
@@ -1309,9 +1919,9 @@ package body Landin.IR is
       Declares : Declaration_Id;
       Site     : Landin.Provenance.Origin) return Slot_Id
    is
-      Where : constant Natural :=
-        (if Element.Kind = Scalar_Field_Shape then 0
-         else Add_Shape_Run (Into, [1 => Element]));
+      Shape : constant Field_Shape :=
+        Make_Array_Shape (Into, Length, Element);
+      Where : constant Natural := Shape.Payloads_First;
       Held : Item_Record := Landin.IR.Element (Into, Item);
    begin
       Open_Run (Held.Slots, Natural (Into.Slots.Length));
@@ -1472,11 +2082,12 @@ package body Landin.IR is
       Declares : Declaration_Id;
       Site     : Landin.Provenance.Origin;
       Signature : Signature_Id := No_Signature;
-      Atoms     : Atom_Set_Id := No_Atom_Set) return Slot_Id
+      Atoms     : Atom_Set_Id := No_Atom_Set;
+      Pointee   : Pointee_Id := No_Pointee) return Slot_Id
    is
       Made : constant Slot_Id :=
         Add_Slot
-          (Into, Item, Of_Type, Declares, Site, Signature, Atoms);
+          (Into, Item, Of_Type, Declares, Site, Signature, Atoms, Pointee);
       Held : Item_Record := Element (Into, Item);
    begin
       --  A parameter is a slot the caller filled, and the run below is
@@ -1747,7 +2358,7 @@ package body Landin.IR is
    begin
       if Instruction_Held.Op
            in Function_Address | Evidence_Function | Load | Load_Datum
-              | Load_Field | Load_Element | Load_Variant_Field
+              | Load_Field | Load_Element | Load_Variant_Field | Load_Indirect
       then
          return Instruction_Held.Signature;
       end if;
@@ -1776,6 +2387,48 @@ package body Landin.IR is
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
       return Declaration_Id
      is (Held (Of_Unit, Item, Value).Atom_Identity);
+
+   function Call_Variadic_Types_Are_Valid
+     (Of_Unit : Unit; Item : Item_Id; Call : Value_Id) return Boolean
+   is
+   begin
+      if not Holds (Of_Unit, Item, Call)
+        or else Op_Of (Of_Unit, Item, Call)
+          not in Landin.IR.Call | Indirect_Call
+      then
+         return False;
+      end if;
+      declare
+         Types : constant Run := Held (Of_Unit, Item, Call).Variadic_Types;
+         Limit : constant Natural := Natural (Of_Unit.Signature_Parts.Length);
+      begin
+         return Types.First <= Limit
+           and then Types.Count <= Limit - Types.First;
+      end;
+   end Call_Variadic_Types_Are_Valid;
+
+   function Call_Variadic_Count
+     (Of_Unit : Unit; Item : Item_Id; Call : Value_Id) return Natural is
+   begin
+      if not Call_Variadic_Types_Are_Valid (Of_Unit, Item, Call) then
+         raise Landin.Compiler_Defect with "invalid variadic type run";
+      end if;
+      return Held (Of_Unit, Item, Call).Variadic_Types.Count;
+   end Call_Variadic_Count;
+
+   function Nth_Call_Variadic_Type
+     (Of_Unit : Unit; Item : Item_Id; Call : Value_Id; Index : Positive)
+      return Signature_Part
+   is
+   begin
+      if not Call_Variadic_Types_Are_Valid (Of_Unit, Item, Call)
+        or else Index > Call_Variadic_Count (Of_Unit, Item, Call)
+      then
+         raise Landin.Compiler_Defect with "invalid variadic type index";
+      end if;
+      return Of_Unit.Signature_Parts
+        (Held (Of_Unit, Item, Call).Variadic_Types.First + Index);
+   end Nth_Call_Variadic_Type;
 
    function Call_Signature
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Signature_Id
@@ -1858,7 +2511,9 @@ package body Landin.IR is
             --  D121: [0520] counts elements, [0750] counts fields, and a
             --  step names whichever the run it indexes has.
             if Reached.Kind = Array_Field_Shape then
-               if Element_Total (Step.Field) > Reached.Length then
+               if Element_Total (Step.Field) > Reached.Length
+                 or else not Array_Element_Run_Is_Valid (Of_Unit, Reached)
+               then
                   return False;
                end if;
                Reached := Array_Element_Shape (Of_Unit, Reached);
@@ -2011,6 +2666,11 @@ package body Landin.IR is
      (Of_Unit : Unit; Shape : Field_Shape) return Boolean
    is
    begin
+      if Shape.Kind /= Aggregate_Field_Shape then
+         return False;
+      elsif Has_Nominal_Shape (Of_Unit, Shape.Nominal) then
+         return Nominal_Field_Run_Is_Valid (Of_Unit, Shape.Nominal);
+      end if;
       return Shape.Cases > 0
         and then Shape.Payloads_First > 0
         and then Shape.Payloads_First
@@ -2023,8 +2683,10 @@ package body Landin.IR is
    function Aggregate_Field_Count
      (Of_Unit : Unit; Shape : Field_Shape) return Natural
    is
-      pragma Unreferenced (Of_Unit);
    begin
+      if Has_Nominal_Shape (Of_Unit, Shape.Nominal) then
+         return Nominal_Field_Count (Of_Unit, Shape.Nominal);
+      end if;
       return Shape.Cases;
    end Aggregate_Field_Count;
 
@@ -2033,9 +2695,55 @@ package body Landin.IR is
       return Field_Shape
    is
    begin
+      if not Aggregate_Field_Run_Is_Valid (Of_Unit, Shape)
+        or else Field > Aggregate_Field_Count (Of_Unit, Shape)
+      then
+         raise Landin.Compiler_Defect with "invalid aggregate field index";
+      elsif Has_Nominal_Shape (Of_Unit, Shape.Nominal) then
+         return Nth_Nominal_Field (Of_Unit, Shape.Nominal, Field);
+      end if;
       return Of_Unit.Variant_Fields
         (Shape.Payloads_First + Field - 1);
    end Nth_Aggregate_Field;
+
+   function Make_Array_Shape
+     (Into    : in out Unit;
+      Length  : Element_Total;
+      Element : Field_Shape) return Field_Shape
+   is
+      First : Natural := 0;
+   begin
+      if Element /= Field_Shape'
+        (Kind => Scalar_Field_Shape, Element => Element.Element,
+         others => <>)
+      then
+         --  Exact run reuse never merges separately owned callable identities.
+         --  Structural equality remains the job of Same_Shape.
+         for Position in 1 .. Natural (Into.Variant_Fields.Length) loop
+            if Into.Variant_Fields (Position) = Element then
+               First := Position;
+               exit;
+            end if;
+         end loop;
+         if First = 0 then
+            First := Add_Shape_Run (Into, [1 => Element]);
+         end if;
+      end if;
+      return
+        (Kind => Array_Field_Shape, Element => Element.Element,
+         Length => Length, Cases => (if First = 0 then 0 else 1),
+         Payloads_First => First, Nominal => Element.Nominal, others => <>);
+   end Make_Array_Shape;
+
+   function Array_Element_Run_Is_Valid
+     (Of_Unit : Unit; Shape : Field_Shape) return Boolean
+     is (Shape.Kind = Array_Field_Shape
+         and then
+           ((Shape.Cases = 0 and then Shape.Payloads_First = 0)
+            or else
+              (Shape.Cases = 1 and then Shape.Payloads_First > 0
+               and then Shape.Payloads_First
+                 <= Variant_Field_Shape_Count (Of_Unit))));
 
    function Array_Element_Is_Aggregate
      (Of_Unit : Unit; Shape : Field_Shape) return Boolean
@@ -2050,6 +2758,10 @@ package body Landin.IR is
      (Of_Unit : Unit; Shape : Field_Shape) return Field_Shape
    is
    begin
+      if not Array_Element_Run_Is_Valid (Of_Unit, Shape) then
+         raise Landin.Compiler_Defect with
+           "an array has a malformed child run";
+      end if;
       if Array_Element_Is_Aggregate (Of_Unit, Shape) then
          return Of_Unit.Variant_Fields (Shape.Payloads_First);
       end if;
@@ -2060,10 +2772,6 @@ package body Landin.IR is
 
    --  The walk carries a budget for the reason Field_Shape_Is_Malformed's
    --  does: nothing in the vector proves a run does not name itself.
-   function Same_Shape
-     (Of_Unit : Unit; Left, Right : Field_Shape; Budget : Natural)
-      return Boolean;
-
    function Same_Shape
      (Of_Unit : Unit; Left, Right : Field_Shape; Budget : Natural)
       return Boolean
@@ -2078,14 +2786,17 @@ package body Landin.IR is
       case Left.Kind is
          when Scalar_Field_Shape =>
             return Left.Element = Right.Element
+              and then Pointees_Agree
+                (Of_Unit, Left.Pointee, Right.Pointee, Budget)
               and then
                 ((Left.Signature = No_Signature
                     and then Right.Signature = No_Signature)
                  or else
                    (Holds (Of_Unit, Left.Signature)
                     and then Holds (Of_Unit, Right.Signature)
+                    and then Budget > 0
                     and then Signatures_Agree
-                      (Of_Unit, Left.Signature, Right.Signature)))
+                      (Of_Unit, Left.Signature, Right.Signature, Budget - 1)))
               and then
                 ((Left.Atoms = No_Atom_Set
                     and then Right.Atoms = No_Atom_Set)
@@ -2096,16 +2807,11 @@ package body Landin.IR is
                       (Of_Unit, Left.Atoms, Right.Atoms)));
 
          when Array_Field_Shape =>
-            if Left.Length /= Right.Length then
-               return False;
-            end if;
-            if Array_Element_Is_Aggregate (Of_Unit, Left)
-                 /= Array_Element_Is_Aggregate (Of_Unit, Right)
+            if Left.Length /= Right.Length
+              or else not Array_Element_Run_Is_Valid (Of_Unit, Left)
+              or else not Array_Element_Run_Is_Valid (Of_Unit, Right)
             then
                return False;
-            end if;
-            if not Array_Element_Is_Aggregate (Of_Unit, Left) then
-               return Left.Element = Right.Element;
             end if;
             return Budget > 0
               and then Same_Shape
@@ -2115,9 +2821,10 @@ package body Landin.IR is
                  Budget - 1);
 
          when Aggregate_Field_Shape =>
-            if Left.Cases /= Right.Cases
-              or else not Aggregate_Field_Run_Is_Valid (Of_Unit, Left)
+            if not Aggregate_Field_Run_Is_Valid (Of_Unit, Left)
               or else not Aggregate_Field_Run_Is_Valid (Of_Unit, Right)
+              or else Aggregate_Field_Count (Of_Unit, Left)
+                /= Aggregate_Field_Count (Of_Unit, Right)
               or else Budget = 0
             then
                return False;
@@ -2173,23 +2880,34 @@ package body Landin.IR is
    function Same_Shape
      (Of_Unit : Unit; Left, Right : Field_Shape) return Boolean
      is (Same_Shape
-           (Of_Unit, Left, Right, Variant_Field_Shape_Count (Of_Unit) + 1));
+           (Of_Unit, Left, Right,
+            Variant_Field_Shape_Count (Of_Unit) + Signature_Count (Of_Unit)
+              + Natural (Of_Unit.Nominal_Fields.Length) + 1));
 
    function Variant_Case_Run_Is_Valid
      (Of_Unit : Unit; Shape : Field_Shape; Which : Positive)
       return Boolean
    is
-      Run : constant Case_Run := Of_Unit.Variant_Cases
-        (Shape.Payloads_First + Which - 1);
    begin
-      return (if Run.Count = 0
-              then Run.First = 0
-              else Run.First > 0
-                   and then Run.First
-                              <= Variant_Field_Shape_Count (Of_Unit)
-                   and then Run.Count
-                              <= Variant_Field_Shape_Count (Of_Unit)
-                                   - Run.First + 1);
+      if Shape.Kind /= Variant_Field_Shape or else Which > Shape.Cases
+        or else Shape.Payloads_First = 0
+        or else Shape.Payloads_First > Variant_Case_Run_Count (Of_Unit)
+        or else Shape.Cases > Variant_Case_Run_Count (Of_Unit)
+          - Shape.Payloads_First + 1
+      then
+         return False;
+      end if;
+      declare
+         Run : constant Case_Run := Of_Unit.Variant_Cases
+           (Shape.Payloads_First + Which - 1);
+      begin
+         return (if Run.Count = 0
+                 then Run.First = 0
+                 else Run.First > 0
+                   and then Run.First <= Variant_Field_Shape_Count (Of_Unit)
+                   and then Run.Count <= Variant_Field_Shape_Count (Of_Unit)
+                     - Run.First + 1);
+      end;
    end Variant_Case_Run_Is_Valid;
 
    function Variant_Case_Field_Count
@@ -2528,6 +3246,7 @@ package body Landin.IR is
                          Result => Type_Of (Into, Item, Slot),
                          Site   => Site,
                          Slot   => Slot,
+                         Pointee => Pointee_Of (Into, Item, Slot),
                          Signature => Signature_Of (Into, Item, Slot),
                          Atom_Set => Atom_Set_Of (Into, Item, Slot),
                          others => <>)));
@@ -2561,6 +3280,7 @@ package body Landin.IR is
    is
       Made : Instruction :=
         Instruction'(Op => Pointer_Address,
+                     Pointee => Pointee_Of (Into, Item, Value),
                      Result => Landin.Types.Usize,
                      Site => Site, others => <>);
    begin
@@ -2695,6 +3415,87 @@ package body Landin.IR is
       pragma Assert (Where /= No_Value);
    end Emit_Store_Indirect;
 
+   function Indirect_Address_Slot
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Slot_Id
+     is (Held (Of_Unit, Item, Value).Slot);
+
+   function Emit_Load_Indirect
+     (Into    : in out Unit;
+      Item    : Item_Id;
+      Address : Slot_Id;
+      Site    : Landin.Provenance.Origin) return Value_Id
+   is
+      Made : Instruction :=
+        (Op => Load_Indirect, Site => Site, Slot => Address, others => <>);
+      Pointer : Value_Id;
+   begin
+      if not Holds (Into, Item, Address)
+        or else not Is_Address (Into, Item, Address)
+        or else Address_Shape (Into, Item, Address).Kind /= Scalar_Field_Shape
+      then
+         raise Landin.Compiler_Defect with
+           "a typed indirect load has no scalar address witness";
+      end if;
+      declare
+         Shape : constant Field_Shape := Address_Shape (Into, Item, Address);
+      begin
+         Made.Result := Shape.Element;
+         Made.Pointee := Shape.Pointee;
+         Made.Signature := Shape.Signature;
+         Made.Atom_Set := Shape.Atoms;
+      end;
+      Pointer := Emit_Load (Into, Item, Address, Site);
+      Made.First_Arg := Natural (Into.Operands.Length);
+      Made.Args := 1;
+      Into.Operands.Append (Pointer);
+      return Append (Into, Item, Made);
+   end Emit_Load_Indirect;
+
+   procedure Emit_Store_Indirect
+     (Into    : in out Unit;
+      Item    : Item_Id;
+      Address : Slot_Id;
+      Value   : Value_Id;
+      Site    : Landin.Provenance.Origin)
+   is
+      Made : Instruction :=
+        (Op => Store_Indirect, Site => Site, Slot => Address, others => <>);
+      Pointer : Value_Id;
+      Where : Value_Id;
+   begin
+      if not Holds (Into, Item, Address)
+        or else not Is_Address (Into, Item, Address)
+        or else Address_Shape (Into, Item, Address).Kind /= Scalar_Field_Shape
+        or else not Holds (Into, Item, Value)
+        or else Result_Of (Into, Item, Value) not in Landin.Types.Scalar_Name
+      then
+         raise Landin.Compiler_Defect with
+           "a typed indirect store has no scalar address witness";
+      end if;
+      declare
+         Shape : constant Field_Shape := Address_Shape (Into, Item, Address);
+         Source : constant Field_Shape :=
+           (Kind => Scalar_Field_Shape,
+            Element =>
+              Landin.Types.Scalar_Name (Result_Of (Into, Item, Value)),
+            Pointee => Pointee_Of (Into, Item, Value),
+            Signature => Signature_Of (Into, Item, Value),
+            Atoms => Atom_Set_Of (Into, Item, Value), others => <>);
+      begin
+         if not Same_Shape (Into, Shape, Source) then
+            raise Landin.Compiler_Defect with
+              "a typed indirect store disagrees with its reached shape";
+         end if;
+      end;
+      Pointer := Emit_Load (Into, Item, Address, Site);
+      Made.First_Arg := Natural (Into.Operands.Length);
+      Made.Args := 2;
+      Into.Operands.Append (Pointer);
+      Into.Operands.Append (Value);
+      Where := Append (Into, Item, Made);
+      pragma Assert (Where /= No_Value);
+   end Emit_Store_Indirect;
+
    function Emit_Load_Datum
      (Into  : in out Unit;
       Item  : Item_Id;
@@ -2706,6 +3507,7 @@ package body Landin.IR is
                          Result    => Result_Of (Into, Datum),
                          Site      => Site,
                          Named     => Datum,
+                         Pointee => Pointee_Of (Into, Datum),
                          Signature => Signature_Of (Into, Datum),
                          Atom_Set  => Atom_Set_Of (Into, Datum),
                          others    => <>)));
@@ -3417,35 +4219,96 @@ package body Landin.IR is
       return Append (Into, Item, Made);
    end Emit_Evidence_Function;
 
+   function Emit_Erased_Evidence_Function
+     (Into     : in out Unit;
+      Item     : Item_Id;
+      Receiver : Value_Id;
+      Evidence : Evidence_Id;
+      Which    : Positive;
+      Site     : Landin.Provenance.Origin) return Value_Id
+   is
+      Made : Instruction :=
+        (Op => Evidence_Function, Result => Landin.Types.Usize,
+         Site => Site, Evidence => Evidence, Evidence_Entry => Which,
+         Signature => Evidence_Entry_Dispatch_Signature
+           (Into, Evidence, Which), others => <>);
+   begin
+      Made.First_Arg := Natural (Into.Operands.Length);
+      Made.Args := 1;
+      Into.Operands.Append (Receiver);
+      return Append (Into, Item, Made);
+   end Emit_Erased_Evidence_Function;
+
+   function Emit_Evidence_Self
+     (Into           : in out Unit;
+      Item           : Item_Id;
+      Function_Value : Value_Id;
+      Site           : Landin.Provenance.Origin) return Value_Id
+   is
+      Made : Instruction :=
+        (Op => Evidence_Self, Result => Landin.Types.Usize,
+         Site => Site, others => <>);
+   begin
+      Made.First_Arg := Natural (Into.Operands.Length);
+      Made.Args := 1;
+      Into.Operands.Append (Function_Value);
+      return Append (Into, Item, Made);
+   end Emit_Evidence_Self;
+
+   function Stored_Variadic_Types
+     (Into : in out Unit; Types : Signature_Part_Array) return Run;
+
+   function Stored_Variadic_Types
+     (Into : in out Unit; Types : Signature_Part_Array) return Run
+   is
+      Made : constant Run :=
+        (First => Natural (Into.Signature_Parts.Length),
+         Count => Types'Length);
+   begin
+      for Part of Types loop
+         Into.Signature_Parts.Append (Part);
+      end loop;
+      return Made;
+   end Stored_Variadic_Types;
+
    function Emit_Call
      (Into   : in out Unit;
       Item   : Item_Id;
       Callee : Item_Id;
       Result : Landin.Types.Type_Kind;
       Site   : Landin.Provenance.Origin;
-      Failure : Slot_Id := No_Slot) return Value_Id
-     is (Append
-           (Into, Item,
-            Instruction'(Op        => Call,
-                         Result    => Result,
-                         Site      => Site,
-                         Named     => Callee,
-                         Signature => Signature_Of (Into, Callee),
-                         Atom_Set  =>
-                           (if Signature_Of (Into, Callee) /= No_Signature
-                              and then Holds
-                                (Into, Signature_Of (Into, Callee))
-                            then
-                              (if Signature_Result_Count
-                                    (Into, Signature_Of (Into, Callee)) = 1
-                               then Nth_Signature_Result
-                                 (Into, Signature_Of (Into, Callee), 1).Atoms
-                               else No_Atom_Set)
-                            else No_Atom_Set),
-                         Slot      => Failure,
-                         First_Arg => 0,
-                         Args      => 0,
-                         others    => <>)));
+      Failure : Slot_Id := No_Slot;
+      Variadic_Types : Signature_Part_Array := No_Signature_Parts)
+      return Value_Id
+   is
+      Callee_Signature : constant Signature_Id :=
+        Signature_Of (Into, Callee);
+      Result_Atoms : constant Atom_Set_Id :=
+        (if Callee_Signature /= No_Signature
+           and then Holds (Into, Callee_Signature)
+         then
+           (if Signature_Result_Count (Into, Callee_Signature) = 1
+            then Nth_Signature_Result
+              (Into, Callee_Signature, 1).Atoms
+            else No_Atom_Set)
+         else No_Atom_Set);
+      Stored_Types : constant Run :=
+        Stored_Variadic_Types (Into, Variadic_Types);
+   begin
+      return Append
+        (Into, Item,
+         Instruction'(Op             => Call,
+                      Result         => Result,
+                      Site           => Site,
+                      Named          => Callee,
+                      Signature      => Callee_Signature,
+                      Atom_Set       => Result_Atoms,
+                      Slot           => Failure,
+                      Variadic_Types => Stored_Types,
+                      First_Arg      => 0,
+                      Args           => 0,
+                      others         => <>));
+   end Emit_Call;
 
    function Emit_Indirect_Call
      (Into      : in out Unit;
@@ -3453,22 +4316,30 @@ package body Landin.IR is
       Signature : Signature_Id;
       Result    : Landin.Types.Type_Kind;
       Site      : Landin.Provenance.Origin;
-      Failure   : Slot_Id := No_Slot) return Value_Id
-     is (Append
-           (Into, Item,
-            Instruction'(Op        => Indirect_Call,
-                         Result    => Result,
-                         Site      => Site,
-                         Signature => Signature,
-                         Atom_Set  =>
-                           (if Signature_Result_Count (Into, Signature) = 1
-                            then Nth_Signature_Result
-                              (Into, Signature, 1).Atoms
-                            else No_Atom_Set),
-                         Slot      => Failure,
-                         First_Arg => 0,
-                         Args      => 0,
-                         others    => <>)));
+      Failure   : Slot_Id := No_Slot;
+      Variadic_Types : Signature_Part_Array := No_Signature_Parts)
+      return Value_Id
+   is
+      Result_Atoms : constant Atom_Set_Id :=
+        (if Signature_Result_Count (Into, Signature) = 1
+         then Nth_Signature_Result (Into, Signature, 1).Atoms
+         else No_Atom_Set);
+      Stored_Types : constant Run :=
+        Stored_Variadic_Types (Into, Variadic_Types);
+   begin
+      return Append
+        (Into, Item,
+         Instruction'(Op             => Indirect_Call,
+                      Result         => Result,
+                      Site           => Site,
+                      Signature      => Signature,
+                      Atom_Set       => Result_Atoms,
+                      Slot           => Failure,
+                      Variadic_Types => Stored_Types,
+                      First_Arg      => 0,
+                      Args           => 0,
+                      others         => <>));
+   end Emit_Indirect_Call;
 
    procedure Add_Argument
      (Into  : in out Unit;

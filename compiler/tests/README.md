@@ -40,11 +40,11 @@ Fixture classes, and the directory each uses:
 | positive | `positive` | a program that must be accepted |
 | negative | `negative` | a program that must be rejected, with the codes it must produce and, where a code alone could hide a wrong refusal, the exact report |
 | runtime | `runtime` | a program whose behaviour when run is the assertion |
+| ABI | `abi` | emitted Landin assembly compiled with ordered C11 companions, then executed |
 | end-to-end | `end-to-end` | the toolchain from source to result |
 
-`abi` and `debugger` classes are reserved for R4.40 and R4.60 and have no
-directory yet; an empty class directory is not a fault, an absent one is
-not a class.
+The `debugger` class is reserved for R4.60 and has no directory yet; an empty
+class directory is not a fault, an absent one is not a class.
 
 ## Focused developer runs
 
@@ -58,15 +58,16 @@ recompilation:
 ./scripts/dev-test.sh --fixture=positive/variant-match-exhaustive
 ./scripts/dev-test.sh --fixture=negative/variant-match-duplicate
 ./scripts/dev-test.sh --fixture=runtime/variant-match-selects-tag
+./scripts/dev-test.sh --fixture=abi/r440-smoke
 ```
 
-A fixture selector accepts `positive`, `negative`, `runtime`, or any other
-discovered class whose fixture has a recorded `expect`. It invokes the real
-scanner-through-backend path appropriate to that class, including assembling,
-linking and executing a runtime fixture. Every selected transcript begins with
-`FILTERED`, and an unknown selection fails: focused feedback cannot look like
-the complete suite by accident. Run `./scripts/test.sh` with no selector for
-the complete local gate.
+A fixture selector accepts `positive`, `negative`, `runtime`, `abi`, or any
+other discovered class whose fixture has a recorded `expect`. It invokes the
+real scanner-through-backend path appropriate to that class, including
+assembling, linking and executing a runtime or ABI fixture. Every selected
+transcript begins with `FILTERED`, and an unknown selection fails: focused
+feedback cannot look like the complete suite by accident. Run
+`./scripts/test.sh` with no selector for the complete local gate.
 
 ## Complete programs to try
 
@@ -136,15 +137,17 @@ and checks all ten on every push.
 | --- | --- | --- |
 | `class` | yes | must match the directory the fixture sits in |
 | `summary` | yes | one line, what the fixture proves |
-| `program` | no | the `.ldn` program the fixture runs |
-| `with` | no | the rest of the module, when one file is not enough |
-| `root` | no | a runtime fixture's import root, relative to its directory; the directory itself becomes the entry module |
+| `program` | yes for runtime, ABI, and a rooted positive or negative | the `.ldn` program the fixture runs or uses as its compile-only corpus file |
+| `with` | no | the rest of the Landin module, when one file is not enough; never a C source |
+| `root` | no | a positive, negative, runtime or ABI fixture's import root, relative to its directory; the directory itself becomes the entry module |
+| `c-sources` | yes for ABI | comma-separated, ordered C companion sources relative to the fixture directory |
+| `c-args` | no | whitespace-separated C compiler and linker arguments for an ABI fixture |
 | `expect` | no | the file holding the expected bytes |
 | `args` | no | the arguments `refine` is run with |
-| `run_args` | no | the arguments handed to a compiled runtime program |
-| `run_expect` | no | the file holding a runtime program's expected merged output |
-| `status` | no | the exit status `refine` must produce (default 0) |
-| `traps` | no | `yes` if the program must end without returning a status |
+| `run_args` | no | the arguments handed to a compiled runtime or ABI program |
+| `run_expect` | no | the file holding a runtime or ABI program's expected merged output |
+| `status` | no | the exit status `refine` or a compiled program must produce (default 0) |
+| `traps` | no | `yes` if a runtime or ABI program must end without returning a status |
 | `stream` | no | `output` (the bytes must be on standard output, and standard error must be empty) or `merged` (default) |
 | `lex` | no | the exact complaint the scanner must produce, for a fixture whose fault is lexical |
 | `codes` | yes for a negative with a program | the diagnostic codes the report must carry, in order |
@@ -164,7 +167,9 @@ code — `L0010` is raised by the scanner and by the parser both.
 `codes` is an ordered list and not a set. Two refused constructs in one file
 are two reports, and a regression that doubles a count is invisible to a set,
 so a fixture that contains two refused uses names its code twice in source
-order. `float-literal-not-enabled` names one `L0301`: its one literal is a
+order. Spaces around comma boundaries are insignificant; the harness
+canonicalizes them without sorting the codes or removing duplicates.
+`float-literal-not-enabled` names one `L0301`: its one literal is a
 float in an integer context, refused by the checker, so the grammar must
 derive it. `check.py` holds every name in `codes` to
 the catalogue, and
@@ -179,14 +184,49 @@ the rest of a module with no `program` to be the rest of is a reported fault,
 and `check.py` holds every file either key names to being there — a name
 pointing at nothing would compile one file while claiming to have compiled
 two. Every `.ldn` in a fixture directory is held to the grammar already, so
-the extra files are derived like any other.
+the extra files are derived like any other. C companions never belong in
+`with`; an ABI fixture names them only with `c-sources`.
 
-`root` is the runtime counterpart for a directory-module program. It is
-relative to the fixture directory; when present, the fixture directory is
-passed to `refine` as the entry module and the root is passed with `--root`.
-It cannot be combined with `with`, because rooted discovery owns the source
-membership. This is how an executable fixture imports the repository-owned
-`core/*` modules rather than keeping a fixture-only copy.
+`root` is the directory-module counterpart for a positive, negative, runtime or
+ABI program. It is relative to the fixture directory; when present, the
+fixture directory is passed to `refine` as the entry module and the root is
+passed first with `--root`. It cannot be combined with `with`, because rooted
+discovery owns the source membership. A rooted positive or negative fixture
+must also name a nonempty `program`: that is the corpus file whose compile-only
+acceptance or refusal is counted. This is how compile-only fixtures and
+executable fixtures alike import repository-owned modules such as `core/*`
+without keeping fixture-only copies. The parser's exact-code case retains its
+fake filesystem for ordinary negative fixtures, but reads the real module
+closure for a rooted negative because its pinned report depends on those
+imports resolving.
+
+An ABI fixture requires `program`, `c-sources`, `constructs`, and `targets`.
+`c-sources` is a comma-separated ordered list. Every entry must be a portable,
+slash-separated relative path ending in `.c`, must contain no backslash or
+colon, must remain below the fixture directory (no absolute, empty, `.` or
+`..` component), and must name a file that exists. The list is passed to the
+target driver in the order written. `c-args`, when present, is a
+whitespace-separated argument-vector suffix; no shell interprets it. Both keys
+belong only to ABI fixtures, duplicate keys or C source paths are faults, and C
+source files in `with` are faults.
+
+The ABI harness runs `refine` for Linux x86-64 with the Landin inputs followed
+by `--target=linux-x86-64 --emit=asm -o <assembly>`. It then selects
+`Driver_For (Linux_X86_64, "")` and invokes that driver once with arguments in
+this exact order:
+
+```text
+<assembly> <c-sources in metadata order>
+-std=c11 -Wall -Wextra -Werror -no-pie
+<c-args in metadata order> -o <executable>
+```
+
+The resulting executable may get `main` from Landin or from a C companion.
+The harness passes `run_args`, compares `run_expect` with merged standard
+output and standard error when it is present, and then compares either the
+exit `status` or the non-returning `traps: yes` verdict. Thus a C `main` can
+drive exported Landin routines, and a Landin `main` can drive imported C
+routines, without adding C inputs to the product compiler.
 
 `constructs` is what R1.90 indexes the corpus by, and it is a written list
 rather than a reading of the summary. A citation in prose is prose: it is
@@ -256,27 +296,30 @@ everywhere.
 | unit | a note of what an implementation-side case covers; the case itself lives in `compiler/ada/tests` |
 | negative, end-to-end | executed: `refine` is run with `args`, and its bytes and exit status are compared with `expect` and `status` |
 | runtime | executed: `refine` compiles and links `program`, the result is run, and its own exit status is compared with `status` — or, with `traps: yes`, it is held to having ended without returning one |
+| ABI | executed in the existing `runtime fixtures execute` case: `refine` emits assembly, the selected Linux x86-64 C driver compiles it with `c-sources`, and the result's output/status/trap verdict is checked |
 | positive | executed: the grammar must derive the program, `refine` must accept it through checking, lowering and verification, and the Linux x86-64 backend must emit assembly for it |
-| ABI, debugger | reserved; no fixture yet. They arrive with the work that produces an ABI and debug information |
+| debugger | reserved; no fixture yet. It arrives with the work that produces debug information |
 
 A class with no fixtures is the normal state early in the roadmap, and an
 empty class directory is not a fault. A fixture that records an expectation
 nobody runs is.
 
-That last sentence decides what a runtime fixture does on a host that cannot
-finish the target, and the answer is that the run fails. A macOS host with no
-ELF toolchain reports the fixture as a failure carrying `refine`'s own
-report, which is where `L0500`'s note says which toolchain would satisfy it.
-Skipping would be the quiet non-run the sentence refuses, and it would also
-hide the gate losing its toolchain. This is the same rule `scripts/env.sh`
-already applies one level up: a machine without the pinned GNAT is told so
-and stops, rather than quietly building nothing.
+That last sentence decides what a runtime or ABI fixture does on a host that
+cannot finish the target, and the answer is that the run fails. A macOS host
+with no ELF toolchain reports the existing `runtime fixtures execute` case as
+one failing case: runtime fixtures carry `refine`'s own L0500 report, and ABI
+fixtures name the triplet-selected C driver that could not be run. Skipping
+would be the quiet non-run the sentence refuses, and it would also hide the
+gate losing its toolchain. This is the same rule `scripts/env.sh` already
+applies one level up: a machine without the pinned GNAT is told so and stops,
+rather than quietly building nothing.
 
-A runtime fixture carries `program` and `status` and neither `expect` nor
-`args`, because nothing compares `refine`'s own output — what is asserted is
-what the compiled program did. One without a `program` is a reported fault,
-for the same reason `expect` without `args` is: a status nobody produces is
-dead data.
+A runtime or ABI fixture carries `program` and either an exit `status` (zero by
+default) or `traps: yes`, and neither `expect` nor `args`, because nothing
+compares `refine`'s own output — what is asserted is what the compiled program
+did. One without a `program` is a reported fault, for the same reason `expect`
+without `args` is: a status nobody produces is dead data. ABI additionally
+requires `c-sources`; `c-args`, `run_args`, and `run_expect` remain optional.
 
 Accepted, emitted and executed are three claims and not one, which is why
 three classes make them. A positive fixture is a program the compiler must

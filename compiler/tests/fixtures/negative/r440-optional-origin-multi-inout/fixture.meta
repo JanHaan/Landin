@@ -1,0 +1,6 @@
+class: negative
+summary: A multi-result inout return source contributes the actual frame storage even when the argument value contains no reference
+constructs: 0480, 0770, 0780, 0790, 0800, 0990
+program: program.ldn
+codes: L0314
+targets: linux-x86-64, macos-arm64, synthetic-32

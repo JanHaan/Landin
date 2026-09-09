@@ -221,7 +221,10 @@ that object through the same allocator. The byte-specific `mem.new_bytes`
 returns a `byte_buffer` holding the complete allocation extent, initializes
 all requested bytes, and exposes a borrowed slice through `mem.bytes`.
 `mem.drop_bytes` clears that owner and releases its original backing, rather
-than accepting a possibly shortened slice as allocation identity. No generic
+than accepting a possibly shortened slice as allocation identity. Absent or
+disposed backing is a named one-atom pointer union under D206, not `ptr(0)` or
+a fabricated non-null allocation; repeated raw disposal reports `raw_empty`.
+No generic
 uninitialized `new_slice` is supplied. Copied aliases remain the caller's
 manual-lifetime responsibility.
 

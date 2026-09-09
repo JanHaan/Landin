@@ -13,6 +13,13 @@
 ; Declarations and names
 (function_declaration name: (identifier) @function)
 (extern_declaration name: (identifier) @function)
+(c_convention convention: (identifier) @attribute)
+(c_layout
+  attribute: (identifier) @attribute
+  convention: (identifier) @attribute)
+(link_symbol
+  attribute: (identifier) @attribute
+  label: (identifier) @property)
 (type_declaration name: (identifier) @type.definition)
 (concept_declaration name: (identifier) @type.definition)
 (atom_declaration name: (identifier_list (identifier) @constant))
@@ -40,7 +47,7 @@
 ; Keywords
 [
   "addr" "alignof" "any" "as" "atom" "begin" "break" "complete" "concept"
-  "continue" "dec" "defer" "do" "else" "elsif" "end" "escaping" "fail"
+  "continue" "dec" "defer" "do" "else" "elsif" "end" "escaping" "extern" "fail"
   "fixed" "for" "from" "if" "import" "in" "inc" "inout" "is" "loop"
   "match" "mut" "none" "option" "ptr" "public" "return" "sink" "sizeof" "struct"
   "then" "try" "type" "unchecked" "undo" "variant" "when" "while" "with"
@@ -55,6 +62,8 @@
   (#eq? @keyword "of"))
 
 ["and" "not" "or"] @keyword.operator
+
+(variadic_marker) @punctuation.special
 
 ; Operators and punctuation
 [

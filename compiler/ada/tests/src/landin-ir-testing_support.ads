@@ -96,7 +96,111 @@ package Landin.IR.Testing_Support is
       Item     : Item_Id;
       Value    : Value_Id;
       Signature : Signature_Id)
+     with Pre => Holds (Into, Item, Value);
+
+   --  Release-mode verifier evidence: corrupt metadata only after a valid
+   --  unit has been built, bypassing builder preconditions deliberately.
+   type Item_Run_Kind is
+     (Slot_Run, Parameter_Run, Block_Run, Value_Run, Field_Run);
+
+   procedure Overwrite_Item_Run
+     (Into : in out Unit; Item : Item_Id; Which : Item_Run_Kind;
+      First, Count : Natural)
+     with Pre => Holds (Into, Item);
+
+   procedure Overwrite_Parameter
+     (Into : in out Unit; Item : Item_Id; Index : Positive; Slot : Slot_Id)
+     with Pre => Holds (Into, Item)
+                 and then Index <= Parameter_Count (Into, Item);
+
+   procedure Overwrite_Nominal_Run
+     (Into : in out Unit; Nominal : Nominal_Type_Id; First, Count : Natural)
+     with Pre => Has_Nominal_Shape (Into, Nominal);
+
+   --  Complete-child, image and indirect witnesses can be corrupted only
+   --  after construction, so assertions do not stand in for verification.
+   procedure Overwrite_Shape
+     (Into : in out Unit; Position : Positive; Shape : Field_Shape)
+     with Pre => Position <= Variant_Field_Shape_Count (Into);
+
+   procedure Overwrite_Array_Element_Run
+     (Into : in out Unit; Item : Item_Id; First : Natural;
+      Slot : Slot_Id := No_Slot)
+     with Pre => Holds (Into, Item)
+                 and then (Slot = No_Slot or else Holds (Into, Item, Slot));
+
+   procedure Overwrite_Image_Descriptor
+     (Into : in out Unit; Item : Item_Id; Position : Positive;
+      Image : Aggregate_Field_Image)
+     with Pre => Holds (Into, Item)
+                 and then Position <= Aggregate_Field_Image_Count
+                   (Into, Item);
+
+   procedure Overwrite_Descriptor_Run
+     (Into : in out Unit; Item : Item_Id; First, Count : Natural)
+     with Pre => Holds (Into, Item);
+
+   procedure Overwrite_Signature_Parameter
+     (Into : in out Unit; Signature : Signature_Id; Index : Positive;
+      Part : Signature_Part)
+     with Pre => Holds (Into, Signature)
+                 and then Index <= Signature_Parameter_Count
+                   (Into, Signature);
+
+   procedure Overwrite_Signature_Result
+     (Into : in out Unit; Signature : Signature_Id; Index : Positive;
+      Part : Signature_Part)
+     with Pre => Holds (Into, Signature)
+                 and then Index <= Signature_Result_Count (Into, Signature);
+
+   procedure Overwrite_Signature_Errors
+     (Into : in out Unit; Signature : Signature_Id; Errors : Atom_Set_Id)
+     with Pre => Holds (Into, Signature);
+
+   procedure Overwrite_Signature_Source
+     (Into : in out Unit; Signature : Signature_Id; Index : Positive;
+      Source : Return_Source_Association)
+     with Pre => Holds (Into, Signature);
+
+   procedure Overwrite_Evidence_Dispatch
+     (Into : in out Unit; Evidence : Evidence_Id; Which : Positive;
+      Signature : Signature_Id)
+     with Pre => Holds (Into, Evidence)
+                 and then Which <= Evidence_Entry_Count (Into, Evidence);
+
+   procedure Overwrite_Item_Signature
+     (Into : in out Unit; Item : Item_Id; Signature : Signature_Id)
+     with Pre => Holds (Into, Item);
+
+   procedure Overwrite_Indirect_Address_Slot
+     (Into : in out Unit; Item : Item_Id; Value : Value_Id; Slot : Slot_Id)
      with Pre => Holds (Into, Item, Value)
-                 and then Op_Of (Into, Item, Value) = Evidence_Function;
+                 and then Op_Of (Into, Item, Value)
+                   in Load_Indirect | Store_Indirect;
+
+   procedure Overwrite_Operand
+     (Into : in out Unit; Item : Item_Id; Value : Value_Id;
+      Index : Positive; Operand : Value_Id)
+     with Pre => Holds (Into, Item, Value)
+                 and then Index <= Operand_Count (Into, Item, Value);
+
+   procedure Overwrite_Value_Atoms
+     (Into : in out Unit; Item : Item_Id; Value : Value_Id;
+      Atoms : Atom_Set_Id)
+     with Pre => Holds (Into, Item, Value);
+
+   procedure Overwrite_Value_Type
+     (Into : in out Unit; Item : Item_Id; Value : Value_Id;
+      Result : Landin.Types.Type_Kind)
+     with Pre => Holds (Into, Item, Value);
+
+   procedure Overwrite_Pointee
+     (Into : in out Unit; Pointee : Pointee_Id; Shape : Field_Shape)
+     with Pre => Holds (Into, Pointee);
+
+   procedure Overwrite_Value_Pointee
+     (Into : in out Unit; Item : Item_Id; Value : Value_Id;
+      Pointee : Pointee_Id)
+     with Pre => Holds (Into, Item, Value);
 
 end Landin.IR.Testing_Support;

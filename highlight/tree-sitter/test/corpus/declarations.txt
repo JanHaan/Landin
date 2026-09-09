@@ -252,3 +252,237 @@ as: u32 = 0
                         (unary_expression
                           (literal
                             (integer_literal)))))))))))))))
+
+==================
+C boundary declarations and contextual names
+==================
+
+record : type = layout(c) struct
+  value : f64
+end record
+callback : type = extern(c) (value : i32) -> (result : i32)
+callbacks : type = [2]extern(c) (value : i32) -> (result : i32)
+extern(c) link(symbol: "c_variadic") c_variadic : (format : cstring, ...) -> (status : i32)
+public extern(c) landin_callback : (value : i32) -> (result : i32) =
+  result = value
+end landin_callback
+link(symbol: "native_identity") native_identity : (value : i32) -> (result : i32) =
+  result = value
+end native_identity
+layout : i32 = 0
+c : i32 = 0
+link : i32 = 0
+symbol : i32 = 0
+
+---
+
+(source_file
+  (public_declaration
+    (type_declaration
+      (identifier)
+      (struct_body
+        (c_layout
+          (identifier)
+          (identifier))
+        (field
+          (identifier)
+          (scalar_type))
+        (identifier))))
+  (public_declaration
+    (type_declaration
+      (identifier)
+      (function_type
+        (c_convention
+          (identifier))
+        (c_signature
+          (parameters
+            (parameter
+              (identifier)
+              (scalar_type)))
+          (arrow)
+          (returns
+            (named_return
+              (identifier)
+              (scalar_type)))))))
+  (public_declaration
+    (type_declaration
+      (identifier)
+      (array_type
+        (logical_or_expression
+          (logical_and_expression
+            (comparison_expression
+              (alternation_expression
+                (exclusion_expression
+                  (conjunction_expression
+                    (shift_expression
+                      (sum_expression
+                        (product_expression
+                          (unary_expression
+                            (literal
+                              (integer_literal))))))))))))
+        (function_type
+          (c_convention
+            (identifier))
+          (c_signature
+            (parameters
+              (parameter
+                (identifier)
+                (scalar_type)))
+            (arrow)
+            (returns
+              (named_return
+                (identifier)
+                (scalar_type))))))))
+  (public_declaration
+    (extern_declaration
+      (c_convention
+        (identifier))
+      (link_symbol
+        (identifier)
+        (identifier)
+        (text_literal))
+      (identifier)
+      (c_declared_signature
+        (routine_formals
+          (parameter
+            (identifier)
+            (declaration_reference
+              (identifier))))
+        (variadic_marker)
+        (arrow)
+        (returns
+          (named_return
+            (identifier)
+            (scalar_type))))))
+  (public_declaration
+    (extern_declaration
+      (c_convention
+        (identifier))
+      (identifier)
+      (c_declared_signature
+        (routine_formals
+          (parameter
+            (identifier)
+            (scalar_type)))
+        (arrow)
+        (returns
+          (named_return
+            (identifier)
+            (scalar_type))))
+      (block
+        (assignment_statement
+          (place
+            (indexed_expression
+              (identifier)))
+          (logical_or_expression
+            (logical_and_expression
+              (comparison_expression
+                (alternation_expression
+                  (exclusion_expression
+                    (conjunction_expression
+                      (shift_expression
+                        (sum_expression
+                          (product_expression
+                            (unary_expression
+                              (indexed_expression
+                                (identifier))))))))))))))
+      (identifier)))
+  (public_declaration
+    (function_declaration
+      (link_symbol
+        (identifier)
+        (identifier)
+        (text_literal))
+      (identifier)
+      (declared_signature
+        (routine_formals
+          (parameter
+            (identifier)
+            (scalar_type)))
+        (arrow)
+        (returns
+          (named_return
+            (identifier)
+            (scalar_type))))
+      (block
+        (assignment_statement
+          (place
+            (indexed_expression
+              (identifier)))
+          (logical_or_expression
+            (logical_and_expression
+              (comparison_expression
+                (alternation_expression
+                  (exclusion_expression
+                    (conjunction_expression
+                      (shift_expression
+                        (sum_expression
+                          (product_expression
+                            (unary_expression
+                              (indexed_expression
+                                (identifier))))))))))))))
+      (identifier)))
+  (public_declaration
+    (binding
+      (identifier)
+      (scalar_type)
+      (logical_or_expression
+        (logical_and_expression
+          (comparison_expression
+            (alternation_expression
+              (exclusion_expression
+                (conjunction_expression
+                  (shift_expression
+                    (sum_expression
+                      (product_expression
+                        (unary_expression
+                          (literal
+                            (integer_literal))))))))))))))
+  (public_declaration
+    (binding
+      (identifier)
+      (scalar_type)
+      (logical_or_expression
+        (logical_and_expression
+          (comparison_expression
+            (alternation_expression
+              (exclusion_expression
+                (conjunction_expression
+                  (shift_expression
+                    (sum_expression
+                      (product_expression
+                        (unary_expression
+                          (literal
+                            (integer_literal))))))))))))))
+  (public_declaration
+    (binding
+      (identifier)
+      (scalar_type)
+      (logical_or_expression
+        (logical_and_expression
+          (comparison_expression
+            (alternation_expression
+              (exclusion_expression
+                (conjunction_expression
+                  (shift_expression
+                    (sum_expression
+                      (product_expression
+                        (unary_expression
+                          (literal
+                            (integer_literal))))))))))))))
+  (public_declaration
+    (binding
+      (identifier)
+      (scalar_type)
+      (logical_or_expression
+        (logical_and_expression
+          (comparison_expression
+            (alternation_expression
+              (exclusion_expression
+                (conjunction_expression
+                  (shift_expression
+                    (sum_expression
+                      (product_expression
+                        (unary_expression
+                          (literal
+                            (integer_literal)))))))))))))))

@@ -1,0 +1,9 @@
+class: abi
+summary: Recursive C array fields preserve layout images pointers and register or memory transport
+program: program.ldn
+c-sources: peer.c
+c-args: -O2
+run_expect: expected.txt
+status: 42
+constructs: 0420, 0430, 0520, 1570, 1580, 1600, 1940
+targets: linux-x86-64

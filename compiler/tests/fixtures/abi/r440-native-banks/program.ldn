@@ -1,0 +1,239 @@
+-- Exhaustion is atomic: spilled aggregates consume neither register bank.
+pair_i: type = layout(c) struct
+    first: u64
+    second: u64
+end pair_i
+
+mixed: type = layout(c) struct
+    first: u64
+    second: f64
+end mixed
+
+pair_s: type = layout(c) struct
+    first: f64
+    second: f64
+end pair_s
+
+large: type = layout(c) struct
+    first: u64
+    second: f64
+    third: u64
+end large
+
+partial: type = layout(c) struct
+    first: u8
+    second: u8
+    third: u8
+end partial
+
+gp_mixed_handler: type = extern(c) (p0: u64, p1: u64, p2: u64, p3: u64, p4: u64, p5: u64, p6: mixed, p7: f64, p8: u64, p9: partial, p10: large, p11: f64) -> (result: i32)
+extern(c) c_gp_mixed: (p0: u64, p1: u64, p2: u64, p3: u64, p4: u64, p5: u64, p6: mixed, p7: f64, p8: u64, p9: partial, p10: large, p11: f64) -> (result: i32)
+public extern(c) l_gp_mixed: (p0: u64, p1: u64, p2: u64, p3: u64, p4: u64, p5: u64, p6: mixed, p7: f64, p8: u64, p9: partial, p10: large, p11: f64) -> (result: i32) =
+    if p0 == 3
+       and p1 == 6
+       and p2 == 9
+       and p3 == 12
+       and p4 == 15
+       and p5 == 18
+       and p6.first == 21
+       and p6.second == 22.5
+       and p7 == 24.5
+       and p8 == 27
+       and p9.first == 30
+       and p9.second == 31
+       and p9.third == 32
+       and p10.first == 33
+       and p10.second == 34.5
+       and p10.third == 35
+       and p11 == 36.5
+    then
+        result = 42
+    else
+        result = 1
+    end if
+end l_gp_mixed
+
+gp_pair_handler: type = extern(c) (p0: u64, p1: u64, p2: u64, p3: u64, p4: u64, p5: pair_i, p6: u64, p7: u64) -> (result: i32)
+extern(c) c_gp_pair: (p0: u64, p1: u64, p2: u64, p3: u64, p4: u64, p5: pair_i, p6: u64, p7: u64) -> (result: i32)
+public extern(c) l_gp_pair: (p0: u64, p1: u64, p2: u64, p3: u64, p4: u64, p5: pair_i, p6: u64, p7: u64) -> (result: i32) =
+    if p0 == 3
+       and p1 == 6
+       and p2 == 9
+       and p3 == 12
+       and p4 == 15
+       and p5.first == 18
+       and p5.second == 19
+       and p6 == 21
+       and p7 == 24
+    then
+        result = 42
+    else
+        result = 1
+    end if
+end l_gp_pair
+
+sse_mixed_handler: type = extern(c) (p0: f64, p1: f64, p2: f64, p3: f64, p4: f64, p5: f64, p6: f64, p7: f64, p8: mixed, p9: u64, p10: f64) -> (result: i32)
+extern(c) c_sse_mixed: (p0: f64, p1: f64, p2: f64, p3: f64, p4: f64, p5: f64, p6: f64, p7: f64, p8: mixed, p9: u64, p10: f64) -> (result: i32)
+public extern(c) l_sse_mixed: (p0: f64, p1: f64, p2: f64, p3: f64, p4: f64, p5: f64, p6: f64, p7: f64, p8: mixed, p9: u64, p10: f64) -> (result: i32) =
+    if p0 == 3.5
+       and p1 == 6.5
+       and p2 == 9.5
+       and p3 == 12.5
+       and p4 == 15.5
+       and p5 == 18.5
+       and p6 == 21.5
+       and p7 == 24.5
+       and p8.first == 27
+       and p8.second == 28.5
+       and p9 == 30
+       and p10 == 33.5
+    then
+        result = 42
+    else
+        result = 1
+    end if
+end l_sse_mixed
+
+sse_pair_handler: type = extern(c) (p0: f64, p1: f64, p2: f64, p3: f64, p4: f64, p5: f64, p6: f64, p7: pair_s, p8: f64, p9: u64) -> (result: i32)
+extern(c) c_sse_pair: (p0: f64, p1: f64, p2: f64, p3: f64, p4: f64, p5: f64, p6: f64, p7: pair_s, p8: f64, p9: u64) -> (result: i32)
+public extern(c) l_sse_pair: (p0: f64, p1: f64, p2: f64, p3: f64, p4: f64, p5: f64, p6: f64, p7: pair_s, p8: f64, p9: u64) -> (result: i32) =
+    if p0 == 3.5
+       and p1 == 6.5
+       and p2 == 9.5
+       and p3 == 12.5
+       and p4 == 15.5
+       and p5 == 18.5
+       and p6 == 21.5
+       and p7.first == 24.5
+       and p7.second == 25.5
+       and p8 == 27.5
+       and p9 == 30
+    then
+        result = 42
+    else
+        result = 1
+    end if
+end l_sse_pair
+
+both_handler: type = extern(c) (p0: u64, p1: u64, p2: u64, p3: u64, p4: u64, p5: u64, p6: f64, p7: f64, p8: f64, p9: f64, p10: f64, p11: f64, p12: f64, p13: f64, p14: pair_i, p15: pair_s, p16: mixed, p17: partial) -> (result: i32)
+extern(c) c_both: (p0: u64, p1: u64, p2: u64, p3: u64, p4: u64, p5: u64, p6: f64, p7: f64, p8: f64, p9: f64, p10: f64, p11: f64, p12: f64, p13: f64, p14: pair_i, p15: pair_s, p16: mixed, p17: partial) -> (result: i32)
+public extern(c) l_both: (p0: u64, p1: u64, p2: u64, p3: u64, p4: u64, p5: u64, p6: f64, p7: f64, p8: f64, p9: f64, p10: f64, p11: f64, p12: f64, p13: f64, p14: pair_i, p15: pair_s, p16: mixed, p17: partial) -> (result: i32) =
+    if p0 == 3
+       and p1 == 6
+       and p2 == 9
+       and p3 == 12
+       and p4 == 15
+       and p5 == 18
+       and p6 == 21.5
+       and p7 == 24.5
+       and p8 == 27.5
+       and p9 == 30.5
+       and p10 == 33.5
+       and p11 == 36.5
+       and p12 == 39.5
+       and p13 == 42.5
+       and p14.first == 45
+       and p14.second == 46
+       and p15.first == 48.5
+       and p15.second == 49.5
+       and p16.first == 51
+       and p16.second == 52.5
+       and p17.first == 54
+       and p17.second == 55
+       and p17.third == 56
+    then
+        result = 42
+    else
+        result = 1
+    end if
+end l_both
+
+memory_live_handler: type = extern(c) (p0: large, p1: u64, p2: f64, p3: large, p4: u64, p5: f64) -> (result: i32)
+extern(c) c_memory_live: (p0: large, p1: u64, p2: f64, p3: large, p4: u64, p5: f64) -> (result: i32)
+public extern(c) l_memory_live: (p0: large, p1: u64, p2: f64, p3: large, p4: u64, p5: f64) -> (result: i32) =
+    if p0.first == 3
+       and p0.second == 4.5
+       and p0.third == 5
+       and p1 == 6
+       and p2 == 9.5
+       and p3.first == 12
+       and p3.second == 13.5
+       and p3.third == 14
+       and p4 == 15
+       and p5 == 18.5
+    then
+        result = 42
+    else
+        result = 1
+    end if
+end l_memory_live
+
+sret_handler: type = extern(c) (p0: u64, p1: u64, p2: u64, p3: u64, p4: u64, p5: mixed, p6: f64, p7: u64, p8: large) -> (result: large)
+extern(c) c_sret: (p0: u64, p1: u64, p2: u64, p3: u64, p4: u64, p5: mixed, p6: f64, p7: u64, p8: large) -> (result: large)
+public extern(c) l_sret: (p0: u64, p1: u64, p2: u64, p3: u64, p4: u64, p5: mixed, p6: f64, p7: u64, p8: large) -> (result: large) =
+    if p0 == 3
+       and p1 == 6
+       and p2 == 9
+       and p3 == 12
+       and p4 == 15
+       and p5.first == 18
+       and p5.second == 19.5
+       and p6 == 21.5
+       and p7 == 24
+       and p8.first == 27
+       and p8.second == 28.5
+       and p8.third == 29
+    then
+        result = large(first: 42, second: 43.5, third: 44)
+    else
+        result = large(first: 1, second: 1.0, third: 1)
+    end if
+end l_sret
+
+public extern(c) landin_check: () -> (result: i32) =
+    result = 42
+    handler_0: gp_mixed_handler = c_gp_mixed
+    direct_0 := c_gp_mixed(3, 6, 9, 12, 15, 18, mixed(first: 21, second: 22.5), 24.5, 27, partial(first: 30, second: 31, third: 32), large(first: 33, second: 34.5, third: 35), 36.5)
+    indirect_0 := handler_0(3, 6, 9, 12, 15, 18, mixed(first: 21, second: 22.5), 24.5, 27, partial(first: 30, second: 31, third: 32), large(first: 33, second: 34.5, third: 35), 36.5)
+    if not (direct_0 == 42 and indirect_0 == 42) then
+        result = 1
+    end if
+    handler_1: gp_pair_handler = c_gp_pair
+    direct_1 := c_gp_pair(3, 6, 9, 12, 15, pair_i(first: 18, second: 19), 21, 24)
+    indirect_1 := handler_1(3, 6, 9, 12, 15, pair_i(first: 18, second: 19), 21, 24)
+    if not (direct_1 == 42 and indirect_1 == 42) then
+        result = 2
+    end if
+    handler_2: sse_mixed_handler = c_sse_mixed
+    direct_2 := c_sse_mixed(3.5, 6.5, 9.5, 12.5, 15.5, 18.5, 21.5, 24.5, mixed(first: 27, second: 28.5), 30, 33.5)
+    indirect_2 := handler_2(3.5, 6.5, 9.5, 12.5, 15.5, 18.5, 21.5, 24.5, mixed(first: 27, second: 28.5), 30, 33.5)
+    if not (direct_2 == 42 and indirect_2 == 42) then
+        result = 3
+    end if
+    handler_3: sse_pair_handler = c_sse_pair
+    direct_3 := c_sse_pair(3.5, 6.5, 9.5, 12.5, 15.5, 18.5, 21.5, pair_s(first: 24.5, second: 25.5), 27.5, 30)
+    indirect_3 := handler_3(3.5, 6.5, 9.5, 12.5, 15.5, 18.5, 21.5, pair_s(first: 24.5, second: 25.5), 27.5, 30)
+    if not (direct_3 == 42 and indirect_3 == 42) then
+        result = 4
+    end if
+    handler_4: both_handler = c_both
+    direct_4 := c_both(3, 6, 9, 12, 15, 18, 21.5, 24.5, 27.5, 30.5, 33.5, 36.5, 39.5, 42.5, pair_i(first: 45, second: 46), pair_s(first: 48.5, second: 49.5), mixed(first: 51, second: 52.5), partial(first: 54, second: 55, third: 56))
+    indirect_4 := handler_4(3, 6, 9, 12, 15, 18, 21.5, 24.5, 27.5, 30.5, 33.5, 36.5, 39.5, 42.5, pair_i(first: 45, second: 46), pair_s(first: 48.5, second: 49.5), mixed(first: 51, second: 52.5), partial(first: 54, second: 55, third: 56))
+    if not (direct_4 == 42 and indirect_4 == 42) then
+        result = 5
+    end if
+    handler_5: memory_live_handler = c_memory_live
+    direct_5 := c_memory_live(large(first: 3, second: 4.5, third: 5), 6, 9.5, large(first: 12, second: 13.5, third: 14), 15, 18.5)
+    indirect_5 := handler_5(large(first: 3, second: 4.5, third: 5), 6, 9.5, large(first: 12, second: 13.5, third: 14), 15, 18.5)
+    if not (direct_5 == 42 and indirect_5 == 42) then
+        result = 6
+    end if
+    handler_6: sret_handler = c_sret
+    direct_6 := c_sret(3, 6, 9, 12, 15, mixed(first: 18, second: 19.5), 21.5, 24, large(first: 27, second: 28.5, third: 29))
+    indirect_6 := handler_6(3, 6, 9, 12, 15, mixed(first: 18, second: 19.5), 21.5, 24, large(first: 27, second: 28.5, third: 29))
+    if not (direct_6.first == 42 and direct_6.second == 43.5
+       and direct_6.third == 44 and indirect_6.first == 42
+       and indirect_6.second == 43.5 and indirect_6.third == 44) then
+        result = 7
+    end if
+end landin_check

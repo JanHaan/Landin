@@ -1,3 +1,4 @@
+problem: atom
 bad: type (item: type) = struct
-    nested: [2][3]u8
+    nested: [2][3]problem
 end bad

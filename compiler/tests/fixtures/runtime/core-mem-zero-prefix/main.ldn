@@ -8,8 +8,14 @@ public main: () -> (code: i32) =
     zero: usize = 0
     one: usize = 1
     two: usize = 2
-    base: ptr mut u8 = mem.allocate(allocator, zero, alignof empty) else ptr(0)
-    other: ptr mut u8 = mem.allocate(allocator, zero, alignof empty) else ptr(0)
+    base: ptr mut u8 = mem.allocate(allocator, zero, alignof empty) else (problem)
+        _ = problem
+        return
+    end
+    other: ptr mut u8 = mem.allocate(allocator, zero, alignof empty) else (problem)
+        _ = problem
+        return
+    end
     mut source := mem.reserve(item: empty, base: base, slots: two)
     mut target := mem.reserve(item: empty, base: other, slots: two)
     value: empty = zeroed
@@ -34,8 +40,14 @@ public main: () -> (code: i32) =
     end
     _ = mem.release(source) else value
     _ = mem.release(source) else value
-    released: ptr mut u8 = mem.dispose(source) else ptr(0)
-    released_other: ptr mut u8 = mem.dispose(target) else ptr(0)
+    released: ptr mut u8 = mem.dispose(source) else (problem)
+        _ = problem
+        return
+    end
+    released_other: ptr mut u8 = mem.dispose(target) else (problem)
+        _ = problem
+        return
+    end
     exact: bool = usize(released) == usize(base)
                  and usize(released_other) == usize(other)
     mem.free(allocator, released, zero)

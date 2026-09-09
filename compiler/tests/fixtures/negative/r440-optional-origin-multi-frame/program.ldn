@@ -1,0 +1,21 @@
+absent: atom
+maybe_pointer: type = absent | ptr u32
+
+pair: (cell: ptr u32, missing: bool)
+      -> (item: maybe_pointer from cell, got: bool) =
+    item = if missing then absent else cell end if
+    got = not missing
+end pair
+
+retain: (escaping pointer: ptr u32) -> none =
+    _ = pointer
+end retain
+
+bad: (missing: bool) -> none =
+    cell: u32 = 42
+    values := pair(addr cell, missing)
+    match values.item
+        absent: _ = 0
+        ptr (pointer): retain(pointer)
+    end match
+end bad

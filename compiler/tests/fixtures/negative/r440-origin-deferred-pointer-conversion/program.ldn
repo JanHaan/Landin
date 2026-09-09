@@ -1,0 +1,18 @@
+absent: atom
+maybe_pointer: type = absent | ptr u32
+
+consume: (value: ptr u32) -> none =
+    _ = value
+end consume
+
+bad: (cell: ptr u32) -> (result: maybe_pointer from cell) =
+    local: u32 = 42
+    result = absent
+    defer consume(begin
+        converted: ptr u32 = ptr(begin
+            result = addr local
+            usize(cell)
+        end)
+        converted
+    end)
+end bad

@@ -47,7 +47,7 @@ replaced.
 | `Landin.Tokens` | the lexical vocabulary, the token, the fault, the stream | render prose, assign a diagnostic code, or build a token |
 | `Landin.Tokens.Lexer` | the scan, the only construction of a token, and D161's validation of complete text-literal spelling | know what a token means or decide its contextual text view |
 | `Landin.Tokens.Text` | D161/D181's shared UTF-8 validation and byte, UTF-8 and UTF-16 literal decoder | diagnose, choose a literal context, or own emitted storage |
-| `Landin.Syntax` | the node table, extents, anchors, origins, soundness, and the retained bodyless `extern(c)` declaration fact | know that types or IR values exist, or hold a diagnostic |
+| `Landin.Syntax` | the node table, extents, anchors, origins, soundness, and the retained independent C-convention, variadic, bodyless-import, visibility, C-layout and symbol-literal facts | know that types or IR values exist, or hold a diagnostic |
 | `Landin.Syntax.Precedence` | [1820] as data: levels, operators, folds, first sets | contain a parsing decision |
 | `Landin.Syntax.Parser` | the parse, including contextual separation of a final `try` expression from a `try` statement followed by more body items, D185's initialized condition-binding form D186's contextual caller parameter and D187's two-token contextual `unchecked` region, and the only construction of a tree | assign a diagnostic code, or read a byte |
 | `Landin.Syntax.Dump` | a canonical text for a tree | be a stable interface or a serialisation |
@@ -62,6 +62,7 @@ replaced.
 | `Landin.IR.Verifier` | release-build well-formedness of a completed Unit, including atom/error set membership, descriptor/carrier, multiple-result slot and static function-image agreement, call-failure slots and exits, valid neutral subobject paths and recursive image descriptors, plus target-aware fit of every static fold | diagnose source, repair malformed IR, or choose backend policy |
 | `Landin.IR.Dump` | canonical human-readable text for a Unit | be a stable interface, a reader, or a serialisation |
 | `Landin.Backend` | where a routine's cells live, the recursive target extent of one neutral field shape, where a scalar or fixed-array leaf at any path depth sits inside an aggregate datum or slot, how wide one element of an array of either is, and the target-byte replay of scalar, fixed-array and unfolded variant runs | name a machine, choose a register, or ask the host a width |
+| `Landin.Backend.C_ABI` | SysV AMD64 classification and one call/entry/result placement plan from target facts and neutral shapes, including independent GP/SSE banks and aggregate rollback | ask the host for layout, put register placements in IR, or change the internal Landin ABI |
 | `Landin.Backend.X86_64` | the assembly text for one target, every register in it, collision-safe whole-program symbols, the hosted entry argument/libc bridge, D161's read-only literal data, the target-width scalar, finite-array, compact repetition, nested-child and selected-variant directives and padding for recursively written aggregate images, and D187's omission of exactly the overflow, element-index, slice-range and integer-conversion edges an instruction is marked for | decide a language error mapping, write a file, or run a tool |
 | `Landin.Backend.Toolchain` | the one command line that finishes a compilation, the triplet it is found by, and D202's ordered archive arguments | know what ELF is, invoke a linker directly, or search a PATH |
 | `Landin.Backend.Entry_Point` | [1970]'s one hosted entry shape, asked of the IR | raise a defect for a module that simply has no `main` |
@@ -122,6 +123,20 @@ which would read the carrier as an address are guarded by name in
 `Landin.Stages.Checking` rather than by an exhaustive case. Reference
 checking gives the bound pointer the subject's own origin and gives the empty
 case none; lowering emits the reserved zero and one comparison against it.
+D206 separately refuses known null integer constructions and checks dynamic
+zero after target-width conversion, even in `unchecked`; origin erasure does
+not erase non-nullness. The library's absent backing uses named pointer unions,
+and `dispose` reports `raw_empty` rather than returning an invalid pointer.
+
+D203's C convention and variadic flags follow the complete recursive signature,
+not the bodyless import flag or a concrete callee item. Checking admits only
+[1975]'s selected C subset and lowering promotes unnamed outgoing C arguments;
+verification checks the same signature facts for direct and indirect calls.
+`compiler.c_sysv_lp64` is an early fixed configuration bool, with no runtime
+storage. Ordinary `core/c` asserts it before exporting LP64 aliases. Header
+parsing and C adapter generation belong to the separate bindings tool, not to
+the scanner, parser, type checker or native backend. R4.40 remains active until
+its compiler, generated-adapter and native differential evidence closes.
 
 D192 supersedes D186's string representation through those same seams:
 checking owns the exact three-u32 struct contract and named-forward-only rule;
@@ -338,9 +353,12 @@ signature. Explicit fallthrough and return facts make only continuing arms
 fill one consumer-owned neutral join slot; returning arms use the ordinary
 named-result exit, and no condition is believed. A typed binding, assignment
 or return supplies storage directly, while an argument or discard owns a fresh
-shaped temporary. Every aggregate argument and result context enabled by the
-kernel uses that internal convention; R4.40 later completes the separate C ABI
-classification. Inferred and explicitly typed local or module function values
+shaped temporary. Landin-convention aggregate argument and result contexts
+use that internal convention. D203/D204's separate C signature facts instead
+select SysV AMD64 LP64 classification: independent integer/SSE banks, complete
+aggregate rollback to inline stack bytes, and C hidden-result storage. This
+never repurposes the internal failure carrier as a C error channel.
+Inferred and explicitly typed local or module function values
 are represented by target code addresses and called through verified
 `Indirect_Call` IR. A first-class recursive neutral descriptor, not a concrete
 callee item, carries each complete signature through checking, routine and
@@ -395,9 +413,12 @@ on macOS would hand ELF-only assembly to a toolchain that emits Mach-O.
 Declared whole-program symbols keep their readable short spelling when it is
 unique. Repeated short names across modules receive deterministic declaration
 prefixes, as do non-external declarations named like one of the hosted
-bridge's private libc dependencies. The selected `main` and `extern(c)` items
-retain their ABI spelling. Thus an ordinary lexer function named `open` cannot
-interpose on the bridge's call to libc `open`.
+bridge's private libc dependencies. The selected `main`, C imports and public
+C definitions retain their ABI spelling unless an explicit C symbol override
+selects another; private C definitions without overrides keep collision-safe
+internal names. Checking decodes and validates overrides and refuses
+incompatible same-symbol declarations or multiple definitions. Thus an ordinary
+lexer function named `open` cannot interpose on the bridge's call to libc `open`.
 
 The `Runtime` fixture class compiles programs, links them, runs them on the
 target and checks their statuses. The Linux gate therefore proves the scalar

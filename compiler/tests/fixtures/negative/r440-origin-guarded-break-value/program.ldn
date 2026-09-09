@@ -1,0 +1,17 @@
+absent: atom
+maybe_pointer: type = absent | ptr u32
+
+bad: (cell: ptr u32, choose: bool) -> (result: maybe_pointer from cell) =
+    local: u32 = 42
+    mut candidate: maybe_pointer = addr local
+    result = cell
+    value: i32 = loop do
+        break with begin
+            candidate = absent
+            0
+        end when choose
+        result = candidate
+        return
+    end loop
+    _ = value
+end bad

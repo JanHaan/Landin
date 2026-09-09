@@ -11,7 +11,7 @@
 #
 #  A construct with no evidence and no refusal is this
 #  item's to answer for; see ROADMAP.md R1.90.
-#  200 constructs, 188 with evidence, 12 with neither.
+#  200 constructs, 190 with evidence, 10 with neither.
 #
 #  id    defined in  evidence
 0010   tour        accepted emitted                   Line comment, to end of line
@@ -25,7 +25,7 @@
 0090   tour        accepted emitted refused           Exported from the module
 0100   tour        accepted emitted executed          Several names may share one declaration
 0110   tour        accepted emitted executed refused  Left of ':' is always the name being introduced
-0120   tour        accepted emitted refused refused-by-name Types are declared like any other value, with 'type'
+0120   tour        accepted emitted executed refused refused-by-name Types are declared like any other value, with 'type'
 0130   tour        accepted emitted executed refused  Order inside a module does not matter
 0140   tour        accepted emitted                   An inner scope may shadow an outer name
 0150   tour        accepted emitted executed refused refused-by-name Integers: u8 u16 u32 u64 u128, i8 i16 i32 i64 i128
@@ -59,7 +59,7 @@
 0430   tour        accepted emitted executed refused  Pointer type, address, dereference
 0440   tour        accepted emitted executed refused  A mut reference satisfies a plain one, never the reverse
 0450   tour        accepted emitted executed          Permission is shallow
-0460   tour        accepted emitted executed          Address literal
+0460   tour        accepted emitted executed refused  Address literal
 0470   tour        accepted emitted executed refused  Both directions between a pointer and an integer are the
 0480   tour        accepted emitted executed refused refused-by-name There is no null
 0490   tour        -                                  Pointers are a system tool
@@ -173,16 +173,16 @@
 1570   tour        accepted emitted executed refused  Calling conventions are a growing set of atoms behind one
 1580   tour        accepted emitted executed refused refused-by-name Importing from C
 1590   tour        accepted emitted executed refused  Linking a static library
-1600   tour        -                                  Exporting to C
-1610   tour        -                                  A symbol name the language's identifiers cannot spell
+1600   tour        accepted emitted executed          Exporting to C
+1610   tour        accepted emitted executed refused  A symbol name the language's identifiers cannot spell
 1620   tour        refused                            Atomics are builtins
 1630   tour        refused                            Inline assembly, for what has no builtin
 1640   tour        -                                  Kept against section garbage collection, and placed
-1650   tour        accepted emitted executed          Entry point
+1650   tour        accepted emitted executed refused  Entry point
 1660   tour        accepted emitted executed refused  And this is where capabilities come from
 1670   tour        accepted emitted executed          A failed check calls a fixed, never-returning symbol
 1680   tour        accepted emitted executed refused  Require a capability, do not track an effect
-1690   tour        accepted emitted executed          One mechanism, two readings, is better than two mechanisms
+1690   tour        accepted emitted executed refused  One mechanism, two readings, is better than two mechanisms
 1700   tour        accepted emitted executed refused  Atoms are the same idea wherever they appear
 1710   tour        -                                  How a new feature earns its place
 1720   tour        accepted emitted executed          What the language claims, at this version, plainly
@@ -211,6 +211,6 @@
 1940   spec        accepted emitted executed refused  A module value is known when the compiler reads it
 1950   spec        accepted emitted executed refused  An operand an operation cannot take
 1960   spec        accepted emitted executed          A trap stops at the operation
-1970   spec        accepted emitted executed          The first hosted path has one entry shape
-1975   spec        accepted emitted executed refused  The first foreign boundary imports fixed scalar C routines
+1970   spec        accepted emitted executed refused  The first hosted path has one entry shape
+1975   spec        accepted emitted executed refused  The selected C boundary is SysV AMD64 LP64
 1980   spec        accepted emitted executed          Declared errors are an orthogonal payload-free atom outcome

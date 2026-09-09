@@ -70,8 +70,11 @@ module.exports = grammar({
     [$.declaration_reference, $.indexed_expression],
     [$._type, $.type_application],
     [$.routine_formals, $.parameters],
+    [$.routine_formals],
+    [$.parameters],
     [$.labeled_arguments, $.arguments],
     [$.function_declaration],
+    [$.extern_declaration],
     [$.struct_body],
     [$.concept_body],
     [$.destructured_field, $.indexed_expression],
@@ -119,7 +122,6 @@ module.exports = grammar({
 
     _declaration: $ => choice(
       $.public_declaration,
-      $.extern_declaration,
       $.conformance_declaration,
       $.fixed_conditional,
       $.option_declaration,
@@ -142,14 +144,29 @@ module.exports = grammar({
         $.atom_declaration,
         $.binding,
         $.function_declaration,
+        $.extern_declaration,
         $.type_declaration,
         $.concept_declaration,
       ),
     ),
 
     extern_declaration: $ => seq(
-      'extern', '(', field('convention', $.identifier), ')',
-      field('name', $._declaration_name), ':', $.declared_signature,
+      $.c_convention,
+      optional($.link_symbol),
+      field('name', $._declaration_name), ':', $.c_declared_signature,
+      optional(seq(
+        '=', optional(field('body', $.block)),
+        'end', optional(field('end_name', $.identifier)),
+      )),
+    ),
+    c_convention: $ => seq(
+      'extern', '(', field('convention', alias('c', $.identifier)), ')',
+    ),
+    link_symbol: $ => seq(
+      field('attribute', alias('link', $.identifier)), '(',
+      field('label', alias('symbol', $.identifier)), ':',
+      field('value', $.text_literal),
+      ')',
     ),
 
     fixed_conditional: $ => seq(
@@ -165,7 +182,10 @@ module.exports = grammar({
     // At a declaration start the lexer may also admit contextual import or
     // option syntax. Keep the ordinary name until the next token decides.
     _declaration_name: $ => choice(
-      $.identifier, alias('option', $.identifier), alias('as', $.identifier),
+      $.identifier,
+      alias('option', $.identifier),
+      alias('as', $.identifier),
+      alias('link', $.identifier),
     ),
 
     binding: $ => choice(
@@ -195,7 +215,10 @@ module.exports = grammar({
       $.declaration_reference,
     ),
 
-    function_type: $ => $.signature,
+    function_type: $ => choice(
+      $.signature,
+      seq($.c_convention, $.c_signature),
+    ),
     array_type: $ => seq('[', field('length', $._expression), ']', field('element', $._type)),
     pointer_type: $ => seq('ptr', optional('mut'), field('target', $._type)),
     slice_type: $ => seq('[', ']', optional('mut'), field('element', $._type)),
@@ -276,7 +299,13 @@ module.exports = grammar({
     _union_member: $ => choice($.declaration_reference, $.pointer_type),
 
     struct_body: $ => seq(
+      optional($.c_layout),
       'struct', repeat1(choice($.field, $.variant_part)), 'end', optional($.identifier),
+    ),
+    c_layout: $ => seq(
+      field('attribute', alias('layout', $.identifier)), '(',
+      field('convention', alias('c', $.identifier)),
+      ')',
     ),
     field: $ => seq(field('name', $._declaration_name), ':', field('type', $._type)),
     variant_part: $ => seq(
@@ -290,6 +319,7 @@ module.exports = grammar({
     ),
 
     function_declaration: $ => seq(
+      optional($.link_symbol),
       field('name', $._declaration_name), ':',
       $.declared_signature, '=',
       optional(field('body', $.block)),
@@ -301,9 +331,22 @@ module.exports = grammar({
     signature: $ => seq(
       '(', optional($.parameters), ')', $.arrow, $.returns, optional($.errors),
     ),
+    c_signature: $ => seq(
+      '(', optional(seq(
+        $.parameters,
+        optional(seq(',', $.variadic_marker)),
+      )), ')', $.arrow, $.returns, optional($.errors),
+    ),
     declared_signature: $ => seq(
       '(', optional($.routine_formals), ')', $.arrow, $.returns, optional($.errors),
     ),
+    c_declared_signature: $ => seq(
+      '(', optional(seq(
+        $.routine_formals,
+        optional(seq(',', $.variadic_marker)),
+      )), ')', $.arrow, $.returns, optional($.errors),
+    ),
+    variadic_marker: _ => '...',
     routine_formals: $ => commaSep1(choice($.parameter, $.type_formal)),
     parameters: $ => commaSep1($.parameter),
     // `caller` marks D192's site parameter and is not reserved, so a

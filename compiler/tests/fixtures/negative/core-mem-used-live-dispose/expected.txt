@@ -1,7 +1,7 @@
 error[L0315]: this `inout` or `sink` use may move storage while a derived view is still in use
   --> ../tests/fixtures/negative/core-mem-used-live-dispose/main.ldn:4:40
   |
-4 |     released: ptr mut u8 = mem.dispose(storage) else ptr(0)
+4 |     released: ptr mut u8 = mem.dispose(storage) else (problem)
   |                                        ^^^^^^^
   --> ../tests/fixtures/negative/core-mem-used-live-dispose/main.ldn:3:5
   |

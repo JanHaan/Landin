@@ -1,0 +1,5 @@
+class: positive
+summary: Actual empty returns remain valid after condition and cleanup mutations and returned nested arms lend no frame facts to fallthrough
+constructs: 0470, 0480, 0790, 1050, 1100, 1140, 1170
+program: program.ldn
+targets: linux-x86-64, macos-arm64, synthetic-32

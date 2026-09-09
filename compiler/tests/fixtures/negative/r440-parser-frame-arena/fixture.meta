@@ -1,0 +1,7 @@
+class: negative
+summary: a frame-backed library arena cannot satisfy the derived parser's escaping capability contract
+program: program.ldn
+root: ../../../../..
+constructs: 0480, 0770, 0780, 0790, 1650
+codes: L0314
+targets: linux-x86-64

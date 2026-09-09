@@ -1,0 +1,6 @@
+fixed_callback: type = extern(c) (count: i32) -> (result: i32)
+extern(c) collect: (count: i32, ...) -> (result: i32)
+bad: () -> none =
+    code: fixed_callback = collect
+    _ = code
+end bad
