@@ -242,7 +242,7 @@ container transition, allocation rollback and unsafe obligation is written
 down, and the ten running examples exercise the slice with exact output
 oracles.
 
-**Current roadmap work: R4.40 — Implement the narrow complete C ABI and bindings.**
+**Current roadmap work: R4.50 — Implement baseline code generation and specialization.**
 
 `refine` runs the frontend, lowers and
 verifies target-neutral IR, emits Linux x86-64 assembly, and can assemble and

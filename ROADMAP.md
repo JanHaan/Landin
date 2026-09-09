@@ -2908,10 +2908,10 @@ that has no implementation owner.
 | `[1550]` | principle | none | native-backend policy; implementations have target owners |
 | `[1560]` | hosted-now | R4.30 | D202 hosted tool facts/directives; machine operations have named owners |
 | `[1570]` | hosted-now | R3.50 | matrix evidence |
-| `[1580]` | hosted-now | R4.40 | D203--D205 and `extern.c-boundary` cover the selected boundary; native integration remains active |
+| `[1580]` | hosted-now | R4.40 | D203--D205 and `extern.c-boundary` cover the selected boundary; native gate 1884079 passed |
 | `[1590]` | hosted-now | R4.30 | D202 and runtime/r430-static-library archive execution |
-| `[1600]` | hosted-now | R4.40 | C definitions are implemented and classified by `extern.c-boundary`; native gate evidence remains active |
-| `[1610]` | hosted-now | R4.40 | independent native/C symbol overrides are implemented and classified by `functions.linkage`; native gate evidence remains active |
+| `[1600]` | hosted-now | R4.40 | C definitions are implemented and classified by `extern.c-boundary`; native gate 1884079 passed |
+| `[1610]` | hosted-now | R4.40 | independent native/C symbol overrides are implemented and classified by `functions.linkage`; native gate 1884079 passed |
 | `[1620]` | freestanding | R6.30 | scheduled atomics work |
 | `[1630]` | freestanding | R6.60 | scheduled inline-assembly work |
 | `[1640]` | freestanding | R6.60 | scheduled keep and placement work |
@@ -4660,7 +4660,7 @@ no stable interface.
 
 ### R4.40 — Implement the narrow complete C ABI and bindings
 
-Status: active
+Status: complete
 Depends on: R2.30, R4.30
 
 Cover `c_int` and related types, `char` signedness, aggregate arguments and
@@ -4729,7 +4729,7 @@ non-null-table root without copying or allocation. Identical repetition is a
 no-op; use before initialization, invalid input or root replacement traps. The C
 owner keeps the table and strings live for every capability derived from them.
 
-Implementation and verification are in progress. Recorded source and library
+Implementation and verification are complete. Recorded source and library
 cases include `positive/r440-c-aliases`, `positive/r440-c-signatures`,
 `positive/r440-external-float`, `positive/r440-compatible-link-declarations`,
 `negative/r440-link-does-not-change-convention`,
@@ -4745,9 +4745,17 @@ Rosetta, each with 486/486 cases and 14,795 checks. The clean Mac suite ran 486
 cases with 485 passed, one failed and 14,423 checks; the failing case contained
 only the expected missing-Linux-toolchain failures and zero compiler defects.
 The pinned Clang 19 generator suite passed 41/41, full `check.py` passed, and
-generated IR/layout records were refreshed. The authoritative native Linux
-x86-64 SourceHut clean debug/release gate has not run, so R4.40 remains active
-and cannot close from these local results.
+generated IR/layout records were refreshed. These local results remain
+supplemental evidence. The authoritative native Linux x86-64 SourceHut gate
+closed R4.40: `hut builds show 1884079` reports `SUCCESS` for
+`c1efeb1d556b8407c9a8919787644f504b860214`, titled
+"Implement R4.40 C ABI and generated bindings", with `checks`, `identity`,
+`pages`, `toolchain`, `identify`, `build`, `test`, `release` and `bindings`
+all passed, including clean debug and release validation. The job is
+<https://builds.sr.ht/~sinnfrei/job/1884079>. That revision identifies the
+pre-rewrite gate input, not an ancestor claimed in the rewritten history;
+`origin/main` after the history rewrite is
+`7bef5c0c67d35aa800847b9d22af1dfab1bcd2e4`. R4.50 is now active.
 
 Sources: `[0480]`, `[0790]`, `[1580]`, `[1600]`, `[1610]`, `[1975]`,
 legacy B2; `R§9`, `R§10`.
@@ -4760,7 +4768,7 @@ pointer union carrying what it stood for.
 
 ### R4.50 — Implement baseline code generation and specialization
 
-Status: planned
+Status: active
 Depends on: R1.70, R2.70, R4.10
 
 Implement deterministic local simplification, instruction selection, a simple

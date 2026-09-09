@@ -206,7 +206,7 @@ and memory I/O worlds. Compiled clients exercise their bounded composition,
 allocation failures and rollback. The complete container and hosted
 application programs remain R4.70 and R4.80 work.
 
-**Current roadmap work: R4.40 — Implement the narrow complete C ABI and bindings.**
+**Current roadmap work: R4.50 — Implement baseline code generation and specialization.**
 
 Language and architecture questions are resolved when the first vertical
 slice needs them.
