@@ -68,6 +68,16 @@ Debug mode adds `-O0 -g -gnata -gnatVa -fstack-check`: assertions, contracts
 and validity checks are on while the compiler is being written. Release mode
 uses `-O2 -g -gnatn` and keeps debug information.
 
+The shared library also compiles `src/platform/landin_file_identity.c` with
+the pinned toolchain's host C compiler and the host's system headers. This
+small `stat` adapter keeps host-specific structure layout out of Ada; it is
+not a Landin backend and does not inspect target layout. Its switches are
+`-std=c11 -Wall -Wextra -Werror -pedantic -fno-common -O2 -g` in both modes:
+C warnings are errors too. `scripts/build.sh` includes C sources and headers
+in the same source-checksum manifest as Ada, so editing the adapter cannot
+reuse stale objects. The adapter uses only the host C runtime, already a
+GNAT runtime dependency; it adds no separately acquired library.
+
 `Ada 2022` contracts (`Pre`, `Post`, `Dynamic_Predicate`) are load-bearing in
 debug builds, and debug is the default mode for that reason. Release mode
 drops those checks, so a rule that a package has to keep is written into its

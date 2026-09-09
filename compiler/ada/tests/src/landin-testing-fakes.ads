@@ -24,9 +24,18 @@ package Landin.Testing.Fakes is
    procedure Add_Unreadable (Host : in out Fake_Filesystem; Path : String);
 
    function Written (Host : Fake_Filesystem; Path : String) return String;
+   --  Counts attempts, including refused and empty writes.
+   function Write_Count (Host : Fake_Filesystem) return Natural;
 
    overriding function Exists
      (Host : Fake_Filesystem; Path : String) return Boolean;
+
+   --  Namespace equivalence is explicit, including dot/separator spellings.
+   --  The fake does not guess native symlink or volume case semantics.
+   procedure Add_Alias
+     (Host : in out Fake_Filesystem; Left, Right : String);
+   overriding function Paths_Overlap
+     (Host : Fake_Filesystem; Left, Right : String) return Boolean;
 
    overriding function Is_Directory
      (Host : Fake_Filesystem; Path : String) return Boolean;
@@ -146,6 +155,7 @@ private
       --  same reason the writes do.
       Raises       : Boolean := False;
       Refuses_Write : Boolean := False;
+      Write_Attempts : Natural := 0;
    end record;
 
    type Store_Access is access Store;
@@ -153,6 +163,7 @@ private
    type Fake_Filesystem is limited new Landin.Platform.Filesystem
    with record
       Items  : File_Vectors.Vector;
+      Aliases : Landin.Platform.Path_List;
       Writes : Store_Access := new Store;
    end record;
 

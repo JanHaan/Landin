@@ -1,0 +1,241 @@
+mut trace: i32 = 0
+
+typed_left_0: () -> (code: i32) =
+    code = 42
+    a: [0]i32 = zeroed
+    b: [0]i32 = (begin return end) + a
+    code = 1
+end typed_left_0
+
+inferred_left_0: () -> (code: i32) =
+    code = 42
+    a: [0]i32 = zeroed
+    b := (begin return end) + a
+    code = 1
+end inferred_left_0
+
+assigned_left_0: () -> (code: i32) =
+    code = 42
+    a: [0]i32 = zeroed
+    mut b: [0]i32 = zeroed
+    b = (begin return end) + a
+    code = 1
+end assigned_left_0
+
+discarded_left_0: () -> (code: i32) =
+    code = 42
+    a: [0]i32 = zeroed
+    _ = (begin return end) + a
+    code = 1
+end discarded_left_0
+
+typed_right_0: () -> (code: i32) =
+    code = 42
+    a: [0]i32 = zeroed
+    b: [0]i32 = a + (begin return end)
+    code = 1
+end typed_right_0
+
+inferred_right_0: () -> (code: i32) =
+    code = 42
+    a: [0]i32 = zeroed
+    b := a + (begin return end)
+    code = 1
+end inferred_right_0
+
+assigned_right_0: () -> (code: i32) =
+    code = 42
+    a: [0]i32 = zeroed
+    mut b: [0]i32 = zeroed
+    b = a + (begin return end)
+    code = 1
+end assigned_right_0
+
+discarded_right_0: () -> (code: i32) =
+    code = 42
+    a: [0]i32 = zeroed
+    _ = a + (begin return end)
+    code = 1
+end discarded_right_0
+
+effects_left_0: () -> (code: i32) =
+    trace = 0
+    _ = (begin code = if trace == 0 then 42 else 1 end if trace = trace * 10 + 2 return end) + touch_0()
+    code = 1
+end effects_left_0
+
+effects_right_0: () -> (code: i32) =
+    trace = 0
+    _ = touch_0() + (begin code = if trace == 1 then 42 else 1 end if trace = trace * 10 + 2 return end)
+    code = 1
+end effects_right_0
+
+touch_0: () -> (r: [0]i32) =
+    trace = trace * 10 + 1
+    r = zeroed
+end touch_0
+
+scalar_0: () -> (code: i32) =
+    code = 42
+    a: i32 = 1
+    b: i32 = a + (begin return end)
+    code = 1
+end scalar_0
+
+compound_0: () -> (code: i32) =
+    code = 42
+    mut a: [0]i32 = zeroed
+    a += (begin return end)
+    code = 1
+end compound_0
+
+typed_left_3: () -> (code: i32) =
+    code = 42
+    a: [3]i32 = zeroed
+    b: [3]i32 = (begin return end) + a
+    code = 1
+end typed_left_3
+
+inferred_left_3: () -> (code: i32) =
+    code = 42
+    a: [3]i32 = zeroed
+    b := (begin return end) + a
+    code = 1
+end inferred_left_3
+
+assigned_left_3: () -> (code: i32) =
+    code = 42
+    a: [3]i32 = zeroed
+    mut b: [3]i32 = zeroed
+    b = (begin return end) + a
+    code = 1
+end assigned_left_3
+
+discarded_left_3: () -> (code: i32) =
+    code = 42
+    a: [3]i32 = zeroed
+    _ = (begin return end) + a
+    code = 1
+end discarded_left_3
+
+typed_right_3: () -> (code: i32) =
+    code = 42
+    a: [3]i32 = zeroed
+    b: [3]i32 = a + (begin return end)
+    code = 1
+end typed_right_3
+
+inferred_right_3: () -> (code: i32) =
+    code = 42
+    a: [3]i32 = zeroed
+    b := a + (begin return end)
+    code = 1
+end inferred_right_3
+
+assigned_right_3: () -> (code: i32) =
+    code = 42
+    a: [3]i32 = zeroed
+    mut b: [3]i32 = zeroed
+    b = a + (begin return end)
+    code = 1
+end assigned_right_3
+
+discarded_right_3: () -> (code: i32) =
+    code = 42
+    a: [3]i32 = zeroed
+    _ = a + (begin return end)
+    code = 1
+end discarded_right_3
+
+effects_left_3: () -> (code: i32) =
+    trace = 0
+    _ = (begin code = if trace == 0 then 42 else 1 end if trace = trace * 10 + 2 return end) + touch_3()
+    code = 1
+end effects_left_3
+
+effects_right_3: () -> (code: i32) =
+    trace = 0
+    _ = touch_3() + (begin code = if trace == 1 then 42 else 1 end if trace = trace * 10 + 2 return end)
+    code = 1
+end effects_right_3
+
+touch_3: () -> (r: [3]i32) =
+    trace = trace * 10 + 1
+    r = zeroed
+end touch_3
+
+scalar_3: () -> (code: i32) =
+    code = 42
+    a: i32 = 1
+    b: i32 = a + (begin return end)
+    code = 1
+end scalar_3
+
+compound_3: () -> (code: i32) =
+    code = 42
+    mut a: [3]i32 = zeroed
+    a += (begin return end)
+    code = 1
+end compound_3
+
+public main: () -> (code: i32) =
+    code = 1
+
+    if typed_left_0() <> 42 then return end if
+
+    if inferred_left_0() <> 42 then return end if
+
+    if assigned_left_0() <> 42 then return end if
+
+    if discarded_left_0() <> 42 then return end if
+
+    if typed_right_0() <> 42 then return end if
+
+    if inferred_right_0() <> 42 then return end if
+
+    if assigned_right_0() <> 42 then return end if
+
+    if discarded_right_0() <> 42 then return end if
+
+    if effects_left_0() <> 42 then return end if
+
+    if trace <> 2 then return end if
+
+    if effects_right_0() <> 42 then return end if
+
+    if trace <> 12 then return end if
+
+    if scalar_0() <> 42 then return end if
+
+    if compound_0() <> 42 then return end if
+
+    if typed_left_3() <> 42 then return end if
+
+    if inferred_left_3() <> 42 then return end if
+
+    if assigned_left_3() <> 42 then return end if
+
+    if discarded_left_3() <> 42 then return end if
+
+    if typed_right_3() <> 42 then return end if
+
+    if inferred_right_3() <> 42 then return end if
+
+    if assigned_right_3() <> 42 then return end if
+
+    if discarded_right_3() <> 42 then return end if
+
+    if effects_left_3() <> 42 then return end if
+
+    if trace <> 2 then return end if
+
+    if effects_right_3() <> 42 then return end if
+
+    if trace <> 12 then return end if
+
+    if scalar_3() <> 42 then return end if
+
+    if compound_3() <> 42 then return end if
+
+    code = 42
+end main

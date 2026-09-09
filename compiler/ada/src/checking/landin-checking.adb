@@ -1,5 +1,8 @@
+with Landin.Targets.Layouts;
+
 package body Landin.Checking is
 
+   use type Landin.Layouts.Policy;
    use type Landin.Types.Reference_View;
 
    package body Nominal_Identities is
@@ -3135,11 +3138,15 @@ package body Landin.Checking is
            (Nominal_Identities.Position (Of_Table, Id)).State
                      = Instance_Ready);
 
+   function Layout_Of (Of_Table : Table; Id : Nominal_Type_Id)
+     return Landin.Layouts.Policy
+     is (Of_Table.Layouts
+           (Nominal_Identities.Position (Of_Table, Id)).Policy);
+
    function Has_C_Layout (Of_Table : Table; Id : Nominal_Type_Id)
      return Boolean
      is (Is_Prepared (Of_Table) and then Has_Layout (Of_Table, Id)
-         and then Of_Table.Layouts
-           (Nominal_Identities.Position (Of_Table, Id)).C_Layout);
+         and then Layout_Of (Of_Table, Id) = Landin.Layouts.C);
 
    function Layout_Field_Count (Of_Table : Table; Id : Nominal_Type_Id)
      return Natural
@@ -3239,9 +3246,29 @@ package body Landin.Checking is
       Payloads : Field_Shape_Array := No_Field_Shapes;
       C_Layout : Boolean := False)
    is
+   begin
+      Lay_Out
+        (Into, Id, Fields, Facts, Fits,
+         (if C_Layout then Landin.Layouts.C else Landin.Layouts.Natural),
+         Cases, Payloads);
+   end Lay_Out;
+
+   procedure Lay_Out
+     (Into  : in out Table;
+      Id    : Nominal_Type_Id;
+      Fields : Field_Shape_Array;
+      Facts : Landin.Targets.Target_Facts;
+      Fits  : out Boolean;
+      Policy : Landin.Layouts.Policy;
+      Cases : Case_Run_Array := No_Case_Runs;
+      Payloads : Field_Shape_Array := No_Field_Shapes)
+   is
       Built : Aggregate_Layout :=
-        (State => Instance_Building, C_Layout => C_Layout, others => <>);
+        (State => Instance_Building, Policy => Policy, others => <>);
       Layout_Possible : Boolean := True;
+
+      Extents : Landin.Targets.Layouts.Field_Extent_Array (Fields'Range);
+      Placement : Landin.Targets.Layouts.Plan (Fields'Length);
 
       procedure Reject;
 
@@ -3371,28 +3398,35 @@ package body Landin.Checking is
          Begin_Instance (Into, Id);
       end if;
 
-      --  First prove the complete padded value fits this target.  D18 proves
-      --  each array leaf fits alone; the containing struct still may not.
+      --  Measure complete units once.  Placement permutes physical units,
+      --  never the semantic field run or initializer evaluation order.
       for Field in Fields'Range loop
+         Extent_Of
+           (Fields (Field), Extents (Field).Size, Extents (Field).Alignment);
+         if not Layout_Possible then
+            Reject;
+            return;
+         end if;
+      end loop;
+      --  Make owns expected placement failures.  Map only that computation
+      --  to source-level rejection; malformed shapes above and defects while
+      --  publishing the completed layout below must remain compiler defects.
+      begin
+         Placement := Landin.Targets.Layouts.Make
+           (Extents, Policy, Landin.Targets.Maximum_Object_Size (Facts));
+      exception
+         when Landin.Compiler_Defect =>
+            Reject;
+            return;
+      end;
+      for Position of Placement.Order loop
          declare
-            Size      : Landin.Targets.Byte_Count;
-            Alignment : Landin.Targets.Byte_Alignment;
-            Ignored   : Landin.Targets.Byte_Count;
+            Field : constant Positive := Fields'First + Position - 1;
+            Ignored : Landin.Targets.Byte_Count;
          begin
-            Extent_Of (Fields (Field), Size, Alignment);
-            if not Layout_Possible then
-               Reject;
-               return;
-            end if;
-            if not Landin.Targets.Can_Place
-                     (Built.Placed, Size, Alignment,
-                      Landin.Targets.Maximum_Object_Size (Facts))
-            then
-               Reject;
-               return;
-            end if;
             Landin.Targets.Place
-              (Built.Placed, Size, Alignment, Ignored);
+              (Built.Placed, Extents (Field).Size,
+               Extents (Field).Alignment, Ignored);
          end;
       end loop;
 
@@ -3418,23 +3452,13 @@ package body Landin.Checking is
          Built.First := Natural (Into.Field_Offsets.Length) + 1;
          Built.Shape_First := Natural (Into.Field_Shapes.Length) + 1;
          Built.Count := Fields'Length;
-         Built.Placed := Landin.Targets.Empty_Placement;
 
          for Field in Fields'Range loop
             declare
-               Size      : Landin.Targets.Byte_Count;
-               Alignment : Landin.Targets.Byte_Alignment;
-               At_Offset : Landin.Targets.Byte_Count;
-               Stored    : Field_Shape := Fields (Field);
+               Stored : Field_Shape := Fields (Field);
             begin
-               Extent_Of (Fields (Field), Size, Alignment);
-               if not Layout_Possible then
-                  Reject;
-                  return;
-               end if;
-               Landin.Targets.Place
-                 (Built.Placed, Size, Alignment, At_Offset);
-               Into.Field_Offsets.Append (At_Offset);
+               Into.Field_Offsets.Append
+                 (Placement.Offsets (Field - Fields'First + 1));
                if Stored.Kind = Variant_Field then
                   Stored.Payloads_First :=
                     Case_Base + Stored.Payloads_First;

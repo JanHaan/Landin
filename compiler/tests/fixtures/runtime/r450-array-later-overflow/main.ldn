@@ -1,0 +1,6 @@
+calculate: (a: [3]u8) -> (r: [3]u8) = r = a + 1 end calculate
+public main: () -> (code: i32) =
+    input: [3]u8 = [1, 2, 255]
+    result := calculate(input)
+    code = i32(result[0])
+end main

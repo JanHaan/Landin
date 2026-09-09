@@ -1,6 +1,7 @@
 with Ada.Directories;
 with Ada.IO_Exceptions;
 with Ada.Streams.Stream_IO;
+with Interfaces.C;
 
 package body Landin.Platform.Native is
 
@@ -25,6 +26,30 @@ package body Landin.Platform.Native is
       when Ada.IO_Exceptions.Name_Error =>
          return False;
    end Exists;
+
+   overriding function Paths_Overlap
+     (Host : Native_Filesystem; Left, Right : String) return Boolean
+   is
+      pragma Unreferenced (Host);
+      use type Interfaces.C.int;
+      function Same_Object
+        (Left, Right : Interfaces.C.char_array) return Interfaces.C.int
+        with Import, Convention => C,
+             External_Name => "landin_same_file";
+   begin
+      --  Only the host namespace can resolve symlinks followed by ".." or
+      --  compare missing names on the destination filesystem. Unknown is
+      --  overlapping: never turn an identity lookup error into permission
+      --  to overwrite another artifact.
+      if Left = "" or else Right = ""
+        or else (for some Byte of Left => Byte = Character'Val (0))
+        or else (for some Byte of Right => Byte = Character'Val (0))
+      then
+         return True;
+      end if;
+      return Same_Object
+        (Interfaces.C.To_C (Left), Interfaces.C.To_C (Right)) /= 0;
+   end Paths_Overlap;
 
    overriding function Is_Directory
      (Host : Native_Filesystem; Path : String) return Boolean

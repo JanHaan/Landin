@@ -1,0 +1,30 @@
+==================
+Optimal layout keeps source field identities and contextual names
+==================
+
+record : type = layout(optimal) struct
+  optimal : u8
+  layout : u64
+  c : u8
+end record
+
+---
+
+(source_file
+  (public_declaration
+    (type_declaration
+      (identifier)
+      (struct_body
+        (c_layout
+          (identifier)
+          (identifier))
+        (field
+          (identifier)
+          (scalar_type))
+        (field
+          (identifier)
+          (scalar_type))
+        (field
+          (identifier)
+          (scalar_type))
+        (identifier)))))

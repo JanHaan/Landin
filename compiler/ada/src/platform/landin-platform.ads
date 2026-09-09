@@ -33,6 +33,14 @@ package Landin.Platform is
    function Exists (Host : Filesystem; Path : String) return Boolean
      is abstract;
 
+   --  True for names of the same object, including links and relative paths,
+   --  or when identity cannot safely be distinguished. Missing output leaves
+   --  use actual parent identity and destination-filesystem name equivalence,
+   --  not lexical dot collapse or host-wide case folding. This is a preflight
+   --  guard, not protection against concurrent filesystem replacement.
+   function Paths_Overlap
+     (Host : Filesystem; Left, Right : String) return Boolean is abstract;
+
    function Is_Directory (Host : Filesystem; Path : String) return Boolean
      is abstract;
 

@@ -11,6 +11,12 @@ with Ada.Strings.Unbounded;
 with Ada.Text_IO;
 
 with Landin.Testing;
+with Landin.Tests.Array_Layout_Suite;
+with Landin.Tests.IR_Optimization_Suite;
+with Landin.Tests.Backend_Plans_Suite;
+with Landin.Tests.Backend_Scale_Suite;
+with Landin.Tests.Frontend_Review_Suite;
+with Landin.Tests.Host_Reports_Suite;
 with Landin.Tests.Backend_Suite;
 with Landin.Tests.Catalogue_Suite;
 with Landin.Tests.Checking_Suite;
@@ -22,6 +28,8 @@ with Landin.Tests.Harness_Suite;
 with Landin.Tests.IR_Suite;
 with Landin.Tests.Lexer_Suite;
 with Landin.Tests.Lowering_Suite;
+with Landin.Tests.Optimization_Driver_Suite;
+with Landin.Tests.Optimization_Foundations_Suite;
 with Landin.Tests.Parser_Suite;
 with Landin.Tests.Platform_Suite;
 with Landin.Tests.Resolution_Suite;
@@ -30,6 +38,7 @@ with Landin.Tests.Stages_Suite;
 with Landin.Tests.Targets_Suite;
 with Landin.Tests.Toolchain_Suite;
 with Landin.Tests.Verifier_Suite;
+with Landin.Tests.X86_Optimization_Suite;
 
 procedure Landin_Tests is
 
@@ -61,7 +70,12 @@ procedure Landin_Tests is
    subtype Suite_Name is String (1 .. 17);
 
    Expected_Suites : constant array (Positive range <>) of Suite_Name :=
-     ["backend          ",
+     ["array layout     ",
+      "backend          ",
+      "backend plans    ",
+      "backend scale    ",
+      "frontend review  ",
+      "host reports     ",
       "checking         ",
       "diagnostics      ",
       "driver           ",
@@ -69,7 +83,10 @@ procedure Landin_Tests is
       "fixtures         ",
       "harness          ",
       "ir               ",
+      "ir opt           ",
       "lowering         ",
+      "opt driver       ",
+      "opt foundations  ",
       "parser           ",
       "platform         ",
       "resolution       ",
@@ -77,7 +94,8 @@ procedure Landin_Tests is
       "stages           ",
       "targets          ",
       "toolchain        ",
-      "verifier         "];
+      "verifier         ",
+      "x86 opt          "];
 
    function Trimmed (Name : Suite_Name) return String;
 
@@ -228,6 +246,12 @@ begin
         (Unbounded.To_String (Fixture));
    end if;
 
+   Landin.Tests.Array_Layout_Suite.Register (Cases);
+   Landin.Tests.IR_Optimization_Suite.Register (Cases);
+   Landin.Tests.Backend_Plans_Suite.Register (Cases);
+   Landin.Tests.Backend_Scale_Suite.Register (Cases);
+   Landin.Tests.Frontend_Review_Suite.Register (Cases);
+   Landin.Tests.Host_Reports_Suite.Register (Cases);
    Landin.Tests.Backend_Suite.Register (Cases);
    Landin.Tests.Catalogue_Suite.Register (Cases);
    Landin.Tests.Checking_Suite.Register (Cases);
@@ -239,6 +263,8 @@ begin
    Landin.Tests.IR_Suite.Register (Cases);
    Landin.Tests.Lexer_Suite.Register (Cases);
    Landin.Tests.Lowering_Suite.Register (Cases);
+   Landin.Tests.Optimization_Driver_Suite.Register (Cases);
+   Landin.Tests.Optimization_Foundations_Suite.Register (Cases);
    Landin.Tests.Parser_Suite.Register (Cases);
    Landin.Tests.Platform_Suite.Register (Cases);
    Landin.Tests.Resolution_Suite.Register (Cases);
@@ -247,6 +273,7 @@ begin
    Landin.Tests.Targets_Suite.Register (Cases);
    Landin.Tests.Toolchain_Suite.Register (Cases);
    Landin.Tests.Verifier_Suite.Register (Cases);
+   Landin.Tests.X86_Optimization_Suite.Register (Cases);
 
    for Suite of Expected_Suites loop
       if not Landin.Testing.Has_Suite (Cases, Trimmed (Suite)) then

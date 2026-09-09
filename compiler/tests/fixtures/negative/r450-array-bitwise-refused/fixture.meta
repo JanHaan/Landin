@@ -1,0 +1,6 @@
+class: negative
+summary: array operators require the documented plain scalar arithmetic shape
+constructs: 0300, 0370, 0520, 0590, 0760, 1890
+program: program.ldn
+codes: L0301
+targets: linux-x86-64, macos-arm64

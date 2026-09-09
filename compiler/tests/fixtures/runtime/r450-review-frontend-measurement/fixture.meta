@@ -1,0 +1,6 @@
+class: runtime
+summary: named array aliases and uninitialized storage have nonreading lengths
+program: main.ldn
+constructs: 0120, 0300, 0370, 0520, 1900
+status: 42
+targets: linux-x86-64

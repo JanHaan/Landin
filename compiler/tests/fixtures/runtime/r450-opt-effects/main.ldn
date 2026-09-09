@@ -1,0 +1,41 @@
+mut trace: i32 = 0
+
+mark: (digit: i32) -> (value: i32) =
+    trace = trace * 10 + digit
+    value = digit
+end mark
+
+finish: () -> none = _ = mark(9) end finish
+
+work: () -> (value: i32) =
+    defer finish()
+    mut local: i32 = 40
+    saved: i32 = local
+    local = local + 1
+    _ = mark(1)
+    value = saved + local + mark(2)
+    if true then
+        value = value + 1
+    else
+        _ = mark(8)
+    end if
+end work
+
+aliased: () -> (value: i32) =
+    mut local: i32 = 7
+    pointer: ptr mut i32 = addr local
+    saved := local
+    pointer.val = 12
+    value = saved + local
+end aliased
+
+public main: () -> (code: i32) =
+    result := work()
+    alias_result := aliased()
+    mut wrapped: i8 = 127
+    unchecked begin
+        wrapped = wrapped + 1
+    end unchecked
+    code = if result == 84 and trace == 129 and wrapped == -128
+        and alias_result == 19 then 0 else 1 end if
+end main

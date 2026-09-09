@@ -69,9 +69,37 @@ package body Landin.Testing.Fakes is
       return "";
    end Written;
 
+   function Write_Count (Host : Fake_Filesystem) return Natural
+     is (Host.Writes.Write_Attempts);
+
    overriding function Exists
      (Host : Fake_Filesystem; Path : String) return Boolean
      is (Find (Host, Path) /= 0);
+
+   procedure Add_Alias
+     (Host : in out Fake_Filesystem; Left, Right : String) is
+   begin
+      Host.Aliases.Append (Left);
+      Host.Aliases.Append (Right);
+   end Add_Alias;
+
+   overriding function Paths_Overlap
+     (Host : Fake_Filesystem; Left, Right : String) return Boolean is
+   begin
+      if Left = Right then
+         return True;
+      end if;
+      for Pair in 1 .. Natural (Host.Aliases.Length) / 2 loop
+         if (Host.Aliases (Pair * 2 - 1) = Left
+             and then Host.Aliases (Pair * 2) = Right)
+           or else (Host.Aliases (Pair * 2 - 1) = Right
+                    and then Host.Aliases (Pair * 2) = Left)
+         then
+            return True;
+         end if;
+      end loop;
+      return False;
+   end Paths_Overlap;
 
    overriding function Is_Directory
      (Host : Fake_Filesystem; Path : String) return Boolean
@@ -129,6 +157,7 @@ package body Landin.Testing.Fakes is
       Status  : out Landin.Platform.Write_Status)
    is
    begin
+      Host.Writes.Write_Attempts := Host.Writes.Write_Attempts + 1;
       if Host.Writes.Refuses_Write then
          Status := Landin.Platform.Not_Writable;
          return;

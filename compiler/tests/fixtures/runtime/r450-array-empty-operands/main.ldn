@@ -1,0 +1,10 @@
+empty: type = [0]i32
+mut calls: i32 = 0
+left: () -> (r: empty) = calls = calls * 10 + 1 r = zeroed end left
+right: () -> (r: i32) = calls = calls * 10 + 2 r = 0 end right
+public main: () -> (code: i32) =
+    a: empty = left() / right()
+    b := -a
+    if calls == 12 and lenof b == 0
+    then code = 42 else code = 1 end if
+end main

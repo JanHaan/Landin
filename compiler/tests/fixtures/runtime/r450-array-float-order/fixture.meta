@@ -1,0 +1,6 @@
+class: runtime
+summary: lifted floating arithmetic retains IEEE zero division and ordinary reduction order
+constructs: 0240, 0370, 0520, 0590, 1010, 1890
+program: main.ldn
+status: 42
+targets: linux-x86-64

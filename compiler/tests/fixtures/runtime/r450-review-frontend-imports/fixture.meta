@@ -1,0 +1,7 @@
+class: runtime
+summary: qualified aliased and selective array arithmetic preserves module identities
+program: main.ldn
+root: root
+constructs: 0300, 0370, 0590, 1430, 1440, 1450, 1850
+status: 42
+targets: linux-x86-64

@@ -5,7 +5,12 @@ with Ada.Strings.Fixed;
 with Landin.Backend.Entry_Point;
 with Landin.Backend.Toolchain;
 with Landin.Backend.X86_64;
+with Landin.Build_Reports;
+with Landin.Build_Reports.Sources;
 with Landin.Configuration;
+with Landin.IR.Simplification;
+with Landin.IR.Specialization;
+with Landin.Optimization;
 with Landin.Diagnostics;
 with Landin.Diagnostics.Catalogue;
 with Landin.Diagnostics.Modules;
@@ -103,6 +108,9 @@ package body Landin.Driver is
       & "  --target=NAME       select a described target" & LF
       & "  --option=NAME=VALUE set a declared fixed build option" & LF
       & "  --build-mode=NAME   debug (default) or release" & LF
+      & "  --optimize=NAME     none, size (default), or speed" & LF
+      & "  --specialize=NAME   off, auto (default), or all" & LF
+      & "  --build-report=PATH write deterministic build evidence JSON" & LF
       & "  --root=DIR          append an ordered module import root" & LF
       & "  --emit=asm|exe      write assembly, or assemble and link" & LF
       & "  -o PATH             where to write it" & LF
@@ -158,6 +166,11 @@ package body Landin.Driver is
       Output    : Unbounded.Unbounded_String;
       Toolchain : Unbounded.Unbounded_String;
       Linker    : Unbounded.Unbounded_String;
+      Build_Report_Path : Unbounded.Unbounded_String;
+      Optimization : Landin.Optimization.Options :=
+        Landin.Optimization.Default_Options;
+      Optimize_Seen, Specialize_Seen, Report_Seen : Boolean := False;
+      Emit_Seen, Output_Seen : Boolean := False;
       Index     : Positive := 1;
    begin
       if Natural (Arguments.Length) = 0 then
@@ -194,6 +207,45 @@ package body Landin.Driver is
             elsif Starts_With (Argument, "--build-mode=") then
                Modes.Append (After (Argument, "--build-mode="));
 
+            elsif Starts_With (Argument, "--optimize=") then
+               declare
+                  Accepted : Boolean;
+               begin
+                  Landin.Optimization.Parse
+                    (After (Argument, "--optimize="),
+                     Optimization.Optimize, Accepted);
+                  if Optimize_Seen or else not Accepted then
+                     Unknowns.Append (Argument);
+                     Bad_Use := True;
+                  end if;
+                  Optimize_Seen := True;
+               end;
+
+            elsif Starts_With (Argument, "--specialize=") then
+               declare
+                  Accepted : Boolean;
+               begin
+                  Landin.Optimization.Parse
+                    (After (Argument, "--specialize="),
+                     Optimization.Specialize, Accepted);
+                  if Specialize_Seen or else not Accepted then
+                     Unknowns.Append (Argument);
+                     Bad_Use := True;
+                  end if;
+                  Specialize_Seen := True;
+               end;
+
+            elsif Starts_With (Argument, "--build-report=") then
+               if Report_Seen
+                 or else After (Argument, "--build-report=") = ""
+               then
+                  Unknowns.Append (Argument);
+                  Bad_Use := True;
+               end if;
+               Report_Seen := True;
+               Build_Report_Path := Unbounded.To_Unbounded_String
+                 (After (Argument, "--build-report="));
+
             elsif Starts_With (Argument, "--root=") then
                Roots.Append (After (Argument, "--root="));
 
@@ -208,6 +260,11 @@ package body Landin.Driver is
                    (After (Argument, "--linker="));
 
             elsif Starts_With (Argument, "--emit=") then
+               if Emit_Seen then
+                  Unknowns.Append (Argument);
+                  Bad_Use := True;
+               end if;
+               Emit_Seen := True;
                declare
                   Kind : constant String := After (Argument, "--emit=");
                begin
@@ -222,6 +279,11 @@ package body Landin.Driver is
                end;
 
             elsif Argument = "-o" then
+               if Output_Seen then
+                  Unknowns.Append (Argument);
+                  Bad_Use := True;
+               end if;
+               Output_Seen := True;
                --  A `-o` with nothing after it is a misuse and not an
                --  empty path: silently writing to "" would be the worst
                --  reading of a request that is simply unfinished.
@@ -245,6 +307,20 @@ package body Landin.Driver is
 
          Index := Index + 1;
       end loop;
+
+      --  Compilation controls do not modify informational actions, and a
+      --  build report describes an emitted artifact, not a checking request.
+      if ((Optimize_Seen or Specialize_Seen or Report_Seen)
+          and then (Wants_Usage or Wants_Identity))
+        or else (Report_Seen and then Emit = Emit_Nothing)
+        or else ((Optimize_Seen or Specialize_Seen)
+                 and then Natural (Inputs.Length) = 0)
+        or else (Output_Seen and then
+                 (Emit = Emit_Nothing or Unbounded.Length (Output) = 0))
+      then
+         Unknowns.Append ("incompatible compilation action");
+         Bad_Use := True;
+      end if;
 
       --  Help and identity answer immediately, but only once the whole
       --  command line has been seen and found sound.
@@ -650,7 +726,67 @@ package body Landin.Driver is
 
             Written : Landin.Platform.Write_Status;
             Map_Id : Unbounded.Unbounded_String;
+            Evidence : Landin.Build_Reports.Report;
+            Product_Path : constant String :=
+              (if Unbounded.Length (Output) > 0
+               then Unbounded.To_String (Output)
+               elsif Emit = Emit_Executable then Default_Executable
+               else Default_Assembly);
+            Map_Path : constant String := Source_Map_Beside (Product_Path);
+            Report_Path : constant String :=
+              Unbounded.To_String (Build_Report_Path);
+
+            function Conflicts_With (Path : String) return Boolean is
+              (Host.Paths_Overlap (Report_Path, Path));
+
+            procedure Write_Build_Report;
+
+            procedure Write_Build_Report is
+            begin
+               if Report_Seen and then not Landin.Stages.Failed (Context) then
+                  Host.Write_File
+                    (Report_Path,
+                     Landin.Build_Reports.Sources.JSON
+                       (Evidence, Context, Optimization), Written);
+                  if Written /= Landin.Platform.Write_Ok then
+                     Note_Failure
+                       (Code_Unwritable, "cannot write: " & Report_Path);
+                  end if;
+               end if;
+            end Write_Build_Report;
          begin
+            --  All destinations are checked before the first artifact write,
+            --  including source files discovered through module roots.
+            if Report_Seen then
+               if Conflicts_With (Assembly_Path)
+                 or else Conflicts_With (Product_Path)
+                 or else Conflicts_With (Map_Path)
+               then
+                  Bad_Use := True;
+                  Note_Failure
+                    (Code_Unknown_Option,
+                     "build report collides with an artifact: " & Report_Path);
+                  return;
+               end if;
+               for Index in 1 .. Landin.Stages.Source_Count (Context) loop
+                  declare
+                     Path : constant String := Landin.Source.Name
+                       (Landin.Stages.Source
+                          (Context,
+                           Landin.Stages.Nth_Source (Context, Index)));
+                  begin
+                     if Conflicts_With (Path) then
+                        Bad_Use := True;
+                        Note_Failure
+                          (Code_Unknown_Option,
+                           "build report collides with source: "
+                           & Report_Path);
+                        return;
+                     end if;
+                  end;
+               end loop;
+            end if;
+
             --  A target nothing emits for cannot be asked for a file.
             --  `synthetic-32` exists to keep layout arithmetic honest on a
             --  64-bit host and has no backend, which is what
@@ -683,6 +819,31 @@ package body Landin.Driver is
                return;
             end if;
 
+            Landin.Build_Reports.Clear (Evidence);
+            Landin.IR.Specialization.Run
+              (Landin.Stages.Code (Context).all, Facts,
+               Optimization, Evidence);
+            Landin.IR.Simplification.Run
+              (Landin.Stages.Code (Context).all, Facts,
+               Optimization.Optimize);
+
+            for Index in 1 .. Landin.IR.Nominal_Type_Count
+              (Landin.Stages.Code (Context).all)
+            loop
+               declare
+                  Unit : Landin.IR.Unit renames
+                    Landin.Stages.Code (Context).all;
+                  Id : constant Landin.IR.Nominal_Type_Id :=
+                    Landin.IR.Nth_Nominal_Type (Unit, Index);
+               begin
+                  if Landin.IR.Has_Nominal_Shape (Unit, Id) then
+                     Landin.Build_Reports.Append_Layout
+                       (Evidence, Index, Landin.IR.Layout_Of (Unit, Id),
+                        Landin.Backend.Nominal_Layout (Unit, Id, Facts));
+                  end if;
+               end;
+            end loop;
+
             --  A verified frame may still exceed the displacement encoding
             --  of this backend.  Ask before anything is written, for
             --  [1970]'s reason above.
@@ -702,7 +863,7 @@ package body Landin.Driver is
                   begin
                      if Landin.IR.Kind_Of (Unit, Item) = Landin.IR.Routine
                        and then not Landin.Backend.X86_64.Frame_Is_Addressable
-                                      (Unit, Item, Facts)
+                                      (Unit, Item, Facts, Optimization)
                      then
                         Note_Failure
                           (Code_Wide_Frame,
@@ -725,32 +886,26 @@ package body Landin.Driver is
             end;
 
             declare
-               Assembly : constant String :=
-                 Landin.Backend.X86_64.Text
+               Emitted : Unbounded.Unbounded_String;
+            begin
+               Landin.Backend.X86_64.Emit
                  (Landin.Stages.Code (Context).all,
                   Landin.Stages.Meanings (Context).all,
                   Landin.Stages.Identities (Context).all,
                   Landin.Stages.Target (Context),
+                  Optimization, Emitted, Evidence,
                   Hosted_Entry => Landin.Backend.Entry_Point.Hosted_Main
                     (Landin.Stages.Code (Context).all,
                      Landin.Stages.Meanings (Context).all,
                      Landin.Stages.Modules (Context).all,
                      Landin.Stages.Identities (Context).all));
-               Emitted : Unbounded.Unbounded_String :=
-                 Unbounded.To_Unbounded_String (Assembly);
-            begin
                if Landin.IR.Caller_Source_Count
                  (Landin.Stages.Code (Context).all) > 0
                then
                   declare
                      Map : constant Landin.Source_Maps.Artifact :=
-                       Landin.Source_Maps.Create (Context, Assembly);
-                     Map_Path : constant String := Source_Map_Beside
-                       (if Emit = Emit_Executable
-                        then (if Unbounded.Length (Output) > 0
-                              then Unbounded.To_String (Output)
-                              else Default_Executable)
-                        else Assembly_Path);
+                       Landin.Source_Maps.Create
+                         (Context, Unbounded.To_String (Emitted));
                   begin
                      Emitted := Map.Assembly;
                      Map_Id := Unbounded.To_Unbounded_String (Map.Build_Id);
@@ -773,6 +928,7 @@ package body Landin.Driver is
             end;
 
             if Emit /= Emit_Executable then
+               Write_Build_Report;
                return;
             end if;
 
@@ -864,6 +1020,7 @@ package body Landin.Driver is
                      & Unbounded.To_String (Ran.Output));
                end if;
             end;
+            Write_Build_Report;
          end Emit_Requested;
 
       begin

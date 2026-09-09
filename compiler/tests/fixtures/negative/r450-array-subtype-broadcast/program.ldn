@@ -1,0 +1,5 @@
+percent: type = u8 range 0..100
+f: (amount: percent) -> none =
+    a: [2]u8 = zeroed
+    _ = a + amount
+end f

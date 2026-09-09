@@ -84,6 +84,21 @@ tasks:
       cd landin
       LANDIN_BUILD_MODE=release ./scripts/test.sh
 
+  #  Native filesystem identity cannot be proved by the fake filesystem.
+  - report-identity: |
+      cd landin
+      python3 compiler/tests/test_native_report_identity.py \
+        --refine "$PWD/compiler/ada/build/$LANDIN_BUILD_TAG/debug/bin/refine"
+      python3 compiler/tests/test_native_report_identity.py \
+        --refine "$PWD/compiler/ada/build/$LANDIN_BUILD_TAG/release/bin/refine"
+
+  #  Numeric acceptance against objects assembled by the checksum-pinned
+  #  Linux toolchain, separately for both compiler build modes.
+  - quality: |
+      cd landin
+      ./scripts/quality.sh
+      LANDIN_BUILD_MODE=release ./scripts/quality.sh
+
   #  Real header extraction and generated C execution require the external
   #  frontend; the document checker deliberately does not.
   - bindings: |
@@ -92,6 +107,7 @@ tasks:
 
   - checks: |
       cd landin
+      python3 scripts/tests/test_build_inventory.py
       python3 check.py
 
   #  The chassis must still refuse to claim a version.

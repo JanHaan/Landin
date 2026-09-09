@@ -1,0 +1,6 @@
+class: runtime
+summary: return-only lifted operands compose in every value context and preserve ordered effects
+program: main.ldn
+constructs: 0200, 0300, 0590, 1020, 1050, 1080, 1910, 1930
+status: 42
+targets: linux-x86-64

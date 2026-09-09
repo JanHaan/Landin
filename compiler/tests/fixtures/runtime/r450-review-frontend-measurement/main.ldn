@@ -1,0 +1,9 @@
+row: type = [21]u8
+alias: type = row
+chained: type = alias
+public main: () -> (code: i32) =
+    mut storage: chained
+    if lenof row == 21 and lenof alias == 21 and lenof chained == 21
+        and lenof storage == 21
+    then code = 42 else code = 1 end if
+end main

@@ -826,31 +826,40 @@ length before it computes an address, so an empty slice cannot produce one.
 
 ### [0590] Fixed arrays are the vector type
 
-Fixed arrays are the vector type. Arithmetic and comparison
-on them are element-wise, so there is no second type with
-the same shape and different rules. The first backend
-lowers them to scalar loops; real vector instructions come
-later, as an optimisation, and never on a target without
-them.
+Fixed arrays are the vector type. Arithmetic on numeric elements is
+element-wise, so there is no second type with the same shape and different
+rules. The first backend lowers it to compact scalar loops; real vector
+instructions are a later optimisation, never required for source correctness.
 
 ```landin
+sum_four: (values: [4]f32) -> (sum: f32) =
+    sum = 0.0
+    for value in values do
+        sum += value
+    end for
+end sum_four
+
 va: [4]f32 = [1.0, 1.0, 1.0, 1.0]
 vb := va * va
 sc := va * 2.0        -- a scalar on either side is fine
-s  := reduce_add(vb)
+s := sum_four(vb)     -- ordinary function, not a reduction builtin
 ```
 
-Arithmetic applies element by element between arrays of the
-same element type and the same length; differing lengths do
-not broadcast, they are a type error. Overflow traps per
-element, +% wraps per element.
-Comparison is deliberately not element-wise: == and <> ask
-about the whole array and yield one bool, and the ordering
-operators are not defined on arrays. Masks come from named
-library functions, so no operator changes result type with
-its operands.
-[4096]f32 + [4096]f32 is a loop and a 16 KB temporary. That
-is visible in the type, but worth saying out loud.
+D209 lifts `+`, `-`, `*`, `/` and unary `-` over numeric arrays, and `%`,
+`+%`, `-%`, `*%` over integer arrays. Arrays must have the same element type
+and length; a scalar of that element type broadcasts, not an array of another
+length. Each operand is evaluated once, left to right, and complete array
+values are retained before the element loop. Arithmetic assignment therefore
+survives overlap rather than reading back its own earlier destination writes.
+Elements are processed in ascending index order with the scalar trap, wrapping
+and floating-point rules. No reassociation changes `sum_four`'s ordered fold
+from positive zero.
+
+D200 refuses every array comparison, including `==` and `<>`; it does not
+silently choose whole-array equality or a mask. Named ordinary functions can
+state those algorithms explicitly. `[4096]f32 + [4096]f32` needs a 16 KB result
+and may retain operand snapshots as well. The type makes that cost visible;
+compact loop code does not make the storage free.
 
 ### [0600] Text types are distinct views
 
@@ -1265,12 +1274,19 @@ end read_modify_write
 Fields keep the order you wrote them, with natural alignment
 and padding in between, so a hexdump matches the source and
 the layout does not shift under a new compiler.
-layout(optimal) lets the compiler reorder to save padding.
-layout(c) applies the selected C rules [1975]; it does not choose a function's
+`layout(optimal)` explicitly permits D210's stable descending-alignment
+candidate, selected only when its final padded size is strictly smaller.
+Equal-sized candidates keep source order. Complete nested fields, arrays and
+variant parts stay indivisible; their internal rules do not change. The
+selected target supplies every byte count, including for 32-bit descriptions.
+Initializer evaluation still follows written order [0410]. Optimization flags
+never reorder an unannotated struct.
+`layout(c)` applies the selected C rules [1975]; it does not choose a function's
 calling convention. The enabled C subset uses native-endian scalar fields,
 fixed arrays, nested nonempty C structs and explicitly C-convention callback
-fields. `layout(optimal)` and per-field byte-order attributes below remain the
-broader design, not enabled R4.40 C record forms. Byte order is per field.
+fields. Optimal layout does not qualify a record for C transport. Per-field
+byte-order attributes below remain broader design, not enabled C record forms.
+Byte order is per field.
 
 ```landin
 packet: type = layout(c) struct
@@ -2527,25 +2543,38 @@ end sort_demo
 
 ```
 
-### [1310] Generic code can always be compiled once and handed a table
+### [1310] Evidence is the foundation; specialization is optional
 
-Generic code can always be compiled once and handed a table
-of the concept's functions. That table is the foundation,
-because 'any' needs it and so do calls through function
-pointers. Everywhere the concrete type is known, the
-compiler weighs specialising against it: loop depth at the
-call, how many concept entries the body calls, and the size
-of the type on the one side, code size on the other. With a
-single instantiation it always specialises, since the table
-version then becomes dead. Optimising for size raises the
-bar, optimising for speed lowers it, and identical machine
-code from different types is folded into one copy. The
-build report lists what was specialised and what was not.
-The evidence is not only the concept's functions. It
-carries the size and the alignment of the type as well,
-because sizeof T and alignof T are constants only where
-the call was specialised, and a generic container that
-cannot ask how big its element is cannot allocate.
+Evidence tables are the semantic foundation, not an optimisation fallback
+that source correctness may depend on. D211 distinguishes the concrete
+instances required to represent source types from optional specialization of
+their dispatch. The bootstrap retains concrete representation bodies; it does
+not promise one erased body for every possible by-value representation.
+
+`--optimize=none|size|speed` and `--specialize=off|auto|all` are independent
+axes, defaulting to `size` and `auto`, independent also of `--build-mode`.
+Specialization needs proof of actual incoming evidence, not merely the table
+expected for a semantic instance. Unknown incoming tables, address-exposed
+instances and heterogeneous `any` calls keep indirect dispatch. A single
+eligible normalized instance bypasses profitability, not proof; `all` does the
+same for every eligible instance. No call is specialized merely because its
+source type is known.
+
+The deterministic policy counts proved entry-call sites and their source loop
+depth, represented target bytes and weighted IR growth. D211 states the caps,
+weights and thresholds: size raises the bar and speed lowers it. `none` turns
+off simplification and allocation, not independently requested specialization;
+its automatic specialization uses the size threshold. Identical emitted bodies
+may share only when their complete machine meaning and address identity permit
+it. A smaller body does not authorize changing a C or Landin convention.
+
+The evidence includes target size and alignment as well as functions. The
+bootstrap keeps hidden evidence and aggregate-result ABI positions even where
+a proved entry call becomes direct; specialization is not an ABI-erasure
+promise. `--build-report=PATH` writes factual decisions, retained ABI/fallback,
+layout savings and frame/register/stack-traffic evidence separately from source
+diagnostics. It introduces no runtime report storage. Measured object bytes
+come from the Linux object-quality harness, not an IR cost estimate.
 
 The enabled R2.70 bootstrap gives every constrained routine instance hidden
 table pointers for the direct constraint and its separate transitive
@@ -2559,8 +2588,8 @@ the synthetic 32-bit target facts. The baseline backend folds two instance
 symbols onto one machine body only after a deliberately narrow IR comparison
 proves every retained operation has the same physical meaning; differing
 representations or signed operations remain separate concrete bodies rather
-than making sharing a correctness assumption. Direct-call specialization and
-the general optimization policy above remain R4.50 work.
+than making sharing a correctness assumption. D211 adds optional proved
+entry-call specialization without weakening that foundation.
 
 ### [1320] Traversal is a concept
 
@@ -3245,8 +3274,9 @@ separate deterministic clang-AST generator for declarations and explicit C
 adapters, with policy for facts a header does not say: nullability, ownership,
 `from`, retention and incoming-varargs extraction. That policy is not a
 handwritten replacement signature. [1975] defines the selected Linux x86-64
-SysV AMD64 LP64 boundary; ROADMAP.md retains its pending implementation and
-native evidence rather than treating this rule as completion.
+SysV AMD64 LP64 boundary; ROADMAP.md records R4.40's authoritative native
+closure and R4.50's remaining optimization integration rather than treating
+normative rules alone as completion.
 
 A C pointer may be null and a Landin pointer may not. A foreign declaration
 that permits absence therefore names [0480]'s one-atom pointer union, which
@@ -3586,12 +3616,11 @@ later rather than a repair that is owed.
 
 One mechanism, two readings, is better than two mechanisms.
 Generic code is a value plus evidence that its type
-satisfies a concept. When the compiler knows the type it
-can specialise and the evidence disappears; when it does
-not, the evidence is carried and the type is erased, and
-that is exactly what 'any C' is. Static generics and
-runtime dispatch are one thing seen from two sides, not
-two features.
+satisfies a concept. When the compiler proves the concrete incoming evidence
+it can specialize dispatch; when it cannot, the evidence is carried and the
+type may be erased, which is what 'any C' expresses. D211's bootstrap keeps
+hidden evidence ABI positions even after dispatch specialization. Static
+generics and runtime dispatch share a foundation, not two unrelated features.
 
 ### [1700] Atoms are the same idea wherever they appear
 
@@ -3636,9 +3665,10 @@ with static help that is worth having.
 Checks stay on by default. unchecked [1120] removes the
 edges D187 names, in the region where it is written, and
 grants an optimiser nothing at all: it emits fewer checks
-and makes no fact available to a later pass. What an
-optimiser may assume is still a decision that should wait
-for a compiler that can be measured, and R4.50 owns it.
+and makes no fact available to a later pass. D211 retains that rule under
+optimization: no new undefined behavior, no-alias, overflow or floating-point
+assumption follows from `unchecked`. Existing scalar outcomes and observable
+side-effect and trap order remain the contract.
 
 ### [1730] Check once, then carry the proof
 

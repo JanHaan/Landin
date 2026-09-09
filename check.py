@@ -3449,13 +3449,15 @@ def check_coverage_registers(full_run):
             "pointer.permission", "inout.exact-alias",
             "inout.possible-alias", "pointer.validity",
             "pointer.integer-origin", "pointer.integer-width",
-            "arrays.initialization", "raw.prefix", "raw.backing",
+            "arrays.initialization", "arrays.arithmetic",
+            "arrays.element-traps", "layout.explicit-policy",
+            "raw.prefix", "raw.backing",
             "allocation.failure", "allocation.backing",
             "allocation.reclamation",
             "slices.bounds-known",
             "slices.bounds-runtime", "atoms.sets", "aggregates.variants",
             "origins.escape", "origins.aliasing-limit", "functions.abi",
-            "functions.caller", "functions.linkage",
+            "functions.caller", "functions.linkage", "optimization.outcomes",
             "extern.c-boundary", "host.arguments-startup", "host.io",
             "host.io-failure",
             "diagnostics.retention", "diagnostics.delivery-failure",
@@ -4606,7 +4608,7 @@ def check_highlight_vocabulary(full_run):
                         "the tree-sitter `%s` rule omits %s"
                         % (rule, ", ".join(missing_refs))))
 
-    contextual = {"c", "layout", "link", "symbol"}
+    contextual = {"c", "optimal", "layout", "link", "symbol"}
     reserved_contextual = sorted(contextual & listed) if reserved else []
     if reserved_contextual:
         out.append((grammar, 1,
@@ -4760,6 +4762,115 @@ def check_source_locations(full_run):
     return out
 
 
+def check_optimization_contract(full_run):
+    """Cheap policy wiring and object-reader checks; never compiler evidence."""
+    if not full_run:
+        return []
+    import runpy
+    paths = ["compiler/tests/quality/check.py",
+             "compiler/tests/quality/scalars.ldn",
+             "compiler/tests/quality/arrays.ldn.in",
+             "compiler/tests/quality/layout.ldn",
+             "scripts/quality.sh",
+             "compiler/ada/src/base/landin-optimization.ads",
+             "compiler/ada/tests/src/landin-tests-fixture_execution_suite.adb",
+             "compiler/tests/quality/specialization.ldn",
+             "compiler/tests/quality/folding.ldn"]
+    missing = absent(paths)
+    if missing:
+        return missing
+    out = []
+    quality = runpy.run_path(paths[0], run_name="quality_contract_check")
+    expected = (("none", "off"), ("size", "off"),
+                ("size", "auto"), ("speed", "auto"))
+    if quality["PROFILES"] != expected:
+        out.append((paths[0], 1, "mandatory object profiles changed"))
+    sample = ("0000000000000000 <probe>:\n"
+              "   0:\tmov    -0x8(%rbp),%rax\n"
+              "   4:\tlea    -0x8(%rbp),%rcx\n"
+              "   8:\tmov    %rax,-0x10(%rbp)\n"
+              "   c:\tret\n\n"
+              "0000000000000010 <other>:\n  10:\tret\n")
+    body = quality["instructions"](sample, "probe")
+    if len(body) != 4 or quality["stack_traffic"](body) != 2:
+        out.append((paths[0], 1, "object reader confuses addresses and memory"))
+    try:
+        quality["instructions"](sample, "missing")
+        out.append((paths[0], 1, "missing object symbol silently passes"))
+    except ValueError:
+        pass
+    # Exercise output-oracle policy without spawning any process or compiler.
+    import subprocess
+    from unittest.mock import patch
+    for stdout, stderr in (("", ""), ("unexpected", ""), ("", "unexpected")):
+        result = subprocess.CompletedProcess(["quality-program"], 0,
+                                             stdout, stderr)
+        with patch("subprocess.run", return_value=result):
+            try:
+                quality["run"](["quality-program"], empty_output=True)
+                if stdout or stderr:
+                    out.append((paths[0], 1, "quality output oracle is weakened"))
+            except ValueError:
+                if not stdout and not stderr:
+                    out.append((paths[0], 1, "quality rejects empty output"))
+    identity = "compiler/ada/src/platform/landin_file_identity.c"
+    if not os.path.isfile(identity):
+        out.append((identity, 1, "native same-file identity adapter is missing"))
+    manifest = io.open("scripts/build.sh", encoding="utf-8").read()
+    if "-name '*.c'" not in manifest or "-name '*.h'" not in manifest:
+        out.append(("scripts/build.sh", 1,
+                    "host C sources and headers must invalidate build checksums"))
+    project = io.open("compiler/ada/landin_lib.gpr", encoding="utf-8").read()
+    if 'for Languages use ("Ada", "C");' not in project:
+        out.append(("compiler/ada/landin_lib.gpr", 1,
+                    "native identity adapter must link into the shared library"))
+    result = subprocess.CompletedProcess(["quality-program"], 1, "", "failed")
+    with patch("subprocess.run", return_value=result):
+        try:
+            quality["run"](["quality-program"])
+            out.append((paths[0], 1, "failed quality command silently passes"))
+        except ValueError as error:
+            if "failed" not in str(error):
+                out.append((paths[0], 1, "quality command loses its diagnostic"))
+    options = io.open(paths[5], encoding="utf-8").read()
+    for name, pair in (("Default_Options", "Size, Auto"),
+                       ("Reference_Options", "None, Off")):
+        if not re.search(name + r"\s*:.*?:=\s*\(" + pair + r"\)", options):
+            out.append((paths[5], 1, name + " differs from D211"))
+    harness = io.open(paths[6], encoding="utf-8").read().replace(
+        "Landin.Optimization.", "")
+    for objective, specialization in (("None", "Off"), ("Size", "Off"),
+                                      ("Size", "Auto"), ("Speed", "Auto"),
+                                      ("None", "All_Eligible"),
+                                      ("Speed", "All_Eligible")):
+        if not re.search(r"\(" + objective + r",\s*" + specialization
+                         + r"\)", harness):
+            out.append((paths[6], 1, "runtime profile missing: "
+                        + objective + "/" + specialization))
+    gate = io.open(".build.yml", encoding="utf-8").read()
+    if "LANDIN_BUILD_MODE=release ./scripts/quality.sh" not in gate:
+        out.append((".build.yml", 1, "release object quality is not gated"))
+    for runner in ("compiler/tests/test_native_report_identity.py",
+                   "scripts/tests/test_build_inventory.py"):
+        out += absent([runner])
+        if "python3 " + runner not in gate:
+            out.append((".build.yml", 1, runner + " is not gated"))
+    for mode in ("debug", "release"):
+        identity_command = (
+            "python3 compiler/tests/test_native_report_identity.py "
+            + chr(92) + "\n"
+            + '        --refine "$PWD/compiler/ada/build/$LANDIN_BUILD_TAG/'
+            + mode + '/bin/refine"')
+        if identity_command not in gate:
+            out.append((".build.yml", 1,
+                        mode + " native report identity is not gated"))
+    tour = io.open(TOUR_NAME, encoding="utf-8").read()
+    array_section = tour.split("### [0590]", 1)[1].split("### [0600]", 1)[0]
+    if "Arithmetic and comparison" in array_section or "reduce_add(" in array_section:
+        out.append((TOUR_NAME, 1, "array prose revives undefined comparison/reduction"))
+    return out
+
+
 def main(argv):
     here = os.path.dirname(os.path.abspath(__file__))
     if here:
@@ -4843,6 +4954,7 @@ def main(argv):
     extra += check_pinned_toolchain(full_run)
     extra += check_developer_loops(full_run)
     extra += check_source_locations(full_run)
+    extra += check_optimization_contract(full_run)
     extra += check_grammar_corpus(full_run)
     extra += check_token_vocabulary(full_run)
     extra += check_precedence_table(full_run)

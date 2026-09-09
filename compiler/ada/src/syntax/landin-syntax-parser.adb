@@ -337,7 +337,7 @@ package body Landin.Syntax.Parser is
                External  : Boolean := False;
                C_ABI     : Boolean := False;
                Variadic  : Boolean := False;
-               C_Layout  : Boolean := False;
+               Layout    : Landin.Layouts.Policy := Landin.Layouts.Natural;
                Link_Name : Landin.Source.Span := Landin.Source.Empty_Span;
                Mutable   : Boolean := False;
                Escapes   : Boolean := False;
@@ -423,6 +423,7 @@ package body Landin.Syntax.Parser is
                return Node_Id;
             procedure Recover_Annotation_Closer;
             procedure Parse_C_Convention;
+            function Parse_Layout return Landin.Layouts.Policy;
             procedure Parse_Parameters
               (Into         : in out Slot_Vectors.Vector;
                C_ABI        : Boolean;
@@ -777,7 +778,7 @@ package body Landin.Syntax.Parser is
                External  : Boolean := False;
                C_ABI     : Boolean := False;
                Variadic  : Boolean := False;
-               C_Layout  : Boolean := False;
+               Layout    : Landin.Layouts.Policy := Landin.Layouts.Natural;
                Link_Name : Landin.Source.Span := Landin.Source.Empty_Span;
                Mutable   : Boolean := False;
                Escapes   : Boolean := False;
@@ -824,7 +825,7 @@ package body Landin.Syntax.Parser is
                    External   => External,
                    C_ABI      => C_ABI,
                    Variadic   => Variadic,
-                   C_Layout   => C_Layout,
+                   Layout     => Layout,
                    Link_Name  => Link_Name,
                    Mutable    => Mutable,
                    Escaping   => Escapes,
@@ -2046,6 +2047,48 @@ package body Landin.Syntax.Parser is
                end if;
             end Parse_C_Convention;
 
+            function Parse_Layout return Landin.Layouts.Policy is
+               Opened : constant Landin.Source.Span := Here;
+               Policy : Landin.Layouts.Policy := Landin.Layouts.Natural;
+            begin
+               Advance;
+               if not Expect
+                 (Tok.Left_Paren, "a layout annotation opens with `(`",
+                  "[0750]: write `layout(c)` or `layout(optimal)`",
+                  Opened, "this annotation")
+               then
+                  return Policy;
+               end if;
+               if Peek = Tok.Identifier
+                 and then Landin.Source.Names.Spelling
+                   (Names, Named_Here) = "c"
+               then
+                  Policy := Landin.Layouts.C;
+               elsif Peek = Tok.Identifier
+                 and then Landin.Source.Names.Spelling
+                   (Names, Named_Here) = "optimal"
+               then
+                  Policy := Landin.Layouts.Optimal;
+               else
+                  Complain
+                    (Syn.Token_Expected, Here,
+                     "the supported layouts are `c` and `optimal`",
+                     Note => "[0750]: ordinary structs retain natural layout",
+                     Related => Opened, Because => "this annotation");
+               end if;
+               if Peek = Tok.Identifier then
+                  Advance;
+               end if;
+               if not Expect
+                 (Tok.Right_Paren, "a layout annotation closes with `)`",
+                  "[0750]: write `layout(c)` or `layout(optimal)`",
+                  Opened, "this annotation")
+               then
+                  Recover_Annotation_Closer;
+               end if;
+               return Policy;
+            end Parse_Layout;
+
             procedure Parse_Parameters
               (Into         : in out Slot_Vectors.Vector;
                C_ABI        : Boolean;
@@ -2664,19 +2707,24 @@ package body Landin.Syntax.Parser is
                       (Names, Named_Here) = "layout"
                     and then Ahead (1) = Tok.Left_Paren
                   then
-                     Parse_C_Convention;
-                     if Peek = Tok.Kw_Struct then
-                        Aliased_Type := Parse_Struct_Body (Named, At_Name);
-                        Result.Items (Positive (Aliased_Type)).C_Layout :=
-                          True;
-                     else
-                        Complain
-                          (Syn.Type_Expected, Here,
-                           "`layout(c)` requires a struct body",
-                           Note => "[1580]: layout(c) struct fields end",
-                           Related => At_Name, Because => "this type");
-                        Aliased_Type := Add (Error_Type, Here);
-                     end if;
+                     declare
+                        Policy : constant Landin.Layouts.Policy :=
+                          Parse_Layout;
+                     begin
+                        if Peek = Tok.Kw_Struct then
+                           Aliased_Type := Parse_Struct_Body (Named, At_Name);
+                           Result.Items (Positive (Aliased_Type)).Layout :=
+                             Policy;
+                        else
+                           Complain
+                             (Syn.Type_Expected, Here,
+                              "a layout annotation requires a struct body",
+                              Note => "[0750]: layout(optimal) struct fields"
+                                & " end",
+                              Related => At_Name, Because => "this type");
+                           Aliased_Type := Add (Error_Type, Here);
+                        end if;
+                     end;
                   elsif Peek = Tok.Kw_Struct then
                      Aliased_Type := Parse_Struct_Body (Named, At_Name);
                   else
@@ -2857,15 +2905,20 @@ package body Landin.Syntax.Parser is
                   Resync_Declaration;
                end if;
 
-               return Add
-                 (Of_Kind  => Type_Declaration,
-                  At_Token => At_Name,
-                  Extent   => Join (Start, After_Previous),
-                  Children => [Aliased_Type] & To_List (Formals),
-                  Named    => Named,
-                  C_Layout => Aliased_Type /= No_Node
-                    and then Result.Items (Positive (Aliased_Type)).C_Layout,
-                  Exported => Exported);
+               declare
+                  Policy : constant Landin.Layouts.Policy :=
+                    (if Aliased_Type = No_Node then Landin.Layouts.Natural
+                     else Result.Items (Positive (Aliased_Type)).Layout);
+               begin
+                  return Add
+                    (Of_Kind  => Type_Declaration,
+                     At_Token => At_Name,
+                     Extent   => Join (Start, After_Previous),
+                     Children => [Aliased_Type] & To_List (Formals),
+                     Named    => Named,
+                     Layout   => Policy,
+                     Exported => Exported);
+               end;
             end Parse_Type_Declaration;
 
             --  [1230]'s contextual concept body.  Its requirement entries

@@ -28,7 +28,8 @@ Manifest="$LANDIN_BUILD_DIR/source-manifest.txt"
 #  PATH; the tools themselves say what is.
 landin_manifest() {
     find "$LANDIN_ADA_DIR/src" "$LANDIN_ADA_DIR/tests/src" \
-         -type f -name '*.ad[bs]' -exec cksum {} + | sort
+         -type f \( -name '*.ad[bs]' -o -name '*.c' -o -name '*.h' \) \
+         -exec cksum {} + | sort
     cksum "$LANDIN_ADA_DIR"/*.gpr | sort
     cksum "$LANDIN_ROOT/scripts/build.sh" "$LANDIN_ROOT/scripts/env.sh" \
         | sort
@@ -60,10 +61,10 @@ if [ -f "$Manifest" ] && [ "$Current" != "$(cat "$Manifest")" ]; then
         #  The manifest is sorted by its whole checksum row, so changing a
         #  file can move its path.  Inventory equality is set equality:
         #  extract the paths and sort those independently.
-        Old_Paths="$(awk '$NF ~ /[.](ad[bs]|gpr|sh)$/ {print $NF}' "$Manifest" \
+        Old_Paths="$(awk '$NF ~ /[.](ad[bs]|c|h|gpr|sh)$/ {print $NF}' "$Manifest" \
             | sort)"
         New_Paths="$(printf '%s\n' "$Current" \
-            | awk '$NF ~ /[.](ad[bs]|gpr|sh)$/ {print $NF}' | sort)"
+            | awk '$NF ~ /[.](ad[bs]|c|h|gpr|sh)$/ {print $NF}' | sort)"
         Old_Fixed="$(grep -E '^(mode |gnat |gprbuild )|[.](gpr|sh)$' "$Manifest")"
         New_Fixed="$(printf '%s\n' "$Current" \
             | grep -E '^(mode |gnat |gprbuild )|[.](gpr|sh)$')"

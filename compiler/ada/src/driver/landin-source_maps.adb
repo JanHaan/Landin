@@ -1,5 +1,6 @@
 with GNAT.SHA256;
 
+with Landin.Byte_Encoding;
 with Landin.IR;
 with Landin.Source;
 
@@ -7,20 +8,8 @@ package body Landin.Source_Maps is
    package US renames Ada.Strings.Unbounded;
    LF : constant Character := Character'Val (10);
 
-   function Hex (Value : String) return String;
-
-   function Hex (Value : String) return String is
-      Hex_Digits : constant String := "0123456789abcdef";
-      Result : String (1 .. Value'Length * 2);
-      Next : Positive := 1;
-   begin
-      for Byte of Value loop
-         Result (Next) := Hex_Digits (Character'Pos (Byte) / 16 + 1);
-         Result (Next + 1) := Hex_Digits (Character'Pos (Byte) mod 16 + 1);
-         Next := Next + 2;
-      end loop;
-      return Result;
-   end Hex;
+   function Hex (Value : String) return String
+     renames Landin.Byte_Encoding.Hex;
 
    function Create
      (Context : in out Landin.Stages.Compilation;

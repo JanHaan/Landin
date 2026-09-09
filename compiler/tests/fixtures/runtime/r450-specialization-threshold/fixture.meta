@@ -1,0 +1,6 @@
+class: runtime
+summary: two concrete evidence instances exercise capped loop benefit under every optimization profile
+program: main.ldn
+status: 0
+constructs: 0810, 1230, 1240, 1260, 1290, 1310
+targets: linux-x86-64

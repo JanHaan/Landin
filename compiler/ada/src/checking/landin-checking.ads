@@ -59,6 +59,7 @@
 private with Ada.Containers.Vectors;
 private with System;
 
+with Landin.Layouts;
 with Landin.Provenance;
 with Landin.Resolution;
 with Landin.Source;
@@ -1775,6 +1776,10 @@ package Landin.Checking is
      return Boolean
      with Pre => Is_Prepared (Of_Table);
 
+   function Layout_Of (Of_Table : Table; Id : Nominal_Type_Id)
+     return Landin.Layouts.Policy
+     with Pre => Has_Layout (Of_Table, Id);
+
    function Has_C_Layout (Of_Table : Table; Id : Nominal_Type_Id)
      return Boolean;
 
@@ -1793,6 +1798,26 @@ package Landin.Checking is
       Cases : Case_Run_Array := No_Case_Runs;
       Payloads : Field_Shape_Array := No_Field_Shapes;
       C_Layout : Boolean := False)
+     with Pre  => Is_Prepared (Into)
+                  and then Holds (Into, Id)
+                  and then Instance_State_Of (Into, Id)
+                             in Instance_Unseen | Instance_Building,
+          Post => Has_Layout (Into, Id) = Fits
+                  and then Instance_State_Of (Into, Id)
+                             = (if Fits then Instance_Ready
+                                else Instance_Invalid)
+                  and then (if Fits then Layout_Field_Count (Into, Id)
+                                         = Fields'Length);
+
+   procedure Lay_Out
+     (Into  : in out Table;
+      Id    : Nominal_Type_Id;
+      Fields : Field_Shape_Array;
+      Facts : Landin.Targets.Target_Facts;
+      Fits  : out Boolean;
+      Policy : Landin.Layouts.Policy;
+      Cases : Case_Run_Array := No_Case_Runs;
+      Payloads : Field_Shape_Array := No_Field_Shapes)
      with Pre  => Is_Prepared (Into)
                   and then Holds (Into, Id)
                   and then Instance_State_Of (Into, Id)
@@ -2437,7 +2462,7 @@ private
      (Index_Type => Positive, Element_Type => Signature_Record);
 
    type Aggregate_Layout is record
-      C_Layout : Boolean := False;
+      Policy : Landin.Layouts.Policy := Landin.Layouts.Natural;
       State  : Instance_State := Instance_Unseen;
       --  Payload shapes share Field_Shapes but have no top-level offset.
       --  Keep the two run starts distinct once a variant contributes those

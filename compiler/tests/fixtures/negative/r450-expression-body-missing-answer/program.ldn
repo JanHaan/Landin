@@ -1,0 +1,4 @@
+integer_body: () -> (r: i64) = -(-(-(begin end))) end integer_body
+float_body: () -> (r: f64) = 1.0 + -(-(-(begin end))) end float_body
+empty_body: (a: [0]i32) -> (r: [0]i32) = -(-(begin end)) + a end empty_body
+array_body: (a: [3]i32) -> (r: [3]i32) = -(a + -(-(begin end))) end array_body

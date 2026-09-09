@@ -1,0 +1,4 @@
+import lib
+f: () -> none =
+    _ = lib.row + 1
+end f

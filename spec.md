@@ -43,7 +43,7 @@ enclosing production recognises. Thus 'of', 'lenof', 'variant', 'begin',
 'match', 'defer', 'undo', 'unchecked', 'caller', 'range', 'arena', 'loop',
 'while', 'for', 'do', 'break', 'continue', 'complete', 'with', 'concept',
 'is', 'as', 'option', 'compiler', 'assembler', 'linker', 'c', 'layout',
-'link' and 'symbol' remain
+'optimal', 'link' and 'symbol' remain
 identifier tokens everywhere their contextual productions do not meet them.
 D202 separately reserves the three tool names as declaration/import bindings;
 that semantic reservation does not turn their tokens into keywords.
@@ -338,7 +338,8 @@ type_formal     ::= identifier ":" "type" constraint?
 constraint      ::= "is" concept_reference
 atom_union      ::= union_member "|" union_member ("|" union_member)*
 union_member    ::= declaration_reference | pointer_type
-struct_body      ::= ("layout" "(" "c" ")")? "struct" member+ "end" identifier?
+struct_body      ::= ("layout" "(" ("c" | "optimal") ")")?
+                     "struct" member+ "end" identifier?
 member           ::= field | variant_part
 field            ::= identifier ":" type
 variant_part     ::= identifier ":" "variant" variant_case
@@ -977,8 +978,9 @@ is folded before testing its target-width value.
 What each operator takes and what it gives.
 [1820] settled what binds; this settles what agrees. Every
 binary operator takes two operands of one type, because
-[0310] converts nothing and there is nowhere else for a
-second type to go.
+[0310] converts nothing. D209 additionally lifts the numeric arithmetic rows
+over equal-shape fixed arrays or an array and its exact scalar element type;
+that scalar is evaluated once and broadcast, not implicitly converted.
 
 | operator | takes, and gives back |
 | --- | --- |
@@ -8961,6 +8963,9 @@ classified failure boundary before the repository gate can pass.
 | `pointer.integer-origin` | beyond-lifetime | 0470, 0810, 0860, 1690, 1720 | non-guarantee: integer-to-pointer conversion carries no origin through a direct or erased value, and D196 records it as the actual derivation cut [0810] describes without privileged `core` names | `runtime/r250-references`, `runtime/any-untracked-pointer-origin`, `runtime/diagnostic-loggers-dispatch`, `negative/frame-origin-return` |
 | `pointer.integer-width` | trap | 0470, 1120, 1950, 1960 | trap, outside [1120]'s region | `runtime/pointer-to-small-integer-traps` |
 | `arrays.initialization` | static | 0520, 0530, 0540, 0550, 0560 | L0300--L0304 or L0313 | `negative/array-initializer-length-mismatch`, `runtime/whole-arrays-copy-between-storage` |
+| `arrays.arithmetic` | static | 0590 | L0301 refuses mismatched lengths, element types, nonnumeric lifting and every array comparison; D209 snapshots operands in source order and retains scalar element semantics | `negative/r450-array-length-mismatch`, `negative/r450-array-element-mismatch`, `negative/r450-array-bool-refused`, `negative/r450-array-comparison-refused`, `runtime/r450-array-snapshots`, `runtime/r450-array-compound-snapshot`, `runtime/r450-array-empty-operands`, `runtime/r450-array-float-order` |
+| `arrays.element-traps` | trap | 0290, 0300, 0310, 0590, 1120, 1960 | D209 executes element operations in ascending index order with the scalar overflow and division edges; unchecked removes no division edge | `runtime/r450-array-later-overflow`, `runtime/r450-array-unary-overflow`, `runtime/r450-array-later-division-zero`, `runtime/r450-array-signed-division-overflow`, `runtime/r450-array-unchecked-division-zero` |
+| `layout.explicit-policy` | static | 0750, 0760 | D210 changes physical field placement only for explicit optimal policy and only for a strict final padded-size win; source identities and initializer evaluation order are unchanged | `positive/r450-optimal-layout-source`, `runtime/r450-optimal-layout-composition` |
 | `raw.prefix` | static | 0420, 0500, 0510 | L0202 prevents representation access; `core/mem` reports `raw_full`, `uninitialized`, `raw_empty` or `raw_not_empty` before an invalid transition | `negative/core-mem-private-representation`, `runtime/core-mem-raw-storage` |
 | `raw.backing` | outside | 0430, 0470, 0510, 1720 | non-guarantee: the supplied byte pointer may be invalid, misaligned or smaller than the declared capacity | `runtime/core-mem-raw-storage` |
 | `allocation.failure` | static | 0300, 0940, 1230, 1280, 1290, 1310, 1360, 1975 | allocators report `core/mem.out_of_memory`, which a caller must handle or declare; arenas reject exhaustion and unrepresentable request arithmetic before mutation, vectors check extents and growth before provider calls and preserve the old list on failure, and heap refusal, finite pool exhaustion, injected refusal and delegated inner refusal use the same channel | `runtime/core-mem-allocators`, `runtime/core-mem-arena-boundaries`, `runtime/core-vec-pointer-storage`, `runtime/r420-vec-capacity-boundaries`, `runtime/r420-vec-growth-boundary`, `runtime/r420-vec-growth-transaction`, `runtime/derived-parser`, `runtime/hosted-heap-provider`, `runtime/r420-pool-provider`, `runtime/r420-failing-providers` |
@@ -8973,6 +8978,7 @@ classified failure boundary before the repository gate can pass.
 | `origins.escape` | static | 0480, 0770, 0780, 0790, 0800, 0830, 0840 | L0314--L0316; [0790]'s exact `from` comparison applies to an actual returned reference, while a provably empty optional-pointer arm has no origin and is not `Untracked`; a retained provider wrapper keeps its ordinary inner argument's origin without requiring that argument to be declared `escaping`, and tracked pool constructor sources join | `negative/frame-origin-return`, `negative/borrowed-source-inout`, `negative/returned-reference-missing-from`, `negative/core-arena-frame-escape`, `negative/core-pool-frame-escape`, `negative/core-pool-bookkeeping-frame-escape`, `negative/core-failing-frame-escape`, `negative/core-text-frame-slice-escape`, `negative/core-diag-frame-message-escape`, `negative/r440-parser-frame-arena`, `runtime/diagnostic-loggers-dispatch`, `runtime/r420-failing-providers` |
 | `origins.aliasing-limit` | outside | 0770, 0910 | non-guarantee: a pre-existing copy or indistinguishable arena is not tracked | `positive/reference-origins-and-consume`, `negative/use-after-sink` |
 | `functions.abi` | static | 0870, 0880, 0890, 0900, 0920, 0930, 0980, 1000, 1020, 1030, 1460, 1920, 1970 | L0301, L0302 or L0502 | `negative/call-with-too-few-arguments`, `runtime/r230-composition` |
+| `optimization.outcomes` | static | 0290, 0430, 1100, 1120, 1310, 1550 | D211 preserves effects, snapshots, cleanup, required traps, calling conventions and observable function identities under every optimization profile; malformed transformed IR is a compiler defect, never a source diagnostic | `runtime/r450-opt-effects`, `runtime/r450-opt-discarded-trap`, `runtime/r450-specialization-recursive-errors`, `runtime/r450-specialization-threshold`, `runtime/r450-x86-pressure`, `abi/r450-x86-callee-probes` |
 | `functions.caller` | static | 0670, 0790, 1000, 1040, 1800, 1920 | caller positions have immutable three-u32 struct values (file_id, line, column) and structural signature identity, are compiler-filled without source strings, and accept an explicit argument only as a named forwarding of another caller parameter; L0301 rejects every other type, position or source and L0303 rejects mutation, and `caller` decided on two tokens leaves the spelling an ordinary name | `negative/caller-parameter-extra-field`, `negative/caller-parameter-field-order`, `negative/caller-parameter-field-width`, `negative/caller-parameter-read-only`, `negative/caller-parameter-forward-copy`, `negative/caller-parameter-forward-needs-caller`, `negative/caller-parameter-needs-site`, `negative/caller-parameter-positional`, `negative/caller-parameter-signature-mismatch`, `runtime/caller-parameters`, `runtime/caller-is-an-ordinary-name` |
 | `extern.c-boundary` | static | 0430, 0570, 0750, 0920, 1000, 1570, 1580, 1600, 1975 | C convention and variadicness remain recursively distinct from the Landin convention; fixed positions at the selected boundary admit integers, bool, pointers, f32/f64, fixed C callbacks and compatible nonempty `layout(c)` structs, while L0301 refuses an ordinary Landin struct, a slice, a Landin error channel or a native-convention callback even when its machine shape matches | `positive/external-scalar-c-boundary`, `positive/r440-external-float`, `positive/r440-c-signatures`, `negative/external-aggregate-boundary`, `negative/r440-c-slice-parameter`, `negative/r440-c-error-channel`, `negative/r440-c-native-callback` |
 | `functions.linkage` | static | 1000, 1570, 1580, 1600, 1610, 1800, 1975 | `link(symbol: text)` changes only the linker spelling: standalone use retains the native convention and body requirement, C imports may have compatible repeated declarations, and L0301 refuses an assembly expression, incompatible declarations, multiple definitions or treating a native linked function as a C callback | `positive/r440-c-signatures`, `positive/r440-compatible-link-declarations`, `negative/r440-link-assembly-expression`, `negative/r440-link-does-not-change-convention`, `negative/r440-link-duplicate-definitions`, `negative/r440-link-incompatible-declarations` |
@@ -9009,9 +9015,11 @@ and no others; `subtype.range` is deliberately not among them, because a
 value outside a range subtype's bounds is not a value the destination type
 holds and removing that edge would leave no stated behaviour. D203--D208 add
 the selected C-call, export, linkage, allocation and hosted-startup boundaries
-now that R4.40 implements their source and backend paths; generated binding
-integration and the native gate remain active roadmap evidence rather than
-additional guarantee classes. Driver and backend inability have diagnostic
+now that R4.40 implements their source and backend paths; its generated binding
+integration and authoritative native closure are recorded in ROADMAP.md rather
+than additional guarantee classes. D209--D210 add arithmetic snapshots, retained
+element traps and explicit placement without extending the pointer-validity
+guarantee. Driver and backend inability have diagnostic
 owners in `diagnostics.matrix`, but are host failures rather than source semantic
 operations and therefore are not invented as language guarantees here.
 
@@ -11051,8 +11059,8 @@ and an anonymous function body [1010] written inside it is a separate item
 whose region depth starts at zero, because a function value runs where it is
 called and the region's visibility claim would otherwise be false at that call
 site. The region grants an optimiser nothing: it emits fewer checks and makes
-no fact available to a later pass. R4.50 still owns what an optimiser may
-assume, and C6's applicable target parity remains R5 and R6.
+no fact available to a later pass. D211 preserves that rule under optimization;
+C6's applicable target parity remains R5 and R6.
 
 Cleanup is the one place the compiler emits an instruction for source written
 somewhere else, so lexical has to be said of it in particular: a [1100]
@@ -12528,5 +12536,167 @@ startup-independent file and stream work. All are declined.
 
 **Pinned by** `abi/r440-native-startup-initialized`,
 `abi/r440-native-startup-empty`, `abi/r440-native-startup-uninitialized` and
-`abi/r440-native-startup-replaced` are recorded cases. Their native execution
-remains required by active R4.40; their presence is not runtime evidence.
+`abi/r440-native-startup-replaced` are recorded cases. R4.40's authoritative
+native evidence is recorded in ROADMAP.md.
+
+### D209 — Numeric array arithmetic retains values before scalar loops
+
+**The tour said** at [0590] both that comparisons were element-wise and that
+array equality returned one bool. D200 had already refused array comparisons.
+It also wrote a reduction name without defining a builtin or an ordinary body.
+
+**Chosen:** keep D200's comparison refusal. Lift binary `+`, `-`, `*`, `/`
+and unary `-` over fixed arrays of enabled integer or float elements, and `%`,
+`+%`, `-%`, `*%` over integer elements only. Two arrays have exactly equal
+lengths and element types. An array and a scalar of its element type, in
+either order, produce that array type; literal context reaches the scalar
+element. There is no length-one array broadcast, implicit conversion, nested
+array arithmetic, bool arithmetic, bitwise/shift lifting or slice arithmetic.
+An empty array still checks both operand types and evaluates its operands,
+but runs no element operation.
+
+Operands are evaluated exactly once, left to right. Each array operand is a
+complete retained value before the next operand is evaluated. The operation
+then visits ascending indices, applying the corresponding scalar semantics,
+including overflow traps, wrapping, division failures and IEEE values. An
+assignment evaluates its destination first and cannot overwrite an operand
+snapshot. Compound arithmetic assignment evaluates its place once, retains the
+old array value, then evaluates the right operand and applies the same rule.
+This does not change [0520]'s direct formation of a written array literal.
+Known-operand refusals still apply where the scalar rule requires them.
+
+No reduction builtin is added. [0590]'s `sum_four` is an ordinary function
+whose positive-zero initial value and left fold specify the rounding order.
+The compiler emits compact scalar loops, not one instruction or compiler
+metadata record per array element. The storage for the result and necessary
+snapshots is real; a 16 KB array does not fit for free on a 32 KB device.
+
+**The alternatives:** mask-valued comparison, implicit whole-array equality,
+length-one array broadcast, per-element code expansion, or snapshot-free
+arithmetic into an overlapping destination. The first two contradict D200,
+the third hides a shape change, the fourth spends code and compiler memory in
+proportion to the bound, and the last changes by-value evaluation. All are
+rejected. SIMD and reassociated reductions are not required by this slice.
+
+**Pinned by** the 4- and 4096-element programs generated from
+`compiler/tests/quality/arrays.ldn.in` and the numeric compactness checks in
+`compiler/tests/quality/check.py`. Their presence is an acceptance contract,
+not a claim of passing native execution; ROADMAP.md owns that evidence.
+
+### D210 — Optimal placement is explicit, stable and strictly smaller
+
+**The tour said** at [0750] that ordinary fields retain source order and that
+`layout(optimal)` may save padding. It supplied no deterministic algorithm,
+tie rule, nested-field unit or target-width overflow rule.
+
+**Chosen:** preserve natural and C layout. For an explicitly optimal nominal
+struct, calculate the natural padded layout and a candidate formed by stable
+descending target alignment. Equal alignments retain source order. Use the
+candidate only if its final padded size is strictly smaller; otherwise retain
+the complete natural order and offsets. Every field offset is still indexed
+by source identity, and initializer expressions still run in written order.
+
+A complete nested aggregate, array field or variant part is one placement
+unit. Array storage repeats its padded element extent without array-sized
+placement metadata; a variant keeps its existing internal tag/payload rules.
+Nested nominal fields use their own declared policies. Anonymous structs stay
+natural. Zero-size fields still honor alignment. Target byte arithmetic checks
+rounding and extents, including the selected target's object-size limit, rather
+than using the compiler host's pointer width. Only the selected layout must
+fit that object limit; an unrepresentable arithmetic intermediate is refused.
+
+Optimal layout is not C layout, packed layout, a byte-order attribute or a
+calling convention. No optimization flag silently reorders an ordinary struct.
+The build report states the chosen offsets/order, padded natural and selected
+sizes, alignment and saved bytes; size equality reports zero saved bytes.
+
+**The alternatives:** reorder all structs under size optimization, search every
+permutation, reorder equal-size candidates, or flatten nested fields and
+variant payloads. They respectively break source-order layout, spend compiler
+resources disproportionately, add gratuitous layout churn, or erase semantic
+subobject boundaries. Stable alignment buckets keep the policy bounded and
+useful on the 32 KB end of the target range.
+
+**Pinned by** `compiler/tests/quality/layout.ldn`, the `opt foundations` target
+layout cases and the `backend plans` layout-consumer cases. Synthetic-32 cases
+are target-layout evidence, never native 32-bit execution evidence.
+
+### D211 — Optimization changes implementation, not authority or outcomes
+
+**The tour said** at [1310] that specialization was optional but promised one
+erased body for every representation, automatic specialization of a sole
+instance and disappearance of evidence. Those promises did not distinguish
+semantic instantiation, proof, profitability and the physical hidden ABI.
+
+**Chosen:** semantic instantiation remains necessary without optimization.
+Optional dispatch specialization requires proof that every retained incoming
+path supplies the concrete table, including separate parent/concept evidence.
+Expected-instance metadata alone is not that proof. Address-exposed instances
+and unknown incoming evidence remain unspecialized; heterogeneous `any` calls
+remain indirect. Public/exported identities, function addresses, image
+relocations and evidence-provider references all participate in exposure.
+Recursive evidence proof is conservative and cannot assume its own conclusion.
+No speculative guard, clone or fallback runtime allocation is required.
+
+The bootstrap specializes proved entry calls in existing concrete bodies. It
+retains their hidden aggregate-result destination and hidden evidence parameter
+positions, error convention and calling convention. A replaced indirect call
+must have exactly the provider's physical argument/result meaning. Evidence
+size and alignment remain available with specialization off. Physically equal
+bodies may share only after complete retained machine meaning, relocation,
+convention and observable address-identity checks; IR spelling equality alone
+is not permission to fold different code.
+
+Profitability uses `E = min(32, proved entry-call sites)` and
+`L = min(4, maximum source nesting depth at those sites)`. Let
+`T = min(16, ceil(sum of represented target bytes / target pointer bytes))`.
+The benefit score is `B = 8 * E * (1 + L) + T`. Growth `G` is the sum of
+weighted IR operations: calls cost 6, other memory/control operations 2 and
+other scalar operations 1. These are policy estimates, not machine bytes.
+For multiple eligible normalized instances of one template, speed requires
+`B >= G`; size and none require `B >= 4 * G`. One eligible normalized instance
+bypasses profitability, never proof. `all` bypasses profitability for every
+eligible instance; `off` performs no dispatch specialization. Count instances,
+not repeated calls to one instance. Caps and target-byte arithmetic make the
+policy deterministic without a runtime profiler or per-object machinery.
+
+`--optimize=none|size|speed` defaults to size and independently selects baseline
+simplification, selection and allocation. `--specialize=off|auto|all` defaults
+to auto. `--build-mode=debug|release` selects source configuration, not these
+axes. The explicit reference profile is none/off; none/all is meaningful.
+Malformed or repeated controls are misuse. Optimization controls require a
+source compilation and cannot accompany help/identity; a build report also
+requires emission. Checking without emission still checks the same language.
+
+`--build-report=PATH` requests deterministic typed JSON separate from source
+diagnostics, written only after successful emission/tool completion through
+the platform interface. A write failure fails the request. Collisions with
+source snapshots, assembly, executable or source-map paths are refused before
+artifact writes. The source adapter retains exact path bytes in hexadecimal,
+source-content SHA-256 and item origins; equivalent inputs and controls produce
+byte-identical reports without clocks or temporary output paths. Routine
+metrics are emitted instruction sites and frame/register/spill/save and static
+stack-traffic counts. Actual assembled text bytes are measured externally by
+`compiler/tests/quality/check.py`, not fabricated from an IR count.
+
+Every optimization preserves observable side effects, error/cleanup order,
+traps, exact integer widths and floating-point signed zero/NaN behavior. No
+floating reassociation, fast-math, invented no-alias fact or undefined-behavior
+license follows from `unchecked`. D187 removes only its named lexical check
+edges and establishes no positive fact for a later pass. Unused operations
+that may trap or touch memory cannot disappear merely because their value is
+unused. Inputs and outputs of each transformation remain verified IR.
+
+**The alternatives:** universal monomorphization, metadata-only devirtualization,
+a profile-guided runtime, unconditional evidence-ABI erasure, or new optimizer
+freedom inside `unchecked`. They respectively make code duplication semantic,
+confuse expected and incoming evidence, add target machinery, break indirect
+and aggregate calls, or change existing programs' outcomes. All are rejected.
+
+**Pinned by** `runtime/generic-evidence-indirect`,
+`runtime/generic-composed-evidence`, `runtime/generic-erased-aggregate-try`,
+`runtime/any-generic-storage`, the `opt driver` fake-platform cases and
+`compiler/tests/quality/check.py`. The fixture harness requires each original
+runtime and ABI oracle under none/off, size/off, size/auto and speed/auto;
+focused generic/erased cases additionally run none/all and speed/all.
+ROADMAP.md retains the implementation and authoritative native completion gate.

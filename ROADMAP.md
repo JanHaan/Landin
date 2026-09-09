@@ -4778,7 +4778,171 @@ its size benefit can be measured without changing the source-order default.
 Implement the amended normative specialization policy and build report without
 claiming competitive optimization.
 
-Sources: `[0590]`, `[1310]`.
+The selected contract is D209--D211: compact numeric array loops with retained
+operand values; explicit stable optimal placement only on a strict padded-size
+win; and independently controlled, evidence-proved specialization that retains
+the hidden ABI. `unchecked` establishes no optimizer facts. Defaults are
+`--optimize=size --specialize=auto`, independent of source build mode; none/off
+is the explicit reference. The driver writes source-aware factual JSON through
+the platform, never through the diagnostic stream.
+
+The implementation is integrated; completion evidence is still pending. The
+fixture-execution harness specifies four mandatory profiles for every runtime
+and ABI case:
+none/off, size/off, size/auto and speed/auto. Focused generic/erased cases add
+none/all and speed/all. Each run must meet its own original exit/trap and exact
+output oracle; a timeout cannot satisfy a trap. Source fixtures and their
+runtime arguments are not rewritten to select profiles.
+
+`compiler/tests/quality/check.py`, invoked by `scripts/quality.sh` in the
+existing native gate for both compiler build modes, specifies numeric object
+acceptance using gcc, objdump and size from the checksum-pinned Linux toolchain.
+For both scalar-chain and scalar-loop symbols, optimized static stack traffic
+and each routine's frame must fall by at least 50%, and instruction counts by
+at least 20%. Neither routine's actual object bytes, total scalar object text
+nor summed reported frames may grow. The tiny leaf may gain no instructions,
+object bytes or frame space, and must not acquire callee-save overhead. Existing
+insertion-sort and sieve-of-eratosthenes workloads retain their status-42 and
+empty-output oracles; optimized object text may grow by at most 10% over the
+reference. Changing array length from 4 to 4096 may add at most
+32 instructions to its arithmetic routine and 2048 bytes to complete object
+text, including bounded stack-probe loop setup. The explicit optimal record
+must report natural 24 bytes, selected 16 bytes, offsets `[8, 0, 9]` and exactly
+8 saved bytes. Equivalent requests must repeat assembly and JSON byte-for-byte.
+The single-instance evidence probe must retain indirect calls with specialization
+off and eliminate all of them with auto/all, retain hidden-ABI evidence and
+add no more than 128 bytes of total object text over none/off. The private
+identity-body folding probe must report actual sharing and strictly smaller
+object text for every optimized objective. Large-array object disassembly must
+contain page-by-page 4096-byte stack adjustment and memory touches; merely
+reporting a large frame is not probe evidence. The report retains measured
+disassembly, size output and compiler/assembly/object hashes.
+These are acceptance bounds, not a benchmark claim. Initial pinned-container
+debug measurements establish the following reference baseline; each optimized
+column was identical for size/off, size/auto and speed/auto on these witnesses.
+The traffic counts are static stack-memory instruction sites, including the
+prologue, not dynamic accesses.
+
+| Witness and metric | none/off reference | optimized |
+|---|---:|---:|
+| Scalar object `.text` bytes | 1866 | 1130 |
+| Scalar summed frame bytes | 832 | 368 |
+| Scalar chain instructions / stack sites | 127 / 112 | 78 / 26 |
+| Scalar chain frame / function bytes | 448 / 794 | 176 / 321 |
+| Scalar loop instructions / stack sites | 68 / 49 | 51 / 18 |
+| Scalar loop frame / function bytes | 176 / 307 | 80 / 171 |
+| Tiny leaf instructions / stack sites | 14 / 8 | 12 / 6 |
+| Tiny leaf frame / function bytes | 32 / 45 | 32 / 37 |
+| Insertion-sort object `.text` bytes | 3445 | 2062 |
+| Sieve-of-eratosthenes object `.text` bytes | 3445 | 1999 |
+| Array routine instructions, length 4 / 4096 | 103 / 109 | 101 / 107 |
+| Array object `.text` bytes, length 4 / 4096 | 1669 / 1768 | 1208 / 1304 |
+| Folding object `.text` bytes | 773 | 669 |
+
+These observations use GNAT GCC 16.1.0 and GNU Binutils 2.46.1. The scalar
+traffic reductions exceed the preselected 50% floor; changing array length
+adds six instructions rather than expanding the body per element. The
+specialization object measured 766 bytes with none/off, 767 with none/all,
+714 with size/off and 700 with size/auto, speed/auto and speed/all. Only the
+off profiles retained indirect dispatch. The optimal-layout witness measured
+the 24-to-16-byte placement stated above. The runner preserves its actual
+observations in the host build tree's `quality/measurements.json`; it never
+rewrites these acceptance thresholds from a run. These are supplemental
+container observations, not a native gate or final-tree closure claim. The
+scalar, insertion-sort and sieve none/off assembly also matches byte-for-byte
+the captured R4.40 reference compiler's output at
+`36c1324af3353ebb34ac23adf34b188533e6b4f7`; this is a measured baseline, not
+universal reference-output identity.
+
+The source-level two-instance threshold probe supplies eight entry calls,
+loop depth four and four represented bytes per instance: benefit 321 versus
+estimated growth 209. Size/auto declines at its four-times-growth threshold;
+speed/auto selects at its one-times-growth threshold, while all forces both
+proved instances. The runner pins these source-derived inputs and decisions.
+The two fallback instances share one machine body with eight physical indirect
+call sites; selected bodies have eight direct calls each and cannot share
+because their provider relocations differ. Actual object text is 1805 bytes
+for none/off, 1158 for size/off and size/auto, 1565 for speed/auto and speed/all,
+and 2724 for none/all. This deliberately records the size/speed tradeoff rather
+than requiring every specialization to shrink text.
+
+Report collision preflight now delegates exclusively to authoritative platform
+identity: actual symbolic parents, native device/inode identity and destination
+filesystem name rules. It does not collapse `..` lexically across a symlink or
+infer case sensitivity from the operating system. Fake-driver and native cases
+cover aliases of sources and artifacts, including absent and dangling leaves.
+Missing-name proofs cover APFS/HFS ASCII case rules, Linux ext4/f2fs directory
+casefold flags and recognized byte-sensitive Linux filesystems. Unknown rules
+and unproved Unicode equivalences remain conservatively indeterminate; there
+is no concurrent filesystem-replacement guarantee.
+
+Post-integration focused validation passed with pinned GNAT 16.1.0 and
+GPRbuild 26.0.0: fifteen Mac suites in each compiler build mode (435 cases and
+4314 checks per mode), and ten Linux-container suites plus 112 selected
+positive/negative/runtime/ABI fixtures in each mode. Every selected executable
+ran its required four or six profiles. The object-quality runner passed all
+42 profile observations in both compiler build modes; numeric measurements and
+factual build reports agreed between modes, and each repeated request produced
+identical assembly and JSON. Real Clang 19 bindings integration passed all
+41 tests. Full document checks and the pinned tree-sitter generator, corpus,
+compiler/core parsing and canonical queries passed. These are focused local
+observations, not substitutes for complete gates or native hardware evidence.
+
+The subsequent independent-review repairs retain nonreading array aliases,
+qualified module storage identities and permissions, and D124's returning
+operands in array and literal-scalar arithmetic without accepting a missing
+fallthrough answer. Placement is computed once while retaining unpadded extent.
+Backend sharing eligibility is cached per emission; uncaptured machine streams
+still count instructions. Heap-owned scratch permits the 24,000-statement
+reference routine, and C-entry scratch participates in page probing. Shared
+shape measurement preserves the backend's target-object limit and the cost
+model's separate represented-byte limit. Reports retain whole discriminated
+plans and share one byte encoder with source maps. C/header inventory changes
+invalidate developer builds as well as ordinary builds.
+
+After these repairs, sixteen focused suites passed in each of Darwin and the
+Linux container, in both compiler build modes: 378 cases and 177816 checks per
+host/mode. All 48 R4.50 fixtures passed in each Linux compiler mode, including
+six mandatory profiles for each of their runtime/ABI cases. Native identity
+passed ten tests per host/mode; the build-inventory runner passed five tests.
+Object quality passed all 42 observations in each Linux mode with matching
+numeric measurements and factual reports. The local container measurements
+used its own `/tmp` filesystem because its virtiofs mount cannot prove the
+host volume's absent-name case rules; no acceptance bound or program oracle
+changed. The native identity and inventory runners are wired into the existing
+gate. These remain focused local observations, not complete-gate evidence.
+
+Complete local validation now supplements those focused observations. In the
+pinned Linux amd64 container through Rosetta, the unfiltered debug and release
+suites each passed 544/544 cases and 188739 checks. Each executed 1910
+runtime/ABI oracle attempts: 1806 runtime attempts across 416 fixtures and 104
+ABI attempts across 25 fixtures, against their recorded output, status and trap
+oracles. The complete Mac debug and release suites each passed 543/544 cases
+and 187009 checks. Their sole failing case was the documented missing Linux
+cross-toolchain runtime case; it supplies no runtime-correctness evidence.
+
+Final-tree validation also passed: native report identity passed ten tests for
+each host/build combination; Clang 19 bindings passed 41 tests; the build
+inventory runner passed five tests; and object quality passed all 42 profiles
+in each Linux compiler mode. Full `check.py`, whitespace, generated highlight,
+highlight default/integration, tree-sitter corpus and non-publishing site
+checks passed. Pygments, TextMate tokenizer and native Emacs optional smokes
+were skipped because their dependencies were absent, and are not claimed as
+executed. The numeric table above remains the initial pinned-container
+reference baseline; final quality validation checked its unchanged acceptance
+bounds, reports and measured objects against the final sources rather than
+substituting new baseline values.
+
+Independent finished-change reviews and final contextual-repair verification
+passed. Confirmed findings were repaired and did not regress in the completed
+gates. The locally reported source fingerprints use different algorithms, but
+their exact per-file inventories reconcile; this records no source drift.
+
+R4.50 remains active. The authoritative native Linux x86-64 SourceHut gate for
+the exact committed revision is still required and is the remaining completion
+evidence to record here; no local or filtered pass closes this item.
+
+Sources: `[0590]`, `[0750]`, `[1120]`, `[1310]`, `[1720]`.
 
 Exit evidence: disabling specialization preserves behavior; build reports state
 what happened; scalar loop lowering and code-quality smoke measurements meet

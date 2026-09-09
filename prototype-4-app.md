@@ -21,6 +21,16 @@ What it presses on, none of which the first three prototypes touched:
 Where a spelling had to be invented, the line is marked [Wn] and the
 question is written out at the end.
 
+D211 preserves this program's genuinely runtime-selected filters, destinations
+and memory/system worlds. A homogeneous static instance elsewhere is not proof
+about an `any` loaded from this chain. Optimization preserves state changes,
+partial writes, immediate errno capture and cleanup order; `unchecked` adds no
+no-alias or undefined-behavior license. C callback addresses retain their
+convention and identity rather than becoming interchangeable with ordinary
+Landin entry points. The profile matrix applies each executable fixture's
+original oracle independently, including the allocator and logger pressures
+shared with prototypes 2 and 3.
+
 ---
 
 D196's current disposition qualifies W7's historical resolution below: a

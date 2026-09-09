@@ -1,13 +1,18 @@
 with Ada.Strings.Fixed;
-with Ada.Strings.Unbounded;
 
 with Landin.Backend.C_ABI;
+with Landin.Backend.Work_Arrays;
+with Landin.Backend.X86_64.Allocation;
+with Landin.Backend.X86_64.Machine;
+with Landin.Targets.Layouts;
 with Landin.Types;
 
 package body Landin.Backend.X86_64 is
 
    package Unbounded renames Ada.Strings.Unbounded;
 
+   use type Landin.Optimization.Objective;
+   use type Allocation.Location_Kind;
    use type Landin.Backend.C_ABI.Eightbyte_Class;
    use type Landin.Source.Names.Name_Id;
    use type Landin.Targets.Bit_Width;
@@ -222,6 +227,14 @@ package body Landin.Backend.X86_64 is
      (Of_Unit : Landin.IR.Unit;
       Item    : Landin.IR.Item_Id;
       Facts   : Landin.Targets.Target_Facts) return Boolean
+   is (Frame_Is_Addressable
+         (Of_Unit, Item, Facts, Landin.Optimization.Reference_Options));
+
+   function Frame_Is_Addressable
+     (Of_Unit : Landin.IR.Unit;
+      Item    : Landin.IR.Item_Id;
+      Facts   : Landin.Targets.Target_Facts;
+      Options : Landin.Optimization.Options) return Boolean
    is
       Largest_Displacement : constant Landin.Targets.Byte_Count :=
         2 ** 31 - 1;
@@ -230,7 +243,9 @@ package body Landin.Backend.X86_64 is
       if Landin.IR.Is_External (Of_Unit, Item) then
          return True;
       end if;
-      Layout := Laid_Out (Of_Unit, Item, Facts);
+      Layout := Allocation.Frame_For
+        (Of_Unit, Item, Facts,
+         Allocation.Make (Of_Unit, Item, Facts, Options), Options);
       if Extent (Layout) > Largest_Displacement then
          return False;
       end if;
@@ -288,21 +303,78 @@ package body Landin.Backend.X86_64 is
       Names    : Landin.Source.Names.Table;
       Facts    : Landin.Targets.Target_Facts;
       Hosted_Entry : Landin.IR.Item_Id := Landin.IR.No_Item) return String
+   is (Text (Of_Unit, Meanings, Names, Facts,
+             Landin.Optimization.Reference_Options, Hosted_Entry));
+
+   function Text
+     (Of_Unit  : Landin.IR.Unit;
+      Meanings : Landin.Resolution.Table;
+      Names    : Landin.Source.Names.Table;
+      Facts    : Landin.Targets.Target_Facts;
+      Options  : Landin.Optimization.Options;
+      Hosted_Entry : Landin.IR.Item_Id := Landin.IR.No_Item) return String
+   is
+      Assembly : Unbounded.Unbounded_String;
+      Report : Landin.Build_Reports.Report;
+   begin
+      Emit (Of_Unit, Meanings, Names, Facts, Options, Assembly, Report,
+            Hosted_Entry);
+      return Unbounded.To_String (Assembly);
+   end Text;
+
+   procedure Emit
+     (Of_Unit  : Landin.IR.Unit;
+      Meanings : Landin.Resolution.Table;
+      Names    : Landin.Source.Names.Table;
+      Facts    : Landin.Targets.Target_Facts;
+      Options  : Landin.Optimization.Options;
+      Assembly : out Unbounded.Unbounded_String;
+      Report   : in out Landin.Build_Reports.Report;
+      Hosted_Entry : Landin.IR.Item_Id := Landin.IR.No_Item)
    is
       Out_Text : Unbounded.Unbounded_String;
+      Optimized : constant Boolean :=
+        Options.Optimize /= Landin.Optimization.None;
+      Bodies : array (1 .. Landin.IR.Item_Count (Of_Unit)) of
+        Unbounded.Unbounded_String;
+      Streams : array (1 .. Landin.IR.Item_Count (Of_Unit)) of Machine.Stream;
+      Statistics : array (1 .. Landin.IR.Item_Count (Of_Unit)) of
+        Landin.Build_Reports.Routine_Statistics;
+      Capturing : Landin.IR.Item_Id := Landin.IR.No_Item;
+      --  The emission unit is immutable.  Query retained exposure once per
+      --  candidate, never inside the pairwise final-body equality proof.
+      Shareable : Home_Mask (1 .. Landin.IR.Item_Count (Of_Unit)) :=
+        [others => False];
 
       procedure Put (Line : String);
 
       procedure Put (Line : String) is
       begin
+         if Capturing /= Landin.IR.No_Item and then Line'Length > 0
+           and then Line (Line'Last) = ':'
+         then
+            Machine.Define_Label
+              (Streams (Positive (Capturing)),
+               Line (Line'First .. Line'Last - 1));
+         end if;
          Unbounded.Append (Out_Text, Line & LF);
       end Put;
 
       procedure Emit (Instruction : String);
 
       procedure Emit (Instruction : String) is
+         Selected : constant String :=
+           (if Optimized then Machine.Selected (Instruction) else Instruction);
       begin
-         Put (Character'Val (9) & Instruction);
+         if Selected'Length = 0 then
+            return;
+         end if;
+         if Capturing /= Landin.IR.No_Item
+           and then Selected (Selected'First) /= '.'
+         then
+            Machine.Instruction (Streams (Positive (Capturing)), Selected);
+         end if;
+         Put (Character'Val (9) & Selected);
       end Emit;
 
       --  Allocate one namespace before emitting anything.  Forced linker
@@ -695,6 +767,25 @@ package body Landin.Backend.X86_64 is
          Limit       : Natural) return Boolean;
       function Routines_Can_Share
         (Left, Right : Landin.IR.Item_Id) return Boolean;
+      function Final_Bodies_Can_Share
+        (Left, Right : Landin.IR.Item_Id) return Boolean;
+
+      function Final_Bodies_Can_Share
+        (Left, Right : Landin.IR.Item_Id) return Boolean
+      is
+      begin
+         if not Optimized then
+            return Routines_Can_Share (Left, Right);
+         end if;
+         return Shareable (Positive (Left))
+           and then Shareable (Positive (Right))
+           and then Signatures_Have_One_ABI
+             (Landin.IR.Signature_Of (Of_Unit, Left),
+              Landin.IR.Signature_Of (Of_Unit, Right),
+              Landin.IR.Signature_Count (Of_Unit) + 1)
+           and then Machine.Equivalent
+             (Streams (Positive (Left)), Streams (Positive (Right)));
+      end Final_Bodies_Can_Share;
 
       function Carriers_Agree
         (Left, Right : Landin.Types.Type_Kind) return Boolean
@@ -1005,24 +1096,16 @@ package body Landin.Backend.X86_64 is
             return;
          end if;
 
-         for Field in 1 .. Landin.IR.Field_Count (Of_Unit, Item) loop
-            declare
-               Shape : constant Landin.IR.Field_Shape :=
-                 Landin.IR.Nth_Field_Shape (Of_Unit, Item, Field);
-               Size : Landin.Targets.Byte_Count;
-               Alignment : Landin.Targets.Byte_Alignment;
-               At_Offset : Landin.Targets.Byte_Count;
-            begin
-               Landin.Backend.Field_Extent
-                 (Of_Unit, Shape, Facts, Size, Alignment);
-               Landin.Targets.Place
-                 (Placed, Size, Alignment, At_Offset);
-
-               if Landin.IR.Element_Total (Field) = Wanted then
-                  Offset := At_Offset;
-               end if;
-            end;
-         end loop;
+         declare
+            Plan : constant Landin.Targets.Layouts.Plan :=
+              Datum_Layout (Of_Unit, Item, Facts);
+            Ignored : Landin.Targets.Byte_Count;
+         begin
+            Landin.Targets.Place (Placed, Plan.Size, Plan.Alignment, Ignored);
+            if Wanted > 0 then
+               Offset := Plan.Offsets (Positive (Wanted));
+            end if;
+         end;
       end Place_Fields;
 
       --  A compact array or unfolded variant can make a later module field's
@@ -1065,15 +1148,20 @@ package body Landin.Backend.X86_64 is
       procedure Emit_Routine (Item : Landin.IR.Item_Id);
 
       procedure Emit_Routine (Item : Landin.IR.Item_Id) is
-         Layout : constant Frame := Laid_Out (Of_Unit, Item, Facts);
+         Allocation_Plan : constant Allocation.Plan :=
+           Allocation.Make (Of_Unit, Item, Facts, Options);
+         Layout : constant Frame := Allocation.Frame_For
+           (Of_Unit, Item, Facts, Allocation_Plan, Options);
          Result : constant Landin.Types.Type_Kind :=
            Landin.IR.Result_Of (Of_Unit, Item);
-
-         function Value_Cell (Value : Landin.IR.Value_Id) return String
-           is (Cell (Value_Offset (Layout, Value)));
-
-         function Slot_Cell (Slot : Landin.IR.Slot_Id) return String
-           is (Cell (Slot_Offset (Layout, Slot)));
+         type Use_Counts is array (Positive range <>) of Natural;
+         package Use_Buffers is new Work_Arrays (Natural, Use_Counts, 0);
+         Use_Data : Use_Buffers.Buffer
+           (if Optimized then Landin.IR.Value_Count (Of_Unit, Item) else 0);
+         Uses : Use_Counts renames Use_Data.Data.all;
+         Current_Block : Landin.IR.Block_Id := Landin.IR.No_Block;
+         Next_Instruction : Landin.IR.Value_Id := Landin.IR.No_Value;
+         Fused_Branch : Landin.IR.Value_Id := Landin.IR.No_Value;
 
          function Size_Of_Value
            (Value : Landin.IR.Value_Id) return Held_Size
@@ -1082,6 +1170,89 @@ package body Landin.Backend.X86_64 is
 
          function Size_Of_Slot (Slot : Landin.IR.Slot_Id) return Held_Size
            is (Size_Of (Landin.IR.Type_Of (Of_Unit, Item, Slot), Facts));
+
+         --  Locations retain their carrier width.  A byte projection is
+         --  explicit (not a qword register accidentally used by movb); an
+         --  address query is separate and refuses an unhomed register.
+         function Value_Operand
+           (Value : Landin.IR.Value_Id; Width : Held_Size) return String;
+         function Value_Operand (Value : Landin.IR.Value_Id) return String
+           is (Value_Operand (Value, Size_Of_Value (Value)));
+         function Value_Address (Value : Landin.IR.Value_Id) return String;
+         function Slot_Cell (Slot : Landin.IR.Slot_Id) return String;
+         function Slot_Address (Slot : Landin.IR.Slot_Id) return String;
+         procedure Load_Value (Value : Landin.IR.Value_Id);
+         procedure Store_Value (Value : Landin.IR.Value_Id; From : String);
+
+         function Value_Operand
+           (Value : Landin.IR.Value_Id; Width : Held_Size) return String
+         is
+            Place : Allocation.Location renames
+              Allocation_Plan.Value (Positive (Value));
+         begin
+            if Width > Place.Size or else Place.Kind = Allocation.Absent then
+               raise Landin.Compiler_Defect with
+                 "invalid value location width";
+            elsif Place.Kind = Allocation.GP then
+               return Allocation.Name (Place.Register, Width);
+            end if;
+            return Cell (Value_Offset (Layout, Value));
+         end Value_Operand;
+
+         function Value_Address (Value : Landin.IR.Value_Id) return String is
+         begin
+            if Allocation_Plan.Value (Positive (Value)).Kind
+                 /= Allocation.Stack
+              or else not Has_Value_Home (Layout, Value)
+            then
+               raise Landin.Compiler_Defect with
+                 "an unhomed value was addressed";
+            end if;
+            return Cell (Value_Offset (Layout, Value));
+         end Value_Address;
+
+         function Slot_Cell (Slot : Landin.IR.Slot_Id) return String is
+            Place : Allocation.Location renames
+              Allocation_Plan.Slot (Positive (Slot));
+         begin
+            if Place.Kind = Allocation.GP then
+               return Allocation.Name (Place.Register, Place.Size);
+            end if;
+            return Cell (Slot_Offset (Layout, Slot));
+         end Slot_Cell;
+
+         function Slot_Address (Slot : Landin.IR.Slot_Id) return String is
+         begin
+            if not Has_Slot_Home (Layout, Slot) then
+               raise Landin.Compiler_Defect with
+                 "an unhomed slot was addressed";
+            end if;
+            return Cell (Slot_Offset (Layout, Slot));
+         end Slot_Address;
+
+         procedure Load_Value (Value : Landin.IR.Value_Id) is
+            Held : constant Held_Size := Size_Of_Value (Value);
+         begin
+            Emit ("mov" & Suffix (Held) & " " & Value_Operand (Value)
+                  & ", " & Accumulator (Held));
+         end Load_Value;
+
+         procedure Store_Value (Value : Landin.IR.Value_Id; From : String) is
+            Held : constant Held_Size := Size_Of_Value (Value);
+         begin
+            --  AH cannot be encoded with any REX prefix.  The allocator's
+            --  high registers require one even for a one-byte destination.
+            if From = "%ah"
+              and then Allocation_Plan.Value (Positive (Value)).Kind
+                = Allocation.GP
+            then
+               Emit ("movb %ah, %al");
+               Emit ("movb %al, " & Value_Operand (Value));
+            else
+               Emit ("mov" & Suffix (Held) & " " & From & ", "
+                     & Value_Operand (Value));
+            end if;
+         end Store_Value;
 
          --  D49/D50/D53 ask three compact whole-array operations for the
          --  same target-derived shape and base address.  D57 reuses the base
@@ -1554,25 +1725,10 @@ package body Landin.Backend.X86_64 is
                   end;
                elsif Step.Case_Index = 0 then
                   declare
-                     Placed : Landin.Targets.Placement :=
-                       Landin.Targets.Empty_Placement;
-                     At_Offset : Landin.Targets.Byte_Count := 0;
+                     Plan : constant Landin.Targets.Layouts.Plan :=
+                       Aggregate_Layout (Of_Unit, Reached, Facts);
                   begin
-                     for Which in 1 .. Positive (Step.Field) loop
-                        declare
-                           Part : constant Landin.IR.Field_Shape :=
-                             Landin.IR.Nth_Aggregate_Field
-                               (Of_Unit, Reached, Which);
-                           Size : Landin.Targets.Byte_Count;
-                           Alignment : Landin.Targets.Byte_Alignment;
-                        begin
-                           Landin.Backend.Field_Extent
-                             (Of_Unit, Part, Facts, Size, Alignment);
-                           Landin.Targets.Place
-                             (Placed, Size, Alignment, At_Offset);
-                        end;
-                     end loop;
-                     Total := Total + At_Offset;
+                     Total := Total + Plan.Offsets (Positive (Step.Field));
                      Reached := Landin.IR.Nth_Aggregate_Field
                        (Of_Unit, Reached, Positive (Step.Field));
                   end;
@@ -1601,10 +1757,18 @@ package body Landin.Backend.X86_64 is
 
          procedure Carry (Size : Held_Size; From, To : String) is
          begin
-            Emit ("mov" & Suffix (Size) & " " & From & ", "
-                  & Accumulator (Size));
-            Emit ("mov" & Suffix (Size) & " " & Accumulator (Size)
-                  & ", " & To);
+            if Optimized and then From = To then
+               return;
+            elsif Optimized
+              and then (From (From'First) = '%' or else To (To'First) = '%')
+            then
+               Emit ("mov" & Suffix (Size) & " " & From & ", " & To);
+            else
+               Emit ("mov" & Suffix (Size) & " " & From & ", "
+                     & Accumulator (Size));
+               Emit ("mov" & Suffix (Size) & " " & Accumulator (Size)
+                     & ", " & To);
+            end if;
          end Carry;
 
          --  Chunk transport never touches argument or result registers as
@@ -1640,6 +1804,8 @@ package body Landin.Backend.X86_64 is
            (Offset, Bytes : Landin.Targets.Byte_Count);
          procedure Extend_C_Integer
            (Kind : Landin.Types.Type_Kind);
+         procedure Reserve_Stack
+           (Bytes : Landin.Targets.Byte_Count; Identity : String);
          procedure Emit_C_Entry;
          procedure Emit_C_Call (Value : Landin.IR.Value_Id);
          procedure Emit_C_Result (Value : Landin.IR.Value_Id);
@@ -1704,7 +1870,7 @@ package body Landin.Backend.X86_64 is
          begin
             --  Save both banks before a copy or partial-chunk helper can
             --  clobber them.  This temporary area does not become IR state.
-            Emit ("subq $112, %rsp");
+            Reserve_Stack (Saved_Bytes, "c_entry");
             for Index in 1 .. 6 loop
                Emit ("movq "
                      & Argument_Register (Index, Landin.Targets.Byte_8)
@@ -1721,7 +1887,7 @@ package body Landin.Backend.X86_64 is
                if Plan.Result.Shape.Memory then
                   Emit ("movq 0(%rsp), %r10");
                else
-                  Emit ("leaq " & Slot_Cell
+                  Emit ("leaq " & Slot_Address
                         (Landin.IR.Result_Slot (Of_Unit, Item))
                         & ", %r10");
                end if;
@@ -1737,14 +1903,14 @@ package body Landin.Backend.X86_64 is
                   if Place.On_Stack then
                      Emit ("leaq " & Displacement
                            (16 + Place.Stack_At, "%rbp") & ", %rsi");
-                     Emit ("leaq " & Slot_Cell (Slot) & ", %rdi");
+                     Emit ("leaq " & Slot_Address (Slot) & ", %rdi");
                      Emit ("movabsq $" & Trimmed
                            (Landin.Targets.Byte_Count'Image (Place.Shape.Size))
                            & ", %rcx");
                      Emit ("cld");
                      Emit ("rep movsb");
                   else
-                     Emit ("leaq " & Slot_Cell (Slot) & ", %r11");
+                     Emit ("leaq " & Slot_Address (Slot) & ", %r11");
                      for Chunk in 1 .. Place.Shape.Count loop
                         if Place.Shape.Classes (Chunk) /= C_ABI.No_Class then
                            Emit ("movq " & Displacement
@@ -1784,11 +1950,9 @@ package body Landin.Backend.X86_64 is
               is (Landin.IR.Nth_Operand
                     (Of_Unit, Item, Value, Index + Offset + Hidden));
          begin
-            if Plan.Stack_Bytes > 0 then
-               Emit ("subq $" & Trimmed
-                     (Landin.Targets.Byte_Count'Image (Plan.Stack_Bytes))
-                     & ", %rsp");
-            end if;
+            Reserve_Stack
+              (Plan.Stack_Bytes, "call_"
+               & Trimmed (Landin.IR.Value_Id'Image (Value)));
             --  Copy stack objects before filling either register bank.
             for Index in Plan.Arguments'Range loop
                declare
@@ -1796,7 +1960,7 @@ package body Landin.Backend.X86_64 is
                begin
                   if Place.On_Stack then
                      if Place.Shape.Aggregate then
-                        Emit ("movq " & Value_Cell (Argument (Index))
+                        Emit ("movq " & Value_Operand (Argument (Index))
                               & ", %rsi");
                         Emit ("leaq " & Displacement
                               (Place.Stack_At, "%rsp") & ", %rdi");
@@ -1806,7 +1970,7 @@ package body Landin.Backend.X86_64 is
                         Emit ("cld");
                         Emit ("rep movsb");
                      else
-                        Emit ("leaq " & Value_Cell (Argument (Index))
+                        Emit ("leaq " & Value_Address (Argument (Index))
                               & ", %r11");
                         Load_C_Chunk (0, Place.Shape.Size);
                         Extend_C_Integer
@@ -1819,7 +1983,7 @@ package body Landin.Backend.X86_64 is
                end;
             end loop;
             if Plan.Result.Shape.Memory then
-               Emit ("movq " & Value_Cell
+               Emit ("movq " & Value_Operand
                      (Landin.IR.Nth_Operand
                         (Of_Unit, Item, Value, Offset + 1)) & ", %rdi");
             end if;
@@ -1829,8 +1993,9 @@ package body Landin.Backend.X86_64 is
                begin
                   if not Place.On_Stack then
                      Emit ((if Place.Shape.Aggregate
-                            then "movq " else "leaq ")
-                           & Value_Cell (Argument (Index)) & ", %r11");
+                            then "movq " & Value_Operand (Argument (Index))
+                            else "leaq " & Value_Address (Argument (Index)))
+                           & ", %r11");
                      for Chunk in 1 .. Place.Shape.Count loop
                         if Place.Shape.Classes (Chunk) /= C_ABI.No_Class
                         then
@@ -1853,7 +2018,7 @@ package body Landin.Backend.X86_64 is
                      & ", %al");
             end if;
             if Indirect then
-               Emit ("call *" & Value_Cell
+               Emit ("call *" & Value_Operand
                      (Landin.IR.Nth_Operand (Of_Unit, Item, Value, 1)));
             else
                Emit ("call " & Symbol
@@ -1863,11 +2028,11 @@ package body Landin.Backend.X86_64 is
               and then Plan.Result.Shape.Size > 0
             then
                if Hidden = 1 then
-                  Emit ("movq " & Value_Cell
+                  Emit ("movq " & Value_Operand
                         (Landin.IR.Nth_Operand
                            (Of_Unit, Item, Value, Offset + 1)) & ", %r11");
                else
-                  Emit ("leaq " & Value_Cell (Value) & ", %r11");
+                  Emit ("leaq " & Value_Address (Value) & ", %r11");
                end if;
                for Chunk in 1 .. Plan.Result.Shape.Count loop
                   if Plan.Result.Shape.Classes (Chunk) /= C_ABI.No_Class
@@ -1898,7 +2063,7 @@ package body Landin.Backend.X86_64 is
             elsif Place.Shape.Memory then
                Emit ("movq " & Slot_Cell
                      (Landin.IR.Nth_Parameter (Of_Unit, Item, 1)) & ", %rdi");
-               Emit ("leaq " & Slot_Cell
+               Emit ("leaq " & Slot_Address
                      (Landin.IR.Result_Slot (Of_Unit, Item)) & ", %rsi");
                Emit ("movabsq $" & Trimmed
                      (Landin.Targets.Byte_Count'Image (Place.Shape.Size))
@@ -1909,10 +2074,10 @@ package body Landin.Backend.X86_64 is
                      (Landin.IR.Nth_Parameter (Of_Unit, Item, 1)) & ", %rax");
                return;
             elsif Place.Shape.Aggregate then
-               Emit ("leaq " & Slot_Cell
+               Emit ("leaq " & Slot_Address
                      (Landin.IR.Result_Slot (Of_Unit, Item)) & ", %r11");
             else
-               Emit ("leaq " & Value_Cell
+               Emit ("leaq " & Value_Address
                      (Landin.IR.Nth_Operand (Of_Unit, Item, Value, 1))
                      & ", %r11");
             end if;
@@ -1930,14 +2095,97 @@ package body Landin.Backend.X86_64 is
             end loop;
          end Emit_C_Result;
 
+         --  Linux stack growth touches at most 4096 bytes apart.  R11 is
+         --  scratch at each reservation boundary; argument banks, R10 failure
+         --  state and allocated callee-saves remain live and untouched.
+         procedure Reserve_Stack
+           (Bytes : Landin.Targets.Byte_Count; Identity : String)
+         is
+            Pages : constant Landin.Targets.Byte_Count := Bytes / 4096;
+            Partial : constant Landin.Targets.Byte_Count := Bytes mod 4096;
+            Loop_Label : constant String := Local_Prefix
+              & Trimmed (Landin.IR.Item_Id'Image (Item))
+              & "_probe_" & Identity;
+         begin
+            --  A small frame may not have touched its bottom yet.  Anchor
+            --  outgoing probing there before two individually small reserves
+            --  could combine into an unprobed page.  Stack extents are aligned
+            --  to 16, so a remaining sub-page run plus CALL's push stays below
+            --  4096.  Tiny leaves retain the reference prologue unchanged.
+            if Identity /= "frame" and then Extent (Layout) < 4096
+              and then Extent (Layout) + Bytes >= 4096
+            then
+               Emit ("orq $0, (%rsp)");
+            end if;
+            if Bytes = 0 then
+               return;
+            elsif Pages = 0 then
+               Emit ("subq $" & Trimmed
+                     (Landin.Targets.Byte_Count'Image (Bytes)) & ", %rsp");
+               return;
+            end if;
+            Emit ("leaq -" & Trimmed
+                  (Landin.Targets.Byte_Count'Image (Pages * 4096))
+                  & "(%rsp), %r11");
+            Put (Loop_Label & ":");
+            Emit ("subq $4096, %rsp");
+            Emit ("orq $0, (%rsp)");
+            Emit ("cmpq %r11, %rsp");
+            Emit ("jne " & Loop_Label);
+            if Partial > 0 then
+               Emit ("subq $" & Trimmed
+                     (Landin.Targets.Byte_Count'Image (Partial)) & ", %rsp");
+               Emit ("orq $0, (%rsp)");
+            end if;
+         end Reserve_Stack;
+
          procedure Emit_Epilogue;
 
          procedure Emit_Epilogue is
          begin
+            for Register in Allocation.Saved_Register loop
+               if Allocation_Plan.Used (Register) then
+                  Emit ("movq " & Cell (Save_Offset
+                        (Layout, Allocation.Save_Index
+                           (Allocation_Plan, Register))) & ", "
+                        & Allocation.Name (Register, Landin.Targets.Byte_8));
+               end if;
+            end loop;
             Emit ("movq %rbp, %rsp");
             Emit ("popq %rbp");
             Emit ("ret");
          end Emit_Epilogue;
+
+         procedure Conditional_Branch
+           (Condition : String; Yes, No : Landin.IR.Block_Id);
+
+         procedure Conditional_Branch
+           (Condition : String; Yes, No : Landin.IR.Block_Id)
+         is
+            Following : constant Landin.IR.Block_Id := Current_Block + 1;
+            Inverse : constant String :=
+              (if Condition = "e" then "ne"
+               elsif Condition = "ne" then "e"
+               elsif Condition = "l" then "ge"
+               elsif Condition = "le" then "g"
+               elsif Condition = "g" then "le"
+               elsif Condition = "ge" then "l"
+               elsif Condition = "b" then "ae"
+               elsif Condition = "be" then "a"
+               elsif Condition = "a" then "be"
+               elsif Condition = "ae" then "b"
+               else raise Landin.Compiler_Defect with
+                 "unknown branch condition");
+         begin
+            if Optimized and then Yes = Following then
+               Emit ("j" & Inverse & " " & Label (Item, No));
+            else
+               Emit ("j" & Condition & " " & Label (Item, Yes));
+               if not Optimized or else No /= Following then
+                  Emit ("jmp " & Label (Item, No));
+               end if;
+            end if;
+         end Conditional_Branch;
 
          procedure Emit_Instruction (Value : Landin.IR.Value_Id);
 
@@ -1995,7 +2243,7 @@ package body Landin.Backend.X86_64 is
                            & ", %rax");
                      Emit ("mov" & Suffix (Held) & " "
                            & Accumulator (Held) & ", "
-                           & Value_Cell (Value));
+                           & Value_Operand (Value));
                   end;
 
                when Landin.IR.Measure_Size | Landin.IR.Measure_Align =>
@@ -2020,7 +2268,7 @@ package body Landin.Backend.X86_64 is
                         Emit
                           ("mov" & Suffix (Held) & " "
                            & Accumulator (Held) & ", "
-                           & Value_Cell (Value));
+                           & Value_Operand (Value));
                      end;
                   end;
 
@@ -2030,7 +2278,7 @@ package body Landin.Backend.X86_64 is
                   Emit ("movb $"
                         & (if Landin.IR.Truth_Of (Of_Unit, Item, Value)
                            then "1" else "0")
-                        & ", " & Value_Cell (Value));
+                        & ", " & Value_Operand (Value));
 
                when Landin.IR.Atom =>
                   Emit
@@ -2041,7 +2289,7 @@ package body Landin.Backend.X86_64 is
                                (Of_Unit,
                                 Landin.IR.Atom_Of
                                   (Of_Unit, Item, Value))))
-                     & ", " & Value_Cell (Value));
+                     & ", " & Value_Operand (Value));
 
                when Landin.IR.Place_Address =>
                   declare
@@ -2055,7 +2303,7 @@ package body Landin.Backend.X86_64 is
                      Storage_Address
                        (Place, Field, "%rax", Nested => Nested);
                      Carry
-                       (Landin.Targets.Byte_8, "%rax", Value_Cell (Value));
+                       (Landin.Targets.Byte_8, "%rax", Value_Operand (Value));
                   end;
 
                when Landin.IR.Storage_Address =>
@@ -2074,7 +2322,7 @@ package body Landin.Backend.X86_64 is
                           (Place, Field, "%rax", Nested => Nested);
                         Carry
                           (Landin.Targets.Byte_8, "%rax",
-                           Value_Cell (Value));
+                           Value_Operand (Value));
                      else
                         Storage_Address
                           (Place, Field, "%rcx", Nested => Nested);
@@ -2090,7 +2338,7 @@ package body Landin.Backend.X86_64 is
                            Safe : constant String :=
                              Value_Label (Value) & "_index";
                         begin
-                           Emit ("movq " & Value_Cell (Index) & ", %rax");
+                           Emit ("movq " & Value_Operand (Index) & ", %rax");
                            --  D187 leaves the access at the computed
                            --  address, which is [0430]'s existing pointer
                            --  non-guarantee and nothing worse.
@@ -2125,7 +2373,7 @@ package body Landin.Backend.X86_64 is
                            Emit ("addq %rax, %rcx");
                            Carry
                              (Landin.Targets.Byte_8, "%rcx",
-                              Value_Cell (Value));
+                              Value_Operand (Value));
                         end;
                      end if;
                   end;
@@ -2133,7 +2381,7 @@ package body Landin.Backend.X86_64 is
                when Landin.IR.Pointer_Address =>
                   Carry
                     (Landin.Targets.Byte_8,
-                     Value_Cell (Operand (1)), Value_Cell (Value));
+                     Value_Operand (Operand (1)), Value_Operand (Value));
 
                when Landin.IR.Conversion =>
                   declare
@@ -2154,22 +2402,22 @@ package body Landin.Backend.X86_64 is
                         begin
                            if From = Into_Type then
                               Carry
-                                (Size_Of (From, Facts), Value_Cell (Source),
-                                 Value_Cell (Value));
+                                (Size_Of (From, Facts), Value_Operand (Source),
+                                 Value_Operand (Value));
                            elsif From = Landin.Types.F32 then
                               Emit
-                                ("movss " & Value_Cell (Source)
+                                ("movss " & Value_Operand (Source)
                                  & ", %xmm0");
                               Emit ("cvtss2sd %xmm0, %xmm0");
                               Emit
-                                ("movsd %xmm0, " & Value_Cell (Value));
+                                ("movsd %xmm0, " & Value_Operand (Value));
                            else
                               declare
                                  Safe : constant String :=
                                    Value_Label (Value) & "_finite";
                               begin
                                  Emit
-                                   ("movsd " & Value_Cell (Source)
+                                   ("movsd " & Value_Operand (Source)
                                     & ", %xmm0");
                                  Emit ("cvtsd2ss %xmm0, %xmm0");
                                  --  Infinity and NaN are values of both
@@ -2180,7 +2428,7 @@ package body Landin.Backend.X86_64 is
                                  Emit ("cmpl $2139095040, %eax");
                                  Emit ("jne " & Safe);
                                  Emit
-                                   ("movq " & Value_Cell (Source)
+                                   ("movq " & Value_Operand (Source)
                                     & ", %rdx");
                                  Emit
                                    ("movabsq $9218868437227405312, %rax");
@@ -2191,7 +2439,7 @@ package body Landin.Backend.X86_64 is
                                  Emit ("ud2");
                                  Put (Safe & ":");
                                  Emit
-                                   ("movss %xmm0, " & Value_Cell (Value));
+                                   ("movss %xmm0, " & Value_Operand (Value));
                               end;
                            end if;
                         end;
@@ -2209,10 +2457,10 @@ package body Landin.Backend.X86_64 is
                               then "movss" else "movsd");
                         begin
                            Emit ("movq $0, %rax");
-                           Emit ("movb " & Value_Cell (Source) & ", %al");
+                           Emit ("movb " & Value_Operand (Source) & ", %al");
                            Emit (Convert & " %rax, %xmm0");
                            Emit
-                             (Store & " %xmm0, " & Value_Cell (Value));
+                             (Store & " %xmm0, " & Value_Operand (Value));
                         end;
                      elsif Into_Kind in Landin.Types.Float_Name then
                         declare
@@ -2243,11 +2491,11 @@ package body Landin.Backend.X86_64 is
                                     when Landin.Targets.Byte_2 => "movswq ",
                                     when Landin.Targets.Byte_4 => "movslq ",
                                     when Landin.Targets.Byte_8 => "movq ")
-                                 & Value_Cell (Source) & ", %rax");
+                                 & Value_Operand (Source) & ", %rax");
                            else
                               Emit ("movq $0, %rax");
                               Emit ("mov" & Suffix (From_Size) & " "
-                                    & Value_Cell (Source) & ", "
+                                    & Value_Operand (Source) & ", "
                                     & Accumulator (From_Size));
                            end if;
 
@@ -2274,7 +2522,7 @@ package body Landin.Backend.X86_64 is
                               Emit (Convert & " %rax, %xmm0");
                            end if;
                            Emit
-                             (Store & " %xmm0, " & Value_Cell (Value));
+                             (Store & " %xmm0, " & Value_Operand (Value));
                         end;
                      elsif Into_Kind = Landin.Types.Bool then
                         if From_Kind in Landin.Types.Float_Name then
@@ -2304,7 +2552,7 @@ package body Landin.Backend.X86_64 is
                               Emit
                                 ((if From = Landin.Types.F32
                                   then "movl " else "movq ")
-                                 & Value_Cell (Source)
+                                 & Value_Operand (Source)
                                  & (if From = Landin.Types.F32
                                     then ", %eax" else ", %rax"));
                               Emit ("movq %rax, %rdx");
@@ -2332,7 +2580,7 @@ package body Landin.Backend.X86_64 is
                               Emit ("movq $1, %rax");
                               Put (Store & ":");
                               Emit
-                                ("movb %al, " & Value_Cell (Value));
+                                ("movb %al, " & Value_Operand (Value));
                            end;
                         else
                            declare
@@ -2345,14 +2593,14 @@ package body Landin.Backend.X86_64 is
                            begin
                               Emit ("movq $0, %rax");
                               Emit ("mov" & Suffix (From_Size) & " "
-                                    & Value_Cell (Source) & ", "
+                                    & Value_Operand (Source) & ", "
                                     & Accumulator (From_Size));
                               Emit ("cmpq $1, %rax");
                               Emit ("jbe " & Safe);
                               Emit ("ud2");
                               Put (Safe & ":");
                               Emit
-                                ("movb %al, " & Value_Cell (Value));
+                                ("movb %al, " & Value_Operand (Value));
                            end;
                         end if;
                      elsif From_Kind = Landin.Types.Bool then
@@ -2364,10 +2612,10 @@ package body Landin.Backend.X86_64 is
                         begin
                            Emit ("movq $0, %rax");
                            Emit
-                             ("movb " & Value_Cell (Source) & ", %al");
+                             ("movb " & Value_Operand (Source) & ", %al");
                            Emit ("mov" & Suffix (Into_Size) & " "
                                  & Accumulator (Into_Size) & ", "
-                                 & Value_Cell (Value));
+                                 & Value_Operand (Value));
                         end;
                      elsif From_Kind in Landin.Types.Float_Name then
                         declare
@@ -2426,7 +2674,7 @@ package body Landin.Backend.X86_64 is
                            Emit
                              ((if From = Landin.Types.F32
                                then "movl " else "movq ")
-                              & Value_Cell (Source)
+                              & Value_Operand (Source)
                               & (if From = Landin.Types.F32
                                  then ", %eax" else ", %rax"));
                            Emit ("movq %rax, %r8");
@@ -2546,7 +2794,7 @@ package body Landin.Backend.X86_64 is
                            Emit ("movq %rdx, %rax");
                            Emit ("mov" & Suffix (Into_Size) & " "
                                  & Accumulator (Into_Size) & ", "
-                                 & Value_Cell (Value));
+                                 & Value_Operand (Value));
                            Emit ("jmp " & Done);
                            Put (Trap & ":");
                            Emit ("ud2");
@@ -2576,11 +2824,11 @@ package body Landin.Backend.X86_64 is
                                     when Landin.Targets.Byte_2 => "movswq ",
                                     when Landin.Targets.Byte_4 => "movslq ",
                                     when Landin.Targets.Byte_8 => "movq ")
-                                 & Value_Cell (Source) & ", %rax");
+                                 & Value_Operand (Source) & ", %rax");
                            else
                               Emit ("movq $0, %rax");
                               Emit ("mov" & Suffix (From_Size) & " "
-                                    & Value_Cell (Source) & ", "
+                                    & Value_Operand (Source) & ", "
                                     & Accumulator (From_Size));
                            end if;
 
@@ -2651,7 +2899,7 @@ package body Landin.Backend.X86_64 is
                            end if;
                            Emit ("mov" & Suffix (Into_Size) & " "
                                  & Accumulator (Into_Size) & ", "
-                                 & Value_Cell (Value));
+                                 & Value_Operand (Value));
                         end;
                      end if;
                   end;
@@ -2688,11 +2936,11 @@ package body Landin.Backend.X86_64 is
                               when Landin.Targets.Byte_2 => "movswq ",
                               when Landin.Targets.Byte_4 => "movslq ",
                               when Landin.Targets.Byte_8 => "movq ")
-                           & Value_Cell (Source) & ", %rax");
+                           & Value_Operand (Source) & ", %rax");
                      else
                         Emit ("movq $0, %rax");
                         Emit ("mov" & Suffix (Width) & " "
-                              & Value_Cell (Source) & ", "
+                              & Value_Operand (Source) & ", "
                               & Accumulator (Width));
                      end if;
 
@@ -2716,7 +2964,7 @@ package body Landin.Backend.X86_64 is
 
                      Emit ("mov" & Suffix (Width) & " "
                            & Accumulator (Width) & ", "
-                           & Value_Cell (Value));
+                           & Value_Operand (Value));
                   end;
 
                when Landin.IR.Slice_Address =>
@@ -2741,9 +2989,9 @@ package body Landin.Backend.X86_64 is
                      --  here checked whatever region they sit in.
                      if not Unchecked then
                         Emit
-                          ("movq " & Value_Cell (Operand (4)) & ", %rax");
+                          ("movq " & Value_Operand (Operand (4)) & ", %rax");
                         Emit
-                          ("cmpq " & Value_Cell (Operand (2)) & ", %rax");
+                          ("cmpq " & Value_Operand (Operand (2)) & ", %rax");
                         Emit
                           ((if Landin.IR.Slice_Is_Inclusive
                                  (Of_Unit, Item, Value)
@@ -2751,10 +2999,10 @@ package body Landin.Backend.X86_64 is
                         Emit ("ud2");
                         Put (Safe_Upper & ":");
                      end if;
-                     Emit ("movq " & Value_Cell (Operand (3)) & ", %rcx");
+                     Emit ("movq " & Value_Operand (Operand (3)) & ", %rcx");
                      if not Unchecked then
                         Emit
-                          ("cmpq " & Value_Cell (Operand (4)) & ", %rcx");
+                          ("cmpq " & Value_Operand (Operand (4)) & ", %rcx");
                         Emit ("jbe " & Safe_Lower);
                         Emit ("ud2");
                         Put (Safe_Lower & ":");
@@ -2766,10 +3014,10 @@ package body Landin.Backend.X86_64 is
                                (Landin.Targets.Byte_Count'Image (Stride))
                            & ", %rcx, %rcx");
                      end if;
-                     Emit ("movq " & Value_Cell (Operand (1)) & ", %rax");
+                     Emit ("movq " & Value_Operand (Operand (1)) & ", %rax");
                      Emit ("addq %rcx, %rax");
                      Carry
-                       (Landin.Targets.Byte_8, "%rax", Value_Cell (Value));
+                       (Landin.Targets.Byte_8, "%rax", Value_Operand (Value));
                   end;
 
                when Landin.IR.Empty_Slice_Base =>
@@ -2787,27 +3035,26 @@ package body Landin.Backend.X86_64 is
                        ("movq $"
                         & Trimmed
                             (Landin.Targets.Byte_Alignment'Image (Alignment))
-                        & ", " & Value_Cell (Value));
+                        & ", " & Value_Operand (Value));
                   end;
 
                when Landin.IR.Load_Indirect =>
                   declare
                      Held : constant Held_Size := Size_Of_Value (Value);
                   begin
-                     Emit ("movq " & Value_Cell (Operand (1)) & ", %rcx");
+                     Emit ("movq " & Value_Operand (Operand (1)) & ", %rcx");
                      Emit ("mov" & Suffix (Held) & " (%rcx), "
                            & Accumulator (Held));
-                     Emit ("mov" & Suffix (Held) & " "
-                           & Accumulator (Held) & ", " & Value_Cell (Value));
+                     Store_Value (Value, Accumulator (Held));
                   end;
 
                when Landin.IR.Store_Indirect =>
                   declare
                      Held : constant Held_Size := Size_Of_Value (Operand (2));
                   begin
-                     Emit ("movq " & Value_Cell (Operand (1)) & ", %rcx");
+                     Emit ("movq " & Value_Operand (Operand (1)) & ", %rcx");
                      Emit ("mov" & Suffix (Held) & " "
-                           & Value_Cell (Operand (2)) & ", "
+                           & Value_Operand (Operand (2)) & ", "
                            & Accumulator (Held));
                      Emit ("mov" & Suffix (Held) & " "
                            & Accumulator (Held) & ", (%rcx)");
@@ -2819,7 +3066,7 @@ package body Landin.Backend.X86_64 is
                        Landin.IR.Slot_Of (Of_Unit, Item, Value);
                   begin
                      Carry (Size_Of_Slot (Slot), Slot_Cell (Slot),
-                            Value_Cell (Value));
+                            Value_Operand (Value));
                   end;
 
                when Landin.IR.Store =>
@@ -2828,7 +3075,7 @@ package body Landin.Backend.X86_64 is
                        Landin.IR.Slot_Of (Of_Unit, Item, Value);
                   begin
                      Carry (Size_Of_Slot (Slot),
-                            Value_Cell (Operand (1)), Slot_Cell (Slot));
+                            Value_Operand (Operand (1)), Slot_Cell (Slot));
                   end;
 
                when Landin.IR.Shift_Left | Landin.IR.Shift_Right =>
@@ -2859,8 +3106,34 @@ package body Landin.Backend.X86_64 is
                         elsif Signed then "sar"
                         else "shr");
                   begin
+                     if Optimized and then Landin.IR.Op_Of
+                       (Of_Unit, Item, Operand (2)) = Landin.IR.Number
+                       and then not Landin.IR.Is_Negated
+                         (Of_Unit, Item, Operand (2))
+                     then
+                        declare
+                           Amount : constant Landin.Types.Magnitude :=
+                             Landin.IR.Number_Of (Of_Unit, Item, Operand (2));
+                        begin
+                           if Amount >= Landin.Types.Magnitude (Bits) then
+                              Emit ("mov" & Suffix (Held) & " $0, "
+                                    & Value_Operand (Value));
+                           else
+                              Load_Value (Operand (1));
+                              if Amount > 0 then
+                                 Emit (Instruction & Suffix (Held) & " $"
+                                       & Trimmed
+                                         (Landin.Types.Magnitude'Image
+                                            (Amount))
+                                       & ", " & Accumulator (Held));
+                              end if;
+                              Store_Value (Value, Accumulator (Held));
+                           end if;
+                           return;
+                        end;
+                     end if;
                      Emit ("mov" & Suffix (Held) & " "
-                           & Value_Cell (Operand (2)) & ", "
+                           & Value_Operand (Operand (2)) & ", "
                            & Accumulator (Held));
 
                      if Signed then
@@ -2879,21 +3152,21 @@ package body Landin.Backend.X86_64 is
                            & ", " & Accumulator (Held));
                      Emit ("jb " & In_Range);
                      Emit ("mov" & Suffix (Held) & " $0, "
-                           & Value_Cell (Value));
+                           & Value_Operand (Value));
                      Emit ("jmp " & Done);
                      Put (In_Range & ":");
 
                      --  The count is below the width, so its low byte is the
                      --  whole of it and `%cl` is where a variable count goes.
-                     Emit ("movb " & Value_Cell (Operand (2)) & ", %cl");
-                     Emit ("mov" & Suffix (Held) & " "
-                           & Value_Cell (Operand (1)) & ", "
-                           & Accumulator (Held));
+                     Emit ("movb "
+                           & Value_Operand (Operand (2), Landin.Targets.Byte_1)
+                           & ", %cl");
+                     Load_Value (Operand (1));
                      Emit (Instruction & Suffix (Held) & " %cl, "
                            & Accumulator (Held));
                      Emit ("mov" & Suffix (Held) & " "
                            & Accumulator (Held) & ", "
-                           & Value_Cell (Value));
+                           & Value_Operand (Value));
                      Put (Done & ":");
                   end;
 
@@ -2914,24 +3187,22 @@ package body Landin.Backend.X86_64 is
                              raise Landin.Compiler_Defect
                                with "an unreachable operator case");
                   begin
-                     Emit ("mov" & Suffix (Held) & " "
-                           & Value_Cell (Operand (1)) & ", "
-                           & Accumulator (Held));
+                     Load_Value (Operand (1));
                      Emit (Instruction & Suffix (Held) & " "
-                           & Value_Cell (Operand (2)) & ", "
+                           & Value_Operand (Operand (2)) & ", "
                            & Accumulator (Held));
                      Emit ("mov" & Suffix (Held) & " "
                            & Accumulator (Held) & ", "
-                           & Value_Cell (Value));
+                           & Value_Operand (Value));
                   end;
 
                when Landin.IR.Logical_Not =>
                   --  [1870] fixes a bool at zero or one, so the low bit is
                   --  the whole value and `not` over the byte would give 254
                   --  for `not false`.
-                  Emit ("movb " & Value_Cell (Operand (1)) & ", %al");
+                  Emit ("movb " & Value_Operand (Operand (1)) & ", %al");
                   Emit ("xorb $1, %al");
-                  Emit ("movb %al, " & Value_Cell (Value));
+                  Emit ("movb %al, " & Value_Operand (Value));
 
                when Landin.IR.Negation =>
                   --  [1890] gives unary minus its own integer type back, so
@@ -2946,7 +3217,7 @@ package body Landin.Backend.X86_64 is
                   begin
                      if Kind in Landin.Types.Float_Name then
                         Emit ("mov" & Suffix (Held) & " "
-                              & Value_Cell (Operand (1)) & ", "
+                              & Value_Operand (Operand (1)) & ", "
                               & Accumulator (Held));
                         Emit
                           ((if Kind = Landin.Types.F32
@@ -2954,13 +3225,11 @@ package body Landin.Backend.X86_64 is
                             else "btcq $63, %rax"));
                         Emit ("mov" & Suffix (Held) & " "
                               & Accumulator (Held) & ", "
-                              & Value_Cell (Value));
+                              & Value_Operand (Value));
                         return;
                      end if;
 
-                     Emit ("mov" & Suffix (Held) & " "
-                           & Value_Cell (Operand (1)) & ", "
-                           & Accumulator (Held));
+                     Load_Value (Operand (1));
                      Emit ("neg" & Suffix (Held) & " " & Accumulator (Held));
                      if not Unchecked then
                         Emit ((if Landin.Types.Is_Signed
@@ -2971,7 +3240,7 @@ package body Landin.Backend.X86_64 is
                      end if;
                      Emit ("mov" & Suffix (Held) & " "
                            & Accumulator (Held) & ", "
-                           & Value_Cell (Value));
+                           & Value_Operand (Value));
                   end;
 
                when Landin.IR.Complement =>
@@ -2981,13 +3250,11 @@ package body Landin.Backend.X86_64 is
                   declare
                      Held : constant Held_Size := Size_Of_Value (Value);
                   begin
-                     Emit ("mov" & Suffix (Held) & " "
-                           & Value_Cell (Operand (1)) & ", "
-                           & Accumulator (Held));
+                     Load_Value (Operand (1));
                      Emit ("not" & Suffix (Held) & " " & Accumulator (Held));
                      Emit ("mov" & Suffix (Held) & " "
                            & Accumulator (Held) & ", "
-                           & Value_Cell (Value));
+                           & Value_Operand (Value));
                   end;
 
                when Landin.IR.Copy_Array =>
@@ -3123,7 +3390,7 @@ package body Landin.Backend.X86_64 is
                   begin
                      Storage_Address
                        (Source, Field, "%rcx", Nested => Nested);
-                     Carry (Held, "(%rcx)", Value_Cell (Value));
+                     Carry (Held, "(%rcx)", Value_Operand (Value));
                   end;
 
                when Landin.IR.Load_Variant_Field =>
@@ -3162,7 +3429,7 @@ package body Landin.Backend.X86_64 is
                            & ", %rdx");
                         Emit ("addq %rdx, %rcx");
                      end if;
-                     Carry (Held, "(%rcx)", Value_Cell (Value));
+                     Carry (Held, "(%rcx)", Value_Operand (Value));
                   end;
 
                when Landin.IR.Select_Variant =>
@@ -3244,7 +3511,7 @@ package body Landin.Backend.X86_64 is
                            & ", %rdx");
                         Emit ("addq %rdx, %rcx");
                      end if;
-                     Carry (Held, Value_Cell (Operand (1)), "(%rcx)");
+                     Carry (Held, Value_Operand (Operand (1)), "(%rcx)");
                   end;
 
                when Landin.IR.Fill_Array =>
@@ -3293,7 +3560,7 @@ package body Landin.Backend.X86_64 is
                      end if;
                      Emit
                        ("mov" & Suffix (Held) & " "
-                        & Value_Cell (Operand (1)) & ", "
+                        & Value_Operand (Operand (1)) & ", "
                         & Accumulator (Held));
                      Emit
                        ("movabsq $"
@@ -3317,9 +3584,9 @@ package body Landin.Backend.X86_64 is
                        Symbol (Datum) & "(%rip)";
                   begin
                      if Op = Landin.IR.Load_Datum then
-                        Carry (Held, Place, Value_Cell (Value));
+                        Carry (Held, Place, Value_Operand (Value));
                      else
-                        Carry (Held, Value_Cell (Operand (1)), Place);
+                        Carry (Held, Value_Operand (Operand (1)), Place);
                      end if;
                   end;
 
@@ -3374,7 +3641,7 @@ package body Landin.Backend.X86_64 is
                      Held : constant Held_Size := Size_Of (Kind, Facts);
                      Safe : constant String := Value_Label (Value) & "_index";
                   begin
-                     Emit ("movq " & Value_Cell (Index) & ", %rax");
+                     Emit ("movq " & Value_Operand (Index) & ", %rax");
                      if not Unchecked then
                         Emit
                           ("movabsq $"
@@ -3421,10 +3688,10 @@ package body Landin.Backend.X86_64 is
                      end if;
 
                      if Op = Landin.IR.Load_Element then
-                        Carry (Held, "(%rcx)", Value_Cell (Value));
+                        Carry (Held, "(%rcx)", Value_Operand (Value));
                      else
                         Carry
-                          (Held, Value_Cell (Operand (2)), "(%rcx)");
+                          (Held, Value_Operand (Operand (2)), "(%rcx)");
                      end if;
                   end;
 
@@ -3460,10 +3727,10 @@ package body Landin.Backend.X86_64 is
                                  Nested => Nested);
                               if Op = Landin.IR.Load_Field then
                                  Carry
-                                   (Held, "(%rcx)", Value_Cell (Value));
+                                   (Held, "(%rcx)", Value_Operand (Value));
                               else
                                  Carry
-                                   (Held, Value_Cell (Operand (1)),
+                                   (Held, Value_Operand (Operand (1)),
                                     "(%rcx)");
                               end if;
                               return;
@@ -3498,9 +3765,9 @@ package body Landin.Backend.X86_64 is
                            Place : constant String := Cell (At_Offset);
                         begin
                            if Op = Landin.IR.Load_Field then
-                              Carry (Held, Place, Value_Cell (Value));
+                              Carry (Held, Place, Value_Operand (Value));
                            else
-                              Carry (Held, Value_Cell (Operand (1)), Place);
+                              Carry (Held, Value_Operand (Operand (1)), Place);
                            end if;
                         end;
                      end;
@@ -3561,10 +3828,10 @@ package body Landin.Backend.X86_64 is
                         Emit ("addq %rdx, %rcx");
 
                         if Op = Landin.IR.Load_Field then
-                           Carry (Held, "(%rcx)", Value_Cell (Value));
+                           Carry (Held, "(%rcx)", Value_Operand (Value));
                         else
                            Carry
-                             (Held, Value_Cell (Operand (1)), "(%rcx)");
+                             (Held, Value_Operand (Operand (1)), "(%rcx)");
                         end if;
                      else
                         declare
@@ -3578,10 +3845,10 @@ package body Landin.Backend.X86_64 is
                              & "(%rip)";
                         begin
                            if Op = Landin.IR.Load_Field then
-                              Carry (Held, Place, Value_Cell (Value));
+                              Carry (Held, Place, Value_Operand (Value));
                            else
                               Carry
-                                (Held, Value_Cell (Operand (1)), Place);
+                                (Held, Value_Operand (Operand (1)), Place);
                            end if;
                         end;
                      end if;
@@ -3597,23 +3864,21 @@ package body Landin.Backend.X86_64 is
                      if Kind in Landin.Types.Float_Name then
                         Emit ((if Kind = Landin.Types.F32
                                then "movss " else "movsd ")
-                              & Value_Cell (Operand (1)) & ", %xmm0");
+                              & Value_Operand (Operand (1)) & ", %xmm0");
                         Emit ((if Op = Landin.IR.Add then "add" else "sub")
                               & (if Kind = Landin.Types.F32
                                  then "ss " else "sd ")
-                              & Value_Cell (Operand (2)) & ", %xmm0");
+                              & Value_Operand (Operand (2)) & ", %xmm0");
                         Emit ((if Kind = Landin.Types.F32
                                then "movss " else "movsd ")
-                              & "%xmm0, " & Value_Cell (Value));
+                              & "%xmm0, " & Value_Operand (Value));
                         return;
                      end if;
 
-                     Emit ("mov" & Suffix (Held) & " "
-                           & Value_Cell (Operand (1)) & ", "
-                           & Accumulator (Held));
+                     Load_Value (Operand (1));
                      Emit ((if Op = Landin.IR.Add then "add" else "sub")
                            & Suffix (Held) & " "
-                           & Value_Cell (Operand (2)) & ", "
+                           & Value_Operand (Operand (2)) & ", "
                            & Accumulator (Held));
                      --  D187 leaves [0320]'s two's-complement result in
                      --  the accumulator, which is what the wrapping
@@ -3627,7 +3892,7 @@ package body Landin.Backend.X86_64 is
                      end if;
                      Emit ("mov" & Suffix (Held) & " "
                            & Accumulator (Held) & ", "
-                           & Value_Cell (Value));
+                           & Value_Operand (Value));
                   end;
 
                when Landin.IR.Wrapping_Add
@@ -3635,16 +3900,14 @@ package body Landin.Backend.X86_64 is
                   declare
                      Held : constant Held_Size := Size_Of_Value (Value);
                   begin
-                     Emit ("mov" & Suffix (Held) & " "
-                           & Value_Cell (Operand (1)) & ", "
-                           & Accumulator (Held));
+                     Load_Value (Operand (1));
                      Emit ((if Op = Landin.IR.Wrapping_Add
                             then "add" else "sub") & Suffix (Held) & " "
-                           & Value_Cell (Operand (2)) & ", "
+                           & Value_Operand (Operand (2)) & ", "
                            & Accumulator (Held));
                      Emit ("mov" & Suffix (Held) & " "
                            & Accumulator (Held) & ", "
-                           & Value_Cell (Value));
+                           & Value_Operand (Value));
                   end;
 
                when Landin.IR.Divide | Landin.IR.Remainder =>
@@ -3666,13 +3929,13 @@ package body Landin.Backend.X86_64 is
                         end if;
                         Emit ((if Kind = Landin.Types.F32
                                then "movss " else "movsd ")
-                              & Value_Cell (Operand (1)) & ", %xmm0");
+                              & Value_Operand (Operand (1)) & ", %xmm0");
                         Emit ((if Kind = Landin.Types.F32
                                then "divss " else "divsd ")
-                              & Value_Cell (Operand (2)) & ", %xmm0");
+                              & Value_Operand (Operand (2)) & ", %xmm0");
                         Emit ((if Kind = Landin.Types.F32
                                then "movss " else "movsd ")
-                              & "%xmm0, " & Value_Cell (Value));
+                              & "%xmm0, " & Value_Operand (Value));
                         return;
                      end if;
 
@@ -3686,14 +3949,14 @@ package body Landin.Backend.X86_64 is
                             (Landin.Types.Width (Integer_Kind, Facts) - 1);
                      begin
                         Emit ("cmp" & Suffix (Held) & " $0, "
-                              & Value_Cell (Operand (2)));
+                              & Value_Operand (Operand (2)));
                         Emit ("jne " & Nonzero);
                         Emit ("ud2");
                         Put (Nonzero & ":");
 
                         if Signed then
                            Emit ("cmp" & Suffix (Held) & " $-1, "
-                                 & Value_Cell (Operand (2)));
+                                 & Value_Operand (Operand (2)));
                            Emit ("jne " & Divide);
                            Emit ("movabsq $"
                                  & Trimmed
@@ -3701,21 +3964,21 @@ package body Landin.Backend.X86_64 is
                                         (Minimum_Pattern))
                                  & ", %rax");
                            Emit ("cmp" & Suffix (Held) & " "
-                                 & Value_Cell (Operand (1)) & ", "
+                                 & Value_Operand (Operand (1)) & ", "
                                  & Accumulator (Held));
                            Emit ("jne " & Divide);
                            if Op = Landin.IR.Divide then
                               Emit ("ud2");
                            else
                               Emit ("mov" & Suffix (Held) & " $0, "
-                                    & Value_Cell (Value));
+                                    & Value_Operand (Value));
                               Emit ("jmp " & Done);
                            end if;
                            Put (Divide & ":");
                         end if;
 
                         Emit ("mov" & Suffix (Held) & " "
-                              & Value_Cell (Operand (1)) & ", "
+                              & Value_Operand (Operand (1)) & ", "
                               & Accumulator (Held));
                         if Signed then
                            Emit
@@ -3738,17 +4001,17 @@ package body Landin.Backend.X86_64 is
                         end if;
                         Emit ((if Signed then "idiv" else "div")
                               & Suffix (Held) & " "
-                              & Value_Cell (Operand (2)));
-                        Emit ("mov" & Suffix (Held) & " "
-                              & (if Op = Landin.IR.Divide
-                                 then Accumulator (Held)
-                                 else
-                                   (case Held is
-                                       when Landin.Targets.Byte_1 => "%ah",
-                                       when Landin.Targets.Byte_2 => "%dx",
-                                       when Landin.Targets.Byte_4 => "%edx",
-                                       when Landin.Targets.Byte_8 => "%rdx"))
-                              & ", " & Value_Cell (Value));
+                              & Value_Operand (Operand (2)));
+                        Store_Value
+                          (Value,
+                           (if Op = Landin.IR.Divide
+                            then Accumulator (Held)
+                            else
+                              (case Held is
+                                  when Landin.Targets.Byte_1 => "%ah",
+                                  when Landin.Targets.Byte_2 => "%dx",
+                                  when Landin.Targets.Byte_4 => "%edx",
+                                  when Landin.Targets.Byte_8 => "%rdx")));
                         if Op = Landin.IR.Remainder then
                            Put (Done & ":");
                         end if;
@@ -3765,13 +4028,13 @@ package body Landin.Backend.X86_64 is
                      if Kind in Landin.Types.Float_Name then
                         Emit ((if Kind = Landin.Types.F32
                                then "movss " else "movsd ")
-                              & Value_Cell (Operand (1)) & ", %xmm0");
+                              & Value_Operand (Operand (1)) & ", %xmm0");
                         Emit ((if Kind = Landin.Types.F32
                                then "mulss " else "mulsd ")
-                              & Value_Cell (Operand (2)) & ", %xmm0");
+                              & Value_Operand (Operand (2)) & ", %xmm0");
                         Emit ((if Kind = Landin.Types.F32
                                then "movss " else "movsd ")
-                              & "%xmm0, " & Value_Cell (Value));
+                              & "%xmm0, " & Value_Operand (Value));
                         return;
                      end if;
 
@@ -3781,11 +4044,11 @@ package body Landin.Backend.X86_64 is
                             (Landin.Types.Integer_Name (Kind));
                      begin
                         Emit ("mov" & Suffix (Held) & " "
-                              & Value_Cell (Operand (1)) & ", "
+                              & Value_Operand (Operand (1)) & ", "
                               & Accumulator (Held));
                         Emit ((if Signed then "imul" else "mul")
                               & Suffix (Held) & " "
-                              & Value_Cell (Operand (2)));
+                              & Value_Operand (Operand (2)));
                         if not Unchecked then
                            Emit
                              ((if Signed then "jno " else "jnc ") & Next);
@@ -3794,7 +4057,7 @@ package body Landin.Backend.X86_64 is
                         end if;
                         Emit ("mov" & Suffix (Held) & " "
                               & Accumulator (Held) & ", "
-                              & Value_Cell (Value));
+                              & Value_Operand (Value));
                      end;
                   end;
 
@@ -3804,16 +4067,14 @@ package body Landin.Backend.X86_64 is
                        Landin.IR.Result_Of (Of_Unit, Item, Value);
                      Held : constant Held_Size := Size_Of_Value (Value);
                   begin
-                     Emit ("mov" & Suffix (Held) & " "
-                           & Value_Cell (Operand (1)) & ", "
-                           & Accumulator (Held));
+                     Load_Value (Operand (1));
                      Emit ((if Landin.Types.Is_Signed (Kind)
                             then "imul" else "mul")
                            & Suffix (Held) & " "
-                           & Value_Cell (Operand (2)));
+                           & Value_Operand (Operand (2)));
                      Emit ("mov" & Suffix (Held) & " "
                            & Accumulator (Held) & ", "
-                           & Value_Cell (Value));
+                           & Value_Operand (Value));
                   end;
 
                when Landin.IR.Equal_To
@@ -3850,10 +4111,10 @@ package body Landin.Backend.X86_64 is
                      if Kind in Landin.Types.Float_Name then
                         Emit ((if Kind = Landin.Types.F32
                                then "movss " else "movsd ")
-                              & Value_Cell (Operand (1)) & ", %xmm0");
+                              & Value_Operand (Operand (1)) & ", %xmm0");
                         Emit ((if Kind = Landin.Types.F32
                                then "ucomiss " else "ucomisd ")
-                              & Value_Cell (Operand (2)) & ", %xmm0");
+                              & Value_Operand (Operand (2)) & ", %xmm0");
                         case Op is
                            when Landin.IR.Equal_To =>
                               Emit ("sete %al");
@@ -3878,31 +4139,45 @@ package body Landin.Backend.X86_64 is
                               raise Compiler_Defect with
                                 "non-comparison in comparison emission";
                         end case;
-                        Emit ("movb %al, " & Value_Cell (Value));
+                        Emit ("movb %al, " & Value_Operand (Value));
                         return;
                      end if;
 
-                     Emit ("mov" & Suffix (Held) & " "
-                           & Value_Cell (Operand (1)) & ", "
-                           & Accumulator (Held));
+                     Load_Value (Operand (1));
                      Emit ("cmp" & Suffix (Held) & " "
-                           & Value_Cell (Operand (2)) & ", "
+                           & Value_Operand (Operand (2)) & ", "
                            & Accumulator (Held));
-                     Emit (Condition & " %al");
-                     Emit ("movb %al, " & Value_Cell (Value));
+                     if Optimized and then Uses (Positive (Value)) = 1
+                       and then Next_Instruction /= Landin.IR.No_Value
+                       and then Landin.IR.Op_Of
+                         (Of_Unit, Item, Next_Instruction) = Landin.IR.Branch
+                       and then Landin.IR.Nth_Operand
+                         (Of_Unit, Item, Next_Instruction, 1) = Value
+                     then
+                        Conditional_Branch
+                          (Condition (Condition'First + 3 .. Condition'Last),
+                           Landin.IR.Target_Of
+                             (Of_Unit, Item, Next_Instruction),
+                           Landin.IR.Alternative_Of
+                             (Of_Unit, Item, Next_Instruction));
+                        Fused_Branch := Next_Instruction;
+                     else
+                        Emit (Condition & " %al");
+                        Store_Value (Value, "%al");
+                     end if;
                   end;
 
                when Landin.IR.Failure_Test =>
-                  Emit ("cmpl $0, " & Value_Cell (Operand (1)));
+                  Emit ("cmpl $0, " & Value_Operand (Operand (1)));
                   Emit ("setne %al");
-                  Emit ("movb %al, " & Value_Cell (Value));
+                  Emit ("movb %al, " & Value_Operand (Value));
 
                when Landin.IR.Function_Address =>
                   Emit
                     ("leaq "
                      & Symbol (Landin.IR.Callee_Of (Of_Unit, Item, Value))
                      & "(%rip), %rax");
-                  Emit ("movq %rax, " & Value_Cell (Value));
+                  Emit ("movq %rax, " & Value_Operand (Value));
 
                when Landin.IR.Evidence_Address =>
                   Emit
@@ -3910,7 +4185,7 @@ package body Landin.Backend.X86_64 is
                      & Evidence_Symbol
                          (Landin.IR.Evidence_Of (Of_Unit, Item, Value))
                      & "(%rip), %rax");
-                  Emit ("movq %rax, " & Value_Cell (Value));
+                  Emit ("movq %rax, " & Value_Operand (Value));
 
                when Landin.IR.Evidence_Function =>
                   declare
@@ -3920,7 +4195,7 @@ package body Landin.Backend.X86_64 is
                        Landin.Targets.Evidence_Function_Offset
                          (Facts, Positive (Which));
                   begin
-                     Emit ("movq " & Value_Cell (Operand (1)) & ", %rax");
+                     Emit ("movq " & Value_Operand (Operand (1)) & ", %rax");
                      if Landin.IR.Evidence_Is_Erased
                        (Of_Unit, Landin.IR.Evidence_Of (Of_Unit, Item, Value))
                      then
@@ -3933,7 +4208,7 @@ package body Landin.Backend.X86_64 is
                         & Trimmed
                             (Landin.Targets.Byte_Count'Image (Offset))
                         & "(%rax), %rax");
-                     Emit ("movq %rax, " & Value_Cell (Value));
+                     Emit ("movq %rax, " & Value_Operand (Value));
                   end;
 
                when Landin.IR.Evidence_Self =>
@@ -3942,9 +4217,9 @@ package body Landin.Backend.X86_64 is
                        Landin.IR.Nth_Operand
                          (Of_Unit, Item, Operand (1), 1);
                   begin
-                     Emit ("movq " & Value_Cell (Receiver) & ", %rax");
+                     Emit ("movq " & Value_Operand (Receiver) & ", %rax");
                      Emit ("movq (%rax), %rax");
-                     Emit ("movq %rax, " & Value_Cell (Value));
+                     Emit ("movq %rax, " & Value_Operand (Value));
                   end;
 
                when Landin.IR.Call | Landin.IR.Indirect_Call =>
@@ -4017,13 +4292,9 @@ package body Landin.Backend.X86_64 is
                            * Stack_Argument_Bytes,
                            Landin.Targets.Stack_Alignment (Facts)));
                   begin
-                     if Stack_Bytes > 0 then
-                        Emit ("subq $"
-                              & Trimmed
-                                  (Landin.Targets.Byte_Count'Image
-                                     (Stack_Bytes))
-                              & ", %rsp");
-                     end if;
+                     Reserve_Stack
+                       (Stack_Bytes, "call_"
+                        & Trimmed (Landin.IR.Value_Id'Image (Value)));
 
                      for Index in 1 .. Count loop
                         declare
@@ -4041,18 +4312,18 @@ package body Landin.Backend.X86_64 is
                                  Emit (Extension
                                          (Argument, Held,
                                           Landin.Targets.Byte_4)
-                                       & " " & Value_Cell (Argument) & ", "
+                                       & " " & Value_Operand (Argument) & ", "
                                        & Argument_Register
                                            (Index, Landin.Targets.Byte_4));
                               else
                                  Emit ("mov" & Suffix (Held) & " "
-                                       & Value_Cell (Argument) & ", "
+                                       & Value_Operand (Argument) & ", "
                                        & Argument_Register (Index, Held));
                               end if;
                            elsif Narrow then
                               Emit (Extension
                                       (Argument, Held, Landin.Targets.Byte_8)
-                                    & " " & Value_Cell (Argument)
+                                    & " " & Value_Operand (Argument)
                                     & ", %rax");
                               Emit ("movq %rax, "
                                     & Trimmed
@@ -4063,7 +4334,7 @@ package body Landin.Backend.X86_64 is
                                     & "(%rsp)");
                            else
                               Carry
-                                (Held, Value_Cell (Argument),
+                                (Held, Value_Operand (Argument),
                                  Trimmed
                                    (Landin.Targets.Byte_Count'Image
                                       (Landin.Targets.Byte_Count
@@ -4075,7 +4346,7 @@ package body Landin.Backend.X86_64 is
                      end loop;
 
                      if Indirect then
-                        Emit ("call *" & Value_Cell (Operand (1)));
+                        Emit ("call *" & Value_Operand (Operand (1)));
                      else
                         Emit ("call " & Symbol (Callee));
                      end if;
@@ -4105,28 +4376,27 @@ package body Landin.Backend.X86_64 is
                         begin
                            Emit ("mov" & Suffix (Held) & " "
                                  & Accumulator (Held) & ", "
-                                 & Value_Cell (Value));
+                                 & Value_Operand (Value));
                         end;
                      end if;
                   end;
 
                when Landin.IR.Jump =>
-                  Emit ("jmp "
-                        & Label (Item,
-                                 Landin.IR.Target_Of
-                                   (Of_Unit, Item, Value)));
+                  if not Optimized or else Landin.IR.Target_Of
+                    (Of_Unit, Item, Value) /= Current_Block + 1
+                  then
+                     Emit ("jmp " & Label (Item,
+                           Landin.IR.Target_Of (Of_Unit, Item, Value)));
+                  end if;
 
                when Landin.IR.Branch =>
-                  --  A bool is a byte, and zero is [1870]'s `false`.
-                  Emit ("cmpb $0, " & Value_Cell (Operand (1)));
-                  Emit ("jne "
-                        & Label (Item,
-                                 Landin.IR.Target_Of
-                                   (Of_Unit, Item, Value)));
-                  Emit ("jmp "
-                        & Label (Item,
-                                 Landin.IR.Alternative_Of
-                                   (Of_Unit, Item, Value)));
+                  if Value /= Fused_Branch then
+                     --  A bool is a byte, and zero is [1870]'s false.
+                     Emit ("cmpb $0, " & Value_Operand (Operand (1)));
+                     Conditional_Branch
+                       ("ne", Landin.IR.Target_Of (Of_Unit, Item, Value),
+                        Landin.IR.Alternative_Of (Of_Unit, Item, Value));
+                  end if;
 
                when Landin.IR.Leave =>
                   if Is_C_Item (Item) then
@@ -4142,7 +4412,7 @@ package body Landin.Backend.X86_64 is
                           Size_Of (Result, Facts);
                      begin
                         Emit ("mov" & Suffix (Held) & " "
-                              & Value_Cell (Operand (1)) & ", "
+                              & Value_Operand (Operand (1)) & ", "
                               & Accumulator (Held));
                      end;
                   elsif Result in Landin.Types.Aggregate
@@ -4187,7 +4457,7 @@ package body Landin.Backend.X86_64 is
                   Emit_Epilogue;
 
                when Landin.IR.Fail =>
-                  Emit ("movl " & Value_Cell (Operand (1)) & ", %r10d");
+                  Emit ("movl " & Value_Operand (Operand (1)) & ", %r10d");
                   Emit_Epilogue;
             end case;
          end Emit_Instruction;
@@ -4200,6 +4470,9 @@ package body Landin.Backend.X86_64 is
          Put (Character'Val (9) & ".type " & Symbol (Item)
               & ", @function");
          Put (Symbol (Item) & ":");
+         Machine.Start
+           (Streams (Positive (Item)), Shareable (Positive (Item)));
+         Capturing := Item;
 
          --  [1550]'s frame pointer, set up before anything reads a cell.
          Emit ("pushq %rbp");
@@ -4213,12 +4486,16 @@ package body Landin.Backend.X86_64 is
             Emit ("call _landin_host_initialize_arguments");
          end if;
 
-         if Extent (Layout) > 0 then
-            Emit ("subq $"
-                  & Trimmed
-                      (Landin.Targets.Byte_Count'Image (Extent (Layout)))
-                  & ", %rsp");
-         end if;
+         Reserve_Stack (Extent (Layout), "frame");
+         for Register in Allocation.Saved_Register loop
+            if Allocation_Plan.Used (Register) then
+               Emit ("movq "
+                     & Allocation.Name (Register, Landin.Targets.Byte_8)
+                     & ", " & Cell (Save_Offset
+                       (Layout, Allocation.Save_Index
+                          (Allocation_Plan, Register))));
+            end if;
+         end loop;
 
          if Is_C_Item (Item) then
             Emit_C_Entry;
@@ -4326,16 +4603,35 @@ package body Landin.Backend.X86_64 is
             end loop;
          end if;
 
+         for Index in Uses'Range loop
+            for Position in 1 .. Landin.IR.Operand_Count
+              (Of_Unit, Item, Landin.IR.Value_Id (Index))
+            loop
+               declare
+                  Operand : constant Positive := Positive
+                    (Landin.IR.Nth_Operand
+                       (Of_Unit, Item, Landin.IR.Value_Id (Index), Position));
+               begin
+                  Uses (Operand) := Uses (Operand) + 1;
+               end;
+            end loop;
+         end loop;
          for Index in 1 .. Landin.IR.Block_Count (Of_Unit, Item) loop
             declare
                Block : constant Landin.IR.Block_Id :=
                  Landin.IR.Block_Id (Index);
             begin
+               Current_Block := Block;
                Put (Label (Item, Block) & ":");
 
                for Position in 1 .. Landin.IR.Length
                                       (Of_Unit, Item, Block)
                loop
+                  Next_Instruction :=
+                    (if Position < Landin.IR.Length (Of_Unit, Item, Block)
+                     then Landin.IR.Nth_Value
+                       (Of_Unit, Item, Block, Position + 1)
+                     else Landin.IR.No_Value);
                   Emit_Instruction
                     (Landin.IR.Nth_Value
                        (Of_Unit, Item, Block, Position));
@@ -4343,6 +4639,23 @@ package body Landin.Backend.X86_64 is
             end;
          end loop;
 
+         Capturing := Landin.IR.No_Item;
+         if Shareable (Positive (Item)) then
+            Machine.Seal (Streams (Positive (Item)));
+         end if;
+         Statistics (Positive (Item)) :=
+           Machine.Statistics (Streams (Positive (Item)));
+         declare
+            Counts : Landin.Build_Reports.Routine_Statistics renames
+              Statistics (Positive (Item));
+         begin
+            Counts.Item := Item;
+            Counts.Frame_Bytes := Extent (Layout);
+            Counts.Spill_Bytes := Spill_Bytes (Layout);
+            Counts.Save_Bytes := Save_Bytes (Layout);
+            Counts.Register_Count := Allocation.Save_Count (Allocation_Plan);
+            Counts.Spill_Count := Allocation_Plan.Spill_Homes;
+         end;
          Put (Character'Val (9) & ".size " & Symbol (Item) & ", .-"
               & Symbol (Item));
       end Emit_Routine;
@@ -4373,10 +4686,16 @@ package body Landin.Backend.X86_64 is
          --  [0410] fixes the order of a binary's operands, so the lowering
          --  carries the left one through a slot.  A fold therefore reads
          --  slots as well as values, even though nothing here runs.
-         Held : array (1 .. Landin.IR.Value_Count (Of_Unit, Item))
-                  of Landin.Types.Folded := [others => 0];
-         Slots : array (1 .. Landin.IR.Slot_Count (Of_Unit, Item))
-                   of Landin.Types.Folded := [others => 0];
+         type Folded_Values is array (Positive range <>)
+           of Landin.Types.Folded;
+         package Folded_Buffers is new Work_Arrays
+           (Landin.Types.Folded, Folded_Values, 0);
+         Held_Data : Folded_Buffers.Buffer
+           (Landin.IR.Value_Count (Of_Unit, Item));
+         Slot_Data : Folded_Buffers.Buffer
+           (Landin.IR.Slot_Count (Of_Unit, Item));
+         Held : Folded_Values renames Held_Data.Data.all;
+         Slots : Folded_Values renames Slot_Data.Data.all;
 
          function Bits_Of
            (Value : Landin.IR.Value_Id) return Landin.Targets.Bit_Width;
@@ -4911,6 +5230,9 @@ package body Landin.Backend.X86_64 is
          Alignment : Landin.Targets.Byte_Alignment;
          Is_Array : constant Boolean :=
            Landin.IR.Has_Recursive_Array_Image (Of_Unit, Item);
+         Top_Plan : constant Landin.Targets.Layouts.Plan :=
+           (if Is_Array then Landin.Targets.Layouts.Make ([])
+            else Datum_Layout (Of_Unit, Item, Facts));
 
          procedure Emit_Zero (Bytes : Landin.Targets.Byte_Count);
 
@@ -5137,13 +5459,13 @@ package body Landin.Backend.X86_64 is
            (Shape  : Landin.IR.Field_Shape;
             Parent : Landin.IR.Aggregate_Field_Image)
          is
-            Child_Placement : Landin.Targets.Placement :=
-              Landin.Targets.Empty_Placement;
+            Plan : constant Landin.Targets.Layouts.Plan :=
+              Aggregate_Layout (Of_Unit, Shape, Facts);
             Child_Written : Landin.Targets.Byte_Count := 0;
             Child_Size : Landin.Targets.Byte_Count;
             Child_Alignment : Landin.Targets.Byte_Alignment;
          begin
-            for Child in 1 .. Parent.Count loop
+            for Child of Plan.Order loop
                declare
                   Leaf : constant Landin.IR.Field_Shape :=
                     Landin.IR.Nth_Aggregate_Field
@@ -5151,12 +5473,11 @@ package body Landin.Backend.X86_64 is
                   Image : constant Landin.IR.Aggregate_Field_Image :=
                     Landin.IR.Descendant_Image_Of
                       (Of_Unit, Item, Parent, Child);
-                  At_Child : Landin.Targets.Byte_Count;
+                  At_Child : constant Landin.Targets.Byte_Count :=
+                    Plan.Offsets (Child);
                begin
                   Landin.Backend.Field_Extent
                     (Of_Unit, Leaf, Facts, Child_Size, Child_Alignment);
-                  Landin.Targets.Place
-                    (Child_Placement, Child_Size, Child_Alignment, At_Child);
                   if At_Child > Child_Written then
                      Emit_Zero (At_Child - Child_Written);
                   end if;
@@ -5165,9 +5486,8 @@ package body Landin.Backend.X86_64 is
                end;
             end loop;
 
-            if Landin.Targets.Size_Of (Child_Placement) > Child_Written then
-               Emit_Zero
-                 (Landin.Targets.Size_Of (Child_Placement) - Child_Written);
+            if Plan.Size > Child_Written then
+               Emit_Zero (Plan.Size - Child_Written);
             end if;
          end Emit_Children;
 
@@ -5236,7 +5556,7 @@ package body Landin.Backend.X86_64 is
                Landin.IR.Array_Image_Of (Of_Unit, Item));
             Written := Size;
          end if;
-         for Field in 1 .. Landin.IR.Field_Count (Of_Unit, Item) loop
+         for Field of Top_Plan.Order loop
             declare
                Shape : constant Landin.IR.Field_Shape :=
                  Landin.IR.Nth_Field_Shape (Of_Unit, Item, Field);
@@ -5244,15 +5564,12 @@ package body Landin.Backend.X86_64 is
                  Landin.IR.Field_Image_Of (Of_Unit, Item, Field);
                Field_Size : Landin.Targets.Byte_Count;
                Field_Alignment : Landin.Targets.Byte_Alignment;
-               At_Field : Landin.Targets.Byte_Count;
-               Field_Placement : Landin.Targets.Placement;
+               At_Field : constant Landin.Targets.Byte_Count :=
+                 Top_Plan.Offsets (Field);
             begin
-               Place_Fields
-                 (Item, Field_Placement,
-                  Landin.IR.Element_Total (Field), At_Field);
                Landin.Backend.Field_Extent
                  (Of_Unit, Shape, Facts, Field_Size, Field_Alignment);
-               pragma Unreferenced (Field_Placement, Field_Alignment);
+               pragma Unreferenced (Field_Alignment);
                if At_Field > Written then
                   Emit_Zero (At_Field - Written);
                end if;
@@ -5544,6 +5861,37 @@ package body Landin.Backend.X86_64 is
       end loop;
       Validate_Linkage;
       Allocate_Symbols;
+      if Optimized then
+         for Index in Shareable'Range loop
+            declare
+               Item : constant Landin.IR.Item_Id := Landin.IR.Item_Id (Index);
+            begin
+               Shareable (Index) :=
+                 Landin.IR.Kind_Of (Of_Unit, Item) = Landin.IR.Routine
+                 and then Item /= Hosted_Entry
+                 and then not Is_Public_Item (Item)
+                 and then not Is_Forced (Item)
+                 and then not Landin.IR.Has_Address_Exposure (Of_Unit, Item);
+            end;
+         end loop;
+      end if;
+      --  Selection/allocation happen once per body before comparing final
+      --  instruction evidence.  The entry symbol is deliberately excluded
+      --  from local-label canonicalization; self relocations stay exact.
+      for Index in 1 .. Landin.IR.Item_Count (Of_Unit) loop
+         declare
+            Item : constant Landin.IR.Item_Id := Landin.IR.Item_Id (Index);
+         begin
+            if Landin.IR.Kind_Of (Of_Unit, Item) = Landin.IR.Routine
+              and then not Landin.IR.Is_External (Of_Unit, Item)
+            then
+               Out_Text := Unbounded.Null_Unbounded_String;
+               Emit_Routine (Item);
+               Bodies (Index) := Out_Text;
+            end if;
+         end;
+      end loop;
+      Out_Text := Unbounded.Null_Unbounded_String;
       Put (Character'Val (9) & ".text");
 
       for Right in 2 .. Landin.IR.Item_Count (Of_Unit) loop
@@ -5557,7 +5905,7 @@ package body Landin.Backend.X86_64 is
                  (Of_Unit, Landin.IR.Item_Id (Left)) = Landin.IR.Routine
                  and then not Landin.IR.Is_External
                    (Of_Unit, Landin.IR.Item_Id (Left))
-                 and then Routines_Can_Share
+                 and then Final_Bodies_Can_Share
                    (Landin.IR.Item_Id (Left), Landin.IR.Item_Id (Right))
                then
                   Shared_With (Right) := Landin.IR.Item_Id (Left);
@@ -5575,7 +5923,8 @@ package body Landin.Backend.X86_64 is
                if Landin.IR.Is_External (Of_Unit, Item) then
                   null;
                elsif Shared_With (Index) = Landin.IR.No_Item then
-                  Emit_Routine (Item);
+                  Unbounded.Append (Out_Text, Bodies (Index));
+                  Landin.Build_Reports.Append (Report, Statistics (Index));
                else
                   --  An alias is still this routine's symbol: a public one
                   --  keeps its visibility and its function type, so a
@@ -5587,6 +5936,12 @@ package body Landin.Backend.X86_64 is
                   Emit
                     (".set " & Symbol (Item) & ", "
                      & Symbol (Shared_With (Index)));
+                  --  An alias adds no instruction or frame storage of its own.
+                  --  Its representative's report describes the executed body.
+                  Landin.Build_Reports.Append
+                    (Report, Landin.Build_Reports.Routine_Statistics'
+                       (Item => Item, Shared_With => Shared_With (Index),
+                        others => <>));
                end if;
             elsif Landin.IR.Is_Read_Only (Of_Unit, Item) then
                Any_Read_Only := True;
@@ -5967,7 +6322,7 @@ package body Landin.Backend.X86_64 is
       --  and nothing this compiler emits needs one.
       Put (Character'Val (9)
            & ".section .note.GNU-stack,"""",@progbits");
-      return Unbounded.To_String (Out_Text);
-   end Text;
+      Assembly := Out_Text;
+   end Emit;
 
 end Landin.Backend.X86_64;

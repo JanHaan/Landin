@@ -1,0 +1,123 @@
+box: type = struct value: [3]i32 marker: i32 end box
+empty_box: type = struct value: [0]i32 marker: i32 end empty_box
+float_box: type = struct value: [3]f64 end float_box
+outer: type = struct child: box end outer
+mut trace: i32 = 0
+
+touch: (digit: i32) -> (r: i32) =
+    trace = trace * 10 + digit
+    r = digit
+end touch
+
+field_return: () -> (code: i32) =
+    code = 42
+    b: box = (value: -(begin _ = touch(1) return end) + -(-(begin _ = touch(9) return end)), marker: touch(9))
+    code = 1
+end field_return
+
+empty_field_return: () -> (code: i32) =
+    code = 42
+    b: empty_box = (value: -(begin _ = touch(2) return end) + -(-(begin _ = touch(9) return end)), marker: touch(9))
+    code = 1
+end empty_field_return
+
+nested_return: () -> (code: i32) =
+    code = 42
+    b: outer = (child: (value: -(begin _ = touch(3) return end) + -(-(begin return end)), marker: touch(9)))
+    code = 1
+end nested_return
+
+array_child_return: () -> (code: i32) =
+    code = 42
+    b: [1]box = [(value: -(begin _ = touch(4) return end) + -(-(begin return end)), marker: touch(9))]
+    code = 1
+end array_child_return
+
+consume: (a: [3]i32) -> none =
+    _ = lenof a
+    _ = touch(9)
+end consume
+
+consume_empty: (a: [0]i32) -> none =
+    _ = lenof a
+    _ = touch(9)
+end consume_empty
+
+argument_return: () -> (code: i32) =
+    code = 42
+    consume(-(begin _ = touch(5) return end) + -(-(begin return end)))
+    code = 1
+end argument_return
+
+empty_argument_return: () -> (code: i32) =
+    code = 42
+    consume_empty(-(begin _ = touch(6) return end) + -(-(begin return end)))
+    code = 1
+end empty_argument_return
+
+assignment_return: () -> (code: i32) =
+    code = 42
+    mut b: box = zeroed
+    b.value = -(begin _ = touch(7) return end) + -(-(begin return end))
+    code = 1
+end assignment_return
+
+aggregate_assignment_return: () -> (code: i32) =
+    code = 42
+    mut b: empty_box = zeroed
+    b = (value: -(begin _ = touch(8) return end) + -(-(begin return end)), marker: touch(9))
+    code = 1
+end aggregate_assignment_return
+
+field_branch: (stop: bool) -> (code: i32) =
+    code = 42
+    a: [3]i32 = [14, 14, 14]
+    b: outer = (child: (value: -(-(-(if stop then return else a end if))), marker: 1))
+    code = -(b.child.value[0] + b.child.value[1] + b.child.value[2])
+end field_branch
+
+empty_field_branch: (stop: bool) -> (code: i32) =
+    code = 42
+    a: [0]i32 = zeroed
+    b: empty_box = (value: -(-(-(if stop then return else a end if))), marker: 42)
+    empty := b.value
+    code = b.marker + i32(lenof empty)
+end empty_field_branch
+
+field_assignment_branch: (stop: bool) -> (code: i32) =
+    code = 42
+    a: [0]i32 = zeroed
+    mut b: empty_box = (value: zeroed, marker: 42)
+    b.value = (if stop then return else a end if)
+    code = b.marker
+end field_assignment_branch
+
+loop_argument_return: () -> (code: i32) =
+    code = 42
+    consume_empty((loop do return end loop))
+    code = 1
+end loop_argument_return
+
+float_field: () -> (code: i32) =
+    code = 1
+    a: [3]f64 = zeroed
+    b: float_box = (value: a + (if true then 1.0000000000000002 else 2.0 end if))
+    c: float_box = (value: (if false then 2.0 else 1.0000000000000002 end if) + a)
+    if b.value[0] <> 1.0000000000000002 or c.value[2] <> 1.0000000000000002 then return end if
+    code = 42
+end float_field
+
+public main: () -> (code: i32) =
+    code = 1
+    if field_return() <> 42 or empty_field_return() <> 42 then return end if
+    if nested_return() <> 42 or array_child_return() <> 42 then return end if
+    if argument_return() <> 42 or empty_argument_return() <> 42 then return end if
+    if assignment_return() <> 42 or aggregate_assignment_return() <> 42 then return end if
+    if trace <> 12345678 then return end if
+    if field_branch(true) <> 42 or field_branch(false) <> 42 then return end if
+    if empty_field_branch(true) <> 42 or empty_field_branch(false) <> 42 then return end if
+    if field_assignment_branch(true) <> 42 or field_assignment_branch(false) <> 42 then return end if
+    if loop_argument_return() <> 42 then return end if
+    if float_field() <> 42 then return end if
+    code = 42
+end main

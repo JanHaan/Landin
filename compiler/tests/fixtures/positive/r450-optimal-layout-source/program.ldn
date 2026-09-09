@@ -1,0 +1,13 @@
+compact: type = layout(optimal) struct
+    a: u8
+    b: usize
+    c: u8
+    d: usize
+end compact
+nested: type = layout(optimal) struct
+    tag: u8
+    rows: [3]compact
+    empty: [0]compact
+    tail: usize
+end nested
+measure: () -> (r: usize) = sizeof nested + alignof compact end measure

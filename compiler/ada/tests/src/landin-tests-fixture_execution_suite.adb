@@ -11,6 +11,7 @@ with Ada.Environment_Variables;
 with Ada.Strings.Unbounded;
 
 with Landin.Backend.Toolchain;
+with Landin.Optimization;
 with Landin.Platform;
 with Landin.Platform.Native;
 with Landin.Platform.Native.Tools;
@@ -472,21 +473,61 @@ package body Landin.Tests.Fixture_Execution_Suite is
    --  says which toolchain would satisfy it.
    ------------------------------------------------------------------
 
+   --  Compiler profiles are harness policy, never fixture `args`. Each run
+   --  independently checks the original exact status/output/trap oracle.
+   type Profile_Array is array (Positive range <>) of
+     Landin.Optimization.Options;
+   Profiles : constant Profile_Array :=
+     [(Landin.Optimization.None, Landin.Optimization.Off),
+      (Landin.Optimization.Size, Landin.Optimization.Off),
+      (Landin.Optimization.Size, Landin.Optimization.Auto),
+      (Landin.Optimization.Speed, Landin.Optimization.Auto),
+      (Landin.Optimization.None, Landin.Optimization.All_Eligible),
+      (Landin.Optimization.Speed, Landin.Optimization.All_Eligible)];
+
+   function Profile_Name (Profile : Positive) return String is
+     (Landin.Optimization.Spelling (Profiles (Profile).Optimize) & "-"
+      & Landin.Optimization.Spelling (Profiles (Profile).Specialize));
+
+   function Profile_Count (Case_Item : Fixture) return Positive is
+     (if Ada.Strings.Fixed.Index (Name (Case_Item), "generic") > 0
+         or else Ada.Strings.Fixed.Index (Name (Case_Item), "any-") > 0
+         or else Ada.Strings.Fixed.Index (Name (Case_Item), "r450") > 0
+         or else Name (Case_Item) in "allocator-vec-pressure"
+           | "diagnostic-loggers-dispatch" | "core-io-erased-system"
+      then Profiles'Length else 4);
+
+   procedure Append_Profile
+     (Arguments : in out Landin.Platform.Path_List; Profile : Positive);
+
+   procedure Append_Profile
+     (Arguments : in out Landin.Platform.Path_List; Profile : Positive) is
+   begin
+      Arguments.Append ("--optimize=" & Landin.Optimization.Spelling
+        (Profiles (Profile).Optimize));
+      Arguments.Append ("--specialize=" & Landin.Optimization.Spelling
+        (Profiles (Profile).Specialize));
+   end Append_Profile;
+
    procedure Run_Runtime
      (Case_Item : Fixture;
       Host      : Landin.Platform.Filesystem'Class;
       Program   : String;
+      Profile   : Positive;
       Item      : in out Landin.Testing.Context);
 
    procedure Run_Runtime
      (Case_Item : Fixture;
       Host      : Landin.Platform.Filesystem'Class;
       Program   : String;
+      Profile   : Positive;
       Item      : in out Landin.Testing.Context)
    is
-      Label   : constant String := "runtime/" & Name (Case_Item);
+      Label   : constant String := "runtime/" & Name (Case_Item)
+        & " [" & Profile_Name (Profile) & "]";
       Built   : constant String :=
-        Output_Directory & "runtime-" & Name (Case_Item);
+        Output_Directory & "runtime-" & Name (Case_Item)
+        & "-" & Profile_Name (Profile);
       Runner  : Landin.Platform.Native.Tools.Native_Tool_Runner;
       Compile : Landin.Platform.Tool_Result;
       Outcome : Landin.Platform.Tool_Result;
@@ -497,6 +538,7 @@ package body Landin.Tests.Fixture_Execution_Suite is
    begin
       Append_Module_Arguments (Case_Item, Fixture_Root, Args);
 
+      Append_Profile (Args, Profile);
       Landin.Platform.Add (Args, "--emit=exe");
       Landin.Platform.Add (Args, "-o");
       Landin.Platform.Add (Args, Built);
@@ -576,20 +618,25 @@ package body Landin.Tests.Fixture_Execution_Suite is
      (Case_Item : Fixture;
       Host      : Landin.Platform.Filesystem'Class;
       Program   : String;
+      Profile   : Positive;
       Item      : in out Landin.Testing.Context);
 
    procedure Run_ABI
      (Case_Item : Fixture;
       Host      : Landin.Platform.Filesystem'Class;
       Program   : String;
+      Profile   : Positive;
       Item      : in out Landin.Testing.Context)
    is
-      Label     : constant String := "abi/" & Name (Case_Item);
-      Directory : constant String := Fixture_Root & "/" & Label;
+      Label     : constant String := "abi/" & Name (Case_Item)
+        & " [" & Profile_Name (Profile) & "]";
+      Directory : constant String := Fixture_Root & "/abi/" & Name (Case_Item);
       Assembly  : constant String :=
-        Output_Directory & "abi-" & Name (Case_Item) & ".s";
+        Output_Directory & "abi-" & Name (Case_Item)
+        & "-" & Profile_Name (Profile) & ".s";
       Built     : constant String :=
-        Output_Directory & "abi-" & Name (Case_Item);
+        Output_Directory & "abi-" & Name (Case_Item)
+        & "-" & Profile_Name (Profile);
       Facts     : constant Landin.Targets.Target_Facts :=
         Landin.Targets.Linux_X86_64;
       Driver    : constant String :=
@@ -609,6 +656,7 @@ package body Landin.Tests.Fixture_Execution_Suite is
 
       Landin.Platform.Add
         (Refine_Arguments, "--target=" & Landin.Targets.Name (Facts));
+      Append_Profile (Refine_Arguments, Profile);
       Landin.Platform.Add (Refine_Arguments, "--emit=asm");
       Landin.Platform.Add (Refine_Arguments, "-o");
       Landin.Platform.Add (Refine_Arguments, Assembly);
@@ -789,10 +837,14 @@ package body Landin.Tests.Fixture_Execution_Suite is
          begin
             if Class (Case_Item) = Runtime then
                Runtime_Ran := Runtime_Ran + 1;
-               Run_Runtime (Case_Item, Host, Program, Item);
+               for Profile in 1 .. Profile_Count (Case_Item) loop
+                  Run_Runtime (Case_Item, Host, Program, Profile, Item);
+               end loop;
             elsif Class (Case_Item) = Abi then
                ABI_Ran := ABI_Ran + 1;
-               Run_ABI (Case_Item, Host, Program, Item);
+               for Profile in 1 .. Profile_Count (Case_Item) loop
+                  Run_ABI (Case_Item, Host, Program, Profile, Item);
+               end loop;
             end if;
          end;
       end loop;
@@ -838,7 +890,9 @@ package body Landin.Tests.Fixture_Execution_Suite is
                Ran := Ran + 1;
 
                if Class (Case_Item) = Abi then
-                  Run_ABI (Case_Item, Host, Program, Item);
+                  for Profile in 1 .. Profile_Count (Case_Item) loop
+                     Run_ABI (Case_Item, Host, Program, Profile, Item);
+                  end loop;
                elsif Expect (Case_Item) /= "" then
                   Run_Recorded (Case_Item, Host, Program, Item);
                elsif Class (Case_Item) = Positive_Program then
@@ -846,7 +900,9 @@ package body Landin.Tests.Fixture_Execution_Suite is
                elsif Class (Case_Item) = Negative_Program then
                   Run_Negative (Case_Item, Program, Item);
                elsif Class (Case_Item) = Runtime then
-                  Run_Runtime (Case_Item, Host, Program, Item);
+                  for Profile in 1 .. Profile_Count (Case_Item) loop
+                     Run_Runtime (Case_Item, Host, Program, Profile, Item);
+                  end loop;
                else
                   Landin.Testing.Fail
                     (Item, Wanted & ": this fixture class has no focused"

@@ -1,3 +1,4 @@
+with Ada.Calendar.Formatting;
 with Ada.Directories;
 with Ada.Environment_Variables;
 with Ada.Strings.Fixed;
@@ -605,8 +606,60 @@ package body Landin.Tests.Platform_Suite is
       end if;
    end Only_Ordinary_Files_Are_Read;
 
+   --  Deliberately uses the real host: inode and symbolic-link identity
+   --  cannot be established by the fake's declared overlap pairs.
+   procedure Native_Path_Identity (Item : in out Landin.Testing.Context);
+
+   procedure Native_Path_Identity (Item : in out Landin.Testing.Context) is
+      Host : Landin.Platform.Native.Native_Filesystem;
+      Runner : Landin.Platform.Native.Tools.Native_Tool_Runner;
+      Result : Landin.Platform.Tool_Result;
+      Written : Landin.Platform.Write_Status;
+      Root : constant String := Scratch & "/identity-"
+        & Ada.Calendar.Formatting.Image
+          (Ada.Calendar.Clock, Include_Time_Fraction => True);
+      Original : constant String := Root & "/source.ldn";
+
+      procedure Link (Source, Target : String; Symbolic : Boolean);
+      procedure Link (Source, Target : String; Symbolic : Boolean) is
+         Args : Landin.Platform.Path_List;
+      begin
+         if Symbolic then
+            Args.Append ("-s");
+         end if;
+         Args.Append (Source);
+         Args.Append (Target);
+         Runner.Run ("ln", Args, Result);
+         Landin.Testing.Check
+           (Item, Result.Ended = Landin.Platform.Exited
+            and then Result.Exit_Code = 0, "native test link was created");
+      end Link;
+   begin
+      Ada.Directories.Create_Path (Scratch);
+      --  Exclusive creation: never delete or reuse a pre-existing tree.
+      Ada.Directories.Create_Directory (Root);
+      Host.Write_File (Original, "source bytes", Written);
+      Landin.Testing.Check
+        (Item, Written = Landin.Platform.Write_Ok, "identity source exists");
+      Link (Original, Root & "/hard.json", False);
+      Link ("source.ldn", Root & "/symbolic.json", True);
+      Link (Ada.Directories.Full_Name (Root), Root & "/parent", True);
+      Landin.Testing.Check
+        (Item, Host.Paths_Overlap (Original, Root & "/hard.json")
+         and then Host.Paths_Overlap (Original, Root & "/symbolic.json")
+         and then Host.Paths_Overlap
+           (Original, Ada.Directories.Full_Name (Original))
+         and then Host.Paths_Overlap
+           (Root & "/new.s", Root & "/parent/new.s")
+         and then not Host.Paths_Overlap (Original, Root & "/new.json"),
+         "links, absolute names and missing leaves use host identity");
+   end Native_Path_Identity;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "platform", "native path identity",
+         Native_Path_Identity'Access);
       Landin.Testing.Register
         (Into, "platform", "fake reads report their reason",
          Fake_Reads_Report_Their_Reason'Access);

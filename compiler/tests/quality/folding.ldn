@@ -1,0 +1,13 @@
+first: (x: i32) -> (r: i32) = r = x end first
+second: (x: u32) -> (r: u32) = r = x end second
+
+public visible: (x: i32) -> (r: i32) = r = x end visible
+
+public main: () -> (code: i32) =
+    a: i32 = 19
+    b: u32 = 23
+    code = 0
+    if first(a) <> 19 or second(b) <> 23 or visible(a) <> 19 then
+        code = 1
+    end if
+end main

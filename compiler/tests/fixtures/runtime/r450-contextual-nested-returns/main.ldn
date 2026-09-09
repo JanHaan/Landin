@@ -1,0 +1,120 @@
+left: atom
+right: atom
+choices: type = left | right
+mut trace: i32 = 0
+
+array_right: () -> (code: i32) =
+    code = 42
+    a: [3]i32 = zeroed
+    b := a + -(begin return end)
+    code = 1
+end array_right
+
+array_left: () -> (code: i32) =
+    code = 42
+    a: [3]i32 = zeroed
+    b := -(-(-(begin return end))) + a
+    code = 1
+end array_left
+
+empty_right: () -> (code: i32) =
+    code = 42
+    a: [0]i32 = zeroed
+    b := a + -((begin return end) + -(begin return end))
+    code = 1
+end empty_right
+
+empty_left: () -> (code: i32) =
+    code = 42
+    a: [0]i32 = zeroed
+    b: [0]i32 = -((begin return end) + -(begin return end)) + a
+    code = 1
+end empty_left
+
+array_context: () -> (code: i32) =
+    code = 42
+    b: [3]i32 = -(begin return end) + -(-(begin return end))
+    code = 1
+end array_context
+
+empty_context: () -> (code: i32) =
+    code = 42
+    mut b: [0]i32 = zeroed
+    b = -(begin return end) + -(-(begin return end))
+    code = 1
+end empty_context
+
+scalar_right: () -> (code: i32) =
+    code = 42
+    a: i64 = 0
+    b := a + -((begin return end) + -(begin return end))
+    code = 1
+end scalar_right
+
+scalar_left: () -> (code: i32) =
+    code = 42
+    b: i64 = -(-(-(begin return end))) + 1
+    code = 1
+end scalar_left
+
+float_right: () -> (code: i32) =
+    code = 42
+    b: f64 = 1.0 + -((begin return end) + -(begin return end))
+    code = 1
+end float_right
+
+float_left: () -> (code: i32) =
+    code = 42
+    b := -(-(-(begin return end))) + 1.0
+    code = 1
+end float_left
+
+nested_if: (stop: bool) -> (code: i32) =
+    code = 42
+    a: [3]i32 = zeroed
+    b := a + -(begin (if stop then (begin return end) else (begin return end) end if) end)
+    code = 1
+end nested_if
+
+nested_match: (choice: choices) -> (code: i32) =
+    code = 42
+    a: [0]i32 = zeroed
+    b := -(begin (match choice
+        left: (begin return end)
+        right: (begin return end)
+    end match) end) + a
+    code = 1
+end nested_match
+
+touch: () -> (r: [0]i32) =
+    trace = trace * 10 + 1
+    r = zeroed
+end touch
+
+effects_right: () -> (code: i32) =
+    code = 42
+    trace = 0
+    b := touch() + -(begin trace = trace * 10 + 2 return end)
+    code = 1
+end effects_right
+
+effects_left: () -> (code: i32) =
+    code = 42
+    trace = 0
+    b := -((begin trace = trace * 10 + 2 return end) + (begin trace = 99 return end)) + touch()
+    code = 1
+end effects_left
+
+public main: () -> (code: i32) =
+    code = 1
+    if array_right() <> 42 or array_left() <> 42 then return end if
+    if empty_right() <> 42 or empty_left() <> 42 then return end if
+    if array_context() <> 42 or empty_context() <> 42 then return end if
+    if scalar_right() <> 42 or scalar_left() <> 42 then return end if
+    if float_right() <> 42 or float_left() <> 42 then return end if
+    if nested_if(true) <> 42 or nested_if(false) <> 42 then return end if
+    if nested_match(left) <> 42 or nested_match(right) <> 42 then return end if
+    if effects_right() <> 42 or trace <> 12 then return end if
+    if effects_left() <> 42 or trace <> 2 then return end if
+    code = 42
+end main

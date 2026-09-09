@@ -1,0 +1,6 @@
+class: runtime
+summary: scalar float and empty or nonempty array expression bodies leave only surviving paths
+program: main.ldn
+constructs: 0590, 0880, 0930, 0970, 1050, 1080, 1880, 1910
+status: 42
+targets: linux-x86-64

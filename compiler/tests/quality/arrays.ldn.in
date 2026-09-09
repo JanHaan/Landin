@@ -1,0 +1,14 @@
+link(symbol: "quality_array") add: (a: [@COUNT@]i64, b: [@COUNT@]i64)
+    -> (r: [@COUNT@]i64) =
+    r = a + b
+end add
+
+public main: () -> (code: i32) =
+    a: [@COUNT@]i64 = [of 2]
+    b: [@COUNT@]i64 = [of 3]
+    r := add(a, b)
+    code = 0
+    for value in r do
+        if value <> 5 then code = 1 end if
+    end for
+end main

@@ -75,7 +75,7 @@ replaced.
 | `Landin.Diagnostics.Checking` | turning a type that does not agree or a checker-recognised deferred use into a diagnostic, including the refused-type table and L0304 ownership | invent a code, a construct, or a roadmap item |
 | `Landin.Platform` | the host interfaces every effect goes through | perform an effect |
 | `Landin.Platform.Native` | the only filesystem implementation | be reached except through the interface |
-| `Landin.Platform.Native.Tools` | the only process spawning, and the only GNAT-specific unit that touches the host; `Landin.Source_Maps` uses `GNAT.SHA256` as pure computation | grow a second host concern |
+| `Landin.Platform.Native.Tools` | the only process spawning, and the only GNAT-specific unit that touches the host; `Landin.Source_Maps` and `Landin.Build_Reports.Sources` use `GNAT.SHA256` as pure computation | grow a second host concern |
 | `Landin.Targets` | target facts, typed architecture identity, layout arithmetic, physical evidence-cell offsets/extents and D147 any data/table offsets, extent and alignment derived from pointer facts | ask the host how wide a pointer is |
 | `Landin.Targets.Capabilities` | which described targets have a backend and the triplet selected to finish their output | infer capability from width, invoke a tool, or canonicalise a triplet |
 | `Landin.Configuration` | D139's immutable active-declaration view after target selection and D202's request mode/overrides, option origins and ordered library requests | mutate syntax, resolve an ordinary source name, or expose a general compiler module |
@@ -135,8 +135,39 @@ verification checks the same signature facts for direct and indirect calls.
 `compiler.c_sysv_lp64` is an early fixed configuration bool, with no runtime
 storage. Ordinary `core/c` asserts it before exporting LP64 aliases. Header
 parsing and C adapter generation belong to the separate bindings tool, not to
-the scanner, parser, type checker or native backend. R4.40 remains active until
-its compiler, generated-adapter and native differential evidence closes.
+the scanner, parser, type checker or native backend. R4.40's authoritative
+closure is recorded in ROADMAP.md; R4.50 is the active implementation item.
+
+D209--D211 add independent `--optimize=none|size|speed` (default size) and
+`--specialize=off|auto|all` (default auto) controls. The driver runs verified
+specialization, then verified simplification, then option-aware frame preflight
+and x86 emission. Legacy backend `Text` callers explicitly retain none/off;
+the command-line default never inherits that reference convenience.
+`Landin.Optimization` owns typed controls; `Landin.IR.Specialization` owns
+incoming-evidence proof and profitability, `Landin.IR.Simplification` owns
+conservative neutral rewrites, and x86 allocation/selection owns registers.
+`Landin.Targets.Layouts` supplies one target-byte placement plan to checking,
+measurements, paths and image emission. Source field identity and physical
+placement order are distinct, and array lengths do not size placement metadata.
+
+`Landin.Build_Reports` is typed off-target evidence. Producers append actual
+specialization decisions, layout plans and routine metrics in stable identity
+order. `Landin.Build_Reports.Sources` adds snapshot hashes, hexadecimal path
+bytes and half-open item-origin spans using pure computation. The driver alone
+writes `--build-report=PATH` through `Landin.Platform`, after successful output
+and tools; failure is an ordinary failed request, not a source warning. No
+report bytes or provenance strings become mandatory executable storage.
+
+The outer JSON has `schema: 1`, a `build` object in
+`landin-build-report-1` format, `sources` and `items`. A source entry contains
+`source`, `path_hex`, `sha256`; an item contains `item`, `declaration`, `source`,
+`first`, `last`. The nested build carries the target and both controls, plus
+`specializations`, `routines`, `layouts`. Instruction/stack counts are static
+emission sites, `estimated_growth` is an IR policy score, and neither claims
+assembled bytes. `scripts/quality.sh` obtains those from pinned Linux object
+tools. Complete mandatory runtime profiles and quantitative acceptance are
+recorded in `compiler/tests/README.md` and ROADMAP.md, not inferred from the
+existence of these packages.
 
 D192 supersedes D186's string representation through those same seams:
 checking owns the exact three-u32 struct contract and named-forward-only rule;
@@ -555,6 +586,17 @@ what keeps the seam a seam rather than an empty directory tree with
 aspirational names in it.
 
 ## Building
+
+The stages remain Ada 2022. One host-only C adapter,
+`src/platform/landin_file_identity.c`, compares the host headers' `struct stat`
+identities without transcribing Darwin and Linux structure layouts into Ada.
+`Landin.Platform.Native.Paths_Overlap` combines it with canonical path lookup
+for report/source/artifact preflight, including hard links, symbolic links and
+not-yet-created output leaves. An unresolved identity is refused conservatively;
+this does not protect against concurrent filesystem replacement. No host
+identity operation determines Landin target layout or emits program code.
+The shared project builds the adapter with warnings as errors; source checksums
+include C sources and headers as well as Ada sources.
 
 See `TOOLCHAIN.md`. From the repository root:
 
