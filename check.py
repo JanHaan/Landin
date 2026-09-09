@@ -133,6 +133,8 @@ ROADMAP_GATE = re.compile(r"^### (R[0-7]) gate$")
 ROADMAP_STATUS = re.compile(r"^Status: (planned|active|blocked|complete)$")
 CURRENT_ROADMAP_WORK = re.compile(
     r"^\*\*Current roadmap work: (R[0-7]\.\d+ — \S.*?)\.\*\*$")
+NEXT_ROADMAP_ITEM = re.compile(
+    r"^\*\*Next roadmap item: (R[0-7]\.\d+ — \S.*?) \(planned\)\.\*\*$")
 ROADMAP_PROSE_STATUS = re.compile(
     r"(?=(\b(R[0-7]\.\d+)'s\b.{0,240}?\b(?:is|are) "
     r"(active|complete)\b))")
@@ -1375,13 +1377,15 @@ def check_roadmap(path):
 
 
 def check_project_status(full_run):
-    """The published/current-work prose must agree with ROADMAP.md.
+    """The published current- or next-work prose must agree with ROADMAP.md.
 
     The site renderer reads its hero status from README.md and its progress
     track from ROADMAP.md, while handoff.md is the first human orientation.
     R2.40 was marked complete in the roadmap and README but remained active in
     the handoff, and the roadmap then had no active item for the page to show.
-    Keep all three answers mechanically one answer.
+    Keep all three answers mechanically one answer. Between active items, show
+    the sole dependency-ready planned item as next rather than claiming its
+    implementation is active.
     """
     if not full_run:
         return []
@@ -1402,7 +1406,7 @@ def check_project_status(full_run):
             current = heading.group(1)
             items[current] = {
                 "title": heading.group(3), "line": n, "status": None,
-                "status_line": n,
+                "status_line": n, "depends": [],
             }
         elif line.startswith("### "):
             current = None
@@ -1411,35 +1415,56 @@ def check_project_status(full_run):
             if status:
                 items[current]["status"] = status.group(1)
                 items[current]["status_line"] = n
+        elif current and line.startswith("Depends on:"):
+            items[current]["depends"] = [
+                dependency.strip()
+                for dependency in line[len("Depends on:"):].split(",")
+            ]
 
     active = [(work_id, item) for work_id, item in items.items()
               if item["status"] == "active"]
+    ready = [(work_id, item) for work_id, item in items.items()
+             if item["status"] == "planned"
+             and all(dependency == "none"
+                     or items.get(dependency, {}).get("status") == "complete"
+                     for dependency in item["depends"])]
     out = []
-    if len(active) != 1:
-        out.append((ROADMAP, 1,
-                    "roadmap has %d active work items; the page needs exactly one"
-                    % len(active)))
-        expected = None
-    else:
+    if len(active) == 1:
         work_id, item = active[0]
+        marker_kind = "current"
         expected = "%s — %s" % (work_id, item["title"])
+    elif not active and len(ready) == 1:
+        work_id, item = ready[0]
+        marker_kind = "next"
+        expected = "%s — %s" % (work_id, item["title"])
+    else:
+        out.append((ROADMAP, 1,
+                    "roadmap has %d active and %d dependency-ready planned work "
+                    "items; the page needs exactly one status pointer"
+                    % (len(active), len(ready))))
+        marker_kind = None
+        expected = None
 
     for path in documents:
         relative = os.path.relpath(path, ROOT)
         text = io.open(path, encoding="utf-8").read()
         markers = []
         for n, line in enumerate(text.splitlines(), 1):
-            match = CURRENT_ROADMAP_WORK.match(line)
-            if match:
-                markers.append((n, match.group(1)))
+            for kind, pattern in (("current", CURRENT_ROADMAP_WORK),
+                                  ("next", NEXT_ROADMAP_ITEM)):
+                match = pattern.match(line)
+                if match:
+                    markers.append((n, kind, match.group(1)))
         if len(markers) != 1:
             out.append((relative, 1,
-                        "expected one current-roadmap-work line, found %d"
+                        "expected one current- or next-roadmap-work line, found %d"
                         % len(markers)))
-        elif expected is not None and markers[0][1] != expected:
+        elif (expected is not None
+              and (markers[0][1] != marker_kind
+                   or markers[0][2] != expected)):
             out.append((relative, markers[0][0],
-                        "current roadmap work is %r, expected %r"
-                        % (markers[0][1], expected)))
+                        "roadmap status pointer is %s %r, expected %s %r"
+                        % (markers[0][1], markers[0][2], marker_kind, expected)))
 
         #  Possessive status prose is allowed, but it cannot contradict the
         #  durable status. Work paragraph-by-paragraph so an unrelated later

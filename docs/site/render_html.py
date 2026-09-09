@@ -1549,7 +1549,8 @@ LANDING_IDS = ["0040", "0870", "0940"]
 FENCE_OPEN = re.compile(r"^```landin\s*$")
 ROADMAP_ITEM = re.compile(
     r"^### (R\d+\.\d+) — (.+)\n\n?"
-    r"Status: (planned|active|blocked|complete)$", re.M)
+    r"Status: (planned|active|blocked|complete)"
+    r"(?:\nDepends on: ([^\n]+))?$", re.M)
 
 
 def tour_intro(text):
@@ -1594,18 +1595,33 @@ def status_parts(text):
 
 
 def roadmap_progress(text, recent_count=3):
-    """The completed, active and next items around current roadmap work."""
-    items = [dict(key=m.group(1), title=m.group(2), status=m.group(3))
+    """The completed, active or next-planned items around roadmap work."""
+    items = [dict(key=m.group(1), title=m.group(2), status=m.group(3),
+                  depends=m.group(4).split(", ") if m.group(4) else [])
              for m in ROADMAP_ITEM.finditer(text)]
     active = [i for i, item in enumerate(items) if item["status"] == "active"]
-    if len(active) != 1:
+    if len(active) == 1:
+        at = active[0]
+        completed = [item for item in items[:at]
+                     if item["status"] == "complete"][-recent_count:]
+        following = items[at + 1] if at + 1 < len(items) else None
+        return dict(recent=completed, current=items[at], following=following)
+
+    ready = [i for i, item in enumerate(items)
+             if item["status"] == "planned"
+             and all(dependency == "none"
+                     or any(other["key"] == dependency
+                            and other["status"] == "complete"
+                            for other in items)
+                     for dependency in item["depends"])]
+    if active or len(ready) != 1:
         raise SystemExit("render_html: ROADMAP.md must have exactly one active "
-                         "item for the front page")
-    at = active[0]
+                         "item or one dependency-ready planned item for the "
+                         "front page")
+    at = ready[0]
     completed = [item for item in items[:at]
                  if item["status"] == "complete"][-recent_count:]
-    following = items[at + 1] if at + 1 < len(items) else None
-    return dict(recent=completed, current=items[at], following=following)
+    return dict(recent=completed, current=None, following=items[at])
 
 
 def landing_samples(text, ids=LANDING_IDS):
@@ -1814,16 +1830,20 @@ def index_page(docs, counts, intro, status, progress, samples, symbols):
 
             recent = "".join(progress_item(item)
                              for item in progress["recent"])
-            current = progress_item(progress["current"])
+            current = (progress_item(progress["current"])
+                       if progress["current"] else "")
             following = (progress_item(progress["following"])
                          if progress["following"] else "")
+            current_lane = ('<div class="roadmap-now">'
+                            '<span class="roadmap-label">in progress</span>'
+                            f'{current}</div>') if current else ""
+            following_label = ("up next" if current else "next planned item")
             hero += ('<div class="roadmap-track">'
                      '<div><span class="roadmap-label">recently completed</span>'
                      f'{recent}</div>'
-                     '<div class="roadmap-now">'
-                     '<span class="roadmap-label">in progress</span>'
-                     f'{current}</div>'
-                     '<div><span class="roadmap-label">up next</span>'
+                     f'{current_lane}'
+                     '<div><span class="roadmap-label">'
+                     f'{following_label}</span>'
                      f'{following}</div></div>')
         hero += '</aside>'
 
@@ -2212,7 +2232,8 @@ def main(argv):
         front = ([("the pitch", " ".join(intro)), ("the status", status)]
                  + [(f'roadmap {item["key"]}', item["title"])
                     for item in (progress["recent"]
-                                 + [progress["current"]]
+                                 + ([progress["current"]]
+                                    if progress["current"] else [])
                                  + ([progress["following"]]
                                     if progress["following"] else []))]
                  + [(f"sample [{cid}]", "\n".join(code))
