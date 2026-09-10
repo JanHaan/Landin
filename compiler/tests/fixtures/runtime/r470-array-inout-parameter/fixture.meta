@@ -1,0 +1,6 @@
+class: runtime
+summary: direct fixed-array inout parameters keep one address through indexing, copies, forwarding and recovery
+constructs: 0410, 0520, 0570, 0840, 0920, 0940, 1810, 1920, 1950
+program: main.ldn
+status: 42
+targets: linux-x86-64

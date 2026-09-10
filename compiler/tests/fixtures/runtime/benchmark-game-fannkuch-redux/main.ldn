@@ -7,7 +7,7 @@ score: type = struct
     maximum: u32
 end score
 
-reverse_prefix: (values: []mut u8) -> none =
+reverse_prefix: (inout values: [7]u8) -> none =
     mut left: usize = 0
     mut right: usize = usize(values[0])
     while left < right do
@@ -37,7 +37,7 @@ fannkuch: () -> (result: score) =
             mut flips: u32 = 0
             loop do
                 break when permutation[0] == 0
-                reverse_prefix(permutation[0..<lenof permutation])
+                reverse_prefix(permutation)
                 inc flips
             end loop
 
