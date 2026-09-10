@@ -110,7 +110,7 @@ package body Landin.Tests.Checking_Suite is
 
    --  A loop frame must not copy its two program-sized transfer tables through
    --  Ada.Containers.Vectors.  The production reproducer had 1,217 resolved
-   --  declarations; these pressure fields cross that same boundary without
+   --  declarations; these module bindings cross that same boundary without
    --  carrying the container workload into this narrow checker regression.
    procedure Large_Loop_Frames_Stay_Off_The_Host_Stack
      (Item : in out Landin.Testing.Context);
@@ -118,23 +118,23 @@ package body Landin.Tests.Checking_Suite is
    procedure Large_Loop_Frames_Stay_Off_The_Host_Stack
      (Item : in out Landin.Testing.Context)
    is
+      Pressure_Declarations : constant Positive := 1_220;
+
       function Source (Conforming : Boolean) return String;
 
       function Source (Conforming : Boolean) return String
       is
          Text : US.Unbounded_String := US.To_Unbounded_String
            ("ordered: type = concept (t: type)" & LF
-            & "end ordered" & LF
-            & "pressure: type = struct" & LF);
+            & "end ordered" & LF);
       begin
-         for Field in 1 .. 1_220 loop
+         for Declaration in 1 .. Pressure_Declarations loop
             US.Append
-              (Text, "    field_" & Image (Field) & ": i32" & LF);
+              (Text, "pressure_" & Image (Declaration) & ": i32 = 0" & LF);
          end loop;
          US.Append
-           (Text, "end pressure" & LF
-            & (if Conforming then "i32 is ordered ()" & LF
-               else "marker: i32 = 0" & LF)
+           (Text, (if Conforming then "i32 is ordered ()" & LF
+                  else "marker: i32 = 0" & LF)
             & "identity: (t: type is ordered, value: t)"
             & " -> (result: t) =" & LF
             & "    result = value" & LF
@@ -160,26 +160,40 @@ package body Landin.Tests.Checking_Suite is
 
       procedure Check_Source (Conforming : Boolean)
       is
+         Expected_Declarations : constant Natural :=
+           Pressure_Declarations + (if Conforming then 8 else 9);
          Work : Landin.Stages.Compilation :=
            Landin.Stages.Create (Landin.Targets.Synthetic_32);
-         Order : Landin.Stages.Pipeline;
-         Ran : Natural;
+         Resolution_Order : Landin.Stages.Pipeline;
+         Checking_Order : Landin.Stages.Pipeline;
+         Resolution_Ran : Natural;
+         Checking_Ran : Natural;
          Src : Landin.Source.Source_Id;
          pragma Unreferenced (Src);
       begin
          Src := Landin.Stages.Add_Source
            (Work, "large-loop-frame.ldn", Source (Conforming));
-         Landin.Stages.Append (Order, Frontend'Access);
-         Landin.Stages.Append (Order, Configurer'Access);
-         Landin.Stages.Append (Order, Names'Access);
-         Landin.Stages.Append (Order, Checker'Access);
-         Ran := Landin.Stages.Run (Order, Work);
+         Landin.Stages.Append (Resolution_Order, Frontend'Access);
+         Landin.Stages.Append (Resolution_Order, Configurer'Access);
+         Landin.Stages.Append (Resolution_Order, Names'Access);
+         Resolution_Ran := Landin.Stages.Run (Resolution_Order, Work);
+         Landin.Testing.Check_Equal
+           (Item, Resolution_Ran, 3, "the large loop reaches resolution");
+         Landin.Testing.Check_Equal
+           (Item,
+            Landin.Resolution.Declaration_Count
+              (Landin.Stages.Meanings (Work).all),
+            Expected_Declarations,
+            "resolution records every pressure declaration");
+
+         Landin.Stages.Append (Checking_Order, Checker'Access);
+         Checking_Ran := Landin.Stages.Run (Checking_Order, Work);
          declare
             Reports : constant Landin.Diagnostics.Diagnostic_List :=
               Landin.Stages.Report (Work);
          begin
             Landin.Testing.Check_Equal
-              (Item, Ran, 4, "the large loop reaches reference checking");
+              (Item, Checking_Ran, 1, "the large loop reaches checking");
             Landin.Testing.Check
               (Item, Landin.Stages.Failed (Work) /= Conforming
                and then
