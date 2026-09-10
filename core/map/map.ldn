@@ -79,8 +79,8 @@ public length: (key: type is hashable, item: type,
     count = value.count
 end length
 
-capacity: (key: type is hashable, item: type,
-           value: map(key, item)) -> (count: usize) =
+public capacity: (key: type is hashable, item: type,
+                  value: map(key, item)) -> (count: usize) =
     count = mem.capacity(value.buckets)
 end capacity
 
