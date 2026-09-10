@@ -570,6 +570,38 @@ map_operations: () -> (ok: bool) =
     map.remove(compact, k3) else (problem) _ = problem return end
     before_capacity: usize = map.capacity(compact)
     before_tombstones: usize = compact.tombstones
+
+    --  Enumerate while dead buckets still precede and follow live buckets. A
+    --  scan that mistakes any non-free bucket for a live entry changes both
+    --  these exact sums and the point at which exhaustion is reported.
+    mut tombstone_position := map.entries()
+    mut tombstone_count: usize = 0
+    mut tombstone_key_sum: u64 = 0
+    mut tombstone_item_sum: i32 = 0
+    accumulate_collision_entry
+        (compact, tombstone_position, tombstone_count,
+         tombstone_key_sum, tombstone_item_sum)
+        else (problem) _ = problem map.release_map(compact, provider) return end
+    accumulate_collision_entry
+        (compact, tombstone_position, tombstone_count,
+         tombstone_key_sum, tombstone_item_sum)
+        else (problem) _ = problem map.release_map(compact, provider) return end
+    accumulate_collision_entry
+        (compact, tombstone_position, tombstone_count,
+         tombstone_key_sum, tombstone_item_sum)
+        else (problem) _ = problem map.release_map(compact, provider) return end
+    mut tombstone_exhausted: bool = false
+    _ = map.next_entry(compact, tombstone_position) else (problem)
+        tombstone_exhausted = problem == map.end_of_entries
+    end
+    mut tombstone_exhausted_again: bool = false
+    _ = map.next_entry(compact, tombstone_position) else (problem)
+        tombstone_exhausted_again = problem == map.end_of_entries
+    end
+    enumerated_through_tombstones: bool = tombstone_count == 3
+        and tombstone_key_sum == 15 and tombstone_item_sum == 165
+        and tombstone_exhausted and tombstone_exhausted_again
+
     map.insert(compact, provider, k7, 77) else (problem) _ = problem return end
     compacted: bool = before_capacity == 8 and before_tombstones == 3
                       and map.capacity(compact) == before_capacity
@@ -608,7 +640,7 @@ map_operations: () -> (ok: bool) =
     map.release_map(compact, provider)
 
     ok = updated and reused_tombstone and rehashed and removed and used_bytes
-         and compacted and enumerated
+         and enumerated_through_tombstones and compacted and enumerated
          and map.length(value) == 0 and map.length(compact) == 0
 end map_operations
 
@@ -868,8 +900,10 @@ circle: type = struct
 end circle
 
 label: type = struct
+    prefix_sentinel: u64
     weight: i32
     calls: i32
+    suffix_sentinel: u64
 end label
 
 draw_circle: (self: ptr mut circle, target: ptr mut canvas) -> none =
@@ -880,15 +914,19 @@ end draw_circle
 
 draw_label: (self: ptr mut label, target: ptr mut canvas) -> none =
     inc self.val.calls
-    inc target.val.draws
-    target.val.total += self.val.weight
+    target.val.draws += 4
+    target.val.total += self.val.weight * 10
 end draw_label
 
 circle is drawable (draw: draw_circle)
 label is drawable (draw: draw_label)
 
+label_prefix: u64 = 0x1111_2222_3333_4444
+label_suffix: u64 = 0x5555_6666_7777_8888
 mut round_shape: circle = (weight: 3, calls: 0)
-mut text_shape: label = (weight: 5, calls: 0)
+mut text_shape: label =
+    (prefix_sentinel: label_prefix, weight: 5, calls: 0,
+     suffix_sentinel: label_suffix)
 
 draw_all: (items: vec.list(any drawable), target: ptr mut canvas) -> none =
     for item in vec.used(items) do
@@ -912,9 +950,14 @@ heterogeneous_drawables: () -> (ok: bool) =
 
     mut target: canvas = (draws: 0, total: 0)
     draw_all(items, addr target)
+    layout_preserved: bool = sizeof label > sizeof circle
+                             and text_shape.prefix_sentinel == label_prefix
+                             and text_shape.weight == 5
+                             and text_shape.suffix_sentinel == label_suffix
     dispatched: bool = vec.length(items) == 3
-                       and target.draws == 3 and target.total == 11
+                       and target.draws == 6 and target.total == 56
                        and round_shape.calls == 2 and text_shape.calls == 1
+                       and layout_preserved
                        and failing.attempts(provider) == 1
                        and failing.delegated(provider) == 1
                        and failing.successes(provider) == 1
@@ -927,10 +970,10 @@ heterogeneous_drawables: () -> (ok: bool) =
 end heterogeneous_drawables
 
 public containers_run: () -> (ok: bool) =
-    signed_left: i32 = 3
-    signed_right: i32 = 7
-    unsigned_left: u32 = 29
-    unsigned_right: u32 = 11
+    signed_left: i32 = -1
+    signed_right: i32 = 1
+    unsigned_left: u32 = 0xFFFF_FFFF
+    unsigned_right: u32 = 1
     signed_order: bool = evidence_less(signed_left, signed_right)
     unsigned_order_ok: bool = not evidence_less(unsigned_left, unsigned_right)
 
