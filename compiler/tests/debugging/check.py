@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from collections.abc import Callable
 import hashlib
 import json
 import os
@@ -20,6 +21,15 @@ ROOT = HERE.parents[2]
 MAIN_SOURCE = HERE / "main.ldn"
 ODD_SOURCE = HERE / 'caller"\\path.ldn'
 SOURCES = (MAIN_SOURCE, ODD_SOURCE)
+CONTAINER_SOURCE = ROOT / "examples/derived_containers/workload/workload.ldn"
+CONTAINER_FIXTURE = HERE.parent / "fixtures/runtime/derived-containers"
+CONTAINER_COMPILE_TIMEOUT = 900
+CONTAINER_DONE_VALUES = (
+    "signed_order", "unsigned_order_ok", "numbers_ok", "arrays_ok", "raw_ok",
+    "vector_ok", "small_ok", "map_ok", "reference_entries_ok",
+    "map_first_failure_ok", "map_second_failure_ok", "map_third_failure_ok",
+    "tree_ok", "drawables_ok",
+)
 PRIMARY_PROFILES = (("none-off", "none", "off"),
                     ("size-auto", "size", "auto"))
 FALLBACK_PROFILE = ("size-all", "size", "all")
@@ -101,9 +111,10 @@ def emit_section(lines: list[str], name: str, commands: list[str]) -> None:
     lines.append(f'printf "LANDIN-END {name}\\n"')
 
 
-def emit_value(lines: list[str], name: str, expression: str) -> None:
+def emit_value(lines: list[str], name: str, expression: str,
+               unsigned: bool = False) -> None:
     lines.append(f'printf "LANDIN-VALUE {name}="')
-    lines.append(f"output/d {expression}")
+    lines.append(f"output/{'u' if unsigned else 'd'} {expression}")
     lines.append('printf "\\n"')
 
 
@@ -113,9 +124,8 @@ def emit_values(lines: list[str], scope: str,
         emit_value(lines, f"{scope}.{name}", expression)
 
 
-def gdb_script(start_commands: list[str], source_lines: dict[str, int]) -> str:
-    source_name = os.path.relpath(MAIN_SOURCE, ROOT)
-    lines = [
+def gdb_setup() -> list[str]:
+    return [
         "set pagination off",
         "set confirm off",
         "set width 0",
@@ -128,6 +138,13 @@ def gdb_script(start_commands: list[str], source_lines: dict[str, int]) -> str:
         "set disable-randomization off",
         "set startup-with-shell off",
         "set sysroot /",
+    ]
+
+
+def gdb_script(start_commands: list[str], source_lines: dict[str, int]) -> str:
+    source_name = os.path.relpath(MAIN_SOURCE, ROOT)
+    lines = [
+        *gdb_setup(),
         "break debug_outer",
         *start_commands,
     ]
@@ -345,6 +362,115 @@ def gdb_script(start_commands: list[str], source_lines: dict[str, int]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def container_lines() -> dict[str, int]:
+    source = CONTAINER_SOURCE.read_text().splitlines()
+    result = {}
+    for name, marker in (("evidence", "R470_DEBUG_EVIDENCE_ENTRY"),
+                         ("sorted", "R470_DEBUG_SORTED_LIST"),
+                         ("done", "R470_DEBUG_CONTAINERS_DONE")):
+        matches = [index for index, line in enumerate(source) if marker in line]
+        require(len(matches) == 1, f"container marker {marker} is not unique")
+        index = matches[0] + 1
+        require(index < len(source) and source[index].strip()
+                and not source[index].lstrip().startswith("--"),
+                f"container marker {marker} does not precede executable source")
+        result[name] = index + 1
+    for occurrence, instance in enumerate(("signed", "unsigned")):
+        result[instance + "-provider"] = source_line(
+            CONTAINER_SOURCE, "yes = left < right", occurrence)
+    result["signed-call"] = source_line(CONTAINER_SOURCE, "signed_order: bool =")
+    result["unsigned-call"] = source_line(CONTAINER_SOURCE, "unsigned_order_ok: bool =")
+    result["signed-ready"] = result["unsigned-call"]
+    result["unsigned-ready"] = source_line(CONTAINER_SOURCE, "numbers_ok: bool =")
+    return result
+
+
+def container_gdb_script(start_commands: list[str],
+                         source_lines: dict[str, int]) -> str:
+    source_name = os.path.relpath(CONTAINER_SOURCE, ROOT)
+    lines = gdb_setup()
+    # These real workload stops may precede or follow the two evidence calls.
+    # Breakpoint commands record them without prescribing application order.
+    for name in ("sorted", "done"):
+        line = source_lines[name]
+        lines.extend([f"break {source_name}:{line}", "commands", "silent"])
+        emit_section(lines, f"container-{name}",
+                     ["frame", "info line", f"list {line},{line}", "info locals"])
+        if name == "sorted":
+            emit_values(lines, "container-sorted", (
+                ("count", "count"), ("first", "first"), ("last", "last")))
+        else:
+            emit_values(lines, "container-done",
+                        tuple((name, name) for name in CONTAINER_DONE_VALUES))
+        lines.extend(["continue", "end"])
+    lines.append(f"break {source_name}:{source_lines['evidence']}")
+    emit_section(lines, "container-evidence-breakpoints", ["info breakpoints"])
+    lines.extend(start_commands)
+    for instance in ("signed", "unsigned"):
+        scope = f"container-{instance}"
+        emit_section(lines, scope, ["frame", "info line", "info args"])
+        for name in ("left", "right"):
+            emit_value(lines, scope + "." + name, name,
+                       unsigned=instance == "unsigned")
+        lines.append("step")
+        emit_section(lines, scope + "-dispatch", ["frame", "info line", "bt 8"])
+        emit_section(lines, scope + "-provider-return", ["finish", "frame", "info line"])
+        emit_section(lines, scope + "-return", ["finish", "frame", "info line"])
+        # Observe the source binding after its assignment, not GDB's optional
+        # return-value prose or an ABI-specific result register.
+        emit_section(lines, scope + "-ready", ["next", "frame", "info line"])
+        result_name = "signed_order" if instance == "signed" else "unsigned_order_ok"
+        emit_value(lines, scope + "." + result_name, result_name)
+        if instance == "signed":
+            lines.append("continue")
+    emit_section(lines, "inferior-exit", ["continue"])
+    return "\n".join(lines) + "\n"
+
+
+def check_container_transcript(transcript: str,
+                               source_lines: dict[str, int]) -> None:
+    for phrase in ("No symbol ", "No source file named", "Cannot access memory",
+                   "Cannot find bounds", "not defined"):
+        require(phrase not in transcript,
+                f"container GDB transcript contains {phrase!r}\n{transcript}")
+    for name, function in (("sorted", "numbers_path"),
+                           ("done", "containers_run")):
+        expect_line(transcript, f"container-{name}", source_lines[name],
+                    function, "workload.ldn")
+    for instance, provider, left, right, result_name in (
+            ("signed", "less_i32", -1, 1, "signed_order"),
+            ("unsigned", "less_u32", 4294967295, 1, "unsigned_order_ok")):
+        scope = f"container-{instance}"
+        expect_line(transcript, scope, source_lines["evidence"],
+                    "evidence_less", "workload.ldn")
+        expect_value(transcript, scope + ".left", left)
+        expect_value(transcript, scope + ".right", right)
+        expect_line(transcript, scope + "-dispatch",
+                    source_lines[instance + "-provider"], provider, "workload.ldn")
+        stack = marker_section(transcript, scope + "-dispatch")
+        require(re.search(r"#0\s+.*\b" + provider + r"\b", stack) is not None
+                and re.search(r"#1\s+.*\bevidence_less\b", stack) is not None
+                and re.search(r"#2\s+.*\bcontainers_run\b", stack) is not None
+                and re.search(r"#3\s+.*\bmain\b", stack) is not None,
+                f"container evidence step lost its source stack: {stack!r}")
+        for suffix, function, line in (
+                ("-provider-return", "evidence_less", source_lines["evidence"]),
+                ("-return", "containers_run", source_lines[instance + "-call"]),
+                ("-ready", "containers_run", source_lines[instance + "-ready"])):
+            expect_line(transcript, scope + suffix, line, function, "workload.ldn")
+            returned = marker_section(transcript, scope + suffix)
+            require(re.search(r"#0\s+.*\b" + function + r"\b", returned) is not None,
+                    f"container evidence lost its caller frame: {returned!r}")
+        expect_value(transcript, scope + "." + result_name, 1)
+    for name, value in (("count", 20), ("first", 1), ("last", 20)):
+        expect_value(transcript, f"container-sorted.{name}", value)
+    for name in CONTAINER_DONE_VALUES:
+        expect_value(transcript, f"container-done.{name}", 1)
+    inferior_exit = marker_section(transcript, "inferior-exit")
+    require(re.search(r"exited with code (?:052|42)\b", inferior_exit) is not None,
+            f"debugged container program did not return 42: {inferior_exit!r}")
+
+
 def expect_value(transcript: str, name: str, value: int) -> None:
     require(re.search(r"^LANDIN-VALUE " + re.escape(name) + "=" +
                       re.escape(str(value)) + r"$", transcript, re.M) is not None,
@@ -352,14 +478,14 @@ def expect_value(transcript: str, name: str, value: int) -> None:
 
 
 def expect_line(transcript: str, section_name: str, line: int,
-                function: str) -> None:
+                function: str, source_name: str = "main.ldn") -> None:
     section = marker_section(transcript, section_name)
     require(re.search(rf"\b{re.escape(function)}\b", section) is not None,
             f"{section_name} stopped outside {function}: {section!r}")
     require(re.search(rf"\bLine {line}\b", section) is not None,
             f"{section_name} did not identify source line {line}: {section!r}")
-    require("main.ldn" in section,
-            f"{section_name} did not identify main.ldn: {section!r}")
+    require(source_name in section,
+            f"{section_name} did not identify {source_name}: {section!r}")
 
 
 def expect_one_of_lines(transcript: str, section_name: str,
@@ -571,7 +697,9 @@ def check_line_table(raw_lines: str,
         directory_id, basename = files[expected_id]
         require(basename == Path(source_arg).name,
                 f"line-table file {expected_id} has wrong basename {basename!r}")
-        require(directories.get(directory_id) == str(Path(source_arg).parent),
+        # Path.parent normalizes away the leading ./ of rooted imports,
+        # but the assembler's directory table retains that source spelling.
+        require(directories.get(directory_id) == (os.path.dirname(source_arg) or "."),
                 f"line-table file {expected_id} has wrong directory entry")
     return versions
 
@@ -636,7 +764,8 @@ def check_debug_sections(readelf: str, executable: Path,
 
 
 def check_source_map(table_path: Path, executable_id: str,
-                     source_args: tuple[str, ...], assembly: Path) -> dict:
+                     source_args: tuple[str, ...], assembly: Path,
+                     sources: tuple[Path, ...] = SOURCES) -> dict:
     table = json.loads(table_path.read_text(encoding="ascii"))
     require(table["build_id"] == executable_id,
             "source map build ID differs from its executable")
@@ -644,11 +773,11 @@ def check_source_map(table_path: Path, executable_id: str,
     require(table["assembly_sha256"] == assembly_sha256,
             "source map assembly SHA-256 differs from the emitted bytes")
     entries = table["files"]
-    require(len(entries) == len(SOURCES),
+    require(len(entries) == len(sources) == len(source_args),
             "full debug source map does not inventory every compilation source")
     assembly_lines = assembly.read_text().splitlines()
     for expected_id, (entry, source, source_arg) in enumerate(
-            zip(entries, SOURCES, source_args), 1):
+            zip(entries, sources, source_args), 1):
         require(entry["file_id"] == expected_id,
                 "source map is not in Source_Id order")
         source_arg_bytes = os.fsencode(source_arg)
@@ -710,10 +839,12 @@ def guest_command(executable: Path, runner: str,
 
 def run_gdb(gdb: str, executable: Path, script_path: Path,
             transcript_path: Path, debugger_cwd: Path, runner: str,
-            qemu: str | None, transport_dir: Path) -> str:
+            qemu: str | None, transport_dir: Path,
+            script: Callable[[list[str]], str]) -> str:
     gdb_args = [gdb, "-q", "-nx", "--batch", str(executable),
                 "-x", str(script_path)]
     if runner == "native":
+        script_path.write_text(script(["run"]))
         transcript = run_gdb_process(gdb_args, debugger_cwd, transcript_path)
         if re.search(r"PTRACE_GETREGS|Couldn't get CS register|ptrace:",
                      transcript, re.I):
@@ -735,8 +866,8 @@ def run_gdb(gdb: str, executable: Path, script_path: Path,
         if qemu_process.poll() is not None:
             output = qemu_process.stdout.read() if qemu_process.stdout else ""
             raise ValueError(f"qemu exited before GDB connected: {output}")
-        script_path.write_text(gdb_script(
-            [f"target remote {socket_path}", "continue"], SOURCE_LINES))
+        script_path.write_text(script(
+            [f"target remote {socket_path}", "continue"]))
         transcript = run_gdb_process(gdb_args, debugger_cwd, transcript_path)
         try:
             status = qemu_process.wait(timeout=15)
@@ -801,22 +932,42 @@ CALLER_COLUMN = next(line.index("debug_outer") + 1 for line in
 
 def measure(refine: Path, tools: dict[str, str], gdb: str,
             runner: str, qemu: str | None, retained: Path, scratch: Path,
-            profile: tuple[str, str, str]) -> dict:
+            profile: tuple[str, str, str], containers: bool = False) -> dict:
     key, optimize, specialize = profile
+    if containers:
+        key = "containers-" + key
     executable = scratch / f"debug-{key}"
     assembly = scratch / f"debug-{key}.s"
     report = scratch / f"report-{key}.json"
-    source_args = tuple(os.path.relpath(source, ROOT) for source in SOURCES)
+    sources = SOURCES
+    source_args = tuple(os.path.relpath(source, ROOT) for source in sources)
+    inputs = ([os.path.relpath(CONTAINER_FIXTURE, ROOT), "--root=."]
+              if containers else list(source_args))
     profile_args = [f"--optimize={optimize}",
                     f"--specialize={specialize}"]
     compiler_args = [str(refine), "--target=linux-x86-64", "--debug=full",
-                     *source_args, "--emit=exe", "-o", str(executable),
+                     *inputs, "--emit=exe", "-o", str(executable),
                      *profile_args, f"--build-report={report}"]
     assembly_args = [str(refine), "--target=linux-x86-64", "--debug=full",
-                     *source_args, "--emit=asm", "-o", str(assembly),
+                     *inputs, "--emit=asm", "-o", str(assembly),
                      *profile_args]
-    run(compiler_args, cwd=ROOT)
-    run(assembly_args, cwd=ROOT)
+    # The rooted client takes over two minutes to compile even natively;
+    # executable and debugger timeouts remain independent and unchanged.
+    compile_timeout = CONTAINER_COMPILE_TIMEOUT if containers else 120
+    run(compiler_args, cwd=ROOT, timeout=compile_timeout)
+    run(assembly_args, cwd=ROOT, timeout=compile_timeout)
+    if containers:
+        inventory = json.loads(report.read_text())["sources"]
+        source_args = tuple(os.fsdecode(bytes.fromhex(entry["path_hex"]))
+                            for entry in inventory)
+        sources = tuple((ROOT / path).resolve() for path in source_args)
+        require(CONTAINER_SOURCE in sources
+                and CONTAINER_FIXTURE / "main.ldn" in sources,
+                "container report omits its entry or workload source")
+        families = {source.parent.name for source in sources
+                    if source.parent.parent == ROOT / "core"}
+        require({"vec", "small", "map", "tree", "sort"} <= families,
+                "container debug build did not reach every core container")
     require(executable.is_file(), f"compiler did not create {executable.name}")
     require(assembly.is_file(), f"compiler did not create {assembly.name}")
     map_path = executable.with_suffix(".sources.json")
@@ -845,13 +996,16 @@ def measure(refine: Path, tools: dict[str, str], gdb: str,
     dwarf_versions = check_dwarf_versions(debug_info, frames)
     dwarf_versions["debug_line_tables"] = check_line_table(
         raw_lines, source_args)
-    for name in ("debug_outer", "debug_inner", "debug_generic",
-                 "debug_multiple", "debug_aliases",
-                 "scalar_param", "pointer_param", "record_param",
-                 "variant_param", "array_param", "scalar_local",
-                 "pointer_local", "record_local", "variant_local",
-                 "array_local", "renamed_left", "renamed_right",
-                 "loop_element", "debug_record", "debug_choice"):
+    debug_names = (("containers_run", "evidence_less", "left", "right",
+                    "count", "first", "last") if containers else (
+        "debug_outer", "debug_inner", "debug_generic",
+        "debug_multiple", "debug_aliases",
+        "scalar_param", "pointer_param", "record_param",
+        "variant_param", "array_param", "scalar_local",
+        "pointer_local", "record_local", "variant_local",
+        "array_local", "renamed_left", "renamed_right",
+        "loop_element", "debug_record", "debug_choice"))
+    for name in debug_names:
         require(name in debug_info, f"DWARF info omits {name}")
     executable_bytes = executable.read_bytes()
     for source_arg in source_args:
@@ -859,20 +1013,26 @@ def measure(refine: Path, tools: dict[str, str], gdb: str,
         require(source_name in executable_bytes,
                 f"unstripped debug image omits source basename {source_arg!r}")
     executable_id = read_build_id(tools["readelf"], executable)
-    table = check_source_map(map_path, executable_id, source_args, assembly)
+    table = check_source_map(map_path, executable_id, source_args, assembly,
+                             sources)
     assembly_table = check_source_map(assembly_map_path, executable_id,
-                                      source_args, assembly)
+                                      source_args, assembly, sources)
     run(guest_command(executable, runner, qemu), cwd=scratch,
         expected_status=42, empty_output=True)
     debugger_cwd = scratch / f"debugger-cwd-{key}"
     debugger_cwd.mkdir()
     script_path = retained / f"{key}.gdb"
     transcript_path = retained / f"{key}.gdb.txt"
-    script_path.write_text(gdb_script(["run"], SOURCE_LINES))
+    lines = container_lines() if containers else SOURCE_LINES
+    script = container_gdb_script if containers else gdb_script
     with tempfile.TemporaryDirectory(prefix="landin-gdb-") as tmp:
         transcript = run_gdb(gdb, executable, script_path, transcript_path,
-                             debugger_cwd, runner, qemu, Path(tmp))
-    check_transcript(transcript, SOURCE_LINES, CALLER_LINE, CALLER_COLUMN)
+                             debugger_cwd, runner, qemu, Path(tmp),
+                             lambda start: script(start, lines))
+    if containers:
+        check_container_transcript(transcript, lines)
+    else:
+        check_transcript(transcript, lines, CALLER_LINE, CALLER_COLUMN)
     stripped = scratch / f"debug-{key}-stripped"
     shutil.copy2(executable, stripped)
     run([tools["strip"], "--strip-debug", str(stripped)])
@@ -889,11 +1049,19 @@ def measure(refine: Path, tools: dict[str, str], gdb: str,
     run(guest_command(stripped, runner, qemu), cwd=debugger_cwd,
         expected_status=42, empty_output=True)
     resolver = str(ROOT / "scripts/source-location.py")
-    coordinate_args = [str(map_path), "2", str(CALLER_LINE),
-                       str(CALLER_COLUMN)]
+    caller_id, caller_line, caller_column = 2, CALLER_LINE, CALLER_COLUMN
+    if containers:
+        entry_source = CONTAINER_FIXTURE / "main.ldn"
+        caller_id = sources.index(entry_source) + 1
+        caller_line = source_line(entry_source, "containers_run")
+        caller_column = (entry_source.read_text().splitlines()[caller_line - 1]
+                         .index("containers_run") + 1)
+    coordinate_args = [str(map_path), str(caller_id), str(caller_line),
+                       str(caller_column)]
     resolved = run([sys.executable, resolver, *coordinate_args,
                     "--build-id", stripped_id], cwd=debugger_cwd).strip()
-    expected_location = f"{source_args[1]}:{CALLER_LINE}:{CALLER_COLUMN}"
+    expected_location = (f"{source_args[caller_id - 1]}:"
+                         f"{caller_line}:{caller_column}")
     require(resolved == expected_location,
             "D192 source-map decoding failed for the stripped build")
     resolved_assembly = run([sys.executable, resolver, *coordinate_args,
@@ -988,6 +1156,11 @@ def main() -> None:
                 measurements[profile[0]] = measure(
                     refine, tools, gdb, runner, qemu,
                     args.output, scratch, profile)
+            container_measurements = {}
+            for profile in (*PRIMARY_PROFILES, FALLBACK_PROFILE):
+                container_measurements[profile[0]] = measure(
+                    refine, tools, gdb, runner, qemu,
+                    args.output, scratch, profile, containers=True)
     except Exception as error:
         failure_path.write_text(f"{type(error).__name__}: {error}\n")
         raise
@@ -1000,6 +1173,7 @@ def main() -> None:
         "debugger_cwd_is_distinct": True,
         "specialization_fallback_used": "size-all" in measurements,
         "measurements": measurements,
+        "container_measurements": container_measurements,
     }
     evidence_path.write_text(
         json.dumps(result, indent=2, sort_keys=True) + "\n")

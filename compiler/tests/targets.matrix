@@ -692,6 +692,11 @@ negative/r450-review-frontend-import-type | linux-x86-64, macos-arm64
 negative/r450-review-frontend-partial-return | linux-x86-64, macos-arm64, synthetic-32
 negative/r450-review-frontend-type-arithmetic | linux-x86-64, macos-arm64, synthetic-32
 negative/r450-review-frontend-uninitialized-arithmetic | linux-x86-64, macos-arm64, synthetic-32
+negative/r470-array-inout-parameter-shape-mismatch | linux-x86-64, macos-arm64
+negative/r470-container-entry-live-map | linux-x86-64, macos-arm64, synthetic-32
+negative/r470-container-entry-wrong-from | linux-x86-64, macos-arm64, synthetic-32
+negative/r470-container-missing-order-evidence | linux-x86-64, macos-arm64, synthetic-32
+negative/r470-scalar-reference-controls | linux-x86-64, macos-arm64
 negative/range-subtype-address | linux-x86-64, macos-arm64
 negative/range-subtype-base-is-not-an-integer | linux-x86-64, macos-arm64
 negative/range-subtype-bound-outside-base | linux-x86-64, macos-arm64
@@ -1217,6 +1222,7 @@ runtime/defer-cleanups-follow-control-edges | linux-x86-64
 runtime/defer-does-not-unwind-traps | linux-x86-64
 runtime/derived-address-empty-slice-traps | linux-x86-64
 runtime/derived-array-slice-origin | linux-x86-64
+runtime/derived-containers | linux-x86-64
 runtime/derived-parser | linux-x86-64
 runtime/derived-storage-address-origin | linux-x86-64
 runtime/diagnostic-loggers-dispatch | linux-x86-64
@@ -1440,6 +1446,10 @@ runtime/r450-review-frontend-scalar-return | linux-x86-64
 runtime/r450-specialization-recursive-errors | linux-x86-64
 runtime/r450-specialization-threshold | linux-x86-64
 runtime/r450-x86-pressure | linux-x86-64
+runtime/r470-array-field-range | linux-x86-64
+runtime/r470-array-inout-parameter | linux-x86-64
+runtime/r470-nested-guarded-field-range | linux-x86-64
+runtime/r470-scalar-operator-origins | linux-x86-64
 runtime/range-subtype-checks | linux-x86-64
 runtime/range-subtype-conversion-traps | linux-x86-64
 runtime/range-subtype-store-traps | linux-x86-64

@@ -495,6 +495,7 @@ package body Landin.Tests.Fixture_Execution_Suite is
          or else Ada.Strings.Fixed.Index (Name (Case_Item), "r450") > 0
          or else Name (Case_Item) in "allocator-vec-pressure"
            | "diagnostic-loggers-dispatch" | "core-io-erased-system"
+           | "derived-containers"
       then Profiles'Length else 4);
 
    procedure Append_Profile
