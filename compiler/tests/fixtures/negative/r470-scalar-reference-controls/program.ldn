@@ -1,0 +1,34 @@
+retain: (escaping source: ptr u32) -> (result: ptr u32 from source) =
+    result = source
+end retain
+
+operand_effect: () -> (answer: bool) =
+    local: u32 = 1
+    answer = retain(addr local) == addr local
+end operand_effect
+
+advance: (inout source: []mut u32) -> none =
+    source = source[1..<lenof source]
+end advance
+
+live_slice: (inout source: []mut u32) -> (value: u32) =
+    view: []mut u32 = source[0..<lenof source]
+    advance(source)
+    value = view[0]
+end live_slice
+
+live_pointer: (inout source: []mut u32) -> (value: u32) =
+    view: ptr mut u32 = addr source[0]
+    advance(source)
+    value = view.val
+end live_pointer
+
+wrong_pointer: (left: ptr mut u32, right: ptr mut u32)
+               -> (result: ptr mut u32 from right) =
+    result = left
+end wrong_pointer
+
+wrong_slice: (left: []mut u32, right: []mut u32)
+             -> (result: []mut u32 from right) =
+    result = left
+end wrong_slice
