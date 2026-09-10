@@ -5056,7 +5056,7 @@ and selected locals in unoptimized and baseline-optimized builds.
 
 ### R4.70 — Complete and run the derived container program
 
-Status: planned
+Status: active
 Depends on: R4.20, R4.50, R4.60
 
 Turn prototype 3 into a complete hosted `.ldn` program and negative corpus,

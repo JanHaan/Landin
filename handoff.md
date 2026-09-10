@@ -261,7 +261,7 @@ release compiler builds. ROADMAP.md records the complete closure evidence.
 Debug provenance remains independent of DWARF encoding for a possible future
 PDB emitter; PDB support is not implemented.
 
-**Next roadmap item: R4.70 — Complete and run the derived container program (planned).**
+**Current roadmap work: R4.70 — Complete and run the derived container program.**
 
 `refine` runs the frontend, lowers and
 verifies target-neutral IR, emits Linux x86-64 assembly, and can assemble and
