@@ -1,0 +1,6 @@
+class: runtime
+summary: computed scalar operators retain effects but not slice or array-field origins across later mutation
+program: main.ldn
+status: 42
+constructs: 0370, 0430, 0520, 0570, 0710, 0750, 0790, 0800, 0830, 0910, 1890
+targets: linux-x86-64

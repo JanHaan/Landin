@@ -1228,6 +1228,22 @@ package body Landin.Stages.Checking.References is
         return Origin_Fact
       is
          Result : Origin_Fact := No_Origin;
+
+         procedure Normalize_Scalar_Result;
+
+         procedure Normalize_Scalar_Result is
+         begin
+            if Falls_Through
+              and then Landin.Checking.Type_Of (Types.all, Tree, Node)
+                in Ty.Scalar_Name
+            then
+               --  Evaluation has already contributed its effects and joined
+               --  its control edges.  The computed scalar retains no view;
+               --  keep Storage separate for scalar places used by `addr`.
+               Result.Value := No_Reference;
+               Result.Results.Clear;
+            end if;
+         end Normalize_Scalar_Result;
       begin
          if not Falls_Through then
             return No_Value_Edge;
@@ -1290,6 +1306,11 @@ package body Landin.Stages.Checking.References is
             when Syn.Anonymous_Function =>
                --  Creating a code value does not run its separately checked
                --  body or any transfers in that body's cleanup arguments.
+               return No_Origin;
+
+            when Syn.Len_Of =>
+               --  D14/D31: a fixed-array length does not read its storage,
+               --  and array-literal elements are typechecked but not run.
                return No_Origin;
 
             when Syn.Try_Expression =>
@@ -1565,6 +1586,7 @@ package body Landin.Stages.Checking.References is
                      Falls_Through := True;
                   end;
                end if;
+               Normalize_Scalar_Result;
                return Result;
 
             when Syn.If_Statement | Syn.Match_Statement | Syn.Bare_Block
@@ -1595,6 +1617,7 @@ package body Landin.Stages.Checking.References is
          --  Only anonymous-result producers and their copies carry a
          --  positional shape, never an enclosing conversion or constructor.
          Result.Results.Clear;
+         Normalize_Scalar_Result;
          return Result;
       end Fact_Of;
 

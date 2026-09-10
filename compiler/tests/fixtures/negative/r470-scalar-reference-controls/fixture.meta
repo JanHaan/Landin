@@ -1,0 +1,6 @@
+class: negative
+summary: scalar normalization retains operand effects, live references, and exact return sources
+program: program.ldn
+codes: L0314, L0315, L0315, L0316, L0316
+constructs: 0430, 0570, 0770, 0780, 0790, 0800, 0830, 1890
+targets: linux-x86-64, macos-arm64

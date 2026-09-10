@@ -1,0 +1,92 @@
+saved_scalars: type = struct
+    spare: []mut u32
+    length: usize
+    field_length: usize
+    bits: usize
+    negative: isize
+    sum: usize
+    same: bool
+    negated: bool
+    all: bool
+end saved_scalars
+
+array_source: type = struct
+    words: [3]u32
+end array_source
+
+advance: (inout source: []mut u32) -> none =
+    source = source[1..<lenof source]
+end advance
+
+discard: (sink source: []mut u32) -> none =
+end discard
+
+change: (inout source: array_source) -> none =
+    source.words[0] = source.words[0] + 1
+end change
+
+touch: (inout calls: u32, source: ptr mut u32)
+       -> (result: ptr mut u32 from source) =
+    calls = calls + 1
+    result = source
+end touch
+
+slice_length_survives: (inout source: []mut u32) -> (ok: bool) =
+    mut saved: saved_scalars =
+      (spare: [], length: 0, field_length: 0, bits: 0, negative: 0,
+       sum: 0, same: false, negated: false, all: false)
+    saved.length = lenof source
+    advance(source)
+    ok = saved.length == 2 and lenof source == 1
+end slice_length_survives
+
+sink_length_survives: (sink source: []mut u32) -> (ok: bool) =
+    mut saved: saved_scalars =
+      (spare: [], length: 0, field_length: 0, bits: 0, negative: 0,
+       sum: 0, same: false, negated: false, all: false)
+    saved.length = lenof source
+    discard(source)
+    ok = saved.length == 2
+end sink_length_survives
+
+array_field_length_survives: () -> (ok: bool) =
+    mut source: array_source = (words: [3, 5, 7])
+    mut saved: saved_scalars =
+      (spare: [], length: 0, field_length: 0, bits: 0, negative: 0,
+       sum: 0, same: false, negated: false, all: false)
+    words: [3]u32 = source.words
+    saved.field_length = lenof words
+    change(source)
+    ok = saved.field_length == 3 and source.words[0] == 4
+end array_field_length_survives
+
+operators_discard_origins: () -> (ok: bool) =
+    mut words: [2]u32 = [11, 13]
+    mut source: []mut u32 = words[0..<2]
+    mut calls: u32 = 0
+    mut saved: saved_scalars =
+      (spare: [], length: 0, field_length: 0, bits: 0, negative: 0,
+       sum: 0, same: false, negated: false, all: false)
+    saved.bits = ~lenof source
+    saved.negative = -isize(lenof source)
+    saved.sum = lenof source + 4
+    saved.same = touch(calls, addr source[0]) == addr source[0]
+    saved.negated = not (touch(calls, addr source[0]) <> addr source[0])
+    saved.all = saved.same and false
+                and touch(calls, addr source[1]) == addr source[1]
+    advance(source)
+    ok = saved.bits == ~usize(2) and saved.negative == -2
+         and saved.sum == 6 and saved.same and saved.negated
+         and not saved.all and calls == 2 and words[0] == 11
+end operators_discard_origins
+
+public main: () -> (code: i32) =
+    mut words: [2]u32 = [17, 25]
+    mut source: []mut u32 = words[0..<2]
+    consumed: []mut u32 = words[0..<2]
+    code = if slice_length_survives(source)
+              and sink_length_survives(consumed)
+              and array_field_length_survives()
+              and operators_discard_origins()
+           then 42 else 1 end if
+end main
