@@ -1,0 +1,31 @@
+packet: type = struct
+    kind: variant
+        empty |
+        full: (planes: [2][3][4]i32)
+    end kind
+end packet
+
+public main: () -> (code: i32) =
+    mut state: packet = zeroed
+    state.kind = full(planes: zeroed)
+    mut total: i32 = 0
+    match state.kind
+        empty: code = 1
+        full(inout planes): begin
+            planes[0][0] = [5, 1, 2, 3]
+            planes[1][1] = [7, 4, 5, 6]
+            for plane, index in planes[0..<2] do
+                total = total + plane[index][0]
+                plane[2][3] = plane[2][3] + i32(index) + 10
+            end for
+        end
+    end match
+    mut correct: bool = false
+    match state.kind
+        empty: correct = false
+        full(planes):
+            correct = total == 12 and planes[0][2][3] == 10
+              and planes[1][2][3] == 11
+    end match
+    code = if correct then 42 else 1 end if
+end main

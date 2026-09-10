@@ -1,0 +1,6 @@
+class: runtime
+summary: a guarded variant field range retains a recursive nested-array shape
+constructs: 0410, 0420, 0520, 0570, 0670, 0680, 0750, 1260, 1810, 1950
+program: main.ldn
+status: 42
+targets: linux-x86-64

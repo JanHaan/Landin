@@ -2314,22 +2314,28 @@ package body Landin.Stages.Lowering is
                Rooted_Steps (Of_Tree, Alias.Subject)));
 
       --  Element operations accept either a complete nested path or the
-      --  legacy direct variant selectors, never both.  Keep direct payloads
-      --  compact; below a child, append the payload to the existing path.
+      --  legacy direct variant selectors, never both.  Keep a direct payload
+      --  compact only when no selection continues below it; otherwise the
+      --  complete path must include both the payload and its child run.
       function Alias_Element_Steps
-        (Of_Tree : Syn.Tree; Alias : Payload_Alias)
-         return IR.Path_Step_Array;
+        (Of_Tree : Syn.Tree; Alias : Payload_Alias;
+         Below   : IR.Path_Step_Array) return IR.Path_Step_Array;
 
       function Alias_Element_Steps
-        (Of_Tree : Syn.Tree; Alias : Payload_Alias)
-         return IR.Path_Step_Array
+        (Of_Tree : Syn.Tree; Alias : Payload_Alias;
+         Below   : IR.Path_Step_Array) return IR.Path_Step_Array
       is
          Steps : constant IR.Path_Step_Array := Alias_Steps (Of_Tree, Alias);
       begin
-         return
-           (if Steps'Length = 0 or else Alias.Which = 0 then Steps
-            else Payload_Steps
-              (Steps, Positive (Alias.Which), Positive (Alias.Payload_Field)));
+         if Alias.Which = 0 then
+            return Steps & Below;
+         elsif Steps'Length = 0 and then Below'Length = 0 then
+            return IR.No_Path_Steps;
+         else
+            return Payload_Steps
+              (Steps, Positive (Alias.Which), Positive (Alias.Payload_Field))
+              & Below;
+         end if;
       end Alias_Element_Steps;
 
       function Rooted_Steps
@@ -2357,7 +2363,18 @@ package body Landin.Stages.Lowering is
              (Declared
                 (Res.Bound_To (Meanings.all, Of_Tree, Root))).Active
          then
-            return Chain_All_Steps (Of_Tree, Node);
+            declare
+               Alias : Payload_Alias renames Aliases
+                 (Declared (Res.Bound_To (Meanings.all, Of_Tree, Root)));
+            begin
+               if Alias.Which = 0 then
+                  return Chain_All_Steps (Of_Tree, Node);
+               end if;
+               return Payload_Steps
+                 (Alias_Steps (Of_Tree, Alias), Positive (Alias.Which),
+                  Positive (Alias.Payload_Field))
+                 & Chain_All_Steps (Of_Tree, Node);
+            end;
          end if;
          return Chain_Steps (Of_Tree, Node);
       end Rooted_Steps;
@@ -4047,11 +4064,24 @@ package body Landin.Stages.Lowering is
                   declare
                      Place : constant Stored_Place :=
                        Lower_Stored_Place (Of_Tree, Argument, Scope);
+                     Site : constant Landin.Provenance.Origin :=
+                       Site_Of (Of_Tree, Argument);
                   begin
-                     Given (Formal_Position) := IR.Emit_Place_Address
-                       (Unit.all, Filling, Place.Place,
-                        Site_Of (Of_Tree, Argument), Field => Place.Base,
-                        Nested => Stored_Steps (Place));
+                     --  An inout forwarded from another inout already is the
+                     --  address the callee needs. Taking its place address
+                     --  would instead pass the address slot itself.
+                     if Place.Place.Kind = IR.Runtime_Address
+                       and then Place.Base = 0
+                       and then Place.Steps.Is_Empty
+                     then
+                        Given (Formal_Position) := IR.Emit_Load
+                          (Unit.all, Filling, Place.Place.Address, Site);
+                     else
+                        Given (Formal_Position) := IR.Emit_Place_Address
+                          (Unit.all, Filling, Place.Place, Site,
+                           Field => Place.Base,
+                           Nested => Stored_Steps (Place));
+                     end if;
                   end;
                elsif Type_At (Of_Tree, Argument)
                     in Ty.Aggregate | Ty.Fixed_Array | Ty.Slice_Value
@@ -6682,7 +6712,9 @@ package body Landin.Stages.Lowering is
                         Alias : Payload_Alias renames
                           Aliases (Declared (Means));
                         Element_Path : constant IR.Path_Step_Array :=
-                          Alias_Element_Steps (Of_Tree, Alias);
+                          Alias_Element_Steps
+                            (Of_Tree, Alias,
+                             Chain_All_Steps (Of_Tree, From));
                         Index : constant IR.Value_Id :=
                           Lower_Expression
                             (Of_Tree, Syn.Index_Of (Of_Tree, Node), Scope);
@@ -10284,7 +10316,9 @@ package body Landin.Stages.Lowering is
                         Alias : Payload_Alias renames
                           Aliases (Declared (Means));
                         Element_Path : constant IR.Path_Step_Array :=
-                          Alias_Element_Steps (Of_Tree, Alias);
+                          Alias_Element_Steps
+                            (Of_Tree, Alias,
+                             Chain_All_Steps (Of_Tree, From));
                      begin
                         if not Alias.Active then
                            raise Landin.Compiler_Defect with
@@ -10383,7 +10417,9 @@ package body Landin.Stages.Lowering is
                         Alias : Payload_Alias renames
                           Aliases (Declared (Means));
                         Element_Path : constant IR.Path_Step_Array :=
-                          Alias_Element_Steps (Of_Tree, Alias);
+                          Alias_Element_Steps
+                            (Of_Tree, Alias,
+                             Chain_All_Steps (Of_Tree, Selected));
                      begin
                         if not Alias.Active then
                            raise Landin.Compiler_Defect with

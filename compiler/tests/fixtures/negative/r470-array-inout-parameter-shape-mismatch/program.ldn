@@ -1,0 +1,8 @@
+consume: (inout values: [7]u8) -> none =
+    values[0] = values[0]
+end consume
+
+bad: () -> none =
+    mut values: [6]u8 = zeroed
+    consume(values)
+end bad

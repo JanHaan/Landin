@@ -1,0 +1,10 @@
+error[L0301]: this argument has a different array shape
+  --> ../tests/fixtures/negative/r470-array-inout-parameter-shape-mismatch/program.ldn:7:13
+  |
+7 |     consume(values)
+  |             ^^^^^^
+  --> ../tests/fixtures/negative/r470-array-inout-parameter-shape-mismatch/program.ldn:1:11
+  |
+1 | consume: (inout values: [7]u8) -> none =
+  |           ^^^^^^^^^^^^^^^^^^^ this parameter
+  = note: D17: a fixed array is its length and scalar element type

@@ -8199,6 +8199,254 @@ package body Landin.Tests.Lowering_Suite is
       end loop;
    end Recursive_Repetition_Stays_Compact;
 
+   procedure R470_Field_Ranges_Lower_Recursive_Shapes
+     (Item : in out Landin.Testing.Context);
+
+   procedure R470_Field_Ranges_Lower_Recursive_Shapes
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "node: type = struct value: i32 end node" & LF
+         & "holder: type = struct" & LF
+         & "    deep: [2][3][4]i32" & LF
+         & "    empty: [2][0][3]i32" & LF
+         & "    refs: [2][3][]mut i32" & LF
+         & "    nominal: [2][3]node" & LF
+         & "end holder" & LF
+         & "inspect: (inout value: holder) -> none =" & LF
+         & "    deep := value.deep[0..<2]" & LF
+         & "    empty := value.empty[0..<2]" & LF
+         & "    refs := value.refs[0..<2]" & LF
+         & "    nominal := value.nominal[0..<2]" & LF
+         & "    _ = lenof deep + lenof empty + lenof refs + lenof nominal" & LF
+         & "end inspect" & LF,
+         Ran);
+      Landin.Testing.Check_Equal
+        (Item, Ran, 5, "recursive field ranges reach lowering");
+      if Landin.Stages.Failed (Work) then
+         return;
+      end if;
+
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         Inspect : constant IR.Item_Id := Named_Item (Work, "inspect");
+         Seen, Deep, Empty, References, Nominals : Natural := 0;
+      begin
+         for Position in 1 .. IR.Value_Count (Unit, Inspect) loop
+            declare
+               Value : constant IR.Value_Id := IR.Value_Id (Position);
+            begin
+               if IR.Op_Of (Unit, Inspect, Value) = IR.Slice_Address then
+                  Seen := Seen + 1;
+                  declare
+                     Shape : constant IR.Field_Shape :=
+                       IR.Slice_Element_Shape (Unit, Inspect, Value);
+                     Child : IR.Field_Shape;
+                  begin
+                     Landin.Testing.Check
+                       (Item, Shape.Kind = IR.Array_Field_Shape,
+                        "a nested range lowers as a recursive array shape");
+                     if Shape.Kind = IR.Array_Field_Shape then
+                        Child := IR.Array_Element_Shape (Unit, Shape);
+                        if Shape.Length = 0 then
+                           Empty := Empty + 1;
+                           Landin.Testing.Check
+                             (Item, Child.Kind = IR.Array_Field_Shape
+                              and then Child.Length = 3
+                              and then IR.Array_Element_Shape
+                                (Unit, Child).Kind = IR.Scalar_Field_Shape
+                              and then IR.Array_Element_Shape
+                                (Unit, Child).Element = Landin.Types.I32,
+                              "a zero child keeps its scalar grandchild");
+                        elsif Child.Kind = IR.Array_Field_Shape
+                          and then Child.Length = 4
+                        then
+                           Deep := Deep + 1;
+                           Landin.Testing.Check
+                             (Item, IR.Array_Element_Shape
+                                (Unit, Child).Kind = IR.Scalar_Field_Shape
+                              and then IR.Array_Element_Shape
+                                (Unit, Child).Element = Landin.Types.I32,
+                              "deep scalar array identity remains recursive");
+                        elsif Child.Kind = IR.Array_Field_Shape
+                          and then Child.Length = 2
+                        then
+                           References := References + 1;
+                           Landin.Testing.Check
+                             (Item, Child.Element = Landin.Types.Usize,
+                              "a slice child keeps its two-word carrier");
+                        elsif Child.Kind = IR.Aggregate_Field_Shape then
+                           Nominals := Nominals + 1;
+                           Landin.Testing.Check
+                             (Item, Child.Nominal /= IR.No_Nominal_Type,
+                              "a nominal child keeps its nominal body");
+                        end if;
+                     end if;
+                  end;
+               end if;
+            end;
+         end loop;
+         Landin.Testing.Check
+           (Item, Seen = 4 and then Deep = 1 and then Empty = 1
+            and then References = 1 and then Nominals = 1,
+            "all four recursive slice pointees reached target-neutral IR");
+         Landin.Testing.Check
+           (Item, IR.Verifier.Check (Unit).Kind = IR.Verifier.Nothing_Wrong,
+            "the verifier accepts every recursive range shape");
+      end;
+   end R470_Field_Ranges_Lower_Recursive_Shapes;
+
+   procedure R470_Direct_Array_Inout_Uses_One_Address
+     (Item : in out Landin.Testing.Context);
+
+   procedure R470_Direct_Array_Inout_Uses_One_Address
+     (Item : in out Landin.Testing.Context)
+   is
+      use type IR.Storage_Kind;
+
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "forward: (inout values: [7]u8, index: usize) -> none =" & LF
+         & "    values[index] = values[index] + 1" & LF
+         & "end forward" & LF
+         & "operate: (inout values: [7]u8, left: usize, right: usize)"
+         & " -> none =" & LF
+         & "    saved: u8 = values[left]" & LF
+         & "    values[left] = values[right]" & LF
+         & "    values[right] = saved" & LF
+         & "    mut shadow: [7]u8 = values" & LF
+         & "    values = shadow" & LF
+         & "    forward(values, left)" & LF
+         & "end operate" & LF
+         & "exercise: () -> none =" & LF
+         & "    mut values: [7]u8 = [0, 1, 2, 3, 4, 5, 6]" & LF
+         & "    operate(values, 1, 5)" & LF
+         & "end exercise" & LF,
+         Ran);
+      Landin.Testing.Check_Equal
+        (Item, Ran, 5, "direct fixed-array inout reaches lowering");
+      if Landin.Stages.Failed (Work) then
+         return;
+      end if;
+
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         Operate : constant IR.Item_Id := Named_Item (Work, "operate");
+         Forward : constant IR.Item_Id := Named_Item (Work, "forward");
+         Parameter : constant IR.Slot_Id :=
+           IR.Nth_Parameter (Unit, Operate, 1);
+         Forward_Parameter : constant IR.Slot_Id :=
+           IR.Nth_Parameter (Unit, Forward, 1);
+         Shape : constant IR.Field_Shape :=
+           IR.Address_Shape (Unit, Operate, Parameter);
+         Child : IR.Field_Shape;
+         Runtime_Indexes, Copies, Forwarded, Place_Addresses : Natural := 0;
+      begin
+         Landin.Testing.Check
+           (Item, IR.Is_Address (Unit, Operate, Parameter)
+            and then IR.Is_Address (Unit, Forward, Forward_Parameter)
+            and then Shape.Kind = IR.Array_Field_Shape
+            and then Shape.Length = 7,
+            "each direct array parameter is one whole-array address slot");
+         Child := IR.Array_Element_Shape (Unit, Shape);
+         Landin.Testing.Check
+           (Item, Child.Kind = IR.Scalar_Field_Shape
+            and then Child.Element = Landin.Types.U8,
+            "the address slot points at seven u8 elements");
+
+         for Position in 1 .. IR.Value_Count (Unit, Operate) loop
+            declare
+               Value : constant IR.Value_Id := IR.Value_Id (Position);
+               Op : constant IR.Opcode := IR.Op_Of (Unit, Operate, Value);
+            begin
+               if Op = IR.Place_Address then
+                  Place_Addresses := Place_Addresses + 1;
+               elsif Op = IR.Storage_Address
+                 and then IR.Destination_Of
+                   (Unit, Operate, Value).Kind = IR.Runtime_Address
+               then
+                  Runtime_Indexes := Runtime_Indexes + 1;
+                  Landin.Testing.Check
+                    (Item, IR.Destination_Of
+                       (Unit, Operate, Value).Address = Parameter
+                     and then IR.Storage_Address_Has_Index
+                       (Unit, Operate, Value),
+                     "computed access starts at the incoming array address");
+               elsif Op = IR.Copy_Array then
+                  Copies := Copies + 1;
+                  Landin.Testing.Check
+                    (Item,
+                     (IR.Source_Of (Unit, Operate, Value).Kind
+                        = IR.Runtime_Address
+                      and then IR.Source_Of
+                        (Unit, Operate, Value).Address = Parameter)
+                     or else
+                       (IR.Destination_Of (Unit, Operate, Value).Kind
+                          = IR.Runtime_Address
+                        and then IR.Destination_Of
+                          (Unit, Operate, Value).Address = Parameter),
+                     "each whole copy has the direct parameter as one"
+                     & " endpoint");
+               elsif Op = IR.Call
+                 and then IR.Callee_Of (Unit, Operate, Value) = Forward
+               then
+                  Forwarded := Forwarded + 1;
+                  declare
+                     Actual : constant IR.Value_Id :=
+                       IR.Nth_Operand (Unit, Operate, Value, 1);
+                     Saved : IR.Value_Id := IR.No_Value;
+                     Source : IR.Value_Id := IR.No_Value;
+                  begin
+                     if IR.Op_Of (Unit, Operate, Actual) = IR.Load then
+                        for Prior in 1 .. Natural (Actual) - 1 loop
+                           declare
+                              Candidate : constant IR.Value_Id :=
+                                IR.Value_Id (Prior);
+                           begin
+                              if IR.Op_Of
+                                   (Unit, Operate, Candidate) = IR.Store
+                                and then IR.Slot_Of
+                                  (Unit, Operate, Candidate) = IR.Slot_Of
+                                    (Unit, Operate, Actual)
+                              then
+                                 Saved := Candidate;
+                                 Source := IR.Nth_Operand
+                                   (Unit, Operate, Candidate, 1);
+                              end if;
+                           end;
+                        end loop;
+                     end if;
+                     Landin.Testing.Check
+                       (Item, Saved /= IR.No_Value
+                        and then Source /= IR.No_Value
+                        and then IR.Op_Of
+                          (Unit, Operate, Source) = IR.Load
+                        and then IR.Slot_Of
+                          (Unit, Operate, Source) = Parameter,
+                        "forwarding spills the incoming address itself");
+                  end;
+               end if;
+            end;
+         end loop;
+         Landin.Testing.Check
+           (Item, Runtime_Indexes = 4 and then Copies = 2
+            and then Forwarded = 1 and then Place_Addresses = 0,
+            "reads, writes, swaps, copies and forwarding add no indirection");
+         Landin.Testing.Check
+           (Item, IR.Verifier.Check (Unit).Kind = IR.Verifier.Nothing_Wrong,
+            "the verifier accepts the direct array address operations");
+      end;
+   end R470_Direct_Array_Inout_Uses_One_Address;
+
    procedure Callback_Slices_And_Inout_Keep_Metadata
      (Item : in out Landin.Testing.Context);
 
@@ -8662,6 +8910,12 @@ package body Landin.Tests.Lowering_Suite is
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "lowering", "R4.70 field ranges lower recursive shapes",
+         R470_Field_Ranges_Lower_Recursive_Shapes'Access);
+      Landin.Testing.Register
+        (Into, "lowering", "R4.70 direct array inout uses one address",
+         R470_Direct_Array_Inout_Uses_One_Address'Access);
       Landin.Testing.Register
         (Into, "lowering", "erased shaped arguments keep spill types",
          Erased_Shaped_Arguments_Keep_Spill_Types'Access);

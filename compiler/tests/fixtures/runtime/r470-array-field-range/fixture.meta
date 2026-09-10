@@ -1,0 +1,6 @@
+class: runtime
+summary: a range over a struct field preserves its nested fixed-array element shape
+constructs: 0420, 0520, 0570, 0670, 0750, 1810, 1820, 1970
+program: main.ldn
+status: 42
+targets: linux-x86-64

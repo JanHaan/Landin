@@ -1,0 +1,9 @@
+class: negative
+summary: a direct fixed-array inout argument must match its complete parameter shape
+constructs: 0520, 0570, 1810, 1920
+program: program.ldn
+codes: L0301
+targets: linux-x86-64, macos-arm64
+expect: expected.txt
+args: ../tests/fixtures/negative/r470-array-inout-parameter-shape-mismatch/program.ldn
+status: 1

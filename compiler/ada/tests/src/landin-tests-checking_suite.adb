@@ -1733,6 +1733,145 @@ package body Landin.Tests.Checking_Suite is
          "permission, referent and concept split keys; an alias reuses one");
    end Reference_Actuals_Keep_Complete_Identity;
 
+   procedure R470_Field_Ranges_Keep_Recursive_Children
+     (Item : in out Landin.Testing.Context);
+
+   procedure R470_Field_Ranges_Keep_Recursive_Children
+     (Item : in out Landin.Testing.Context)
+   is
+      package C renames Landin.Checking;
+
+      Text : constant String :=
+        "node: type = struct value: i32 end node" & LF
+        & "holder: type = struct" & LF
+        & "    deep: [2][3][4]i32" & LF
+        & "    empty: [2][0][3]i32" & LF
+        & "    refs: [2][3][]mut i32" & LF
+        & "    nominal: [2][3]node" & LF
+        & "end holder" & LF
+        & "inspect: (inout value: holder) -> none =" & LF
+        & "    deep := value.deep[0..<2]" & LF
+        & "    empty := value.empty[0..<2]" & LF
+        & "    refs := value.refs[0..<2]" & LF
+        & "    nominal := value.nominal[0..<2]" & LF
+        & "    _ = lenof deep + lenof empty + lenof refs + lenof nominal" & LF
+        & "end inspect" & LF
+        & "inspect_readonly: (value: holder) -> none =" & LF
+        & "    deep := value.deep[0..<2]" & LF
+        & "    _ = lenof deep" & LF
+        & "end inspect_readonly" & LF;
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Ran : Natural;
+      Src : Landin.Source.Source_Id;
+   begin
+      Src := Landin.Stages.Add_Source (Work, "r470-field-ranges.ldn", Text);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Configurer'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Landin.Stages.Append (Order, Checker'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+      Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "nested field ranges are accepted");
+
+      declare
+         Of_Tree : constant not null access constant Landin.Syntax.Tree :=
+           Landin.Syntax.Forest.Tree_Of
+             (Landin.Stages.Trees (Work).all, Src);
+         Types : constant not null access C.Table :=
+           Landin.Stages.Types (Work);
+         Seen, Deep, Empty, References, Nominals : Natural := 0;
+         Mutable_Deep, Readonly_Deep : Natural := 0;
+      begin
+         for Where in Landin.Syntax.Node_Id'(1)
+                    .. Landin.Syntax.Last_Node (Of_Tree.all)
+         loop
+            if Landin.Syntax.Kind (Of_Tree.all, Where)
+                 = Landin.Syntax.Half_Open_Slice
+            then
+               Seen := Seen + 1;
+               declare
+                  Ref : constant C.Reference_Descriptor := C.Descriptor_Of
+                    (Types.all,
+                     C.Reference_Of (Types.all, Of_Tree.all, Where));
+               begin
+                  Landin.Testing.Check
+                    (Item, Ref.Kind = Landin.Types.Slice_Value
+                     and then Ref.Referent = Landin.Types.Fixed_Array,
+                     "a field range keeps a fixed-array referent");
+                  if Ref.Length = 3
+                    and then Ref.Element_Shape.Kind = C.Fixed_Array_Field
+                  then
+                     declare
+                        Child : constant C.Field_Shape :=
+                          C.Array_Field_Element (Types.all, Ref.Element_Shape);
+                     begin
+                        if Ref.Element_Shape.Length = 4 then
+                           Deep := Deep + 1;
+                           if Ref.Mutable then
+                              Mutable_Deep := Mutable_Deep + 1;
+                           else
+                              Readonly_Deep := Readonly_Deep + 1;
+                           end if;
+                           Landin.Testing.Check
+                             (Item, Child.Kind = C.Scalar_Field
+                              and then Child.Element = Landin.Types.I32,
+                              "the deepest scalar child remains i32");
+                        end if;
+                     end;
+                  elsif Ref.Length = 0
+                    and then Ref.Element_Shape.Kind = C.Fixed_Array_Field
+                  then
+                     Empty := Empty + 1;
+                     declare
+                        Child : constant C.Field_Shape :=
+                          C.Array_Field_Element (Types.all, Ref.Element_Shape);
+                     begin
+                        Landin.Testing.Check
+                          (Item, Ref.Element_Shape.Length = 3
+                           and then Child.Kind = C.Scalar_Field
+                           and then Child.Element = Landin.Types.I32,
+                           "a zero child extent keeps its nonempty"
+                           & " grandchild");
+                     end;
+                  elsif Ref.Length = 3
+                    and then Ref.Element_Shape.Kind = C.Reference_Field
+                  then
+                     References := References + 1;
+                     declare
+                        Child : constant C.Reference_Descriptor :=
+                          C.Descriptor_Of
+                            (Types.all, Ref.Element_Shape.Reference);
+                     begin
+                        Landin.Testing.Check
+                          (Item, Child.Kind = Landin.Types.Slice_Value
+                           and then Child.Mutable
+                           and then Child.Referent = Landin.Types.I32,
+                           "a nested mutable reference child remains"
+                           & " complete");
+                     end;
+                  elsif Ref.Length = 3
+                    and then Ref.Element_Nominal /= C.No_Nominal_Type
+                  then
+                     Nominals := Nominals + 1;
+                     Landin.Testing.Check
+                       (Item, C.Holds (Types.all, Ref.Element_Nominal),
+                        "a nested nominal child remains registered");
+                  end if;
+               end;
+            end if;
+         end loop;
+         Landin.Testing.Check
+           (Item, Seen = 5 and then Deep = 2 and then Empty = 1
+            and then References = 1 and then Nominals = 1
+            and then Mutable_Deep = 1 and then Readonly_Deep = 1,
+            "all mutable and readonly recursive range descriptors survived");
+      end;
+   end R470_Field_Ranges_Keep_Recursive_Children;
+
    procedure Array_Actuals_Keep_Complete_Identity
      (Item : in out Landin.Testing.Context);
 
@@ -8875,6 +9014,9 @@ package body Landin.Tests.Checking_Suite is
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "checking", "R4.70 field ranges keep recursive children",
+         R470_Field_Ranges_Keep_Recursive_Children'Access);
       Landin.Testing.Register
         (Into, "checking", "match aliases keep backing origins",
          Match_Aliases_Keep_Backing_Origins'Access);

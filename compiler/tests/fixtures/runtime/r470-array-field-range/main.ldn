@@ -1,0 +1,29 @@
+grid: type = struct
+    planes: [2][3][4]i32
+    empty: [2][0][3]i32
+end grid
+
+public main: () -> (code: i32) =
+    mut value: grid = zeroed
+    value.planes[0][0] = [1, 2, 3, 4]
+    value.planes[0][2] = [5, 6, 7, 8]
+    value.planes[1][1] = [11, 12, 13, 14]
+    value.planes[1][2] = [31, 32, 33, 34]
+    mut total: i32 = 0
+    for plane, index in value.planes[0..<2] do
+        total = total + plane[index][0]
+        plane[2][3] = plane[2][3] + 10
+    end for
+    empty_view := value.empty[0..<2]
+    first_empty := empty_view[0]
+    last_empty := empty_view[1]
+    if total == 12
+      and value.planes[0][2][3] == 18
+      and value.planes[1][2][3] == 44
+      and lenof first_empty == 0 and lenof last_empty == 0
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main
