@@ -35,6 +35,18 @@ Linux ABI, so use `scripts/linux-loop.sh` there.  No independent Clang archive
 is downloaded and no new checksum authority is introduced; each environment
 uses its existing package-set provenance.
 
+## External source debugger
+
+R4.60's `scripts/debug.sh` uses GDB and GNU binutils to inspect and run the
+emitted Linux x86-64 executable. They are external validation tools, not
+bootstrap dependencies. The Debian gate and local Linux image install `gdb`
+from their existing package channel; the Linux nix shell takes it from
+`flake.lock`'s package set. The script uses GDB from the configured PATH
+(which can select the GDB bundled in the pinned toolchain), or `LANDIN_GDB`
+when explicitly set, and records that executable's version. The native Linux
+gate runs the sessions with both debug and release
+builds of `refine`, separately from the emitted program's optimization policy.
+
 ### Archives and checksums
 
 The releases below are the ones the pins name. Every checksum here has been

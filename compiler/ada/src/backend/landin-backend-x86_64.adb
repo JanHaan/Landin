@@ -3,6 +3,7 @@ with Ada.Strings.Fixed;
 with Landin.Backend.C_ABI;
 with Landin.Backend.Work_Arrays;
 with Landin.Backend.X86_64.Allocation;
+with Landin.Backend.X86_64.Dwarf;
 with Landin.Backend.X86_64.Machine;
 with Landin.Targets.Layouts;
 with Landin.Types;
@@ -330,7 +331,8 @@ package body Landin.Backend.X86_64 is
       Options  : Landin.Optimization.Options;
       Assembly : out Unbounded.Unbounded_String;
       Report   : in out Landin.Build_Reports.Report;
-      Hosted_Entry : Landin.IR.Item_Id := Landin.IR.No_Item)
+      Hosted_Entry : Landin.IR.Item_Id := Landin.IR.No_Item;
+      Debug : access constant Landin.Debugging.Information := null)
    is
       Out_Text : Unbounded.Unbounded_String;
       Optimized : constant Boolean :=
@@ -774,7 +776,9 @@ package body Landin.Backend.X86_64 is
         (Left, Right : Landin.IR.Item_Id) return Boolean
       is
       begin
-         if not Optimized then
+         if Debug /= null then
+            return False;
+         elsif not Optimized then
             return Routines_Can_Share (Left, Right);
          end if;
          return Shareable (Positive (Left))
@@ -1699,51 +1703,7 @@ package body Landin.Backend.X86_64 is
            (Shape : Landin.IR.Field_Shape;
             Path  : Landin.IR.Path_Step_Array)
             return Landin.Targets.Byte_Count
-         is
-            Reached : Landin.IR.Field_Shape := Shape;
-            Total   : Landin.Targets.Byte_Count := 0;
-         begin
-            for Step of Path loop
-               if Step.Case_Index = 0
-                 and then Reached.Kind = Landin.IR.Array_Field_Shape
-               then
-                  --  D127: a step into an array names [0520]'s element
-                  --  position, so the offset is one multiplication.
-                  declare
-                     Element : constant Landin.IR.Field_Shape :=
-                       Landin.IR.Array_Element_Shape (Of_Unit, Reached);
-                     Size : Landin.Targets.Byte_Count;
-                     Alignment : Landin.Targets.Byte_Alignment;
-                  begin
-                     Landin.Backend.Field_Extent
-                       (Of_Unit, Element, Facts, Size, Alignment);
-                     Total := Total
-                       + Landin.Targets.Byte_Count
-                           (Landin.IR.Element_Total (Step.Field) - 1)
-                         * Size;
-                     Reached := Element;
-                  end;
-               elsif Step.Case_Index = 0 then
-                  declare
-                     Plan : constant Landin.Targets.Layouts.Plan :=
-                       Aggregate_Layout (Of_Unit, Reached, Facts);
-                  begin
-                     Total := Total + Plan.Offsets (Positive (Step.Field));
-                     Reached := Landin.IR.Nth_Aggregate_Field
-                       (Of_Unit, Reached, Positive (Step.Field));
-                  end;
-               else
-                  Total := Total
-                    + Landin.Backend.Variant_Payload_Field_Offset
-                        (Of_Unit, Reached, Step.Case_Index,
-                         Positive (Step.Field), Facts);
-                  Reached := Landin.IR.Nth_Variant_Case_Field
-                    (Of_Unit, Reached, Step.Case_Index,
-                     Positive (Step.Field));
-               end if;
-            end loop;
-            return Total;
-         end Path_Offset;
+           is (Landin.Backend.Path_Offset (Of_Unit, Shape, Path, Facts));
 
          --  A Value_Id restarts in each item, just as a Block_Id does.  The
          --  extra `V` keeps a continuation distinct from a block label.
@@ -2143,17 +2103,31 @@ package body Landin.Backend.X86_64 is
 
          procedure Emit_Epilogue is
          begin
+            if Debug /= null then
+               Emit (".cfi_remember_state");
+            end if;
             for Register in Allocation.Saved_Register loop
                if Allocation_Plan.Used (Register) then
                   Emit ("movq " & Cell (Save_Offset
                         (Layout, Allocation.Save_Index
                            (Allocation_Plan, Register))) & ", "
                         & Allocation.Name (Register, Landin.Targets.Byte_8));
+                  if Debug /= null then
+                     Emit (".cfi_restore " & Trimmed (Natural'Image
+                       (Dwarf.Register_Number (Register))));
+                  end if;
                end if;
             end loop;
             Emit ("movq %rbp, %rsp");
             Emit ("popq %rbp");
+            if Debug /= null then
+               Emit (".cfi_def_cfa %rsp, 8");
+               Emit (".cfi_restore %rbp");
+            end if;
             Emit ("ret");
+            if Debug /= null then
+               Emit (".cfi_restore_state");
+            end if;
          end Emit_Epilogue;
 
          procedure Conditional_Branch
@@ -4473,10 +4447,23 @@ package body Landin.Backend.X86_64 is
          Machine.Start
            (Streams (Positive (Item)), Shareable (Positive (Item)));
          Capturing := Item;
+         if Debug /= null then
+            Put (Dwarf.Label_Name (Local_Prefix, "begin", Item) & ":");
+            Put (Dwarf.Source_Line
+              (Debug.all, Landin.IR.Origin_Of (Of_Unit, Item)));
+            Emit (".cfi_startproc");
+         end if;
 
          --  [1550]'s frame pointer, set up before anything reads a cell.
          Emit ("pushq %rbp");
+         if Debug /= null then
+            Emit (".cfi_def_cfa_offset 16");
+            Emit (".cfi_offset %rbp, -16");
+         end if;
          Emit ("movq %rsp, %rbp");
+         if Debug /= null then
+            Emit (".cfi_def_cfa_register %rbp");
+         end if;
 
          --  The hosted entry keeps its source-level no-argument shape.  The
          --  frame-pointer push aligned the stack for this C call, before any
@@ -4494,6 +4481,13 @@ package body Landin.Backend.X86_64 is
                      & ", " & Cell (Save_Offset
                        (Layout, Allocation.Save_Index
                           (Allocation_Plan, Register))));
+               if Debug /= null then
+                  Emit (".cfi_offset " & Trimmed (Natural'Image
+                    (Dwarf.Register_Number (Register))) & ", -"
+                    & Trimmed (Landin.Targets.Byte_Count'Image
+                      (Save_Offset (Layout, Allocation.Save_Index
+                        (Allocation_Plan, Register)) + 16)));
+               end if;
             end if;
          end loop;
 
@@ -4632,13 +4626,33 @@ package body Landin.Backend.X86_64 is
                      then Landin.IR.Nth_Value
                        (Of_Unit, Item, Block, Position + 1)
                      else Landin.IR.No_Value);
-                  Emit_Instruction
-                    (Landin.IR.Nth_Value
-                       (Of_Unit, Item, Block, Position));
+                  declare
+                     Value : constant Landin.IR.Value_Id :=
+                       Landin.IR.Nth_Value (Of_Unit, Item, Block, Position);
+                  begin
+                     if Debug /= null then
+                        Put (Dwarf.Label_Name
+                          (Local_Prefix, "value", Item, Natural (Value))
+                          & ":");
+                        Put (Dwarf.Source_Line
+                          (Debug.all, Landin.IR.Origin_Of
+                            (Of_Unit, Item, Value)));
+                     end if;
+                     Emit_Instruction (Value);
+                     if Debug /= null then
+                        Put (Dwarf.Label_Name
+                          (Local_Prefix, "after", Item, Natural (Value))
+                          & ":");
+                     end if;
+                  end;
                end loop;
             end;
          end loop;
 
+         if Debug /= null then
+            Put (Dwarf.Label_Name (Local_Prefix, "end", Item) & ":");
+            Emit (".cfi_endproc");
+         end if;
          Capturing := Landin.IR.No_Item;
          if Shareable (Positive (Item)) then
             Machine.Seal (Streams (Positive (Item)));
@@ -5892,6 +5906,9 @@ package body Landin.Backend.X86_64 is
          end;
       end loop;
       Out_Text := Unbounded.Null_Unbounded_String;
+      if Debug /= null then
+         Unbounded.Append (Out_Text, Dwarf.Preamble (Debug.all, Local_Prefix));
+      end if;
       Put (Character'Val (9) & ".text");
 
       for Right in 2 .. Landin.IR.Item_Count (Of_Unit) loop
@@ -6318,6 +6335,11 @@ package body Landin.Backend.X86_64 is
          Emit (".zero 4");
       end if;
 
+      if Debug /= null then
+         Unbounded.Append (Out_Text, Dwarf.Sections
+           (Of_Unit, Meanings, Names, Facts, Options, Debug.all,
+            Local_Prefix, Symbol'Access));
+      end if;
       --  An executable stack is inherited when nothing says otherwise,
       --  and nothing this compiler emits needs one.
       Put (Character'Val (9)

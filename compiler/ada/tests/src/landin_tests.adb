@@ -20,6 +20,7 @@ with Landin.Tests.Host_Reports_Suite;
 with Landin.Tests.Backend_Suite;
 with Landin.Tests.Catalogue_Suite;
 with Landin.Tests.Checking_Suite;
+with Landin.Tests.Debugging_Suite;
 with Landin.Tests.Diagnostics_Suite;
 with Landin.Tests.Driver_Suite;
 with Landin.Tests.Fixture_Execution_Suite;
@@ -77,6 +78,7 @@ procedure Landin_Tests is
       "frontend review  ",
       "host reports     ",
       "checking         ",
+      "debugging        ",
       "diagnostics      ",
       "driver           ",
       "fixture execution",
@@ -255,6 +257,7 @@ begin
    Landin.Tests.Backend_Suite.Register (Cases);
    Landin.Tests.Catalogue_Suite.Register (Cases);
    Landin.Tests.Checking_Suite.Register (Cases);
+   Landin.Tests.Debugging_Suite.Register (Cases);
    Landin.Tests.Diagnostics_Suite.Register (Cases);
    Landin.Tests.Driver_Suite.Register (Cases);
    Landin.Tests.Fixture_Execution_Suite.Register (Cases);

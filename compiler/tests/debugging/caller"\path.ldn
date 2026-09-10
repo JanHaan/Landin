@@ -1,0 +1,22 @@
+public main: () -> (code: i32) =
+    mut pointee: i32 = 41
+    pointer_value: ptr mut i32 = addr pointee
+    record_value: debug_record = debug_record(tiny: 7,
+                                               huge: 7000000000,
+                                               middle: 901)
+    mut variant_value: debug_choice = zeroed
+    variant_value.choice = payload(record: record_value,
+                                   values: [111, 222, 333])
+    array_value: [3]u16 = [111, 222, 333]
+    code = debug_outer(37, pointer_value, record_value, variant_value,
+                       array_value, 51, 52, 53)
+    first_generic: bool = debug_generic(t: i32,
+                                        generic_param: -1,
+                                        generic_bound: 1)
+    second_generic: bool = debug_generic(t: u32,
+                                         generic_param: u32(1),
+                                         generic_bound: u32(2))
+    aliases: i32 = debug_aliases()
+    if code == 42 and first_generic and second_generic and aliases == 42
+    then code = 42 else code = 1 end if
+end main

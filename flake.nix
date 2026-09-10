@@ -204,6 +204,7 @@
               #  package set matches Debian stable's versioned clang-19 rather
               #  than following nixpkgs' moving default Clang.
               pkgs.llvmPackages."19".clang
+              pkgs.gdb #  scripts/debug.sh; native Linux source debugging
             ];
 
             #  The binding generator's Linux C model comes from the same

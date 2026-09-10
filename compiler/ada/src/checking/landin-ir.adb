@@ -1549,8 +1549,8 @@ package body Landin.IR is
    --  D118's subobject path, stored once.  An instruction keeps where its
    --  run starts and how long it is; the steps themselves go end to end in
    --  one vector, as an item's values and a node's children do.  This one
-   --  does not go through Open_Run: paths belong to instructions and not to
-   --  items, so nothing requires one item's runs to stay contiguous.
+   --  does not go through Open_Run: each instruction or source alias owns
+   --  its path, so one item's paths need not stay contiguous.
    function Stored_Path
      (Into : in out Unit; Path : Path_Step_Array) return Run;
 
@@ -1569,6 +1569,52 @@ package body Landin.IR is
       end loop;
       return Made;
    end Stored_Path;
+
+   procedure Note_Source_Alias
+     (Into : in out Unit; Item : Item_Id; Alias : Source_Alias;
+      Path : Path_Step_Array)
+   is
+      Held : Item_Record := Element (Into, Item);
+      Steps : constant Run := Stored_Path (Into, Path);
+   begin
+      if Alias.Binding = No_Declaration
+        or else not Landin.Provenance.Is_Known (Alias.Site)
+        or else (case Alias.Place.Kind is
+                   when Module_Datum => not Holds (Into, Alias.Place.Datum),
+                   when Frame_Slot =>
+                     not Holds (Into, Item, Alias.Place.Slot),
+                   when Runtime_Address =>
+                     not Holds (Into, Item, Alias.Place.Address))
+      then
+         raise Compiler_Defect with "invalid source alias provenance";
+      end if;
+      Open_Run (Held.Aliases, Natural (Into.Aliases.Length));
+      Into.Aliases.Append (Stored_Source_Alias'(Alias, Steps));
+      Held.Aliases.Count := Held.Aliases.Count + 1;
+      Into.Items (Positive (Item)) := Held;
+   end Note_Source_Alias;
+
+   function Source_Alias_Count
+     (Of_Unit : Unit; Item : Item_Id) return Natural
+     is (Element (Of_Unit, Item).Aliases.Count);
+
+   function Nth_Source_Alias
+     (Of_Unit : Unit; Item : Item_Id; Index : Positive) return Source_Alias
+     is (Of_Unit.Aliases (Element (Of_Unit, Item).Aliases.First + Index).Info);
+
+   function Source_Alias_Path
+     (Of_Unit : Unit; Item : Item_Id; Index : Positive)
+      return Path_Step_Array
+   is
+      Path : constant Run := Of_Unit.Aliases
+        (Element (Of_Unit, Item).Aliases.First + Index).Path;
+      Result : Path_Step_Array (1 .. Path.Count);
+   begin
+      for Step in Result'Range loop
+         Result (Step) := Of_Unit.Paths (Path.First + Step);
+      end loop;
+      return Result;
+   end Source_Alias_Path;
 
    procedure Add_Field
      (Into    : in out Unit;

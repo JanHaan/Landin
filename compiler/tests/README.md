@@ -43,8 +43,10 @@ Fixture classes, and the directory each uses:
 | ABI | `abi` | emitted Landin assembly compiled with ordered C11 companions, then executed |
 | end-to-end | `end-to-end` | the toolchain from source to result |
 
-The `debugger` class is reserved for R4.60 and has no directory yet; an empty
-class directory is not a fault, an absent one is not a class.
+R4.60's scripted debugger programs live in `debugging/` and run through
+`scripts/debug.sh`, independently of the Ada fixture harness. The `debugger`
+metadata class has no directory; these sessions use debugger assertions
+rather than the harness's process-output fixture contract.
 
 ## Focused developer runs
 
@@ -111,6 +113,21 @@ fixture. Acceptance is the current command's zero exit, not the presence of
 this file: a failed rerun leaves an earlier successful observation untouched.
 This is structural/object smoke evidence, not timing or competitive
 benchmark evidence. A non-Linux host fails rather than claiming a skip as a pass.
+
+## Source debugger acceptance
+
+After building the compiler, `./scripts/debug.sh` runs the Linux x86-64
+source-debugger acceptance in `debugging/check.py`. It uses GDB to test the
+emitted program's line information, breakpoints, stepping, stack frames and
+selected parameters and locals. The native gate runs it separately with debug
+and release builds of the Ada compiler. The script fails if its tools or
+debugger operations are unavailable; missing debugger evidence is not a pass.
+
+The default transport is native GDB. For the Mac's translated local Linux
+loop, use `./scripts/linux-loop.sh ./scripts/debug.sh --runner=qemu`;
+`--qemu=PATH` selects the emulator explicitly. This uses QEMU's GDB remote
+stub with the same assertions and reports its transport. It never turns a
+failed native session into a pass by automatically falling back to emulation.
 
 ## Native report identity and build inventory
 
@@ -361,7 +378,7 @@ everywhere.
 | runtime | executed: `refine` compiles and links `program`, the result is run, and its own exit status is compared with `status` — or, with `traps: yes`, it is held to having ended without returning one |
 | ABI | executed in the existing `runtime fixtures execute` case: `refine` emits assembly, the selected Linux x86-64 C driver compiles it with `c-sources`, and the result's output/status/trap verdict is checked |
 | positive | executed: the grammar must derive the program, `refine` must accept it through checking, lowering and verification, and the Linux x86-64 backend must emit assembly for it |
-| debugger | reserved; no fixture yet. It arrives with the work that produces debug information |
+| debugger | sessions in `debugging/` run separately through `scripts/debug.sh` |
 
 A class with no fixtures is the normal state early in the roadmap, and an
 empty class directory is not a fault. A fixture that records an expectation

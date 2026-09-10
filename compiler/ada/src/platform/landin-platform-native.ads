@@ -17,6 +17,9 @@ package Landin.Platform.Native is
    overriding function Paths_Overlap
      (Host : Native_Filesystem; Left, Right : String) return Boolean;
 
+   overriding function Working_Directory
+     (Host : Native_Filesystem) return String;
+
    overriding function Is_Directory
      (Host : Native_Filesystem; Path : String) return Boolean;
 

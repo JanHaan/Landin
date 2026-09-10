@@ -13,16 +13,21 @@ package body Landin.Source_Maps is
 
    function Create
      (Context : in out Landin.Stages.Compilation;
-      Assembly : String) return Artifact
+      Assembly : String;
+      All_Sources : Boolean := False) return Artifact
    is
       Files : US.Unbounded_String;
       Unit : Landin.IR.Unit renames Landin.Stages.Code (Context).all;
       Result : Artifact;
    begin
-      for Index in 1 .. Landin.IR.Caller_Source_Count (Unit) loop
+      for Index in 1 .. (if All_Sources
+                         then Landin.Stages.Source_Count (Context)
+                         else Landin.IR.Caller_Source_Count (Unit))
+      loop
          declare
             Id : constant Landin.Source.Source_Id :=
-              Landin.IR.Caller_Source (Unit, Index);
+              (if All_Sources then Landin.Stages.Nth_Source (Context, Index)
+               else Landin.IR.Caller_Source (Unit, Index));
             Snap : constant Landin.Source.Snapshot :=
               Landin.Stages.Source (Context, Id);
          begin

@@ -71,6 +71,7 @@
 with Ada.Strings.Unbounded;
 
 with Landin.Build_Reports;
+with Landin.Debugging;
 with Landin.Optimization;
 with Landin.IR;
 with Landin.Resolution;
@@ -123,6 +124,7 @@ package Landin.Backend.X86_64 is
       Options  : Landin.Optimization.Options;
       Assembly : out Ada.Strings.Unbounded.Unbounded_String;
       Report   : in out Landin.Build_Reports.Report;
-      Hosted_Entry : Landin.IR.Item_Id := Landin.IR.No_Item);
+      Hosted_Entry : Landin.IR.Item_Id := Landin.IR.No_Item;
+      Debug : access constant Landin.Debugging.Information := null);
 
 end Landin.Backend.X86_64;

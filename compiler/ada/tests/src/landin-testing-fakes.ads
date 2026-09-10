@@ -37,6 +37,9 @@ package Landin.Testing.Fakes is
    overriding function Paths_Overlap
      (Host : Fake_Filesystem; Left, Right : String) return Boolean;
 
+   overriding function Working_Directory
+     (Host : Fake_Filesystem) return String is ("/virtual/compile");
+
    overriding function Is_Directory
      (Host : Fake_Filesystem; Path : String) return Boolean;
 

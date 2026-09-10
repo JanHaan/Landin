@@ -3693,6 +3693,29 @@ package Landin.IR is
                   = Open_Block (Of_Unit, Item))
      with Pre => Holds (Of_Unit, Item);
 
+   --  Source bindings that alias existing storage need no machine slot.
+   --  The path reaches the bound payload from the selected base field.
+   --  Item/slot identities and these immutable paths survive rewriting.
+   type Source_Alias is record
+      Binding : Declaration_Id := No_Declaration;
+      Site : Landin.Provenance.Origin := Landin.Provenance.No_Origin;
+      Place : Storage;
+      Field : Natural := 0;
+      Initialized_On_Entry : Boolean := False;
+   end record;
+
+   procedure Note_Source_Alias
+     (Into : in out Unit; Item : Item_Id; Alias : Source_Alias;
+      Path : Path_Step_Array)
+     with Pre => Holds (Into, Item);
+   function Source_Alias_Count
+     (Of_Unit : Unit; Item : Item_Id) return Natural;
+   function Nth_Source_Alias
+     (Of_Unit : Unit; Item : Item_Id; Index : Positive) return Source_Alias;
+   function Source_Alias_Path
+     (Of_Unit : Unit; Item : Item_Id; Index : Positive)
+      return Path_Step_Array;
+
 private
 
    --  One run per item, end to end in one vector, which is what
@@ -3813,6 +3836,7 @@ private
       Site        : Landin.Provenance.Origin  :=
                       Landin.Provenance.No_Origin;
       Slots       : Run;
+      Aliases     : Run;
       Parameters  : Run;
       Returns_To  : Slot_Id                   := No_Slot;
       Blocks      : Run;
@@ -3963,11 +3987,19 @@ private
      (Index_Type => Positive, Element_Type => Landin.Source.Source_Id,
       "=" => Landin.Source."=");
 
+   type Stored_Source_Alias is record
+      Info : Source_Alias;
+      Path : Run;
+   end record;
+   package Source_Alias_Vectors is new Ada.Containers.Vectors
+     (Positive, Stored_Source_Alias);
+
    type Unit is tagged limited record
       Caller_Sources : Caller_Source_Vectors.Vector;
       Ready      : Boolean := False;
       Items      : Item_Vectors.Vector;
       Slots      : Slot_Vectors.Vector;
+      Aliases    : Source_Alias_Vectors.Vector;
       Parameters : Slot_Ref_Vectors.Vector;
       Blocks     : Block_Vectors.Vector;
       Code       : Code_Vectors.Vector;

@@ -4956,7 +4956,7 @@ the documented baseline.
 
 ### R4.60 — Implement usable Linux source debugging
 
-Status: planned
+Status: active
 Depends on: R1.70, R1.80, R4.50
 
 Emit source line tables, symbolic frames and inspectable parameters/locals for
@@ -4966,6 +4966,45 @@ that same source identity table; extend or replace the bootstrap off-target
 file-map packaging without changing the three-u32 caller ABI. Preserve exact
 build matching and optional filename deployment. Native debugger support does
 not gate caller-coordinate generation, which R4.10 already implements.
+
+The driver exposes `--debug=none|full`, defaulting to none independently of
+source build mode and optimization. Full requests emit non-allocated DWARF 4
+and frame information while preserving the ordinary frame pointer. Register
+allocation and evidence specialization remain enabled; identical-body sharing
+is suppressed so distinct source routines keep distinct breakpoint locations.
+Represented types and physical locations come from immutable IR and the same
+backend placement plans as code emission. Declaration syntax supplies names
+and source extents, never a second physical layout.
+
+DWARF is the selected Linux interchange format, not Landin's internal debug
+model. Source identities, declaration/type provenance and variable-location
+facts must remain independent of its record encodings. A future PDB emitter
+may consume those same facts; this item neither implements PDB nor adds a
+Windows target to the roadmap. Format-specific records and section packaging
+belong at emission, rather than becoming language or IR contracts.
+
+Version 4 is sufficient for this slice's type descriptions and variable
+location lists. It keeps the first emitter on that direct representation;
+the choice is not a claim that the pinned debugger lacks version 5 support.
+Assembler-generated line and frame tables retain their independently
+versioned formats; a compilation-unit version does not force every section
+header to that number.
+Changing the output version later need not change source identities, runtime
+caller coordinates or the compiler's internal provenance model.
+
+The complete debug source table uses the compilation's source IDs in their
+original order, as do assembler file entries and D192's caller values. Full
+debugging expands `.sources.json` to every snapshot; none retains the previous
+caller-only packaging. GNU assembler quoting preserves arbitrary filename
+bytes. The map's exact assembly/build identity remains mandatory for lookup,
+and stripping the optional debugger sections preserves program behavior and
+the caller ABI.
+
+`scripts/debug.sh` owns debugger acceptance independently of the Ada harness.
+It defaults to native GDB; an explicit QEMU remote-stub mode supplies local
+feedback because Rosetta cannot implement GDB's ptrace register operations.
+The authoritative native Linux gate has no fallback and runs the script with
+both debug and release compiler builds.
 
 Exit evidence: scripted debugger sessions prove breakpoints, stepping, stacks
 and selected locals in unoptimized and baseline-optimized builds.

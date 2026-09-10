@@ -4,6 +4,7 @@ with Landin.IR.Shape_Measurement;
 package body Landin.Backend is
 
    use type Landin.IR.Element_Total;
+   use type Landin.IR.Field_Shape_Kind;
    use type Landin.Targets.Byte_Count;
    use type Landin.Targets.Byte_Alignment;
    use type Landin.Types.Type_Kind;
@@ -27,6 +28,58 @@ package body Landin.Backend is
       Facts   : Targets.Target_Facts) return Layout.Plan
      is (IR.Shape_Measurement.Aggregate_Layout
            (Of_Unit, Shape, Facts, Targets.Maximum_Object_Size (Facts)));
+
+   function Path_Offset
+     (Of_Unit : Landin.IR.Unit;
+      Shape : Landin.IR.Field_Shape;
+      Path  : Landin.IR.Path_Step_Array;
+      Facts : Landin.Targets.Target_Facts)
+      return Landin.Targets.Byte_Count
+   is
+      Reached : Landin.IR.Field_Shape := Shape;
+      Total   : Landin.Targets.Byte_Count := 0;
+   begin
+      for Step of Path loop
+         if Step.Case_Index = 0
+           and then Reached.Kind = Landin.IR.Array_Field_Shape
+         then
+            --  D127: a step into an array names [0520]'s element
+            --  position, so the offset is one multiplication.
+            declare
+               Element : constant Landin.IR.Field_Shape :=
+                 Landin.IR.Array_Element_Shape (Of_Unit, Reached);
+               Size : Landin.Targets.Byte_Count;
+               Alignment : Landin.Targets.Byte_Alignment;
+            begin
+               Landin.Backend.Field_Extent
+                 (Of_Unit, Element, Facts, Size, Alignment);
+               Total := Total
+                 + Landin.Targets.Byte_Count
+                     (Landin.IR.Element_Total (Step.Field) - 1)
+                   * Size;
+               Reached := Element;
+            end;
+         elsif Step.Case_Index = 0 then
+            declare
+               Plan : constant Landin.Targets.Layouts.Plan :=
+                 Aggregate_Layout (Of_Unit, Reached, Facts);
+            begin
+               Total := Total + Plan.Offsets (Positive (Step.Field));
+               Reached := Landin.IR.Nth_Aggregate_Field
+                 (Of_Unit, Reached, Positive (Step.Field));
+            end;
+         else
+            Total := Total
+              + Landin.Backend.Variant_Payload_Field_Offset
+                  (Of_Unit, Reached, Step.Case_Index,
+                   Positive (Step.Field), Facts);
+            Reached := Landin.IR.Nth_Variant_Case_Field
+              (Of_Unit, Reached, Step.Case_Index,
+               Positive (Step.Field));
+         end if;
+      end loop;
+      return Total;
+   end Path_Offset;
 
    function Nominal_Layout
      (Of_Unit : IR.Unit;

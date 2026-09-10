@@ -15,5 +15,6 @@ package Landin.Source_Maps is
 
    function Create
      (Context : in out Landin.Stages.Compilation;
-      Assembly : String) return Artifact;
+      Assembly : String;
+      All_Sources : Boolean := False) return Artifact;
 end Landin.Source_Maps;

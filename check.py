@@ -4896,6 +4896,22 @@ def check_optimization_contract(full_run):
     return out
 
 
+def check_debugger_contract(full_run):
+    """Keep source-debugger acceptance wired to both native compiler modes."""
+    if not full_run:
+        return []
+    paths = ["scripts/debug.sh", "compiler/tests/debugging/check.py"]
+    out = absent(paths)
+    gate = io.open(".build.yml", encoding="utf-8").read()
+    for command in ("./scripts/debug.sh",
+                    "LANDIN_BUILD_MODE=release ./scripts/debug.sh"):
+        if not any(line.strip() == command for line in gate.splitlines()):
+            out.append((".build.yml", 1, command + " is not gated"))
+    if not re.search(r"^  - gdb$", gate, re.M):
+        out.append((".build.yml", 1, "native debugger gate has no GDB"))
+    return out
+
+
 def main(argv):
     here = os.path.dirname(os.path.abspath(__file__))
     if here:
@@ -4995,6 +5011,7 @@ def main(argv):
     extra += check_highlighters(full_run)
     extra += check_highlight_vocabulary(full_run)
     extra += check_binding_generator(full_run)
+    extra += check_debugger_contract(full_run)
     extra += check_register_entries(full_run)
     extra += check_borrowed_icons(full_run)
     extra += check_named_files(full_run)
