@@ -120,7 +120,7 @@ def main() -> None:
     parser.add_argument("--toolchain", type=Path, required=True,
                         help="checksum-pinned Linux GNAT installation")
     parser.add_argument("--output", type=Path, required=True,
-                        help="scratch directory for measured objects and JSON")
+                        help="directory for retained measurement evidence")
     args = parser.parse_args()
     require(platform.system() == "Linux" and platform.machine() == "x86_64",
             "object quality requires Linux x86-64; no skip is a pass")
@@ -137,7 +137,9 @@ def main() -> None:
                 for name, path in tools.items()}
     args.output.mkdir(parents=True, exist_ok=True)
     # A fresh private directory prevents stale output from satisfying a check.
-    with tempfile.TemporaryDirectory(prefix="quality-", dir=args.output) as tmp:
+    # Private artifacts need local filesystem identities; a shared build
+    # mount can report distinct paths as aliases. Retain evidence below.
+    with tempfile.TemporaryDirectory(prefix="quality-") as tmp:
         scratch = Path(tmp)
         sources = {name: HERE / f"{name}.ldn" for name in
                    ("scalars", "layout", "specialization", "folding")}
