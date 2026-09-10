@@ -1,0 +1,15 @@
+import examples/derived_containers/workload
+
+unordered: type = struct
+    value: i32
+end unordered
+
+public main: () -> (code: i32) =
+    left: unordered = (value: 1)
+    right: unordered = (value: 2)
+    if workload.evidence_less(left, right) then
+        code = 42
+    else
+        code = 1
+    end if
+end main

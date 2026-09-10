@@ -1,6 +1,7 @@
 import core/mem
 
 public missing: atom
+public end_of_entries: atom
 
 public equatable: type = concept (key: type)
     eq: (left: key, right: key) -> (same: bool)
@@ -45,6 +46,21 @@ public map: type (key: type is hashable, item: type) = struct
     tombstones: usize
 end map
 
+--  Enumeration deliberately exposes ordinary public value shapes, matching
+--  map's public-composition boundary above. A cursor is a bounded manual
+--  bucket position, not an ownership or snapshot token: it has no map identity
+--  or generation check and is not transferable between maps. Any mutation,
+--  including insert, remove, rehash and release_map, invalidates an active
+--  walk; callers must discard its cursor and restart.
+public cursor: type = struct
+    next_slot: usize
+end cursor
+
+public entry: type (key: type, item: type) = struct
+    key: key
+    item: item
+end entry
+
 empty_storage: (value: type) -> (result: mem.storage(value)) =
     result = mem.empty_storage(item: value)
 end empty_storage
@@ -67,6 +83,43 @@ capacity: (key: type is hashable, item: type,
            value: map(key, item)) -> (count: usize) =
     count = mem.capacity(value.buckets)
 end capacity
+
+public entries: () -> (position: cursor) =
+    position = (next_slot: 0)
+end entries
+
+--  Each call advances monotonically and examines at most the map's remaining
+--  bucket count. Across an unmodified walk, every live entry is returned once
+--  and the scan costs O(capacity). The result retains `from value` because K
+--  or V may hold references into the map's initialized storage.
+public next_entry: (key: type is hashable, item: type,
+                    value: map(key, item), inout position: cursor)
+                   -> (result: entry(key, item) from value) ! end_of_entries =
+    slots: usize = capacity(value)
+    while position.next_slot < slots do
+        at: usize = position.next_slot
+        inc position.next_slot
+        record: bucket = (mem.get(value.buckets, at) else (problem)
+            _ = problem
+            fail end_of_entries
+        end)
+        if record.state == slot_used then
+            found_key: key = (mem.get(value.keys, record.dense_index)
+                else (problem)
+                    _ = problem
+                    fail end_of_entries
+                end)
+            found_item: item = (mem.get(value.values, record.dense_index)
+                else (problem)
+                    _ = problem
+                    fail end_of_entries
+                end)
+            result = (key: found_key, item: found_item)
+            return
+        end if
+    end while
+    fail end_of_entries
+end next_entry
 
 byte_extent: (value: type, slots: usize)
              -> (extent: usize) ! mem.out_of_memory =
@@ -419,9 +472,16 @@ public insert: (key: type is hashable, item: type,
         old_capacity: usize = capacity(value)
         mut want: usize = 8
         if old_capacity > 0 then
-            maximum: usize = 0 -% 1
-            fail mem.out_of_memory when old_capacity > maximum / 2
-            want = old_capacity * 2
+            if value.tombstones > 0 then
+                --  Dead buckets already supply enough physical room. Rebuild
+                --  at the same capacity so churn compacts instead of causing
+                --  unbounded geometric growth.
+                want = old_capacity
+            else
+                maximum: usize = 0 -% 1
+                fail mem.out_of_memory when old_capacity > maximum / 2
+                want = old_capacity * 2
+            end if
         end if
         try rehash(value, state, want)
     end if

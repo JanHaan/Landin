@@ -1,0 +1,956 @@
+import core/failing
+import core/heap
+import core/map
+import core/mem
+import core/pool
+import core/small
+import core/sort
+import core/tree
+import core/vec
+
+pool_provider: type = pool.provider
+
+less_i32: (left: i32, right: i32) -> (yes: bool) =
+    yes = left < right
+end less_i32
+
+less_u32: (left: u32, right: u32) -> (yes: bool) =
+    yes = left < right
+end less_u32
+
+i32 is sort.ordered (less: less_i32)
+u32 is sort.ordered (less: less_u32)
+
+u32_equal: (left: u32, right: u32) -> (same: bool) =
+    same = left == right
+end u32_equal
+
+u32_hash: (value: u32) -> (result: u64) =
+    result = u64(value) *% 0x9E37_79B9_7F4A_7C15
+end u32_hash
+
+u32 is map.equatable (eq: u32_equal)
+u32 is map.hashable (hash: u32_hash)
+
+--  This small, ordinary constrained routine gives the debugger a stable
+--  generic body whose real calls select two different core/sort tables.
+public evidence_less: (item: type is sort.ordered, left: item, right: item)
+                      -> (result: bool) =
+    --  R470_DEBUG_EVIDENCE_ENTRY
+    result = item.less(left, right)
+end evidence_less
+
+reverse_seed: (inout values: [20]i32) -> none =
+    mut low: usize = 0
+    mut high: usize = lenof values - 1
+    while low < high do
+        saved: i32 = values[low]
+        values[low] = values[high]
+        values[high] = saved
+        inc low
+        dec high
+    end while
+end reverse_seed
+
+numbers_path: () -> (ok: bool) =
+    ok = false
+    mut provider := heap.host()
+    mut seed: [20]i32 =
+        [1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+         11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+    reverse_seed(seed)
+
+    --  The scalar result is independent of the slice descriptor. Keep it live
+    --  across a later descriptor mutation rather than hiding the composition
+    --  behind a helper returning an ordinary scalar.
+    mut source: []mut i32 = seed[0..<lenof seed]
+    saved_length: usize = lenof source
+    source = source[1..<saved_length]
+    source_shape: bool = saved_length == 20 and lenof source == 19
+                         and source[0] == 19 and source[18] == 1
+
+    zero: usize = 0
+    last_index: usize = 19
+    square_three: u32 = 3
+    square_twenty: u32 = 20
+    mut numbers := vec.new_list(item: i32)
+    for number in seed do
+        vec.push(numbers, provider, number) else (problem)
+            _ = problem
+            vec.release(numbers, provider)
+            return
+        end
+    end for
+    if vec.length(numbers) <> 20 then
+        vec.release(numbers, provider)
+        return
+    end if
+
+    sort.sort(vec.used(numbers))
+    count: usize = vec.length(numbers)
+    first: i32 = vec.get(numbers, zero) else (problem)
+        _ = problem
+        vec.release(numbers, provider)
+        return
+    end
+    last: i32 = vec.get(numbers, last_index) else (problem)
+        _ = problem
+        vec.release(numbers, provider)
+        return
+    end
+    --  R470_DEBUG_SORTED_LIST
+    sorted: bool = count == 20 and first == 1 and last == 20
+
+    mut squares := map.new_map(key: u32, item: u32)
+    for number in vec.used(numbers) do
+        key: u32 = u32(number)
+        square: u32 = key * key
+        map.insert(squares, provider, key, square) else (problem)
+            _ = problem
+            map.release_map(squares, provider)
+            vec.release(numbers, provider)
+            return
+        end
+    end for
+    nine: u32 = map.get(squares, square_three) else (problem)
+        _ = problem
+        map.release_map(squares, provider)
+        vec.release(numbers, provider)
+        return
+    end
+    squares_ok: bool = map.length(squares) == 20 and nine == 9
+                       and (map.get(squares, square_twenty) else 0) == 400
+    map.release_map(squares, provider)
+
+    removed: i32 = vec.pop(numbers) else (problem)
+        _ = problem
+        vec.release(numbers, provider)
+        return
+    end
+    vec.push(numbers, provider, removed) else (problem)
+        _ = problem
+        vec.release(numbers, provider)
+        return
+    end
+    restored: bool = removed == 20 and vec.length(numbers) == 20
+                    and (vec.get(numbers, last_index) else 0) == 20
+    vec.release(numbers, provider)
+    ok = source_shape and sorted and squares_ok and restored
+         and map.length(squares) == 0
+         and vec.length(numbers) == 0 and vec.capacity(numbers) == 0
+end numbers_path
+
+row: type = [3]i32
+array_box: type = struct
+    rows: [2]row
+end array_box
+
+array_compositions: () -> (ok: bool) =
+    mut value: array_box = zeroed
+    value.rows[0] = [11, 13, 17]
+    value.rows[1] = [19, 23, 29]
+
+    --  A range over a struct field whose elements are fixed arrays must retain
+    --  the complete row descriptor, including through a write and later copy.
+    rows: []mut row = value.rows[0..<2]
+    rows[1] = [31, 37, 41]
+    selected: row = rows[1]
+    ok = lenof rows == 2 and lenof selected == 3
+         and rows[0][0] == 11 and rows[0][2] == 17
+         and selected[0] == 31 and selected[1] == 37 and selected[2] == 41
+end array_compositions
+
+sample_node: type = struct
+    value: i32
+end sample_node
+
+node_1: sample_node = (value: 1)
+node_2: sample_node = (value: 2)
+node_3: sample_node = (value: 3)
+node_4: sample_node = (value: 4)
+node_5: sample_node = (value: 5)
+node_6: sample_node = (value: 6)
+node_7: sample_node = (value: 7)
+node_8: sample_node = (value: 8)
+node_9: sample_node = (value: 9)
+
+node_pointer_equal: (left: ptr sample_node, right: ptr sample_node)
+                    -> (same: bool) =
+    same = usize(left) == usize(right)
+end node_pointer_equal
+
+node_pointer_hash: (value: ptr sample_node) -> (result: u64) =
+    result = u64(usize(value))
+end node_pointer_hash
+
+ptr sample_node is map.equatable (eq: node_pointer_equal)
+ptr sample_node is map.hashable (hash: node_pointer_hash)
+
+raw_reference_prefix: () -> (ok: bool) =
+    ok = false
+    mut words: [10]u64 = zeroed
+    base: ptr mut u8 = ptr(usize(addr words[0]))
+    mut records: [1]pool.slot = zeroed
+    mut provider := pool.over
+        (base, lenof words * sizeof u64,
+         64, 1, 8, records[0..<1]) else (problem)
+        _ = problem
+        return
+    end
+    slots: usize = 2
+    extent: usize = slots * sizeof ptr sample_node
+    block: ptr mut u8 = mem.allocate(provider, extent, alignof ptr sample_node)
+        else (problem)
+        _ = problem
+        return
+    end
+    mut storage := mem.reserve
+        (item: ptr sample_node, base: block, slots: slots)
+    first_index: usize = mem.admit(storage, addr node_1) else (problem)
+        _ = problem
+        return
+    end
+    second_index: usize = mem.admit(storage, addr node_2) else (problem)
+        _ = problem
+        return
+    end
+
+    mut prefix_ok: bool = false
+    begin
+        view: []mut ptr sample_node = mem.used(storage)
+        prefix_ok = first_index == 0 and second_index == 1
+                    and mem.capacity(storage) == 2
+                    and mem.initialized(storage) == 2 and lenof view == 2
+                    and view[0].val.value == 1 and view[1].val.value == 2
+    end
+    removed_second: ptr sample_node = mem.release(storage) else (problem)
+        _ = problem
+        return
+    end
+    second_ok: bool = removed_second.val.value == 2
+                    and mem.initialized(storage) == 1
+    removed_first: ptr sample_node = mem.release(storage) else (problem)
+        _ = problem
+        return
+    end
+    first_ok: bool = removed_first.val.value == 1
+                   and mem.initialized(storage) == 0
+    released: ptr mut u8 = mem.dispose(storage) else (problem)
+        _ = problem
+        return
+    end
+    mem.free(provider, released, extent)
+    ok = prefix_ok and second_ok and first_ok
+         and pool.allocation_count(provider) == 1
+         and pool.free_count(provider) == 1 and pool.live(provider) == 0
+         and pool.rejected_free_count(provider) == 0
+end raw_reference_prefix
+
+vector_growth_retry: () -> (ok: bool) =
+    ok = false
+    mut words: [40]u64 = zeroed
+    base: ptr mut u8 = ptr(usize(addr words[0]))
+    mut records: [2]pool.slot = zeroed
+    mut inner := pool.over
+        (base, lenof words * sizeof u64,
+         128, 2, 8, records[0..<2]) else (problem)
+        _ = problem
+        return
+    end
+    zero: usize = 0
+    one: usize = 1
+    seven: usize = 7
+    eight: usize = 8
+    mut state := failing.count_down
+        (inner_provider: pool_provider, inner: addr inner,
+         allowed_attempts: one)
+    mut values := vec.new_list(item: ptr sample_node)
+    vec.push(values, state, addr node_1) else (problem) _ = problem return end
+    vec.push(values, state, addr node_2) else (problem) _ = problem return end
+    vec.push(values, state, addr node_3) else (problem) _ = problem return end
+    vec.push(values, state, addr node_4) else (problem) _ = problem return end
+    vec.push(values, state, addr node_5) else (problem) _ = problem return end
+    vec.push(values, state, addr node_6) else (problem) _ = problem return end
+    vec.push(values, state, addr node_7) else (problem) _ = problem return end
+    vec.push(values, state, addr node_8) else (problem) _ = problem return end
+
+    mut failed: bool = false
+    vec.push(values, state, addr node_9) else (problem)
+        _ = problem
+        failed = true
+    end
+    first: ptr sample_node = vec.get(values, zero) else addr node_9
+    eighth: ptr sample_node = vec.get(values, seven) else addr node_9
+    preserved: bool = failed and vec.length(values) == 8
+                      and vec.capacity(values) == 8
+                      and first.val.value == 1 and eighth.val.value == 8
+                      and failing.attempts(state) == 2
+                      and failing.delegated(state) == 1
+                      and failing.successes(state) == 1
+                      and failing.injected_failures(state) == 1
+                      and failing.frees(state) == 0
+                      and failing.live(state) == 1
+                      and pool.allocation_count(inner) == 1
+                      and pool.free_count(inner) == 0
+                      and pool.live(inner) == 1
+
+    failing.permit(state, one)
+    vec.push(values, state, addr node_9) else (problem)
+        _ = problem
+        vec.release(values, state)
+        return
+    end
+    ninth: ptr sample_node = vec.get(values, eight) else addr node_1
+    retried: bool = vec.length(values) == 9 and vec.capacity(values) == 16
+                    and ninth.val.value == 9
+                    and failing.attempts(state) == 3
+                    and failing.delegated(state) == 2
+                    and failing.successes(state) == 2
+                    and failing.injected_failures(state) == 1
+                    and failing.frees(state) == 1
+                    and failing.live(state) == 1
+                    and pool.allocation_count(inner) == 2
+                    and pool.free_count(inner) == 1
+                    and pool.live(inner) == 1
+                    and pool.rejected_free_count(inner) == 0
+    vec.release(values, state)
+    released: bool = vec.length(values) == 0 and vec.capacity(values) == 0
+                     and failing.frees(state) == 2
+                     and failing.live(state) == 0
+                     and pool.free_count(inner) == 2
+                     and pool.live(inner) == 0
+                     and pool.rejected_free_count(inner) == 0
+    ok = preserved and retried and released
+end vector_growth_retry
+
+small_spill_retry: () -> (ok: bool) =
+    ok = false
+    mut words: [10]u64 = zeroed
+    base: ptr mut u8 = ptr(usize(addr words[0]))
+    mut records: [1]pool.slot = zeroed
+    mut inner := pool.over
+        (base, lenof words * sizeof u64,
+         64, 1, 8, records[0..<1]) else (problem)
+        _ = problem
+        return
+    end
+    zero: usize = 0
+    one: usize = 1
+    mut state := failing.count_down
+        (inner_provider: pool_provider, inner: addr inner,
+         allowed_attempts: zero)
+    mut values := small.new(item: i32, inline_slots: 2)
+    small.push(values, state, 11) else (problem) _ = problem return end
+    small.push(values, state, 13) else (problem) _ = problem return end
+
+    mut failed: bool = false
+    small.push(values, state, 17) else (problem)
+        _ = problem
+        failed = true
+    end
+    mut atomic: bool = false
+    begin
+        view := small.used(values)
+        atomic = failed and small.length(values) == 2
+                 and small.capacity(values) == 2
+                 and view[0] == 11 and view[1] == 13
+                 and failing.attempts(state) == 1
+                 and failing.delegated(state) == 0
+                 and failing.injected_failures(state) == 1
+                 and failing.frees(state) == 0
+                 and failing.live(state) == 0
+                 and pool.allocation_count(inner) == 0
+                 and pool.free_count(inner) == 0 and pool.live(inner) == 0
+    end
+
+    failing.permit(state, one)
+    small.push(values, state, 17) else (problem)
+        _ = problem
+        return
+    end
+    popped: i32 = small.pop(values) else (problem)
+        _ = problem
+        return
+    end
+    mut spilled: bool = false
+    begin
+        view := small.used(values)
+        spilled = popped == 17 and small.length(values) == 2
+                  and small.capacity(values) == 4
+                  and view[0] == 11 and view[1] == 13
+                  and failing.attempts(state) == 2
+                  and failing.delegated(state) == 1
+                  and failing.successes(state) == 1
+                  and failing.injected_failures(state) == 1
+                  and failing.frees(state) == 0
+                  and failing.live(state) == 1
+                  and pool.allocation_count(inner) == 1
+                  and pool.live(inner) == 1
+    end
+    small.release(values, state)
+    released: bool = small.length(values) == 0 and small.capacity(values) == 2
+                     and failing.frees(state) == 1
+                     and failing.live(state) == 0
+                     and pool.free_count(inner) == 1
+                     and pool.live(inner) == 0
+                     and pool.rejected_free_count(inner) == 0
+    ok = atomic and spilled and released
+end small_spill_retry
+
+collision_key: type = struct
+    identity: u64
+    home: u64
+end collision_key
+
+keys_equal: (left: collision_key, right: collision_key) -> (same: bool) =
+    same = left.identity == right.identity
+end keys_equal
+
+key_hash: (value: collision_key) -> (result: u64) =
+    result = value.home
+end key_hash
+
+collision_key is map.equatable (eq: keys_equal)
+collision_key is map.hashable (hash: key_hash)
+
+map_has: (value: map.map(collision_key, i32), identity: u64,
+          wanted: i32) -> (ok: bool) =
+    key: collision_key = (identity: identity, home: 6)
+    found: i32 = map.get(value, key) else (problem)
+        _ = problem
+        ok = false
+        return
+    end
+    ok = found == wanted
+end map_has
+
+map_lacks: (value: map.map(collision_key, i32), identity: u64)
+           -> (ok: bool) =
+    key: collision_key = (identity: identity, home: 6)
+    mut absent: bool = false
+    _ = map.get(value, key) else (problem)
+        _ = problem
+        absent = true
+    end
+    ok = absent
+end map_lacks
+
+accumulate_collision_entry:
+    (value: map.map(collision_key, i32), inout position: map.cursor,
+     inout count: usize, inout key_sum: u64, inout item_sum: i32)
+    -> none ! map.end_of_entries =
+    selected: map.entry(collision_key, i32) =
+        try map.next_entry(value, position)
+    key_sum += selected.key.identity
+    item_sum += selected.item
+    inc count
+end accumulate_collision_entry
+
+reference_entry_enumeration: () -> (ok: bool) =
+    ok = false
+    mut provider := heap.host()
+    mut value := map.new_map(key: ptr sample_node, item: ptr sample_node)
+    mut empty_cursor := map.entries()
+    mut empty_seen: bool = false
+    _ = map.next_entry(value, empty_cursor) else (problem)
+        empty_seen = problem == map.end_of_entries
+    end
+
+    map.insert(value, provider, addr node_1, addr node_2) else (problem)
+        _ = problem
+        return
+    end
+    map.insert(value, provider, addr node_3, addr node_4) else (problem)
+        _ = problem
+        map.release_map(value, provider)
+        return
+    end
+
+    mut position := map.entries()
+    mut count: usize = 0
+    mut key_sum: i32 = 0
+    mut value_sum: i32 = 0
+    begin
+        selected: map.entry(ptr sample_node, ptr sample_node) =
+            map.next_entry(value, position) else (problem)
+                _ = problem
+                map.release_map(value, provider)
+                return
+            end
+        key_sum += selected.key.val.value
+        value_sum += selected.item.val.value
+        inc count
+    end
+    begin
+        selected: map.entry(ptr sample_node, ptr sample_node) =
+            map.next_entry(value, position) else (problem)
+                _ = problem
+                map.release_map(value, provider)
+                return
+            end
+        key_sum += selected.key.val.value
+        value_sum += selected.item.val.value
+        inc count
+    end
+    mut exhausted_seen: bool = false
+    _ = map.next_entry(value, position) else (problem)
+        exhausted_seen = problem == map.end_of_entries
+    end
+    mut exhausted_again: bool = false
+    _ = map.next_entry(value, position) else (problem)
+        exhausted_again = problem == map.end_of_entries
+    end
+    enumerated: bool = empty_seen and exhausted_seen and exhausted_again
+                       and count == 2 and key_sum == 4 and value_sum == 6
+    map.release_map(value, provider)
+    ok = enumerated and map.length(value) == 0
+end reference_entry_enumeration
+
+map_operations: () -> (ok: bool) =
+    ok = false
+    mut bytes: [2048]u8 = zeroed
+    mut provider := mem.arena_over(addr bytes[0], lenof bytes)
+    mut value := map.new_map(key: collision_key, item: i32)
+    k1: collision_key = (identity: 1, home: 6)
+    k2: collision_key = (identity: 2, home: 6)
+    k3: collision_key = (identity: 3, home: 6)
+    k4: collision_key = (identity: 4, home: 6)
+    k5: collision_key = (identity: 5, home: 6)
+    k6: collision_key = (identity: 6, home: 6)
+    k7: collision_key = (identity: 7, home: 6)
+    k8: collision_key = (identity: 8, home: 6)
+
+    map.insert(value, provider, k1, 101) else (problem) _ = problem return end
+    map.insert(value, provider, k2, 102) else (problem) _ = problem return end
+    map.insert(value, provider, k3, 103) else (problem) _ = problem return end
+    mut snapshot_cursor := map.entries()
+    snapshot: map.entry(collision_key, i32) =
+        map.next_entry(value, snapshot_cursor) else (problem)
+            _ = problem
+            return
+        end
+    map.insert(value, provider, k2, 202) else (problem) _ = problem return end
+    scalar_copy_ok: bool = snapshot.item == i32(snapshot.key.identity) + 100
+    updated: bool = scalar_copy_ok and map.length(value) == 3
+                    and map_has(value, 2, 202)
+
+    map.remove(value, k1) else (problem) _ = problem return end
+    map.insert(value, provider, k4, 104) else (problem) _ = problem return end
+    reused_tombstone: bool = map.length(value) == 3
+                             and map_lacks(value, 1)
+                             and map_has(value, 3, 103)
+                             and map_has(value, 4, 104)
+
+    map.insert(value, provider, k5, 105) else (problem) _ = problem return end
+    map.insert(value, provider, k6, 106) else (problem) _ = problem return end
+    map.insert(value, provider, k7, 107) else (problem) _ = problem return end
+    map.insert(value, provider, k8, 108) else (problem) _ = problem return end
+    rehashed: bool = map.length(value) == 7
+                   and map_has(value, 2, 202)
+                   and map_has(value, 4, 104)
+                   and map_has(value, 8, 108)
+    map.remove(value, k3) else (problem) _ = problem return end
+    removed: bool = map.length(value) == 6 and map_lacks(value, 3)
+                   and map_has(value, 7, 107)
+    used_bytes: bool = provider.used > 0
+    map.release_map(value, provider)
+
+    --  Churn reaches the capacity-eight pressure threshold with three live
+    --  entries and three tombstones. The next absent insert compacts in place
+    --  rather than doubling, then bounded enumeration yields each survivor.
+    mut compact := map.new_map(key: collision_key, item: i32)
+    map.insert(compact, provider, k1, 11) else (problem) _ = problem return end
+    map.insert(compact, provider, k2, 22) else (problem) _ = problem return end
+    map.insert(compact, provider, k3, 33) else (problem) _ = problem return end
+    map.insert(compact, provider, k4, 44) else (problem) _ = problem return end
+    map.insert(compact, provider, k5, 55) else (problem) _ = problem return end
+    map.insert(compact, provider, k6, 66) else (problem) _ = problem return end
+    map.remove(compact, k1) else (problem) _ = problem return end
+    map.remove(compact, k2) else (problem) _ = problem return end
+    map.remove(compact, k3) else (problem) _ = problem return end
+    before_capacity: usize = mem.capacity(compact.buckets)
+    before_tombstones: usize = compact.tombstones
+    map.insert(compact, provider, k7, 77) else (problem) _ = problem return end
+    compacted: bool = before_capacity == 8 and before_tombstones == 3
+                      and mem.capacity(compact.buckets) == before_capacity
+                      and compact.tombstones == 0
+                      and map.length(compact) == 4
+                      and map_lacks(compact, 1) and map_lacks(compact, 2)
+                      and map_lacks(compact, 3) and map_has(compact, 7, 77)
+
+    mut position := map.entries()
+    mut enumeration_count: usize = 0
+    mut key_sum: u64 = 0
+    mut item_sum: i32 = 0
+    accumulate_collision_entry
+        (compact, position, enumeration_count, key_sum, item_sum)
+        else (problem) _ = problem map.release_map(compact, provider) return end
+    accumulate_collision_entry
+        (compact, position, enumeration_count, key_sum, item_sum)
+        else (problem) _ = problem map.release_map(compact, provider) return end
+    accumulate_collision_entry
+        (compact, position, enumeration_count, key_sum, item_sum)
+        else (problem) _ = problem map.release_map(compact, provider) return end
+    accumulate_collision_entry
+        (compact, position, enumeration_count, key_sum, item_sum)
+        else (problem) _ = problem map.release_map(compact, provider) return end
+    mut exhausted: bool = false
+    _ = map.next_entry(compact, position) else (problem)
+        exhausted = problem == map.end_of_entries
+    end
+    mut exhausted_again: bool = false
+    _ = map.next_entry(compact, position) else (problem)
+        exhausted_again = problem == map.end_of_entries
+    end
+    enumerated: bool = exhausted and exhausted_again
+                       and enumeration_count == 4
+                       and key_sum == 22 and item_sum == 242
+    map.release_map(compact, provider)
+
+    ok = updated and reused_tombstone and rehashed and removed and used_bytes
+         and compacted and enumerated
+         and map.length(value) == 0 and map.length(compact) == 0
+end map_operations
+
+map_failure_case: (allowed: usize, rollback_frees: usize) -> (ok: bool) =
+    ok = false
+    mut words: [193]u64 = zeroed
+    base: ptr mut u8 = ptr(usize(addr words[0]))
+    mut records: [6]pool.slot = zeroed
+    mut inner := pool.over
+        (base, lenof words * sizeof u64,
+         256, 6, 8, records[0..<6]) else (problem)
+        _ = problem
+        return
+    end
+    three: usize = 3
+    mut state := failing.count_down
+        (inner_provider: pool_provider, inner: addr inner,
+         allowed_attempts: three)
+    mut value := map.new_map(key: collision_key, item: i32)
+    k1: collision_key = (identity: 1, home: 6)
+    k2: collision_key = (identity: 2, home: 6)
+    k3: collision_key = (identity: 3, home: 6)
+    k4: collision_key = (identity: 4, home: 6)
+    k5: collision_key = (identity: 5, home: 6)
+    k6: collision_key = (identity: 6, home: 6)
+    k7: collision_key = (identity: 7, home: 6)
+    map.insert(value, state, k1, 11) else (problem) _ = problem return end
+    map.insert(value, state, k2, 22) else (problem) _ = problem return end
+    map.insert(value, state, k3, 33) else (problem) _ = problem return end
+    map.insert(value, state, k4, 44) else (problem) _ = problem return end
+    map.insert(value, state, k5, 55) else (problem) _ = problem return end
+    map.insert(value, state, k6, 66) else (problem) _ = problem return end
+    map.remove(value, k1) else (problem) _ = problem return end
+    map.remove(value, k2) else (problem) _ = problem return end
+    map.remove(value, k3) else (problem) _ = problem return end
+    initial: bool = map.length(value) == 3
+                    and mem.capacity(value.buckets) == 8
+                    and value.tombstones == 3
+                    and failing.attempts(state) == 3
+                    and failing.delegated(state) == 3
+                    and failing.successes(state) == 3
+                    and failing.frees(state) == 0
+                    and failing.live(state) == 3
+                    and pool.allocation_count(inner) == 3
+                    and pool.free_count(inner) == 0 and pool.live(inner) == 3
+
+    failing.permit(state, allowed)
+    mut failed: bool = false
+    map.insert(value, state, k7, 77) else (problem)
+        _ = problem
+        failed = true
+    end
+    preserved: bool = failed and map.length(value) == 3
+                      and mem.capacity(value.buckets) == 8
+                      and value.tombstones == 3
+                      and map_lacks(value, 1)
+                      and map_lacks(value, 2)
+                      and map_lacks(value, 3)
+                      and map_has(value, 4, 44)
+                      and map_has(value, 5, 55)
+                      and map_has(value, 6, 66)
+                      and map_lacks(value, 7)
+                      and failing.frees(state) == rollback_frees
+                      and failing.live(state) == 3
+                      and pool.free_count(inner) == rollback_frees
+                      and pool.live(inner) == 3
+                      and pool.rejected_free_count(inner) == 0
+
+    failing.permit(state, three)
+    map.insert(value, state, k7, 77) else (problem)
+        _ = problem
+        map.release_map(value, state)
+        return
+    end
+    expected_allocations: usize = 6 + allowed
+    expected_attempts: usize = 7 + allowed
+    retried: bool = map.length(value) == 4
+                    and mem.capacity(value.buckets) == 8
+                    and value.tombstones == 0
+                    and map_lacks(value, 1)
+                    and map_lacks(value, 2)
+                    and map_lacks(value, 3)
+                    and map_has(value, 4, 44)
+                    and map_has(value, 5, 55)
+                    and map_has(value, 7, 77)
+                    and failing.attempts(state) == expected_attempts
+                    and failing.delegated(state) == expected_allocations
+                    and failing.successes(state) == expected_allocations
+                    and failing.injected_failures(state) == 1
+                    and failing.inner_failures(state) == 0
+                    and failing.frees(state) == rollback_frees + 3
+                    and failing.live(state) == 3
+                    and pool.allocation_count(inner) == expected_allocations
+                    and pool.free_count(inner) == rollback_frees + 3
+                    and pool.live(inner) == 3
+                    and pool.rejected_free_count(inner) == 0
+    map.release_map(value, state)
+    released: bool = map.length(value) == 0
+                     and failing.frees(state) == rollback_frees + 6
+                     and failing.live(state) == 0
+                     and pool.free_count(inner) == rollback_frees + 6
+                     and pool.live(inner) == 0
+                     and pool.rejected_free_count(inner) == 0
+    ok = initial and preserved and retried and released
+end map_failure_case
+
+leaf_name: utf8 = "leaf"
+branch_name: utf8 = "branch"
+
+tree_append_retry: () -> (ok: bool) =
+    ok = false
+    mut words: [520]u64 = zeroed
+    base: ptr mut u8 = ptr(usize(addr words[0]))
+    mut records: [2]pool.slot = zeroed
+    mut inner := pool.over
+        (base, lenof words * sizeof u64,
+         2048, 2, 16, records[0..<2]) else (problem)
+        _ = problem
+        return
+    end
+    zero: usize = 0
+    one: usize = 1
+    eight: u32 = 8
+    mut state := failing.count_down
+        (inner_provider: pool_provider, inner: addr inner,
+         allowed_attempts: zero)
+    mut value := tree.new_tree()
+
+    mut empty_failed: bool = false
+    _ = tree.add_leaf(value, state, leaf_name) else (problem)
+        _ = problem
+        empty_failed = true
+        tree.id(0)
+    end
+    initial: bool = empty_failed and tree.length(value) == 0
+                   and failing.attempts(state) == 1
+                   and failing.injected_failures(state) == 1
+                   and failing.delegated(state) == 0
+                   and pool.live(inner) == 0
+
+    failing.permit(state, one)
+    mut at: usize = 0
+    mut ids_ok: bool = true
+    while at < 8 do
+        added: tree.node_id = tree.add_leaf(value, state, leaf_name)
+            else (problem)
+                _ = problem
+                return
+            end
+        if tree.ordinal(added) <> u32(at) then
+            ids_ok = false
+        end if
+        inc at
+    end while
+
+    mut leaf_failed: bool = false
+    _ = tree.add_leaf(value, state, leaf_name) else (problem)
+        _ = problem
+        leaf_failed = true
+        tree.id(0)
+    end
+    mut branch_failed: bool = false
+    _ = tree.add_branch(value, state, branch_name, tree.id(0), eight)
+        else (problem)
+            _ = problem
+            branch_failed = true
+            tree.id(0)
+        end
+
+    mut retained: bool = leaf_failed and branch_failed
+                         and tree.length(value) == 8
+                         and failing.attempts(state) == 4
+                         and failing.injected_failures(state) == 3
+                         and failing.delegated(state) == 1
+                         and failing.frees(state) == 0
+                         and failing.live(state) == 1
+                         and pool.live(inner) == 1
+    at = 0
+    while at < 8 do
+        selected := tree.get(value, tree.id(u32(at))) else (problem)
+            _ = problem
+            retained = false
+            tree.get(value, tree.id(0)) else (fallback)
+                _ = fallback
+                return
+            end
+        end
+        name: utf8 = tree.name(selected)
+        first_byte: []u8 = name[0]
+        leaves: u32 = tree.count_leaves(value, tree.id(u32(at)))
+            else (problem)
+                _ = problem
+                retained = false
+                0
+            end
+        if tree.ordinal(tree.id(u32(at))) <> u32(at)
+          or lenof name <> 4 or first_byte[0] <> 108 or leaves <> 1
+        then
+            retained = false
+        end if
+        inc at
+    end while
+
+    failing.permit(state, one)
+    root: tree.node_id = tree.add_branch
+        (value, state, branch_name, tree.id(0), eight) else (problem)
+        _ = problem
+        tree.release(value, state)
+        return
+    end
+    root_node := tree.get(value, root) else (problem)
+        _ = problem
+        tree.release(value, state)
+        return
+    end
+    root_name: utf8 = tree.name(root_node)
+    root_first: []u8 = root_name[0]
+    total: u32 = tree.count_leaves(value, root) else (problem)
+        _ = problem
+        tree.release(value, state)
+        return
+    end
+    appended: bool = tree.ordinal(root) == 8 and tree.length(value) == 9
+                     and lenof root_name == 6 and root_first[0] == 98
+                     and total == 8
+                     and failing.attempts(state) == 5
+                     and failing.delegated(state) == 2
+                     and failing.successes(state) == 2
+                     and failing.injected_failures(state) == 3
+                     and failing.frees(state) == 1
+                     and failing.live(state) == 1
+                     and pool.allocation_count(inner) == 2
+                     and pool.free_count(inner) == 1
+                     and pool.live(inner) == 1
+    tree.release(value, state)
+    released: bool = tree.length(value) == 0
+                     and failing.frees(state) == 2
+                     and failing.live(state) == 0
+                     and pool.free_count(inner) == 2
+                     and pool.live(inner) == 0
+                     and pool.rejected_free_count(inner) == 0
+    ok = initial and ids_ok and retained and appended and released
+end tree_append_retry
+
+canvas: type = struct
+    draws: i32
+    total: i32
+end canvas
+
+drawable: type = concept (item: type)
+    draw: (self: ptr mut item, target: ptr mut canvas) -> none
+end drawable
+
+circle: type = struct
+    weight: i32
+    calls: i32
+end circle
+
+label: type = struct
+    weight: i32
+    calls: i32
+end label
+
+draw_circle: (self: ptr mut circle, target: ptr mut canvas) -> none =
+    inc self.val.calls
+    inc target.val.draws
+    target.val.total += self.val.weight
+end draw_circle
+
+draw_label: (self: ptr mut label, target: ptr mut canvas) -> none =
+    inc self.val.calls
+    inc target.val.draws
+    target.val.total += self.val.weight
+end draw_label
+
+circle is drawable (draw: draw_circle)
+label is drawable (draw: draw_label)
+
+mut round_shape: circle = (weight: 3, calls: 0)
+mut text_shape: label = (weight: 5, calls: 0)
+
+draw_all: (items: vec.list(any drawable), target: ptr mut canvas) -> none =
+    for item in vec.used(items) do
+        item.draw(target)
+    end for
+end draw_all
+
+heterogeneous_drawables: () -> (ok: bool) =
+    ok = false
+    round_shape.calls = 0
+    text_shape.calls = 0
+    mut host := heap.host()
+    one: usize = 1
+    mut provider := failing.count_down(addr host, one)
+    mut items := vec.new_list(item: any drawable)
+    round: any drawable = any(addr round_shape)
+    text: any drawable = any(addr text_shape)
+    vec.push(items, provider, round) else (problem) _ = problem return end
+    vec.push(items, provider, text) else (problem) _ = problem return end
+    vec.push(items, provider, round) else (problem) _ = problem return end
+
+    mut target: canvas = (draws: 0, total: 0)
+    draw_all(items, addr target)
+    dispatched: bool = vec.length(items) == 3
+                       and target.draws == 3 and target.total == 11
+                       and round_shape.calls == 2 and text_shape.calls == 1
+                       and failing.attempts(provider) == 1
+                       and failing.delegated(provider) == 1
+                       and failing.successes(provider) == 1
+                       and failing.injected_failures(provider) == 0
+                       and failing.frees(provider) == 0
+                       and failing.live(provider) == 1
+    vec.release(items, provider)
+    ok = dispatched and vec.length(items) == 0
+         and failing.frees(provider) == 1 and failing.live(provider) == 0
+end heterogeneous_drawables
+
+public containers_run: () -> (ok: bool) =
+    signed_left: i32 = 3
+    signed_right: i32 = 7
+    unsigned_left: u32 = 29
+    unsigned_right: u32 = 11
+    signed_order: bool = evidence_less(signed_left, signed_right)
+    unsigned_order_ok: bool = not evidence_less(unsigned_left, unsigned_right)
+
+    numbers_ok: bool = numbers_path()
+    arrays_ok: bool = array_compositions()
+    raw_ok: bool = raw_reference_prefix()
+    vector_ok: bool = vector_growth_retry()
+    small_ok: bool = small_spill_retry()
+    map_ok: bool = map_operations()
+    reference_entries_ok: bool = reference_entry_enumeration()
+    map_first_failure_ok: bool = map_failure_case(0, 0)
+    map_second_failure_ok: bool = map_failure_case(1, 1)
+    map_third_failure_ok: bool = map_failure_case(2, 2)
+    tree_ok: bool = tree_append_retry()
+    drawables_ok: bool = heterogeneous_drawables()
+
+    --  R470_DEBUG_CONTAINERS_DONE
+    ok = signed_order and unsigned_order_ok
+         and numbers_ok and arrays_ok and raw_ok and vector_ok and small_ok
+         and map_ok and reference_entries_ok and map_first_failure_ok
+         and map_second_failure_ok
+         and map_third_failure_ok and tree_ok and drawables_ok
+end containers_run

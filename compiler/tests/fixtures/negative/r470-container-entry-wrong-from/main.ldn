@@ -1,0 +1,27 @@
+import core/map
+
+key_equal: (left: u32, right: u32) -> (same: bool) =
+    same = left == right
+end key_equal
+
+key_hash: (value: u32) -> (result: u64) =
+    result = u64(value)
+end key_hash
+
+u32 is map.equatable (eq: key_equal)
+u32 is map.hashable (hash: key_hash)
+
+node: type = struct
+    value: i32
+end node
+
+bad: (source: map.map(u32, ptr node), wrong: map.map(u32, ptr node))
+     -> (result: ptr node from wrong) ! map.end_of_entries =
+    mut position := map.entries()
+    selected: map.entry(u32, ptr node) = try map.next_entry(source, position)
+    result = selected.item
+end bad
+
+public main: () -> (code: i32) =
+    code = 0
+end main

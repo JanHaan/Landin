@@ -1,0 +1,8 @@
+class: negative
+summary: the derived container generic routine requires concrete ordered evidence
+program: main.ldn
+root: ../../../../..
+status: 1
+codes: L0318
+constructs: 1230, 1240, 1290, 1340
+targets: linux-x86-64, macos-arm64, synthetic-32

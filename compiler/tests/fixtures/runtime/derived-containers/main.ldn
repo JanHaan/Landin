@@ -1,0 +1,9 @@
+import examples/derived_containers/workload
+
+public main: () -> (code: i32) =
+    if workload.containers_run() then
+        code = 42
+    else
+        code = 1
+    end if
+end main

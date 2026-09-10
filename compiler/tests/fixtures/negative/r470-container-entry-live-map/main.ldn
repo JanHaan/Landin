@@ -1,0 +1,44 @@
+import core/heap
+import core/map
+import core/mem
+
+key_equal: (left: u32, right: u32) -> (same: bool) =
+    same = left == right
+end key_equal
+
+key_hash: (value: u32) -> (result: u64) =
+    result = u64(value)
+end key_hash
+
+u32 is map.equatable (eq: key_equal)
+u32 is map.hashable (hash: key_hash)
+
+node: type = struct
+    value: i32
+end node
+
+first: node = (value: 11)
+second: node = (value: 22)
+
+bad_insert: (inout value: map.map(u32, ptr node),
+             inout provider: heap.system) -> (result: i32)
+             ! mem.out_of_memory | map.end_of_entries =
+    mut position := map.entries()
+    selected: map.entry(u32, ptr node) = try map.next_entry(value, position)
+    replacement_key: u32 = 2
+    try map.insert(value, provider, replacement_key, addr second)
+    result = selected.item.val.value
+end bad_insert
+
+bad_release: (inout value: map.map(u32, ptr node),
+              inout provider: heap.system) -> (result: i32)
+              ! map.end_of_entries =
+    mut position := map.entries()
+    selected: map.entry(u32, ptr node) = try map.next_entry(value, position)
+    map.release_map(value, provider)
+    result = selected.item.val.value
+end bad_release
+
+public main: () -> (code: i32) =
+    code = first.value
+end main
