@@ -6,6 +6,8 @@
 --  equal layouts prove [0710]'s nominal rule.
 
 with Ada.Assertions;
+with Ada.Strings.Fixed;
+with Ada.Strings.Unbounded;
 
 with Landin.Checking;
 with Landin.Diagnostics;
@@ -60,6 +62,11 @@ package body Landin.Tests.Checking_Suite is
    use type Landin.Targets.Byte_Count;
    use type Landin.Types.Type_Kind;
 
+   package US renames Ada.Strings.Unbounded;
+
+   function Image (Value : Natural) return String is
+     (Ada.Strings.Fixed.Trim (Natural'Image (Value), Ada.Strings.Both));
+
    Frontend : aliased Landin.Stages.Syntax.Instance;
    Names    : aliased Landin.Stages.Resolution.Instance;
    Configurer : aliased Landin.Stages.Configuration.Instance;
@@ -100,6 +107,96 @@ package body Landin.Tests.Checking_Suite is
      & "    child: nested" & LF
      & "    tail: u8" & LF
      & "end outer" & LF;
+
+   --  A loop frame must not copy its two program-sized transfer tables through
+   --  Ada.Containers.Vectors.  The production reproducer had 1,217 resolved
+   --  declarations; these pressure fields cross that same boundary without
+   --  carrying the container workload into this narrow checker regression.
+   procedure Large_Loop_Frames_Stay_Off_The_Host_Stack
+     (Item : in out Landin.Testing.Context);
+
+   procedure Large_Loop_Frames_Stay_Off_The_Host_Stack
+     (Item : in out Landin.Testing.Context)
+   is
+      function Source (Conforming : Boolean) return String;
+
+      function Source (Conforming : Boolean) return String
+      is
+         Text : US.Unbounded_String := US.To_Unbounded_String
+           ("ordered: type = concept (t: type)" & LF
+            & "end ordered" & LF
+            & "pressure: type = struct" & LF);
+      begin
+         for Field in 1 .. 1_220 loop
+            US.Append
+              (Text, "    field_" & Image (Field) & ": i32" & LF);
+         end loop;
+         US.Append
+           (Text, "end pressure" & LF
+            & (if Conforming then "i32 is ordered ()" & LF
+               else "marker: i32 = 0" & LF)
+            & "identity: (t: type is ordered, value: t)"
+            & " -> (result: t) =" & LF
+            & "    result = value" & LF
+            & "end identity" & LF
+            & "stress: () -> none =" & LF
+            & "    loop do" & LF
+            & "        loop do" & LF
+            & "            loop do" & LF
+            & "                loop do" & LF
+            & "                    break" & LF
+            & "                end loop" & LF
+            & "            end loop" & LF
+            & "        end loop" & LF
+            & "    end loop" & LF
+            & "end stress" & LF
+            & "use: () -> none =" & LF
+            & "    _ = identity(42)" & LF
+            & "end use" & LF);
+         return US.To_String (Text);
+      end Source;
+
+      procedure Check_Source (Conforming : Boolean);
+
+      procedure Check_Source (Conforming : Boolean)
+      is
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Synthetic_32);
+         Order : Landin.Stages.Pipeline;
+         Ran : Natural;
+         Src : Landin.Source.Source_Id;
+         pragma Unreferenced (Src);
+      begin
+         Src := Landin.Stages.Add_Source
+           (Work, "large-loop-frame.ldn", Source (Conforming));
+         Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
+         Landin.Stages.Append (Order, Names'Access);
+         Landin.Stages.Append (Order, Checker'Access);
+         Ran := Landin.Stages.Run (Order, Work);
+         declare
+            Reports : constant Landin.Diagnostics.Diagnostic_List :=
+              Landin.Stages.Report (Work);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Ran, 4, "the large loop reaches reference checking");
+            Landin.Testing.Check
+              (Item, Landin.Stages.Failed (Work) /= Conforming
+               and then
+                 (if Conforming then Landin.Diagnostics.Count (Reports) = 0
+                  else Landin.Diagnostics.Count (Reports) = 1
+                    and then Landin.Diagnostics.Code
+                      (Landin.Diagnostics.Get (Reports, 1)) = "L0318"),
+               (if Conforming
+                then "the accepted large loop keeps no diagnostic"
+                else "the refused large loop retains its evidence"
+                  & " diagnostic"));
+         end;
+      end Check_Source;
+   begin
+      Check_Source (Conforming => False);
+      Check_Source (Conforming => True);
+   end Large_Loop_Frames_Stay_Off_The_Host_Stack;
 
    procedure Match_Aliases_Keep_Backing_Origins
      (Item : in out Landin.Testing.Context);
@@ -9014,6 +9111,9 @@ package body Landin.Tests.Checking_Suite is
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "checking", "large loop frames stay off the host stack",
+         Large_Loop_Frames_Stay_Off_The_Host_Stack'Access);
       Landin.Testing.Register
         (Into, "checking", "R4.70 field ranges keep recursive children",
          R470_Field_Ranges_Keep_Recursive_Children'Access);
