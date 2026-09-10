@@ -1,0 +1,158 @@
+debug_site: type = struct
+    file_id: u32
+    line: u32
+    column: u32
+end debug_site
+
+debug_record: type = layout(optimal) struct
+    tiny: u8
+    huge: i64
+    middle: u16
+end debug_record
+
+debug_choice: type = struct
+    choice: variant
+        empty |
+        payload: (record: debug_record, values: [3]u16)
+    end choice
+end debug_choice
+
+debug_ordered: type = concept (t: type)
+    less: (left: t, right: t) -> (yes: bool)
+end debug_ordered
+
+debug_less_i32: (left: i32, right: i32) -> (yes: bool) =
+    yes = left < right
+end debug_less_i32
+
+debug_less_u32: (left: u32, right: u32) -> (yes: bool) =
+    yes = left < right
+end debug_less_u32
+
+i32 is debug_ordered (less: debug_less_i32)
+u32 is debug_ordered (less: debug_less_u32)
+
+debug_generic: (t: type is debug_ordered,
+                generic_param: t,
+                generic_bound: t) -> (generic_result: bool) =
+    generic_local: t = generic_param
+    generic_result = false
+    loop do
+        loop do
+            loop do
+                loop do
+                    _ = t.less(generic_local, generic_bound)
+                    _ = t.less(generic_local, generic_bound)
+                    _ = t.less(generic_local, generic_bound)
+                    _ = t.less(generic_local, generic_bound)
+                    _ = t.less(generic_local, generic_bound)
+                    _ = t.less(generic_local, generic_bound)
+                    _ = t.less(generic_local, generic_bound)
+                    generic_result = t.less(generic_local, generic_bound)
+                    break
+                end loop
+                break
+            end loop
+            break
+        end loop
+        break
+    end loop
+end debug_generic
+
+debug_multiple: (base: i32) -> (first: i32, second: i32) =
+    first = base + 10
+    second = base + 20
+    multiple_ready: i32 = first + second
+    if multiple_ready <> 40 then first = 0 end if
+end debug_multiple
+
+debug_aliases: () -> (result: i32) =
+    (first: renamed_left, second: renamed_right) := debug_multiple(5)
+    aliases_ready: i32 = renamed_left + renamed_right
+    loop_values: [2]i32 = [3, 4]
+    mut loop_sum: i32 = 0
+    for loop_element in loop_values do
+        loop_sum += loop_element
+    end for
+    result = 1
+    if aliases_ready == 40 and loop_sum == 7
+    then result = 42 end if
+end debug_aliases
+
+debug_inner: (scalar_param: i32,
+              pointer_param: ptr mut i32,
+              record_param: debug_record,
+              variant_param: debug_choice,
+              array_param: [3]u16,
+              saved_a: i32,
+              saved_b: i32,
+              saved_c: i32) -> (result: i32) =
+    scalar_local: i32 = scalar_param + 1
+    pointer_local: ptr mut i32 = pointer_param
+    record_local: debug_record = record_param
+    variant_local: debug_choice = variant_param
+    array_local: [3]u16 = array_param
+    step_local: i32 = scalar_local + pointer_local.val
+    next_local: i32 = step_local + i32(record_local.tiny)
+    result = 1
+    match variant_param.choice
+        empty: result = 2
+        payload(param_record, param_values):
+            match variant_local.choice
+                empty: result = 3
+                payload(local_record, local_values):
+                    if scalar_param == 37 and scalar_local == 38
+                      and pointer_param.val == 41 and pointer_local.val == 41
+                      and record_param.tiny == 7
+                      and record_param.huge == 7000000000
+                      and record_param.middle == 901
+                      and record_local.tiny == 7
+                      and record_local.huge == 7000000000
+                      and record_local.middle == 901
+                      and array_param[0] == 111 and array_param[1] == 222
+                      and array_param[2] == 333
+                      and array_local[0] == 111 and array_local[1] == 222
+                      and array_local[2] == 333
+                      and param_record.huge == 7000000000
+                      and param_values[1] == 222
+                      and local_record.middle == 901
+                      and local_values[2] == 333
+                      and step_local == 79 and next_local == 86
+                      and saved_a == 51 and saved_b == 52 and saved_c == 53
+                    then result = 42 end if
+            end match
+    end match
+end debug_inner
+
+debug_outer: (caller call_site: debug_site,
+              scalar_param: i32,
+              pointer_param: ptr mut i32,
+              record_param: debug_record,
+              variant_param: debug_choice,
+              array_param: [3]u16,
+              saved_a: i32,
+              saved_b: i32,
+              saved_c: i32) -> (result: i32) =
+    scalar_local: i32 = scalar_param
+    pointer_local: ptr mut i32 = pointer_param
+    record_local: debug_record = record_param
+    variant_local: debug_choice = variant_param
+    array_local: [3]u16 = array_param
+    inner_result: i32 = debug_inner(scalar_local, pointer_local, record_local, variant_local, array_local, saved_a, saved_b, saved_c)
+    result = 1
+    match variant_local.choice
+        empty: result = 2
+        payload(local_record, local_values):
+            if inner_result == 42
+              and call_site.file_id == 2
+              and call_site.line > 0 and call_site.column > 0
+              and scalar_param == 37 and scalar_local == 37
+              and pointer_param.val == 41 and pointer_local.val == 41
+              and record_param.huge == 7000000000
+              and record_local.middle == 901
+              and array_param[1] == 222 and array_local[2] == 333
+              and local_record.tiny == 7 and local_values[0] == 111
+              and saved_a == 51 and saved_b == 52 and saved_c == 53
+            then result = 42 end if
+    end match
+end debug_outer

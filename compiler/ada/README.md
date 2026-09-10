@@ -43,6 +43,7 @@ replaced.
 | `Landin.Source` storage | heap-allocated text and line maps, never freed while the process lives | put a source file in an automatic object |
 | `Landin.Source.Sets` | a compilation's snapshots and their identities | acquire bytes from a host |
 | `Landin.Provenance` | origins and the declaration side table | know what a declaration means |
+| `Landin.Debugging` | optional source snapshots, source result labels and compilation-directory context, with access to immutable declaration syntax | copy represented types/layouts, read the host or encode a debugger file format |
 | `Landin.Source.Names` | identities for the byte runs a program names | know that a spelling is reserved |
 | `Landin.Tokens` | the lexical vocabulary, the token, the fault, the stream | render prose, assign a diagnostic code, or build a token |
 | `Landin.Tokens.Lexer` | the scan, the only construction of a token, and D161's validation of complete text-literal spelling | know what a token means or decide its contextual text view |
@@ -58,12 +59,14 @@ replaced.
 | `Landin.Evidence` | target-neutral semantic evidence-table positions: size, alignment, then direct concept functions in declaration order | know machine bytes, target offsets, or physical layout |
 | `Landin.Checking` | the type of every runtime node and declaration, the concept and conformance register, interned nominal and routine instances with their per-instance facts and layouts, and D188's range-subtype identities; the full list is under "The four long rows, in full" below | decide a rule, execute user code, synthesize a source declaration, mutate a template, or ask the host for a width |
 | `Landin.Cleanup` | target-neutral exit kinds and the defer/undo applicability policy | parse a cleanup, track definite assignment, emit a call, or name a target |
-| `Landin.IR` | the target-neutral instructions, shapes, descriptors, images and paths; the full list is under "The four long rows, in full" below | hold a scope tree, name a machine, ask a width, synthesize a declaration, or hold an offset, register or padding byte |
+| `Landin.IR` | the target-neutral instructions, shapes, descriptors, images, paths and source aliases into existing storage; the full list is under "The four long rows, in full" below | hold a scope tree, name a machine, ask a width, synthesize a declaration, or hold an offset, register or padding byte |
 | `Landin.IR.Verifier` | release-build well-formedness of a completed Unit, including atom/error set membership, descriptor/carrier, multiple-result slot and static function-image agreement, call-failure slots and exits, valid neutral subobject paths and recursive image descriptors, plus target-aware fit of every static fold | diagnose source, repair malformed IR, or choose backend policy |
 | `Landin.IR.Dump` | canonical human-readable text for a Unit | be a stable interface, a reader, or a serialisation |
 | `Landin.Backend` | where a routine's cells live, the recursive target extent of one neutral field shape, where a scalar or fixed-array leaf at any path depth sits inside an aggregate datum or slot, how wide one element of an array of either is, and the target-byte replay of scalar, fixed-array and unfolded variant runs | name a machine, choose a register, or ask the host a width |
 | `Landin.Backend.C_ABI` | SysV AMD64 classification and one call/entry/result placement plan from target facts and neutral shapes, including independent GP/SSE banks and aggregate rollback | ask the host for layout, put register placements in IR, or change the internal Landin ABI |
 | `Landin.Backend.X86_64` | the assembly text for one target, every register in it, collision-safe whole-program symbols, the hosted entry argument/libc bridge, D161's read-only literal data, the target-width scalar, finite-array, compact repetition, nested-child and selected-variant directives and padding for recursively written aggregate images, and D187's omission of exactly the overflow, element-index, slice-range and integer-conversion edges an instruction is marked for | decide a language error mapping, write a file, or run a tool |
+| `Landin.Backend.Debug_Locations` | format-independent lexical visibility and definite initialization at IR instruction boundaries | choose storage, encode debugger records or read the host |
+| `Landin.Backend.X86_64.Dwarf` | DWARF record encoding, assembler path quoting and debug sections derived from source metadata, immutable IR and backend placement plans | change language types, choose variable storage, read the host or write files |
 | `Landin.Backend.Toolchain` | the one command line that finishes a compilation, the triplet it is found by, and D202's ordered archive arguments | know what ELF is, invoke a linker directly, or search a PATH |
 | `Landin.Backend.Entry_Point` | [1970]'s one hosted entry shape, asked of the IR | raise a defect for a module that simply has no `main` |
 | `Landin.Diagnostics` | codes, severities, labels, notes, ordering | render, or own the catalogue of codes |
@@ -169,11 +172,46 @@ tools. Complete mandatory runtime profiles and quantitative acceptance are
 recorded in `compiler/tests/README.md` and ROADMAP.md, not inferred from the
 existence of these packages.
 
+`--debug=full` requests Linux source-debugger metadata; `--debug=none` is the
+default. This control is independent of `--build-mode`, `--optimize` and
+`--specialize`. Full debugging writes line information using the compilation's
+source IDs and expands the existing `.sources.json` table to every source.
+The optional metadata does not change the caller-coordinate ABI. See
+`compiler/tests/README.md` for the scripted debugger gate.
+
+Register allocation and specialization remain enabled under full debugging.
+Only identical-body sharing is suppressed, so two source routines retain
+distinct breakpoint locations. DWARF describes represented types and physical
+locations using the immutable IR and the same backend layout/allocation plans
+as instruction emission. Source declaration syntax supplies names and lexical
+extents; it does not decide machine layout. The sections are non-allocated
+DWARF 4 metadata, and frame information covers saved registers so a caller's
+register-resident locals remain inspectable while stopped in a callee.
+
+DWARF is an output encoding. Source identity, represented types and allocation
+facts remain usable by other emitters, including a possible future PDB path;
+neither DWARF record numbers nor ELF packaging belong in the neutral IR.
+
+For a source session, compile with `refine --debug=full --emit=exe
+program.ldn -o program`, then open `gdb ./program`. Ordinary commands such as
+`break main`, `break program.ldn:12`, `run`, `next`, `step`, `bt`, `info args`
+and `info locals` use the emitted metadata. `--optimize=none --specialize=off`
+gives the reference code path; full debug also supports the default baseline
+optimization. The compilation directory is recorded so relative source paths
+can be found when GDB starts elsewhere.
+
+GDB uses its C-compatible expression and display rules for these values;
+it does not parse Landin expressions. For example, inspect a pointer with
+`print *pointer_param`. Variant displays expose a zero-based `tag` and named
+case overlays at their actual physical offsets. Inspect the case selected by
+the tag; the other overlays describe inactive storage.
+
 D192 supersedes D186's string representation through those same seams:
 checking owns the exact three-u32 struct contract and named-forward-only rule;
 lowering constructs file_id, line and column through the ordinary aggregate
 ABI. IR records only which source files have injected coordinates, and
-`Landin.Source_Maps` renders their off-target filename table. The driver writes
+`Landin.Source_Maps` renders their off-target filename table, or the complete
+source table when full debugging is requested. The driver writes
 it beside the output and passes its build identity to the linker. Flow and
 reference checking use the checker-owned caller signature fact and resolution's
 labelled positions; neither constructs source sites. No per-site datum or

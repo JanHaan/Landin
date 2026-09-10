@@ -9,9 +9,11 @@
 FROM docker.io/library/debian@sha256:f324c7ff54321e8d9c588493a20244965938ce0aa50bbd1022d38010e9ffc4b1
 
 #  Only what the pinned Ada toolchain needs to link a program and fetch itself,
-#  plus R4.40's deliberately separate C frontend.  clang-19 reads the external
-#  headers and compiles generated adapters; libc6-dev supplies the matching
-#  Linux x86-64 C headers and link-time sysroot.  A broad build-essential would
+#  plus R4.40's deliberately separate C frontend and R4.60's GDB. clang-19
+#  reads external headers and compiles generated adapters; libc6-dev supplies
+#  the Linux x86-64 C headers and link-time sysroot. qemu-user supplies a GDB
+#  remote stub for the local debugger loop: Rosetta does not implement the
+#  ptrace register operations required by native GDB. A broad build-essential would
 #  install another unselected C toolchain rather than make either role clearer.
 RUN apt-get update \
  && apt-get install --no-install-recommends --yes \
@@ -19,8 +21,10 @@ RUN apt-get update \
         clang-19 \
         curl \
         binutils \
+        gdb \
         libc6-dev \
         python3 \
+        qemu-user \
  && rm -rf /var/lib/apt/lists/*
 
 ARG GNAT_VERSION=16.1.0-1

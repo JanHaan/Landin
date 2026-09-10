@@ -128,6 +128,18 @@ the local loop and the native `debian/stable` gate select the same Clang
 19.1.7 frontend and Debian 13 C-header baseline. GNAT and GPRbuild retain their
 existing versions and archive checksums.
 
+R4.60 adds GDB from that same Debian channel for `scripts/debug.sh`; the Linux
+nix shell provides GDB from its locked package set. The native gate runs the
+script in both compiler build modes. It checks source debugging of emitted
+programs, which is separate from debugging the Ada compiler itself.
+
+Native GDB cannot read registers through Rosetta's `ptrace` interface:
+even `/bin/true` reports `Cannot PTRACE_GETREGS` and `Couldn't get CS register`.
+The local image therefore also supplies `qemu-user`. Its `qemu-x86_64` GDB
+remote stub supports the same breakpoint, register and stack operations
+without Rosetta's ptrace path. This explicit local transport remains emulated
+evidence; the native gate uses GDB directly and has no fallback.
+
 `environments/pins.sh` remains the one place an independently downloaded Ada
 toolchain version or checksum is written; `check.py` holds the recipe,
 `compiler/ada/TOOLCHAIN.md`, the CI manifest and the nix shell to those same

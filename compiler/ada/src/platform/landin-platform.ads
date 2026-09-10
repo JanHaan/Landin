@@ -33,6 +33,10 @@ package Landin.Platform is
    function Exists (Host : Filesystem; Path : String) return Boolean
      is abstract;
 
+   --  Debug-only path context.  Virtual filesystems may leave it empty;
+   --  native adapters supply the absolute directory without rewriting inputs.
+   function Working_Directory (Host : Filesystem) return String is abstract;
+
    --  True for names of the same object, including links and relative paths,
    --  or when identity cannot safely be distinguished. Missing output leaves
    --  use actual parent identity and destination-filesystem name equivalence,

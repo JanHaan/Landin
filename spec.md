@@ -11607,7 +11607,13 @@ resolving a triple. A manually linked assembly can use the assembly check.
 Neither the filename map nor a lookup routine enters the running program;
 without the map a diagnostic can still print all three coordinates. This is
 bootstrap artifact packaging, not a frozen debug format or stage protocol.
-R4.60 consumes the same source identities for native debugger information.
+R4.60's `--debug=full` also emits this map, with every compilation source,
+and uses these same file IDs for native debugger line information. The default
+`--debug=none` retains the caller-only map. Debugger sections are optional
+off-target data and can be stripped from the executable without changing
+caller values or its ELF build identity. The source table continues to require
+exact assembly or build-ID matching; neither a basename nor a map from a
+different build is sufficient.
 
 **The alternatives:** one u32 site token would reduce transport and saved-log
 storage to four bytes, but even its line would need a lookup table. The chosen

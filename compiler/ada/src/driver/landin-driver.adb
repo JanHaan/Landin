@@ -7,7 +7,9 @@ with Landin.Backend.Toolchain;
 with Landin.Backend.X86_64;
 with Landin.Build_Reports;
 with Landin.Build_Reports.Sources;
+with Landin.Checking;
 with Landin.Configuration;
+with Landin.Debugging;
 with Landin.IR.Simplification;
 with Landin.IR.Specialization;
 with Landin.Optimization;
@@ -46,6 +48,7 @@ package body Landin.Driver is
    package Module_Diagnostics renames Landin.Diagnostics.Modules;
 
    use type Landin.IR.Item_Id;
+   use type Landin.Checking.Signature_Id;
    use type Landin.IR.Item_Kind;
    use type Landin.Modules.Module_Id;
    use type Landin.Platform.List_Status;
@@ -110,6 +113,7 @@ package body Landin.Driver is
       & "  --build-mode=NAME   debug (default) or release" & LF
       & "  --optimize=NAME     none, size (default), or speed" & LF
       & "  --specialize=NAME   off, auto (default), or all" & LF
+      & "  --debug=NAME        none (default) or full source debugging" & LF
       & "  --build-report=PATH write deterministic build evidence JSON" & LF
       & "  --root=DIR          append an ordered module import root" & LF
       & "  --emit=asm|exe      write assembly, or assemble and link" & LF
@@ -170,6 +174,7 @@ package body Landin.Driver is
       Optimization : Landin.Optimization.Options :=
         Landin.Optimization.Default_Options;
       Optimize_Seen, Specialize_Seen, Report_Seen : Boolean := False;
+      Debug_Seen, Full_Debug : Boolean := False;
       Emit_Seen, Output_Seen : Boolean := False;
       Index     : Positive := 1;
    begin
@@ -234,6 +239,16 @@ package body Landin.Driver is
                   end if;
                   Specialize_Seen := True;
                end;
+
+            elsif Starts_With (Argument, "--debug=") then
+               if Debug_Seen
+                 or else After (Argument, "--debug=") not in "none" | "full"
+               then
+                  Unknowns.Append (Argument);
+                  Bad_Use := True;
+               end if;
+               Debug_Seen := True;
+               Full_Debug := After (Argument, "--debug=") = "full";
 
             elsif Starts_With (Argument, "--build-report=") then
                if Report_Seen
@@ -310,9 +325,9 @@ package body Landin.Driver is
 
       --  Compilation controls do not modify informational actions, and a
       --  build report describes an emitted artifact, not a checking request.
-      if ((Optimize_Seen or Specialize_Seen or Report_Seen)
+      if ((Optimize_Seen or Specialize_Seen or Report_Seen or Debug_Seen)
           and then (Wants_Usage or Wants_Identity))
-        or else (Report_Seen and then Emit = Emit_Nothing)
+        or else ((Report_Seen or Debug_Seen) and then Emit = Emit_Nothing)
         or else ((Optimize_Seen or Specialize_Seen)
                  and then Natural (Inputs.Length) = 0)
         or else (Output_Seen and then
@@ -887,7 +902,43 @@ package body Landin.Driver is
 
             declare
                Emitted : Unbounded.Unbounded_String;
+               Debug : aliased Landin.Debugging.Information
+                 (Landin.Stages.Trees (Context));
             begin
+               if Full_Debug then
+                  Landin.Debugging.Set_Directory
+                    (Debug, Host.Working_Directory);
+                  for Index in 1 .. Landin.Stages.Source_Count (Context) loop
+                     Landin.Debugging.Append
+                       (Debug, Landin.Stages.Source
+                          (Context, Landin.Stages.Nth_Source
+                            (Context, Index)));
+                  end loop;
+                  for Index in 1 .. Landin.Checking.Declaration_Limit
+                    (Landin.Stages.Types (Context).all)
+                  loop
+                     declare
+                        Binding : constant Landin.Checking.Declaration_Id :=
+                          Landin.Checking.Declaration_Id (Index);
+                        Shape : constant Landin.Checking.Signature_Id :=
+                          Landin.Checking.Result_Shape_Of
+                            (Landin.Stages.Types (Context).all, Binding);
+                     begin
+                        if Shape /= Landin.Checking.No_Signature then
+                           for Field in 1 ..
+                             Landin.Checking.Signature_Result_Count
+                               (Landin.Stages.Types (Context).all, Shape)
+                           loop
+                              Landin.Debugging.Append_Result_Name
+                                (Debug, Binding,
+                                 Landin.Checking.Nth_Signature_Result
+                                   (Landin.Stages.Types (Context).all,
+                                    Shape, Field).Name);
+                           end loop;
+                        end if;
+                     end;
+                  end loop;
+               end if;
                Landin.Backend.X86_64.Emit
                  (Landin.Stages.Code (Context).all,
                   Landin.Stages.Meanings (Context).all,
@@ -898,14 +949,16 @@ package body Landin.Driver is
                     (Landin.Stages.Code (Context).all,
                      Landin.Stages.Meanings (Context).all,
                      Landin.Stages.Modules (Context).all,
-                     Landin.Stages.Identities (Context).all));
-               if Landin.IR.Caller_Source_Count
+                     Landin.Stages.Identities (Context).all),
+                  Debug => (if Full_Debug then Debug'Access else null));
+               if Full_Debug or else Landin.IR.Caller_Source_Count
                  (Landin.Stages.Code (Context).all) > 0
                then
                   declare
                      Map : constant Landin.Source_Maps.Artifact :=
                        Landin.Source_Maps.Create
-                         (Context, Unbounded.To_String (Emitted));
+                         (Context, Unbounded.To_String (Emitted),
+                          All_Sources => Full_Debug);
                   begin
                      Emitted := Map.Assembly;
                      Map_Id := Unbounded.To_Unbounded_String (Map.Build_Id);

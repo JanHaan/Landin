@@ -7450,6 +7450,13 @@ package body Landin.Stages.Lowering is
                      Subject       => Alias_Subject,
                      Which         => Which,
                      Payload_Field => Payload);
+                  IR.Note_Source_Alias
+                    (Unit.all, Filling,
+                     (Binding => Id, Site => Site_Of (Of_Tree, Binding),
+                      Place => Location.Place, Field => Location.Base,
+                      Initialized_On_Entry => True),
+                     Payload_Steps
+                       (Stored_Steps (Location), Which, Payload));
                end;
             end loop;
          end Bind;
@@ -8897,6 +8904,14 @@ package body Landin.Stages.Lowering is
                   Subject       => Syn.No_Node,
                   Which         => 0,
                   Payload_Field => 0);
+               IR.Note_Source_Alias
+                 (Unit.all, Filling,
+                  (Binding => Element_Id,
+                   Site => Site_Of (Of_Tree, Element_Node),
+                   Place => (Kind => IR.Runtime_Address,
+                             Address => Address_Slot),
+                   Field => 0, Initialized_On_Entry => True),
+                  IR.No_Path_Steps);
             end;
          elsif Is_Text then
             declare
@@ -11159,6 +11174,15 @@ package body Landin.Stages.Lowering is
                                           Subject       => Syn.No_Node,
                                           Which         => 0,
                                           Payload_Field => 0);
+                                       IR.Note_Source_Alias
+                                         (Unit.all, Filling,
+                                          (Binding => Id,
+                                           Site => Site_Of (Of_Tree, Stmt),
+                                           Place => Source,
+                                           Field => Aliases
+                                             (Declared (Id)).Field,
+                                           Initialized_On_Entry => False),
+                                          IR.No_Path_Steps);
                                     end;
                                  end if;
                               end;
@@ -12492,6 +12516,12 @@ package body Landin.Stages.Lowering is
                      Subject       => Syn.No_Node,
                      Which         => 0,
                      Payload_Field => 0);
+                  IR.Note_Source_Alias
+                    (Unit.all, Filling,
+                     (Binding => Id, Site => Site_Of (Of_Tree, Returned),
+                      Place => (Kind => IR.Frame_Slot, Slot => Result),
+                      Field => Which, Initialized_On_Entry => False),
+                     IR.No_Path_Steps);
                end;
             end loop;
          end if;

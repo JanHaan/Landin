@@ -51,6 +51,14 @@ package body Landin.Platform.Native is
         (Interfaces.C.To_C (Left), Interfaces.C.To_C (Right)) /= 0;
    end Paths_Overlap;
 
+   overriding function Working_Directory
+     (Host : Native_Filesystem) return String
+   is
+      pragma Unreferenced (Host);
+   begin
+      return Directories.Current_Directory;
+   end Working_Directory;
+
    overriding function Is_Directory
      (Host : Native_Filesystem; Path : String) return Boolean
    is

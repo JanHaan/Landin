@@ -144,6 +144,15 @@ package Landin.Backend is
       Facts   : Landin.Targets.Target_Facts)
       return Landin.Targets.Layouts.Plan;
 
+   --  The common physical interpretation of an immutable subobject path.
+   --  Machine addresses and off-target debug locations use the same walk.
+   function Path_Offset
+     (Of_Unit : Landin.IR.Unit;
+      Shape : Landin.IR.Field_Shape;
+      Path : Landin.IR.Path_Step_Array;
+      Facts : Landin.Targets.Target_Facts)
+      return Landin.Targets.Byte_Count;
+
    function Nominal_Layout
      (Of_Unit : Landin.IR.Unit;
       Nominal : Landin.IR.Nominal_Type_Id;

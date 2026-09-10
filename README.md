@@ -212,7 +212,11 @@ evidence-proved specialization and factual build reports. The authoritative
 native Linux x86-64 gate passed for the exact implementation revision; the
 closure evidence is recorded in ROADMAP.md.
 
-**Next roadmap item: R4.60 — Implement usable Linux source debugging (planned).**
+**Current roadmap work: R4.60 — Implement usable Linux source debugging.**
+
+`refine --debug=full --emit=exe program.ldn -o program` requests Linux source
+debugging. The default is `--debug=none`; debugging metadata is independent of
+the program's optimization and source build-mode settings.
 
 D209--D211 specify compact numeric-array arithmetic, explicit optimal field
 placement and optional evidence-proved specialization. The driver selects
