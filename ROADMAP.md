@@ -4956,7 +4956,7 @@ the documented baseline.
 
 ### R4.60 — Implement usable Linux source debugging
 
-Status: active
+Status: complete
 Depends on: R1.70, R1.80, R4.50
 
 Emit source line tables, symbolic frames and inspectable parameters/locals for
@@ -5005,6 +5005,51 @@ It defaults to native GDB; an explicit QEMU remote-stub mode supplies local
 feedback because Rosetta cannot implement GDB's ptrace register operations.
 The authoritative native Linux gate has no fallback and runs the script with
 both debug and release compiler builds.
+
+Finished-change validation used the same 211 compiler source/project
+checksum entries in Mac and Linux debug/release builds. The focused
+debugging suite passed all 11 cases and 129 checks. Complete local Linux
+suites passed all 555 cases and 188,868 checks in each compiler mode.
+Complete Mac suites each ran 555 cases and 187,138 checks, passing 554
+cases; the sole failed case was the expected Linux runtime-execution case
+because the cross-toolchain is absent. Native report identity passed ten
+tests in every host/compiler-mode combination.
+
+Scripted local QEMU debugger acceptance passed none/off, size/auto and the
+conditional size/all profile with both compiler builds. Auto factually
+declined the two concrete instances on cost; size/all specialized both with
+eight direct calls each. Every profile proved source breakpoints, stepping,
+nested stacks, caller locals (including saved-register values under
+optimization), represented types, match/destructuring/loop aliases, exact
+source maps and build IDs, and stripped-copy execution without debug
+sections or source filenames. Observed compilation-unit, line-table and CIE
+versions were respectively 4, 3 and 1. Omitted debug and explicit none
+produced identical assembly and caller-only maps in all six source build-
+mode and optimization combinations.
+
+Object quality passed all 42 profiles in each Linux compiler mode. A local
+shared-mount artifact-identity collision was fixed by placing the harness's
+private files in local temporary storage while retaining its complete
+measured evidence; both reruns passed with every oracle unchanged. Clang 19
+bindings passed all 41 tests. Full document checks, the five build-inventory
+tests, the six roadmap-progress tests and complete no-drop site rendering
+passed. Independent finished-change source reviews approved the compiler,
+debugger harness and environment fixes; confirmed initialization, source-
+alias, source-member-name and debugger-oracle findings were repaired and
+verified.
+
+The authoritative native Linux x86-64 SourceHut gate closed R4.60: `hut builds
+show 1884951` reports `SUCCESS` for the exact committed revision
+`0e854b7da159990e403e75cefbfbb886b9d6e0ff`, titled "Use local temporary storage
+for object quality artifacts". Its `toolchain`, `identify`, `build`, `test`,
+`release`, `report-identity`, `quality`, `debugging`, `bindings`, `checks`,
+`identity` and `pages` tasks all succeeded. This includes clean debug and
+release validation and strict native GDB acceptance in both compiler modes.
+The `pages` task correctly skipped publication on this feature branch; no
+site publication is claimed. The job is
+<https://builds.sr.ht/~sinnfrei/job/1884951>. The separate Nix shell check also
+passed its complete suite and four dynamic-libc profiles in job 1884933 at
+`08c46850dfa1023351b4884d588734a1b5ab8c8f`; it remains a non-gate.
 
 Exit evidence: scripted debugger sessions prove breakpoints, stepping, stacks
 and selected locals in unoptimized and baseline-optimized builds.
