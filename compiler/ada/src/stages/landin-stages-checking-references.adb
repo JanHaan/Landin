@@ -1,4 +1,5 @@
 with Ada.Containers.Vectors;
+with Ada.Unchecked_Deallocation;
 
 with Landin.Checking;
 with Landin.Cleanup;
@@ -131,6 +132,10 @@ package body Landin.Stages.Checking.References is
         Into'Unchecked_Access;
 
       subtype Function_Table is Origin_Table (Origins'Range);
+      type Function_Table_Access is access Function_Table;
+
+      procedure Free is new Ada.Unchecked_Deallocation
+        (Object => Function_Table, Name => Function_Table_Access);
 
       --  The lexical cleanup stack, kept the way
       --  Landin.Stages.Checking.Flow keeps it: `defer` and `undo` register
@@ -150,15 +155,19 @@ package body Landin.Stages.Checking.References is
       --  One loop being analysed.  Its `break` edges are joined into
       --  Exit_State and its `continue` edges into Back_State; the loop
       --  handler joins the latter with the body's fallthrough to form the
-      --  back edge.
+      --  back edge.  A function table grows quadratically with the number of
+      --  declarations because every fact carries declaration-origin bits.
+      --  Allocate the uncommon transfer states only when an edge needs one;
+      --  embedding both in a vector element makes Append copy program-sized
+      --  values on the host stack.
       type Loop_Frame is record
          Label        : Landin.Source.Names.Name_Id :=
            Landin.Source.Names.No_Name;
          Cleanup_Base : Natural := 0;
          Exits        : Boolean := False;
-         Exit_State   : Function_Table := [others => No_Origin];
+         Exit_State   : Function_Table_Access := null;
          Continues    : Boolean := False;
-         Back_State   : Function_Table := [others => No_Origin];
+         Back_State   : Function_Table_Access := null;
          Value        : Origin_Fact := No_Value_Edge;
       end record;
 
@@ -166,6 +175,14 @@ package body Landin.Stages.Checking.References is
         (Index_Type => Positive, Element_Type => Loop_Frame);
 
       Loop_Stack : Loop_Frames.Vector;
+
+      procedure Release (Frame : in out Loop_Frame);
+
+      procedure Release (Frame : in out Loop_Frame) is
+      begin
+         Free (Frame.Exit_State);
+         Free (Frame.Back_State);
+      end Release;
 
       --  Where the traversal is: the block being processed, the statement
       --  within it, and the loop whose body that block is, if any.  The
@@ -2107,6 +2124,7 @@ package body Landin.Stages.Checking.References is
                      Body_Fell : Boolean;
                      Next : Function_Table := Entry_State;
                   begin
+                     Release (Frame);
                      Sink := (if Reporting
                               then Outer_Sink
                               else Scratch'Unchecked_Access);
@@ -2144,7 +2162,7 @@ package body Landin.Stages.Checking.References is
                         Join_Table (Next, Origins);
                      end if;
                      if Frame.Continues then
-                        Join_Table (Next, Frame.Back_State);
+                        Join_Table (Next, Frame.Back_State.all);
                      end if;
                      Converged := Next = Head;
                      Head := Next;
@@ -2208,31 +2226,34 @@ package body Landin.Stages.Checking.References is
                      Process_Block
                        (Tree, Syn.Complete_Body (Tree, Node), Fell);
                      declare
-                        Completion : constant Loop_Frame :=
-                          Loop_Stack.Last_Element;
+                        Completion : Loop_Frame := Loop_Stack.Last_Element;
                      begin
                         Loop_Stack.Delete_Last;
                         Join (Frame.Value, Completion.Value);
                         if Completion.Exits then
                            if Frame.Exits then
                               Join_Table
-                                (Frame.Exit_State, Completion.Exit_State);
+                                (Frame.Exit_State.all,
+                                 Completion.Exit_State.all);
                            else
                               Frame.Exit_State := Completion.Exit_State;
+                              Completion.Exit_State := null;
                               Frame.Exits := True;
                            end if;
                         end if;
+                        Release (Completion);
                      end;
                   end if;
                   if Frame.Exits then
                      if Falls_Through then
-                        Join_Table (Origins, Frame.Exit_State);
+                        Join_Table (Origins, Frame.Exit_State.all);
                      else
-                        Origins := Frame.Exit_State;
+                        Origins := Frame.Exit_State.all;
                      end if;
                      Falls_Through := True;
                   end if;
                   Statement_Value := Frame.Value;
+                  Release (Frame);
                end;
 
             when Syn.Return_Statement | Syn.Fail_Statement
@@ -2284,15 +2305,18 @@ package body Landin.Stages.Checking.References is
                                        Join (Frame.Value, Value);
                                        if Frame.Exits then
                                           Join_Table
-                                            (Frame.Exit_State, Origins);
+                                            (Frame.Exit_State.all, Origins);
                                        else
-                                          Frame.Exit_State := Origins;
+                                          Frame.Exit_State :=
+                                            new Function_Table'(Origins);
                                           Frame.Exits := True;
                                        end if;
                                     elsif Frame.Continues then
-                                       Join_Table (Frame.Back_State, Origins);
+                                       Join_Table
+                                         (Frame.Back_State.all, Origins);
                                     else
-                                       Frame.Back_State := Origins;
+                                       Frame.Back_State :=
+                                         new Function_Table'(Origins);
                                        Frame.Continues := True;
                                     end if;
                                     Loop_Stack.Replace_Element (Target, Frame);
