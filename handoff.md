@@ -254,7 +254,14 @@ evidence-proved specialization and factual build reports. The authoritative
 native Linux x86-64 gate passed for the exact implementation revision; the
 closure evidence is recorded in ROADMAP.md.
 
-**Current roadmap work: R4.60 — Implement usable Linux source debugging.**
+R4.60 completes usable Linux source debugging: DWARF source lines, symbolic
+frames and inspectable parameters/locals, including optimized caller frames.
+The authoritative native gate passed scripted GDB acceptance with debug and
+release compiler builds. ROADMAP.md records the complete closure evidence.
+Debug provenance remains independent of DWARF encoding for a possible future
+PDB emitter; PDB support is not implemented.
+
+**Next roadmap item: R4.70 — Complete and run the derived container program (planned).**
 
 `refine` runs the frontend, lowers and
 verifies target-neutral IR, emits Linux x86-64 assembly, and can assemble and
