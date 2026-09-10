@@ -568,11 +568,11 @@ map_operations: () -> (ok: bool) =
     map.remove(compact, k1) else (problem) _ = problem return end
     map.remove(compact, k2) else (problem) _ = problem return end
     map.remove(compact, k3) else (problem) _ = problem return end
-    before_capacity: usize = mem.capacity(compact.buckets)
+    before_capacity: usize = map.capacity(compact)
     before_tombstones: usize = compact.tombstones
     map.insert(compact, provider, k7, 77) else (problem) _ = problem return end
     compacted: bool = before_capacity == 8 and before_tombstones == 3
-                      and mem.capacity(compact.buckets) == before_capacity
+                      and map.capacity(compact) == before_capacity
                       and compact.tombstones == 0
                       and map.length(compact) == 4
                       and map_lacks(compact, 1) and map_lacks(compact, 2)
@@ -645,7 +645,7 @@ map_failure_case: (allowed: usize, rollback_frees: usize) -> (ok: bool) =
     map.remove(value, k2) else (problem) _ = problem return end
     map.remove(value, k3) else (problem) _ = problem return end
     initial: bool = map.length(value) == 3
-                    and mem.capacity(value.buckets) == 8
+                    and map.capacity(value) == 8
                     and value.tombstones == 3
                     and failing.attempts(state) == 3
                     and failing.delegated(state) == 3
@@ -662,7 +662,7 @@ map_failure_case: (allowed: usize, rollback_frees: usize) -> (ok: bool) =
         failed = true
     end
     preserved: bool = failed and map.length(value) == 3
-                      and mem.capacity(value.buckets) == 8
+                      and map.capacity(value) == 8
                       and value.tombstones == 3
                       and map_lacks(value, 1)
                       and map_lacks(value, 2)
@@ -686,7 +686,7 @@ map_failure_case: (allowed: usize, rollback_frees: usize) -> (ok: bool) =
     expected_allocations: usize = 6 + allowed
     expected_attempts: usize = 7 + allowed
     retried: bool = map.length(value) == 4
-                    and mem.capacity(value.buckets) == 8
+                    and map.capacity(value) == 8
                     and value.tombstones == 0
                     and map_lacks(value, 1)
                     and map_lacks(value, 2)
