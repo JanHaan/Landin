@@ -11,6 +11,7 @@ if [ -n "${LANDIN_QEMU:-}" ]; then
     set -- --qemu "$LANDIN_QEMU" "$@"
 fi
 
+python3 "$LANDIN_ROOT/compiler/tests/debugging/test_check.py"
 exec python3 "$LANDIN_ROOT/compiler/tests/debugging/check.py" \
     --refine "$LANDIN_BUILD_DIR/bin/refine" \
     --toolchain "$LANDIN_GNAT_HOME" \

@@ -65,6 +65,14 @@ The descriptor may be copied into a local binding without making its backing
 frame-local. This does not permit returning an address into a local array or
 constructing a view over uninitialized slots.
 
+The scalar side of that distinction is [0840]: `lenof` and other scalar
+operators copy no reference into their result. A saved length may survive a
+later container or descriptor mutation without keeping the old view alive.
+The reference itself may not. This also leaves prototype 1's DMA buffer
+escape, prototype 2's retained parser input and prototype 4's borrowed text
+and erased capability origins intact; no operand evaluation or storage
+lifetime rule is relaxed.
+
 ```landin
 public out_of_memory: atom
 
@@ -596,6 +604,17 @@ end get
 
 Grow at three quarters and count tombstones, so a map that is
 churned rather than filled still rehashes.
+
+The executable D198 map distinguishes that rehash from capacity growth:
+absent-key pressure with tombstones compacts at the same capacity, using the
+same three fallible acquisitions and publication-last rollback transaction.
+Only a tombstone-free crowded table doubles. Its `entries()` cursor and
+`next_entry` operation enumerate live key/value pairs rather than the raw
+dense prefix, which still contains removed values. Reference-bearing entries
+remain `from map`; a scalar copy retains no view. Cursors are manual positions:
+restart after mutation and never resume one on a different map. This supplies
+the complete derivative's enumeration without making the public map
+composition opaque or changing prototype 4's retained-reference obligations.
 
 ```landin
 crowded: (K: type is hashable, V: type, m: map(K, V)) -> (yes: bool) =

@@ -2709,6 +2709,10 @@ finding labels, so moving prose cannot stale a hand-copied location.
 | --- | --- | --- | --- |
 | `runtime/diagnostic-loggers-dispatch` | P2 | Y1 | recoverable diagnostics use a bounded or streaming capability without becoming parser failure |
 | `runtime/derived-parser` | P2 | Y1, Y4, Y5, Y6, Y7 | a complete recursive parser builds an arena AST, logs and recovers from syntax faults, and propagates allocation or diagnostic-delivery failure through shared erased evidence |
+| `runtime/derived-containers` | P3 | Z1, Z2, Z3, Z4, Z5, Z6, Z7, Z8, Z9, Z10, Z11, Z12, Z13, Z14, Z15, Z16, Z17, Z18, Z19 | the complete client composes initialized containers, explicit and failing providers, sorting, tree and heterogeneous evidence; its derivation manifest distinguishes executable resolutions from preserved no-gap or superseded sketches |
+| `negative/r470-container-entry-live-map` | P3 | Z5, Z16 | a pointer-bearing enumerated entry keeps its map live across insertion and release |
+| `negative/r470-container-entry-wrong-from` | P3 | Z5 | entry extraction retains the exact map origin |
+| `negative/r470-container-missing-order-evidence` | P3 | Z2 | a constrained generic application call requires its concrete ordering conformance |
 | `runtime/parameterized-struct-values` | P3 | Z2 | type and fixed parameters on nominal values |
 | `runtime/r250-references` | P3 | Z3, Z18 | pointer/slice carriers and implicit conventions |
 | `negative/borrowed-source-inout` | P3 | Z5, Z16 | a derived view prevents moving its source |
@@ -5062,10 +5066,42 @@ Depends on: R4.20, R4.50, R4.60
 Turn prototype 3 into a complete hosted `.ldn` program and negative corpus,
 with derivation mapping and deliberately failing allocator cases.
 
+`runtime/derived-containers` now hosts the reusable
+`examples/derived_containers/workload` module. Its `DERIVATION.md` maps every
+prototype section and Z1--Z19, explicitly retaining historical/no-gap
+resolutions instead of reviving obsolete raw-storage sketches. The program
+uses the ordinary `core` modules: it reverses the twenty-number seed, grows
+and sorts a list, maps numbers to squares, exercises small-vector spill,
+initialized pointer storage, colliding map keys and entry walks, indexed tree
+nodes and names, and a heterogeneous `list(any drawable)`. Every allocating
+operation receives its provider. Reclaiming pool/countdown combinations pin
+vector and small-vector rollback, all three map-compaction acquisition
+failures, tree append refusal, retry and exact final cleanup; arena no-op
+`free` is not counted as reclamation evidence. The entry returns 42 only when
+all fourteen path booleans hold and writes no output. Its three new negatives
+cover missing ordering evidence and enumerated-entry live-view/exact-source
+origins; the manifest cites the existing stronger raw-storage, frame-escape
+and composed-conformance controls rather than duplicating them.
+
 Complete direct scalar-operator origin normalization, including saved `lenof`
 across later source mutation. R4.20 uses ordinary scalar-returning length
 helpers and immediate assertions; that equivalent does not close the operator
-limitation.
+limitation. [1910] and [0840] distinguish the reference-free result from its
+operand's storage provenance: saving a number retains no view, while address
+and range formation still derive from the selected backing. The repair must
+preserve evaluated-operand checks, short-circuit joins and D14/D31's
+unevaluated measurement rules.
+
+The scalar repair now separates computed scalar values from place storage
+facts after operand checking and control-flow joins. The runtime
+`r470-scalar-operator-origins` saves direct slice lengths across `inout` and
+`sink`, combines unary, arithmetic, comparison and logical results, and observes
+operand effects and short-circuiting. Its fixed-array field case measures a
+legal copied-array binding; the grammar still does not admit general `lenof`
+selection expressions. `negative/r470-scalar-reference-controls` retains
+ordered L0314/L0315/L0316 checks for operand escapes, genuine live pointer/slice
+views and exact `from`. Focused Linux feedback passes; this does not substitute
+for the complete item's native exit gate.
 
 Own the remaining nested-array field range normalization observed by R4.20:
 a range over a struct field whose elements are fixed arrays must preserve the
@@ -5074,13 +5110,47 @@ direct array backing and typed whole-array selection copies; this additional
 composition must be implemented or explicitly amended before complete P3
 parity is claimed.
 
+The R4.40 recursive descriptor machinery already preserves the complete
+supported element shape through checking and neutral-IR shape construction.
+R4.70's checking and lowering cases pin concrete nested-array field ranges,
+including deep children, zero-length children, nominal and reference-bearing
+elements, and read-only/mutable views. `runtime/r470-array-field-range` observes
+the concrete composition. The older `parameterized-struct-unused-shape` and
+template-order negatives remain L0304: they contain unsupported atom-set array
+elements, not the concrete nested-array shapes repaired here. They have not
+been weakened or retired.
+
+Guarded payload lowering did need repair. An array match alias followed by
+child selection must carry both the selected payload step and the full child
+path; compact direct variant selectors are valid only when no child follows.
+`runtime/r470-nested-guarded-field-range` exercises a variant payload's nested
+array ranges and reads back writes made through its aliases.
+
 Repair the direct fixed-array parameter access exposed by the running
 fannkuch example. Changing `reverse_prefix` in
 `runtime/benchmark-game-fannkuch-redux` from `(values: []mut u8)` to
 `(inout values: [7]u8)` and passing `permutation` directly makes the pinned
 R4.20 compiler report an internal defect. Its prefix-swap body also reproduces
-the failure in isolation. The example executes through the writable slice;
-that equivalent does not close the direct-parameter composition defect.
+the failure in isolation. The writable-slice equivalent did not close the
+direct-parameter composition defect.
+
+The repaired lowering forwards a root `inout` parameter's existing runtime
+address instead of taking the address of its pointer slot. Selected ordinary
+storage still uses the ordinary place-address path. The fannkuch source and
+its `examples.md` listing now use the direct fixed-array parameter and call;
+the output oracle remains checksum 228 and maximum 16.
+`runtime/r470-array-inout-parameter` and the one-address lowering case pin
+forwarding, reads, swaps, writes and evaluation order;
+`negative/r470-array-inout-parameter-shape-mismatch` retains rejection of a
+wrong fixed extent. The array partition's eight focused Linux selectors pass
+85 checks; complete and native integrated gates remain separate obligations.
+
+Also close R4.21's transferred map tombstone compaction and entry enumeration:
+reclaim dead pressure without unnecessary capacity growth, retain the existing
+three-acquisition rollback transaction, and enumerate only live entries with
+their exact reference origins. The complete derivative supplies the real
+container workload for R4.50's specialization/object measurements and R4.60's
+source-debugger acceptance, as transferred by R4.20.
 
 Exit evidence: list, small vector, map and tree paths execute on Linux x86-64;
 raw-storage, evidence and origin invariants are exercised.

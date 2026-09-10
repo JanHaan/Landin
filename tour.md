@@ -1529,6 +1529,12 @@ frame origin cannot leave a function, so whatever does
 leave is allocated or static by construction. A value that
 holds no references at all is unconstrained, which is
 another reason the idiom is handles and indices.
+A scalar computed from a view does not retain that view. In particular,
+saving `lenof xs` saves a number, not a borrow: the number may be used after
+`xs` or its container is changed. This does not exempt an operator's evaluated
+operands from their checks, or change [0370]'s unevaluated measurements.
+Taking an address or range is different: that reference still keeps the
+selected storage's origin [0430] [0790].
 
 ### [0850] Volatile is exempt from the borrow rule and from every
 
@@ -2772,13 +2778,23 @@ non-zeroable pointer element is its executable case.
 `core/map.map(K, V)` is the ordinary open-addressed map. `K is hashable` uses
 the separately declared `equatable` and composed `hashable` conformances;
 composition does not synthesize the parent conformance [1340]. Construction,
-insert, get, remove, length and release are its public operations. `get`
+insert, get, remove, length, capacity, entry enumeration and release are its
+public operations. `get`
 returns `V from map`, while retained pointer keys and values enter through
 `escaping` parameters. The implementation keeps fully initialized bucket
 records beside dense initialized key and value prefixes, so neither `K` nor
 `V` needs a zero image. A removed entry remains initialized storage until its
-tombstone is reused or the allocation is released; resource ownership of
-elements remains manual.
+tombstone is reused, rehashed away or the allocation is released; resource
+ownership of elements remains manual.
+
+`entries()` creates an enumeration cursor. `next_entry` receives the map and
+an `inout` cursor and returns a key/value `entry(K, V) from map`, or reports
+`end_of_entries`. A complete walk scans each bucket at most once and exposes
+only live entries. References in a returned entry still derive from the map;
+scalar copies do not retain a view [0840]. The cursor is a manually managed
+position, not a checked map/generation identity: restart after any mutation,
+and do not resume a cursor on a different map. Local reference checks do not
+replace that protocol.
 
 `map` is a public struct composition, not an encapsulated or deep-safe object.
 Its bucket, key and value storages and its counters are public fields. The
@@ -2806,7 +2822,9 @@ tombstone makes the table crowded. Only an absent key considers pressure;
 placement then remembers the first tombstone until it reaches a free bucket or
 the probe bound. Hashes are reduced modulo capacity as `u64` before conversion
 to `usize`, and load pressure counts tombstones with checked-equivalent
-arithmetic that cannot overflow. Rehash preflights all byte extents, acquires
+arithmetic that cannot overflow. Under absent-key pressure a table containing
+tombstones compacts at the same capacity; a tombstone-free table grows instead.
+Both paths use the same transaction. Rehash preflights all byte extents, acquires
 bucket, key and value storage in that order, migrates only used records into a
 private replacement, and publishes only after every fallible step. Failure of
 acquisition one, two or three consequently releases zero, one or two

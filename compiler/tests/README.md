@@ -76,7 +76,8 @@ feedback cannot look like the complete suite by accident. Run
 Every runtime and ABI fixture runs separately under `none/off`, `size/off`,
 `size/auto` and `speed/auto` (objective/specialization). Focused names containing
 `generic`, `any-` or `r450`, plus `allocator-vec-pressure`,
-`diagnostic-loggers-dispatch` and `core-io-erased-system`, also run `none/all`
+`diagnostic-loggers-dispatch`, `core-io-erased-system` and `derived-containers`,
+also run `none/all`
 and `speed/all`. A selected runtime/ABI fixture uses the same matrix. Artifact
 names and assertion labels include the profile. Each profile independently
 checks the original exact status, trap and output oracle; agreement with another
@@ -98,6 +99,16 @@ and loops, a tiny leaf, compact large-array arithmetic with real stack-page
 touches, explicit optimal layout, single-instance evidence specialization,
 a source-level two-instance size/speed threshold and final private-body
 folding. The specialization and folding probes also run none/all and speed/all.
+The complete `derived-containers` client runs all six profiles, preserving its
+status-42 and empty-output oracle. Its reports must identify real `core`
+container instances and factual specialization actions with retained evidence
+ABIs; forced specialization must actually select a container entry. Its object
+measurements are observations, not a new size budget or timing claim.
+The quality and debugger runners give this large rooted workload a separate
+900-second compiler-subprocess limit: its full-debug compilation already
+exceeds the ordinary 120-second limit on a native development host. Executable
+and debugger timeouts remain 120 seconds; slow compilation does not excuse a
+hung program or debugger.
 Existing insertion-sort and sieve-of-eratosthenes sources retain their original
 status-42 oracles; the other probes return zero. Scalar acceptance requires
 substantial stack-site, frame and instruction reductions, with no tiny-leaf
@@ -122,6 +133,21 @@ emitted program's line information, breakpoints, stepping, stack frames and
 selected parameters and locals. The native gate runs it separately with debug
 and release builds of the Ada compiler. The script fails if its tools or
 debugger operations are unavailable; missing debugger evidence is not a pass.
+
+The complete `derived-containers` program is a second workload in that same
+runner, using none/off, size/auto and size/all. Source markers in its real
+`containers_run` path locate the sorted list and completed composition. Two
+concrete `evidence_less` calls use the same high-bit operand as signed and
+unsigned values, requiring opposite comparison results. GDB must identify each
+selected provider's frame and source line, verify the two unwind steps back to
+`evidence_less` and `containers_run`, and inspect the caller's completed result
+binding. The stack includes the application and entry point; acceptance does
+not depend on GDB automatically printing return values. The runner retains
+source maps, build reports and transcripts;
+it checks source hashes, line tables, stripping and exact executable identity
+for the whole reached library closure, not a fixture-only copy of it.
+`python3 compiler/tests/debugging/test_check.py` exercises transcript refusals
+without GDB; `scripts/debug.sh` runs those regressions before the real sessions.
 
 The default transport is native GDB. For the Mac's translated local Linux
 loop, use `./scripts/linux-loop.sh ./scripts/debug.sh --runner=qemu`;
@@ -549,6 +575,26 @@ edit above an instruction does not rewrite the artefact.
 
 ## Derived programs
 
-The four prototype text files in the repository root stay exactly as they
-are. Complete derived `.ldn` programs are separate artefacts and arrive with
-the roadmap work that can compile them.
+The four prototype text files in the repository root remain design-stress
+sketches, including their omissions and historical findings. Complete derived
+`.ldn` programs are separate artefacts and arrive with the roadmap work that
+can compile them.
+
+`runtime/derived-parser` hosts the complete prototype-2-derived lexer and
+recovering configuration parser in `examples/config_parser`. Its derivation
+manifest maps the executable behavior and negative controls to the prototype.
+
+`runtime/derived-containers` hosts `examples/derived_containers/workload` as the
+complete prototype-3-derived workload. Its `DERIVATION.md` maps every prototype
+section and Z finding to the ordinary `core` modules, executable paths and
+negative corpus. The runtime entry requires every path to succeed before
+returning 42, with no stdout or stderr: list growth and sorting, direct fixed
+array mutation, nested-array field ranges, initialized raw storage, vector and
+small-vector failure/retry, map collisions/compaction/enumeration, each of the
+three map acquisition failures, tree traversal and heterogeneous dispatch.
+Providers remain explicit capabilities and cleanup is observable; no
+fixture-private replacement container library or implicit resource ownership
+stands in for the prototype. This same workload is mandatory in the six-profile
+runtime matrix, object-quality measurements and source-debugger acceptance
+above. These local runners do not replace the exact-revision native gate in
+`ROADMAP.md`.

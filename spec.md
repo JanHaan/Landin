@@ -1093,6 +1093,15 @@ derives from; an `inout` or `sink` use of that binding is refused when the view
 is read before being replaced.
 Volatile reference paths remain exempt [0850].
 
+A reference-free scalar operator result carries no reference origin [0840].
+This includes a saved `lenof` result: using that number after an `inout` use of
+its source does not keep a view of the source alive. Operand checks and effects
+still follow each operator's evaluation rules, including short-circuit joins;
+D14's fixed-array measurement and D31's literal-length measurement remain
+unevaluated. This value rule does not erase storage provenance: an address or
+range formed from a selected place still derives from that place's backing
+reference, even when reading the selected scalar would copy no reference.
+
 A `caller` position is part of the complete structural function signature. It
 has D192's ordinary nominal struct type: exactly three fields, in order,
 `file_id: u32`, `line: u32`, `column: u32`. Aliases retain that identity;
@@ -11994,8 +12003,21 @@ or implicit resource ownership is introduced.
 concrete key supplies both explicit conformances under [1340]; the child table
 does not synthesize its parent. Insert retains K and V through `escaping`
 parameters, and get returns `V from map`. Construction, insert, get, remove,
-length and release comprise this bounded public surface; the growth and rehash
-operations remain private.
+length, capacity, entry enumeration and release comprise this bounded public
+surface; the growth and rehash operations remain private. `entries()` starts
+a cursor; `next_entry` receives the map and an `inout` cursor and returns an
+`entry(K, V) from map`, or reports `end_of_entries`. It scans bucket positions
+in order, at most capacity positions across an unchanged map's complete walk,
+and yields only used entries, never free or dead positions. An empty or
+exhausted walk reports `end_of_entries` without reading a key or value.
+Reference-bearing entry fields retain the map origin; copying an entry does
+not detach its references. Scalar copies retain no reference origin [1910].
+
+A cursor is a manually managed position, not a checked association with one
+map or generation. Start a new cursor after mutation and do not transfer an
+in-progress walk to another map. Mutation invalidates the walk even when
+capacity does not change. The compiler's local reference checks remain in
+force, but do not enforce this cursor protocol.
 
 `map` itself is a public struct composition. Its three storages and two
 counters are public fields. A module-private bucket identity and
@@ -12015,8 +12037,10 @@ Equality and hash results for every stored key remain stable until removal,
 including when the key contains a pointer or reference: mutation of anything
 reached through it must not change either result while the key is stored.
 
-The starting capacity is eight and growth doubles after a checked maximum
-bound. Lookup, removal, placement and migration each probe at most capacity
+The starting capacity is eight. On absent-key insertion pressure, a table with
+tombstones rehashes at the same capacity, reclaiming its dead entries; a
+nonempty tombstone-free table doubles after a checked maximum bound. Lookup,
+removal, placement and migration each probe at most capacity
 records and wrap without adding one to the final index. Placement records the
 first dead bucket until a free bucket or the probe bound is reached. Insert
 first performs a separate read-only bounded search for an equal used key. If
@@ -12038,6 +12062,9 @@ private. Any failure releases every acquired replacement and leaves the old map
 untouched. After migration, only infallible drain, exact free and field
 publication steps remain. The success path frees each old extent once; release
 frees each current extent once and resets the map to its empty shape.
+Same-capacity compaction follows this exact three-acquisition transaction,
+including all three refusal and rollback positions; it is not in-place
+migration with partially published state.
 
 **Why dense prefixes:** they use D151's existing honest raw-storage state
 machine without pretending sparse K/V slots contain values. A dead bucket's
@@ -12045,7 +12072,12 @@ still-initialized K/V entry follows the language's manual element-resource
 contract, and its stable dense index makes tombstone reuse infallible after the
 ordinary invariant checks. The entry is exposed by the public composition; it
 is not claimed to be private. Three independent extents preserve Z19's actual
-failure pressure and D197's six-live-slot allocator case.
+failure pressure and D197's six-live-slot allocator case. Compaction keeps
+capacity and metadata bounded under churn rather than doubling solely to
+retire tombstones. It temporarily needs three replacement extents, just like
+growth; that explicit allocator cost preserves failure atomicity on small
+as well as hosted targets. Enumeration uses one position rather than a
+snapshot allocation or per-map generation metadata.
 
 **The alternatives:** sparse initialized K/V slices recreate Z8's false type
 claim and would require K and V to be zeroable. One allocation evades rather
@@ -12056,7 +12088,9 @@ load-factor products and narrowing the hash before modulo make valid behavior
 target-accidental. All are declined.
 
 **Pinned by** `runtime/r420-map-operations`,
-`runtime/r420-map-failure-rollback`,
+`runtime/r420-map-failure-rollback`, `runtime/derived-containers`,
+`negative/r470-container-entry-live-map`,
+`negative/r470-container-entry-wrong-from`,
 `negative/core-map-missing-parent-conformance`,
 `negative/core-map-key-frame-escape`, and
 `negative/core-map-value-frame-escape`. Runtime evidence includes pointer K/V,
@@ -12064,7 +12098,11 @@ collision wrap, churn, rehash, full and all-dead bounded probes, failure at
 acquisitions one/two/three with zero/one/two rollback frees, reclaiming-provider
 retry, exact old/new frees and final zero live allocations. At six-of-eight
 pressure with a preceding tombstone, an existing-key replacement under a zero
-allocation budget leaves provider attempts and map length unchanged.
+allocation budget leaves provider attempts and map length unchanged. The
+complete derivative additionally pins same-capacity compaction, each of its
+three allocation refusals and retries, and live-only scalar and pointer entry
+walks, including empty and repeatedly exhausted cursors. The two entry
+negatives preserve live-map and exact-source refusals.
 
 ### D199 — Text conversion preserves carriers and validation has checked and trapping edges
 

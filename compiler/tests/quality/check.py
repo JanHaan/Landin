@@ -16,12 +16,13 @@ import tempfile
 HERE = Path(__file__).resolve().parent
 PROFILES = (("none", "off"), ("size", "off"),
             ("size", "auto"), ("speed", "auto"))
+CONTAINER_COMPILE_TIMEOUT = 900
 
 
 def run(args: list[str], *, empty_output: bool = False,
-        expected_status: int = 0) -> str:
+        expected_status: int = 0, timeout: int = 120) -> str:
     completed = subprocess.run(args, check=False, capture_output=True,
-                               text=True, timeout=120,
+                               text=True, timeout=timeout,
                                env={**os.environ, "LC_ALL": "C"})
     require(completed.returncode == expected_status,
             f"command returned {completed.returncode}, expected {expected_status}: "
@@ -66,16 +67,19 @@ def frame_bytes(body: list[str]) -> int:
 
 def measure(refine: Path, tools: dict[str, str], source: Path,
             destination: Path, profile: tuple[str, str],
-            expected_status: int = 0) -> dict:
+            expected_status: int = 0, root: Path | None = None,
+            compile_timeout: int = 120) -> dict:
     assembly = destination.with_suffix(".s")
     report = destination.with_suffix(".json")
     obj = destination.with_suffix(".o")
     args = [str(refine), str(source), "--emit=asm", "-o", str(assembly),
             f"--optimize={profile[0]}", f"--specialize={profile[1]}",
             f"--build-report={report}"]
-    run(args)
+    if root is not None:
+        args.append(f"--root={root}")
+    run(args, timeout=compile_timeout)
     first_assembly, first_report = assembly.read_bytes(), report.read_bytes()
-    run(args)
+    run(args, timeout=compile_timeout)
     require(assembly.read_bytes() == first_assembly,
             f"nondeterministic assembly: {source.name}/{profile}")
     require(report.read_bytes() == first_report,
@@ -106,6 +110,7 @@ def measure(refine: Path, tools: dict[str, str], source: Path,
     run([tools["gcc"], "-no-pie", str(obj), "-o", str(destination)])
     run([str(destination)], empty_output=True, expected_status=expected_status)
     return {"text_bytes": text_bytes, "build": build,
+            "sources": parsed["sources"], "items": parsed["items"],
             "section_bytes": section_bytes, "function_bytes": function_bytes,
             "symbol_output": symbols, "expected_status": expected_status,
             "object_sha256": hashlib.sha256(obj.read_bytes()).hexdigest(),
@@ -144,12 +149,18 @@ def main() -> None:
         sources = {name: HERE / f"{name}.ldn" for name in
                    ("scalars", "layout", "specialization", "folding")}
         expected_status = {}
-        for name in ("insertion-sort", "sieve-of-eratosthenes"):
+        roots = {}
+        for name in ("insertion-sort", "sieve-of-eratosthenes",
+                     "derived-containers"):
             fixture = HERE.parent / "fixtures" / "runtime" / name
             metadata = dict(line.split(":", 1) for line in
                             (fixture / "fixture.meta").read_text().splitlines()
                             if ":" in line and not line.startswith("#"))
-            sources[name] = fixture / metadata["program"].strip()
+            if "root" in metadata:
+                sources[name] = fixture
+                roots[name] = (fixture / metadata["root"].strip()).resolve()
+            else:
+                sources[name] = fixture / metadata["program"].strip()
             expected_status[name] = int(metadata["status"])
         sources["threshold"] = (HERE.parent / "fixtures" / "runtime"
                                 / "r450-specialization-threshold" / "main.ldn")
@@ -162,13 +173,19 @@ def main() -> None:
         for name, source in sources.items():
             evidence[name] = {}
             profiles = PROFILES
-            if name in ("specialization", "folding", "threshold"):
+            if name in ("specialization", "folding", "threshold",
+                        "derived-containers"):
                 profiles += (("none", "all"), ("speed", "all"))
             for profile in profiles:
                 key = "-".join(profile)
+                # The rooted client takes over two minutes to compile even
+                # natively. Keep this allowance separate from execution.
+                compile_timeout = (CONTAINER_COMPILE_TIMEOUT
+                                   if name == "derived-containers" else 120)
                 evidence[name][key] = measure(
                     refine, tools, source, scratch / f"{name}-{key}", profile,
-                    expected_status.get(name, 0))
+                    expected_status.get(name, 0), roots.get(name),
+                    compile_timeout)
         base = evidence["scalars"]["none-off"]
         for key in ("size-off", "size-auto", "speed-auto"):
             optimized = evidence["scalars"][key]
@@ -281,6 +298,36 @@ def main() -> None:
             require(sum(r["shared_with"] != 0 for r in routines)
                     == (0 if selected else 1),
                     f"{key}: threshold witness lost its shared fallback")
+        # The complete P3 client supplies a real container workload, rather
+        # than another policy probe. Its measurements have no size budget;
+        # specialization must stay factual and preserve the execution oracle.
+        for key, measured in evidence["derived-containers"].items():
+            decisions = measured["build"]["specializations"]
+            paths = {entry["source"]: Path(os.fsdecode(bytes.fromhex(
+                         entry["path_hex"]))) for entry in measured["sources"]}
+            container_items = {
+                entry["item"] for entry in measured["items"]
+                if paths[entry["source"]].parent.name in
+                ("vec", "small", "map", "tree", "sort")
+                and paths[entry["source"]].parent.parent.name == "core"
+            }
+            require(container_items, f"{key}: no core container source evidence")
+            require(decisions, f"{key}: no derived-container specialization evidence")
+            for decision in decisions:
+                specialized = decision["action"] == "specialized"
+                require(decision["action"] in ("declined", "specialized")
+                        and specialized == (decision["direct_calls_made"] > 0),
+                        f"{key}: container specialization action is not factual")
+                require(not specialized or decision["retains_evidence_abi"],
+                        f"{key}: specialized container dropped its evidence ABI")
+                if key.endswith("-off"):
+                    require(not specialized and decision["reason"] == "disabled",
+                            f"{key}: disabled container specialization took effect")
+            if key.endswith("-all"):
+                require(any(d["item"] in container_items
+                            and d["action"] == "specialized"
+                            for d in decisions),
+                        f"{key}: no core container entry was specialized")
         fold_base = evidence["folding"]["none-off"]
         for key in ("size-off", "size-auto", "speed-auto", "speed-all"):
             folded = evidence["folding"][key]
