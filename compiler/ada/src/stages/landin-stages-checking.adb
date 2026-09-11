@@ -9229,6 +9229,15 @@ package body Landin.Stages.Checking is
             Discover_Generic_Calls
               (Of_Tree, Syn.Slot (Of_Tree, Node, Index));
          end loop;
+         --  A call's recovery is stored beside its ordinary child slots.
+         --  Its generic targets must join discovery before the error graph
+         --  freezes, just like targets on the successful path.
+         if Syn.Kind (Of_Tree, Node) in Syn.Call | Syn.Labeled_Application
+           and then Syn.Recovery_Of (Of_Tree, Node) /= Syn.No_Node
+         then
+            Discover_Generic_Calls
+              (Of_Tree, Syn.Recovery_Of (Of_Tree, Node));
+         end if;
       end Discover_Generic_Calls;
 
       ------------------------------------------------------------

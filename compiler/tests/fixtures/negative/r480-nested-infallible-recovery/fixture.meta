@@ -1,0 +1,7 @@
+class: negative
+summary: generic calls nested only in a recovery are discovered before error inference and reject infallible recovery
+program: main.ldn
+status: 1
+codes: L0301
+constructs: 0940, 1030, 1340, 1380, 1440
+targets: linux-x86-64
