@@ -32,7 +32,7 @@ public next_line: (provider: type is mem.allocator, inout allocator: provider,
                   -> (line: []u8 from value)
                   ! io.io_failed | mem.out_of_memory | at_end =
     while vec.length(value.line) > 0 do
-        _ = vec.pop(value.line) else (problem) _ = problem end
+        _ = vec.pop(value.line) else u8(0)
     end while
     loop do
         if value.position == value.filled then
