@@ -16,7 +16,7 @@ import tempfile
 HERE = Path(__file__).resolve().parent
 PROFILES = (("none", "off"), ("size", "off"),
             ("size", "auto"), ("speed", "auto"))
-CONTAINER_COMPILE_TIMEOUT = 900
+WORKLOAD_COMPILE_TIMEOUT = 900
 
 
 def run(args: list[str], *, empty_output: bool = False,
@@ -119,6 +119,44 @@ def measure(refine: Path, tools: dict[str, str], source: Path,
             "assembly_sha256": hashlib.sha256(first_assembly).hexdigest()}
 
 
+def check_hosted_measurements(measurements: dict[str, dict]) -> None:
+    # The complete hosted composition keeps runtime-selected providers
+    # indirect even under forced specialization. These are observations
+    # of its actual object and source inventory, with no invented budget.
+    for key, measured in measurements.items():
+        paths = {entry["source"]: Path(os.fsdecode(bytes.fromhex(
+                     entry["path_hex"]))) for entry in measured["sources"]}
+        app_sources = {path.name for path in paths.values()
+                       if path.parent.name == "app"
+                       and path.parent.parent.name == "derived_hosted"}
+        require({"app.ldn", "config.ldn", "filter.ldn", "dest.ldn",
+                 "reader.ldn"} <= app_sources,
+                f"{key}: incomplete hosted application source inventory")
+        app_items = {entry["item"] for entry in measured["items"]
+                     if paths[entry["source"]].name == "app.ldn"
+                     and paths[entry["source"]].parent.name == "app"
+                     and paths[entry["source"]].parent.parent.name
+                     == "derived_hosted"}
+        require(app_items, f"{key}: missing complete hosted application")
+        require(any(r["item"] in app_items and r["indirect_calls"] > 0
+                    for r in measured["build"]["routines"]),
+                f"{key}: hosted runtime dispatch lost its indirect calls")
+        require(re.search(r"^\s*[0-9a-f]+:\s+call\w*\s+\*",
+                          measured["disassembly"], re.M),
+                f"{key}: hosted object has no indirect machine call")
+        require(measured["build"]["specializations"],
+                f"{key}: missing hosted specialization observations")
+        for decision in measured["build"]["specializations"]:
+            specialized = decision["action"] == "specialized"
+            require(decision["action"] in ("declined", "specialized")
+                    and specialized == (decision["direct_calls_made"] > 0)
+                    and (not specialized or decision["retains_evidence_abi"]),
+                    f"{key}: hosted specialization evidence is not factual")
+            if key.endswith("-off"):
+                require(not specialized and decision["reason"] == "disabled",
+                        f"{key}: disabled hosted specialization took effect")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--refine", type=Path, required=True)
@@ -151,7 +189,7 @@ def main() -> None:
         expected_status = {}
         roots = {}
         for name in ("insertion-sort", "sieve-of-eratosthenes",
-                     "derived-containers"):
+                     "derived-containers", "derived-hosted-memory"):
             fixture = HERE.parent / "fixtures" / "runtime" / name
             metadata = dict(line.split(":", 1) for line in
                             (fixture / "fixture.meta").read_text().splitlines()
@@ -174,14 +212,15 @@ def main() -> None:
             evidence[name] = {}
             profiles = PROFILES
             if name in ("specialization", "folding", "threshold",
-                        "derived-containers"):
+                        "derived-containers", "derived-hosted-memory"):
                 profiles += (("none", "all"), ("speed", "all"))
             for profile in profiles:
                 key = "-".join(profile)
                 # The rooted client takes over two minutes to compile even
                 # natively. Keep this allowance separate from execution.
-                compile_timeout = (CONTAINER_COMPILE_TIMEOUT
-                                   if name == "derived-containers" else 120)
+                compile_timeout = (WORKLOAD_COMPILE_TIMEOUT
+                                   if name in ("derived-containers",
+                                               "derived-hosted-memory") else 120)
                 evidence[name][key] = measure(
                     refine, tools, source, scratch / f"{name}-{key}", profile,
                     expected_status.get(name, 0), roots.get(name),
@@ -328,6 +367,7 @@ def main() -> None:
                             and d["action"] == "specialized"
                             for d in decisions),
                         f"{key}: no core container entry was specialized")
+        check_hosted_measurements(evidence["derived-hosted-memory"])
         fold_base = evidence["folding"]["none-off"]
         for key in ("size-off", "size-auto", "speed-auto", "speed-all"):
             folded = evidence["folding"][key]

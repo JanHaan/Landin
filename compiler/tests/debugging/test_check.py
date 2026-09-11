@@ -126,6 +126,70 @@ class ContainerTranscriptTests(unittest.TestCase):
                       script)
 
 
+class HostedTranscriptTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.lines = {"sample": 51, "sample-updated": 52, "text": 73}
+        sections = []
+        for name, function, filename in (("sample", "sample_keep", "filter.ldn"),
+                                         ("sample-updated", "sample_keep", "filter.ldn"),
+                                         ("text", "text_emit", "dest.ldn")):
+            line = self.lines[name]
+            sections.append(
+                f"LANDIN-BEGIN hosted-{name}\n"
+                f"#0 {function} () at {filename}:{line}\n"
+                f'Line {line} of "{filename}"\n'
+                "#1 process ()\n#2 run ()\n#3 main ()\n"
+                f"LANDIN-END hosted-{name}\n")
+        sections.extend(("LANDIN-VALUE hosted-sample.seen=0\n",
+                         "LANDIN-VALUE hosted-sample.every=2\n",
+                         "LANDIN-VALUE hosted-sample-updated.seen=1\n",
+                         "LANDIN-VALUE hosted-text.delivered=0\n",
+                         "LANDIN-BEGIN inferior-exit\n"
+                         "[Inferior 1 exited with code 052]\n"
+                         "LANDIN-END inferior-exit\n"))
+        self.transcript = "".join(sections)
+
+    def test_valid_runtime_provider_transcript(self) -> None:
+        CHECK.check_hosted_transcript(self.transcript, self.lines)
+
+    def test_wrong_provider_is_rejected(self) -> None:
+        for provider in ("sample_keep", "text_emit"):
+            with self.subTest(provider=provider):
+                with self.assertRaisesRegex(ValueError, "outside"):
+                    CHECK.check_hosted_transcript(self.transcript.replace(
+                        provider, "unrelated_provider"), self.lines)
+
+    def test_missing_application_frame_is_rejected(self) -> None:
+        with self.assertRaisesRegex(ValueError, "source stack"):
+            CHECK.check_hosted_transcript(self.transcript.replace(
+                "#1 process", "#1 test_dispatch"), self.lines)
+
+    def test_wrong_provider_source_is_rejected(self) -> None:
+        with self.assertRaisesRegex(ValueError, "filter.ldn"):
+            CHECK.check_hosted_transcript(self.transcript.replace(
+                "filter.ldn", "unrelated.ldn"), self.lines)
+
+    def test_wrong_source_line_is_rejected(self) -> None:
+        with self.assertRaisesRegex(ValueError, "source line"):
+            CHECK.check_hosted_transcript(self.transcript.replace(
+                "Line 51", "Line 999"), self.lines)
+
+    def test_wrong_or_unavailable_state_is_rejected(self) -> None:
+        for name, value in (("sample.seen", 0), ("sample.every", 2),
+                            ("sample-updated.seen", 1), ("text.delivered", 0)):
+            for replacement in ("999", "<optimized out>"):
+                with self.subTest(name=name, replacement=replacement):
+                    with self.assertRaisesRegex(ValueError, "did not report"):
+                        CHECK.check_hosted_transcript(self.transcript.replace(
+                            f"hosted-{name}={value}", f"hosted-{name}={replacement}"),
+                            self.lines)
+
+    def test_wrong_final_status_is_rejected(self) -> None:
+        with self.assertRaisesRegex(ValueError, "did not return 42"):
+            CHECK.check_hosted_transcript(self.transcript.replace(
+                "exited with code 052", "exited with code 01"), self.lines)
+
+
 class LineTableTests(unittest.TestCase):
     @staticmethod
     def table(directory: str) -> str:

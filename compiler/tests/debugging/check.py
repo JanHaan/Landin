@@ -23,7 +23,9 @@ ODD_SOURCE = HERE / 'caller"\\path.ldn'
 SOURCES = (MAIN_SOURCE, ODD_SOURCE)
 CONTAINER_SOURCE = ROOT / "examples/derived_containers/workload/workload.ldn"
 CONTAINER_FIXTURE = HERE.parent / "fixtures/runtime/derived-containers"
-CONTAINER_COMPILE_TIMEOUT = 900
+HOSTED_SOURCE = ROOT / "examples/derived_hosted/app/app.ldn"
+HOSTED_FIXTURE = HERE.parent / "fixtures/runtime/derived-hosted-memory"
+WORKLOAD_COMPILE_TIMEOUT = 900
 CONTAINER_DONE_VALUES = (
     "signed_order", "unsigned_order_ok", "numbers_ok", "arrays_ok", "raw_ok",
     "vector_ok", "small_ok", "map_ok", "reference_entries_ok",
@@ -469,6 +471,69 @@ def check_container_transcript(transcript: str,
     inferior_exit = marker_section(transcript, "inferior-exit")
     require(re.search(r"exited with code (?:052|42)\b", inferior_exit) is not None,
             f"debugged container program did not return 42: {inferior_exit!r}")
+
+
+def hosted_lines() -> dict[str, int]:
+    result = {}
+    for name, filename, marker in (
+            ("sample", "filter.ldn", "R480_DEBUG_SAMPLE"),
+            ("text", "dest.ldn", "R480_DEBUG_TEXT")):
+        source = (HOSTED_SOURCE.parent / filename).read_text().splitlines()
+        matches = [index for index, line in enumerate(source) if marker in line]
+        require(len(matches) == 1, f"hosted marker {marker} is not unique")
+        index = matches[0] + 1
+        require(index < len(source) and source[index].strip()
+                and not source[index].lstrip().startswith("--"),
+                f"hosted marker {marker} does not precede executable source")
+        result[name] = index + 1
+    result["sample-updated"] = source_line(
+        HOSTED_SOURCE.parent / "filter.ldn", "yes = self.val.seen")
+    return result
+
+
+def hosted_gdb_script(start_commands: list[str],
+                      source_lines: dict[str, int]) -> str:
+    lines = gdb_setup()
+    for name, filename, values in (
+            ("sample", "filter.ldn", (("seen", "self->seen"),
+                                      ("every", "self->every"))),
+            ("sample-updated", "filter.ldn", (("seen", "self->seen"),)),
+            ("text", "dest.ldn", (("delivered", "line.delivered"),))):
+        source = os.path.relpath(HOSTED_SOURCE.parent / filename, ROOT)
+        line = source_lines[name]
+        lines.extend([f"tbreak {source}:{line}", "commands", "silent"])
+        emit_section(lines, f"hosted-{name}",
+                     ["frame", "info line", f"list {line},{line}",
+                      "info args", "info locals", "bt 12"])
+        emit_values(lines, f"hosted-{name}", values)
+        lines.extend(["continue", "end"])
+    emit_section(lines, "inferior-exit", start_commands)
+    return "\n".join(lines) + "\n"
+
+
+def check_hosted_transcript(transcript: str,
+                            source_lines: dict[str, int]) -> None:
+    for phrase in ("No symbol ", "No source file named", "Cannot access memory",
+                   "Cannot find bounds", "not defined"):
+        require(phrase not in transcript,
+                f"hosted GDB transcript contains {phrase!r}\n{transcript}")
+    for name, function, filename in (("sample", "sample_keep", "filter.ldn"),
+                                     ("sample-updated", "sample_keep", "filter.ldn"),
+                                     ("text", "text_emit", "dest.ldn")):
+        scope = f"hosted-{name}"
+        expect_line(transcript, scope, source_lines[name], function, filename)
+        stack = marker_section(transcript, scope)
+        require(re.search(r"#0\s+.*\b" + function + r"\b", stack) is not None
+                and re.search(r"#1\s+.*\bprocess\b", stack) is not None
+                and re.search(r"#2\s+.*\brun\b", stack) is not None
+                and re.search(r"#[3-9]\s+.*\bmain\b", stack) is not None,
+                f"hosted runtime dispatch lost its source stack: {stack!r}")
+    for name, value in (("sample.seen", 0), ("sample.every", 2),
+                        ("sample-updated.seen", 1), ("text.delivered", 0)):
+        expect_value(transcript, "hosted-" + name, value)
+    inferior_exit = marker_section(transcript, "inferior-exit")
+    require(re.search(r"exited with code (?:052|42)\b", inferior_exit) is not None,
+            f"debugged hosted program did not return 42: {inferior_exit!r}")
 
 
 def expect_value(transcript: str, name: str, value: int) -> None:
@@ -932,17 +997,22 @@ CALLER_COLUMN = next(line.index("debug_outer") + 1 for line in
 
 def measure(refine: Path, tools: dict[str, str], gdb: str,
             runner: str, qemu: str | None, retained: Path, scratch: Path,
-            profile: tuple[str, str, str], containers: bool = False) -> dict:
+            profile: tuple[str, str, str], containers: bool = False,
+            hosted: bool = False) -> dict:
     key, optimize, specialize = profile
+    require(not (containers and hosted), "choose one debugger workload")
     if containers:
         key = "containers-" + key
+    elif hosted:
+        key = "hosted-" + key
     executable = scratch / f"debug-{key}"
     assembly = scratch / f"debug-{key}.s"
     report = scratch / f"report-{key}.json"
     sources = SOURCES
     source_args = tuple(os.path.relpath(source, ROOT) for source in sources)
-    inputs = ([os.path.relpath(CONTAINER_FIXTURE, ROOT), "--root=."]
-              if containers else list(source_args))
+    fixture = HOSTED_FIXTURE if hosted else CONTAINER_FIXTURE
+    inputs = ([os.path.relpath(fixture, ROOT), "--root=."]
+              if containers or hosted else list(source_args))
     profile_args = [f"--optimize={optimize}",
                     f"--specialize={specialize}"]
     compiler_args = [str(refine), "--target=linux-x86-64", "--debug=full",
@@ -953,17 +1023,18 @@ def measure(refine: Path, tools: dict[str, str], gdb: str,
                      *profile_args]
     # The rooted client takes over two minutes to compile even natively;
     # executable and debugger timeouts remain independent and unchanged.
-    compile_timeout = CONTAINER_COMPILE_TIMEOUT if containers else 120
+    compile_timeout = WORKLOAD_COMPILE_TIMEOUT if containers or hosted else 120
     run(compiler_args, cwd=ROOT, timeout=compile_timeout)
     run(assembly_args, cwd=ROOT, timeout=compile_timeout)
-    if containers:
+    if containers or hosted:
         inventory = json.loads(report.read_text())["sources"]
         source_args = tuple(os.fsdecode(bytes.fromhex(entry["path_hex"]))
                             for entry in inventory)
         sources = tuple((ROOT / path).resolve() for path in source_args)
-        require(CONTAINER_SOURCE in sources
-                and CONTAINER_FIXTURE / "main.ldn" in sources,
-                "container report omits its entry or workload source")
+        workload_source = HOSTED_SOURCE if hosted else CONTAINER_SOURCE
+        require(workload_source in sources and fixture / "main.ldn" in sources,
+                "workload report omits its entry or application source")
+    if containers:
         families = {source.parent.name for source in sources
                     if source.parent.parent == ROOT / "core"}
         require({"vec", "small", "map", "tree", "sort"} <= families,
@@ -996,7 +1067,8 @@ def measure(refine: Path, tools: dict[str, str], gdb: str,
     dwarf_versions = check_dwarf_versions(debug_info, frames)
     dwarf_versions["debug_line_tables"] = check_line_table(
         raw_lines, source_args)
-    debug_names = (("containers_run", "evidence_less", "left", "right",
+    debug_names = (("sample_keep", "text_emit", "process") if hosted else
+                   ("containers_run", "evidence_less", "left", "right",
                     "count", "first", "last") if containers else (
         "debug_outer", "debug_inner", "debug_generic",
         "debug_multiple", "debug_aliases",
@@ -1023,13 +1095,17 @@ def measure(refine: Path, tools: dict[str, str], gdb: str,
     debugger_cwd.mkdir()
     script_path = retained / f"{key}.gdb"
     transcript_path = retained / f"{key}.gdb.txt"
-    lines = container_lines() if containers else SOURCE_LINES
-    script = container_gdb_script if containers else gdb_script
+    lines = (hosted_lines() if hosted else
+             container_lines() if containers else SOURCE_LINES)
+    script = (hosted_gdb_script if hosted else
+              container_gdb_script if containers else gdb_script)
     with tempfile.TemporaryDirectory(prefix="landin-gdb-") as tmp:
         transcript = run_gdb(gdb, executable, script_path, transcript_path,
                              debugger_cwd, runner, qemu, Path(tmp),
                              lambda start: script(start, lines))
-    if containers:
+    if hosted:
+        check_hosted_transcript(transcript, lines)
+    elif containers:
         check_container_transcript(transcript, lines)
     else:
         check_transcript(transcript, lines, CALLER_LINE, CALLER_COLUMN)
@@ -1050,12 +1126,13 @@ def measure(refine: Path, tools: dict[str, str], gdb: str,
         expected_status=42, empty_output=True)
     resolver = str(ROOT / "scripts/source-location.py")
     caller_id, caller_line, caller_column = 2, CALLER_LINE, CALLER_COLUMN
-    if containers:
-        entry_source = CONTAINER_FIXTURE / "main.ldn"
+    if containers or hosted:
+        entry_source = fixture / "main.ldn"
+        entry_call = "app.run" if hosted else "containers_run"
         caller_id = sources.index(entry_source) + 1
-        caller_line = source_line(entry_source, "containers_run")
+        caller_line = source_line(entry_source, entry_call)
         caller_column = (entry_source.read_text().splitlines()[caller_line - 1]
-                         .index("containers_run") + 1)
+                         .index(entry_call) + 1)
     coordinate_args = [str(map_path), str(caller_id), str(caller_line),
                        str(caller_column)]
     resolved = run([sys.executable, resolver, *coordinate_args,
@@ -1161,6 +1238,11 @@ def main() -> None:
                 container_measurements[profile[0]] = measure(
                     refine, tools, gdb, runner, qemu,
                     args.output, scratch, profile, containers=True)
+            hosted_measurements = {}
+            for profile in (*PRIMARY_PROFILES, FALLBACK_PROFILE):
+                hosted_measurements[profile[0]] = measure(
+                    refine, tools, gdb, runner, qemu,
+                    args.output, scratch, profile, hosted=True)
     except Exception as error:
         failure_path.write_text(f"{type(error).__name__}: {error}\n")
         raise
@@ -1174,6 +1256,7 @@ def main() -> None:
         "specialization_fallback_used": "size-all" in measurements,
         "measurements": measurements,
         "container_measurements": container_measurements,
+        "hosted_measurements": hosted_measurements,
     }
     evidence_path.write_text(
         json.dumps(result, indent=2, sort_keys=True) + "\n")
