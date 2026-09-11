@@ -1617,10 +1617,11 @@ def roadmap_progress(text, recent_count=3):
                             and other["status"] == "complete"
                             for other in items)
                      for dependency in item["depends"])]
-    if active or len(ready) != 1:
+    if active or not ready:
         raise SystemExit("render_html: ROADMAP.md must have exactly one active "
-                         "item or one dependency-ready planned item for the "
+                         "item or at least one dependency-ready planned item for the "
                          "front page")
+    # Roadmap order selects the next item when a phase opens parallel work.
     at = ready[0]
     completed = [item for item in items[:at]
                  if item["status"] == "complete"][-recent_count:]

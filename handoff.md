@@ -91,7 +91,7 @@ specification says so rather than claiming more.
 colon. Immutable by default. Keyword blocks closed by `end`, and blocks
 are expressions — a block has the value of its last expression, and
 `if`, `match`, `else` clauses and loops all follow from that one rule.
-Semicolons optional.
+Statements need no terminator.
 
 **The machine** is served by Landin's own native backends. The bootstrap
 compiler is written in Ada 2022 with pinned GNAT/GPRbuild, minimal
@@ -269,7 +269,7 @@ destinations at runtime. Messages retain a delivery cursor for explicit retry.
 cleanup. D212 withdraws both builtin arena forms and W7's transitive escape
 promise while preserving ordinary local origins and independent allocations.
 
-**Next roadmap item: R4.90 — Close Linux hosted parity (planned).**
+**Current roadmap work: R4.90 — Close Linux hosted parity.**
 
 `refine` runs the frontend, lowers and
 verifies target-neutral IR, emits Linux x86-64 assembly, and can assemble and

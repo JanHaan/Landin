@@ -1,0 +1,28 @@
+north, south, east, west: atom
+vertical: type = north | south
+horizontal: type = east | west
+overlap: type = south | east
+mut trace: i32 = 0
+
+identity: (t: type, value: t) -> (result: t) = result = value end identity
+left: () -> (value: vertical) =
+    trace = trace * 10 + 1
+    value = south
+end left
+right: () -> (value: overlap) =
+    trace = trace * 10 + 2
+    value = south
+end right
+
+public main: () -> (code: i32) =
+    v: vertical = north
+    h: horizontal = east
+    o: overlap = south
+    same: bool = left() == right()
+    singletons: bool = north <> south and north == north
+    disjoint: bool = v <> h and not (v == h)
+    overlapping: bool = v <> o and not (v == o)
+    copied: bool = identity(v) == north and identity(o) == south
+    code = if same and trace == 12 and singletons and disjoint
+              and overlapping and copied then 42 else 1 end if
+end main

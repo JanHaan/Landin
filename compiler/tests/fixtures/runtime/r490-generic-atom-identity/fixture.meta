@@ -1,0 +1,6 @@
+class: runtime
+summary: atom identity equality spans disjoint and overlapping structural sets with preserved generic values and written operand order
+program: main.ldn
+status: 42
+constructs: 0350, 0410, 0630, 0640, 1290, 1300, 1980
+targets: linux-x86-64

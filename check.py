@@ -1384,7 +1384,7 @@ def check_project_status(full_run):
     R2.40 was marked complete in the roadmap and README but remained active in
     the handoff, and the roadmap then had no active item for the page to show.
     Keep all three answers mechanically one answer. Between active items, show
-    the sole dependency-ready planned item as next rather than claiming its
+    the first dependency-ready planned item in roadmap order rather than claiming its
     implementation is active.
     """
     if not full_run:
@@ -1433,7 +1433,7 @@ def check_project_status(full_run):
         work_id, item = active[0]
         marker_kind = "current"
         expected = "%s — %s" % (work_id, item["title"])
-    elif not active and len(ready) == 1:
+    elif not active and ready:
         work_id, item = ready[0]
         marker_kind = "next"
         expected = "%s — %s" % (work_id, item["title"])
@@ -3283,6 +3283,77 @@ def construct_applicability_rows():
         ("Construct", "Applicability", "Owner", "Disposition"))
 
 
+def hosted_compile_time_rows():
+    return markdown_register(
+        ROADMAP, "#### Hosted compile-time evidence",
+        ("Construct", "Accepted", "Refused", "Rationale"))
+
+
+def hosted_parity_problems(statuses, applicability, static_rows, fixtures):
+    """R4 closure needs Linux execution, or an explicit static-rule oracle.
+
+    Metadata establishes traceability, not semantic sufficiency: reviewers
+    must still inspect each assertion. A named refusal or another target's
+    runtime program cannot stand in for implemented hosted behavior.
+    """
+    if statuses.get("R4.90") != "complete":
+        return []
+    out = []
+    for key, status in statuses.items():
+        if key.startswith("R4.") and status != "complete":
+            out.append((ROADMAP, 1, "R4.90 cannot close before " + key))
+    if applicability is None or static_rows is None:
+        return out + [(ROADMAP, 1, "R4.90 parity registers cannot be read")]
+
+    def names(field):
+        return {value.strip() for value in field.split(",") if value.strip()}
+
+    def witness(name, construct, kinds):
+        meta = fixtures.get(name, (None, {}))[1]
+        return (name.split("/")[0] in kinds and meta.get("program")
+                and construct in names(meta.get("constructs", ""))
+                and "linux-x86-64" in names(meta.get("targets", ""))
+                and (not name.startswith("negative/") or meta.get("codes")))
+
+    hosted = {row["Construct"]: row for _, row in applicability
+              if row["Applicability"] == "hosted-now"}
+    exceptions = set()
+    for line, row in static_rows:
+        key = row["Construct"]
+        if key not in hosted or key in exceptions or not row["Rationale"]:
+            out.append((ROADMAP, line, "invalid hosted compile-time row " + key))
+        exceptions.add(key)
+        construct = key.strip("`[]")
+        cited = []
+        for field, kinds in (("Accepted", {"positive"}),
+                             ("Refused", {"negative"})):
+            value = row[field]
+            found = fixture_names(value)
+            cited += found
+            if value != "none" and (not found or
+                    any(not witness(name, construct, kinds) for name in found)):
+                out.append((ROADMAP, line,
+                            key + " has invalid " + field.lower() + " evidence"))
+        if not cited:
+            out.append((ROADMAP, line, key + " has no compile-time oracle"))
+
+    for line, row in applicability:
+        key = row["Construct"]
+        if row["Applicability"] == "later-r4":
+            out.append((ROADMAP, line, "R4.90 leaves later-r4 work: " + key))
+        elif key in hosted:
+            owner = row["Owner"].strip("`")
+            if statuses.get(owner) != "complete":
+                out.append((ROADMAP, line, key + " has unfinished owner " + owner))
+            if key not in exceptions:
+                construct = key.strip("`[]")
+                if not any(witness(name, construct, {"runtime", "abi"})
+                           for name in fixtures):
+                    out.append((ROADMAP, line,
+                                key + " has no Linux runtime/ABI program oracle"))
+    return out
+
+
 def coverage_dumps():
     """Generate R2.90's four non-diagnostic reading copies."""
     guarantees = guarantee_rows()
@@ -3378,6 +3449,11 @@ def check_coverage_registers(full_run):
         r"^### R4\.10\b.*?^Status: (planned|active|blocked|complete)$",
         roadmap_text, re.M | re.S)
     r410_status = r410.group(1) if r410 else None
+    statuses = dict(re.findall(
+        r"^### (R\d+\.\d+) — [^\n]+\n\nStatus: (\w+)$",
+        roadmap_text, re.M))
+    out += hosted_parity_problems(
+        statuses, applicability, hosted_compile_time_rows(), fixtures)
 
     if applicability is None:
         out.append((ROADMAP, 1,
