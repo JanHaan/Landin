@@ -76,6 +76,7 @@ arena_case: () -> (ok: bool) =
     mut bytes_refused: bool = false
     _ = mem.new_bytes(state, one) else (problem)
         bytes_refused = problem == mem.out_of_memory
+        keeper
     end
     --  The buffer that already existed is untouched by that refusal.
     keeper_ok: bool = begin
@@ -165,12 +166,14 @@ fixed_case: () -> (ok: bool) =
     mut count_refused: bool = false
     _ = mem.new_bytes(state, one) else (problem)
         count_refused = problem == mem.out_of_memory
+        first
     end
     mem.drop_bytes(state, first)
     return when pool.live(state) <> 1 or pool.free_count(state) <> 1
     mut width_refused: bool = false
     _ = mem.new_bytes(state, oversized) else (problem)
         width_refused = problem == mem.out_of_memory
+        first
     end
     return when not count_refused or not width_refused
       or pool.live(state) <> 1 or pool.allocation_count(state) <> 2

@@ -74,6 +74,7 @@ public main: () -> (code: i32) =
     _ = map.get(value, key(14)) else (problem)
         _ = problem
         fourteen_missing = true
+        i32(0)
     end
     preserved: bool = exhausted and arena.used == before_failure
                       and map.length(value) == 12 and fourteen_missing

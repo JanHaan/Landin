@@ -12,14 +12,17 @@ public main: () -> (code: i32) =
     mut admit_refused: bool = false
     _ = mem.admit(empty, initial) else (problem)
         admit_refused = problem == mem.raw_full
+        usize(0)
     end
     mut get_refused: bool = false
     _ = mem.get(empty, zero) else (problem)
         get_refused = problem == mem.uninitialized
+        u8(0)
     end
     mut release_refused: bool = false
     _ = mem.release(empty) else (problem)
         release_refused = problem == mem.raw_empty
+        u8(0)
     end
     empty_view: bool = begin
         view := mem.used(empty)
