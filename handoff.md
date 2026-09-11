@@ -269,7 +269,7 @@ destinations at runtime. Messages retain a delivery cursor for explicit retry.
 cleanup. D212 withdraws both builtin arena forms and W7's transitive escape
 promise while preserving ordinary local origins and independent allocations.
 
-**Current roadmap work: R4.80 — Complete and run the derived hosted application.**
+**Next roadmap item: R4.90 — Close Linux hosted parity (planned).**
 
 `refine` runs the frontend, lowers and
 verifies target-neutral IR, emits Linux x86-64 assembly, and can assemble and

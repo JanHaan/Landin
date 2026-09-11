@@ -2,5 +2,5 @@ class: runtime
 summary: cached generic allocation results retain checked nested erased recovery bindings
 program: main.ldn
 status: 42
-constructs: 0940, 1030, 1340, 1380, 1440
+constructs: 0940, 1030, 1290, 1300, 1310, 1380, 1390
 targets: linux-x86-64

@@ -701,6 +701,10 @@ negative/r480-callback-frame-escape | linux-x86-64, macos-arm64
 negative/r480-helper-frame-retention | linux-x86-64, macos-arm64
 negative/r480-nested-infallible-recovery | linux-x86-64
 negative/r480-reader-live-line | linux-x86-64
+negative/r480-recovery-assignment | linux-x86-64
+negative/r480-recovery-exposed-storage | linux-x86-64
+negative/r480-recovery-retains-borrow | linux-x86-64
+negative/r480-recovery-zero-divisor | linux-x86-64
 negative/r480-region-frame-provider | linux-x86-64, macos-arm64, synthetic-32
 negative/r480-region-private-ledger | linux-x86-64, macos-arm64, synthetic-32
 negative/range-subtype-address | linux-x86-64, macos-arm64
@@ -1459,11 +1463,13 @@ runtime/r470-nested-guarded-field-range | linux-x86-64
 runtime/r470-scalar-operator-origins | linux-x86-64
 runtime/r480-arena-independent-results | linux-x86-64
 runtime/r480-arena-nested-exhaustion | linux-x86-64
+runtime/r480-concrete-error-deduction | linux-x86-64
 runtime/r480-generic-nested-recovery | linux-x86-64
 runtime/r480-generic-provider-entry | linux-x86-64
 runtime/r480-hosted-count | linux-x86-64
 runtime/r480-hosted-text | linux-x86-64
 runtime/r480-loop-fresh-view | linux-x86-64
+runtime/r480-recovery-loop-transfer | linux-x86-64
 runtime/range-subtype-checks | linux-x86-64
 runtime/range-subtype-conversion-traps | linux-x86-64
 runtime/range-subtype-store-traps | linux-x86-64

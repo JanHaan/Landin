@@ -5186,7 +5186,7 @@ complete hosted application.
 
 ### R4.80 — Complete and run the derived hosted application
 
-Status: active
+Status: complete
 Depends on: R4.20, R4.30, R4.40, R4.70
 
 Turn prototype 4 into a complete hosted `.ldn` program with heterogeneous
@@ -5289,6 +5289,34 @@ body. `any` retains its two-word representation. The six-profile
 direct and erased dispatch, aggregate arguments/results, inout arrays and
 failure propagation; its old lowering fails internally in every profile.
 
+The complete reader then exposed the same separate-subtree mistake in loop
+exit discovery: a break in call recovery had no destination block. The
+six-profile `runtime/r480-recovery-loop-transfer` now covers conditional
+break/continue, a labeled outer break, slice results and cleanup on every
+edge. A fresh independent review traced that representation through the
+remaining checks and found four further omissions: recovery-only borrower
+reads, exposed-storage mutations, definite assignment beneath an operator,
+and literal operand diagnostics. The corresponding
+`negative/r480-recovery-retains-borrow`,
+`negative/r480-recovery-exposed-storage`,
+`negative/r480-recovery-assignment` and
+`negative/r480-recovery-zero-divisor` now retain exactly L0315, L0316, L0302
+and L0306. Valid assignment within a recovery remains accepted. Bounded
+re-review found no remaining issue in these repairs.
+The original positive IR corpus also required discovery to defer a match
+header until its inferred error binding has a real atom set, while still
+discovering generic calls in every arm. Concrete sets are already known and
+are supplied before generic deduction from an error value. The corpus stays
+byte-for-byte unchanged, and `runtime/r480-concrete-error-deduction` preserves
+that previously accepted form across six profiles. A separately reproduced
+canonical defect involving an inferred error actual is recorded under the
+still-planned R4.90 parity item.
+The stronger recovery walk also exposed discarded scalar and aggregate calls
+in the earlier container workload and runtime fixtures whose handlers omitted
+the fallback value required by [1030]. Their sources now supply that value
+or call an ordinary none-returning helper, preserving every failure flag,
+control-flow path, allocation count and existing status/output oracle.
+
 `runtime/derived-hosted-memory` specifies the complete deterministic workload:
 long/chunked/final/empty lines, retained arguments after source mutation,
 heterogeneous selection, arbitrary binary message copying, committed-prefix
@@ -5308,6 +5336,17 @@ call stacks and stripped-image oracles. These supplement every existing
 runtime/ABI/workload, identity, bindings and document check; none replaces
 full native acceptance. R4.90 remains planned.
 
+Closure records implementation and bounded independent review in this
+candidate. At candidate preparation, focused native execution, quality and
+GDB checks had passed; full eight-job acceptance, verified durable export,
+administrative approval, canonical promotion and publication verification
+were still pending delivery steps. Acceptance of the exact containing
+revision is recorded externally by its annotated `ci/accepted/FULL_COMMIT`
+tag and bound native run bundle, rather than a later source edit. Canonical
+Pages publication requires that approval through the existing guard. The
+complete acceptance matrix, approval and publication records are the delivery
+evidence; the focused runs above cannot substitute for them.
+
 Exit evidence: the application selects heterogeneous implementations at
 runtime, processes hosted I/O and executes on Linux x86-64.
 
@@ -5318,6 +5357,27 @@ Depends on: R4.60, R4.70, R4.80
 
 Run the full applicable construct, conformance, ABI, diagnostics, determinism,
 debugger and prototype suites on native Linux x86-64.
+
+R4.80's recovery review isolated a pre-existing inference-frontier defect for
+this parity item. On canonical `5b2db329`, the program below exits 70: generic
+deduction needs the recovered error's inferred atom set, and discovering its
+instance during error finalization changes the supposedly frozen signature
+inventory. Native GDB pinned the signature-count assertion immediately after
+`Finalize_Error_Sets`. This item owns closing that dependency without guessed
+atom sets or silently disabling an otherwise ordinary generic call. The
+concrete-error-set form already worked on that baseline and remains covered
+by `runtime/r480-concrete-error-deduction`; the complete hosted application
+and its support programs do not depend on the unresolved inferred form.
+
+```landin
+problem: atom
+leaf: () -> none ! ... = fail problem end leaf
+observe: (t: type, value: t) -> none = _ = value end observe
+public main: () -> (code: i32) =
+    leaf() else (error) observe(error) end
+    code = 42
+end main
+```
 
 Exit evidence: all applicable matrices are complete; equivalent builds produce
 identical assembly and behavior under the pinned toolchain.
