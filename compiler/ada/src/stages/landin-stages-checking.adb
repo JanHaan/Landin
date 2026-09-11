@@ -26627,13 +26627,27 @@ package body Landin.Stages.Checking is
              in Ty.Pointer_Value | Ty.Slice_Value | Ty.Function_Value
          then
             declare
+               --  Preflight can reach a forward callback/reference alias
+               --  before its initializer is contextually checked.  Its
+               --  declaration already owns the complete storage descriptor;
+               --  an undecided expression is not a descriptor to rebuild.
+               Kind : constant Ty.Type_Kind :=
+                 Landin.Checking.Type_Of (Types.all, Id);
+               Stored : constant Type_Descriptor :=
+                 (if Kind = Ty.Function_Value
+                  then (Kind => Kind, Signature =>
+                          Landin.Checking.Signature_Of (Types.all, Id),
+                        others => <>)
+                  elsif Kind in Ty.Pointer_Value | Ty.Slice_Value
+                  then (Kind => Kind, Reference =>
+                          Landin.Checking.Reference_Of (Types.all, Id),
+                        others => <>)
+                  else Stored_Descriptor
+                    (Of_Tree.all, Value,
+                     Landin.Checking.Type_Of
+                       (Types.all, Of_Tree.all, Value)));
                Reaches : constant Boolean := Validate_Stored_Image
-                 (Of_Tree.all, Value,
-                  Descriptor_Shape
-                    (Stored_Descriptor
-                       (Of_Tree.all, Value,
-                        Landin.Checking.Type_Of
-                          (Types.all, Of_Tree.all, Value))));
+                 (Of_Tree.all, Value, Descriptor_Shape (Stored));
             begin
                Image_States (Id) := (if Reaches then Valid else Invalid);
                return Reaches;

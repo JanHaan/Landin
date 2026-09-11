@@ -1,0 +1,6 @@
+class: runtime
+summary: forward static callback aliases and selected atom arrays retain complete descriptors through distinct wrappers and generic copies
+program: main.ldn
+status: 42
+constructs: 0520, 0640, 0650, 0670, 0750, 1000, 1290, 1300, 1940
+targets: linux-x86-64

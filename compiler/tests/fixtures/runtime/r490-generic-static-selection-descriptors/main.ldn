@@ -1,0 +1,27 @@
+handler: type = () -> (result: i32)
+first: handler = second
+second: handler = answer
+callbacks: [2]handler = [first, second]
+wrapped_handler: type = distinct handler
+hidden_callback: wrapped_handler = wrapped_handler(first)
+visible_callback: handler = handler(hidden_callback)
+
+north, south: atom
+problem: type = north | south
+row: type = [2]problem
+holder: type = struct values: row end holder
+selected: row = original.values
+opaque: type = distinct row
+hidden: opaque = opaque(selected)
+visible: row = row(hidden)
+original: holder = (values: [north, south])
+
+copy: (t: type, value: t) -> (result: t) = result = value end copy
+answer: () -> (result: i32) = result = 42 end answer
+public main: () -> (code: i32) =
+    callback: handler = copy(visible_callback)
+    values: row = copy(visible)
+    code = if callback() == 42 and callbacks[0]() == 42
+      and callbacks[1]() == 42 and selected[0] == north
+      and values[0] == north and values[1] == south then 42 else 1 end if
+end main
