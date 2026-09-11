@@ -1677,6 +1677,15 @@ package body Landin.Stages.Checking.Flow is
             return True;
          end if;
 
+         --  A recovered call splits control even when its fallback is a
+         --  simple expression. Keep enclosing operators on the edge-aware
+         --  walk so recovery reads and transfers use their actual state.
+         if Syn.Kind (Of_Tree, Root) in Syn.Call | Syn.Labeled_Application
+           and then Syn.Recovery_Of (Of_Tree, Root) /= Syn.No_Node
+         then
+            return True;
+         end if;
+
          for Position in 1 .. Syn.Slot_Count (Of_Tree, Root) loop
             if Contains_Control
                  (Of_Tree, Syn.Slot (Of_Tree, Root, Position))

@@ -1,0 +1,6 @@
+class: negative
+summary: a borrower used only by a later call recovery remains live across source mutation
+program: main.ldn
+codes: L0315
+constructs: 0770, 0800, 0830, 0900, 1030
+targets: linux-x86-64

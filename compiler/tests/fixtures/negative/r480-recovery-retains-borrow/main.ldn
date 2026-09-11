@@ -1,0 +1,13 @@
+unavailable: atom
+increment: (inout value: u32) -> none = value = value + 1 end increment
+stop: () -> none ! unavailable = fail unavailable end stop
+public main: () -> (code: i32) =
+    mut value: u32 = 1
+    view: ptr u32 = addr value
+    increment(value)
+    stop() else (problem)
+        _ = problem
+        _ = view.val
+    end
+    code = 42
+end main

@@ -1,0 +1,14 @@
+unavailable: atom
+absent: atom
+optional: type = absent | ptr u32
+stored: u32 = 42
+stop: () -> none ! unavailable = fail unavailable end stop
+replace: (inout item: optional) -> none = item = addr stored end replace
+bad: (cell: ptr u32) -> (result: optional from cell) =
+    result = absent
+    stop() else (problem)
+        _ = problem
+        replace(result)
+    end
+end bad
+public main: () -> (code: i32) = code = 42 end main

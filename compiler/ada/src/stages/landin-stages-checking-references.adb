@@ -637,6 +637,11 @@ package body Landin.Stages.Checking.References is
          for Slot in 1 .. Syn.Slot_Count (Tree, Node) loop
             Note_Exposed_Storage (Tree, Syn.Slot (Tree, Node, Slot));
          end loop;
+         if Syn.Kind (Tree, Node) in Syn.Call | Syn.Labeled_Application
+           and then Syn.Recovery_Of (Tree, Node) /= Syn.No_Node
+         then
+            Note_Exposed_Storage (Tree, Syn.Recovery_Of (Tree, Node));
+         end if;
       end Note_Exposed_Storage;
 
       function First_Derivation (Fact : Reference_Fact)
@@ -843,6 +848,11 @@ package body Landin.Stages.Checking.References is
                   return True;
                end if;
             end loop;
+            if Syn.Kind (Of_Tree, Node) in Syn.Call | Syn.Labeled_Application
+              and then Syn.Recovery_Of (Of_Tree, Node) /= Syn.No_Node
+            then
+               return Reads_In (Syn.Recovery_Of (Of_Tree, Node), From);
+            end if;
             return False;
          end Reads_In;
 

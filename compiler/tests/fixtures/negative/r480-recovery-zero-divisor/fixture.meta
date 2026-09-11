@@ -1,0 +1,6 @@
+class: negative
+summary: a literal zero divisor in call recovery receives the ordinary operand diagnostic
+program: main.ldn
+codes: L0306
+constructs: 1030, 1880, 1950
+targets: linux-x86-64

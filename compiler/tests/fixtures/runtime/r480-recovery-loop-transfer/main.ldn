@@ -11,6 +11,10 @@ next: (inout state: i32) -> (line: []u8) ! again | finished =
     line = bytes[0..<1]
 end next
 
+failed_value: () -> (value: u32) ! finished =
+    fail finished
+end failed_value
+
 public main: () -> (code: i32) =
     mut state: i32 = 0
     mut total: i32 = 0
@@ -34,6 +38,13 @@ public main: () -> (code: i32) =
             total += i32(line[0])
         end loop
     end outer
+    mut assigned: u32
+    recovered: u32 = (failed_value() else (problem)
+        _ = problem
+        assigned = 41
+        assigned
+    end) + 1
     code = if state == 5 and total == 84 and cleanups == 6
+              and recovered == 42
            then 42 else 1 end if
 end main
