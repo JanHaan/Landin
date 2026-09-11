@@ -8044,6 +8044,13 @@ package body Landin.Stages.Lowering is
                   return True;
                end if;
             end loop;
+            if Syn.Kind (Of_Tree, Node) in Syn.Call | Syn.Labeled_Application
+              and then Syn.Recovery_Of (Of_Tree, Node) /= Syn.No_Node
+            then
+               --  Recovery is beside the ordinary slots, and its transfers
+               --  need the same loop destination as successful expressions.
+               return Walk (Syn.Recovery_Of (Of_Tree, Node), Deeper);
+            end if;
             return False;
          end Walk;
       begin
