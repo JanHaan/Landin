@@ -12,7 +12,7 @@ acceptance and closure evidence.
 | app/read | `examples/derived_hosted/app/reader.ldn` reads arbitrary-length complete lines across explicit chunk boundaries, preserves empty lines and final unterminated lines, and closes the consumed reader on every handled exit. |
 | app/filter | `examples/derived_hosted/app/filter.ldn` implements exact level tokens, valid-UTF-8 substring matching, and stateful nth-line sampling as heterogeneous `any filter` values. |
 | app/dest | `examples/derived_hosted/app/dest.ldn` implements text and count destinations, arbitrary copied byte messages, transactional append allocation, and cursor-based delivery/retry. The queue receives its allocator explicitly before erased dispatch; count emission needs none. |
-| app/config | `examples/derived_hosted/app/config.ldn` copies the complete argument table's bytes, builds a runtime-sized vector of independently allocated heterogeneous filters, selects a destination, diagnoses/recoveries numeric input, and closes a newly opened destination if object allocation fails. |
+| app/config | `examples/derived_hosted/app/config.ldn` copies the complete argument table's bytes, builds a runtime-sized vector of independently allocated heterogeneous filters, selects a destination, diagnoses and recovers from numeric input, and closes a newly opened destination if object allocation fails. |
 | app/run | `examples/derived_hosted/app/app.ldn` composes configuration, line reading, ordered short-circuit filters, message copying, destination dispatch, explicit bounded retry, and reader/destination cleanup; diagnostic capability is passed to `run_logged`/`build_logged`. |
 
 The app/read spelling differs from the sketch where implementation evidence
@@ -51,8 +51,8 @@ have no resumable cursor and terminate on failure.
 | W5 | Filter traversal uses initialized `vec.used` values; it does not pretend generic iterable copies are mutable places. |
 | W6 | Each heterogeneous pair preserves its mutable provider pointer and evidence; sample filters update original state through indirect calls. |
 | W7 | The historical proof missed helper-side-effect escape into module state. [0820]'s lexical promise is withdrawn; ordinary region/arena providers preserve useful helper results and simultaneous allocations without claiming transitive lifetime checks. |
-| Prototype 2 | The application reuses `core/text` UTF-8/positions and `core/diag` bounded/streaming `any log` capabilities used by `examples/config_parser/lexer/lexer.ldn`, `examples/config_parser/parser/parser.ldn`, and `runtime/derived-parser`. Command-line options need no recursive grammar parser; that complete support program remains separately executable. |
-| Prototype 3 | It directly reuses initialized allocation, vector growth/retention, explicit heap/arena providers, and `core/failing` accounting. The complete container support program is `examples/derived_containers/workload/workload.ldn`, pinned by `runtime/derived-containers`; its derivation records Z1-Z19. |
+| `prototype-2-parser.md` | The application reuses `core/text` UTF-8/positions and `core/diag` bounded/streaming `any log` capabilities used by `examples/config_parser/lexer/lexer.ldn`, `examples/config_parser/parser/parser.ldn`, and `runtime/derived-parser`. Command-line options need no recursive grammar parser; that complete support program remains separately executable. |
+| `prototype-3-containers.md` | It directly reuses initialized allocation, vector growth/retention, explicit heap/arena providers, and `core/failing` accounting. The complete container support program is `examples/derived_containers/workload/workload.ldn`, pinned by `runtime/derived-containers`; its derivation records Z1-Z19. |
 
 `runtime/derived-hosted-memory` starts with runtime-selected level, match, and
 sample filters plus a text destination. It checks exact output despite a

@@ -69,7 +69,9 @@ count_emit: (self: ptr mut count_dest, world: any io.world, inout line: message)
             -> none ! io.io_failed =
     _ = world
     bytes := vec.used(line.bytes)
-    level: u8 = level_of(bytes)
+    mut length: usize = lenof bytes
+    if length > 0 and bytes[length - 1] == 10 then dec length end if
+    level: u8 = level_of(bytes[0..<length])
     inc self.val.by_level[usize(level)]
     inc self.val.total
 end count_emit
