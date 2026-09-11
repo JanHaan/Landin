@@ -16048,7 +16048,13 @@ package body Landin.Stages.Checking is
             declare
                Means : constant Res.Declaration_Id :=
                  Res.Bound_To (Meanings.all, Of_Tree, Node);
-               Held  : constant Ty.Type_Kind := Settled_Type (Means);
+               --  A fixed actual is an expression without declaration
+               --  storage.  Conversion discovery can ask this shape path
+               --  about it; preserve Bound_Value's substitution semantics.
+               Held  : constant Ty.Type_Kind :=
+                 (if Res.Sort_Of (Meanings.all, Means) = Res.Fixed_Parameter
+                  then Synthesise (Of_Tree, Node)
+                  else Settled_Type (Means));
             begin
                if Res.Sort_Of (Meanings.all, Means)
                  in Res.Module_Type | Res.Module_Concept | Res.Type_Parameter

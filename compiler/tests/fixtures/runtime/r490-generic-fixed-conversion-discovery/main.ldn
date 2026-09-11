@@ -1,0 +1,34 @@
+identifier: type = distinct u32
+choice: type = struct
+    kind: variant first | second end kind
+end choice
+
+convert: (fixed amount: u32, value: choice) -> (result: usize) =
+    match value.kind
+        first: result = usize(amount)
+        second: result = usize(amount) + 1
+    end match
+end convert
+
+wrap: (fixed amount: u32) -> (result: identifier) =
+    result = identifier(amount)
+end wrap
+
+forward: (fixed amount: u32) -> (result: usize) =
+    value: choice = (kind: first)
+    result = convert(amount: amount, value: value)
+end forward
+
+public main: () -> (code: i32) =
+    first_value: choice = (kind: first)
+    second_value: choice = (kind: second)
+    code = 1
+    if convert(amount: 17, value: first_value) == 17
+      and convert(amount: 24, value: second_value) == 25
+      and forward(amount: 42) == 42
+      and u32(wrap(amount: 17)) == 17
+      and u32(wrap(amount: 25)) == 25
+    then
+        code = 42
+    end if
+end main
