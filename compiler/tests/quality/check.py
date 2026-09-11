@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import platform
 import re
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -17,6 +18,55 @@ HERE = Path(__file__).resolve().parent
 PROFILES = (("none", "off"), ("size", "off"),
             ("size", "auto"), ("speed", "auto"))
 WORKLOAD_COMPILE_TIMEOUT = 900
+FIXTURE_NAMES = ("insertion-sort", "sieve-of-eratosthenes", "derived-parser",
+                 "derived-containers", "derived-hosted-memory")
+COMPLETE_WORKLOADS = ("derived-parser", "derived-containers",
+                      "derived-hosted-memory")
+
+
+def profiles_for(name: str) -> tuple[tuple[str, str], ...]:
+    if name in ("specialization", "folding", "threshold", *COMPLETE_WORKLOADS):
+        return PROFILES + (("none", "all"), ("speed", "all"))
+    return PROFILES
+
+
+def fixture_configuration(name: str) -> dict:
+    require(name in FIXTURE_NAMES, f"unregistered quality fixture: {name}")
+    fixture = HERE.parent / "fixtures" / "runtime" / name
+    metadata = dict(line.split(":", 1) for line in
+                    (fixture / "fixture.meta").read_text().splitlines()
+                    if ":" in line and not line.startswith("#"))
+    rooted = "root" in metadata
+    return {
+        "source": fixture if rooted else fixture / metadata["program"].strip(),
+        "root": (fixture / metadata["root"].strip()).resolve() if rooted else None,
+        "expected_status": int(metadata["status"]),
+        "run_args": tuple(shlex.split(metadata.get("run_args", ""))),
+        "expected_output": ((fixture / metadata["run_expect"].strip()).read_bytes()
+                            if "run_expect" in metadata else b""),
+        # Runtime fixture arguments are relative to the Ada harness directory.
+        "execution_cwd": HERE.parents[1] / "ada",
+    }
+
+
+def execute_measurement(destination: Path, *, expected_status: int,
+                        run_args: tuple[str, ...] = (),
+                        expected_output: bytes = b"",
+                        execution_cwd: Path | None = None) -> dict:
+    command = [str(destination), *run_args]
+    completed = subprocess.run(command, check=False, stdout=subprocess.PIPE,
+                               stderr=subprocess.STDOUT, timeout=120,
+                               cwd=execution_cwd,
+                               env={**os.environ, "LC_ALL": "C"})
+    require(completed.returncode == expected_status,
+            f"quality program returned {completed.returncode}, "
+            f"expected {expected_status}: {command!r}\n{completed.stdout!r}")
+    require(completed.stdout == expected_output,
+            f"quality program output differs from its fixture oracle: "
+            f"{command!r}\n{completed.stdout!r}")
+    return {"argv": list(run_args), "status": completed.returncode,
+            "output_sha256": hashlib.sha256(completed.stdout).hexdigest()}
+
 
 
 def run(args: list[str], *, empty_output: bool = False,
@@ -68,7 +118,9 @@ def frame_bytes(body: list[str]) -> int:
 def measure(refine: Path, tools: dict[str, str], source: Path,
             destination: Path, profile: tuple[str, str],
             expected_status: int = 0, root: Path | None = None,
-            compile_timeout: int = 120) -> dict:
+            compile_timeout: int = 120, *, run_args: tuple[str, ...] = (),
+            expected_output: bytes = b"",
+            execution_cwd: Path | None = None) -> dict:
     assembly = destination.with_suffix(".s")
     report = destination.with_suffix(".json")
     obj = destination.with_suffix(".o")
@@ -108,8 +160,10 @@ def measure(refine: Path, tools: dict[str, str], source: Path,
     # Execute the identical assembly that was measured, rather than a second
     # compiler request which could use another policy.
     run([tools["gcc"], "-no-pie", str(obj), "-o", str(destination)])
-    run([str(destination)], empty_output=True, expected_status=expected_status)
-    return {"text_bytes": text_bytes, "build": build,
+    execution = execute_measurement(
+        destination, expected_status=expected_status, run_args=run_args,
+        expected_output=expected_output, execution_cwd=execution_cwd)
+    return {"execution": execution, "text_bytes": text_bytes, "build": build,
             "sources": parsed["sources"], "items": parsed["items"],
             "section_bytes": section_bytes, "function_bytes": function_bytes,
             "symbol_output": symbols, "expected_status": expected_status,
@@ -117,6 +171,38 @@ def measure(refine: Path, tools: dict[str, str], source: Path,
             "size_output": sizes,
             "disassembly": disassembly,
             "assembly_sha256": hashlib.sha256(first_assembly).hexdigest()}
+
+
+def check_parser_measurements(measurements: dict[str, dict]) -> None:
+    require(set(measurements) == {"-".join(p) for p in profiles_for("derived-parser")},
+            "complete parser quality evidence lacks a required profile")
+    root = HERE.parents[2]
+    required = {HERE.parent / "fixtures/runtime/derived-parser/main.ldn"}
+    for module in ("examples/config_parser/parser", "examples/config_parser/lexer",
+                   "core/diag", "core/io", "core/mem", "core/text", "core/vec"):
+        required.update((root / module).glob("*.ldn"))
+    expected_paths = {path.resolve() for path in required}
+    oracle = fixture_configuration("derived-parser")
+    for key, measured in measurements.items():
+        paths = {entry["source"]: Path(os.fsdecode(bytes.fromhex(
+                     entry["path_hex"]))).resolve() for entry in measured["sources"]}
+        require(expected_paths <= set(paths.values()),
+                f"{key}: incomplete parser source closure")
+        for module in ("parser", "lexer"):
+            items = {entry["item"] for entry in measured["items"]
+                     if paths[entry["source"]].parent
+                     == root / "examples/config_parser" / module}
+            require(items and any(r["item"] in items
+                                  for r in measured["build"]["routines"]),
+                    f"{key}: missing complete {module} routine evidence")
+        require(measured["execution"] == {
+                    "argv": list(oracle["run_args"]),
+                    "status": oracle["expected_status"],
+                    "output_sha256": hashlib.sha256(
+                        oracle["expected_output"]).hexdigest()},
+                f"{key}: parser measurement lost its original execution oracle")
+        require(measured["text_bytes"] > 0,
+                f"{key}: parser has no baseline object measurement")
 
 
 def check_hosted_measurements(measurements: dict[str, dict]) -> None:
@@ -186,20 +272,8 @@ def main() -> None:
         scratch = Path(tmp)
         sources = {name: HERE / f"{name}.ldn" for name in
                    ("scalars", "layout", "specialization", "folding")}
-        expected_status = {}
-        roots = {}
-        for name in ("insertion-sort", "sieve-of-eratosthenes",
-                     "derived-containers", "derived-hosted-memory"):
-            fixture = HERE.parent / "fixtures" / "runtime" / name
-            metadata = dict(line.split(":", 1) for line in
-                            (fixture / "fixture.meta").read_text().splitlines()
-                            if ":" in line and not line.startswith("#"))
-            if "root" in metadata:
-                sources[name] = fixture
-                roots[name] = (fixture / metadata["root"].strip()).resolve()
-            else:
-                sources[name] = fixture / metadata["program"].strip()
-            expected_status[name] = int(metadata["status"])
+        configurations = {name: fixture_configuration(name) for name in FIXTURE_NAMES}
+        sources.update({name: config["source"] for name, config in configurations.items()})
         sources["threshold"] = (HERE.parent / "fixtures" / "runtime"
                                 / "r450-specialization-threshold" / "main.ldn")
         template = (HERE / "arrays.ldn.in").read_text()
@@ -210,21 +284,16 @@ def main() -> None:
         evidence = {}
         for name, source in sources.items():
             evidence[name] = {}
-            profiles = PROFILES
-            if name in ("specialization", "folding", "threshold",
-                        "derived-containers", "derived-hosted-memory"):
-                profiles += (("none", "all"), ("speed", "all"))
-            for profile in profiles:
+            for profile in profiles_for(name):
                 key = "-".join(profile)
-                # The rooted client takes over two minutes to compile even
-                # natively. Keep this allowance separate from execution.
+                # Full rooted derivatives need an independent compile allowance.
                 compile_timeout = (WORKLOAD_COMPILE_TIMEOUT
-                                   if name in ("derived-containers",
-                                               "derived-hosted-memory") else 120)
+                                   if name in COMPLETE_WORKLOADS else 120)
+                config = {key: value for key, value in configurations.get(name, {}).items()
+                          if key != "source"}
                 evidence[name][key] = measure(
                     refine, tools, source, scratch / f"{name}-{key}", profile,
-                    expected_status.get(name, 0), roots.get(name),
-                    compile_timeout)
+                    compile_timeout=compile_timeout, **config)
         base = evidence["scalars"]["none-off"]
         for key in ("size-off", "size-auto", "speed-auto"):
             optimized = evidence["scalars"][key]
@@ -367,6 +436,7 @@ def main() -> None:
                             and d["action"] == "specialized"
                             for d in decisions),
                         f"{key}: no core container entry was specialized")
+        check_parser_measurements(evidence["derived-parser"])
         check_hosted_measurements(evidence["derived-hosted-memory"])
         fold_base = evidence["folding"]["none-off"]
         for key in ("size-off", "size-auto", "speed-auto", "speed-all"):
