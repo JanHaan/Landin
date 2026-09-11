@@ -1,0 +1,3 @@
+row: type = [3]u16
+hidden: type = distinct row
+public main: () -> (code: i32) = code = i32(lenof hidden) end main
