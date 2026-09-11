@@ -8,7 +8,7 @@ acceptance and closure evidence.
 | Prototype section | Complete source and behavior |
 | --- | --- |
 | core/mem addition | `core/mem/allocation.ldn` initializes allocated objects; `core/mem/bytes.ldn` owns initialized byte extents; `core/region/region.ldn` records allocations against an explicit ordinary parent provider. |
-| core/io/root/arguments | `core/io/io.ldn` and `core/io/memory.ldn` supply the same ordinary erased world protocol. `examples/derived_hosted/app/entry.ldn` alone mints hosted world/heap capabilities. `examples/derived_hosted/main.ldn` calls that root. |
+| core/io/root/arguments | `core/io/io.ldn` and `core/io/memory.ldn` supply the same ordinary erased world protocol. `io.file` now has the prototype's `distinct i32` identity; each provider constructs handles explicitly and extracts `i32` only for descriptor arithmetic or the native boundary. `examples/derived_hosted/app/entry.ldn` alone mints hosted world/heap capabilities. `examples/derived_hosted/main.ldn` calls that root. |
 | app/read | `examples/derived_hosted/app/reader.ldn` reads arbitrary-length complete lines across explicit chunk boundaries, preserves empty lines and final unterminated lines, and closes the consumed reader on every handled exit. |
 | app/filter | `examples/derived_hosted/app/filter.ldn` implements exact level tokens, valid-UTF-8 substring matching, and stateful nth-line sampling as heterogeneous `any filter` values. |
 | app/dest | `examples/derived_hosted/app/dest.ldn` implements text and count destinations, arbitrary copied byte messages, transactional append allocation, and cursor-based delivery/retry. The queue receives its allocator explicitly before erased dispatch; count emission needs none. |

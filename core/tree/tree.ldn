@@ -1,17 +1,15 @@
 import core/mem
 import core/vec
 
-identifier: type = struct
-    ordinal: u32
-end identifier
+identifier: type = distinct u32
 public node_id: type = identifier
 
 public id: (ordinal: u32) -> (value: identifier) =
-    value = (ordinal: ordinal)
+    value = identifier(ordinal)
 end id
 
 public ordinal: (value: identifier) -> (number: u32) =
-    number = value.ordinal
+    number = u32(value)
 end ordinal
 public no_such_node: atom
 public invalid_children: atom
@@ -44,7 +42,7 @@ end length
 next_id: (count: usize) -> (id: node_id) ! too_many_nodes =
     maximum: u64 = 4294967295
     fail too_many_nodes when u64(count) > maximum
-    id = (ordinal: u32(count))
+    id = identifier(u32(count))
 end next_id
 
 public add_leaf: (provider: type is mem.allocator, inout value: tree_value,
@@ -66,7 +64,7 @@ public add_branch: (provider: type is mem.allocator, inout value: tree_value,
                    ! mem.out_of_memory | too_many_nodes
                      | invalid_children | too_many_leaves =
     id = try next_id(length(value))
-    begins: usize = usize(first.ordinal)
+    begins: usize = usize(u32(first))
     amount: usize = usize(count)
     available: usize = length(value)
     fail invalid_children when begins > available
@@ -90,7 +88,7 @@ end add_branch
 
 public get: (value: tree_value, id: node_id)
             -> (result: node_value from value) ! no_such_node =
-    result = vec.get(value.nodes, usize(id.ordinal)) else (problem)
+    result = vec.get(value.nodes, usize(u32(id))) else (problem)
         _ = problem
         fail no_such_node
     end

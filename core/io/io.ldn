@@ -37,9 +37,7 @@ public empty_path: atom
 public path_contains_nul: atom
 public path_too_long: atom
 
-file_value: type = struct
-    descriptor: i32
-end file_value
+file_value: type = distinct i32
 
 public file: type = file_value
 
@@ -217,7 +215,7 @@ system_open_read: (self: ptr mut system, path: ptr u8)
     loop do
         descriptor: i32 = _landin_host_open_read(path)
         if descriptor >= 0 then
-            opened = (descriptor: descriptor)
+            opened = file_value(descriptor)
             return
         end if
 
@@ -242,7 +240,7 @@ system_open_write: (self: ptr mut system, path: ptr u8)
     loop do
         descriptor: i32 = _landin_host_open_write(path)
         if descriptor >= 0 then
-            opened = (descriptor: descriptor)
+            opened = file_value(descriptor)
             return
         end if
 
@@ -263,7 +261,7 @@ end system_open_write
 system_close: (self: ptr mut system, sink opened: file)
               -> none ! io_failed =
     self.val.failure_errno = 0
-    status: i32 = _landin_host_close(opened.descriptor)
+    status: i32 = _landin_host_close(i32(opened))
     if status <> 0 then
         --  Capture first, then report.  A failed Linux close may already have
         --  released the descriptor; retrying could close an unrelated reused
@@ -284,7 +282,7 @@ system_read: (self: ptr mut system, opened: file, into: []mut u8)
     failed: usize = 0 -% 1
     loop do
         read_count: usize = _landin_host_read
-            (opened.descriptor, base, lenof into)
+            (i32(opened), base, lenof into)
         if read_count <> failed then
             fail io_failed when read_count > lenof into
             --  Zero from a nonempty read is genuine EOF, not stalled progress.
@@ -336,17 +334,17 @@ system_write: (self: ptr mut system, opened: file, bytes: []u8)
               -> none ! io_failed =
     self.val.failure_errno = 0
     return when lenof bytes == 0
-    try write_all(self, opened.descriptor, bytes)
+    try write_all(self, i32(opened), bytes)
 end system_write
 
 system_out: (self: ptr system) -> (stream: file) =
     _ = self.val.argument_length
-    stream = (descriptor: 1)
+    stream = file_value(1)
 end system_out
 
 system_err: (self: ptr system) -> (stream: file) =
     _ = self.val.argument_length
-    stream = (descriptor: 2)
+    stream = file_value(2)
 end system_err
 
 system_argument_count: (self: ptr system) -> (count: usize) =
