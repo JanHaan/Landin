@@ -9,12 +9,14 @@ import json
 import os
 from pathlib import Path
 import platform
+import pty
 import re
 import shutil
 import subprocess
 import sys
 import tempfile
 import time
+import tty
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
@@ -25,6 +27,8 @@ CONTAINER_SOURCE = ROOT / "examples/derived_containers/workload/workload.ldn"
 CONTAINER_FIXTURE = HERE.parent / "fixtures/runtime/derived-containers"
 HOSTED_SOURCE = ROOT / "examples/derived_hosted/app/app.ldn"
 HOSTED_FIXTURE = HERE.parent / "fixtures/runtime/derived-hosted-memory"
+PARSER_SOURCE = ROOT / "examples/config_parser/parser/parser.ldn"
+PARSER_FIXTURE = HERE.parent / "fixtures/runtime/derived-parser"
 WORKLOAD_COMPILE_TIMEOUT = 900
 CONTAINER_DONE_VALUES = (
     "signed_order", "unsigned_order_ok", "numbers_ok", "arrays_ok", "raw_ok",
@@ -35,6 +39,8 @@ CONTAINER_DONE_VALUES = (
 PRIMARY_PROFILES = (("none-off", "none", "off"),
                     ("size-auto", "size", "auto"))
 FALLBACK_PROFILE = ("size-all", "size", "all")
+WORKLOAD_PROFILES = (*PRIMARY_PROFILES, FALLBACK_PROFILE)
+WORKLOADS = ("parser", "containers", "hosted")
 DEBUG_SECTIONS = (".debug_info", ".debug_abbrev", ".debug_line",
                   ".debug_loc", ".debug_frame")
 
@@ -536,6 +542,100 @@ def check_hosted_transcript(transcript: str,
             f"debugged hosted program did not return 42: {inferior_exit!r}")
 
 
+def parser_lines() -> dict[str, int]:
+    return {
+        "digits": source_line(PARSER_SOURCE,
+                              "if text.ordinal(cursor) == text.ordinal(ends)"),
+        "recovery": source_line(PARSER_SOURCE,
+                                "return when parser.look.what == lexer.newline"),
+        "nested": source_line(PARSER_SOURCE,
+                              "if parser.look.what == lexer.end_of_input"),
+        "done": source_line(PARSER_FIXTURE / "main.ldn", "code = 42"),
+    }
+
+
+def parser_gdb_script(start_commands: list[str],
+                      source_lines: dict[str, int]) -> str:
+    source = os.path.relpath(PARSER_SOURCE, ROOT)
+    lines = gdb_setup()
+    for name, condition, values in (
+            ("digits", "accumulated == 4", (
+                ("accumulated", "accumulated"), ("cursor", "cursor.offset"),
+                ("ends", "ends.offset"))),
+            ("recovery", "parser->look.begins.offset == 36", (
+                ("depth", "parser->depth"), ("look", "parser->look.what"),
+                ("begins", "parser->look.begins.offset"),
+                ("ends", "parser->look.ends.offset"))),
+            ("nested", "parser->depth == 1", (
+                ("depth", "parser->depth"), ("look", "parser->look.what"),
+                ("begins", "parser->look.begins.offset"),
+                ("source_length", "source[1]")))):
+        line = source_lines[name]
+        lines.extend([f"tbreak {source}:{line} if {condition}",
+                      "commands", "silent"])
+        emit_section(lines, f"parser-{name}",
+                     ["frame", "info line", f"list {line},{line}",
+                      "info args", "info locals", "bt 24"])
+        emit_values(lines, f"parser-{name}", values)
+        if name == "digits":
+            lines.append("frame 1")
+            emit_values(lines, "parser-digits-caller", (
+                ("accumulated", "accumulated"), ("cursor", "cursor.offset")))
+            lines.append("frame 0")
+        lines.extend(["continue", "end"])
+    entry = os.path.relpath(PARSER_FIXTURE / "main.ldn", ROOT)
+    line = source_lines["done"]
+    lines.extend([f"tbreak {entry}:{line}", "commands", "silent"])
+    emit_section(lines, "parser-done", ["frame", "info line", "info locals", "bt 8"])
+    emit_values(lines, "parser-done", tuple((name, name) for name in (
+        "valid", "source_length", "saw_out_of_memory", "saw_io_failure")))
+    lines.extend(["continue", "end"])
+    emit_section(lines, "inferior-exit", start_commands)
+    return "\n".join(lines) + "\n"
+
+
+def check_parser_transcript(transcript: str,
+                            source_lines: dict[str, int]) -> None:
+    for phrase in ("No symbol ", "No source file named", "Cannot access memory",
+                   "Cannot find bounds", "not defined", "Error in testing breakpoint"):
+        require(phrase not in transcript,
+                f"parser GDB transcript contains {phrase!r}\n{transcript}")
+    for name, functions in (
+            ("digits", ("parse_digits", "parse_digits", "parse_entry", "parse_sequence")),
+            ("recovery", ("recover_to_boundary", "parse_entry", "parse_sequence")),
+            ("nested", ("parse_sequence", "parse_entry", "parse_sequence")),
+            ("done", ("main",))):
+        scope = f"parser-{name}"
+        filename = "main.ldn" if name == "done" else "parser.ldn"
+        expect_line(transcript, scope, source_lines[name], functions[0], filename)
+        stack = marker_section(transcript, scope)
+        require(all(re.search(rf"#{index}\s+.*\b{expected}\b", stack) is not None
+                    for index, expected in enumerate(functions)),
+                f"parser recursion lost its source stack: {stack!r}")
+        if name != "done":
+            require(re.search(r"#\d+\s+.*\bparse_file\b.*parser\.ldn:", stack)
+                    is not None and re.search(r"#\d+\s+.*\bmain\b.*main\.ldn:", stack)
+                    is not None,
+                    f"parser stack lost its complete application callers: {stack!r}")
+    for name, value in (
+            ("digits.accumulated", 4), ("digits.cursor", 27), ("digits.ends", 28),
+            ("digits-caller.accumulated", 0), ("digits-caller.cursor", 26),
+            ("recovery.depth", 0), ("recovery.look", 1),
+            ("recovery.begins", 36), ("recovery.ends", 38),
+            ("nested.depth", 1), ("nested.look", 6), ("nested.begins", 48),
+            ("nested.source_length", 92), ("done.valid", 1),
+            ("done.source_length", 92), ("done.saw_out_of_memory", 1),
+            ("done.saw_io_failure", 1)):
+        expect_value(transcript, "parser-" + name, value)
+    expected_output = (PARSER_FIXTURE / "output.txt").read_text()
+    output = marker_section(transcript, "inferior-output")
+    require(output == expected_output,
+            f"debugged parser diagnostics differ from the fixture oracle: {output!r}")
+    inferior_exit = marker_section(transcript, "inferior-exit")
+    require(re.search(r"exited with code (?:052|42)\b", inferior_exit) is not None,
+            f"debugged parser program did not return 42: {inferior_exit!r}")
+
+
 def expect_value(transcript: str, name: str, value: int) -> None:
     require(re.search(r"^LANDIN-VALUE " + re.escape(name) + "=" +
                       re.escape(str(value)) + r"$", transcript, re.M) is not None,
@@ -895,31 +995,62 @@ def check_specialization(report_path: Path, optimize: str,
 
 
 def guest_command(executable: Path, runner: str,
-                  qemu: str | None) -> list[str]:
+                  qemu: str | None, arguments: tuple[str, ...] = ()) -> list[str]:
     if runner == "native":
-        return [str(executable)]
+        return [str(executable), *arguments]
     require(qemu is not None, "qemu runner has no qemu-x86_64 command")
-    return [qemu, str(executable)]
+    return [qemu, str(executable), *arguments]
 
 
 def run_gdb(gdb: str, executable: Path, script_path: Path,
             transcript_path: Path, debugger_cwd: Path, runner: str,
             qemu: str | None, transport_dir: Path,
-            script: Callable[[list[str]], str]) -> str:
-    gdb_args = [gdb, "-q", "-nx", "--batch", str(executable),
-                "-x", str(script_path)]
-    if runner == "native":
-        script_path.write_text(script(["run"]))
-        transcript = run_gdb_process(gdb_args, debugger_cwd, transcript_path)
-        if re.search(r"PTRACE_GETREGS|Couldn't get CS register|ptrace:",
-                     transcript, re.I):
-            raise Native_Transport_Unavailable(
-                "host ptrace cannot read the inferior registers")
+            script: Callable[[list[str]], str],
+            arguments: tuple[str, ...] = (), expected_output: str = "") -> str:
+    gdb_args = [gdb, "-q", "-nx", "--batch", "-x", str(script_path),
+                "--args", str(executable), *arguments]
+    capture_output = bool(arguments) or bool(expected_output)
+
+    def record_output(transcript: str, output: str) -> str:
+        transcript_path.with_suffix(".inferior.txt").write_text(output)
+        require(output == expected_output,
+                f"debugged executable output differs from its fixture oracle: {output!r}")
+        transcript += ("LANDIN-BEGIN inferior-output\n" + output +
+                       "LANDIN-END inferior-output\n")
+        transcript_path.write_text(transcript)
         return transcript
+
+    if runner == "native":
+        if capture_output:
+            # A raw PTY separates exact inferior bytes from debugger prose.
+            # A regular file tty would inject GDB's controlling-terminal
+            # warning into the program output; a real PTY needs no filtering.
+            primary, secondary = pty.openpty()
+            try:
+                tty.setraw(secondary)
+                os.set_blocking(primary, False)
+                script_path.write_text(script([
+                    "set inferior-tty " + os.ttyname(secondary), "run"]))
+                transcript = run_gdb_process(gdb_args, debugger_cwd, transcript_path)
+                output = bytearray()
+                while True:
+                    try:
+                        chunk = os.read(primary, 65536)
+                    except BlockingIOError:
+                        break
+                    if not chunk:
+                        break
+                    output.extend(chunk)
+                return record_output(transcript, output.decode())
+            finally:
+                os.close(primary)
+                os.close(secondary)
+        script_path.write_text(script(["run"]))
+        return run_gdb_process(gdb_args, debugger_cwd, transcript_path)
     require(qemu is not None, "qemu runner has no qemu-x86_64 command")
     socket_path = transport_dir / "gdb.sock"
     qemu_process = subprocess.Popen(
-        [qemu, "-g", str(socket_path), str(executable)],
+        [qemu, "-g", str(socket_path), str(executable), *arguments],
         cwd=debugger_cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
         text=True, env={**os.environ, "LC_ALL": "C"})
     try:
@@ -941,7 +1072,9 @@ def run_gdb(gdb: str, executable: Path, script_path: Path,
         qemu_output = qemu_process.stdout.read() if qemu_process.stdout else ""
         require(status == 42,
                 f"qemu debug inferior returned {status}, expected 42: {qemu_output}")
-        require(qemu_output == "",
+        if capture_output:
+            return record_output(transcript, qemu_output)
+        require(qemu_output == expected_output,
                 f"qemu debug inferior produced output: {qemu_output!r}")
         return transcript
     finally:
@@ -998,21 +1131,29 @@ CALLER_COLUMN = next(line.index("debug_outer") + 1 for line in
 def measure(refine: Path, tools: dict[str, str], gdb: str,
             runner: str, qemu: str | None, retained: Path, scratch: Path,
             profile: tuple[str, str, str], containers: bool = False,
-            hosted: bool = False) -> dict:
+            hosted: bool = False, parser_workload: bool = False) -> dict:
     key, optimize, specialize = profile
-    require(not (containers and hosted), "choose one debugger workload")
+    require(sum((containers, hosted, parser_workload)) <= 1,
+            "choose one debugger workload")
+    workload = containers or hosted or parser_workload
     if containers:
         key = "containers-" + key
     elif hosted:
         key = "hosted-" + key
+    elif parser_workload:
+        key = "parser-" + key
     executable = scratch / f"debug-{key}"
     assembly = scratch / f"debug-{key}.s"
     report = scratch / f"report-{key}.json"
     sources = SOURCES
     source_args = tuple(os.path.relpath(source, ROOT) for source in sources)
-    fixture = HOSTED_FIXTURE if hosted else CONTAINER_FIXTURE
+    fixture = (PARSER_FIXTURE if parser_workload else
+               HOSTED_FIXTURE if hosted else CONTAINER_FIXTURE)
+    arguments = (str(PARSER_FIXTURE / "input.txt"),) if parser_workload else ()
+    expected_output = ((PARSER_FIXTURE / "output.txt").read_text()
+                       if parser_workload else "")
     inputs = ([os.path.relpath(fixture, ROOT), "--root=."]
-              if containers or hosted else list(source_args))
+              if workload else list(source_args))
     profile_args = [f"--optimize={optimize}",
                     f"--specialize={specialize}"]
     compiler_args = [str(refine), "--target=linux-x86-64", "--debug=full",
@@ -1023,15 +1164,16 @@ def measure(refine: Path, tools: dict[str, str], gdb: str,
                      *profile_args]
     # The rooted client takes over two minutes to compile even natively;
     # executable and debugger timeouts remain independent and unchanged.
-    compile_timeout = WORKLOAD_COMPILE_TIMEOUT if containers or hosted else 120
+    compile_timeout = WORKLOAD_COMPILE_TIMEOUT if workload else 120
     run(compiler_args, cwd=ROOT, timeout=compile_timeout)
     run(assembly_args, cwd=ROOT, timeout=compile_timeout)
-    if containers or hosted:
+    if workload:
         inventory = json.loads(report.read_text())["sources"]
         source_args = tuple(os.fsdecode(bytes.fromhex(entry["path_hex"]))
                             for entry in inventory)
         sources = tuple((ROOT / path).resolve() for path in source_args)
-        workload_source = HOSTED_SOURCE if hosted else CONTAINER_SOURCE
+        workload_source = (PARSER_SOURCE if parser_workload else
+                           HOSTED_SOURCE if hosted else CONTAINER_SOURCE)
         require(workload_source in sources and fixture / "main.ldn" in sources,
                 "workload report omits its entry or application source")
     if containers:
@@ -1067,7 +1209,9 @@ def measure(refine: Path, tools: dict[str, str], gdb: str,
     dwarf_versions = check_dwarf_versions(debug_info, frames)
     dwarf_versions["debug_line_tables"] = check_line_table(
         raw_lines, source_args)
-    debug_names = (("sample_keep", "text_emit", "process") if hosted else
+    debug_names = (("parse_file", "parse_sequence", "parse_entry",
+                    "parse_digits", "recover_to_boundary", "parser_state")
+                   if parser_workload else ("sample_keep", "text_emit", "process") if hosted else
                    ("containers_run", "evidence_less", "left", "right",
                     "count", "first", "last") if containers else (
         "debug_outer", "debug_inner", "debug_generic",
@@ -1089,21 +1233,25 @@ def measure(refine: Path, tools: dict[str, str], gdb: str,
                              sources)
     assembly_table = check_source_map(assembly_map_path, executable_id,
                                       source_args, assembly, sources)
-    run(guest_command(executable, runner, qemu), cwd=scratch,
-        expected_status=42, empty_output=True)
+    observed_output = run(guest_command(executable, runner, qemu, arguments),
+                          cwd=scratch, expected_status=42)
+    require(observed_output == expected_output,
+            "debug executable output differs from its fixture oracle")
     debugger_cwd = scratch / f"debugger-cwd-{key}"
     debugger_cwd.mkdir()
     script_path = retained / f"{key}.gdb"
     transcript_path = retained / f"{key}.gdb.txt"
-    lines = (hosted_lines() if hosted else
+    lines = (parser_lines() if parser_workload else hosted_lines() if hosted else
              container_lines() if containers else SOURCE_LINES)
-    script = (hosted_gdb_script if hosted else
+    script = (parser_gdb_script if parser_workload else hosted_gdb_script if hosted else
               container_gdb_script if containers else gdb_script)
     with tempfile.TemporaryDirectory(prefix="landin-gdb-") as tmp:
         transcript = run_gdb(gdb, executable, script_path, transcript_path,
                              debugger_cwd, runner, qemu, Path(tmp),
-                             lambda start: script(start, lines))
-    if hosted:
+                             lambda start: script(start, lines), arguments, expected_output)
+    if parser_workload:
+        check_parser_transcript(transcript, lines)
+    elif hosted:
         check_hosted_transcript(transcript, lines)
     elif containers:
         check_container_transcript(transcript, lines)
@@ -1122,13 +1270,16 @@ def measure(refine: Path, tools: dict[str, str], gdb: str,
         require(os.fsencode(source_arg) not in stripped_bytes and
                 os.fsencode(Path(source_arg).name) not in stripped_bytes,
                 f"stripped executable still deploys filename {source_arg!r}")
-    run(guest_command(stripped, runner, qemu), cwd=debugger_cwd,
-        expected_status=42, empty_output=True)
+    stripped_output = run(guest_command(stripped, runner, qemu, arguments),
+                          cwd=debugger_cwd, expected_status=42)
+    require(stripped_output == expected_output,
+            "stripped executable output differs from its fixture oracle")
     resolver = str(ROOT / "scripts/source-location.py")
     caller_id, caller_line, caller_column = 2, CALLER_LINE, CALLER_COLUMN
-    if containers or hosted:
+    if workload:
         entry_source = fixture / "main.ldn"
-        entry_call = "app.run" if hosted else "containers_run"
+        entry_call = ("parser.parse_file" if parser_workload else
+                      "app.run" if hosted else "containers_run")
         caller_id = sources.index(entry_source) + 1
         caller_line = source_line(entry_source, entry_call)
         caller_column = (entry_source.read_text().splitlines()[caller_line - 1]
@@ -1166,6 +1317,9 @@ def measure(refine: Path, tools: dict[str, str], gdb: str,
         "build": build,
         "build_id": executable_id,
         "compiler_request": compiler_args[1:],
+        "runtime_arguments": arguments,
+        "runtime_output": observed_output,
+        "stripped_output": stripped_output,
         "assembly_request": assembly_args[1:],
         "assembly_sha256": hashlib.sha256(assembly.read_bytes()).hexdigest(),
         "debug_sections_sha256": hashlib.sha256(sections.encode()).hexdigest(),
@@ -1183,6 +1337,14 @@ def measure(refine: Path, tools: dict[str, str], gdb: str,
     }
 
 
+def measure_workloads(measurement: Callable[[str, tuple[str, str, str]], dict],
+                      selected: str | None = None) -> dict[str, dict]:
+    require(selected is None or selected in WORKLOADS, "unknown debugger workload")
+    return {name: {profile[0]: measurement(name, profile)
+                   for profile in WORKLOAD_PROFILES}
+            for name in WORKLOADS if selected is None or selected == name}
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--refine", type=Path, required=True)
@@ -1195,6 +1357,8 @@ def main() -> None:
                         help="debugger transport; default is strict native")
     parser.add_argument("--qemu", metavar="PATH",
                         help="qemu-x86_64 path; also selects qemu by default")
+    parser.add_argument("--workload", choices=WORKLOADS,
+                        help="exact developer workload; FILTERED, not acceptance")
     args = parser.parse_args()
     require(platform.system() == "Linux",
             "source debugging requires Linux; no skip is a pass")
@@ -1214,40 +1378,42 @@ def main() -> None:
                    for name, path in tools.items()}}
     if qemu is not None:
         versions["qemu"] = run([qemu, "--version"]).splitlines()[0]
+    if args.workload:
+        args.output = args.output / "development" / args.workload
     args.output.mkdir(parents=True, exist_ok=True)
     failure_path = args.output / "failure.txt"
-    evidence_path = args.output / "evidence.json"
+    evidence_path = args.output / ("development-evidence.json"
+                                   if args.workload else "evidence.json")
+    if args.workload:
+        print(f"FILTERED debugger workload={args.workload}; NOT ACCEPTANCE", flush=True)
     failure_path.unlink(missing_ok=True)
     evidence_path.unlink(missing_ok=True)
     try:
         with tempfile.TemporaryDirectory(prefix="debugging-") as tmp:
             scratch = Path(tmp)
             measurements = {}
-            for profile in PRIMARY_PROFILES:
-                measurements[profile[0]] = measure(
-                    refine, tools, gdb, runner, qemu,
-                    args.output, scratch, profile)
-            if not has_concrete_specialization(
-                    measurements["size-auto"]["build"]):
-                profile = FALLBACK_PROFILE
-                measurements[profile[0]] = measure(
-                    refine, tools, gdb, runner, qemu,
-                    args.output, scratch, profile)
-            container_measurements = {}
-            for profile in (*PRIMARY_PROFILES, FALLBACK_PROFILE):
-                container_measurements[profile[0]] = measure(
-                    refine, tools, gdb, runner, qemu,
-                    args.output, scratch, profile, containers=True)
-            hosted_measurements = {}
-            for profile in (*PRIMARY_PROFILES, FALLBACK_PROFILE):
-                hosted_measurements[profile[0]] = measure(
-                    refine, tools, gdb, runner, qemu,
-                    args.output, scratch, profile, hosted=True)
+            if args.workload is None:
+                for profile in PRIMARY_PROFILES:
+                    measurements[profile[0]] = measure(
+                        refine, tools, gdb, runner, qemu,
+                        args.output, scratch, profile)
+                if not has_concrete_specialization(
+                        measurements["size-auto"]["build"]):
+                    profile = FALLBACK_PROFILE
+                    measurements[profile[0]] = measure(
+                        refine, tools, gdb, runner, qemu,
+                        args.output, scratch, profile)
+            workloads = measure_workloads(
+                lambda name, profile: measure(
+                    refine, tools, gdb, runner, qemu, args.output, scratch, profile,
+                    containers=name == "containers", hosted=name == "hosted",
+                    parser_workload=name == "parser"), args.workload)
     except Exception as error:
         failure_path.write_text(f"{type(error).__name__}: {error}\n")
         raise
     result = {
         "schema": 1,
+        "filtered": args.workload is not None,
         "runner": runner,
         "tools": versions,
         "compiler_sha256": hashlib.sha256(refine.read_bytes()).hexdigest(),
@@ -1255,8 +1421,9 @@ def main() -> None:
         "debugger_cwd_is_distinct": True,
         "specialization_fallback_used": "size-all" in measurements,
         "measurements": measurements,
-        "container_measurements": container_measurements,
-        "hosted_measurements": hosted_measurements,
+        "parser_measurements": workloads.get("parser", {}),
+        "container_measurements": workloads.get("containers", {}),
+        "hosted_measurements": workloads.get("hosted", {}),
     }
     evidence_path.write_text(
         json.dumps(result, indent=2, sort_keys=True) + "\n")
