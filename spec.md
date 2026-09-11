@@ -8144,7 +8144,11 @@ including declared atom singletons, qualified names and fully applied aliases.
 Repeated atoms and source order do not change the interned structural set.
 Symbolic declaration checking validates independent members while leaving the
 result undecided; it never invents a partial atom-set key or records a concrete
-instance answer on template syntax. The resulting alias participates in the
+instance answer on template syntax. Proven pointer presence and up to two distinct
+atom identities survive symbolic alias substitution solely as diagnostic lower
+bounds, so unconditional pointer-count and tagged-pointer violations are refused
+even in unused declarations. An invalid concrete substitution names its application
+as the primary source and its template member as the related source. The resulting alias participates in the
 ordinary error-set, assignment and generic-key rules. A one-atom pointer union
 uses D189's existing descriptor, including the empty atom of a substituted
 optional-pointer alias. Two pointer members are still refused, and two or more
@@ -8188,7 +8192,9 @@ would leak its name and create collisions unrelated aliases cannot share. A
 function-shaped type maker would instead introduce execution where [1350]
 requires substitution. All were declined.
 
-**Pinned by** `positive/parameterized-atom-union`,
+**Pinned by** `negative/r490-union-alias-application-reports`,
+`negative/r490-union-alias-unused-pointer-shapes`,
+`positive/parameterized-atom-union`,
 `runtime/r490-generic-union-alias`,
 `negative/r490-union-alias-nonatom`,
 `negative/r490-union-alias-direct-array`,

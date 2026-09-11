@@ -1,0 +1,4 @@
+public first, second: atom
+public joined: type (t: type) = first | t
+public with_pointer: type (t: type) = first | t | ptr u8
+public with_atoms: type (t: type) = first | second | t

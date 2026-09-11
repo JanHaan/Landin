@@ -1,0 +1,41 @@
+error[L0301]: a union holds at most one pointer type
+  --> ../tests/fixtures/negative/r490-union-alias-unused-pointer-shapes/main.ldn:5:44
+  |
+5 | two_ptrs: type (t: type) = first | ptr t | ptr u8
+  |                                            ^^^^^^
+  --> ../tests/fixtures/negative/r490-union-alias-unused-pointer-shapes/main.ldn:5:36
+  |
+5 | two_ptrs: type (t: type) = first | ptr t | ptr u8
+  |                                    ^^^^^ the pointer member already given
+  = note: [0480]: `maybe a pointer` is an atom beside one pointer type
+error[L0304]: a union of several atoms and a pointer is not enabled
+  --> ../tests/fixtures/negative/r490-union-alias-unused-pointer-shapes/main.ldn:6:26
+  |
+6 | tagged: type (t: type) = first | second | ptr t
+  |                          ^^^^^^^^^^^^^^^^^^^^^^
+  = note: the tour describes it at [0480]
+  = note: ROADMAP.md R7.20 is where it is enabled
+error[L0301]: a union holds at most one pointer type
+  --> ../tests/fixtures/negative/r490-union-alias-unused-pointer-shapes/main.ldn:7:51
+  |
+7 | nested_two: type (t: type) = first | pointer(t) | ptr u8
+  |                                                   ^^^^^^
+  --> ../tests/fixtures/negative/r490-union-alias-unused-pointer-shapes/main.ldn:7:38
+  |
+7 | nested_two: type (t: type) = first | pointer(t) | ptr u8
+  |                                      ^^^^^^^^^^ the pointer member already given
+  = note: [0480]: `maybe a pointer` is an atom beside one pointer type
+error[L0304]: a union of several atoms and a pointer is not enabled
+  --> ../tests/fixtures/negative/r490-union-alias-unused-pointer-shapes/main.ldn:8:33
+  |
+8 | nested_tagged: type (t: type) = optional(t) | second
+  |                                 ^^^^^^^^^^^^^^^^^^^^
+  = note: the tour describes it at [0480]
+  = note: ROADMAP.md R7.20 is where it is enabled
+error[L0304]: a union of several atoms and a pointer is not enabled
+  --> ../tests/fixtures/negative/r490-union-alias-unused-pointer-shapes/main.ldn:9:32
+  |
+9 | nested_atoms: type (t: type) = atoms(t) | ptr u8
+  |                                ^^^^^^^^^^^^^^^^^
+  = note: the tour describes it at [0480]
+  = note: ROADMAP.md R7.20 is where it is enabled

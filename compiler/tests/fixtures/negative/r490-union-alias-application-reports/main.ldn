@@ -1,0 +1,9 @@
+import unions
+problem: atom
+joined: type (t: type) = problem | t
+bad: type = joined(i32)
+other: type = joined(bool)
+imported: type = unions.joined(i32)
+imported_other: type = unions.joined(bool)
+two_pointers: type = unions.with_pointer(ptr i32)
+several_atoms: type = unions.with_atoms(ptr u8)

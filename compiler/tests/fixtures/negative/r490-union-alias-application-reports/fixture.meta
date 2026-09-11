@@ -1,0 +1,10 @@
+class: negative
+summary: Invalid union substitutions name each application and its local or imported template member
+program: main.ldn
+root: .
+codes: L0301, L0301, L0301, L0301, L0301, L0304
+constructs: 0480, 0630, 0640, 1350, 1795, 1830
+targets: linux-x86-64, macos-arm64, synthetic-32
+expect: expected.txt
+args: --root=../tests/fixtures/negative/r490-union-alias-application-reports ../tests/fixtures/negative/r490-union-alias-application-reports
+status: 1
