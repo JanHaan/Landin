@@ -1,0 +1,12 @@
+public main: () -> (code: i32) =
+    cycle(false) else (error) _ = error end
+    code = 42
+end main
+cycle: (stop: bool) -> none ! ... =
+    fail problem when stop
+    cycle(true) else (error)
+        try relay(error)
+    end
+end cycle
+relay: (t: type, error: t) -> none ! ... = fail error end relay
+problem: atom

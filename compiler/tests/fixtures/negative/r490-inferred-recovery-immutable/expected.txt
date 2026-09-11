@@ -1,0 +1,10 @@
+error[L0303]: `error` is not mutable, so it may not be written
+  --> ../tests/fixtures/negative/r490-inferred-recovery-immutable/program.ldn:9:9
+  |
+9 |         error = problem
+  |         ^^^^^
+  --> ../tests/fixtures/negative/r490-inferred-recovery-immutable/program.ldn:8:12
+  |
+8 |     leaf() else (error)
+  |            ^^^^ declared here
+  = note: [1900]: a mutable binding and a named return may be written, and nothing else may

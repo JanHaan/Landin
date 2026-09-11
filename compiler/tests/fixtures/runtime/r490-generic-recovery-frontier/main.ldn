@@ -1,0 +1,88 @@
+problem, denied: atom
+mut calls: i32 = 0
+
+observe: (t: type, value: t) -> none =
+    _ = value
+    inc calls
+end observe
+copy: (t: type, value: t) -> (result: t) = value end copy
+relay: (t: type, value: t) -> none ! ... = fail value end relay
+
+limit: (t: type, value: t) -> (count: i32) =
+    _ = value
+    count = 1
+end limit
+
+leaf: (stop: bool) -> (result: i32) ! ... =
+    fail problem when stop
+    result = 40
+end leaf
+deny: () -> none ! ... = fail denied end deny
+
+recover: (t: type, value: t) -> none ! ... =
+    _ = value
+    leaf(true) else (error)
+        held := copy(error)
+        observe(held)
+        try relay(held)
+    end
+end recover
+
+left: (count: i32) -> none ! ... =
+    fail problem when count == 0
+    try right(count - 1)
+end left
+right: (count: i32) -> none ! ... =
+    fail denied when count == 0
+    try left(count - 1)
+end right
+
+self: (stop: bool) -> none ! ... =
+    fail problem when stop
+    self(true) else (error)
+        observe(error)
+    end
+end self
+
+public main: () -> (code: i32) =
+    recovered := leaf(true) else (error)
+        observe(copy(error))
+        for index in 0 ..< limit(error) do
+            observe(index)
+        end for
+        40
+    end
+    successful := leaf(false) else (error)
+        observe(error)
+        0
+    end
+    recover(1) else (error)
+        alias := error
+        match alias
+            problem: observe(alias)
+        end match
+    end
+    recover(false) else (error)
+        observe(error)
+    end
+    deny() else (error)
+        observe(copy(error))
+        leaf(true) else (nested)
+            observe(copy(nested))
+            0
+        end
+    end
+    left(1) else (error)
+        observe(error)
+        match error
+            problem: calls = 100
+            denied: inc calls
+        end match
+    end
+    self(false) else (error)
+        _ = error
+        calls = 100
+    end
+    code = if recovered == 40 and successful == 40 and calls == 11
+           then 42 else 1 end if
+end main

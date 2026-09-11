@@ -1,0 +1,9 @@
+class: negative
+summary: deferred recovery discovery preserves the different-key recursive expansion refusal
+constructs: 0940, 1030, 1290, 1300
+program: program.ldn
+targets: linux-x86-64, macos-arm64
+codes: L0301
+expect: expected.txt
+args: ../tests/fixtures/negative/r490-recovery-expanding-generic/program.ldn
+status: 1

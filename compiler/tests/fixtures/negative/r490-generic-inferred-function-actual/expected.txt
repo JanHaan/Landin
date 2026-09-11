@@ -1,0 +1,10 @@
+error[L0301]: this call cannot deduce a function type whose error set is still inferred
+  --> ../tests/fixtures/negative/r490-generic-inferred-function-actual/program.ldn:5:5
+  |
+5 |     observe(leaf)
+  |     ^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/r490-generic-inferred-function-actual/program.ldn:3:11
+  |
+3 | observe: (t: type, value: t) -> none = _ = value end observe
+  |           ^^^^^^^ the direct function type formal
+  = note: D138 routine keys use finalized function descriptors; a generic template is not a standalone function value

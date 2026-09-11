@@ -1,0 +1,12 @@
+problem: atom
+leaf: () -> none ! ... = fail problem end leaf
+observe: (t: type, first: t, second: t) -> none =
+    _ = first
+    _ = second
+end observe
+public main: () -> (code: i32) =
+    leaf() else (error)
+        observe(error, 42)
+    end
+    code = 42
+end main

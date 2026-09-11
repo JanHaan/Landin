@@ -1,0 +1,14 @@
+problem: atom
+relay: (t: type, error: t) -> none ! ... = fail error end relay
+cycle: (t: type, value: t, stop: bool) -> none ! ... =
+    _ = value
+    fail problem when stop
+    cycle(value, true) else (error)
+        alias := error
+        try relay(alias)
+    end
+end cycle
+public main: () -> (code: i32) =
+    cycle(42, false) else (error) _ = error end
+    code = 42
+end main
