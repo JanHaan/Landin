@@ -1,0 +1,10 @@
+error[L0301]: this recursive generic call expands the same template at a different actual tuple
+  --> ../tests/fixtures/negative/r490-recovery-expanding-generic/program.ldn:6:9
+  |
+6 |         expand(error)
+  |         ^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/r490-recovery-expanding-generic/program.ldn:3:1
+  |
+3 | expand: (t: type, value: t) -> none =
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the active generic template
+  = note: D138: recursive same-key calls are finite; a different active tuple is not

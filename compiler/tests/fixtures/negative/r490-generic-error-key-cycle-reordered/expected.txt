@@ -1,0 +1,10 @@
+error[L0301]: this generic key needs an error set in a circular deduction dependency
+  --> ../tests/fixtures/negative/r490-generic-error-key-cycle-reordered/program.ldn:8:13
+  |
+8 |         try relay(error)
+  |             ^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/r490-generic-error-key-cycle-reordered/program.ldn:11:1
+   |
+11 | relay: (t: type, error: t) -> none ! ... = fail error end relay
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the generic routine awaiting deduction
+  = note: D215: deduction needs a complete recovered atom set; a circular key/effect dependency cannot supply one

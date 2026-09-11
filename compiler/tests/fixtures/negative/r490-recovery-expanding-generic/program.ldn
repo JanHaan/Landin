@@ -1,0 +1,12 @@
+problem: atom
+leaf: () -> none ! ... = fail problem end leaf
+expand: (t: type, value: t) -> none =
+    _ = value
+    leaf() else (error)
+        expand(error)
+    end
+end expand
+public main: () -> (code: i32) =
+    expand(42)
+    code = 42
+end main

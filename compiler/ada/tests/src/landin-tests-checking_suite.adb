@@ -510,6 +510,9 @@ package body Landin.Tests.Checking_Suite is
    procedure Discovery_Skips_Refused_Generic_Calls
      (Item : in out Landin.Testing.Context);
 
+   procedure Recovery_Deduction_Interns_Final_Sets
+     (Item : in out Landin.Testing.Context);
+
    procedure Generic_Instances_Carry_Declared_Errors
      (Item : in out Landin.Testing.Context);
 
@@ -2254,6 +2257,92 @@ package body Landin.Tests.Checking_Suite is
             & " its nested call");
       end;
    end Discovery_Skips_Refused_Generic_Calls;
+
+   procedure Recovery_Deduction_Interns_Final_Sets
+     (Item : in out Landin.Testing.Context)
+   is
+      Text : constant String :=
+        "problem, denied: atom" & LF
+        & "leaf: () -> none ! ... = fail problem end leaf" & LF
+        & "other: () -> none ! ... = fail denied end other" & LF
+        & "observe: (t: type, value: t) -> none = _ = value end observe" & LF
+        & "use: () -> none =" & LF
+        & "    leaf() else (error) observe(error) end" & LF
+        & "    leaf() else (error)" & LF
+        & "        alias := error" & LF
+        & "        observe(alias)" & LF
+        & "    end" & LF
+        & "    other() else (error) observe(error) end" & LF
+        & "end use" & LF;
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Ran : Natural;
+      Src : Landin.Source.Source_Id;
+   begin
+      Src := Landin.Stages.Add_Source (Work, "recovery-deduction.ldn", Text);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Configurer'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Landin.Stages.Append (Order, Checker'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+      Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work), "the program is accepted");
+      declare
+         Types : constant not null access Landin.Checking.Table :=
+           Landin.Stages.Types (Work);
+         Of_Tree : constant not null access constant Landin.Syntax.Tree :=
+           Landin.Syntax.Forest.Tree_Of
+             (Landin.Stages.Trees (Work).all, Src);
+         Sets : array (1 .. 2) of Landin.Checking.Atom_Set_Id :=
+           [others => Landin.Checking.No_Atom_Set];
+         Targets : Natural := 0;
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Landin.Checking.Routine_Instance_Count (Types.all), 2,
+            "equal final sets share an instance and unequal sets do not");
+         for Position in 1 .. Landin.Checking.Routine_Instance_Count
+           (Types.all)
+         loop
+            declare
+               Instance : constant Landin.Checking.Routine_Instance_Id :=
+                 Landin.Checking.Routine_Identities.Nth (Types.all, Position);
+               Signature : constant Landin.Checking.Signature_Id :=
+                 Landin.Checking.Routine_Signature_Of (Types.all, Instance);
+               Part : constant Landin.Checking.Signature_Part :=
+                 Landin.Checking.Nth_Signature_Parameter
+                   (Types.all, Signature, 1);
+            begin
+               Landin.Testing.Check
+                 (Item, Landin.Checking.Routine_State_Of (Types.all, Instance)
+                    = Landin.Checking.Routine_Ready
+                    and then Part.Kind = Landin.Types.Atom_Value
+                    and then Landin.Checking.Atom_Count
+                      (Types.all, Part.Atoms) = 1,
+                  "each ready instance has one exact atom parameter");
+               if Position in Sets'Range then
+                  Sets (Position) := Part.Atoms;
+               end if;
+            end;
+         end loop;
+         Landin.Testing.Check
+           (Item, Sets (1) /= Sets (2), "the two atoms remain distinct");
+         for Node in Landin.Syntax.Node_Id'(1)
+           .. Landin.Syntax.Last_Node (Of_Tree.all)
+         loop
+            if Landin.Syntax.Kind (Of_Tree.all, Node) = Landin.Syntax.Call
+              and then Landin.Checking.Routine_Target_Of
+                (Types.all, Of_Tree.all, Node)
+                  /= Landin.Checking.No_Routine_Instance
+            then
+               Targets := Targets + 1;
+            end if;
+         end loop;
+         Landin.Testing.Check_Equal
+           (Item, Targets, 3, "every deferred call keeps its final target");
+      end;
+   end Recovery_Deduction_Interns_Final_Sets;
 
    procedure Generic_Instances_Carry_Declared_Errors
      (Item : in out Landin.Testing.Context)
@@ -9213,6 +9302,9 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Register
         (Into, "checking", "discovery skips refused generic calls",
          Discovery_Skips_Refused_Generic_Calls'Access);
+      Landin.Testing.Register
+        (Into, "checking", "recovery deduction interns final sets",
+         Recovery_Deduction_Interns_Final_Sets'Access);
       Landin.Testing.Register
         (Into, "checking", "generic instances carry declared errors",
          Generic_Instances_Carry_Declared_Errors'Access);

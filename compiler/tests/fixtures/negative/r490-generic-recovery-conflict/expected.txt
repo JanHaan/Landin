@@ -1,0 +1,10 @@
+error[L0301]: this argument deduces a different type descriptor for repeated formal `t`
+  --> ../tests/fixtures/negative/r490-generic-recovery-conflict/program.ldn:9:24
+  |
+9 |         observe(error, 42)
+  |                        ^^
+  --> ../tests/fixtures/negative/r490-generic-recovery-conflict/program.ldn:9:17
+  |
+9 |         observe(error, 42)
+  |                 ^^^^^ the first argument relation for this formal
+  = note: D138: repeated exact structural deductions must agree; this call has no routine target

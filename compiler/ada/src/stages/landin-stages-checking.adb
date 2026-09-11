@@ -991,6 +991,8 @@ package body Landin.Stages.Checking is
            Landin.Checking.Empty_Actuals;
          Record_Target : Boolean := True)
          return Landin.Checking.Signature_Id;
+      function Needs_Error_Type
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
       procedure Discover_Generic_Calls
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
 
@@ -1002,6 +1004,44 @@ package body Landin.Stages.Checking is
       package Selection_Lists is new Ada.Containers.Vectors
         (Index_Type => Positive, Element_Type => Pending_Selection);
       Pending_Selections : Selection_Lists.Vector;
+      Deferred_Error_Calls : Selection_Lists.Vector;
+      Blocked_Error_Calls : Selection_Lists.Vector;
+      type Discovery_Parent is record
+         Child, Parent : Landin.Checking.Routine_Instance_Id;
+      end record;
+      package Routine_Parent_Lists is new Ada.Containers.Vectors
+        (Index_Type => Positive, Element_Type => Discovery_Parent);
+      Routine_Discovery_Parents : Routine_Parent_Lists.Vector;
+
+      function Is_Discovery_Ancestor
+        (Ancestor, Descendant : Landin.Checking.Routine_Instance_Id)
+         return Boolean;
+
+      function Is_Discovery_Ancestor
+        (Ancestor, Descendant : Landin.Checking.Routine_Instance_Id)
+         return Boolean
+      is
+         Current : Landin.Checking.Routine_Instance_Id := Descendant;
+      begin
+         while Current /= Landin.Checking.No_Routine_Instance loop
+            if Current = Ancestor then
+               return True;
+            end if;
+            declare
+               Parent : Landin.Checking.Routine_Instance_Id :=
+                 Landin.Checking.No_Routine_Instance;
+            begin
+               for Link of Routine_Discovery_Parents loop
+                  if Link.Child = Current then
+                     Parent := Link.Parent;
+                     exit;
+                  end if;
+               end loop;
+               Current := Parent;
+            end;
+         end loop;
+         return False;
+      end Is_Discovery_Ancestor;
 
       procedure Check_Traversal_Header
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
@@ -8795,8 +8835,10 @@ package body Landin.Stages.Checking is
                      if Other /= Instance
                        and then Landin.Checking.Routine_Template_Of
                          (Types.all, Other) = Template
-                       and then Landin.Checking.Routine_State_Of
-                         (Types.all, Other) = Landin.Checking.Routine_Building
+                       and then
+                         (Landin.Checking.Routine_State_Of (Types.all, Other)
+                            = Landin.Checking.Routine_Building
+                          or else Is_Discovery_Ancestor (Other, Caller))
                      then
                         Bad.Report
                           (Item    => Bad.Type_Mismatch,
@@ -8821,6 +8863,11 @@ package body Landin.Stages.Checking is
                   end;
                end loop;
 
+               --  A recovery can resume discovery after the caller became
+               --  Ready.  Retain its expansion ancestry so delaying an error
+               --  type cannot bypass D138's different-key recursion refusal.
+               Routine_Discovery_Parents.Append
+                 (Discovery_Parent'(Child => Instance, Parent => Caller));
                Landin.Checking.Begin_Routine_Instance
                  (Types.all, Instance);
                declare
@@ -9116,6 +9163,96 @@ package body Landin.Stages.Checking is
          end;
       end Instantiate_Generic_Call;
 
+      --  Recovery bindings have no initializer.  Reading one before its
+      --  callee's error graph is closed must not cache an ill-typed value or
+      --  intern a generic key from a provisional set.  Follow inferred local
+      --  aliases too, while leaving ordinary value cycles to Infer.
+      function Needs_Error_Type
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
+      is
+         Seen : array (1 .. Res.Declaration_Count (Meanings.all)) of Boolean :=
+           [others => False];
+
+         function Visit (In_Tree : Syn.Tree; At_Node : Syn.Node_Id)
+           return Boolean;
+
+         function Visit (In_Tree : Syn.Tree; At_Node : Syn.Node_Id)
+           return Boolean is
+         begin
+            if At_Node = Syn.No_Node then
+               return False;
+            end if;
+            if Syn.Kind (In_Tree, At_Node) = Syn.Name_Reference
+              and then Res.Verdict_Of (Meanings.all, In_Tree, At_Node)
+                = Res.Bound
+            then
+               declare
+                  Id : constant Res.Declaration_Id :=
+                    Res.Bound_To (Meanings.all, In_Tree, At_Node);
+               begin
+                  if Landin.Checking.State_Of (Types.all, Id)
+                    = Landin.Checking.Untouched
+                  then
+                     if Res.Sort_Of (Meanings.all, Id) = Res.Error_Binding then
+                        return True;
+                     elsif Res.Sort_Of (Meanings.all, Id)
+                       in Res.Local_Binding | Res.Module_Binding
+                       and then not Seen (Positive (Id))
+                     then
+                        Seen (Positive (Id)) := True;
+                        declare
+                           Source_Tree : constant not null access
+                             constant Syn.Tree :=
+                               Tree_For (Res.Source_Of (Meanings.all, Id));
+                        begin
+                           if Syn.Value_Of
+                             (Source_Tree.all, Res.Node_Of (Meanings.all, Id))
+                               = Syn.No_Node
+                           then
+                              for Candidate in Syn.Node_Id'(1)
+                                .. Syn.Last_Node (Source_Tree.all)
+                              loop
+                                 if Syn.Kind (Source_Tree.all, Candidate)
+                                   = Syn.For_Statement
+                                   and then
+                                     (Syn.Traversal_Element
+                                        (Source_Tree.all, Candidate)
+                                        = Res.Node_Of (Meanings.all, Id)
+                                      or else Syn.Traversal_Index
+                                        (Source_Tree.all, Candidate)
+                                        = Res.Node_Of (Meanings.all, Id))
+                                 then
+                                    return Visit
+                                      (Source_Tree.all, Syn.Traversal_Lower
+                                         (Source_Tree.all, Candidate))
+                                      or else Visit
+                                        (Source_Tree.all, Syn.Traversal_Upper
+                                           (Source_Tree.all, Candidate));
+                                 end if;
+                              end loop;
+                           end if;
+                           return Visit
+                             (Source_Tree.all, Syn.Value_Of
+                                (Source_Tree.all,
+                                 Res.Node_Of (Meanings.all, Id)));
+                        end;
+                     end if;
+                  end if;
+               end;
+            end if;
+            for Index in 1 .. Syn.Slot_Count (In_Tree, At_Node) loop
+               if Visit (In_Tree, Syn.Slot (In_Tree, At_Node, Index)) then
+                  return True;
+               end if;
+            end loop;
+            --  Recovery is a separate subtree.  It does not determine the
+            --  successful result descriptor a call supplies to deduction.
+            return False;
+         end Visit;
+      begin
+         return Visit (Of_Tree, Node);
+      end Needs_Error_Type;
+
       procedure Discover_Generic_Calls
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
       is
@@ -9151,39 +9288,16 @@ package body Landin.Stages.Checking is
             --  infer a declaration which deliberately has no initializer.
             Discover_Generic_Calls
               (Of_Tree, Syn.Match_Subject (Of_Tree, Node));
-            declare
-               Subject : constant Syn.Node_Id :=
-                 Syn.Match_Subject (Of_Tree, Node);
-            begin
-               if Syn.Kind (Of_Tree, Subject) = Syn.Name_Reference
-                 and then Res.Verdict_Of (Meanings.all, Of_Tree, Subject)
-                   = Res.Bound
-               then
-                  declare
-                     Id : constant Res.Declaration_Id :=
-                       Res.Bound_To (Meanings.all, Of_Tree, Subject);
-                  begin
-                     if Res.Sort_Of (Meanings.all, Id) = Res.Error_Binding
-                       and then Landin.Checking.State_Of (Types.all, Id)
-                         = Landin.Checking.Untouched
-                     then
-                        --  The error graph has not settled this atom set.
-                        --  Atom arms have no payload descriptors to prepare;
-                        --  discover their calls now and check the header
-                        --  against the actual final set with the body.
-                        for Index in 1 .. Syn.Match_Arm_Count
-                          (Of_Tree, Node)
-                        loop
-                           Discover_Generic_Calls
-                             (Of_Tree, Syn.Body_Of
-                                (Of_Tree,
-                                 Syn.Nth_Match_Arm (Of_Tree, Node, Index)));
-                        end loop;
-                        return;
-                     end if;
-                  end;
-               end if;
-            end;
+            if Needs_Error_Type
+              (Of_Tree, Syn.Match_Subject (Of_Tree, Node))
+            then
+               for Index in 1 .. Syn.Match_Arm_Count (Of_Tree, Node) loop
+                  Discover_Generic_Calls
+                    (Of_Tree, Syn.Body_Of
+                       (Of_Tree, Syn.Nth_Match_Arm (Of_Tree, Node, Index)));
+               end loop;
+               return;
+            end if;
             Check_Match
               (Of_Tree, Node, Ty.No_Value, Discover_Only => True);
             return;
@@ -9191,6 +9305,13 @@ package body Landin.Stages.Checking is
             --  Generic discovery precedes the body check and error-graph
             --  closure. Its arguments need the traversal locals' exact
             --  descriptors before deduction can inspect the loop body.
+            if Needs_Error_Type
+              (Of_Tree, Syn.Traversal_Lower (Of_Tree, Node))
+              or else Needs_Error_Type
+                (Of_Tree, Syn.Traversal_Upper (Of_Tree, Node))
+            then
+               return;
+            end if;
             Check_Traversal_Header (Of_Tree, Node);
          elsif Syn.Kind (Of_Tree, Node)
                  in Syn.Call | Syn.Labeled_Application
@@ -9215,6 +9336,7 @@ package body Landin.Stages.Checking is
                           Res.Node_Of (Meanings.all, Means)) /= 0
                        and then Landin.Checking.Type_Of
                          (Types.all, Of_Tree, Node) = Ty.Undecided
+                       and then not Needs_Error_Type (Of_Tree, Node)
                      then
                         declare
                            Signature : constant
@@ -9263,8 +9385,8 @@ package body Landin.Stages.Checking is
               (Of_Tree, Syn.Slot (Of_Tree, Node, Index));
          end loop;
          --  A call's recovery is stored beside its ordinary child slots.
-         --  Its generic targets must join discovery before the error graph
-         --  freezes, just like targets on the successful path.
+         --  Its generic targets join the same discovery frontier as the
+         --  successful path.  Only complete recovered sets may form keys.
          if Syn.Kind (Of_Tree, Node) in Syn.Call | Syn.Labeled_Application
            and then Syn.Recovery_Of (Of_Tree, Node) /= Syn.No_Node
          then
@@ -20237,7 +20359,8 @@ package body Landin.Stages.Checking is
                return;
             end if;
             if Discover_Only then
-               Discovered_Matches (Discovery).Calls_Discovered := True;
+               Discovered_Matches (Discovery).Calls_Discovered :=
+                 not Needs_Error_Type (Of_Tree, Node);
             end if;
             if Discovered_Matches (Discovery).Has_Arms then
                for Position in 1 .. Syn.Match_Arm_Count (Of_Tree, Node) loop
@@ -20253,7 +20376,9 @@ package body Landin.Stages.Checking is
            (Discovered_Match'
               (Source => Syn.Source_Of (Of_Tree), Node => Node,
                Instance => Landin.Checking.Current_Routine_View (Types.all),
-               Has_Arms => False, Calls_Discovered => Discover_Only));
+               Has_Arms => False,
+               Calls_Discovered => Discover_Only
+                 and then not Needs_Error_Type (Of_Tree, Node)));
          Discovery := Discovered_Matches.Last_Index;
 
          --  D189/[0480]: a pointer union is the second exhaustive subject
@@ -24715,6 +24840,10 @@ package body Landin.Stages.Checking is
             return;
          end if;
 
+         if Needs_Error_Type (Of_Tree.all, Value) then
+            return;
+         end if;
+
          Landin.Checking.Begin_Inference (Types.all, Id);
 
          if Value = Syn.No_Node then
@@ -27150,13 +27279,48 @@ package body Landin.Stages.Checking is
          end;
       end Check_Operands;
 
+      Next_Selection : Positive := 1;
+
+      procedure Drain_Pending_Selections;
+
+      procedure Drain_Pending_Selections is
+      begin
+         --  Provider instantiation can append work while discovery runs.
+         --  Drain the complete queue before capturing the graph inventory.
+         while Next_Selection <= Natural (Pending_Selections.Length) loop
+            declare
+               Pending : constant Pending_Selection :=
+                 Pending_Selections (Next_Selection);
+               Previous : constant Landin.Checking.Routine_Instance_Id :=
+                 Landin.Checking.Current_Routine_View (Types.all);
+            begin
+               Landin.Checking.Restore_Routine_View (Types.all, Pending.View);
+               declare
+                  Held : constant Ty.Type_Kind :=
+                    Synthesise (Tree_For (Pending.Source).all, Pending.Node);
+               begin
+                  pragma Unreferenced (Held);
+               end;
+               Landin.Checking.Restore_Routine_View (Types.all, Previous);
+            exception
+               when others =>
+                  Landin.Checking.Restore_Routine_View (Types.all, Previous);
+                  raise;
+            end;
+            Next_Selection := Next_Selection + 1;
+         end loop;
+      end Drain_Pending_Selections;
+
       ------------------------------------------------------------
       --  [0940]/[0960]: whole-module error-set inference
       ------------------------------------------------------------
 
-      procedure Finalize_Error_Sets;
+      procedure Finalize_Error_Sets
+        (Complete : out Boolean; Progress : out Boolean);
 
-      procedure Finalize_Error_Sets is
+      procedure Finalize_Error_Sets
+        (Complete : out Boolean; Progress : out Boolean)
+      is
          Signature_Total : constant Natural :=
            Landin.Checking.Signature_Count (Types.all);
          Declaration_Total : constant Natural :=
@@ -27185,6 +27349,12 @@ package body Landin.Stages.Checking is
              [others => [others => False]];
          Owns_Body : array (1 .. Signature_Last) of Boolean :=
            [others => False];
+         --  Unknown propagated targets or failed values can still enlarge
+         --  an inferred set.  Their openness follows effect edges, so a
+         --  closed recursive component is solved exactly before publishing;
+         --  an open component retains Inferred and never supplies a key.
+         Open_Body : array (1 .. Signature_Last) of Boolean :=
+           [others => False];
          Recovery_Signatures : array (1 .. Declaration_Last) of
            Landin.Checking.Signature_Id :=
              [others => Landin.Checking.No_Signature];
@@ -27202,25 +27372,12 @@ package body Landin.Stages.Checking is
               Landin.Checking.No_Routine_Instance;
          end record;
 
-         function Total_Nodes return Natural;
-
-         function Total_Nodes return Natural is
-            Total : Natural := 0;
-         begin
-            for Index in 1 .. Source_Count (Context) loop
-               Total := Total + Syn.Node_Count
-                 (Tree_For (Nth_Source (Context, Index)).all);
-            end loop;
-            return Total;
-         end Total_Nodes;
-
-         Issues : array (1 .. Positive'Max (1, Total_Nodes)) of Call_Issue :=
-           [others => (others => <>)];
-         Deferred_Recoveries : array
-           (1 .. Positive'Max (1, Total_Nodes)) of Call_Issue :=
-             [others => (others => <>)];
-         Issue_Count : Natural := 0;
-         Deferred_Recovery_Count : Natural := 0;
+         --  One syntax node can occur in arbitrarily many concrete views;
+         --  the source node count is not a bound on deferred call evidence.
+         package Issue_Lists is new Ada.Containers.Vectors
+           (Index_Type => Positive, Element_Type => Call_Issue);
+         Issues : Issue_Lists.Vector;
+         Deferred_Recoveries : Issue_Lists.Vector;
 
          procedure Include_Set
            (Into : in out Effect_Matrix;
@@ -27235,6 +27392,8 @@ package body Landin.Stages.Checking is
            (Of_Tree : Syn.Tree;
             Node : Syn.Node_Id;
             Caller : Positive);
+         procedure Note_Blocked_Call
+           (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
 
          procedure Include_Set
            (Into : in out Effect_Matrix;
@@ -27285,6 +27444,9 @@ package body Landin.Stages.Checking is
                                 (Recovery_Signatures (Positive (Id)))) :=
                                True;
                         else
+                           if Needs_Error_Type (Of_Tree, Node) then
+                              Open_Body (Caller) := True;
+                           end if;
                            Include_Set
                              (Into, Caller,
                               Landin.Checking.Atom_Set_Of (Types.all, Id));
@@ -27305,6 +27467,10 @@ package body Landin.Stages.Checking is
                           (Into, Caller,
                            Landin.Checking.Nth_Signature_Result
                              (Types.all, Signature, 1).Atoms);
+                     elsif Signature = Landin.Checking.No_Signature
+                       and then Needs_Error_Type (Of_Tree, Node)
+                     then
+                        Open_Body (Caller) := True;
                      end if;
                   end;
 
@@ -27366,6 +27532,37 @@ package body Landin.Stages.Checking is
             end case;
          end Include_Expression;
 
+         procedure Note_Blocked_Call
+           (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
+         is
+            Callee : constant Syn.Node_Id := Syn.Callee_Of (Of_Tree, Node);
+         begin
+            if Effective_Call_Signature (Of_Tree, Node)
+                 /= Landin.Checking.No_Signature
+              or else not Needs_Error_Type (Of_Tree, Node)
+              or else Res.Verdict_Of (Meanings.all, Of_Tree, Callee)
+                /= Res.Bound
+            then
+               return;
+            end if;
+            declare
+               Id : constant Res.Declaration_Id :=
+                 Res.Bound_To (Meanings.all, Of_Tree, Callee);
+               Pending : constant Pending_Selection :=
+                 (Syn.Source_Of (Of_Tree), Node,
+                  Landin.Checking.Current_Routine_View (Types.all));
+            begin
+               if Res.Sort_Of (Meanings.all, Id) = Res.Module_Function
+                 and then Syn.Generic_Formal_Count
+                   (Tree_For (Res.Source_Of (Meanings.all, Id)).all,
+                    Res.Node_Of (Meanings.all, Id)) /= 0
+                 and then not Blocked_Error_Calls.Contains (Pending)
+               then
+                  Blocked_Error_Calls.Append (Pending);
+               end if;
+            end;
+         end Note_Blocked_Call;
+
          procedure Scan
            (Of_Tree : Syn.Tree;
             Node : Syn.Node_Id;
@@ -27399,6 +27596,7 @@ package body Landin.Stages.Checking is
                           in Syn.Call | Syn.Labeled_Application
                        and then Syn.Recovery_Of (Of_Tree, Call) = Syn.No_Node
                      then
+                        Note_Blocked_Call (Of_Tree, Call);
                         declare
                            Signature : constant
                              Landin.Checking.Signature_Id :=
@@ -27406,6 +27604,8 @@ package body Landin.Stages.Checking is
                         begin
                            if Signature /= Landin.Checking.No_Signature then
                               Edges (Caller, Positive (Signature)) := True;
+                           elsif Needs_Error_Type (Of_Tree, Call) then
+                              Open_Body (Caller) := True;
                            end if;
                         end;
                         for Index in 1 .. Syn.Argument_Count
@@ -27437,6 +27637,7 @@ package body Landin.Stages.Checking is
                   return;
 
                when Syn.Call | Syn.Labeled_Application =>
+                  Note_Blocked_Call (Of_Tree, Node);
                   for Index in 1 .. Syn.Argument_Count (Of_Tree, Node) loop
                      declare
                         Argument : constant Syn.Node_Id :=
@@ -27465,19 +27666,39 @@ package body Landin.Stages.Checking is
                      Recovery : constant Syn.Node_Id :=
                        Syn.Recovery_Of (Of_Tree, Node);
                   begin
+                     if Signature = Landin.Checking.No_Signature
+                       and then Needs_Error_Type (Of_Tree, Node)
+                     then
+                        --  An ordinary call does not propagate errors.
+                        --  Its missing target delays body checking, but
+                        --  cannot enlarge this caller's inferred set.
+                        Complete := False;
+                     end if;
                      if Recovery /= Syn.No_Node then
-                        if Signature /= Landin.Checking.No_Signature
-                          and then Landin.Checking.Signature_Error_Form
-                            (Types.all, Signature) = Landin.Checking.Inferred
-                        then
-                           Deferred_Recovery_Count :=
-                             Deferred_Recovery_Count + 1;
-                           Deferred_Recoveries (Deferred_Recovery_Count) :=
-                             (Source => Syn.Source_Of (Of_Tree),
-                              Node => Node,
-                              Signature => Signature,
-                              View => Landin.Checking.Current_Routine_View
-                                (Types.all));
+                        if Signature /= Landin.Checking.No_Signature then
+                           Deferred_Recoveries.Append
+                             (Call_Issue'
+                                (Source => Syn.Source_Of (Of_Tree),
+                                 Node => Node,
+                                 Signature => Signature,
+                                 View => Landin.Checking.Current_Routine_View
+                                   (Types.all)));
+                           if Landin.Checking.Signature_Error_Form
+                             (Types.all, Signature) = Landin.Checking.Inferred
+                           then
+                              declare
+                                 Pending : constant Pending_Selection :=
+                                   (Syn.Source_Of (Of_Tree), Node,
+                                    Landin.Checking.Current_Routine_View
+                                      (Types.all));
+                              begin
+                                 if not Deferred_Error_Calls.Contains
+                                   (Pending)
+                                 then
+                                    Deferred_Error_Calls.Append (Pending);
+                                 end if;
+                              end;
+                           end if;
                         end if;
                         if Syn.Name (Of_Tree, Recovery)
                              /= Landin.Source.Names.No_Name
@@ -27512,13 +27733,13 @@ package body Landin.Stages.Checking is
                           (Of_Tree, Syn.Else_Body (Of_Tree, Recovery),
                            Caller);
                      elsif Signature /= Landin.Checking.No_Signature then
-                        Issue_Count := Issue_Count + 1;
-                        Issues (Issue_Count) :=
-                          (Source => Syn.Source_Of (Of_Tree),
-                           Node => Node,
-                           Signature => Signature,
-                           View => Landin.Checking.Current_Routine_View
-                             (Types.all));
+                        Issues.Append
+                          (Call_Issue'
+                             (Source => Syn.Source_Of (Of_Tree),
+                              Node => Node,
+                              Signature => Signature,
+                              View => Landin.Checking.Current_Routine_View
+                                (Types.all)));
                      end if;
                   end;
                   return;
@@ -27534,6 +27755,9 @@ package body Landin.Stages.Checking is
 
          Changed : Boolean;
       begin
+         Complete := True;
+         Progress := False;
+         Blocked_Error_Calls.Clear;
          if Signature_Total = 0 then
             return;
          end if;
@@ -27674,6 +27898,15 @@ package body Landin.Stages.Checking is
             for Caller in 1 .. Signature_Total loop
                for Callee in 1 .. Signature_Total loop
                   if Edges (Caller, Callee) then
+                     if Open_Body (Callee)
+                       and then Landin.Checking.Signature_Error_Form
+                         (Types.all, Landin.Checking.Signature_Id (Callee))
+                           = Landin.Checking.Inferred
+                       and then not Open_Body (Caller)
+                     then
+                        Open_Body (Caller) := True;
+                        Changed := True;
+                     end if;
                      for Atom in 1 .. Declaration_Total loop
                         if Effects (Callee, Atom) then
                            if not Required (Caller, Atom) then
@@ -27698,10 +27931,13 @@ package body Landin.Stages.Checking is
          end loop;
 
          for Signature in 1 .. Signature_Total loop
-            if Landin.Checking.Signature_Error_Form
+            if Open_Body (Signature) then
+               Complete := False;
+            elsif Landin.Checking.Signature_Error_Form
                  (Types.all, Landin.Checking.Signature_Id (Signature))
                  = Landin.Checking.Inferred
             then
+               Progress := True;
                declare
                   Count : Natural := 0;
                begin
@@ -27738,38 +27974,9 @@ package body Landin.Stages.Checking is
             end if;
          end loop;
 
-         --  Recovery names become ordinary immutable atom values only after
-         --  recursive inference has made their call's set concrete.
-         for Id in Res.Declaration_Id'(1)
-                   .. Res.Declaration_Id (Declaration_Total)
+         for Index in Deferred_Recoveries.First_Index
+           .. Deferred_Recoveries.Last_Index
          loop
-            if Res.Sort_Of (Meanings.all, Id) = Res.Error_Binding
-              and then Generic_Routine_Owner (Id) = Res.No_Declaration
-              and then Landin.Checking.State_Of (Types.all, Id)
-                = Landin.Checking.Untouched
-            then
-               Landin.Checking.Begin_Inference (Types.all, Id);
-               declare
-                  Signature : constant Landin.Checking.Signature_Id :=
-                    Recovery_Signatures (Positive (Id));
-                  Errors : constant Landin.Checking.Atom_Set_Id :=
-                    (if Signature = Landin.Checking.No_Signature
-                     then Landin.Checking.No_Atom_Set
-                     else Landin.Checking.Signature_Errors
-                       (Types.all, Signature));
-               begin
-                  if Errors = Landin.Checking.No_Atom_Set then
-                     Landin.Checking.Settle (Types.all, Id, Ty.Ill_Typed);
-                  else
-                     Landin.Checking.Note_Atom_Set (Types.all, Id, Errors);
-                     Landin.Checking.Settle
-                       (Types.all, Id, Ty.Atom_Value);
-                  end if;
-               end;
-            end if;
-         end loop;
-
-         for Index in 1 .. Deferred_Recovery_Count loop
             declare
                Issue : Call_Issue renames Deferred_Recoveries (Index);
                Of_Tree : constant not null access constant Syn.Tree :=
@@ -27777,6 +27984,11 @@ package body Landin.Stages.Checking is
                Previous : Landin.Checking.Routine_Instance_Id :=
                  Landin.Checking.Current_Routine_View (Types.all);
             begin
+               if Landin.Checking.Signature_Error_Form
+                 (Types.all, Issue.Signature) = Landin.Checking.Inferred
+               then
+                  goto Next_Recovery;
+               end if;
                if Issue.View /= Landin.Checking.No_Routine_Instance then
                   Landin.Checking.Activate_Routine_View
                     (Types.all, Issue.View, Previous);
@@ -27785,11 +27997,9 @@ package body Landin.Stages.Checking is
                   Recovery : constant Syn.Node_Id :=
                     Syn.Recovery_Of (Of_Tree.all, Issue.Node);
                begin
-                  --  Ordinary recovery bindings were settled by the
-                  --  declaration-order loop above.  A generic binding belongs
-                  --  to its instance overlay instead, so materialize it here
-                  --  from that instance's now-final signature before the
-                  --  ordinary call checker reads the recovery body.
+                  --  Each recovery uses its callee's finalized set in the
+                  --  exact caller view.  No provisional atom set enters a
+                  --  declaration cache or a generic identity.
                   if Syn.Name (Of_Tree.all, Recovery)
                        /= Landin.Source.Names.No_Name
                   then
@@ -27817,26 +28027,7 @@ package body Landin.Stages.Checking is
                      end;
                   end if;
 
-                  --  Pass two may already have cached an ordinary call's
-                  --  result while inferring a local or module binding; its
-                  --  later body walk will then prune at that node, so finish
-                  --  its deferred recovery now.  Contextual discovery of an
-                  --  `any` construction can also infer and cache a generic
-                  --  initializer.  Finish that cached call's recovery in its
-                  --  own view; uncached generic calls still belong to the
-                  --  finalized body walk below.
-                  if Issue.View = Landin.Checking.No_Routine_Instance
-                    or else Landin.Checking.Type_Of
-                      (Types.all, Of_Tree.all, Issue.Node) /= Ty.Undecided
-                  then
-                     declare
-                        Checked : constant Ty.Type_Kind :=
-                          Check_Call
-                            (Of_Tree.all, Issue.Node, Issue.Signature);
-                     begin
-                        pragma Unreferenced (Checked);
-                     end;
-                  end if;
+                  Discover_Generic_Calls (Of_Tree.all, Recovery);
                end;
                Landin.Checking.Restore_Routine_View (Types.all, Previous);
             exception
@@ -27845,7 +28036,23 @@ package body Landin.Stages.Checking is
                     (Types.all, Previous);
                   raise;
             end;
+            <<Next_Recovery>>
+            null;
          end loop;
+
+         Drain_Pending_Selections;
+         if Landin.Checking.Signature_Count (Types.all) /= Signature_Total
+         then
+            Complete := False;
+            Progress := True;
+         elsif Complete then
+            --  A graph with no unknown targets was already complete.  Its
+            --  newly finalized sets need no second identical graph walk.
+            Progress := False;
+         end if;
+         if not Complete or else Progress then
+            return;
+         end if;
 
          for Signature in 1 .. Signature_Total loop
             if Owns_Body (Signature) then
@@ -27876,7 +28083,7 @@ package body Landin.Stages.Checking is
             end if;
          end loop;
 
-         for Index in 1 .. Issue_Count loop
+         for Index in Issues.First_Index .. Issues.Last_Index loop
             if Landin.Checking.Signature_Errors
                  (Types.all, Issues (Index).Signature)
                  /= Landin.Checking.No_Atom_Set
@@ -28722,12 +28929,11 @@ package body Landin.Stages.Checking is
       --  concept declaration's rather than the conformance label order.
       Validate_Conformance_Entries;
 
-      --  Generic instances must exist before the whole-module error graph is
-      --  closed.  Runtime argument declarations have all been settled by
-      --  the first two passes, so this walk performs the same context-free
-      --  deduction the later body walk would perform, without borrowing a
-      --  return context.  Calls inside a generic template are discovered by
-      --  checking the selected outer instance, never from bare syntax.
+      --  Discover instances whose arguments already have complete types.
+      --  Recovery values and aliases of them wait for their callee's exact
+      --  inferred set; the error frontier below resumes those subtrees.
+      --  Deduction uses no return context.  Calls inside a generic template
+      --  are discovered in the selected outer view, never from bare syntax.
       for Index in 1 .. Source_Count (Context) loop
          declare
             Of_Tree : constant not null access constant Syn.Tree :=
@@ -28771,42 +28977,92 @@ package body Landin.Stages.Checking is
          end;
       end loop;
 
-      declare
-         Next : Positive := 1;
-      begin
-         --  Provider instantiation can append work while discovery runs.
-         --  Drain the complete queue before capturing the graph inventory.
-         while Next <= Natural (Pending_Selections.Length) loop
-            declare
-               Pending : constant Pending_Selection :=
-                 Pending_Selections (Next);
-               Previous : constant Landin.Checking.Routine_Instance_Id :=
-                 Landin.Checking.Current_Routine_View (Types.all);
-            begin
-               Landin.Checking.Restore_Routine_View (Types.all, Pending.View);
-               declare
-                  Held : constant Ty.Type_Kind :=
-                    Synthesise (Tree_For (Pending.Source).all, Pending.Node);
-               begin
-                  pragma Unreferenced (Held);
-               end;
-               Landin.Checking.Restore_Routine_View (Types.all, Previous);
-            exception
-               when others =>
-                  Landin.Checking.Restore_Routine_View (Types.all, Previous);
-                  raise;
-            end;
-            Next := Next + 1;
-         end loop;
-      end;
+      Drain_Pending_Selections;
 
-      declare
-         Count : constant Natural :=
-           Landin.Checking.Signature_Count (Types.all);
-      begin
-         Finalize_Error_Sets;
-         pragma Assert (Landin.Checking.Signature_Count (Types.all) = Count);
-      end;
+      --  Error inference and instance discovery are mutually dependent.
+      --  Publish only closed sets, materialize recovery bindings in their
+      --  own views, and rebuild the graph after newly discovered signatures.
+      --  Body checks resume once this frontier and the provider queue close.
+      loop
+         declare
+            Count : constant Natural :=
+              Landin.Checking.Signature_Count (Types.all);
+            Complete, Progress : Boolean;
+         begin
+            Finalize_Error_Sets (Complete, Progress);
+            if Complete and then not Progress then
+               --  An initializer may have cached the successful call value
+               --  before its inferred recovery could be checked.  Replay
+               --  only those deferred calls, after discovery is complete.
+               for Pending of Deferred_Error_Calls loop
+                  declare
+                     Of_Tree : constant not null access constant Syn.Tree :=
+                       Tree_For (Pending.Source);
+                     Previous : constant Landin.Checking.Routine_Instance_Id :=
+                       Landin.Checking.Current_Routine_View (Types.all);
+                  begin
+                     Landin.Checking.Restore_Routine_View
+                       (Types.all, Pending.View);
+                     if Landin.Checking.Type_Of
+                       (Types.all, Of_Tree.all, Pending.Node)
+                         not in Ty.Undecided | Ty.Ill_Typed
+                     then
+                        declare
+                           Checked : constant Ty.Type_Kind := Check_Call
+                             (Of_Tree.all, Pending.Node,
+                              Effective_Call_Signature
+                                (Of_Tree.all, Pending.Node));
+                        begin
+                           pragma Unreferenced (Checked);
+                        end;
+                     end if;
+                     Landin.Checking.Restore_Routine_View
+                       (Types.all, Previous);
+                  exception
+                     when others =>
+                        Landin.Checking.Restore_Routine_View
+                          (Types.all, Previous);
+                        raise;
+                  end;
+               end loop;
+               pragma Assert
+                 (Landin.Checking.Signature_Count (Types.all) = Count);
+               exit;
+            elsif not Progress then
+               if Blocked_Error_Calls.Is_Empty then
+                  raise Landin.Compiler_Defect with
+                    "an open error frontier has no blocked generic key";
+               end if;
+               for Pending of Blocked_Error_Calls loop
+                  declare
+                     Of_Tree : constant not null access constant Syn.Tree :=
+                       Tree_For (Pending.Source);
+                     Callee : constant Syn.Node_Id :=
+                       Syn.Callee_Of (Of_Tree.all, Pending.Node);
+                     Template : constant Res.Declaration_Id :=
+                       Res.Bound_To (Meanings.all, Of_Tree.all, Callee);
+                  begin
+                     Bad.Report
+                       (Item => Bad.Type_Mismatch,
+                        Source => Pending.Source,
+                        Where => Syn.Where (Of_Tree.all, Pending.Node),
+                        Message => "this generic key needs an error set"
+                          & " in a circular deduction dependency",
+                        Note => "D215: deduction needs a complete recovered"
+                          & " atom set; a circular key/effect dependency"
+                          & " cannot supply one",
+                        Related => Syn.Origin
+                          (Tree_For
+                             (Res.Source_Of (Meanings.all, Template)).all,
+                           Res.Node_Of (Meanings.all, Template)),
+                        Because => "the generic routine awaiting deduction",
+                        Into => Found);
+                  end;
+               end loop;
+               goto Publish_Diagnostics;
+            end if;
+         end;
+      end loop;
 
       --  Instance discovery published signatures and nested targets but did
       --  not check a generic body against provisional errors.  Every ready
@@ -28971,6 +29227,7 @@ package body Landin.Stages.Checking is
          end;
       end loop;
 
+      <<Publish_Diagnostics>>
       declare
          Ordered : constant Landin.Diagnostics.Diagnostic_List :=
            Landin.Diagnostics.Sorted (Found);

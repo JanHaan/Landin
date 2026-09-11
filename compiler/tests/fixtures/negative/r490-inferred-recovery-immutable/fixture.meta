@@ -1,0 +1,9 @@
+class: negative
+summary: an inferred recovery binding stays immutable after frontier discovery
+constructs: 0940, 1030, 1290, 1300
+program: program.ldn
+targets: linux-x86-64, macos-arm64
+codes: L0303
+expect: expected.txt
+args: ../tests/fixtures/negative/r490-inferred-recovery-immutable/program.ldn
+status: 1
