@@ -17003,7 +17003,13 @@ package body Landin.Stages.Checking is
                      Held : constant Ty.Type_Kind :=
                        (if Res.Verdict_Of
                              (Meanings.all, Of_Tree, Asked) = Res.Bound
-                        then Selected_From (Of_Tree, Asked)
+                        then
+                          (if Res.Sort_Of
+                            (Meanings.all,
+                             Res.Bound_To (Meanings.all, Of_Tree, Asked))
+                             in Res.Module_Type | Res.Type_Parameter
+                           then Type_At (Of_Tree, Asked)
+                           else Selected_From (Of_Tree, Asked))
                         else Indexed_From (Of_Tree, Asked));
                   begin
                      if Held = Ty.Ill_Typed then

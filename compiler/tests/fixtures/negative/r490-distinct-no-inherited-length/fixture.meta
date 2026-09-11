@@ -1,0 +1,6 @@
+class: negative
+summary: a distinct array representation does not inherit an ordinary array length operation
+program: main.ldn
+codes: L0301
+constructs: 0370, 0520, 0650, 1795
+targets: linux-x86-64, macos-arm64, synthetic-32

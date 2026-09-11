@@ -1,0 +1,18 @@
+row: type = [3]u16
+alias: type = row
+hidden: type = distinct alias
+measure: (item: type, value: item) -> (result: usize) =
+    result = lenof item + lenof value
+end measure
+public main: () -> (code: i32) =
+    mut storage: alias
+    initialized: alias = zeroed
+    if lenof alias == 3 and lenof storage == 3
+       and sizeof alias == 6 and alignof alias == alignof u16
+       and sizeof hidden == sizeof alias and alignof hidden == alignof alias
+       and measure(initialized) == 6 then
+        code = 42
+    else
+        code = 1
+    end if
+end main
