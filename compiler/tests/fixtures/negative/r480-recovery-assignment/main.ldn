@@ -1,0 +1,10 @@
+unavailable: atom
+stop: () -> (value: u32) ! unavailable = fail unavailable end stop
+public main: () -> (code: i32) =
+    mut missing: u32
+    held: u32 = (stop() else (problem)
+        _ = problem
+        missing
+    end) + 1
+    code = i32(held)
+end main

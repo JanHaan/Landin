@@ -1,0 +1,6 @@
+class: negative
+summary: inout replacement inside recovery prevents treating a return as a known empty reference union
+program: main.ldn
+codes: L0316
+constructs: 0470, 0770, 0790, 0900, 1030
+targets: linux-x86-64

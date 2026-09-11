@@ -1,0 +1,9 @@
+unavailable: atom
+stop: () -> (value: u8) ! unavailable = fail unavailable end stop
+public main: () -> (code: i32) =
+    held: u8 = stop() else (problem)
+        _ = problem
+        1 / 0
+    end
+    code = i32(held)
+end main

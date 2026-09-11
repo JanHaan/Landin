@@ -26842,6 +26842,12 @@ package body Landin.Stages.Checking is
             Check_Operands
               (Of_Tree, Syn.Slot (Of_Tree, Node, Position), Whole_Fold);
          end loop;
+         if Syn.Kind (Of_Tree, Node) in Syn.Call | Syn.Labeled_Application
+           and then Syn.Recovery_Of (Of_Tree, Node) /= Syn.No_Node
+         then
+            Check_Operands
+              (Of_Tree, Syn.Recovery_Of (Of_Tree, Node), Whole_Fold);
+         end if;
 
          Operation := Syn.Kind (Of_Tree, Node);
 
