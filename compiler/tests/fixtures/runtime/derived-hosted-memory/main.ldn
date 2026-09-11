@@ -209,8 +209,22 @@ end retained_arguments
 
 messages: () -> (ok: bool) =
     ok = false
-    mut source: [700]u8 = zeroed
-    mut out: [800]u8 = zeroed
+    mut backing_host := heap.host()
+    mut source_owner := mem.new_bytes(backing_host, usize(700)) else (problem)
+        _ = problem
+        return
+    end
+    defer mem.drop_bytes(backing_host, source_owner)
+    mut output_owner := mem.new_bytes(backing_host, usize(800)) else (problem)
+        _ = problem
+        return
+    end
+    defer mem.drop_bytes(backing_host, output_owner)
+    ok = messages_in(mem.bytes(source_owner), mem.bytes(output_owner))
+end messages
+
+messages_in: (source: []mut u8, out: []mut u8) -> (ok: bool) =
+    ok = false
     mut err: [1]u8 = zeroed
     files: []mut io.memory_file = []
     args: []io.argument = []
@@ -244,7 +258,7 @@ messages: () -> (ok: bool) =
         refused = problem == mem.out_of_memory
     end
     ok = refused and vec.length(pending.bytes) == 700 and pending.delivered == 700
-end messages
+end messages_in
 
 finite_regions: () -> (ok: bool) =
     ok = false
