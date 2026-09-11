@@ -1,0 +1,191 @@
+import core/io
+import core/diag
+import core/mem
+import core/text
+import core/vec
+
+public bad_argument: atom
+public bad_encoding: atom
+public config: type = struct
+    chain: vec.list(any filter)
+    to: any dest
+    input: ptr u8
+    output: io.file
+    owns_output: bool
+    warnings: usize
+    encoding_warnings: usize
+end config
+
+public equal: (left: []u8, right: []u8) -> (yes: bool) =
+    yes = false
+    return when lenof left <> lenof right
+    for at in usize(0)..<lenof left do return when left[at] <> right[at] end for
+    yes = true
+end equal
+
+--  Copy every user argument before parsing. Configuration, needles, and NUL
+--  paths retain allocated copies, never the provider's argument descriptors.
+public copy_arguments: (provider: type is mem.allocator, inout allocator: provider,
+                        world: any io.world)
+                       -> (arguments: vec.list([]u8))
+                       ! bad_argument | mem.out_of_memory =
+    arguments = vec.new_list(item: []u8)
+    count: usize = world.argument_count()
+    for at in usize(0)..<count do
+        arg: io.argument = world.argument(at) else (problem)
+            _ = problem
+            fail bad_argument
+        end
+        maximum: usize = 0 -% 1
+        fail mem.out_of_memory when arg.length == maximum
+        owner := try mem.new_bytes(allocator, arg.length + 1)
+        buffer := mem.bytes(owner)
+        copied: []u8 = io.copy_argument(arg, buffer) else (problem)
+            _ = problem
+            fail bad_argument
+        end
+        for byte in copied do fail bad_argument when byte == 0 end for
+        try vec.push(arguments, allocator, copied)
+    end for
+end copy_arguments
+
+validated: (bytes: []u8) -> (valid: bool) ! bad_argument =
+    text: utf8 = text.from_bytes(bytes) else (problem)
+        _ = problem
+        fail bad_argument
+    end
+    _ = text
+    valid = true
+end validated
+sample_number: (bytes: []u8) -> (value: usize) ! bad_argument | bad_encoding =
+    _ = validated(bytes) else (problem)
+        _ = problem
+        fail bad_encoding
+    end
+    value = try number(bytes)
+end sample_number
+
+number: (bytes: []u8) -> (value: usize) ! bad_argument =
+    fail bad_argument when lenof bytes == 0
+    value = 0
+    maximum: usize = 0 -% 1
+    for byte in bytes do
+        fail bad_argument when byte < 48 or byte > 57
+        digit: usize = usize(byte - 48)
+        fail bad_argument when value > (maximum - digit) / 10
+        value = value * 10 + digit
+    end for
+end number
+
+public build_logged: (provider: type is mem.allocator, inout allocator: provider,
+               world: any io.world, log: any diag.log) -> (value: config)
+              ! bad_argument | mem.out_of_memory
+              | io.not_found | io.no_access | io.io_failed =
+    arguments := try copy_arguments(allocator, world)
+    args := vec.used(arguments)
+    mut chain := vec.new_list(item: any filter)
+    mut input: []u8 = ""
+    mut output: []u8 = ""
+    mut warnings: usize = 0
+    mut encoding_warnings: usize = 0
+    mut at: usize = 0
+    while at < lenof args do
+        arg: []u8 = args[at]
+        _ = try validated(arg)
+        if equal(arg, "--level") or equal(arg, "--match")
+          or equal(arg, "--every") or equal(arg, "--out") then
+            inc at
+            fail bad_argument when at == lenof args
+            parameter: []u8 = args[at]
+            if not equal(arg, "--every") then
+                _ = try validated(parameter)
+            end if
+            if equal(arg, "--level") then
+                mut least: u8 = 0
+                if equal(parameter, "DEBUG") then least = 1
+                elsif equal(parameter, "INFO") then least = 2
+                elsif equal(parameter, "WARN") then least = 3
+                elsif equal(parameter, "ERROR") then least = 4
+                elsif equal(parameter, "FATAL") then least = 5
+                else fail bad_argument end if
+                initial: level_filter = (least: least)
+                object := try mem.new(allocator, initial)
+                selected: any filter = any(object)
+                try vec.push(chain, allocator, selected)
+            elsif equal(arg, "--match") then
+                initial: match_filter = (needle: parameter)
+                object := try mem.new(allocator, initial)
+                selected: any filter = any(object)
+                try vec.push(chain, allocator, selected)
+            elsif equal(arg, "--every") then
+                mut every: usize = (sample_number(parameter) else (problem)
+                    _ = problem
+                    inc warnings
+                    if problem == bad_encoding then
+                        inc encoding_warnings
+                        try log.note(text.nowhere, diag.error,
+                            "--every argument is not UTF-8, using 1\n")
+                    else
+                        try log.note(text.nowhere, diag.error,
+                            "--every wants a positive number, using 1\n")
+                    end if
+                    1
+                end)
+                if every == 0 then every = 1
+                    inc warnings
+                    try log.note(text.nowhere, diag.error,
+                        "--every 0 makes no sense, using 1\n")
+                end if
+                initial: sample_filter = (every: every, seen: 0)
+                object := try mem.new(allocator, initial)
+                selected: any filter = any(object)
+                try vec.push(chain, allocator, selected)
+            else
+                fail bad_argument when lenof output > 0 or lenof parameter == 0
+                output = parameter
+            end if
+        else
+            fail bad_argument when lenof arg == 0 or arg[0] == 45 or lenof input > 0
+            input = arg
+        end if
+        inc at
+    end while
+    fail bad_argument when lenof input == 0
+    fail bad_argument when lenof output > 0 and equal(input, output)
+    mut chosen: any dest
+    mut opened: io.file = world.out()
+    mut owns_output: bool = false
+    if lenof output > 0 then
+        stream: io.file = try world.open_write(addr output[0])
+        initial: text_dest = (stream: stream)
+        object := (mem.new(allocator, initial) else (problem)
+            world.close(stream) else (close_problem) _ = close_problem end
+            fail problem
+        end)
+        chosen = any(object)
+        opened = stream
+        owns_output = true
+    else
+        initial: count_dest = zeroed
+        object := try mem.new(allocator, initial)
+        chosen = any(object)
+    end if
+    value = (chain: chain, to: chosen, input: addr input[0],
+             output: opened, owns_output: owns_output, warnings: warnings,
+             encoding_warnings: encoding_warnings)
+end build_logged
+
+public close_config: (world: any io.world, sink value: config)
+                     -> none ! io.io_failed =
+    if value.owns_output then try world.close(value.output) end if
+end close_config
+
+public build: (provider: type is mem.allocator, inout allocator: provider,
+               world: any io.world) -> (value: config)
+              ! bad_argument | mem.out_of_memory
+              | io.not_found | io.no_access | io.io_failed =
+    stream: io.file = world.err()
+    mut logger := diag.to(addr world, addr stream)
+    log: any diag.log = any(addr logger)
+    value = try build_logged(allocator, world, log)
+end build

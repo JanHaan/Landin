@@ -1,0 +1,5 @@
+import examples/derived_hosted/app
+
+public main: () -> (code: i32) =
+    code = app.entry()
+end main

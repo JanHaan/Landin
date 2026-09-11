@@ -1,0 +1,39 @@
+import core/io
+import core/diag
+import core/heap
+import core/region
+
+public entry: () -> (code: i32) =
+    mut host := io.host()
+    world: any io.world = any(addr host)
+    mut heap := heap.host()
+    mut program := region.new_region(addr heap)
+    defer region.release_region(program)
+    stream: io.file = world.err()
+    mut logger := diag.to(addr world, addr stream)
+    log: any diag.log = any(addr logger)
+    kept: usize = run_logged(program, world, usize(4096), log) else (problem)
+        _ = problem
+        world.write(world.err(), "log filter failed\n") else (write_problem)
+            _ = write_problem
+        end
+        code = 1
+        return
+    end
+    world.write(world.err(), "kept: ") else (problem)
+        _ = problem
+        code = 1
+        return
+    end
+    print_number(world, world.err(), kept) else (problem)
+        _ = problem
+        code = 1
+        return
+    end
+    world.write(world.err(), "\n") else (problem)
+        _ = problem
+        code = 1
+        return
+    end
+    code = if log.failed() then 1 else 0 end if
+end entry

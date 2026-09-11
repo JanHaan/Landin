@@ -1,0 +1,57 @@
+import core/mem
+import core/vec
+
+allocation: type = struct
+    address: usize
+    extent: usize
+end allocation
+
+region_value: type (provider: type) = struct
+    parent: ptr mut provider
+    allocations: vec.list(allocation)
+end region_value
+
+public region: type (provider: type) = region_value(provider)
+
+public new_region: (provider: type is mem.allocator, parent: ptr mut provider)
+                   -> (value: region(provider) from parent) =
+    records := vec.new_list(item: allocation)
+    value = (parent: parent, allocations: records)
+end new_region
+
+region_alloc: (provider: type is mem.allocator,
+               inout state: region(provider), size: usize, alignment: usize)
+              -> (block: ptr mut u8) ! mem.out_of_memory =
+    block = try mem.allocate(state.parent.val, size, alignment)
+    record: allocation = (address: usize(block), extent: size)
+    vec.push(state.allocations, state.parent.val, record) else (problem)
+        mem.free(state.parent.val, block, size)
+        fail problem
+    end
+end region_alloc
+
+region_free: (provider: type is mem.allocator, inout state: region(provider),
+              block: ptr mut u8, size: usize) -> none =
+    _ = state.parent
+    _ = block
+    _ = size
+end region_free
+
+(provider: type is mem.allocator) region_value(provider) is mem.allocator
+    (alloc: region_alloc, free: region_free)
+
+--  End every alias before this call. Every payload and ledger allocation
+--  is returned to the parent, including failed-construction payloads. A
+--  monotonic parent keeps consumed backing until its own explicit reset.
+public release_region: (provider: type is mem.allocator,
+                        inout state: region(provider)) -> none =
+    while vec.length(state.allocations) > 0 do
+        record: allocation = vec.pop(state.allocations) else (problem)
+            _ = problem
+            return
+        end
+        block: ptr mut u8 = ptr(record.address)
+        mem.free(state.parent.val, block, record.extent)
+    end while
+    vec.release(state.allocations, state.parent.val)
+end release_region

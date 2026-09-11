@@ -1,0 +1,12 @@
+import core/io
+import core/mem
+import examples/derived_hosted/app
+
+bad: (provider: type is mem.allocator, inout allocator: provider,
+      inout reader: app.reader, world: any io.world) -> (byte: u8)
+     ! io.io_failed | mem.out_of_memory | app.at_end =
+    line: []u8 = try app.next_line(allocator, reader, world)
+    later: []u8 = try app.next_line(allocator, reader, world)
+    _ = later
+    byte = line[0]
+end bad

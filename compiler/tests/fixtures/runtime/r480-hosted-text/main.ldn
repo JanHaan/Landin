@@ -1,0 +1,38 @@
+import core/io
+import examples/derived_hosted/app
+extern(c) unlink: (path: cstring) -> (status: i32)
+path: []u8 = "build/r480-hosted-output.txt\0"
+
+public main: () -> (code: i32) =
+    code = 1
+    return when app.entry() <> 0
+    mut host := io.host()
+    world: any io.world = any(addr host)
+    opened: io.file = world.open_read(addr path[0]) else (problem)
+        _ = problem
+        return
+    end
+    mut count: usize = 0
+    mut valid: bool = true
+    mut buffer: [127]u8 = zeroed
+    prefix: []u8 = "ERROR keep "
+    loop do
+        n: usize = world.read(opened, buffer[0..<127]) else (problem)
+            _ = problem
+            valid = false
+            break
+        end
+        break when n == 0
+        for at in usize(0)..<n do
+            mut expected: u8 = 120
+            if count < lenof prefix then expected = prefix[count] end if
+            if count == 9011 then expected = 10 end if
+            if buffer[at] <> expected or count > 9011 then valid = false end if
+            inc count
+        end for
+    end loop
+    world.close(opened) else (problem) _ = problem
+        return end
+    removed: i32 = unlink("build/r480-hosted-output.txt")
+    if valid and count == 9012 and removed == 0 then code = 42 end if
+end main

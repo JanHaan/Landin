@@ -1,0 +1,345 @@
+import core/io
+import core/heap
+import core/region
+import core/failing
+import core/mem
+import core/vec
+import core/diag
+import core/text
+import examples/derived_hosted/app
+
+mut input: [32]u8 = zeroed
+mut destination: [64]u8 = zeroed
+mut output: [128]u8 = zeroed
+mut errors: [128]u8 = zeroed
+arg0: []u8 = "--level"
+arg1: []u8 = "INFO"
+arg2: []u8 = "--match"
+arg3: []u8 = "keep"
+arg4: []u8 = "--every"
+arg5: []u8 = "2"
+arg6: []u8 = "--out"
+arg7: []u8 = "out"
+arg8: []u8 = "in"
+
+public main: () -> (code: i32) =
+    code = 1
+    source: []u8 = "DEBUG keep\nINFO keep\nERROR keep"
+    for at in usize(0)..<lenof source do input[at] = source[at] end for
+    first: io.memory_file =
+      (name: "in", contents: input[0..<32], length: lenof source, cursor: 0,
+       readable: true, writable: false, opened: false, writing: false)
+    second: io.memory_file =
+      (name: "out", contents: destination[0..<64], length: 0, cursor: 0,
+       readable: true, writable: true, opened: false, writing: false)
+    mut files: [2]io.memory_file
+    files[0] = first
+    files[1] = second
+    arguments: [9]io.argument = [
+      (data: addr arg0[0], length: lenof arg0),
+      (data: addr arg1[0], length: lenof arg1),
+      (data: addr arg2[0], length: lenof arg2),
+      (data: addr arg3[0], length: lenof arg3),
+      (data: addr arg4[0], length: lenof arg4),
+      (data: addr arg5[0], length: lenof arg5),
+      (data: addr arg6[0], length: lenof arg6),
+      (data: addr arg7[0], length: lenof arg7),
+      (data: addr arg8[0], length: lenof arg8)]
+    mut memory := io.memory_world(files[0..<2], arguments[0..<9],
+                                  output[0..<128], errors[0..<128])
+    memory.read_limit = 2
+    memory.fail_write_at = 4
+    world: any io.world = any(addr memory)
+    mut heap := heap.host()
+    mut program := region.new_region(addr heap)
+    defer region.release_region(program)
+    kept: usize = app.run(program, world, usize(3)) else (problem) _ = problem
+        return end
+    expected: []u8 = "ERROR keep\n"
+    if kept == 1 and files[1].length == lenof expected
+      and not files[0].opened and not files[1].opened
+      and app.equal(destination[0..<lenof expected], expected)
+      and memory.close_calls == 2 and long_lines() and failure_sweep()
+      and retained_arguments() and messages() and finite_regions() and io_failures() and diagnostics()
+      and app.level_of("Elephant") == 0
+      and app.level_of("DEBUGGER") == 0
+      and app.level_of("ERROR\tmessage") == 4 then code = 42 end if
+end main
+
+--  One-byte chunks, an empty line, growth beyond 8 KiB, and an unterminated
+--  final line all pass through the same application and count destination.
+long_lines: () -> (ok: bool) =
+    ok = false
+    mut backing_host := heap.host()
+    mut backing := mem.new_bytes(backing_host, usize(10000)) else (problem) _ = problem
+        return
+    end
+    defer mem.drop_bytes(backing_host, backing)
+    ok = long_lines_in(mem.bytes(backing))
+end long_lines
+
+long_lines_in: (data: []mut u8) -> (ok: bool) =
+    ok = false
+    data[0] = 10
+    for at in usize(1)..<usize(9999) do data[at] = 120 end for
+    data[9999] = 10
+    file: io.memory_file =
+      (name: "in", contents: data[0..<10000], length: 10000, cursor: 0,
+       readable: true, writable: false, opened: false, writing: false)
+    mut files: [1]io.memory_file
+    files[0] = file
+    args: [1]io.argument = [(data: addr arg8[0], length: lenof arg8)]
+    mut out: [128]u8 = zeroed
+    mut err: [128]u8 = zeroed
+    mut world_state := io.memory_world(files[0..<1], args[0..<1], out[0..<128], err[0..<128])
+    world_state.read_limit = 1
+    world: any io.world = any(addr world_state)
+    mut host := heap.host()
+    mut program := region.new_region(addr host)
+    defer region.release_region(program)
+    kept: usize = app.run(program, world, usize(7)) else (problem) _ = problem
+        return end
+    expected: []u8 = "0: 2\n1: 0\n2: 0\n3: 0\n4: 0\n5: 0\n6: 0\n7: 0\n"
+    return when kept <> 2 or files[0].opened
+      or not app.equal(out[0..<world_state.output_used], expected)
+    --  No phantom third line after trailing LF. Removing that LF keeps two
+    --  lines, with the complete final 9998-byte line delivered exactly once.
+    files[0].length = 9999
+    world_state.output_used = 0
+    kept_again: usize = app.run(program, world, usize(3)) else (problem) _ = problem
+        return end
+    return when kept_again <> 2 or files[0].opened
+    files[0].length = 0
+    world_state.output_used = 0
+    empty: usize = app.run(program, world, usize(3)) else (problem) _ = problem
+        return end
+    ok = empty == 0 and not files[0].opened
+end long_lines_in
+
+--  Walk every allocation boundary until one complete run succeeds. The
+--  counted parent includes both region metadata and application payloads.
+failure_sweep: () -> (ok: bool) =
+    ok = false
+    mut budget: usize = 0
+    while budget < 200 do
+        first: io.memory_file =
+          (name: "in", contents: input[0..<32], length: 31, cursor: 0,
+           readable: true, writable: false, opened: false, writing: false)
+        second: io.memory_file =
+          (name: "out", contents: destination[0..<64], length: 0, cursor: 0,
+           readable: true, writable: true, opened: false, writing: false)
+        mut files: [2]io.memory_file
+        files[0] = first
+        files[1] = second
+        args: [3]io.argument = [(data: addr arg6[0], length: lenof arg6),
+          (data: addr arg7[0], length: lenof arg7), (data: addr arg8[0], length: lenof arg8)]
+        mut world_state := io.memory_world(files[0..<2], args[0..<3], output[0..<128], errors[0..<128])
+        world: any io.world = any(addr world_state)
+        mut host := heap.host()
+        mut counted := failing.count_down(addr host, budget)
+        mut program := region.new_region(addr counted)
+        mut succeeded: bool = true
+        _ = app.run(program, world, usize(3)) else (problem)
+            if problem <> mem.out_of_memory then
+                region.release_region(program)
+                return
+            end if
+            succeeded = false
+            0
+        end
+        region.release_region(program)
+        return when failing.live(counted) <> 0 or files[0].opened or files[1].opened
+          or failing.successes(counted) <> failing.frees(counted)
+        if succeeded then
+            ok = budget > 15
+            return
+        end if
+        inc budget
+    end while
+end failure_sweep
+
+retained_arguments: () -> (ok: bool) =
+    ok = false
+    mut needle: [4]u8 = [107, 101, 101, 112]
+    mut name: [2]u8 = [105, 110]
+    args: [3]io.argument = [(data: addr arg2[0], length: lenof arg2),
+      (data: addr needle[0], length: 4), (data: addr name[0], length: 2)]
+    mut files: [1]io.memory_file
+    files[0] = (name: "in", contents: input[0..<32], length: 31, cursor: 0,
+       readable: true, writable: false, opened: false, writing: false)
+    mut world_state := io.memory_world(files[0..<1], args[0..<3], output[0..<128], errors[0..<128])
+    world: any io.world = any(addr world_state)
+    mut host := heap.host()
+    mut program := region.new_region(addr host)
+    defer region.release_region(program)
+    mut cfg := app.build(program, world) else (problem) _ = problem
+        return end
+    needle[0] = 88
+    name[0] = 88
+    mut reader := app.open_reader(program, world, cfg.input, usize(2)) else (problem) _ = problem
+        return end
+    kept: usize = app.process(program, world, cfg, reader) else (problem)
+        _ = problem
+        app.shut_reader(program, world, reader) else (close_problem) _ = close_problem end
+        return
+    end
+    app.shut_reader(program, world, reader) else (problem) _ = problem
+        return end
+    app.close_config(world, cfg) else (problem) _ = problem
+        return end
+    ok = kept == 3 and not files[0].opened
+end retained_arguments
+
+messages: () -> (ok: bool) =
+    ok = false
+    mut source: [700]u8 = zeroed
+    mut out: [800]u8 = zeroed
+    mut err: [1]u8 = zeroed
+    files: []mut io.memory_file = []
+    args: []io.argument = []
+    mut world_state := io.memory_world(files, args, out[0..<800], err[0..<1])
+    world_state.fail_write_at = 350
+    world: any io.world = any(addr world_state)
+    mut host := heap.host()
+    maximum: usize = 100
+    mut counted := failing.count_down(addr host, maximum)
+    mut pending := app.new_message()
+    defer app.drop_message(counted, pending)
+    for at in usize(0)..<usize(700) do source[at] = u8(at % 251) end for
+    copied: []u8 = source[0..<700]
+    app.append(counted, pending, copied) else (problem) _ = problem
+        return end
+    source[0] = 255
+    mut failed: bool = false
+    app.deliver(pending, world, world.out()) else (problem)
+        failed = problem == io.io_failed
+    end
+    return when not failed or pending.delivered <> 349 or world_state.output_used <> 349
+    app.deliver(pending, world, world.out()) else (problem) _ = problem
+        return end
+    return when pending.delivered <> 700 or world_state.output_used <> 700
+    for at in usize(0)..<usize(700) do return when out[at] <> u8(at % 251) end for
+    zero: usize = 0
+    failing.permit(counted, zero)
+    mut refused: bool = false
+    retry_source: []u8 = source[0..<700]
+    app.append(counted, pending, retry_source) else (problem)
+        refused = problem == mem.out_of_memory
+    end
+    ok = refused and vec.length(pending.bytes) == 700 and pending.delivered == 700
+end messages
+
+finite_regions: () -> (ok: bool) =
+    ok = false
+    mut backing: [128]u64 = zeroed
+    base: ptr mut u8 = ptr(usize(addr backing[0]))
+    mut arena := mem.arena_over(base, usize(1024))
+    mut outer := region.new_region(addr arena)
+    mut inner := region.new_region(addr outer)
+    one: usize = 1
+    align: usize = 1
+    object: ptr mut u8 = mem.allocate(inner, one, align) else (problem) _ = problem
+        return end
+    object.val = 42
+    before: usize = arena.used
+    maximum: usize = 0 -% 1
+    mut refused: bool = false
+    _ = mem.allocate(inner, maximum, align) else (problem)
+        refused = problem == mem.out_of_memory
+        object
+    end
+    return when not refused or arena.used <> before or object.val <> 42
+    region.release_region(inner)
+    region.release_region(outer)
+    ok = arena.used == before
+end finite_regions
+
+io_failures: () -> (ok: bool) =
+    ok = false
+    for scenario in usize(0)..<usize(6) do
+        first: io.memory_file =
+          (name: "in", contents: input[0..<32], length: 31, cursor: 0,
+           readable: true, writable: false, opened: false, writing: false)
+        second: io.memory_file =
+          (name: "out", contents: destination[0..<64], length: 0, cursor: 0,
+           readable: true, writable: true, opened: false, writing: false)
+        mut files: [2]io.memory_file
+        files[0] = first
+        files[1] = second
+        if scenario == 3 then files[1].contents = destination[0..<3] end if
+        args: [3]io.argument = [(data: addr arg6[0], length: lenof arg6),
+          (data: addr arg7[0], length: lenof arg7), (data: addr arg8[0], length: lenof arg8)]
+        mut argc: usize = 3
+        if scenario == 4 then argc = 2 end if
+        mut world_state := io.memory_world(files[0..<2], args[0..<argc], output[0..<128], errors[0..<128])
+        if scenario == 0 then world_state.fail_read_at = 3 end if
+        if scenario == 1 then world_state.fail_close_at = 1 end if
+        if scenario == 2 then world_state.fail_close_at = 2 end if
+        world: any io.world = any(addr world_state)
+        mut host := heap.host()
+        budget: usize = 500
+        mut counted := failing.count_down(addr host, budget)
+        mut program := region.new_region(addr counted)
+        mut chunk: usize = 3
+        if scenario == 5 then chunk = 0 end if
+        mut refused: bool = false
+        _ = app.run(program, world, chunk) else (problem)
+            refused = problem == io.io_failed or problem == app.bad_argument
+            0
+        end
+        region.release_region(program)
+        return when not refused or files[0].opened or files[1].opened
+          or failing.live(counted) <> 0
+        if scenario == 3 then
+            return when files[1].length <> 3 or world_state.write_calls <> 5
+              or not app.equal(destination[0..<3], "DEB")
+        end if
+        if scenario == 4 then return when world_state.open_calls <> 0 end if
+        if scenario == 5 then return when world_state.close_calls <> 1 end if
+    end for
+    ok = true
+end io_failures
+
+diagnostics: () -> (ok: bool) =
+    ok = false
+    malformed: [1]u8 = [255]
+    zero_text: []u8 = "0"
+    bad_number: []u8 = "999999999999999999999999999999999999"
+    args: [7]io.argument = [(data: addr arg4[0], length: lenof arg4),
+      (data: addr malformed[0], length: 1),
+      (data: addr arg4[0], length: lenof arg4), (data: addr zero_text[0], length: 1),
+      (data: addr arg4[0], length: lenof arg4),
+      (data: addr bad_number[0], length: lenof bad_number),
+      (data: addr arg8[0], length: lenof arg8)]
+    mut files: [1]io.memory_file
+    files[0] = (name: "in", contents: input[0..<32], length: 31, cursor: 0,
+       readable: true, writable: false, opened: false, writing: false)
+    mut world_state := io.memory_world(files[0..<1], args[0..<7], output[0..<128], errors[0..<128])
+    world: any io.world = any(addr world_state)
+    mut host := heap.host()
+    mut program := region.new_region(addr host)
+    defer region.release_region(program)
+    mut logger := diag.new_log(capacity: 4)
+    log: any diag.log = any(addr logger)
+    kept: usize = app.run_logged(program, world, usize(3), log) else (problem) _ = problem
+        return
+    end
+    return when kept <> 3 or not log.failed() or diag.stored(logger) <> 3
+      or diag.dropped(logger) <> 0 or world_state.errors_used <> 0 or files[0].opened
+    first: diag.entry = diag.note_at(logger, usize(0)) else (problem) _ = problem
+        return
+    end
+    second: diag.entry = diag.note_at(logger, usize(1)) else (problem) _ = problem
+        return
+    end
+    return when diag.message_length(first) == diag.message_length(second)
+    --  Streaming diagnostics fail before input acquisition; the same core
+    --  routine reports the delivery failure, with no implicit retry.
+    world_state.fail_write_at = world_state.write_calls + 1
+    mut refused: bool = false
+    _ = app.run(program, world, usize(3)) else (problem)
+        refused = problem == io.io_failed
+        0
+    end
+    ok = refused and not files[0].opened and world_state.open_calls == 1
+end diagnostics

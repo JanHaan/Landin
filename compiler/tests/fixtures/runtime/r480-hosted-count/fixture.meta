@@ -1,0 +1,9 @@
+class: runtime
+summary: real native hosted argument root runs heterogeneous filters and the count destination
+program: main.ldn
+root: ../../../../..
+run_args: --level INFO --match keep --every 2 ../tests/fixtures/runtime/r480-hosted-count/input.txt
+run_expect: expected.txt
+status: 0
+constructs: 0770, 0790, 1200, 1360, 1370, 1380, 1390, 1650, 1660
+targets: linux-x86-64
