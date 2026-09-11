@@ -1,0 +1,10 @@
+box: type = struct value: i32 end box
+accept: (value: i32) -> none = end accept
+result: () -> (value: i32) = [] end result
+public main: () -> (code: i32) =
+    value: i32 = []
+    inferred := []
+    accept([])
+    stored: box = (value: [])
+    code = []
+end main

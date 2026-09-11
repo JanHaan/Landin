@@ -1,0 +1,12 @@
+choice: type = struct
+    kind: variant empty | full end kind
+end choice
+public main: () -> (code: i32) =
+    value: choice = (kind: empty)
+    code = 42
+    match value.kind
+        empty:: code = 1
+        full: code = 2
+    end match
+end main
+later: () -> (value: i32) = 42 end later

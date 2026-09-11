@@ -1,0 +1,62 @@
+error[L0103]: `public` cannot modify a conformance
+  --> ../tests/fixtures/negative/r491-malformed-public-start/main.ldn:1:1
+  |
+1 | public []: () -> (code: i32) = code = 42 end main
+  | ^^^^^^
+  --> ../tests/fixtures/negative/r491-malformed-public-start/main.ldn:1:8
+  |
+1 | public []: () -> (code: i32) = code = 42 end main
+  |        ^ the conformance starts here
+  = note: [1280]: every reached conformance belongs to the whole-program register
+error[L0101]: this is not a type
+  --> ../tests/fixtures/negative/r491-malformed-public-start/main.ldn:1:10
+  |
+1 | public []: () -> (code: i32) = code = 42 end main
+  |          ^
+  --> ../tests/fixtures/negative/r491-malformed-public-start/main.ldn:1:1
+  |
+1 | public []: () -> (code: i32) = code = 42 end main
+  | ^^^^^^ declared here
+  = note: [1790]: the kernel's types are the scalar names only
+error[L0103]: a conformance puts `is` after its target type
+  --> ../tests/fixtures/negative/r491-malformed-public-start/main.ldn:1:11
+  |
+1 | public []: () -> (code: i32) = code = 42 end main
+  |           ^
+  --> ../tests/fixtures/negative/r491-malformed-public-start/main.ldn:1:1
+  |
+1 | public []: () -> (code: i32) = code = 42 end main
+  | ^^^^^^ this conformance
+  = note: [1240]: target_type is concept_name (label: RHS, ...)
+error[L0110]: this begins no declaration
+  --> ../tests/fixtures/negative/r491-malformed-public-start/main.ldn:1:15
+  |
+1 | public []: () -> (code: i32) = code = 42 end main
+  |               ^^
+  = note: [1740]: a file is declarations, each a binding or a function
+error[L0101]: a type formal is declared with `type`
+  --> ../tests/fixtures/negative/r491-malformed-public-start/main.ldn:1:25
+  |
+1 | public []: () -> (code: i32) = code = 42 end main
+  |                         ^^^
+  --> ../tests/fixtures/negative/r491-malformed-public-start/main.ldn:1:19
+  |
+1 | public []: () -> (code: i32) = code = 42 end main
+  |                   ^^^^ the formal named here
+  = note: D135: `name: type` declares a type formal
+error[L0103]: a binding names its type after `:`
+  --> ../tests/fixtures/negative/r491-malformed-public-start/main.ldn:1:28
+  |
+1 | public []: () -> (code: i32) = code = 42 end main
+  |                            ^
+  --> ../tests/fixtures/negative/r491-malformed-public-start/main.ldn:1:25
+  |
+1 | public []: () -> (code: i32) = code = 42 end main
+  |                         ^^^ declared here
+  = note: [1790]: `mut`? name `:` type, or name `:=` expression
+error[L0110]: this begins no declaration
+  --> ../tests/fixtures/negative/r491-malformed-public-start/main.ldn:1:28
+  |
+1 | public []: () -> (code: i32) = code = 42 end main
+  |                            ^^^^^^^^^^^^^^^^^^^^^^
+  = note: [1740]: a file is declarations, each a binding or a function

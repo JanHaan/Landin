@@ -1,0 +1,6 @@
+class: runtime
+summary: empty slices retain ordinary contextual element types and permissions
+program: main.ldn
+status: 42
+constructs: 0570, 0580, 0950, 1880
+targets: linux-x86-64

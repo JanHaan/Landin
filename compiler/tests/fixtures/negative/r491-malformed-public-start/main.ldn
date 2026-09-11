@@ -1,0 +1,1 @@
+public []: () -> (code: i32) = code = 42 end main

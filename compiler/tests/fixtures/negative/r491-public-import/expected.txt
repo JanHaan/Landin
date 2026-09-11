@@ -1,0 +1,20 @@
+error[L0103]: `public` cannot modify an import
+  --> ../tests/fixtures/negative/r491-public-import/main.ldn:1:1
+  |
+1 | public import core/mem
+  | ^^^^^^
+  --> ../tests/fixtures/negative/r491-public-import/main.ldn:1:8
+  |
+1 | public import core/mem
+  |        ^^^^^^ the import starts here
+  = note: [1450]: an import is a per-file prelude, not a declaration
+error[L0103]: an import belongs before every declaration
+  --> ../tests/fixtures/negative/r491-public-import/main.ldn:1:8
+  |
+1 | public import core/mem
+  |        ^^^^^^
+  --> ../tests/fixtures/negative/r491-public-import/main.ldn:1:1
+  |
+1 | public import core/mem
+  | ^^^^^^ the source prelude starts here
+  = note: [1450]: imports are a per-file prelude

@@ -52,6 +52,22 @@ package body Landin.Stages.Syntax is
             Landin.Syntax.Forest.Add
               (Trees.all, Stream, Names.all, Found);
 
+            --  Recovery may retain error nodes, but it must explain them.
+            --  Keep this invariant in release builds too: an undiagnosed
+            --  unsound tree must never advance to checking or lowering.
+            declare
+               Parsed : constant not null access constant
+                 Landin.Syntax.Tree := Trees.Tree_Of (Id);
+            begin
+               if not Landin.Syntax.Is_Sound
+                 (Parsed.all, Landin.Syntax.Root (Parsed.all))
+                 and then not Found.Has_Errors
+               then
+                  raise Landin.Compiler_Defect with
+                    "syntax recovery produced no error diagnostic";
+               end if;
+            end;
+
             --  Sorted per source, appended in source order: a report is
             --  read top to bottom of the file it is about.
             declare

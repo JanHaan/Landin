@@ -1,0 +1,9 @@
+class: negative
+summary: source refusals satisfy their diagnostic label contracts
+program: main.ldn
+codes: L0103
+constructs: 1130, 1170, 1190, 1450, 1810
+targets: linux-x86-64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/r491-public-fixed/main.ldn
+status: 1

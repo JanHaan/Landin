@@ -1921,8 +1921,82 @@ package body Landin.Tests.Driver_Suite is
          "L0202", "hidden");
    end R440_Qualified_Alias_Conversions;
 
+   procedure R491_Refusals_Have_No_Effects
+     (Item : in out Landin.Testing.Context);
+
+   procedure R491_Refusals_Have_No_Effects
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check
+        (Source, Code : String; Count : Positive; Executable : Boolean);
+
+      procedure Check
+        (Source, Code : String; Count : Positive; Executable : Boolean)
+      is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : Landin.Platform.Path_List := Arguments_Of ("bad.ldn");
+      begin
+         Host.Add_File ("bad.ldn", Source);
+         Host.Refuse_Writes;
+         Tools.Raise_On_Run;
+         Args.Append ("--target=linux-x86-64");
+         Args.Append (if Executable then "--emit=exe" else "--emit=asm");
+         declare
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Driver.Execute (Args, Host, Tools);
+            Report : constant String := Unbounded.To_String (Result.Report);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Result.Status, Landin.Driver.Status_Reported,
+               "invalid source has an ordinary diagnostic");
+            Landin.Testing.Check
+              (Item, Contains (Report, "error[" & Code & "]")
+                 and then Occurrences (Report, "error[") = Count
+                 and then not Contains (Report, "internal compiler defect"),
+               "the source refusal retains its diagnostic contract");
+            Landin.Testing.Check_Equal
+              (Item, Host.Write_Count, 0, "no output write is attempted");
+            Landin.Testing.Check_Equal
+              (Item, Tools.Run_Count, 0, "no tool is invoked");
+         end;
+      end Check;
+   begin
+      for Executable in Boolean loop
+         Check
+           ("f: () -> none = loop do complete end loop end f",
+            "L0110", 1, Executable);
+         Check
+           ("f: () -> none = loop do continue with 1 end loop end f",
+            "L0110", 1, Executable);
+         Check
+           ("public import core/mem", "L0103", 2, Executable);
+         Check
+           ("public fixed if true then value: i32 = 42 end if",
+            "L0103", 1, Executable);
+         Check
+           ("public main: () -> (code: i32) = code = [] end main",
+            "L0301", 1, Executable);
+         Check
+           ("public main: () -> (code: i32) = code = 1 ) end main",
+            "L0110", 1, Executable);
+         Check
+           ("public []: () -> (code: i32) = code = 42 end main",
+            "L0103", 7, Executable);
+         Check
+           ("readable: type = concept (item: type)" & LF
+            & "read: (self: item) -> (result: i32) end readable" & LF
+            & "read_i32: (self: i32) -> (result: i32) = self end read_i32"
+            & LF & "public i32 is readable (read: read_i32)",
+            "L0103", 1, Executable);
+      end loop;
+   end R491_Refusals_Have_No_Effects;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "driver", "R4.91 refusals have no effects",
+         R491_Refusals_Have_No_Effects'Access);
       Landin.Testing.Register
         (Into, "driver", "R4.40 qualified alias conversions",
          R440_Qualified_Alias_Conversions'Access);

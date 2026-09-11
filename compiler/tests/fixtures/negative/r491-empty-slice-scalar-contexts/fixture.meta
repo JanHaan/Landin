@@ -1,0 +1,9 @@
+class: negative
+summary: empty slices in scalar contexts are type errors before lowering
+program: main.ldn
+codes: L0301, L0301, L0301, L0301, L0301, L0301
+constructs: 0570, 0580, 0950, 1880
+targets: linux-x86-64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/r491-empty-slice-scalar-contexts/main.ldn
+status: 1

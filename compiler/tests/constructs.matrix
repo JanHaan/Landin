@@ -108,7 +108,7 @@
 0920   tour        accepted emitted executed refused  Multiple named returns
 0930   tour        accepted emitted executed refused  Every named return must be assigned before return
 0940   tour        accepted emitted executed refused  Errors: a declared set of atoms in one dedicated register
-0950   tour        accepted emitted executed          Not everything that goes wrong belongs in that channel
+0950   tour        accepted emitted executed refused  Not everything that goes wrong belongs in that channel
 0960   tour        accepted emitted executed refused  Propagating: try, visible at the call site
 0970   tour        accepted emitted executed refused  Early exit
 0980   tour        accepted emitted executed refused  Calls: positional first, then named

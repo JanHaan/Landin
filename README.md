@@ -235,9 +235,10 @@ atom storage and recovered-error generic discovery. Complete derived prototypes
 exact containing revision's acceptance and delivery evidence to its annotated
 approval tag and durable native bundle.
 
-**Next roadmap item: R5.10 — Establish the native macOS compiler environment (planned).**
+**Current roadmap work: R4.91 — Resolve post-R4 review findings.**
 
-This is the next planned item; R5 has not begun.
+R4.91 addresses the remaining compiler, tooling and documentation review
+findings. R5 has not begun.
 
 `refine --debug=full --emit=exe program.ldn -o program` requests Linux source
 debugging. The default is `--debug=none`; debugging metadata is independent of

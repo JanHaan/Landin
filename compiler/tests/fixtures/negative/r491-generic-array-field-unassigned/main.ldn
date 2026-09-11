@@ -1,0 +1,8 @@
+row: type = [2]i32
+box: type = struct values: row end box
+copy: (t: type, value: t) -> (result: t) = value end copy
+public main: () -> (code: i32) =
+    mut b: box
+    values := copy(b.values)
+    code = values[1]
+end main
