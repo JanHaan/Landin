@@ -431,6 +431,7 @@ map_lacks: (value: map.map(collision_key, i32), identity: u64)
     _ = map.get(value, key) else (problem)
         _ = problem
         absent = true
+        i32(0)
     end
     ok = absent
 end map_lacks
@@ -454,6 +455,7 @@ reference_entry_enumeration: () -> (ok: bool) =
     mut empty_seen: bool = false
     _ = map.next_entry(value, empty_cursor) else (problem)
         empty_seen = problem == map.end_of_entries
+        (key: addr node_1, item: addr node_2)
     end
 
     map.insert(value, provider, addr node_1, addr node_2) else (problem)
@@ -495,10 +497,12 @@ reference_entry_enumeration: () -> (ok: bool) =
     mut exhausted_seen: bool = false
     _ = map.next_entry(value, position) else (problem)
         exhausted_seen = problem == map.end_of_entries
+        (key: addr node_1, item: addr node_2)
     end
     mut exhausted_again: bool = false
     _ = map.next_entry(value, position) else (problem)
         exhausted_again = problem == map.end_of_entries
+        (key: addr node_1, item: addr node_2)
     end
     enumerated: bool = empty_seen and exhausted_seen and exhausted_again
                        and count == 2 and key_sum == 4 and value_sum == 6
@@ -593,10 +597,12 @@ map_operations: () -> (ok: bool) =
     mut tombstone_exhausted: bool = false
     _ = map.next_entry(compact, tombstone_position) else (problem)
         tombstone_exhausted = problem == map.end_of_entries
+        (key: (identity: u64(0), home: u64(0)), item: i32(0))
     end
     mut tombstone_exhausted_again: bool = false
     _ = map.next_entry(compact, tombstone_position) else (problem)
         tombstone_exhausted_again = problem == map.end_of_entries
+        (key: (identity: u64(0), home: u64(0)), item: i32(0))
     end
     enumerated_through_tombstones: bool = tombstone_count == 3
         and tombstone_key_sum == 15 and tombstone_item_sum == 165
@@ -629,10 +635,12 @@ map_operations: () -> (ok: bool) =
     mut exhausted: bool = false
     _ = map.next_entry(compact, position) else (problem)
         exhausted = problem == map.end_of_entries
+        (key: (identity: u64(0), home: u64(0)), item: i32(0))
     end
     mut exhausted_again: bool = false
     _ = map.next_entry(compact, position) else (problem)
         exhausted_again = problem == map.end_of_entries
+        (key: (identity: u64(0), home: u64(0)), item: i32(0))
     end
     enumerated: bool = exhausted and exhausted_again
                        and enumeration_count == 4
