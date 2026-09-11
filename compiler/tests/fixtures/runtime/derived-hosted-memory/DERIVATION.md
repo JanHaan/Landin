@@ -61,7 +61,7 @@ partial-prefix delivery failure. Further cases cover a 9998-byte line with
 one-byte reads, trailing and final unterminated lines, empty input, copied
 configuration after argument mutation, arbitrary binary message copying and
 retry, transactional append exhaustion, nested regions over explicit finite
-backing, allocation-failure sweeps including metadata failures, and terminal
+backing, exact metadata-exhaustion consumption on a monotonic parent, allocation-failure sweeps including metadata failures, and terminal
 read/write/close/configuration failures with exact handle/allocation accounting.
 
 `runtime/r480-hosted-count` runs the actual hosted root with real argv and an
