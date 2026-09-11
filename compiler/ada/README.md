@@ -450,6 +450,14 @@ aggregate images carry verified routine relocations, and a containing aggregate
 has no implicit zero image when its active zero shape contains a function.
 Atom declarations and
 unions are structural declaration-identity sets carried as ordinary values.
+R4.90 closes inferred errors and generic discovery together (D215). Recovery
+subtrees are separate syntax members, and deferred recovery/type facts belong to
+the active routine-instance view. Only complete error components publish atom
+sets that can enter generic keys; newly enabled handlers may discover further
+instances before the final inventory assertion. The queue also retains recursive
+expansion ancestry. Circular key/effect deduction is a source diagnostic, while
+ordinary recursive effect graphs remain least-fixed-point inference.
+
 Concrete error sets are part of recursive function signatures; private `! ...`
 routines, including separate concrete generic identities, are solved as one
 whole-module least fixed point before lowering. Direct and indirect failing

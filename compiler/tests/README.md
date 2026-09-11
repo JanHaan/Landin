@@ -638,3 +638,12 @@ by-value aggregate, an aggregate result, an inout array and a declared failure.
 The table entry supplies the provider's concrete evidence arguments to the
 ordinary generic body; its source calling convention and the two-word `any`
 representation remain unchanged.
+
+R4.90 strengthens hosted parity closure beyond a populated construct column.
+Every hosted row must cite a Linux runtime or ABI program, except the explicitly
+registered compile-time rules whose exact acceptance/refusal is the oracle.
+`check.py` enforces this boundary when the parity item closes; it does not infer
+semantic adequacy from metadata. The audit adds distinct and inline nominal
+types, exact once-evaluated field fills, atom comparisons across structural
+sets, conformance-key controls and recovered-error generic deduction. D212's
+ordinary allocator authority and all existing workload profiles remain required.

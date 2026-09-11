@@ -1774,7 +1774,11 @@ inferred set is infallible. A generic template has no error signature of its
 own: each concrete argument tuple joins that same fixed point as a separate
 routine, so equal tuples share one answer and unequal tuples can keep different
 answers. Recovery and propagation see the finalized set for the selected
-instance. Function types and anonymous functions write a concrete set because
+instance. Passing a recovered error, or a local alias of it, to a generic call
+waits for that complete set. A circular dependency between selecting the generic
+instance and inferring its own effects is refused (D215), without guessing a set;
+ordinary recursive error inference remains supported.
+Function types and anonymous functions write a concrete set because
 their complete signature is their type.
 
 ```landin

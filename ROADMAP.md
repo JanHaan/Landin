@@ -5386,7 +5386,7 @@ item in roadmap order when no item is active. This accommodates the R4-to-R5
 boundary without activating either R5 item or inventing a dependency between them.
 
 R4.80's recovery review isolated a pre-existing inference-frontier defect for
-this parity item. On canonical `5b2db329`, the program below exits 70: generic
+this parity item. On canonical `5b2db329`, the program below exited 70: generic
 deduction needs the recovered error's inferred atom set, and discovering its
 instance during error finalization changes the supposedly frozen signature
 inventory. Native GDB pinned the signature-count assertion immediately after
@@ -5394,7 +5394,14 @@ inventory. Native GDB pinned the signature-count assertion immediately after
 atom sets or silently disabling an otherwise ordinary generic call. The
 concrete-error-set form already worked on that baseline and remains covered
 by `runtime/r480-concrete-error-deduction`; the complete hosted application
-and its support programs do not depend on the unresolved inferred form.
+and its support programs did not depend on the unresolved inferred form.
+R4.90 reproduces it on `795f7052` and closes it through D215's dependency
+frontier: inference publishes only complete component sets before resuming
+recovery-dependent generic discovery, and freezes inventory only at completion.
+Meaningful controls cover exact-key interning, unequal keys, aliases, nested
+recoveries, traversal headers, recursion, immutable recovery values and the
+precise circular-key refusal. Existing R4.80 concrete-error, nested recovery and
+control-transfer oracles remain unchanged.
 
 ```landin
 problem: atom

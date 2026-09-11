@@ -35,6 +35,9 @@ package body Landin.Diagnostics.Syntactic is
             "ROADMAP.md " & Enabled_By (Refused)
             & (if Refused = Arena_Block
                then " withdraws this form; pass an ordinary allocator"
+               elsif Refused in Declared_Type | Struct_Type | Type_Parameter
+                 | Array_Repetition | Indexing | Struct_All_Of
+               then " records this source-form boundary"
                else " is where it is enabled"));
       elsif Note /= "" then
          Add_Note (Built, Note);
