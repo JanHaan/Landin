@@ -3303,8 +3303,11 @@ def hosted_parity_problems(statuses, applicability, static_rows, fixtures):
     if statuses.get("R4.90") != "complete":
         return []
     out = []
+    # Later repair slices do not rewrite R4.90's historical dependencies.
+    # The phase gate separately owns current closure.
     for key, status in statuses.items():
-        if key.startswith("R4.") and status != "complete":
+        if (key.startswith("R4.") and int(key.split(".")[1]) < 90
+                and status != "complete"):
             out.append((ROADMAP, 1, "R4.90 cannot close before " + key))
     if applicability is None or static_rows is None:
         return out + [(ROADMAP, 1, "R4.90 parity registers cannot be read")]

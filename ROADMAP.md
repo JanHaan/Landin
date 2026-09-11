@@ -5536,13 +5536,116 @@ Exit evidence: all applicable matrices are complete; equivalent builds produce
 identical assembly and behavior under the pinned toolchain. The bound acceptance
 record, approval tag and guarded publication records establish delivery.
 
+### R4.91 — Resolve post-R4 review findings
+
+Status: active
+Depends on: R4.90
+
+Review of accepted revision `66927e93` reproduced four defects in implemented
+hosted constructs. The initial implementation repairs generic fixed-array field
+arguments, missing contextual diagnostics for `[]`, undiagnosed statement
+recovery, and the public-conformance diagnostic's secondary-label contract.
+The follow-up comparison with the independent reviews of `66b3b659` expands
+this slice. R4.90 acceptance did not close every finding in those older reviews.
+
+Sources: [0570], [0580], [0950], [1280], [1300], [1800], [1810], [1880],
+[1910]; D96, D138, D141. The original review's unconfirmed float-resource and
+varargs observations remain unconfirmed and supply no implementation mandate.
+
+Implementation is in the isolated `r491` worktree. The first batch retains full
+array descriptors in generic deduction; contextualizes empty slices before
+ordinary and concrete generic argument checking; refuses context-free empty
+slices; and repairs the five reviewed diagnostic-label violations without
+relaxing the catalogue. Recovery at end of input uses a point-capable diagnostic,
+and the syntax stage refuses to advance an undiagnosed unsound tree even in
+release builds. Runtime cases cover independent array copies, nested/module
+fields, atom/callback/pointer elements and empty-slice contexts.
+Driver cases check that refused sources attempt no writes or host-tool calls.
+
+#### Older review reconciliation
+
+Paseo coordinator `27030a0b-54d1-4423-ab3b-82dfe079ece4` commissioned the
+independent Codex and Claude reviews of `66b3b659`. `A1` through `A9` below refer to
+the Codex report's numbered findings; `C`, `M` and `m` refer to the Claude
+report's original identifiers, not this roadmap's inherited review register.
+Their original severity labels are not automatically adopted. This comparison
+uses retained report text, source differences through `66927e93`, and small
+ordinary compiler regression inputs. It runs no new mutation campaign, debugger
+session, destructive output-collision experiment or resource-exhaustion sweep.
+
+| Older finding | Current disposition and evidence | Repair order |
+| --- | --- | --- |
+| A1: artifact/source collisions | Still present in source: the driver's preflight is conditional on a build-report request and compares only that report. Apply the existing filesystem identity seam to sources and all actual outputs, including sidecars, before any write. | Second batch |
+| C1: diagnostic label contracts | All five sites still violated the catalogue at the baseline; the four sibling minimal cases still exited 70. Initial implementation repairs imports, fixed conditionals, conformances, unconditional completion and continue-with-value. | First batch |
+| A2, C2, M3: final values and silent recovery | Still present at the baseline. The grammar derives statement-prefix/final-value bodies, including `r = zeroed(1)` as an assignment followed by a parenthesized value. These must be parsed correctly, rather than recorded as negative syntax fixtures. Recovery now diagnoses unexpected tokens, but final-body value semantics remain open: a final none-returning call must stay a statement after a named result has been assigned. This requires coordinated checker, flow, origin and lowering changes. | Recovery in first batch; final values in third batch |
+| A3: type-shaped construction arguments | Still reproduced: `box(value: ptr u8)` exits 70. Reject missing value projections in struct and variant contexts before accessing their syntax, with module/local controls. | Third batch |
+| C3: retained reference origins | Still reproduced: a local address stored through an `inout` pointer parameter is accepted and can escape its caller. The module-only store check remains. Cover inout parameters, pointees, slice elements and reference-bearing fields while preserving allowed long-lived stores. | Second batch |
+| C4: variant payload alias lifetime | Still reproduced: re-tagging under a live scalar inout payload alias is accepted. Track payload storage lifetime independently of whether its scalar type contains references; retain last-use controls. | Second batch |
+| C5: dense inference matrices | Still present in source: effects, required sets and call edges are dense stack arrays. The old exhaustion threshold was not rerun. Move program-sized storage off the host stack and measure scaling without weakening inference completion. | Third batch |
+| C6: nested-call depth | Still present in source: the general call parser lacks its siblings' depth guard. Add balanced recovery and bounded depth regressions in both modes. No new overflow run was made. | Third batch |
+| M1: conformance lookahead | Still reproduced: `v := 1` followed by `is := 2` is falsely parsed as a conformance. Stop at the binding initializer delimiter and retain legitimate conformance controls. | Third batch |
+| M2: consumed subplaces | Still reproduced for a bare array-element read after sink. The aggregate ancestor case and failure-edge restoration need the same path audit. Preserve exact-path reinitialization and ordinary live reads. | Second batch |
+| M4, M16: tour and prototype drift | Still present in sampled live text: uppercase formals/labels, `mem.new_slice`, references to the retired worklist and an unsupported file-handle union. R4.80 changed allocator wording, so re-read complete cross-prototype contracts before editing. Historical finding sections remain untouched. | Fourth batch |
+| M5: font history | Local ancestry and tree inventory confirm the font-addition commit remains reachable from `66927e93`. This is retained repository evidence, not a new interpretation of the license. Any public-history remedy requires a concrete maintainer decision and coordinated delivery; no history is rewritten here. | Maintainer disposition |
+| M6: historical closure anchors | Historical rewrite provenance remains distinct from exact current acceptance. Reconcile the affected old anchors and phase-gate evidence without rewriting old acceptance claims as current ones. | Fourth batch |
+| M7: R4.70 obligations | Superseded by R4.70/R4.90: closure now records complete derivation, scalar-origin normalization, nested field ranges and direct parameter coverage. Preserve their fixtures and later full acceptance evidence. | Existing coverage |
+| M8: stale decisions/citations | Still present in sampled text, including active-R4.40 wording and pending pins. Audit the named citations against their actual rules before changing prose. | Fourth batch |
+| A5, M9: source-path bytes | Decoder still uses decoded text through ordinary stdout. The default check's result depends on stdout error policy; pin strict UTF-8 output and preserve original path bytes explicitly. | Third batch |
+| M10: diagnostic rendering growth | The whole-line-per-label implementation remains; the old stress measurement was not rerun. Bound excerpts while retaining useful primary/secondary spans. | Third batch |
+| A4, M11: native failures | Capture-read failure still becomes empty output; native writes still omit device failures from their ordinary outcome. Add explicit failure propagation and cleanup cases through host seams. Layout exception conflation remains a separate audit. | Third batch |
+| M12: stage organization | Large nested stage procedures and duplicated construction helpers remain. Refactor only with established behavioural controls; size alone is not a correctness finding. | Fourth batch |
+| M13: build mode and locks | Still present in source: mode is interpolated without validation; test execution outlives the build lock; clean-all has no matching lock. Validate modes before path construction and define one lock lifetime for build/test/clean. No unsafe mode was executed. | Second batch |
+| M14: harness contracts | Runtime stream selection is still ignored, suite inventory remains incomplete, and coarse corpus floors remain. Replace these with exact discovery/contract checks without manufacturing fixed historical corpus counts. | Fourth batch |
+| M15: profile selection | Name-based selection remains. Some workload coverage expanded, but renaming a fixture still changes specialization coverage. Introduce explicit, validated profile policy. | Fourth batch |
+| A8, M18: publication and CI | The old automatic compiler manifest was replaced by native acceptance. Current publication verifies exact accepted canonical main, so the former unguarded-publication description is obsolete. Serialization during upload and private-font/highlighter/guide coverage still need checks against the new policy. No stale publication was observed. | Fourth batch |
+| A6: text traversal wording | The broad validated-view promise in [1810] still conflicts with the documented foreign C-string traversal boundary. Qualify it without changing the runtime trap contract. | Fourth batch |
+| A7, M19: emitted operand identities and stride | The wide slice stride still uses an immediate-only multiply, unlike guarded sibling sites. Test emitted instructions with the pinned assembler. Special symbol names require exact-identity controls on supported tools; an LLVM-only failure is not automatically a pinned-GNU defect. | Third batch |
+| A9, m18: third-party inventory | Root LICENSE still says only one third-party item. Reconcile the inventory with the already-present local notices; do not change license terms. | Fourth batch |
+| M17: stale refusal ownership | R4.90 changed the implicated notes to describe source-form boundaries and implemented distinct/fill forms. The earlier blanket enabled-yet report is superseded; retain bounded checks for any remaining inaccurate sites. | Existing coverage |
+
+The remaining minor observations retain these explicit dispositions rather than
+being silently promoted to bugs or discarded:
+
+| Older minor identifiers | Disposition |
+| --- | --- |
+| m1--m7 | Harness/oracle quality concerns remain: precise reports, trap intent, fresh artifacts, scanner wording, fake filesystem behaviour and input-generation coverage. Audit under the fourth batch. No new mutation campaign is authorized. |
+| m8--m11 | Statement-loop values, intermediate constant overflow, sink restoration on failure and explicit atom widening require current rule/case comparison. m10 joins the second batch's consumed-place audit; the others remain bounded semantic questions, not confirmed new language decisions. |
+| m12--m13, m22 | Lexical grammar, text validity and reference wording need a normative cross-check. Do not infer semantic changes from the heuristic recognizer alone. |
+| m14--m17, m21, m23 | Sampled dead helpers, ownership documentation, historical register names/counts, fixture summaries and source attachment assumptions need maintenance or invariant checks. Some surrounding prose changed after the old review. |
+| m19 | The automatic Nix manifest was retired, so that skip-path claim is obsolete. Container pin duplication and shell-pipeline status remain source-level observations. |
+| m20 | Quality and debugger workload coverage expanded at R4.90. The narrower claim about oracle independence still needs evaluation against current assertions; existing passing jobs are not proof of that independence. |
+| m24--m25 | Verifier partitioning and simplifier proof identity are latent concerns without an observed accepted-source defect. Validate with focused IR tests before altering passes. |
+| m26--m28 | Deterministic IR numbering, displayed pointer provenance, overlapping writeback/result semantics and redundant bounds checks need focused evidence. Code-size cost or undocumented behaviour alone does not establish wrong code. |
+| m29--m31 | Compact repetition cost and tool operand/symbol spelling remain visible in source. Use bounded assembly measurements and fake tool argv assertions; do not assemble multi-gigabyte fixtures or execute option-like filenames as experiments. |
+| m32 | Routine sharing and observable callback identity remain unconfirmed; reproduce with a small source case before changing optimization policy. |
+
+Implementation proceeds in four reviewable batches: finish the initial
+context/recovery regressions; repair origin/consume/output/build preservation;
+repair remaining frontend/backend/host boundaries and bounded scaling; then
+reconcile documentation, harness and CI coverage. Each batch keeps its focused
+positive and refusal controls. Confirmed defects and unresolved dispositions
+above remain owned here until repaired or explicitly transferred with reasons.
+
+Retained acceptance of `66927e93` is historical evidence and does not approve
+these repairs. The user's constraint excludes new mutation-based probing and
+debugger sessions. Normal builds and repository regressions remain authorized.
+Required debugger acceptance is not waived: R4.91 remains active until its full
+acceptance can be performed within the user's authorized scope.
+
+Exit evidence: focused regressions pass in both compiler build modes, including
+no output/tool invocation for rejected source; full document checks and compiler
+suites pass; every older finding above has a recorded disposition; and the
+committed repair revision completes canonical eight-job native acceptance,
+verified export and normal delivery binding. Filtered runs do not close it.
+
 ### R4 gate
 
-Status: complete
+Status: active
 
-The implementation and coverage gate is closed by R4.90. Its exact revision's
-full native acceptance and delivery evidence are bound as described above.
-R5.10 and R5.20 remain planned; closing this phase activates neither.
+R4.90's accepted closure remains recorded above. R4.91 reopens the current
+phase gate for the review repairs and their exact-revision acceptance.
+R5.10 and R5.20 remain planned and depend on those repairs. This gate closes
+again only after R4.91 meets its exit evidence.
 
 - Every applicable hosted construct under the current normative specification
   is implemented on Linux x86-64.
@@ -5558,7 +5661,7 @@ freestanding backend begins.
 ### R5.10 — Establish the native macOS compiler environment
 
 Status: planned
-Depends on: R0.70, R4.90
+Depends on: R0.70, R4.91
 
 Pin or bound the macOS arm64 GNAT/GPRbuild, Apple SDK, assembler, linker and
 debugger environment. Build and run `refine` natively; the Linux container is
@@ -5570,7 +5673,7 @@ native macOS arm64 with captured tool versions.
 ### R5.20 — Isolate target contracts
 
 Status: planned
-Depends on: R4.90, R0.60
+Depends on: R4.91, R0.60
 
 Refine target descriptions, ABI queries, assembly emission and debug emission
 so Darwin support does not enter parsing, checking or target-neutral IR

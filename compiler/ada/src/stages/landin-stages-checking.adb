@@ -8975,13 +8975,15 @@ package body Landin.Stages.Checking is
                   end if;
 
                   --  Deduction remains context-free for an unresolved type
-                  --  formal.  A text literal whose written parameter pattern
+                  --  formal.  A literal whose written parameter pattern
                   --  is already concrete is different: [0260] gives the
-                  --  literal that exact reference context, just as an
+                  --  text literal that exact reference context, just as an
                   --  ordinary call does.  This must precede Synthesise,
-                  --  whose context-free text default is utf8.
+                  --  whose context-free text default is utf8. D141 likewise
+                  --  gives an empty slice its concrete parameter context.
                   if Syn.Kind (Caller_Tree, Argument)
                        in Syn.Text_Literal | Syn.Raw_Literal
+                          | Syn.Empty_Slice_Literal
                   then
                      declare
                         Expected : constant Type_Descriptor := Normalized_Type
@@ -9009,7 +9011,9 @@ package body Landin.Stages.Checking is
                     (if Syn.Kind (Caller_Tree, Argument)
                          in Syn.Name_Reference | Syn.Member_Selection
                             | Syn.Element_Index
-                     then Selected_From (Caller_Tree, Argument)
+                     then (if Admit_Array_Field (Caller_Tree, Argument)
+                           then Ty.Fixed_Array
+                           else Selected_From (Caller_Tree, Argument))
                      else Synthesise (Caller_Tree, Argument));
                   if Got = Ty.Untyped_Integer then
                      Commit_To (Caller_Tree, Argument, Ty.Default_Integer);
@@ -11470,6 +11474,7 @@ package body Landin.Stages.Checking is
                    (Is_Value_Control (Of_Tree, Argument)
                     or else Syn.Kind (Of_Tree, Argument)
                               in Syn.Text_Literal | Syn.Raw_Literal
+                                 | Syn.Empty_Slice_Literal
                     or else (Wants = Ty.Fixed_Array
                       and then Needs_Arithmetic_Context (Of_Tree, Argument)))
                then
@@ -16843,6 +16848,22 @@ package body Landin.Stages.Checking is
 
             when Syn.True_Literal | Syn.False_Literal =>
                return Kept (Ty.Bool);
+
+            when Syn.Empty_Slice_Literal =>
+               --  D141 supplies this literal's complete slice descriptor in
+               --  Check_Contextual_Value.  No scalar or inferred context
+               --  can give it a type; Not_Typed would silently pass Require.
+               Bad.Report
+                 (Item    => Bad.Type_Mismatch,
+                  Source  => Syn.Source_Of (Of_Tree),
+                  Where   => Syn.Where (Of_Tree, Node),
+                  Message => "`[]` needs a slice context",
+                  Note    => "[0570]: an empty slice retains its element"
+                             & " type and reference permission",
+                  Related => Syn.Origin (Of_Tree, Node),
+                  Because => "the empty slice written here",
+                  Into    => Found);
+               return Kept (Ty.Ill_Typed);
 
             when Syn.Zeroed_Literal =>
                Bad.Report
@@ -24854,10 +24875,27 @@ package body Landin.Stages.Checking is
                if Expected.Kind = Ty.Slice_Value
                  and then Syn.Kind (Of_Tree, Node) = Syn.Empty_Slice_Literal
                then
-                  Landin.Checking.Note
-                    (Types.all, Of_Tree, Node, Ty.Slice_Value);
-                  Landin.Checking.Note_Reference
-                    (Types.all, Of_Tree, Node, Expected.Reference);
+                  if Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
+                    = Ty.Undecided
+                  then
+                     Landin.Checking.Note
+                       (Types.all, Of_Tree, Node, Ty.Slice_Value);
+                     Landin.Checking.Note_Reference
+                       (Types.all, Of_Tree, Node, Expected.Reference);
+                  elsif Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
+                    /= Ty.Ill_Typed
+                    and then
+                      (Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
+                         /= Ty.Slice_Value
+                       or else not Landin.Checking.References_Agree
+                         (Types.all,
+                          Landin.Checking.Reference_Of
+                            (Types.all, Of_Tree, Node),
+                          Expected.Reference))
+                  then
+                     Context_Mismatch
+                       (Of_Tree, Node, Expected, Site, Because);
+                  end if;
                   return;
                end if;
                --  D189/[0480]: the empty case of a pointer union is written

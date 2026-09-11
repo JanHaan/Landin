@@ -1,0 +1,6 @@
+class: runtime
+summary: generic field arguments preserve array descriptors and by-value copies
+program: main.ldn
+status: 42
+constructs: 0420, 0520, 0910, 0950, 1300, 1880, 1910
+targets: linux-x86-64

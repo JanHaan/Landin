@@ -1,0 +1,19 @@
+holder: type = struct view: []i32 end holder
+module_empty: []i32 = []
+empty: () -> (result: []i32) = [] end empty
+length: (view: []i32) -> (result: usize) = lenof view end length
+generic_length: (t: type, unused: t, view: []i32) -> (result: usize) =
+    lenof view
+end generic_length
+public main: () -> (code: i32) =
+    mut view: []i32 = []
+    mutable: []mut i32 = []
+    stored: holder = (view: [])
+    stored_view := stored.view
+    returned := empty()
+    view = []
+    code = if lenof view == 0 and lenof mutable == 0
+      and lenof stored_view == 0 and lenof returned == 0
+      and lenof module_empty == 0 and length([]) == 0 and generic_length(1, []) == 0
+      then 42 else 1 end if
+end main
