@@ -22,6 +22,7 @@ public main: () -> (code: i32) =
     _ = exercise(-1) else (problem)
         _ = problem
         refused = true
+        false
     end
     if good and refused then
         code = 42

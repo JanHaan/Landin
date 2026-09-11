@@ -10,6 +10,7 @@ public main: () -> (code: i32) =
     _ = grown(over) else (problem)
         _ = problem
         refused = true
+        usize(0)
     end
 
     if initial == 8 and doubled == maximum - 1 and refused then

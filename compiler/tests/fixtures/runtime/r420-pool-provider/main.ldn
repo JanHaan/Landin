@@ -244,6 +244,15 @@ six_live_slots: () -> (ok: bool) =
     ok = ok and pool.live(state) == 0 and pool.free_count(state) == 6
 end six_live_slots
 
+--  Check construction without exposing the private provider representation.
+--  The caller tests only refusal; no provider value survives this helper.
+check_configuration: (base: ptr mut u8, extent: usize, size: usize,
+                      count: usize, alignment: usize,
+                      bookkeeping: []mut pool.slot)
+                     -> none ! mem.out_of_memory =
+    _ = try pool.over(base, extent, size, count, alignment, bookkeeping)
+end check_configuration
+
 bad_configuration_is_refused: () -> (ok: bool) =
     mut words: [20]u64 = zeroed
     base: ptr mut u8 = ptr(usize(addr words[0]) + 1)
@@ -256,14 +265,14 @@ bad_configuration_is_refused: () -> (ok: bool) =
     bookkeeping: []mut pool.slot = records[0..<lenof records]
 
     mut capacity_refused: bool = false
-    _ = pool.over(base, 159, 64, two, alignment, bookkeeping)
+    check_configuration(base, 159, 64, two, alignment, bookkeeping)
         else (problem)
         _ = problem
         capacity_refused = true
     end
 
     mut extent_refused: bool = false
-    _ = pool.over(base, extent, size, one, alignment, bookkeeping)
+    check_configuration(base, extent, size, one, alignment, bookkeeping)
         else (problem)
         _ = problem
         extent_refused = true

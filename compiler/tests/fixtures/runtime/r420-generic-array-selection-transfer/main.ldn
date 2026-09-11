@@ -63,6 +63,7 @@ public main: () -> (code: i32) =
     _ = transfer(empty_source, three, empty_target) else (problem)
         _ = problem
         refused = true
+        usize(0)
     end
 
     source_0: pair = pair_source.prefix[0]

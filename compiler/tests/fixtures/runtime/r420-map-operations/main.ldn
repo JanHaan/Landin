@@ -61,6 +61,7 @@ missing_value: (value: map.map(collision_key, i32), identity: u64,
     _ = map.get(value, key) else (problem)
         _ = problem
         absent = true
+        i32(0)
     end
     ok = absent
 end missing_value
@@ -174,6 +175,7 @@ bounded_full_and_tombstone_probes: () -> (ok: bool) =
         _ = map.get(full, absent) else (problem)
             _ = problem
             full_missing = true
+            i32(0)
         end
     end
     map.release_map(full, provider)
@@ -194,6 +196,7 @@ bounded_full_and_tombstone_probes: () -> (ok: bool) =
         _ = map.get(dead, absent) else (problem)
             _ = problem
             dead_get_missing = true
+            i32(0)
         end
         map.remove(dead, absent) else (problem)
             _ = problem
