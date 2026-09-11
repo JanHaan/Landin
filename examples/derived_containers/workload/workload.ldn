@@ -449,13 +449,15 @@ end accumulate_collision_entry
 
 reference_entry_enumeration: () -> (ok: bool) =
     ok = false
+    discarded: map.entry(ptr sample_node, ptr sample_node) =
+        (key: addr node_1, item: addr node_2)
     mut provider := heap.host()
     mut value := map.new_map(key: ptr sample_node, item: ptr sample_node)
     mut empty_cursor := map.entries()
     mut empty_seen: bool = false
     _ = map.next_entry(value, empty_cursor) else (problem)
         empty_seen = problem == map.end_of_entries
-        (key: addr node_1, item: addr node_2)
+        discarded
     end
 
     map.insert(value, provider, addr node_1, addr node_2) else (problem)
@@ -497,12 +499,12 @@ reference_entry_enumeration: () -> (ok: bool) =
     mut exhausted_seen: bool = false
     _ = map.next_entry(value, position) else (problem)
         exhausted_seen = problem == map.end_of_entries
-        (key: addr node_1, item: addr node_2)
+        discarded
     end
     mut exhausted_again: bool = false
     _ = map.next_entry(value, position) else (problem)
         exhausted_again = problem == map.end_of_entries
-        (key: addr node_1, item: addr node_2)
+        discarded
     end
     enumerated: bool = empty_seen and exhausted_seen and exhausted_again
                        and count == 2 and key_sum == 4 and value_sum == 6
@@ -512,6 +514,8 @@ end reference_entry_enumeration
 
 map_operations: () -> (ok: bool) =
     ok = false
+    discarded: map.entry(collision_key, i32) =
+        (key: (identity: u64(0), home: u64(0)), item: i32(0))
     mut bytes: [2048]u8 = zeroed
     mut provider := mem.arena_over(addr bytes[0], lenof bytes)
     mut value := map.new_map(key: collision_key, item: i32)
@@ -597,12 +601,12 @@ map_operations: () -> (ok: bool) =
     mut tombstone_exhausted: bool = false
     _ = map.next_entry(compact, tombstone_position) else (problem)
         tombstone_exhausted = problem == map.end_of_entries
-        (key: (identity: u64(0), home: u64(0)), item: i32(0))
+        discarded
     end
     mut tombstone_exhausted_again: bool = false
     _ = map.next_entry(compact, tombstone_position) else (problem)
         tombstone_exhausted_again = problem == map.end_of_entries
-        (key: (identity: u64(0), home: u64(0)), item: i32(0))
+        discarded
     end
     enumerated_through_tombstones: bool = tombstone_count == 3
         and tombstone_key_sum == 15 and tombstone_item_sum == 165
@@ -635,12 +639,12 @@ map_operations: () -> (ok: bool) =
     mut exhausted: bool = false
     _ = map.next_entry(compact, position) else (problem)
         exhausted = problem == map.end_of_entries
-        (key: (identity: u64(0), home: u64(0)), item: i32(0))
+        discarded
     end
     mut exhausted_again: bool = false
     _ = map.next_entry(compact, position) else (problem)
         exhausted_again = problem == map.end_of_entries
-        (key: (identity: u64(0), home: u64(0)), item: i32(0))
+        discarded
     end
     enumerated: bool = exhausted and exhausted_again
                        and enumeration_count == 4
