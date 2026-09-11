@@ -1,0 +1,5 @@
+class: positive
+summary: the unchanged originally refused inline struct declaration is a nominal body under [0670]
+constructs: 0120, 0670, 1795
+program: program.ldn
+targets: linux-x86-64, macos-arm64, synthetic-32

@@ -409,7 +409,8 @@ package body Landin.Syntax.Parser is
                Public_At : Landin.Source.Span) return Node_Id;
             function Parse_Struct_Body
               (Named   : Landin.Source.Names.Name_Id;
-               At_Name : Landin.Source.Span) return Node_Id;
+               At_Name : Landin.Source.Span;
+               Compact : Boolean := False) return Node_Id;
             function Parse_Binding
               (Exported  : Boolean;
                Public_At : Landin.Source.Span) return Node_Id;
@@ -2227,7 +2228,7 @@ package body Landin.Syntax.Parser is
 
                   --  [0670]'s inline form is also a parameter, return and
                   --  payload list.  Without a following arrow it remains a
-                  --  struct and retains the existing refusal and recovery.
+                  --  anonymous struct type and retains its existing refusal.
                   Type_Refused := True;
                   Refuse
                     (Item    => Syn.Struct_Type,
@@ -2698,10 +2699,9 @@ package body Landin.Syntax.Parser is
                            Exported => Exported);
                      end;
 
-                  --  [1795] permits a name, or [0670]'s block form, after
-                  --  either a bare declaration or D135's formal list.  The
-                  --  latter carries syntax and resolution only in this slice;
-                  --  checking decides its later nominal meaning.
+                  --  [1795] permits an alias or either [0670] body after a
+                  --  bare declaration or D135's formal list.  Both bodies
+                  --  carry the same nominal declaration into checking.
                   elsif Peek = Tok.Identifier
                     and then Landin.Source.Names.Spelling
                       (Names, Named_Here) = "layout"
@@ -2711,8 +2711,13 @@ package body Landin.Syntax.Parser is
                         Policy : constant Landin.Layouts.Policy :=
                           Parse_Layout;
                      begin
-                        if Peek = Tok.Kw_Struct then
-                           Aliased_Type := Parse_Struct_Body (Named, At_Name);
+                        if Peek = Tok.Kw_Struct
+                          or else (Peek = Tok.Left_Paren
+                            and then not Starts_Signature)
+                        then
+                           Aliased_Type := Parse_Struct_Body
+                             (Named, At_Name,
+                              Compact => Peek = Tok.Left_Paren);
                            Result.Items (Positive (Aliased_Type)).Layout :=
                              Policy;
                         else
@@ -2727,6 +2732,11 @@ package body Landin.Syntax.Parser is
                      end;
                   elsif Peek = Tok.Kw_Struct then
                      Aliased_Type := Parse_Struct_Body (Named, At_Name);
+                  elsif Peek = Tok.Left_Paren
+                    and then not Starts_Signature
+                  then
+                     Aliased_Type := Parse_Struct_Body
+                       (Named, At_Name, Compact => True);
                   else
                      Aliased_Type := Parse_Type (False, At_Name);
 
@@ -3243,7 +3253,8 @@ package body Landin.Syntax.Parser is
             --  naming rather than a parse that quietly succeeded.
             function Parse_Struct_Body
               (Named   : Landin.Source.Names.Name_Id;
-               At_Name : Landin.Source.Span) return Node_Id
+               At_Name : Landin.Source.Span;
+               Compact : Boolean := False) return Node_Id
             is
                Opened : constant Landin.Source.Span := Here;
                Fields : Slot_Vectors.Vector;
@@ -3511,7 +3522,8 @@ package body Landin.Syntax.Parser is
                         --  ordinary field, so the first case has to prove
                         --  the shape rather than the word alone.
                         Is_Variant_Part :=
-                          Peek = Tok.Identifier
+                          not Compact
+                          and then Peek = Tok.Identifier
                           and then Named_Here = Variant_Id
                           and then
                             (Payload_Case_Begins_Part (Field_Named)
@@ -3552,6 +3564,18 @@ package body Landin.Syntax.Parser is
                         Had_Field := True;
                      end if;
                   end;
+                  if Compact then
+                     exit when Peek /= Tok.Comma;
+                     Advance;
+                     if Peek /= Tok.Identifier then
+                        Complain
+                          (Syn.Name_Expected, Here,
+                           "a field belongs after the comma",
+                           Note => "[0670]: an inline body has named fields",
+                           Related => Opened, Because => "this struct");
+                        exit;
+                     end if;
+                  end if;
                end loop;
 
                if not Had_Field then
@@ -3565,7 +3589,19 @@ package body Landin.Syntax.Parser is
                      Because => "declared here");
                end if;
 
-               if Skip_Past_Closer (Named) then
+               if Compact then
+                  if not Expect
+                    (Wanted => Tok.Right_Paren,
+                     Message => "an inline struct body is closed with `)`",
+                     Note => "[0670]: parentheses enclose the field list",
+                     Related => Opened, Because => "this struct")
+                  then
+                     Resync (List_Anchor);
+                     if Peek = Tok.Right_Paren then
+                        Advance;
+                     end if;
+                  end if;
+               elsif Skip_Past_Closer (Named) then
                   null;
                end if;
 

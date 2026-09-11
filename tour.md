@@ -1014,7 +1014,10 @@ size2: type = (w: u32, h: u32)
 
 ```
 
-The block form may take type and fixed parameters. A fully applied instance
+Both declared forms may take type and fixed parameters. An inline body is
+nominal just like the block: two separately declared, equal field lists are
+different types, while an alias keeps the original identity. `layout` applies
+to either form. A fully applied instance
 substitutes them through scalar, fixed-array, nested ordinary-struct, function
 and existing variant payload fields. The formals remain compile-time names;
 they add no field or hidden runtime argument.
