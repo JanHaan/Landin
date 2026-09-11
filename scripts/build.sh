@@ -6,8 +6,8 @@
 #  GPRbuild's checksum-based minimum recompilation instead; it is feedback,
 #  never a substitute for the ordinary clean debug and release gates.
 #
-#  Two rules from R4.21.  One build per tag and mode at a time: a lock
-#  directory beside the build tree serialises concurrent runs, because two
+#  Two rules from R4.21.  One build per tag and mode at a time: an OS lock
+#  beside the build tree serialises concurrent runs, because two
 #  gprbuilds sharing one object directory corrupted each other's archive.
 #  A manifest is written only after both projects built, and a build tree
 #  without one is a failed or interrupted build and is rebuilt from clean,
@@ -15,6 +15,8 @@
 #  timestamp.
 
 . "$(dirname -- "$0")/env.sh"
+
+landin_build_lock mode "$@"
 
 landin_require gprbuild
 
@@ -32,6 +34,7 @@ landin_manifest() {
          -exec cksum {} + | sort
     cksum "$LANDIN_ADA_DIR"/*.gpr | sort
     cksum "$LANDIN_ROOT/scripts/build.sh" "$LANDIN_ROOT/scripts/env.sh" \
+        "$LANDIN_ROOT/scripts/build_lock.py" \
         | sort
     printf 'mode %s tag %s\n' "$LANDIN_BUILD_MODE" "$LANDIN_BUILD_TAG"
     printf 'gnat %s\n' "$(gnat --version 2>/dev/null | head -n 1)"
@@ -49,8 +52,6 @@ case "$Incremental" in
         ;;
 esac
 
-landin_build_lock "$LANDIN_BUILD_TAG-$LANDIN_BUILD_MODE"
-
 if [ -d "$LANDIN_BUILD_DIR" ] && [ ! -f "$Manifest" ]; then
     echo "landin: the last build did not finish; rebuilding from clean"
     rm -rf "$LANDIN_BUILD_DIR"
@@ -61,13 +62,13 @@ if [ -f "$Manifest" ] && [ "$Current" != "$(cat "$Manifest")" ]; then
         #  The manifest is sorted by its whole checksum row, so changing a
         #  file can move its path.  Inventory equality is set equality:
         #  extract the paths and sort those independently.
-        Old_Paths="$(awk '$NF ~ /[.](ad[bs]|c|h|gpr|sh)$/ {print $NF}' "$Manifest" \
+        Old_Paths="$(awk '$NF ~ /[.](ad[bs]|c|h|gpr|sh|py)$/ {print $NF}' "$Manifest" \
             | sort)"
         New_Paths="$(printf '%s\n' "$Current" \
-            | awk '$NF ~ /[.](ad[bs]|c|h|gpr|sh)$/ {print $NF}' | sort)"
-        Old_Fixed="$(grep -E '^(mode |gnat |gprbuild )|[.](gpr|sh)$' "$Manifest")"
+            | awk '$NF ~ /[.](ad[bs]|c|h|gpr|sh|py)$/ {print $NF}' | sort)"
+        Old_Fixed="$(grep -E '^(mode |gnat |gprbuild )|[.](gpr|sh|py)$' "$Manifest")"
         New_Fixed="$(printf '%s\n' "$Current" \
-            | grep -E '^(mode |gnat |gprbuild )|[.](gpr|sh)$')"
+            | grep -E '^(mode |gnat |gprbuild )|[.](gpr|sh|py)$')"
 
         if [ "$Old_Paths" != "$New_Paths" ] \
            || [ "$Old_Fixed" != "$New_Fixed" ]

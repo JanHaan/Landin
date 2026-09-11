@@ -1,0 +1,92 @@
+unavailable: atom
+pair: type = struct
+    first: i32
+    second: i32
+end pair
+bucket: type = struct
+    items: [2]pair
+end bucket
+forest: type = struct
+    left: bucket
+    right: bucket
+end forest
+consume: (sink value: i32) -> none = end consume
+consume_pair: (sink value: pair) -> none = end consume_pair
+touch: (value: i32) -> none = end touch
+maybe: (stop: bool) -> none ! unavailable =
+    fail unavailable when stop
+end maybe
+restore_parent: (inout value: pair) -> none =
+    consume(value.first)
+    value = (first: 40, second: 2)
+end restore_parent
+restore_failure: (inout value: pair) -> none ! unavailable =
+    undo touch(begin value.first = 40 0 end)
+    consume(value.first)
+    fail unavailable
+end restore_failure
+restore_guarded: (inout value: pair, stop: bool) -> none ! unavailable =
+    defer touch(begin value.first = 40 0 end)
+    consume(value.first)
+    fail unavailable when stop
+end restore_guarded
+restore_tried: (inout value: pair, stop: bool) -> none ! unavailable =
+    defer touch(begin value.first = 40 0 end)
+    consume(value.first)
+    try maybe(stop)
+end restore_tried
+
+restored_result: () -> (value: pair) =
+    value = (first: 40, second: 2)
+    consume(value.first)
+    value = (first: 40, second: 2)
+end restored_result
+
+public main: () -> (code: i32) =
+    code = 1
+    mut value: pair = (first: 40, second: 2)
+    copied: pair = value
+    consume(value.first)
+    return when value.second <> 2 or copied.first <> 40
+    value.first = 40
+    return when value.first <> 40
+    consume_pair(value)
+    value = copied
+    return when value.first + value.second <> 42
+    restore_parent(value)
+    return when value.first + value.second <> 42
+
+    mut xs: [2]pair = [(first: 40, second: 2), (first: 3, second: 4)]
+    consume(xs[0].first)
+    return when xs[0].second <> 2 or xs[1].first <> 3
+    xs[0] = (first: 40, second: 2)
+    return when xs[0].first <> 40
+    consume_pair(xs[0])
+    xs = [(first: 40, second: 2), (first: 3, second: 4)]
+    return when xs[0].first <> 40
+
+    mut tree: forest = zeroed
+    tree.right.items[0].first = 42
+    tree.left.items[1].first = 42
+    consume(tree.left.items[0].first)
+    return when tree.right.items[0].first <> 42
+    return when tree.left.items[1].first <> 42
+    tree.left = zeroed
+    return when tree.left.items[0].first <> 0
+    consume(tree.left.items[0].first)
+    tree = zeroed
+    return when tree.left.items[0].first <> 0
+
+    restore_failure(value) else touch(0)
+    return when value.first <> 40
+    restore_guarded(value, true) else touch(0)
+    return when value.first <> 40
+    restore_guarded(value, false) else touch(0)
+    return when value.first <> 40
+    restore_tried(value, true) else touch(0)
+    return when value.first <> 40
+    restore_tried(value, false) else touch(0)
+    result_copy: pair = restored_result()
+    return when result_copy.first + result_copy.second <> 42
+    code = value.first + value.second
+end main

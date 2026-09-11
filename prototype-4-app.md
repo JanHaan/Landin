@@ -47,6 +47,10 @@ caller file tables, output/error buffers and injected argument descriptors.
 Its nonempty reads distinguish EOF from zero-progress failure; partial writes
 retain their completed prefix, and a close error still consumes valid open
 state. Source-derived output and argument views retain local origin checks.
+If a handle is consumed out of an `inout` reader, [0910] requires replacement
+even when close fails and its caller recovers; consuming the whole reader by
+`sink` leaves no such returned-storage obligation. Applicable cleanup can
+restore a field before that exit check.
 Descriptors, nested backing, nonoverlap and copied-handle validity remain
 manual obligations under D153. Small complete library clients exercise these
 contracts. The complete R4.80 derivative is `examples/derived_hosted`, whose

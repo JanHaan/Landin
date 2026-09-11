@@ -1978,6 +1978,17 @@ package body Landin.Tests.Driver_Suite is
            ("public main: () -> (code: i32) = code = [] end main",
             "L0301", 1, Executable);
          Check
+           ("consume: (sink value: i32) -> none = end consume" & LF
+            & "f: () -> (result: i32) = mut xs: [2]i32 = [1, 2] "
+            & "consume(xs[0]) result = xs[0] end f",
+            "L0302", 1, Executable);
+         Check
+           ("unavailable: atom" & LF
+            & "consume: (sink value: i32) -> none = end consume" & LF
+            & "f: (inout value: i32) -> none ! unavailable = "
+            & "consume(value) fail unavailable end f",
+            "L0302", 1, Executable);
+         Check
            ("public main: () -> (code: i32) = code = 1 ) end main",
             "L0110", 1, Executable);
          Check
@@ -1992,8 +2003,104 @@ package body Landin.Tests.Driver_Suite is
       end loop;
    end R491_Refusals_Have_No_Effects;
 
+   procedure R491_Artifacts_Preserve_Inputs
+     (Item : in out Landin.Testing.Context);
+
+   procedure R491_Artifacts_Preserve_Inputs
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check
+        (Output, Left, Right : String; Executable : Boolean := False;
+         Debug : Boolean := False; Refused : Boolean := True);
+
+      procedure Check
+        (Output, Left, Right : String; Executable : Boolean := False;
+         Debug : Boolean := False; Refused : Boolean := True)
+      is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : Landin.Platform.Path_List;
+      begin
+         Host.Add_Directory ("entry");
+         Host.Add_Directory ("root");
+         Host.Add_Directory ("root/lib");
+         Host.Add_File
+           ("entry/main.ldn", "import lib" & LF
+            & "public main: () -> (code: i32) = "
+            & "code = lib.answer() end main");
+         Host.Add_File
+           ("root/lib/value.ldn",
+            "public answer: () -> (value: i32) = 42 end answer");
+         if Left /= "" then
+            Host.Add_Alias (Left, Right);
+         end if;
+         if Refused then
+            Host.Refuse_Writes;
+            Tools.Raise_On_Run;
+         end if;
+         Args.Append ("entry");
+         Args.Append ("--root=root");
+         Args.Append ("--target=linux-x86-64");
+         Args.Append (if Executable then "--emit=exe" else "--emit=asm");
+         if Debug then
+            Args.Append ("--debug=full");
+         end if;
+         Args.Append ("-o");
+         Args.Append (Output);
+         declare
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Driver.Execute (Args, Host, Tools);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Result.Status,
+               (if Refused then Landin.Driver.Status_Misuse
+                else Landin.Driver.Status_Success),
+               "artifact identity determines whether emission is allowed");
+            if Refused then
+               Landin.Testing.Check
+                 (Item, Contains (Unbounded.To_String (Result.Report),
+                                  "collide"),
+                  "the destination collision is diagnosed");
+               Landin.Testing.Check_Equal
+                 (Item, Host.Write_Count, 0, "no artifact write is attempted");
+               Landin.Testing.Check_Equal
+                 (Item, Tools.Run_Count, 0, "no tool is invoked");
+            else
+               Landin.Testing.Check
+                 (Item, Host.Write_Count > 0,
+                  "distinct active destinations produce artifacts");
+            end if;
+         end;
+      end Check;
+   begin
+      for Executable in Boolean loop
+         Check ("entry/main.ldn", "", "", Executable);
+         Check ("root/lib/value.ldn", "", "", Executable);
+         Check ("out", "out", "entry/main.ldn", Executable);
+         Check ("out", "out", "root/lib/value.ldn", Executable);
+         Check ("out", "out.sources.json", "entry/main.ldn",
+                Executable, Debug => True);
+         Check ("out", "out.sources.json", "root/lib/value.ldn",
+                Executable, Debug => True);
+         Check ("out", "out.sources.json", "out",
+                Executable, Debug => True);
+         Check ("out", "out.sources.json", "entry/main.ldn",
+                Executable, Refused => False);
+         Check ("out", "", "", Executable,
+                Debug => True, Refused => False);
+      end loop;
+      Check ("out", "out.s", "entry/main.ldn", Executable => True);
+      Check ("out", "out.s", "root/lib/value.ldn", Executable => True);
+      Check ("out", "out.s", "out", Executable => True);
+      Check ("out", "out.s", "out.sources.json",
+             Executable => True, Debug => True);
+   end R491_Artifacts_Preserve_Inputs;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "driver", "R4.91 artifacts preserve inputs",
+         R491_Artifacts_Preserve_Inputs'Access);
       Landin.Testing.Register
         (Into, "driver", "R4.91 refusals have no effects",
          R491_Refusals_Have_No_Effects'Access);

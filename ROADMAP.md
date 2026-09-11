@@ -5562,6 +5562,22 @@ release builds. Runtime cases cover independent array copies, nested/module
 fields, atom/callback/pointer elements and empty-slice contexts.
 Driver cases check that refused sources attempt no writes or host-tool calls.
 
+The second batch now also preserves source files against output collisions,
+validates build modes and holds build locks through compiler use and cleanup,
+and checks consumed storage across containing reads, replacement assignments
+and every observable exit. Origin escapes and live variant payload aliases
+remain the next repairs in this batch.
+
+Development evidence for these repairs: Linux debug and release pass the driver
+(46 cases), checking (85), lowering (93), complete recorded-diagnostic case
+(971 checks), and all three new consume fixtures. The runtime restoration
+fixture passes four optimization profiles in each mode. The parser corpus also
+passes both modes (23 cases, 5403 checks), and the earlier output/report checks
+pass both modes. On macOS, the driver and 72 script/roadmap tests pass with the
+one existing Linux-only runner test skipped; all 13 build-lock/inventory tests
+pass on Linux. Full `check.py` and rendered-word preservation checks pass.
+This is development evidence; exact-revision acceptance remains outstanding.
+
 #### Older review reconciliation
 
 Paseo coordinator `27030a0b-54d1-4423-ab3b-82dfe079ece4` commissioned the
@@ -5575,7 +5591,7 @@ session, destructive output-collision experiment or resource-exhaustion sweep.
 
 | Older finding | Current disposition and evidence | Repair order |
 | --- | --- | --- |
-| A1: artifact/source collisions | Still present in source: the driver's preflight is conditional on a build-report request and compares only that report. Apply the existing filesystem identity seam to sources and all actual outputs, including sidecars, before any write. | Second batch |
+| A1: artifact/source collisions | Repaired: every actual output is compared with all discovered sources and other outputs through the filesystem identity seam before any write or tool call. Fake-host regressions cover explicit/imported sources, aliases, assembly/executable/map collisions and inactive-map controls. Existing build-report reservations remain intact. | Second batch implementation |
 | C1: diagnostic label contracts | All five sites still violated the catalogue at the baseline; the four sibling minimal cases still exited 70. Initial implementation repairs imports, fixed conditionals, conformances, unconditional completion and continue-with-value. | First batch |
 | A2, C2, M3: final values and silent recovery | Still present at the baseline. The grammar derives statement-prefix/final-value bodies, including `r = zeroed(1)` as an assignment followed by a parenthesized value. These must be parsed correctly, rather than recorded as negative syntax fixtures. Recovery now diagnoses unexpected tokens, but final-body value semantics remain open: a final none-returning call must stay a statement after a named result has been assigned. This requires coordinated checker, flow, origin and lowering changes. | Recovery in first batch; final values in third batch |
 | A3: type-shaped construction arguments | Still reproduced: `box(value: ptr u8)` exits 70. Reject missing value projections in struct and variant contexts before accessing their syntax, with module/local controls. | Third batch |
@@ -5584,7 +5600,7 @@ session, destructive output-collision experiment or resource-exhaustion sweep.
 | C5: dense inference matrices | Still present in source: effects, required sets and call edges are dense stack arrays. The old exhaustion threshold was not rerun. Move program-sized storage off the host stack and measure scaling without weakening inference completion. | Third batch |
 | C6: nested-call depth | Still present in source: the general call parser lacks its siblings' depth guard. Add balanced recovery and bounded depth regressions in both modes. No new overflow run was made. | Third batch |
 | M1: conformance lookahead | Still reproduced: `v := 1` followed by `is := 2` is falsely parsed as a conformance. Stop at the binding initializer delimiter and retain legitimate conformance controls. | Third batch |
-| M2: consumed subplaces | Still reproduced for a bare array-element read after sink. The aggregate ancestor case and failure-edge restoration need the same path audit. Preserve exact-path reinitialization and ordinary live reads. | Second batch |
+| M2: consumed subplaces | Repaired bare element, enclosing-aggregate and descendant reads after sink. Field paths above and below an array index retain separate identities; computed reads account for possibly consumed elements. Assigning an ancestor restores its consumed descendants without reviving a consumed ancestor through a partial write. Ten negative cases and runtime sibling/copy/restoration controls pin the result. | Second batch implementation |
 | M4, M16: tour and prototype drift | Still present in sampled live text: uppercase formals/labels, `mem.new_slice`, references to the retired worklist and an unsupported file-handle union. R4.80 changed allocator wording, so re-read complete cross-prototype contracts before editing. Historical finding sections remain untouched. | Fourth batch |
 | M5: font history | Local ancestry and tree inventory confirm the font-addition commit remains reachable from `66927e93`. This is retained repository evidence, not a new interpretation of the license. Any public-history remedy requires a concrete maintainer decision and coordinated delivery; no history is rewritten here. | Maintainer disposition |
 | M6: historical closure anchors | Historical rewrite provenance remains distinct from exact current acceptance. Reconcile the affected old anchors and phase-gate evidence without rewriting old acceptance claims as current ones. | Fourth batch |
@@ -5594,7 +5610,7 @@ session, destructive output-collision experiment or resource-exhaustion sweep.
 | M10: diagnostic rendering growth | The whole-line-per-label implementation remains; the old stress measurement was not rerun. Bound excerpts while retaining useful primary/secondary spans. | Third batch |
 | A4, M11: native failures | Capture-read failure still becomes empty output; native writes still omit device failures from their ordinary outcome. Add explicit failure propagation and cleanup cases through host seams. Layout exception conflation remains a separate audit. | Third batch |
 | M12: stage organization | Large nested stage procedures and duplicated construction helpers remain. Refactor only with established behavioural controls; size alone is not a correctness finding. | Fourth batch |
-| M13: build mode and locks | Still present in source: mode is interpolated without validation; test execution outlives the build lock; clean-all has no matching lock. Validate modes before path construction and define one lock lifetime for build/test/clean. No unsafe mode was executed. | Second batch |
+| M13: build mode and locks | Repaired: mode validation precedes path construction. Inherited OS locks cover build plus test execution; cleanup takes both mode locks or an exclusive all-tag lock. Permanent lock files survive cleanup, with no PID reclamation race. Disposable-tree regressions cover contention, nested builds, concurrent modes/tags, cleanup, stale context and termination. Rejected modes are tested only by loading the environment. | Second batch implementation |
 | M14: harness contracts | Runtime stream selection is still ignored, suite inventory remains incomplete, and coarse corpus floors remain. Replace these with exact discovery/contract checks without manufacturing fixed historical corpus counts. | Fourth batch |
 | M15: profile selection | Name-based selection remains. Some workload coverage expanded, but renaming a fixture still changes specialization coverage. Introduce explicit, validated profile policy. | Fourth batch |
 | A8, M18: publication and CI | The old automatic compiler manifest was replaced by native acceptance. Current publication verifies exact accepted canonical main, so the former unguarded-publication description is obsolete. Serialization during upload and private-font/highlighter/guide coverage still need checks against the new policy. No stale publication was observed. | Fourth batch |
@@ -5609,7 +5625,8 @@ being silently promoted to bugs or discarded:
 | Older minor identifiers | Disposition |
 | --- | --- |
 | m1--m7 | Harness/oracle quality concerns remain: precise reports, trap intent, fresh artifacts, scanner wording, fake filesystem behaviour and input-generation coverage. Audit under the fourth batch. No new mutation campaign is authorized. |
-| m8--m11 | Statement-loop values, intermediate constant overflow, sink restoration on failure and explicit atom widening require current rule/case comparison. m10 joins the second batch's consumed-place audit; the others remain bounded semantic questions, not confirmed new language decisions. |
+| m8--m9, m11 | Statement-loop values, intermediate constant overflow and explicit atom widening remain bounded semantic questions requiring current rule/case comparison, not confirmed new language decisions. |
+| m10 | Confirmed against [1910]'s every-return-edge obligation and repaired: explicit, guarded and propagated failure check consumed `inout` places after applicable cleanup. Expression-body completion now checks the same obligation. A consumed named result is also refused on successful return. Five refusal cases and successful `defer`/`undo` and result restoration controls pin these exit obligations. |
 | m12--m13, m22 | Lexical grammar, text validity and reference wording need a normative cross-check. Do not infer semantic changes from the heuristic recognizer alone. |
 | m14--m17, m21, m23 | Sampled dead helpers, ownership documentation, historical register names/counts, fixture summaries and source attachment assumptions need maintenance or invariant checks. Some surrounding prose changed after the old review. |
 | m19 | The automatic Nix manifest was retired, so that skip-path claim is obsolete. Container pin duplication and shell-pipeline status remain source-level observations. |

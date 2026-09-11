@@ -750,6 +750,10 @@ package body Landin.Driver is
             Map_Path : constant String := Source_Map_Beside (Product_Path);
             Report_Path : constant String :=
               Unbounded.To_String (Build_Report_Path);
+            Emit_Map : constant Boolean := Full_Debug
+              or else Landin.IR.Caller_Source_Count
+                (Landin.Stages.Code (Context).all) > 0;
+            Destinations : Landin.Platform.Path_List;
 
             function Conflicts_With (Path : String) return Boolean is
               (Host.Paths_Overlap (Report_Path, Path));
@@ -801,6 +805,44 @@ package body Landin.Driver is
                   end;
                end loop;
             end if;
+
+            Destinations.Append (Assembly_Path);
+            if Emit = Emit_Executable then
+               Destinations.Append (Product_Path);
+            end if;
+            if Emit_Map then
+               Destinations.Append (Map_Path);
+            end if;
+            for Index in Destinations.First_Index .. Destinations.Last_Index
+            loop
+               for Earlier in Destinations.First_Index .. Index - 1 loop
+                  if Host.Paths_Overlap
+                    (Destinations (Index), Destinations (Earlier))
+                  then
+                     Bad_Use := True;
+                     Note_Failure
+                       (Code_Unknown_Option,
+                        "artifacts collide: " & Destinations (Index)
+                        & " and " & Destinations (Earlier));
+                     return;
+                  end if;
+               end loop;
+               for Source in 1 .. Landin.Stages.Source_Count (Context) loop
+                  if Host.Paths_Overlap
+                    (Destinations (Index), Landin.Source.Name
+                       (Landin.Stages.Source
+                          (Context,
+                           Landin.Stages.Nth_Source (Context, Source))))
+                  then
+                     Bad_Use := True;
+                     Note_Failure
+                       (Code_Unknown_Option,
+                        "artifact collides with source: "
+                        & Destinations (Index));
+                     return;
+                  end if;
+               end loop;
+            end loop;
 
             --  A target nothing emits for cannot be asked for a file.
             --  `synthetic-32` exists to keep layout arithmetic honest on a
@@ -951,9 +993,7 @@ package body Landin.Driver is
                      Landin.Stages.Modules (Context).all,
                      Landin.Stages.Identities (Context).all),
                   Debug => (if Full_Debug then Debug'Access else null));
-               if Full_Debug or else Landin.IR.Caller_Source_Count
-                 (Landin.Stages.Code (Context).all) > 0
-               then
+               if Emit_Map then
                   declare
                      Map : constant Landin.Source_Maps.Artifact :=
                        Landin.Source_Maps.Create

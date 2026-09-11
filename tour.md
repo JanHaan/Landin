@@ -1677,6 +1677,8 @@ A place that was sunk is dead. Reading it before it is
 assigned again is an error, and that is what closes the
 window between releasing storage and repointing the field
 — the window a temporary binding would have left open.
+Reading the enclosing aggregate also reads that field. Assigning a replacement
+aggregate restores its fields; unrelated fields and array elements stay live.
 Say plainly what this is and is not. It is a
 use-after-consume check on one place. It is not ownership:
 the value is copyable, so a copy made before the sink is
@@ -1687,7 +1689,9 @@ trigger in ROADMAP.md's inherited review register.
 A place sunk out of an inout parameter must be assigned
 again before the function returns, or the caller would get
 its struct back with a dead field and nobody tracking it.
-That is [0930]'s rule for named returns, applied to fields.
+This includes a failure the caller recovers from. Applicable cleanup runs
+before the check, so a `defer` or `undo` may restore the field. A failure needs
+no successful named result under [0930], but it still hands back `inout` storage.
 
 ```landin
 release: (T: type, A: type is allocator, inout l: list(T), inout a: A)

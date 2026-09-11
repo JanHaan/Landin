@@ -1,0 +1,9 @@
+class: negative
+summary: consumed inout places and named results must be restored on their observable exit edges
+program: main.ldn
+codes: L0302, L0302, L0302, L0302, L0302
+constructs: 0900, 0910, 1060, 1110, 1910
+targets: linux-x86-64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/r491-sunk-inout-exit-edges/main.ldn
+status: 1

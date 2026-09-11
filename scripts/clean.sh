@@ -9,15 +9,11 @@
 . "$(dirname -- "$0")/env.sh"
 
 if [ "${1:-}" = "--all" ]; then
+    landin_build_lock all "$@"
     rm -rf "$LANDIN_ADA_DIR/build"
     echo "removed: compiler/ada/build (every host)"
 else
-    #  Both modes of this tag go, so both locks are taken first: a build
-    #  in flight in either would otherwise lose its objects underneath it.
-    landin_build_lock "$LANDIN_BUILD_TAG-debug"
-    Debug_Lock="$Lock_Dir"
-    landin_build_lock "$LANDIN_BUILD_TAG-release"
-    trap 'rm -rf "$Debug_Lock" "$Lock_Dir"' EXIT
+    landin_build_lock tag "$@"
     rm -rf "$LANDIN_ADA_DIR/build/$LANDIN_BUILD_TAG"
     echo "removed: compiler/ada/build/$LANDIN_BUILD_TAG"
 fi
