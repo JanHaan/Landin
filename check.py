@@ -4868,29 +4868,49 @@ def check_source_locations(full_run):
     return out
 
 
+def quality_workload_problems(quality):
+    """Keep every complete hosted prototype in the repeated-build schedule."""
+    path = "compiler/tests/quality/check.py"
+    expected = (("none", "off"), ("size", "off"), ("size", "auto"),
+                ("speed", "auto"), ("none", "all"), ("speed", "all"))
+    try:
+        for name in ("derived-parser", "derived-containers", "derived-hosted-memory"):
+            if (name not in quality["FIXTURE_NAMES"] or
+                    quality["profiles_for"](name) != expected):
+                return [(path, 1, "complete P2/P3/P4 quality workloads must "
+                         "each repeat all six profiles")]
+    except (KeyError, TypeError, ValueError) as exc:
+        return [(path, 1, "complete quality workload schedule: " + str(exc))]
+    return []
+
+
 def check_optimization_contract(full_run):
     """Cheap policy wiring and object-reader checks; never compiler evidence."""
     if not full_run:
         return []
     import runpy
-    paths = ["compiler/tests/quality/check.py",
+    quality_path = "compiler/tests/quality/check.py"
+    tests_path = "compiler/tests/quality/test_check.py"
+    options_path = "compiler/ada/src/base/landin-optimization.ads"
+    harness_path = "compiler/ada/tests/src/landin-tests-fixture_execution_suite.adb"
+    paths = [quality_path, tests_path,
              "compiler/tests/quality/scalars.ldn",
              "compiler/tests/quality/arrays.ldn.in",
              "compiler/tests/quality/layout.ldn",
              "scripts/quality.sh",
-             "compiler/ada/src/base/landin-optimization.ads",
-             "compiler/ada/tests/src/landin-tests-fixture_execution_suite.adb",
+             options_path, harness_path,
              "compiler/tests/quality/specialization.ldn",
              "compiler/tests/quality/folding.ldn"]
     missing = absent(paths)
     if missing:
         return missing
     out = []
-    quality = runpy.run_path(paths[0], run_name="quality_contract_check")
+    quality = runpy.run_path(quality_path, run_name="quality_contract_check")
+    out += quality_workload_problems(quality)
     expected = (("none", "off"), ("size", "off"),
                 ("size", "auto"), ("speed", "auto"))
     if quality["PROFILES"] != expected:
-        out.append((paths[0], 1, "mandatory object profiles changed"))
+        out.append((quality_path, 1, "mandatory object profiles changed"))
     sample = ("0000000000000000 <probe>:\n"
               "   0:\tmov    -0x8(%rbp),%rax\n"
               "   4:\tlea    -0x8(%rbp),%rcx\n"
@@ -4899,15 +4919,20 @@ def check_optimization_contract(full_run):
               "0000000000000010 <other>:\n  10:\tret\n")
     body = quality["instructions"](sample, "probe")
     if len(body) != 4 or quality["stack_traffic"](body) != 2:
-        out.append((paths[0], 1, "object reader confuses addresses and memory"))
+        out.append((quality_path, 1, "object reader confuses addresses and memory"))
     try:
         quality["instructions"](sample, "missing")
-        out.append((paths[0], 1, "missing object symbol silently passes"))
+        out.append((quality_path, 1, "missing object symbol silently passes"))
     except ValueError:
         pass
-    # Exercise output-oracle policy without spawning any process or compiler.
     import subprocess
     from unittest.mock import patch
+    tests = subprocess.run([sys.executable, tests_path], capture_output=True,
+                           text=True, timeout=30)
+    if tests.returncode:
+        out.append((tests_path, 1, "quality oracle regressions: " +
+                    tests.stdout + tests.stderr))
+    # Exercise output-oracle policy without spawning any process or compiler.
     for stdout, stderr in (("", ""), ("unexpected", ""), ("", "unexpected")):
         result = subprocess.CompletedProcess(["quality-program"], 0,
                                              stdout, stderr)
@@ -4915,10 +4940,10 @@ def check_optimization_contract(full_run):
             try:
                 quality["run"](["quality-program"], empty_output=True)
                 if stdout or stderr:
-                    out.append((paths[0], 1, "quality output oracle is weakened"))
+                    out.append((quality_path, 1, "quality output oracle is weakened"))
             except ValueError:
                 if not stdout and not stderr:
-                    out.append((paths[0], 1, "quality rejects empty output"))
+                    out.append((quality_path, 1, "quality rejects empty output"))
     identity = "compiler/ada/src/platform/landin_file_identity.c"
     if not os.path.isfile(identity):
         out.append((identity, 1, "native same-file identity adapter is missing"))
@@ -4934,16 +4959,16 @@ def check_optimization_contract(full_run):
     with patch("subprocess.run", return_value=result):
         try:
             quality["run"](["quality-program"])
-            out.append((paths[0], 1, "failed quality command silently passes"))
+            out.append((quality_path, 1, "failed quality command silently passes"))
         except ValueError as error:
             if "failed" not in str(error):
-                out.append((paths[0], 1, "quality command loses its diagnostic"))
-    options = io.open(paths[5], encoding="utf-8").read()
+                out.append((quality_path, 1, "quality command loses its diagnostic"))
+    options = io.open(options_path, encoding="utf-8").read()
     for name, pair in (("Default_Options", "Size, Auto"),
                        ("Reference_Options", "None, Off")):
         if not re.search(name + r"\s*:.*?:=\s*\(" + pair + r"\)", options):
-            out.append((paths[5], 1, name + " differs from D211"))
-    harness = io.open(paths[6], encoding="utf-8").read().replace(
+            out.append((options_path, 1, name + " differs from D211"))
+    harness = io.open(harness_path, encoding="utf-8").read().replace(
         "Landin.Optimization.", "")
     for objective, specialization in (("None", "Off"), ("Size", "Off"),
                                       ("Size", "Auto"), ("Speed", "Auto"),
@@ -4951,7 +4976,7 @@ def check_optimization_contract(full_run):
                                       ("Speed", "All_Eligible")):
         if not re.search(r"\(" + objective + r",\s*" + specialization
                          + r"\)", harness):
-            out.append((paths[6], 1, "runtime profile missing: "
+            out.append((harness_path, 1, "runtime profile missing: "
                         + objective + "/" + specialization))
     for runner in ("compiler/tests/test_native_report_identity.py",
                    "scripts/tests/test_build_inventory.py"):
@@ -4964,12 +4989,39 @@ def check_optimization_contract(full_run):
     return out
 
 
+def debugger_workload_problems(debugger):
+    """Require the complete P2/P3/P4 debugger schedule without invoking GDB."""
+    path = "compiler/tests/debugging/check.py"
+    expected = [(name, profile) for name in ("parser", "containers", "hosted")
+                for profile in (("none-off", "none", "off"),
+                                ("size-auto", "size", "auto"),
+                                ("size-all", "size", "all"))]
+    calls = []
+
+    def record(name, profile):
+        calls.append((name, profile))
+        return {}
+
+    try:
+        debugger["measure_workloads"](record)
+    except (KeyError, TypeError, ValueError) as exc:
+        return [(path, 1, "complete debugger workload schedule: " + str(exc))]
+    if calls != expected:
+        return [(path, 1, "complete P2/P3/P4 debugger workloads must each run "
+                 "none/off, size/auto and size/all")]
+    return []
+
+
 def check_debugger_contract(full_run):
-    """Keep source-debugger acceptance wired to both native compiler modes."""
+    """Keep complete workloads wired to both native compiler modes."""
     if not full_run:
         return []
     paths = ["scripts/debug.sh", "compiler/tests/debugging/check.py"]
     out = absent(paths)
+    if not out:
+        import runpy
+        debugger = runpy.run_path(paths[1], run_name="debugger_contract_check")
+        out += debugger_workload_problems(debugger)
     # check_native_ci independently holds both native debugger modes to the
     # canonical policy, including the clean builds and required tool identity.
     return out

@@ -3765,7 +3765,8 @@ legacy scalar/canonical nominal part compatibility and rejects scalar parts
 paired with wider descriptors or variant children, conflicting explicit scalar
 metadata and mismatched descriptor extents. Nested fixed-array struct fields
 retain the existing L0304 boundary pinned by
-`negative/parameterized-struct-unused-shape` and the template-order controls;
+the original `parameterized-struct-unused-shape` and template-order controls
+(now positive under R4.90/D216);
 their recursive field representation and range composition belong to R4.70.
 R4.20 retains the evidenced direct-array and typed-copy source forms.
 
@@ -5135,10 +5136,11 @@ supported element shape through checking and neutral-IR shape construction.
 R4.70's checking and lowering cases pin concrete nested-array field ranges,
 including deep children, zero-length children, nominal and reference-bearing
 elements, and read-only/mutable views. `runtime/r470-array-field-range` observes
-the concrete composition. The older `parameterized-struct-unused-shape` and
-template-order negatives remain L0304: they contain unsupported atom-set array
-elements, not the concrete nested-array shapes repaired here. They have not
-been weakened or retired.
+the concrete composition. At R4.70 closure, the older
+`parameterized-struct-unused-shape` and template-order negatives remained L0304:
+they contained atom-set array elements outside that slice. R4.90/D216 now
+accepts those original source bytes as positive fixtures and executes atom
+storage separately; the R4.70 nested-array oracle is unchanged.
 
 Guarded payload lowering did need repair. An array match alias followed by
 child selection must carry both the selected payload step and the full child
@@ -5355,7 +5357,7 @@ runtime, processes hosted I/O and executes on Linux x86-64.
 
 ### R4.90 — Close Linux hosted parity
 
-Status: active
+Status: complete
 Depends on: R4.60, R4.70, R4.80
 
 Run the full applicable construct, conformance, ABI, diagnostics, determinism,
@@ -5382,7 +5384,24 @@ D216 closes the same identity gap in ordinary and generic atom fields, variant
 payloads and fixed arrays. Exact descriptors survive storage, slice views,
 static images and generic keys; indirect writes admit member subsets while
 loads retain the full destination set. Nonmember, numeric, arithmetic,
-unequal-copy, zero-image and unequal-fill refusals pin the other side.
+unequal-copy, zero-image and unequal-fill refusals pin the other side. The three
+older template-order/unused-shape declarations move unchanged to positive
+fixtures. The dependent-errors source also retains its original bytes, but
+remains negative with L0301 at both omitted module initializers: its shapes
+are now admitted, while an implicit zero atom is not. Independent review found
+and corrected the missing atom check in recursive aggregate zeroability and
+the nominal-only module-array check; complete element descriptors now govern
+omitted images, including callback and reference elements.
+Independent review's distinct probes additionally pin Boolean and pointer image
+extraction, reject a type declaration used as a value, and preserve the existing
+[1940]/R6.60 module storage-address refusal. Supported null, numeric-pointer and
+C-string images execute without changing their carrier or relocation rules.
+The complete container migration exposed fixed generic formals being sent to
+binding-initializer inference during conversion discovery; fixed actuals now
+retain their existing expression typing through that discovery path. The
+regression uses unequal views, match bodies, nested forwarding and distinct
+construction/extraction. `core/tree.node_id` and `core/io.file` now use the
+prototype's actual distinct identities, with the original workload oracles.
 
 [1270]'s conformance-input key was previously attributed only to a collision
 refusal. Positive unequal-key collection and alias-normalized collision controls
@@ -5392,6 +5411,24 @@ atoms and local shadowing. Generic cleanup/recovery checks late argument
 execution under both `defer` and `undo`. The parser derivation's recursion is
 recorded as a chosen implementation, not as evidence that loops remain absent.
 The handoff's unsupported semicolon claim is corrected to the actual grammar.
+
+The debugging audit found that the complete parser executed in the runtime
+suite but lacked a workload in the GDB runner. It now joins the complete
+containers and hosted application in all three workload profiles: none/off,
+size/auto and size/all. Its original input, ordered diagnostic output and
+status-42 oracle apply to ordinary, debugger and stripped execution. Source
+stops inspect initialized parser state, recursive frames, recovery, nesting
+depth and the final success/failure flags. The common source inventory, build
+identity and line-table checks cover its reached library closure. Transcript
+refusal controls reject missing or incorrect state, frames, lines and exits;
+`check.py` independently requires every complete prototype and profile in the
+runner's workload schedule.
+The same audit found that repeated assembly and build-report comparisons covered
+the complete containers and hosted application but not the complete parser.
+The parser now runs all six quality profiles with its original input and output
+oracle, retaining the exact repeated-build comparison and measured-object
+execution. Its object sizes remain observations, with no new optimization
+budget.
 
 The audit also distinguishes scoped obligations from future work. D188's range
 compositions, D189's multi-atom pointer unions and D190's u128/i128/f16 remain
@@ -5458,10 +5495,36 @@ them. This table does not withdraw any construct.
 | `[1400]` | none | `negative/local-array-literal-inferred-element-mismatch` | Heterogeneous implicit boxing is deliberately absent; mismatched element types are rejected. Ordinary explicit `any` dispatch has separate executed rows. |
 | `[1860]` | none | `negative/name-declared-nowhere`, `negative/condition-declaration-out-of-scope` | Every name must resolve in its scope; the observable failure is a compiler diagnostic. |
 
+Closure records the complete applicable implementation and independent review
+in this candidate. At candidate preparation, focused native fixtures, the full
+parser and verifier suites, recorded positive IR, object-quality profiles and
+the complete parser's three native GDB profiles had passed. The complete derived parser, containers and
+hosted application retain their behavioral oracles, source identities, build
+report/assembly determinism and debugging profiles. Baseline code generation
+retains its existing numeric/object bounds; no competitive optimization claim
+is made.
+
+Full eight-job native acceptance, verified durable export, administrative
+approval, canonical promotion and guarded publication verification were still
+pending delivery steps at candidate preparation. The mandatory GDB jobs still
+have to validate the integrated P3/P4 debugger workloads in both compiler modes;
+the focused parser sessions do not substitute for them. Acceptance of this exact
+containing revision is bound externally by its annotated
+`ci/accepted/FULL_COMMIT` tag and durable native run bundle. No later source
+bookkeeping edit supplies that evidence. Filtered development checks cannot
+approve the revision, and Pages must pass the existing approval guard.
+
 Exit evidence: all applicable matrices are complete; equivalent builds produce
-identical assembly and behavior under the pinned toolchain.
+identical assembly and behavior under the pinned toolchain. The bound acceptance
+record, approval tag and guarded publication records establish delivery.
 
 ### R4 gate
+
+Status: complete
+
+The implementation and coverage gate is closed by R4.90. Its exact revision's
+full native acceptance and delivery evidence are bound as described above.
+R5.10 and R5.20 remain planned; closing this phase activates neither.
 
 - Every applicable hosted construct under the current normative specification
   is implemented on Linux x86-64.

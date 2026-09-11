@@ -459,6 +459,14 @@ aggregate images carry verified routine relocations, and a containing aggregate
 has no implicit zero image when its active zero shape contains a function.
 Atom declarations and
 unions are structural declaration-identity sets carried as ordinary values.
+D216 retains that metadata through generic keys, array elements, ordinary and
+variant fields, static images, slice views and payload aliases. The IR verifier
+requires exact sets on loads and member subsets on stores; an atom carrier
+never supplies numeric type identity. D213 distinct identities use opaque
+nominal descriptors with one unnameable representation child, preserving target
+layout and origins without exposing source fields or inherited operations.
+Conversion discovery preserves fixed-formal expression typing and contextual
+literal inference instead of treating either as an ordinary initialized binding.
 R4.90 closes inferred errors and generic discovery together (D215). Recovery
 subtrees are separate syntax members, and deferred recovery/type facts belong to
 the active routine-instance view. Only complete error components publish atom

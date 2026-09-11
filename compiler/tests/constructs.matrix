@@ -78,7 +78,7 @@
 0620   tour        -                                  DEFERRED to a later version, kept here as a design record
 0630   tour        accepted emitted executed refused  Atoms: one declaration, one value, its own type
 0640   tour        accepted emitted executed refused  An enumeration is a union of atoms
-0650   tour        refused refused-by-name            Distinct type
+0650   tour        accepted emitted executed refused  Distinct type
 0660   tour        accepted emitted executed refused refused-by-name Range subtype: checked at assignment and conversion
 0670   tour        accepted emitted executed refused refused-by-name Struct, block form and inline form
 0680   tour        accepted emitted executed refused refused-by-name Struct with a variant part
@@ -193,7 +193,7 @@
 1770   spec        accepted emitted executed refused  The kernel's literals include characters, floats and text
 1780   spec        accepted emitted executed refused  A comment ends a token, and its opener says which kind it is
 1790   spec        accepted emitted executed refused  A binding names one thing, and says how much it may change
-1795   spec        accepted emitted executed refused  A type declaration names a type, and names nothing new
+1795   spec        accepted emitted executed refused  Type aliases and declared identities
 1800   spec        accepted emitted executed refused  A function is a value with a body, and its returns are named
 1810   spec        accepted emitted executed refused  Statements do one thing each, and only exits carry 'when'
 1820   spec        accepted emitted executed refused  Precedence, tightest first, and comparison does not chain
