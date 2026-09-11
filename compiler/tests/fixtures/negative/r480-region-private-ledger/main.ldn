@@ -1,0 +1,9 @@
+import core/heap
+import core/region
+
+public main: () -> (code: i32) =
+    mut provider := heap.host()
+    value := region.new_region(addr provider)
+    _ = value.allocations
+    code = 0
+end main

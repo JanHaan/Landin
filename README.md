@@ -38,6 +38,7 @@ library is still to come.**
 | `compiler/tests/` | fixtures, in a format that outlives the implementation checking them. |
 | `examples/config_parser/` | the complete lexer and recovering parser derived from prototype 2; its executable host and exact input/output oracle live in `compiler/tests/fixtures/runtime/derived-parser`. |
 | `examples/derived_containers/` | the complete prototype-3-derived client of the ordinary `core` containers and allocator capabilities; `compiler/tests/fixtures/runtime/derived-containers` supplies its host, status oracle and derivation manifest. |
+| `examples/derived_hosted/` | the complete prototype-4-derived log filter, with runtime-selected filters and destinations, complete line reading, retained arguments and explicit delivery retry; its derivation and memory-world oracle live in `compiler/tests/fixtures/runtime/derived-hosted-memory`. |
 | `scripts/` | build, test, clean and toolchain commands. Provider-neutral, except `linux-loop.sh`, which drives Apple Container by name. |
 | `environments/` | the pinned `linux/amd64` image the local Linux loop builds, and `pins.sh`, the one place a toolchain version or checksum is written. |
 | `flake.nix` | `nix develop`, for people who work that way: a shell holding the same pinned toolchain, read from `environments/pins.sh` rather than from nixpkgs. |
@@ -207,7 +208,12 @@ and failing allocators; initialized storage, vectors, small vectors, maps,
 trees and sorting; checked runtime text helpers; and interchangeable system
 and memory I/O worlds. Compiled clients exercise their bounded composition,
 allocation failures and rollback. R4.70 completes the derived container
-program; the hosted application remains R4.80 work.
+program. R4.80 adds the complete hosted log filter in
+`examples/derived_hosted`: runtime-selected heterogeneous filters and
+destinations, arbitrary-length lines, copied arguments, explicit message
+retry and real file I/O. Ordinary `core/region` provides bulk cleanup over a
+caller-supplied allocator. D212 withdraws the former builtin arena syntax
+and its unsupported transitive escape promise; local origin checks remain.
 
 R4.50 completes deterministic baseline code generation: compact numeric-array
 loops, strict-saving `layout(optimal)` placement, independently controlled

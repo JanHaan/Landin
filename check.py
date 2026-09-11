@@ -4894,6 +4894,49 @@ def check_debugger_contract(full_run):
     return out
 
 
+def check_hosted_derivation(full_run):
+    """Keep the complete P4 source inventory and support evidence traceable.
+
+    This checks names, not behavioral coverage. The runtime, quality and GDB
+    oracles establish behavior; a source added without updating the derivation
+    must not silently disappear from the published mapping.
+    """
+    if not full_run:
+        return []
+    manifest = "compiler/tests/fixtures/runtime/derived-hosted-memory/DERIVATION.md"
+    out = absent([manifest])
+    if out:
+        return out
+    text = io.open(manifest, encoding="utf-8").read()
+    sources = ["core/region/region.ldn"]
+    for directory, _, names in os.walk("examples/derived_hosted"):
+        sources.extend(os.path.join(directory, name) for name in names
+                       if name.endswith(".ldn"))
+    if len(sources) == 1:
+        out.append((manifest, 1, "the complete hosted application source is absent"))
+    for source in sorted(sources):
+        out += absent([source])
+        if "`" + source + "`" not in text:
+            out.append((manifest, 1, "derivation omits source " + source))
+    for fixture in fixture_names(text):
+        out += absent([os.path.join("compiler/tests/fixtures", fixture,
+                                    "fixture.meta")])
+    for support in ("runtime/derived-parser", "runtime/derived-containers",
+                    "prototype-2-parser.md", "prototype-3-containers.md",
+                    "prototype-4-app.md"):
+        if "`" + support + "`" not in text:
+            out.append((manifest, 1, "derivation omits support " + support))
+    rows = prototype_rows() or []
+    application = [row for _, row in rows
+                   if row["Fixture"] == "`runtime/derived-hosted-memory`"
+                   and row["Prototype"] == "P4"]
+    if (len(application) != 1 or
+            set(re.findall(r"W\d+", application[0]["Findings"])) !=
+            {"W" + str(n) for n in range(1, 8)}):
+        out.append((ROADMAP, 1, "complete hosted derivation must account for W1-W7"))
+    return out
+
+
 def check_native_ci(full_run):
     """Preserve the complete native gate while SourceHut only publishes/mirrors."""
     if not full_run:
@@ -5034,6 +5077,7 @@ def main(argv):
     extra += check_highlight_vocabulary(full_run)
     extra += check_binding_generator(full_run)
     extra += check_debugger_contract(full_run)
+    extra += check_hosted_derivation(full_run)
     extra += check_register_entries(full_run)
     extra += check_borrowed_icons(full_run)
     extra += check_named_files(full_run)

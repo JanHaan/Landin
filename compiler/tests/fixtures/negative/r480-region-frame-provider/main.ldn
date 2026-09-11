@@ -1,0 +1,7 @@
+import core/heap
+import core/region
+
+bad: () -> (value: region.region(heap.system)) =
+    mut provider := heap.host()
+    value = region.new_region(addr provider)
+end bad

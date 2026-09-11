@@ -1,0 +1,8 @@
+class: negative
+summary: a region wrapper retains its parent provider's tracked frame origin
+program: main.ldn
+root: ../../../../..
+status: 1
+codes: L0314
+constructs: 0430, 0770, 0790, 0820, 1230, 1350, 1360
+targets: linux-x86-64, macos-arm64, synthetic-32

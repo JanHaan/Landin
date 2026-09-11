@@ -2737,6 +2737,11 @@ finding labels, so moving prose cannot stale a hand-copied location.
 | `runtime/generic-parameterized-evidence` | P3 | Z1, Z4 | parameterized providers receive target-derived evidence |
 | `runtime/allocator-vec-pressure` | P3 | Z6 | an escaping generic value parameter is vacuous for a scalar item and exact for a pointer item |
 | `negative/parameterized-conformance-entry-signature-mismatch` | P3 | Z1, Z4 | substituted provider signatures must agree |
+| `runtime/derived-hosted-memory` | P4 | W1, W2, W3, W4, W5, W6, W7 | the complete log-filter application selects filters and destinations from retained arguments, reads whole lines across arbitrary chunks, buffers messages with explicit retry, and closes handles through the supplied world |
+| `runtime/r480-arena-independent-results` | P4 | W7 | simultaneous ordinary allocations and helper-returned pointers, aggregates, slices, any and callback state remain independent; a helper-retained pointer survives the provider frame without passing a returned-value boundary |
+| `runtime/r480-arena-nested-exhaustion` | P4 | W3, W7 | explicitly backed nested providers exhaust independently and ordinary defer runs across normal, failure, return, break and continue exits |
+| `negative/r480-callback-frame-escape` | P4 | W6, W7 | ordinary callback-state aggregates retain the tracked frame escape refusal |
+| `negative/r480-helper-frame-retention` | P4 | W7 | a helper still cannot retain a tracked nonescaping frame reference in module storage |
 | `runtime/constant-return-exits-with-its-code` | P4 | W2 | hosted entry uses the ordinary no-argument shape |
 | `runtime/generic-composed-evidence` | P4 | W4 | a narrow concept composes rather than widening |
 | `runtime/any-heterogeneous-dispatch` | P4 | W6 | erased state retains mutable permission and dispatch identity |

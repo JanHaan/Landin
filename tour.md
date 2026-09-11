@@ -3589,7 +3589,10 @@ its supplied slices and performs no allocation or host call. Its public
 representation and copied handles remain subject to manual invariants:
 backing must remain valid, transfer ranges must not overlap, counters need
 headroom, and stale handles can address a reopened slot. D153 records these
-bounds. The larger application and its command-line policy remain R4.80.
+bounds. R4.80's complete `examples/derived_hosted` application uses this same
+world interface, copies retained arguments, assembles complete lines and
+selects heterogeneous filters and destinations at runtime. Its derivation
+manifest records exact argument, buffering, retry and cleanup policies.
 
 Both providers expose each user argument as a pointer and byte length, never as
 a guessed C string or forged slice. `copy_argument(argument, scratch)` checks

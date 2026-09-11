@@ -261,6 +261,14 @@ release compiler builds. ROADMAP.md records the complete closure evidence.
 Debug provenance remains independent of DWARF encoding for a possible future
 PDB emitter; PDB support is not implemented.
 
+R4.80's complete hosted log filter composes ordinary text, diagnostics, vector,
+world and allocator capabilities. It copies retained arguments, reads complete
+lines across arbitrary chunks, and selects heterogeneous filters and
+destinations at runtime. Messages retain a delivery cursor for explicit retry.
+`core/region` records allocations against a supplied provider for explicit bulk
+cleanup. D212 withdraws both builtin arena forms and W7's transitive escape
+promise while preserving ordinary local origins and independent allocations.
+
 **Current roadmap work: R4.80 — Complete and run the derived hosted application.**
 
 `refine` runs the frontend, lowers and

@@ -49,8 +49,9 @@ retain their completed prefix, and a close error still consumes valid open
 state. Source-derived output and argument views retain local origin checks.
 Descriptors, nested backing, nonoverlap and copied-handle validity remain
 manual obligations under D153. Small complete library clients exercise these
-contracts; they do not claim the full `read`, `filter`, `dest`, `config` and
-command-line application below, which remain R4.80.
+contracts. The complete R4.80 derivative is `examples/derived_hosted`, whose
+`runtime/derived-hosted-memory/DERIVATION.md` maps `read`, `filter`, `dest`,
+`config` and the command-line root to their executable sources and support.
 
 At the system boundary D207 keeps errno in the explicit provider state,
 readable through `io.last_errno`, rather than adding payloads to these atoms.
@@ -64,8 +65,10 @@ For the argument path touched by this slice, both providers expose only user
 arguments and index zero is the first of them, never `argv[0]`. The ordinary
 adapter copies a pointer-and-length `io.argument` into exact caller scratch and
 returns its initialized prefix for `text.from_bytes`; it does not reinterpret
-the pointer as a C string or manufacture a slice. The complete application's
-argument closure remains R4.80.
+the pointer as a C string or manufacture a slice. The complete application
+copies every retained argument into its explicitly supplied region before
+building configuration, so later changes to memory-world argument bytes do
+not change paths or match needles.
 
 ## core/mem  —  one addition to what prototype 3 sketched
 
@@ -621,9 +624,11 @@ public on_progress: type = struct
 end on_progress
 
 ```
-Hosted entry. The `io.args` adapter supplies initialized argument descriptors
-with process-lifetime backing. The full adapter and application remain
-R4.80 work; no uninitialized view constructor is implied.
+Hosted entry. The sketch names its argument adapter `io.args`; the complete
+derivative uses the supplied world's `argument_count` and `argument` entries,
+then copies their bytes through `io.copy_argument` into initialized storage.
+Its hosted `entry` routine is the only place that acquires the heap and system
+world. No uninitialized view constructor is implied.
 ```landin
 public main: () -> (code: i32) =
     mut h := io.host()
