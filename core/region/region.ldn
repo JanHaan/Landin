@@ -45,13 +45,19 @@ end region_free
 --  monotonic parent keeps consumed backing until its own explicit reset.
 public release_region: (provider: type is mem.allocator,
                         inout state: region(provider)) -> none =
-    while vec.length(state.allocations) > 0 do
-        record: allocation = vec.pop(state.allocations) else (problem)
-            _ = problem
-            return
-        end
+    mut remaining: usize = vec.length(state.allocations)
+    while remaining > 0 do
+        dec remaining
+        record: allocation = record_at(state.allocations, remaining)
         block: ptr mut u8 = ptr(record.address)
         mem.free(state.parent.val, block, record.extent)
     end while
     vec.release(state.allocations, state.parent.val)
 end release_region
+
+--  The extent-bearing record is reference-free. Read it within the helper's
+--  view scope before calling the parent, then dispose the ledger as a whole.
+record_at: (records: vec.list(allocation), index: usize) -> (value: allocation) =
+    initialized := vec.used(records)
+    value = initialized[index]
+end record_at

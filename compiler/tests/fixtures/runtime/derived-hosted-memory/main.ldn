@@ -56,14 +56,31 @@ public main: () -> (code: i32) =
     kept: usize = app.run(program, world, usize(3)) else (problem) _ = problem
         return end
     expected: []u8 = "ERROR keep\n"
-    if kept == 1 and files[1].length == lenof expected
-      and not files[0].opened and not files[1].opened
-      and app.equal(destination[0..<lenof expected], expected)
-      and memory.close_calls == 2 and long_lines() and failure_sweep()
-      and retained_arguments() and messages() and finite_regions() and io_failures() and diagnostics()
-      and app.level_of("Elephant") == 0
-      and app.level_of("DEBUGGER") == 0
-      and app.level_of("ERROR\tmessage") == 4 then code = 42 end if
+    return when kept <> 1 or files[1].length <> lenof expected
+      or files[0].opened or files[1].opened
+      or not app.equal(destination[0..<lenof expected], expected)
+      or memory.close_calls <> 2
+    code = 2
+    return when not long_lines()
+    code = 3
+    return when not failure_sweep()
+    code = 4
+    return when not retained_arguments()
+    code = 5
+    return when not messages()
+    code = 6
+    return when not finite_regions()
+    code = 7
+    return when not io_failures()
+    code = 8
+    return when not diagnostics()
+    code = 9
+    return when app.level_of("Elephant") <> 0
+      or app.level_of("DEBUGGER") <> 0 or app.level_of("ERROR\tmessage") <> 4
+    code = 10
+    return when not bare_levels()
+    code = 42
+
 end main
 
 --  One-byte chunks, an empty line, growth beyond 8 KiB, and an unterminated
@@ -332,7 +349,12 @@ diagnostics: () -> (ok: bool) =
     second: diag.entry = diag.note_at(logger, usize(1)) else (problem) _ = problem
         return
     end
-    return when diag.message_length(first) == diag.message_length(second)
+    third: diag.entry = diag.note_at(logger, usize(2)) else (problem) _ = problem
+        return
+    end
+    return when not exact_note(first, "--every argument is not UTF-8, using 1\n")
+      or not exact_note(second, "--every 0 makes no sense, using 1\n")
+      or not exact_note(third, "--every wants a positive number, using 1\n")
     --  Streaming diagnostics fail before input acquisition; the same core
     --  routine reports the delivery failure, with no implicit retry.
     world_state.fail_write_at = world_state.write_calls + 1
@@ -343,3 +365,45 @@ diagnostics: () -> (ok: bool) =
     end
     ok = refused and not files[0].opened and world_state.open_calls == 1
 end diagnostics
+
+exact_note: (entry: diag.entry, expected: []u8) -> (ok: bool) =
+    ok = false
+    return when diag.position_of(entry) <> 0 or diag.severity_of(entry) <> diag.error
+      or diag.message_length(entry) <> lenof expected
+    for at in usize(0)..<lenof expected do
+        byte: u8 = diag.message_byte(entry, at) else (problem) _ = problem
+            return
+        end
+        return when byte <> expected[at]
+    end for
+    ok = true
+end exact_note
+
+bare_levels: () -> (ok: bool) =
+    ok = false
+    source: []u8 = "INFO\nERROR\n"
+    mut data: [11]u8 = zeroed
+    for at in usize(0)..<lenof source do data[at] = source[at] end for
+    args: [3]io.argument = [(data: addr arg0[0], length: lenof arg0),
+      (data: addr arg1[0], length: lenof arg1), (data: addr arg8[0], length: lenof arg8)]
+    expected: []u8 = "0: 0\n1: 0\n2: 1\n3: 0\n4: 1\n5: 0\n6: 0\n7: 0\n"
+    for length in usize(10)..<usize(12) do
+        mut files: [1]io.memory_file
+        files[0] = (name: "in", contents: data[0..<11], length: length, cursor: 0,
+           readable: true, writable: false, opened: false, writing: false)
+        mut world_state := io.memory_world(files[0..<1], args[0..<3], output[0..<128], errors[0..<128])
+        world: any io.world = any(addr world_state)
+        mut host := heap.host()
+        mut program := region.new_region(addr host)
+        mut good: bool = true
+        kept: usize = app.run(program, world, usize(3)) else (problem)
+            _ = problem
+            good = false
+            0
+        end
+        region.release_region(program)
+        return when not good or kept <> 2 or files[0].opened
+          or not app.equal(output[0..<world_state.output_used], expected)
+    end for
+    ok = true
+end bare_levels
