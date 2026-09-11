@@ -336,6 +336,22 @@ class GitTests(GitFixture):
         with self.assertRaisesRegex(common.Invalid, 'not current canonical main'):
             approval.guard(self.root, str(self.remote))
 
+    def test_default_promotion_uses_canonical_ssh(self):
+        self.tag()
+        original = controller.git
+        calls = []
+        def canonical_ssh(root, *args, **kwargs):
+            calls.append(args)
+            translated = tuple(str(self.remote) if word == controller.PROMOTION_REMOTE else word for word in args)
+            return original(root, *translated, **kwargs)
+        with patch.object(controller, "git", side_effect=canonical_ssh), patch.object(
+                controller, "remote_ref", return_value=self.commit):
+            controller.promote(self.root, self.commit)
+        pushes = [args for args in calls if args[:2] == ("push", "--atomic")]
+        self.assertEqual(len(pushes), 1)
+        self.assertEqual(pushes[0][2], "git@git.sr.ht:~sinnfrei/landin")
+        self.assertEqual(approval.CANONICAL, "https://git.sr.ht/~sinnfrei/landin")
+
     def test_atomic_promotion(self):
         self.tag()
         controller.promote(self.root, self.commit, str(self.remote))
