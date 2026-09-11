@@ -157,8 +157,9 @@ The complete `derived-hosted-memory` application is a third workload, using
 none/off, size/auto and size/all. GDB stops inside the runtime-selected
 `sample_keep` and `text_emit` providers, identifies their actual source lines,
 inspects the sampling state before and after its increment and the destination
-delivery cursor, and requires the caller stack to include `process`, `run` and
-the fixture entry point. The whole
+delivery cursor, and requires the caller stack to include `process`, `run_logged`,
+`run` and the fixture entry point. The text destination also retains its
+`emit_retry` caller frame. The whole
 memory-world application then completes its status-42 oracle. The same full
 source inventory, assembly hashes, executable identity, line-table, stripping
 and source-map checks apply to this application and its reached library
@@ -629,3 +630,11 @@ makes input fragmentation, output contents and failure cleanup deterministic;
 the hosted fixtures use the same application with actual native Linux I/O.
 The memory composition is also mandatory in all six quality profiles and the
 three debugger workload profiles described above.
+
+`runtime/r480-generic-provider-entry` pins the bound entry required when a
+concept provider itself has constrained generic parameters. Two nested
+providers execute through direct evidence and `any` calls, forwarding a
+by-value aggregate, an aggregate result, an inout array and a declared failure.
+The table entry supplies the provider's concrete evidence arguments to the
+ordinary generic body; its source calling convention and the two-word `any`
+representation remain unchanged.

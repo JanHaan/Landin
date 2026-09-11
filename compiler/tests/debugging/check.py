@@ -523,10 +523,10 @@ def check_hosted_transcript(transcript: str,
         scope = f"hosted-{name}"
         expect_line(transcript, scope, source_lines[name], function, filename)
         stack = marker_section(transcript, scope)
-        require(re.search(r"#0\s+.*\b" + function + r"\b", stack) is not None
-                and re.search(r"#1\s+.*\bprocess\b", stack) is not None
-                and re.search(r"#2\s+.*\brun\b", stack) is not None
-                and re.search(r"#[3-9]\s+.*\bmain\b", stack) is not None,
+        functions = (function, *(("emit_retry",) if name == "text" else ()),
+                     "process", "run_logged", "run", "main")
+        require(all(re.search(rf"#{index}\s+.*\b{expected}\b", stack) is not None
+                    for index, expected in enumerate(functions)),
                 f"hosted runtime dispatch lost its source stack: {stack!r}")
     for name, value in (("sample.seen", 0), ("sample.every", 2),
                         ("sample-updated.seen", 1), ("text.delivered", 0)):

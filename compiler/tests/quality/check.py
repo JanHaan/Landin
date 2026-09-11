@@ -130,7 +130,7 @@ def check_hosted_measurements(measurements: dict[str, dict]) -> None:
                        if path.parent.name == "app"
                        and path.parent.parent.name == "derived_hosted"}
         require({"app.ldn", "config.ldn", "filter.ldn", "dest.ldn",
-                 "reader.ldn"} <= app_sources,
+                 "reader.ldn", "entry.ldn"} <= app_sources,
                 f"{key}: incomplete hosted application source inventory")
         app_items = {entry["item"] for entry in measured["items"]
                      if paths[entry["source"]].name == "app.ldn"
