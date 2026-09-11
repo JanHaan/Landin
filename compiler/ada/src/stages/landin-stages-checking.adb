@@ -347,6 +347,8 @@ package body Landin.Stages.Checking is
       begin
          if Syn.Kind (Of_Tree, Node) = Syn.Struct_Literal then
             return Syn.Struct_Fill (Of_Tree, Node);
+         elsif Syn.Kind (Of_Tree, Node) /= Syn.Labeled_Application then
+            return Syn.No_Node;
          end if;
          for Index in 1 .. Syn.Argument_Count (Of_Tree, Node) loop
             declare
@@ -16048,6 +16050,11 @@ package body Landin.Stages.Checking is
                  Res.Bound_To (Meanings.all, Of_Tree, Node);
                Held  : constant Ty.Type_Kind := Settled_Type (Means);
             begin
+               if Res.Sort_Of (Meanings.all, Means)
+                 in Res.Module_Type | Res.Module_Concept | Res.Type_Parameter
+               then
+                  return Synthesise (Of_Tree, Node);
+               end if;
                if Held = Ty.Aggregate then
                   if Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
                      = Ty.Undecided
@@ -16636,7 +16643,23 @@ package body Landin.Stages.Checking is
             Means : constant Res.Declaration_Id :=
               Res.Bound_To (Meanings.all, Of_Tree, Node);
          begin
-            if Res.Sort_Of (Meanings.all, Means) = Res.Case_Name then
+            if Res.Sort_Of (Meanings.all, Means)
+              in Res.Module_Type | Res.Module_Concept | Res.Type_Parameter
+            then
+               Bad.Report
+                 (Item => Bad.Type_Mismatch,
+                  Source => Syn.Source_Of (Of_Tree),
+                  Where => Syn.Where (Of_Tree, Node),
+                  Message => "a type name does not denote a runtime value",
+                  Note => "[1795]/D213: a distinct value requires an explicit"
+                          & " construction from its representation",
+                  Related => Syn.Origin
+                    (Tree_For (Res.Source_Of (Meanings.all, Means)).all,
+                     Res.Node_Of (Meanings.all, Means)),
+                  Because => "this type declaration",
+                  Into => Found);
+               return Kept (Ty.Ill_Typed);
+            elsif Res.Sort_Of (Meanings.all, Means) = Res.Case_Name then
                Bad.Report
                  (Item    => Bad.Unsupported_Use,
                   Source  => Syn.Source_Of (Of_Tree),
@@ -17866,7 +17889,16 @@ package body Landin.Stages.Checking is
                             not in Syn.Array_Literal | Syn.Array_Repetition
                               | Syn.Mixed_Array_Repetition | Syn.Zeroed_Literal
                               | Syn.Struct_Literal | Syn.Text_Literal
-                              | Syn.Raw_Literal
+                              | Syn.Raw_Literal | Syn.Pointer_Conversion
+                              | Syn.Empty_Slice_Literal | Syn.Any_Construction
+                          and then
+                            (Syn.Kind (Of_Tree, Value)
+                               not in Syn.Name_Reference | Syn.Member_Selection
+                             or else Res.Verdict_Of
+                               (Meanings.all, Of_Tree, Value) /= Res.Bound
+                             or else Settled_Type
+                               (Res.Bound_To (Meanings.all, Of_Tree, Value))
+                                 = Ty.Aggregate)
                           and then
                             (if Syn.Kind (Of_Tree, Value)
                               in Syn.Name_Reference | Syn.Member_Selection
@@ -27262,7 +27294,9 @@ package body Landin.Stages.Checking is
                      Into    => Found);
                   Landin.Checking.Refuse (Types.all, Of_Tree, Each);
                elsif Element_Known
-                 and then not Ty.Holds (Element_Held, Element, Facts)
+                 and then (if Element = Ty.Bool
+                           then Element_Held not in 0 | 1
+                           else not Ty.Holds (Element_Held, Element, Facts))
                then
                   Bad.Report
                     (Item    => Bad.Literal_Out_Of_Range,

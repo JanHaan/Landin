@@ -261,6 +261,8 @@ package body Landin.Stages.Lowering is
       begin
          if Syn.Kind (Of_Tree, Node) = Syn.Struct_Literal then
             return Syn.Struct_Fill (Of_Tree, Node);
+         elsif Syn.Kind (Of_Tree, Node) /= Syn.Labeled_Application then
+            return Syn.No_Node;
          end if;
          for Index in 1 .. Syn.Argument_Count (Of_Tree, Node) loop
             declare
@@ -13053,6 +13055,21 @@ package body Landin.Stages.Lowering is
                  (Unit.all, Filling, Res.Declaration_Id (Distinct_Image (Id)),
                   Atom_Set_For (Landin.Checking.Atom_Set_Of (Types.all, Id)),
                   Site);
+            elsif Held = Ty.Pointer_Value then
+               Answer := IR.Emit_Number
+                 (Unit.all, Filling, Ty.Usize,
+                  Ty.Magnitude (Distinct_Image (Id)), False, Site);
+               if Distinct_Image (Id) /= 0 then
+                  Answer := IR.Emit_Conversion
+                    (Unit.all, Filling, Answer, Ty.Usize, Site);
+                  Answer := IR.Emit_Range_Check
+                    (Unit.all, Filling, Answer, Ty.Usize, 1,
+                     Ty.Folded
+                       (Landin.Targets.Maximum_Object_Size (Facts)), Site);
+               end if;
+               IR.Set_Pointee
+                 (Unit.all, Filling, Answer, Pointee_For
+                    (Landin.Checking.Reference_Of (Types.all, Id)));
             elsif Held in Ty.Float_Name then
                Answer := IR.Emit_Float
                  (Unit.all, Filling, Held,
@@ -13063,6 +13080,20 @@ package body Landin.Stages.Lowering is
                   Ty.Magnitude (abs Distinct_Image (Id)),
                   Distinct_Image (Id) < 0, Site);
             end if;
+         elsif Held = Ty.Pointer_Value
+           and then Value /= Syn.No_Node
+           and then Landin.Checking.Distinct_Conversion_Of
+             (Types.all, Of_Tree, Value) /= Landin.Checking.No_Nominal_Type
+           and then IR.Address_Target (Unit.all, Filling) /= IR.No_Item
+         then
+            Answer := IR.Emit_Place_Address
+              (Unit.all, Filling,
+               (Kind => IR.Module_Datum,
+                Datum => IR.Address_Target (Unit.all, Filling)),
+               Site, Field => 1);
+            IR.Set_Pointee
+              (Unit.all, Filling, Answer, Pointee_For
+                 (Landin.Checking.Reference_Of (Types.all, Id)));
          elsif Held = Ty.Function_Value then
             --  Static dependencies are already resolved, including leaves
             --  of later images.  Emit the datum in declaration order.
@@ -16577,9 +16608,10 @@ package body Landin.Stages.Lowering is
             Where (Id) := Visiting;
 
             if Landin.Checking.Type_Of (Types.all, Id)
-              in Ty.Scalar_Name | Ty.Atom_Value
+              in Ty.Scalar_Name | Ty.Atom_Value | Ty.Pointer_Value
               and then Landin.Checking.Type_Of (Types.all, Id) /= Ty.Bool
               and then Has_Distinct_Conversion (Their_Tree.all, Value)
+              and then not Is_C_String_Value (Their_Tree.all, Value)
             then
                Fold_Constant
                  (Their_Tree.all, Value,

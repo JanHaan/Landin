@@ -1,0 +1,6 @@
+class: negative
+summary: distinct representation conversion preserves the module storage-address refusal
+program: main.ldn
+codes: L0305
+constructs: 0430, 0480, 0650, 1940
+targets: linux-x86-64, macos-arm64, synthetic-32

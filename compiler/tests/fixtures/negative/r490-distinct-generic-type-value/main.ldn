@@ -1,0 +1,3 @@
+tag: type (item: type) = distinct item
+handle: type = tag(i32)
+public main: () -> (code: i32) = code = i32(handle) end main
