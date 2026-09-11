@@ -235,6 +235,21 @@ package body Landin.Stages.Checking.Flow is
          return Natural (Left.Length) < Natural (Right.Length);
       end "<";
 
+      function Prefix (Parent, Child : Field_Path) return Boolean;
+
+      function Prefix (Parent, Child : Field_Path) return Boolean is
+      begin
+         if Parent.Length > Child.Length then
+            return False;
+         end if;
+         for Step in 1 .. Natural (Parent.Length) loop
+            if Parent (Step) /= Child (Step) then
+               return False;
+            end if;
+         end loop;
+         return True;
+      end Prefix;
+
       function Last (Path : Field_Path) return Tracked_Field
       is (Path (Positive (Path.Length)));
 
@@ -424,6 +439,7 @@ package body Landin.Stages.Checking.Flow is
          Node    : Syn.Node_Id;
          Id      : out Res.Declaration_Id;
          Path    : out Field_Path;
+         Below   : out Field_Path;
          Position : out Ty.Magnitude;
          Is_Element : out Boolean;
          Valid   : out Boolean);
@@ -469,6 +485,9 @@ package body Landin.Stages.Checking.Flow is
          State     : Assigned_Set;
          Message   : String;
          Field     : Tracked_Field := 0);
+      function Has_Consumed_Part
+        (Id : Res.Declaration_Id; State : Assigned_Set) return Boolean;
+
       procedure Require_Returns_Assigned
         (At_Span : Landin.Source.Span;
          State   : Assigned_Set;
@@ -817,6 +836,30 @@ package body Landin.Stages.Checking.Flow is
          Report_Unassigned (Message);
       end Require_Assigned;
 
+      function Has_Consumed_Part
+        (Id : Res.Declaration_Id; State : Assigned_Set) return Boolean is
+      begin
+         if Id = Res.No_Declaration then
+            return False;
+         end if;
+         for Field in Tracked_Field loop
+            if State.Dead_Fields (Positive (Id), Field) then
+               return True;
+            end if;
+         end loop;
+         for Fact of State.Dead_Nested loop
+            if Fact.Declaration = Id then
+               return True;
+            end if;
+         end loop;
+         for Fact of State.Dead_Elements loop
+            if Fact.Declaration = Id then
+               return True;
+            end if;
+         end loop;
+         return False;
+      end Has_Consumed_Part;
+
       procedure Require_Returns_Assigned
         (At_Span : Landin.Source.Span;
          State   : Assigned_Set;
@@ -837,6 +880,19 @@ package body Landin.Stages.Checking.Flow is
                     (Syn.Source_Of (Of_Tree), At_Span, Id, State,
                      Message & " `" & Spelled (Syn.Name (Of_Tree, Returned))
                      & "`");
+                  if Has_Consumed_Part (Id, State) then
+                     Bad.Report
+                       (Item    => Bad.Not_Definitely_Assigned,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => At_Span,
+                        Message => "this returns a result with a consumed"
+                                   & " place still dead",
+                        Note    => "[0910]: a sunk result must be assigned"
+                                   & " again before return",
+                        Related => Syn.Origin (Of_Tree, Returned),
+                        Because => "the named result",
+                        Into    => Sink.all);
+                  end if;
                end if;
             end;
          end loop;
@@ -853,22 +909,11 @@ package body Landin.Stages.Checking.Flow is
                  Syn.Nth_Parameter (Of_Tree, Function_Node, Position);
                Id : constant Res.Declaration_Id :=
                  Declaration_At (Syn.Source_Of (Of_Tree), Parameter);
-               Dead : Boolean := False;
             begin
                if Syn.Convention_Of (Of_Tree, Parameter)
                     = Syn.Inout_Convention
                then
-                  for Field in Tracked_Field loop
-                     Dead := Dead
-                       or else State.Dead_Fields (Positive (Id), Field);
-                  end loop;
-                  for Fact of State.Dead_Nested loop
-                     Dead := Dead or else Fact.Declaration = Id;
-                  end loop;
-                  for Fact of State.Dead_Elements loop
-                     Dead := Dead or else Fact.Declaration = Id;
-                  end loop;
-                  if Dead then
+                  if Has_Consumed_Part (Id, State) then
                      Bad.Report
                        (Item    => Bad.Not_Definitely_Assigned,
                         Source  => Syn.Source_Of (Of_Tree),
@@ -1185,6 +1230,7 @@ package body Landin.Stages.Checking.Flow is
          Node    : Syn.Node_Id;
          Id      : out Res.Declaration_Id;
          Path    : out Field_Path;
+         Below   : out Field_Path;
          Position : out Ty.Magnitude;
          Is_Element : out Boolean;
          Valid   : out Boolean)
@@ -1193,6 +1239,7 @@ package body Landin.Stages.Checking.Flow is
       begin
          Id := Res.No_Declaration;
          Path := No_Path;
+         Below := No_Path;
          Position := 0;
          Is_Element := False;
          Valid := False;
@@ -1208,7 +1255,7 @@ package body Landin.Stages.Checking.Flow is
                  and then Known_Index_Value (Of_Tree, Where, Position)
                then
                   Is_Element := True;
-                  Path.Append (Chain_Below (Of_Tree, Node));
+                  Below := Chain_Below (Of_Tree, Node);
                   Valid := True;
                end if;
                return;
@@ -1224,18 +1271,19 @@ package body Landin.Stages.Checking.Flow is
       is
          Id : Res.Declaration_Id;
          Path : Field_Path;
+         Below : Field_Path;
          Position : Ty.Magnitude;
          Is_Element : Boolean;
          Valid : Boolean;
       begin
          Place_Identity
-           (Of_Tree, Node, Id, Path, Position, Is_Element, Valid);
+           (Of_Tree, Node, Id, Path, Below, Position, Is_Element, Valid);
          if not Valid then
             return;
          elsif Is_Element then
             Element_Sets.Include
               (State.Dead_Elements,
-               (Id, No_Path, Position, Path));
+               (Id, Path, Position, Below));
          elsif Path.Is_Empty then
             State.Dead_Fields (Positive (Id), 0) := True;
          elsif Path.Length = 1 then
@@ -1250,25 +1298,54 @@ package body Landin.Stages.Checking.Flow is
       is
          Id : Res.Declaration_Id;
          Path : Field_Path;
+         Below : Field_Path;
          Position : Ty.Magnitude;
          Is_Element : Boolean;
          Valid : Boolean;
       begin
          Place_Identity
-           (Of_Tree, Node, Id, Path, Position, Is_Element, Valid);
+           (Of_Tree, Node, Id, Path, Below, Position, Is_Element, Valid);
          if not Valid then
             return;
-         elsif Is_Element then
-            Element_Sets.Exclude
-              (State.Dead_Elements,
-               (Id, No_Path, Position, Path));
-         elsif Path.Is_Empty then
-            State.Dead_Fields (Positive (Id), 0) := False;
-         elsif Path.Length = 1 then
-            State.Dead_Fields (Positive (Id), Last (Path)) := False;
-         else
-            Nested_Sets.Exclude (State.Dead_Nested, (Id, Path));
          end if;
+
+         --  Assigning a container restores every consumed part it holds.
+         --  Assigning a child cannot restore a consumed ancestor.
+         if not Is_Element then
+            if Path.Is_Empty then
+               State.Dead_Fields (Positive (Id), 0) := False;
+            end if;
+            for Field in 1 .. Widest_Struct loop
+               if Prefix (Path, One (Field)) then
+                  State.Dead_Fields (Positive (Id), Field) := False;
+               end if;
+            end loop;
+            declare
+               Previous : constant Nested_Sets.Set := State.Dead_Nested;
+            begin
+               for Fact of Previous loop
+                  if Fact.Declaration = Id and then Prefix (Path, Fact.Path)
+                  then
+                     State.Dead_Nested.Exclude (Fact);
+                  end if;
+               end loop;
+            end;
+         end if;
+         declare
+            Previous : constant Element_Sets.Set := State.Dead_Elements;
+         begin
+            for Fact of Previous loop
+               if Fact.Declaration = Id
+                 and then
+                   (if Is_Element then
+                       Fact.Path = Path and then Fact.Position = Position
+                       and then Prefix (Below, Fact.Below)
+                    else Prefix (Path, Fact.Path))
+               then
+                  State.Dead_Elements.Exclude (Fact);
+               end if;
+            end loop;
+         end;
       end Revive_Place;
 
       function Require_Live
@@ -1277,10 +1354,12 @@ package body Landin.Stages.Checking.Flow is
       is
          Id : Res.Declaration_Id;
          Path : Field_Path;
+         Below : Field_Path;
          Position : Ty.Magnitude;
          Is_Element : Boolean;
          Valid : Boolean;
          Dead : Boolean := False;
+         Known_Position : Boolean := True;
       begin
          if Syn.Kind (Of_Tree, Node)
            not in Syn.Name_Reference | Syn.Member_Selection
@@ -1289,23 +1368,47 @@ package body Landin.Stages.Checking.Flow is
             return True;
          end if;
          Place_Identity
-           (Of_Tree, Node, Id, Path, Position, Is_Element, Valid);
+           (Of_Tree, Node, Id, Path, Below, Position, Is_Element, Valid);
+         if not Valid and then Chain_Index (Of_Tree, Node) /= Syn.No_Node then
+            --  A computed read may select any consumed element, even though
+            --  [0910] permits only known indices as sink arguments.
+            Array_Base (Of_Tree, Chain_Above (Of_Tree, Node), Id, Path);
+            Below := Chain_Below (Of_Tree, Node);
+            Is_Element := True;
+            Known_Position := False;
+            Valid := Id /= Res.No_Declaration;
+         end if;
          if not Valid then
             return True;
          end if;
 
          Dead := State.Dead_Fields (Positive (Id), 0);
-         if Is_Element then
-            Dead := Dead or else Element_Sets.Contains
-              (State.Dead_Elements, (Id, No_Path, Position, Path));
-         elsif not Path.Is_Empty then
-            Dead := Dead
-              or else State.Dead_Fields (Positive (Id), Path (1));
-            if Path.Length > 1 then
-               Dead := Dead or else Nested_Sets.Contains
-                 (State.Dead_Nested, (Id, Path));
-            end if;
-         end if;
+         for Field in 1 .. Widest_Struct loop
+            Dead := Dead or else
+              (State.Dead_Fields (Positive (Id), Field)
+               and then (Prefix (One (Field), Path)
+                         or else (not Is_Element
+                                  and then Prefix (Path, One (Field)))));
+         end loop;
+         for Fact of State.Dead_Nested loop
+            Dead := Dead or else
+              (Fact.Declaration = Id
+               and then (Prefix (Fact.Path, Path)
+                         or else (not Is_Element
+                                  and then Prefix (Path, Fact.Path))));
+         end loop;
+         for Fact of State.Dead_Elements loop
+            Dead := Dead or else
+              (Fact.Declaration = Id
+               and then
+                 (if Is_Element then
+                     Fact.Path = Path
+                     and then (not Known_Position
+                               or else Fact.Position = Position)
+                     and then (Prefix (Below, Fact.Below)
+                               or else Prefix (Fact.Below, Below))
+                  else Prefix (Path, Fact.Path)));
+         end loop;
          if not Dead then
             return True;
          end if;
@@ -2350,6 +2453,10 @@ package body Landin.Stages.Checking.Flow is
                      Flow_Cleanups
                        (Of_Tree, 1, Cleanup.Failure_Propagation,
                         Result, Failure_State, Cleanup_Edges);
+                     if Cleanup_Edges.Falls_Through then
+                        Require_Inout_Places_Live
+                          (Syn.Anchor (Of_Tree, Node), Failure_State);
+                     end if;
                      Edges.Returns := Edges.Returns
                        or Cleanup_Edges.Returns
                        or Cleanup_Edges.Falls_Through;
@@ -2419,6 +2526,10 @@ package body Landin.Stages.Checking.Flow is
                   Flow_Expression
                     (Of_Tree, Where, Result, State, Edges);
                   if not Edges.Falls_Through then
+                     return;
+                  end if;
+
+                  if not Require_Live (Of_Tree, Node, State) then
                      return;
                   end if;
 
@@ -2948,6 +3059,10 @@ package body Landin.Stages.Checking.Flow is
                               Flow_Cleanups
                                 (Of_Tree, 1, Cleanup.Failure_Propagation,
                                  Result, Failure_State, Cleanup_Edges);
+                              if Cleanup_Edges.Falls_Through then
+                                 Require_Inout_Places_Live
+                                   (Syn.Anchor (Of_Tree, Item), Failure_State);
+                              end if;
                               Step.Returns := Step.Returns
                                 or Cleanup_Edges.Returns
                                 or Cleanup_Edges.Falls_Through;
@@ -2974,6 +3089,10 @@ package body Landin.Stages.Checking.Flow is
                                       (Of_Tree, 1,
                                        Cleanup.Failure_Propagation,
                                        Result, Failing, Cleanup_Edges);
+                                    if Cleanup_Edges.Falls_Through then
+                                       Require_Inout_Places_Live
+                                         (Syn.Anchor (Of_Tree, Item), Failing);
+                                    end if;
                                     Error_Edges.Returns :=
                                       Error_Edges.Returns
                                       or Cleanup_Edges.Returns
@@ -3107,6 +3226,8 @@ package body Landin.Stages.Checking.Flow is
            (Syn.Anchor (Of_Tree, Function_Node), State,
             "this function can reach its `end` without assigning the"
             & " return");
+      end if;
+      if Edges.Falls_Through then
          Require_Inout_Places_Live
            (Syn.Anchor (Of_Tree, Function_Node), State);
       end if;

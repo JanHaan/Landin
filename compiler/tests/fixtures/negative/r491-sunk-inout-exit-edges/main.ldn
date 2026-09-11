@@ -1,0 +1,33 @@
+unavailable: atom
+pair: type = struct
+    first: i32
+    second: i32
+end pair
+consume: (sink value: i32) -> none = end consume
+maybe: (stop: bool) -> none ! unavailable =
+    fail unavailable when stop
+end maybe
+
+explicit: (inout value: pair) -> none ! unavailable =
+    consume(value.first)
+    fail unavailable
+end explicit
+
+guarded: (inout value: pair, stop: bool) -> none ! unavailable =
+    consume(value.first)
+    fail unavailable when stop
+    value.first = 42
+end guarded
+
+propagated: (inout value: pair, stop: bool) -> none ! unavailable =
+    consume(value.first)
+    try maybe(stop)
+    value.first = 42
+end propagated
+
+expression: (inout value: i32) -> none = consume(value) end expression
+
+sunk_result: () -> (value: pair) =
+    value = (first: 40, second: 2)
+    consume(value.first)
+end sunk_result

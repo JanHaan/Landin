@@ -1083,6 +1083,12 @@ and assignments made only on the right do not survive their join.
 A place passed to `sink` becomes unassigned at that exact binding-rooted path.
 Every read requires a later assignment on every arriving path, and a part sunk
 out of an `inout` parameter must be assigned again on every return edge [0910].
+Reading an enclosing aggregate reads its consumed parts too; assigning that
+aggregate restores those parts. Other fields and other known array elements
+remain independent. The `inout` obligation includes failure propagation:
+applicable `defer` and `undo` actions run before the exit check. Unlike a
+successful named result, the caller's `inout` storage remains observable after
+a recovered failure.
 This is definite assignment of one consumed place, not ownership; copies made
 before the sink remain live.
 

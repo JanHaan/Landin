@@ -1,0 +1,50 @@
+error[L0302]: this returns with a place sunk out of an `inout` parameter still dead
+  --> ../tests/fixtures/negative/r491-sunk-inout-exit-edges/main.ldn:13:5
+   |
+13 |     fail unavailable
+   |     ^^^^
+  --> ../tests/fixtures/negative/r491-sunk-inout-exit-edges/main.ldn:11:12
+   |
+11 | explicit: (inout value: pair) -> none ! unavailable =
+   |            ^^^^^^^^^^^^^^^^^ the `inout` parameter
+  = note: [0910]: a consumed part of `inout` must be assigned again before return
+error[L0302]: this returns with a place sunk out of an `inout` parameter still dead
+  --> ../tests/fixtures/negative/r491-sunk-inout-exit-edges/main.ldn:18:5
+   |
+18 |     fail unavailable when stop
+   |     ^^^^
+  --> ../tests/fixtures/negative/r491-sunk-inout-exit-edges/main.ldn:16:11
+   |
+16 | guarded: (inout value: pair, stop: bool) -> none ! unavailable =
+   |           ^^^^^^^^^^^^^^^^^ the `inout` parameter
+  = note: [0910]: a consumed part of `inout` must be assigned again before return
+error[L0302]: this returns with a place sunk out of an `inout` parameter still dead
+  --> ../tests/fixtures/negative/r491-sunk-inout-exit-edges/main.ldn:24:5
+   |
+24 |     try maybe(stop)
+   |     ^^^
+  --> ../tests/fixtures/negative/r491-sunk-inout-exit-edges/main.ldn:22:14
+   |
+22 | propagated: (inout value: pair, stop: bool) -> none ! unavailable =
+   |              ^^^^^^^^^^^^^^^^^ the `inout` parameter
+  = note: [0910]: a consumed part of `inout` must be assigned again before return
+error[L0302]: this returns with a place sunk out of an `inout` parameter still dead
+  --> ../tests/fixtures/negative/r491-sunk-inout-exit-edges/main.ldn:28:1
+   |
+28 | expression: (inout value: i32) -> none = consume(value) end expression
+   | ^^^^^^^^^^
+  --> ../tests/fixtures/negative/r491-sunk-inout-exit-edges/main.ldn:28:14
+   |
+28 | expression: (inout value: i32) -> none = consume(value) end expression
+   |              ^^^^^^^^^^^^^^^^ the `inout` parameter
+  = note: [0910]: a consumed part of `inout` must be assigned again before return
+error[L0302]: this returns a result with a consumed place still dead
+  --> ../tests/fixtures/negative/r491-sunk-inout-exit-edges/main.ldn:30:1
+   |
+30 | sunk_result: () -> (value: pair) =
+   | ^^^^^^^^^^^
+  --> ../tests/fixtures/negative/r491-sunk-inout-exit-edges/main.ldn:30:21
+   |
+30 | sunk_result: () -> (value: pair) =
+   |                     ^^^^^^^^^^^ the named result
+  = note: [0910]: a sunk result must be assigned again before return

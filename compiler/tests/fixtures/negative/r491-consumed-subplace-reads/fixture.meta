@@ -1,0 +1,9 @@
+class: negative
+summary: consumed places invalidate descendant and containing reads without flattening array paths
+program: main.ldn
+codes: L0302, L0302, L0302, L0302, L0302, L0302, L0302, L0302, L0302, L0302
+constructs: 0420, 0520, 0900, 0910, 1910
+targets: linux-x86-64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/r491-consumed-subplace-reads/main.ldn
+status: 1

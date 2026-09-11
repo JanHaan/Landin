@@ -1,0 +1,77 @@
+pair: type = struct
+    first: i32
+    second: i32
+end pair
+holder: type = struct
+    child: pair
+    sibling: pair
+end holder
+consume: (sink value: i32) -> none = end consume
+consume_pair: (sink value: pair) -> none = end consume_pair
+
+element: () -> (result: i32) =
+    mut xs: [2]i32 = [1, 2]
+    consume(xs[0])
+    result = xs[0]
+end element
+
+computed: () -> (result: i32) =
+    mut xs: [2]i32 = [1, 2]
+    consume(xs[0])
+    mut index: usize = 0
+    result = xs[index]
+end computed
+
+array: () -> (result: i32) =
+    mut xs: [2]i32 = [1, 2]
+    consume(xs[0])
+    copied: [2]i32 = xs
+    result = copied[1]
+end array
+
+parent: () -> (result: i32) =
+    mut value: pair = (first: 1, second: 2)
+    consume(value.first)
+    copied: pair = value
+    result = copied.second
+end parent
+
+nested_parent: () -> (result: i32) =
+    mut value: holder = (child: (first: 1, second: 2), sibling: (first: 3, second: 4))
+    consume(value.child.first)
+    copied: pair = value.child
+    result = copied.second
+end nested_parent
+
+nested_root: () -> (result: i32) =
+    mut value: holder = (child: (first: 1, second: 2), sibling: (first: 3, second: 4))
+    consume(value.child.first)
+    copied: holder = value
+    result = copied.sibling.first
+end nested_root
+
+child: () -> (result: i32) =
+    mut value: holder = (child: (first: 1, second: 2), sibling: (first: 3, second: 4))
+    consume_pair(value.child)
+    result = value.child.first
+end child
+
+element_parent: () -> (result: i32) =
+    mut xs: [2]pair = [(first: 1, second: 2), (first: 3, second: 4)]
+    consume(xs[0].first)
+    copied: pair = xs[0]
+    result = copied.second
+end element_parent
+
+element_child: () -> (result: i32) =
+    mut xs: [2]pair = [(first: 1, second: 2), (first: 3, second: 4)]
+    consume_pair(xs[0])
+    result = xs[0].first
+end element_child
+
+partial_restore: () -> (result: i32) =
+    mut value: pair = (first: 1, second: 2)
+    consume_pair(value)
+    value.first = 42
+    result = value.second
+end partial_restore

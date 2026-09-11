@@ -1721,6 +1721,7 @@ def check_developer_loops(full_run):
 
     required = {
         "scripts/build.sh": (
+            'landin_build_lock mode "$@"',
             'Incremental="${LANDIN_BUILD_INCREMENTAL:-no}"',
             'set -- -m2 "$@"',
             "checksum manifest unchanged; developer build is current",
@@ -1739,10 +1740,17 @@ def check_developer_loops(full_run):
             "set -- ./scripts/test.sh",
         ),
         "scripts/test.sh": (
+            'landin_build_lock mode "$@"',
             'if [ "$#" -eq 1 ] && [ "$1" = "--record-and-run" ]',
             '"$LANDIN_BUILD_DIR/bin/landin_tests" --record',
             '"$LANDIN_BUILD_DIR/bin/landin_tests"',
         ),
+        "scripts/clean.sh": (
+            'landin_build_lock all "$@"',
+            'landin_build_lock tag "$@"',
+        ),
+        "scripts/quality.sh": ('landin_build_lock mode "$@"',),
+        "scripts/debug.sh": ('landin_build_lock mode "$@"',),
     }
 
     out = []
@@ -4982,7 +4990,8 @@ def check_optimization_contract(full_run):
             out.append((harness_path, 1, "runtime profile missing: "
                         + objective + "/" + specialization))
     for runner in ("compiler/tests/test_native_report_identity.py",
-                   "scripts/tests/test_build_inventory.py"):
+                   "scripts/tests/test_build_inventory.py",
+                   "scripts/tests/test_build_lock.py"):
         out += absent([runner])
     out += check_native_ci(full_run)
     tour = io.open(TOUR_NAME, encoding="utf-8").read()

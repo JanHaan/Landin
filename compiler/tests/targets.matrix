@@ -766,6 +766,7 @@ negative/r490-union-alias-two-pointers | linux-x86-64, macos-arm64, synthetic-32
 negative/r490-union-alias-unused-nonatom | linux-x86-64, macos-arm64, synthetic-32
 negative/r490-union-alias-unused-pointer-shapes | linux-x86-64, macos-arm64, synthetic-32
 negative/r490-union-concrete-optional-widening | linux-x86-64, macos-arm64, synthetic-32
+negative/r491-consumed-subplace-reads | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-empty-slice-scalar-contexts | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-generic-array-field-shape | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-generic-array-field-unassigned | linux-x86-64, macos-arm64, synthetic-32
@@ -775,6 +776,7 @@ negative/r491-match-extra-paren | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-public-conformance | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-public-fixed | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-public-import | linux-x86-64, macos-arm64, synthetic-32
+negative/r491-sunk-inout-exit-edges | linux-x86-64, macos-arm64, synthetic-32
 negative/range-subtype-address | linux-x86-64, macos-arm64
 negative/range-subtype-base-is-not-an-integer | linux-x86-64, macos-arm64
 negative/range-subtype-bound-outside-base | linux-x86-64, macos-arm64
@@ -1575,6 +1577,7 @@ runtime/r490-lexical-module-observation | linux-x86-64
 runtime/r490-review-generic-distinct-atom-array | linux-x86-64
 runtime/r490-review-generic-distinct-bool | linux-x86-64
 runtime/r490-review-generic-empty-module-nonzeroable | linux-x86-64
+runtime/r491-consumed-place-restoration | linux-x86-64
 runtime/r491-generic-array-fields | linux-x86-64
 runtime/r491-generic-empty-slice-contexts | linux-x86-64
 runtime/range-subtype-checks | linux-x86-64

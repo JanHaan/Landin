@@ -85,6 +85,15 @@ a changed source inventory or project file still makes it clean. The ordinary
 `build.sh`, no-argument `test.sh`, and no-argument `linux-loop.sh` remain the
 canonical complete commands.
 
+`LANDIN_BUILD_MODE` accepts only `debug` or `release`, before any build path
+is used. Builds and tests hold an OS lock for their host tag and mode through
+the entire command, including the build nested in `test.sh`. Different modes
+and tags can run concurrently. Host cleanup waits for both modes; `clean.sh
+--all` waits for every tag. The permanent lock files live in
+`compiler/ada/.build-locks/`, outside the directories cleanup removes. Python's
+standard-library `fcntl` supplies these locks on the supported macOS and Linux
+hosts; the kernel releases them when the last using process exits.
+
 The R2.20 session profile had enough timestamps to set the priority: clean
 debug and release builds and whole-fixture runs occupied almost all measured
 time, while all six measured container lifecycle phases rounded to zero

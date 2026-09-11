@@ -20,6 +20,13 @@ landin_root() {
 LANDIN_ROOT="$(landin_root)"
 LANDIN_ADA_DIR="$LANDIN_ROOT/compiler/ada"
 LANDIN_BUILD_MODE="${LANDIN_BUILD_MODE:-debug}"
+case "$LANDIN_BUILD_MODE" in
+    debug | release) ;;
+    *)
+        echo "landin: LANDIN_BUILD_MODE must be debug or release" >&2
+        exit 2
+        ;;
+esac
 export LANDIN_BUILD_MODE
 
 #  One checkout, more than one host: the macOS loop and the linux/amd64
@@ -59,34 +66,17 @@ fi
 
 export PATH
 
-#  One build per tag and mode at a time.  mkdir is the portable atomic
-#  test-and-set; the lock lives beside the build trees so removing one
-#  does not remove it, and the pid inside lets a lock left by a dead
-#  process be reclaimed rather than waited on forever.  Held until this
-#  shell exits, so a caller that runs a build and then a test keeps it.
+#  Re-enter the command with inherited OS locks. The helper verifies the
+#  open descriptors on re-entry and in a build called by test.sh. The
+#  kernel releases each lock when its last inherited descriptor closes.
+#  Lock files live outside build/, and are never unlinked by clean.
 landin_build_lock() {
-    Lock_Dir="$LANDIN_ADA_DIR/build/.lock-$1"
-    mkdir -p "$LANDIN_ADA_DIR/build"
-    Waited=0
-    while ! mkdir "$Lock_Dir" 2>/dev/null; do
-        Holder="$(cat "$Lock_Dir/pid" 2>/dev/null || true)"
-        if [ -n "$Holder" ] && ! kill -0 "$Holder" 2>/dev/null; then
-            echo "landin: reclaiming a build lock left by process $Holder" >&2
-            rm -rf "$Lock_Dir"
-            continue
-        fi
-        if [ "$Waited" -eq 0 ]; then
-            echo "landin: waiting for another build of $1 (pid ${Holder:-unknown})" >&2
-        fi
-        Waited=$((Waited + 1))
-        if [ "$Waited" -gt 3600 ]; then
-            echo "landin: gave up waiting for the build lock $Lock_Dir" >&2
-            exit 2
-        fi
-        sleep 1
-    done
-    printf '%s\n' "$$" > "$Lock_Dir/pid"
-    trap 'rm -rf "$Lock_Dir"' EXIT
+    Lock_Scope="$1"
+    shift
+    if ! python3 "$LANDIN_ROOT/scripts/build_lock.py" --check "$Lock_Scope"; then
+        exec python3 "$LANDIN_ROOT/scripts/build_lock.py" \
+            "$Lock_Scope" "$0" "$@"
+    fi
 }
 
 landin_require() {
