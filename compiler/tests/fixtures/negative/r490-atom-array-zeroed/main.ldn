@@ -1,0 +1,2 @@
+north: atom
+f: () -> none = a: [0]north = zeroed end f

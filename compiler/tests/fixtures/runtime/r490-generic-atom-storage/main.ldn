@@ -1,0 +1,34 @@
+north: atom
+south: atom
+problems: type = north | south
+pair: type (t: type) = (first: t, second: t)
+choice: type (t: type) = struct
+    kind: variant
+        empty | values: (first: t, second: t)
+    end kind
+end choice
+stored: pair(problems) = (first: north, of south)
+static_choice: choice(problems) = (kind: values(first: south, of north))
+static_array: [3]problems = [3 of north]
+copy: (t: type, value: t) -> (result: t) = result = value end copy
+public main: () -> (code: i32) =
+    mut local: pair(problems) = copy(stored)
+    local.first = south
+    local.second = north
+    filled: pair(problems) = (first: south, of south)
+    value: choice(problems) = (kind: values(first: north, of south))
+    mut okay: bool = false
+    match value.kind
+        empty: okay = false
+        values(first, second): okay = first == north and second == south
+    end match
+    match static_choice.kind
+        empty: okay = false
+        values(first, second): okay = okay and first == south and second == north
+    end match
+    code = if okay and local.first == south and local.second == north
+              and stored.first == north and stored.second == south
+              and filled.first == south and filled.second == south
+              and static_array[2] == north
+           then 42 else 1 end if
+end main

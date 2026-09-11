@@ -1,0 +1,6 @@
+class: runtime
+summary: recovered atom sets retain generic field identity through erased providers
+program: main.ldn
+status: 42
+constructs: 0630, 0640, 0670, 0940, 0960, 1300, 1350, 1360, 1370
+targets: linux-x86-64

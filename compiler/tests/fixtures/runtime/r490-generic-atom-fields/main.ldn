@@ -1,0 +1,17 @@
+problem: atom
+leaf: () -> none ! ... = fail problem end leaf
+display: type = concept (t: type)
+    code: (self: ptr t) -> (value: i32)
+end display
+box: type (t: type) = (value: t)
+box_code: (t: type, self: ptr box(t)) -> (value: i32) = value = 42 end box_code
+(t: type) box(t) is display (code: box_code)
+wrap: (t: type, value: t) -> (result: box(t)) = result = (value: value) end wrap
+public main: () -> (code: i32) =
+    code = 1
+    leaf() else (error)
+        held := wrap(error)
+        erased: any display = any(addr held)
+        code = erased.code()
+    end
+end main

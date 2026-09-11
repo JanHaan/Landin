@@ -1,0 +1,22 @@
+north, south: atom
+problems: type = north | south
+errors: type = [2]problems
+twice: type (t: type) = [2]t
+empty_type: type = [0]problems
+stored: errors = [north, south]
+copy: (t: type, value: t) -> (result: t) = result = value end copy
+public main: () -> (code: i32) =
+    mut local: errors = [south, north]
+    local[1] = south
+    other: twice(problems) = copy(stored)
+    narrow: [2]north = [north, north]
+    copied_narrow: [2]north = copy(narrow)
+    view: []problems = local[0..<2]
+    nested: [2]errors = [local, other]
+    empty: empty_type
+    code = if local[0] == south and local[1] == south
+        and other[0] == north and other[1] == south
+        and copied_narrow[1] == north
+        and view[1] == south and nested[1][0] == north
+        and sizeof empty_type == 0 and lenof empty == 0 then 42 else 1 end if
+end main

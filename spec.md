@@ -240,7 +240,7 @@ error sets, and what [1795] declares from them: aliases, named ordinary structs 
 variant-bearing structs. `mut` in a pointer or slice type records permission to
 write the pointee or viewed elements [0430] [0570]; it is independent of a
 binding's `mut` [0070].
-Enabled runtime leaves are scalar, reference, function, fixed array or D147's
+Enabled runtime leaves are scalar, atom set, reference, function, fixed array or D147's
 erased pair; ordinary and variant-bearing structs compose those leaves
 recursively. A pointer is one
 target pointer-width carrier and a slice is its non-null base plus a `usize`
@@ -9034,7 +9034,7 @@ classified failure boundary before the repository gate can pass.
 | `allocation.reclamation` | static | 0430, 0470, 0790, 1360 | heap release and a pool free of a currently occupied exact address and extent return real live storage; pool reuse is lowest-index first, stale same-address/same-size identity is outside the guarantee, and counted free delegates once with a live count exact only for valid-free use | `runtime/hosted-heap-provider`, `runtime/r420-pool-provider`, `runtime/r420-failing-providers` |
 | `slices.bounds-known` | static | 0570, 0580, 1950 | L0300 or L0306 | `negative/index-outside-the-length`, `negative/readonly-slice-write` |
 | `slices.bounds-runtime` | trap | 0570, 0580, 1120, 1950, 1960 | trap, outside [1120]'s region | `runtime/computed-array-index-traps`, `runtime/local-array-computed-store-traps`, `runtime/slice-index-read-traps`, `runtime/slice-index-write-traps`, `runtime/slice-half-open-upper-traps`, `runtime/slice-inclusive-upper-traps`, `runtime/slice-lower-after-upper-traps` |
-| `atoms.sets` | static | 0630, 0640 | L0301 or L0312; equality compares declaration identities without requiring set inclusion, while ordering and atom/numeric mixing remain refused | `negative/atom-match-not-exhaustive`, `runtime/atom-values-cross-the-abi`, `runtime/r490-generic-atom-identity` |
+| `atoms.sets` | static | 0630, 0640 | L0301 or L0312; equality compares declaration identities without requiring set inclusion, while ordering and atom/numeric mixing remain refused | `negative/atom-match-not-exhaustive`, `runtime/atom-values-cross-the-abi`, `runtime/r490-generic-atom-identity`, `runtime/r490-generic-atom-arrays`, `runtime/r490-generic-atom-fields`, `runtime/r490-generic-atom-storage`, `negative/r490-atom-array-wrong-member`, `negative/r490-generic-atom-field-member` |
 | `aggregates.fill` | static | 0410, 0670, 0710, 0720 | L0301 for unequal omitted-field descriptors or a value fill without a destination; one exact contextual value is evaluated after written labels and copied in declaration order; ordinary origin and assignment diagnostics remain | `runtime/r490-generic-field-fill`, `negative/r490-fill-mixed-types`, `negative/r490-fill-array-shapes`, `negative/r490-fill-atom-sets`, `negative/r490-fill-pointer-permissions`, `negative/r490-fill-frame-escape`, `negative/r490-fill-unassigned` |
 | `aggregates.variants` | static | 0670, 0680, 0690, 0700, 0710, 0720, 0750, 1210 | L0301, L0308--L0312 or L0313 | `negative/struct-literal-field-not-given`, `negative/variant-match-not-exhaustive` |
 | `origins.escape` | static | 0480, 0770, 0780, 0790, 0800, 0830, 0840 | L0314--L0316; [0790]'s exact `from` comparison applies to an actual returned reference, while a provably empty optional-pointer arm has no origin and is not `Untracked`; a retained provider wrapper keeps its ordinary inner argument's origin without requiring that argument to be declared `escaping`, and tracked pool constructor sources join | `negative/frame-origin-return`, `negative/borrowed-source-inout`, `negative/returned-reference-missing-from`, `negative/core-arena-frame-escape`, `negative/core-pool-frame-escape`, `negative/core-pool-bookkeeping-frame-escape`, `negative/core-failing-frame-escape`, `negative/core-text-frame-slice-escape`, `negative/core-diag-frame-message-escape`, `negative/r440-parser-frame-arena`, `runtime/diagnostic-loggers-dispatch`, `runtime/r420-failing-providers`, `negative/r480-recovery-retains-borrow`, `negative/r480-recovery-exposed-storage`, `negative/r480-reader-live-line` |
@@ -13044,3 +13044,39 @@ final signature-count assertion remains in place.
 `negative/r490-inferred-recovery-immutable`,
 `negative/r490-recovery-expanding-generic` and the checking case
 `recovery deduction interns final sets`.
+
+### D216 — Atom storage retains its complete structural set
+
+**The tour said** that an atom is a type [0630], a union names an enumeration
+[0640], and arrays and structs hold typed elements and fields [0520] [0670].
+The inherited implementation admitted atoms across calls but omitted them from
+ordinary field and array descriptors; parameterized atom fields could fail
+before lowering, while the apparent numeric carrier lost their identity.
+
+**Chosen:** atom sets compose as runtime leaves in fixed arrays, ordinary
+fields and variant payloads, including generic substitution. They retain the
+existing atom carrier and declaration identity; storage, instance keys, static
+images, slice views and payload bindings preserve the complete structural set.
+A write may supply a member of its destination set. Reading preserves the
+whole destination set, and aggregate or array copying requires the same complete
+descriptor. Neither the carrier nor a singleton set grants numeric operations,
+conversions or an all-zero value. D143's zeroability requirement still applies
+to an empty array. D214's fill requires equal omitted-field descriptors even
+when one source atom would be a member of each unequal set.
+
+**The alternatives:** treating stored atoms as ordinary integers erases identity
+and admits invalid writes; making each loaded singleton a new storage type
+breaks structural generic keys. Both are declined. This completes the ordinary
+composition rule without changing atom equality, D189's optional-pointer
+restriction, C boundary eligibility or inference's complete-key requirement.
+
+**Pinned by** `runtime/r490-generic-atom-arrays`,
+`runtime/r490-generic-atom-fields`, `runtime/r490-generic-atom-storage`,
+`negative/r490-atom-array-numeric-write`,
+`negative/r490-atom-array-wrong-member`,
+`negative/r490-atom-array-copy-identity`,
+`negative/r490-atom-array-arithmetic`, `negative/r490-atom-array-zeroed`,
+`negative/r490-generic-atom-field-member`, `negative/r490-fill-atom-sets`
+and the verifier case `typed indirect atoms are checked`, whose corrupt-load
+and invalid-write controls preserve the distinction between exact reads and
+subset writes.

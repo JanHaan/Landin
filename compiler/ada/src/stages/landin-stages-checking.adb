@@ -2803,7 +2803,7 @@ package body Landin.Stages.Checking is
                elsif Element.Kind /= Ty.Undecided
                  and then Element.Kind not in Ty.Scalar_Name | Ty.Aggregate
                    | Ty.Fixed_Array | Ty.Pointer_Value | Ty.Slice_Value
-                   | Ty.Any_Value | Ty.Function_Value
+                   | Ty.Any_Value | Ty.Function_Value | Ty.Atom_Value
                then
                   if Landin.Provenance.Is_Known (Application) then
                      Bad.Report
@@ -3930,6 +3930,8 @@ package body Landin.Stages.Checking is
                            Element => Ty.Scalar_Name (Descriptor.Kind),
                            Length  => 1,
                            others  => <>);
+               when Ty.Atom_Value =>
+                  Into := Descriptor_Shape (Descriptor);
                when Ty.Any_Value =>
                   if Descriptor.Concept = Landin.Checking.No_Concept then
                      Valid := False;
@@ -5111,6 +5113,15 @@ package body Landin.Stages.Checking is
                         Element => Ty.Scalar_Name (Held),
                         Length  => 1,
                         others  => <>);
+                  elsif Held = Ty.Atom_Value then
+                     Into :=
+                       (Kind    => Landin.Checking.Scalar_Field,
+                        Element => Ty.U32,
+                        Length  => 1,
+                        Atoms   => Landin.Checking.Atom_Set_Of
+                          (Types.all, Of_Tree,
+                           Syn.Declared_Type (Of_Tree, Each)),
+                        others  => <>);
                   elsif Held in Ty.Pointer_Value | Ty.Slice_Value then
                      declare
                         Reference : constant Landin.Checking.Reference_Id :=
@@ -5392,6 +5403,7 @@ package body Landin.Stages.Checking is
                  and then Held not in
                    Ty.Fixed_Array | Ty.Pointer_Value
                    | Ty.Slice_Value | Ty.Any_Value | Ty.Function_Value
+                   | Ty.Atom_Value
                then
                   --  Three passes reach a written type; the first to
                   --  refuse it records that, so a reader sees one report.
@@ -5449,6 +5461,9 @@ package body Landin.Stages.Checking is
                                 * Shape_Bytes
                                   (Landin.Checking.Array_Element_Shape
                                      (Types.all, Of_Tree, Element))
+                              elsif Held = Ty.Atom_Value
+                              then Ty.Magnitude (Landin.Targets.Bytes
+                                (Ty.Storage_Size (Ty.U32, Facts)))
                               elsif Held = Ty.Function_Value
                               then Ty.Magnitude (Landin.Targets.Bytes
                                 (Ty.Storage_Size (Ty.Usize, Facts)))
@@ -5495,6 +5510,7 @@ package body Landin.Stages.Checking is
                      (if Held in
                        Ty.Fixed_Array | Ty.Pointer_Value
                    | Ty.Slice_Value | Ty.Any_Value | Ty.Function_Value
+                   | Ty.Atom_Value
                       then Ty.U8 else Held)));
                if Aggregate_Element then
                   Landin.Checking.Note_Array_Element_Nominal
@@ -5507,6 +5523,13 @@ package body Landin.Stages.Checking is
                           (Types.all, Of_Tree, Element),
                         Landin.Checking.Array_Element_Shape
                           (Types.all, Of_Tree, Element)));
+               elsif Held = Ty.Atom_Value then
+                  Landin.Checking.Note_Array_Element_Shape
+                    (Types.all, Of_Tree, Written,
+                     (Kind => Landin.Checking.Scalar_Field,
+                      Element => Ty.U32,
+                      Atoms => Landin.Checking.Atom_Set_Of
+                        (Types.all, Of_Tree, Element), others => <>));
                elsif Held = Ty.Function_Value then
                   Landin.Checking.Note_Array_Element_Shape
                     (Types.all, Of_Tree, Written,
@@ -10387,6 +10410,7 @@ package body Landin.Stages.Checking is
            and then Shape.Element in Ty.Numeric_Name
            and then Shape.Nominal = Landin.Checking.No_Nominal_Type
            and then Shape.Signature = Landin.Checking.No_Signature
+           and then Shape.Atoms = Landin.Checking.No_Atom_Set
            and then Shape.Reference = Landin.Checking.No_Reference;
       end Plain_Array;
 
@@ -12068,6 +12092,20 @@ package body Landin.Stages.Checking is
             end if;
             return Landin.Checking.Descriptor_Of
               (Types.all, Shape.Reference).Kind;
+         end if;
+
+         if Shape.Kind = Landin.Checking.Scalar_Field
+           and then Shape.Atoms /= Landin.Checking.No_Atom_Set
+         then
+            if Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
+                 = Ty.Undecided
+            then
+               Landin.Checking.Note
+                 (Types.all, Of_Tree, Node, Ty.Atom_Value);
+               Landin.Checking.Note_Atom_Set
+                 (Types.all, Of_Tree, Node, Shape.Atoms);
+            end if;
+            return Ty.Atom_Value;
          end if;
 
          if Shape.Kind = Landin.Checking.Scalar_Field
@@ -17017,10 +17055,13 @@ package body Landin.Stages.Checking is
                         case Shape.Kind is
                            when Landin.Checking.Scalar_Field =>
                               Item.Referent :=
-                                (if Shape.Signature
+                                (if Shape.Atoms /= Landin.Checking.No_Atom_Set
+                                 then Ty.Atom_Value
+                                 elsif Shape.Signature
                                       = Landin.Checking.No_Signature
                                  then Shape.Element else Ty.Function_Value);
                               Item.Signature := Shape.Signature;
+                              Item.Atoms := Shape.Atoms;
                            when Landin.Checking.Aggregate_Field =>
                               Item.Referent := Ty.Aggregate;
                               Item.Nominal := Shape.Nominal;
@@ -17313,6 +17354,10 @@ package body Landin.Stages.Checking is
                            end if;
                            return Kept (Descriptor.Kind);
                         end;
+                     elsif Shape.Atoms /= Landin.Checking.No_Atom_Set then
+                        Landin.Checking.Note_Atom_Set
+                          (Types.all, Of_Tree, Node, Shape.Atoms);
+                        return Kept (Ty.Atom_Value);
                      elsif Shape.Signature /= Landin.Checking.No_Signature then
                         Landin.Checking.Note_Signature
                           (Types.all, Of_Tree, Node, Shape.Signature);
@@ -19413,7 +19458,12 @@ package body Landin.Stages.Checking is
                   begin
                      case Shape.Kind is
                         when Landin.Checking.Scalar_Field =>
-                           if Shape.Signature /=
+                           if Shape.Atoms /= Landin.Checking.No_Atom_Set then
+                              Require_Atom
+                                (Of_Tree, Given, Shape.Atoms,
+                                 Syn.Origin (Of_Tree, Label),
+                                 "the atom-valued payload field named here");
+                           elsif Shape.Signature /=
                                 Landin.Checking.No_Signature
                              and then Syn.Kind (Of_Tree, Given)
                                = Syn.Zeroed_Literal
@@ -19706,7 +19756,9 @@ package body Landin.Stages.Checking is
                                 (case Shape.Kind is
                                     when Landin.Checking.Scalar_Field =>
                                       Shape.Signature =
-                                        Landin.Checking.No_Signature,
+                                        Landin.Checking.No_Signature
+                                      and then Shape.Atoms =
+                                        Landin.Checking.No_Atom_Set,
                                     when Landin.Checking.Reference_Field =>
                                       False,
                                     when Landin.Checking.Fixed_Array_Field =>
@@ -20234,7 +20286,12 @@ package body Landin.Stages.Checking is
                          (Types.all, Wrote, Which);
                      Held : constant Ty.Scalar_Name := Shape.Element;
                   begin
-                     if Shape.Signature /= Landin.Checking.No_Signature
+                     if Shape.Atoms /= Landin.Checking.No_Atom_Set then
+                        Require_Atom
+                          (Of_Tree, Value, Shape.Atoms,
+                           Syn.Origin (Of_Tree, Field),
+                           "the atom-valued struct field named here");
+                     elsif Shape.Signature /= Landin.Checking.No_Signature
                        and then Syn.Kind (Of_Tree, Value)
                          = Syn.Zeroed_Literal
                      then
@@ -21510,7 +21567,20 @@ package body Landin.Stages.Checking is
                               begin
                                  case Shape.Kind is
                                     when Landin.Checking.Scalar_Field =>
-                                       if Shape.Signature /=
+                                       if Shape.Atoms /=
+                                            Landin.Checking.No_Atom_Set
+                                       then
+                                          Landin.Checking.Settle
+                                            (Types.all, Id, Ty.Atom_Value);
+                                          Landin.Checking.Note
+                                            (Types.all, Of_Tree, Binding,
+                                             Ty.Atom_Value);
+                                          Landin.Checking.Note_Atom_Set
+                                            (Types.all, Id, Shape.Atoms);
+                                          Landin.Checking.Note_Atom_Set
+                                            (Types.all, Of_Tree, Binding,
+                                             Shape.Atoms);
+                                       elsif Shape.Signature /=
                                             Landin.Checking.No_Signature
                                        then
                                           Landin.Checking.Settle
