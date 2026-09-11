@@ -1,0 +1,3 @@
+first, second: atom
+bad: type (t: type) = first | second | ptr t
+wrong: type = bad(i32)

@@ -1567,6 +1567,88 @@ package body Landin.Tests.Checking_Suite is
       end;
    end Routine_Instance_Views_Keep_Source_Facts_Separate;
 
+   procedure Union_Aliases_Keep_Exact_Instance_Keys
+     (Item : in out Landin.Testing.Context);
+
+   procedure Union_Aliases_Keep_Exact_Instance_Keys
+     (Item : in out Landin.Testing.Context)
+   is
+      Text : constant String :=
+        "first, second, third: atom" & LF
+        & "joined: type (left: type, right: type) = left | right" & LF
+        & "a: type = joined(first, second)" & LF
+        & "b: type = joined(second, first)" & LF
+        & "c: type = joined(a, first)" & LF
+        & "d: type = joined(first, third)" & LF
+        & "observe: (t: type, value: t) -> none = _ = value end observe" & LF
+        & "main: () -> none =" & LF
+        & "  one: a = first" & LF
+        & "  two: b = second" & LF
+        & "  three: c = first" & LF
+        & "  four: d = third" & LF
+        & "  observe(one)" & LF
+        & "  observe(two)" & LF
+        & "  observe(three)" & LF
+        & "  observe(four)" & LF
+        & "end main" & LF;
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Src : Landin.Source.Source_Id;
+      Ran : Natural;
+   begin
+      Src := Landin.Stages.Add_Source (Work, "union-alias-keys.ldn", Text);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Configurer'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Landin.Stages.Append (Order, Checker'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+      Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work), "union aliases are accepted");
+      declare
+         Types : constant not null access Landin.Checking.Table :=
+           Landin.Stages.Types (Work);
+         Of_Tree : constant not null access constant Landin.Syntax.Tree :=
+           Landin.Syntax.Forest.Tree_Of
+             (Landin.Stages.Trees (Work).all, Src);
+         Targets : array (1 .. 4) of Landin.Checking.Routine_Instance_Id :=
+           [others => Landin.Checking.No_Routine_Instance];
+         Calls : Natural := 0;
+      begin
+         for Node in Landin.Syntax.Node_Id'(1)
+           .. Landin.Syntax.Last_Node (Of_Tree.all)
+         loop
+            if Landin.Syntax.Kind (Of_Tree.all, Node) = Landin.Syntax.Call then
+               Calls := Calls + 1;
+               if Calls <= Targets'Last then
+                  Targets (Calls) := Landin.Checking.Routine_Target_Of
+                    (Types.all, Of_Tree.all, Node);
+               end if;
+            elsif Landin.Syntax.Kind (Of_Tree.all, Node)
+              = Landin.Syntax.Atom_Union_Type
+            then
+               Landin.Testing.Check
+                 (Item, Landin.Checking.Type_Of (Types.all, Of_Tree.all, Node)
+                    = Landin.Types.Undecided,
+                  "the template never receives one instance's atom set");
+            end if;
+         end loop;
+         Landin.Testing.Check_Equal
+           (Item, Calls, 4, "four calls were checked");
+         Landin.Testing.Check
+           (Item, Targets (1) /= Landin.Checking.No_Routine_Instance
+              and then Targets (1) = Targets (2)
+              and then Targets (1) = Targets (3)
+              and then Targets (4) /= Landin.Checking.No_Routine_Instance
+              and then Targets (1) /= Targets (4),
+            "order and duplicates reuse a key; a different atom changes it");
+         Landin.Testing.Check_Equal
+           (Item, Landin.Checking.Routine_Instance_Count (Types.all), 2,
+            "only the two complete structural sets create instances");
+      end;
+   end Union_Aliases_Keep_Exact_Instance_Keys;
+
    --  A concrete generic array result may be copied from a slice element.
    --  The element's type is supplied by the instance, but the member that
    --  reaches that slice remains an ordinary declaration-order field.
@@ -9214,6 +9296,9 @@ package body Landin.Tests.Checking_Suite is
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "checking", "union aliases keep exact instance keys",
+         Union_Aliases_Keep_Exact_Instance_Keys'Access);
       Landin.Testing.Register
         (Into, "checking", "large loop frames stay off the host stack",
          Large_Loop_Frames_Stay_Off_The_Host_Stack'Access);

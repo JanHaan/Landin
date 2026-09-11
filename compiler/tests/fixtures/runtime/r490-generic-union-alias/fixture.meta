@@ -1,0 +1,7 @@
+class: runtime
+summary: parameterized union aliases substitute exact atom sets and optional pointers without cross-instance cache state
+program: main.ldn
+root: .
+status: 42
+constructs: 0120, 0480, 0630, 0640, 0940, 1030, 1210, 1290, 1300, 1350, 1795
+targets: linux-x86-64

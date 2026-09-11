@@ -297,8 +297,8 @@ package Landin.Syntax is
       --  type and fixed arguments in order.
       Type_Application,
       --  [0640]'s nonempty union of atom types.  Its trailing run is the
-      --  referenced atom or atom-union names in written order; checking
-      --  turns that run into a set, so order is not type identity.
+      --  atom names, aliases/applications or pointer types in written order;
+      --  checking normalizes that run, so order is not type identity.
       Atom_Union_Type,
       --  D188's [0660] range subtype, which only a type declaration's
       --  right-hand side may write.  Three slots: the base type, the lower
@@ -1295,12 +1295,11 @@ package Landin.Syntax is
                   and then Kind (Of_Tree, Id) = Atom_Union_Type
                   and then Index <= Atom_Member_Count (Of_Tree, Id),
           Post => Contains (Of_Tree, Nth_Atom_Member'Result)
-                  --  D189/[0480]: `union_member` also admits one written
-                  --  pointer type, which is a Pointer_Type node and not a
-                  --  name the union could otherwise hold.
+                  --  D135 admits applied aliases; D189/[0480] admits
+                  --  one written pointer type alongside atom members.
                   and then Kind (Of_Tree, Nth_Atom_Member'Result)
-                             in Type_Reference | Member_Selection
-                                | Pointer_Type;
+                             in Type_Name | Type_Reference | Member_Selection
+                                | Type_Application | Pointer_Type;
 
    --  D188's [0660] base type and its two written bounds.  The bounds are
    --  nodes and not numbers for Bound_Of's reason: what a literal means is

@@ -95,7 +95,6 @@ package Landin.Diagnostics.Syntactic is
       Struct_Type,
       Distinct_Type,
       Type_Parameter,
-      Parameterized_Atom_Union,
       --  Bracketed constructs whose spelling the parser alone can tell
       --  from [1790]'s array type and [0520]'s array literal.
       Array_Repetition,
@@ -119,7 +118,6 @@ package Landin.Diagnostics.Syntactic is
             when Struct_Type          => "[0670]",
             when Distinct_Type        => "[0650]",
             when Type_Parameter       => "[1290]",
-            when Parameterized_Atom_Union => "[1350]",
             when Array_Repetition     => "[0560]",
             when Indexing             => "[0570]",
             when Struct_All_Of         => "[0720]",
@@ -166,7 +164,6 @@ private
             --  derived hosted application, before the hosted parity gate.
             when Arena_Block           => "R4.80",
             --  R2.40 implements type and fixed parameters.
-            when Type_Parameter
-               | Parameterized_Atom_Union => "R2.40");
+            when Type_Parameter => "R2.40");
 
 end Landin.Diagnostics.Syntactic;

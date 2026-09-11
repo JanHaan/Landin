@@ -2734,23 +2734,138 @@ package body Landin.Stages.Checking is
          end if;
 
          if Syn.Kind (Of_Tree, Written) = Syn.Atom_Union_Type then
-            if Type_At (Of_Tree, Written) = Ty.Atom_Value then
-               return
-                 (Kind   => Ty.Atom_Value,
-                  Atoms  => Landin.Checking.Atom_Set_Of
-                    (Types.all, Of_Tree, Written),
-                  others => <>);
-            end if;
-            --  D189/[0480]: a one-atom pointer union is a pointer whose
-            --  descriptor names the atom it reserves zero for.
-            if Type_At (Of_Tree, Written) = Ty.Pointer_Value then
-               return
-                 (Kind      => Ty.Pointer_Value,
-                  Reference => Landin.Checking.Reference_Of
-                    (Types.all, Of_Tree, Written),
-                  others    => <>);
-            end if;
-            return Invalid;
+            --  An alias body belongs to its substitution, not to a cached
+            --  answer on the template's syntax.  Symbolic validation checks
+            --  every independent member without inventing a concrete set.
+            declare
+               Members : Landin.Checking.Atom_Array
+                 (1 .. Positive'Max
+                    (1, Res.Declaration_Count (Meanings.all))) :=
+                      [others => Res.No_Declaration];
+               Count : Natural := 0;
+               Pointers : Natural := 0;
+               Pointed : Landin.Checking.Reference_Id :=
+                 Landin.Checking.No_Reference;
+               Pointer_Node : Syn.Node_Id := Syn.No_Node;
+               Symbolic : Boolean := False;
+               Valid : Boolean := True;
+
+               procedure Include_Atom (Atom : Res.Declaration_Id);
+
+               procedure Include_Atom (Atom : Res.Declaration_Id) is
+               begin
+                  for Prior in 1 .. Count loop
+                     if Members (Prior) = Atom then
+                        return;
+                     end if;
+                  end loop;
+                  Count := Count + 1;
+                  Members (Count) := Atom;
+               end Include_Atom;
+            begin
+               for Index in 1 .. Syn.Atom_Member_Count (Of_Tree, Written) loop
+                  declare
+                     Member : constant Syn.Node_Id :=
+                       Syn.Nth_Atom_Member (Of_Tree, Written, Index);
+                     Part : constant Type_Descriptor := Normalized_Type
+                       (Of_Tree, Member, Actuals, Application, Identity_Only);
+                  begin
+                     case Part.Kind is
+                        when Ty.Undecided =>
+                           Symbolic := True;
+                        when Ty.Atom_Value =>
+                           for Position in 1 .. Landin.Checking.Atom_Count
+                             (Types.all, Part.Atoms)
+                           loop
+                              Include_Atom (Landin.Checking.Nth_Atom
+                                (Types.all, Part.Atoms, Position));
+                           end loop;
+                        when Ty.Pointer_Value =>
+                           Pointers := Pointers + 1;
+                           if Pointers = 1 then
+                              Pointed := Part.Reference;
+                              Pointer_Node := Member;
+                              declare
+                                 Empty : constant Res.Declaration_Id :=
+                                   Landin.Checking.Descriptor_Of
+                                     (Types.all, Pointed).Empty_Atom;
+                              begin
+                                 if Empty /= Res.No_Declaration then
+                                    Include_Atom (Empty);
+                                 end if;
+                              end;
+                           else
+                              Bad.Report
+                                (Item => Bad.Type_Mismatch,
+                                 Source => Syn.Source_Of (Of_Tree),
+                                 Where => Syn.Where (Of_Tree, Member),
+                                 Message => "a union holds at most one pointer"
+                                   & " type",
+                                 Note => "[0480]: `maybe a pointer` is an"
+                                   & " atom beside one pointer type",
+                                 Related => Syn.Origin
+                                   (Of_Tree, Pointer_Node),
+                                 Because => "the pointer member already given",
+                                 Into => Found);
+                              Valid := False;
+                           end if;
+                        when Ty.Ill_Typed =>
+                           Valid := False;
+                        when others =>
+                           Bad.Report
+                             (Item => Bad.Type_Mismatch,
+                              Source => Syn.Source_Of (Of_Tree),
+                              Where => Syn.Where (Of_Tree, Member),
+                              Message => "this union member is not an atom"
+                                & " type",
+                              Note => "[0640]: an atom union contains only"
+                                & " atom identities, and D189 admits"
+                                & " one pointer type beside them",
+                              Related => Syn.Origin (Of_Tree, Written),
+                              Because => "the union declared here",
+                              Into => Found);
+                           Valid := False;
+                     end case;
+                  end;
+               end loop;
+               if not Valid then
+                  return Invalid;
+               elsif Symbolic then
+                  return (Kind => Ty.Undecided, others => <>);
+               elsif Count = 0 then
+                  return Invalid;
+               elsif Pointers = 1 then
+                  if Count /= 1 then
+                     Bad.Report
+                       (Item => Bad.Unsupported_Use,
+                        Source => Syn.Source_Of (Of_Tree),
+                        Where => Syn.Where (Of_Tree, Written),
+                        Message => "a union of several atoms and a pointer"
+                          & " is not enabled",
+                        Note => "[0480]: the spelling does not decide how"
+                          & " a union of several atoms and a"
+                          & " pointer is laid out",
+                        Refused => Bad.Tagged_Pointer_Union,
+                        Into => Found);
+                     return Invalid;
+                  end if;
+                  declare
+                     Union : Landin.Checking.Reference_Descriptor :=
+                       Landin.Checking.Descriptor_Of (Types.all, Pointed);
+                  begin
+                     Union.Empty_Atom := Members (1);
+                     return
+                       (Kind => Ty.Pointer_Value,
+                        Reference => Landin.Checking.Add_Reference
+                          (Types.all, Union), others => <>);
+                  end;
+               else
+                  return
+                    (Kind => Ty.Atom_Value,
+                     Atoms => Landin.Checking.Add_Atom_Set
+                       (Types.all, Members (1 .. Count)), others => <>);
+               end if;
+            end;
          end if;
 
          if Syn.Kind (Of_Tree, Written) = Syn.Function_Type then
@@ -2950,6 +3065,16 @@ package body Landin.Stages.Checking is
                     (Of_Tree, Written,
                      "this type formal has no argument in this application");
                   return Invalid;
+               end if;
+
+               if Res.Sort_Of (Meanings.all, Means) = Res.Module_Atom then
+                  if Settled_Type (Means) /= Ty.Atom_Value then
+                     return Invalid;
+                  end if;
+                  return
+                    (Kind => Ty.Atom_Value,
+                     Atoms => Landin.Checking.Atom_Set_Of (Types.all, Means),
+                     others => <>);
                end if;
 
                if Res.Sort_Of (Meanings.all, Means) /= Res.Module_Type then
@@ -3523,13 +3648,15 @@ package body Landin.Stages.Checking is
                                  return Invalid;
                               elsif Result.Kind not in
                                 Ty.Undecided | Ty.Scalar_Name | Ty.Fixed_Array
-                                   | Ty.Aggregate
+                                   | Ty.Aggregate | Ty.Atom_Value
+                                   | Ty.Pointer_Value
                               then
                                  Report_Application
                                    (Of_Tree, Written,
                                     "this parameterized alias does not"
                                     & " normalize to a scalar, fixed-array"
-                                    & " or nominal aggregate type");
+                                    & ", aggregate, atom-set or pointer"
+                                    & " type");
                                  return Invalid;
                               end if;
                               return Result;
@@ -3993,12 +4120,13 @@ package body Landin.Stages.Checking is
                         Template_Invalid (Positive (Id)) := True;
                      elsif Result.Kind not in
                        Ty.Undecided | Ty.Scalar_Name | Ty.Fixed_Array
-                          | Ty.Aggregate
+                          | Ty.Aggregate | Ty.Atom_Value | Ty.Pointer_Value
                      then
                         Report_Application
                           (Of_Tree.all, Struct_Node,
                            "this parameterized alias cannot produce a scalar,"
-                           & " fixed-array or nominal aggregate type");
+                           & " fixed-array, aggregate, atom-set or pointer"
+                           & " type");
                         Template_Invalid (Positive (Id)) := True;
                      end if;
                   end;
@@ -4257,6 +4385,23 @@ package body Landin.Stages.Checking is
                            Pointed := Landin.Checking.Reference_Of
                              (Types.all, Of_Tree, Member);
                            Pointer_Node := Member;
+                           declare
+                              Empty : constant Res.Declaration_Id :=
+                                Landin.Checking.Descriptor_Of
+                                  (Types.all, Pointed).Empty_Atom;
+                              Seen : Boolean := False;
+                           begin
+                              if Empty /= Res.No_Declaration then
+                                 for Prior in 1 .. Count loop
+                                    Seen := Seen
+                                      or else Members (Prior) = Empty;
+                                 end loop;
+                                 if not Seen then
+                                    Count := Count + 1;
+                                    Members (Count) := Empty;
+                                 end if;
+                              end if;
+                           end;
                         else
                            Bad.Report
                              (Item    => Bad.Type_Mismatch,

@@ -1,0 +1,11 @@
+first, second, third: atom
+joined: type (left: type, right: type) = left | right
+observe: (t: type, left: t, right: t) -> none =
+    _ = left
+    _ = right
+end observe
+main: () -> none =
+    left: joined(first, second) = first
+    right: joined(first, third) = first
+    observe(left, right)
+end main

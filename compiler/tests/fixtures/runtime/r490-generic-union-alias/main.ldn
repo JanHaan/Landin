@@ -1,0 +1,54 @@
+import atoms
+
+joined: type (left: type, right: type) = left | right
+with_second: type (t: type) = t | atoms.second
+nested: type (t: type) = atoms.first | joined(t, atoms.second)
+optional: type (t: type) = atoms.missing | ptr mut t
+again_optional: type (t: type) = optional(t) | atoms.missing
+first_two: type = joined(atoms.first, atoms.second)
+reordered: type = joined(atoms.second, atoms.first)
+again: type = with_second(first_two)
+other_two: type = joined(atoms.first, atoms.third)
+all_three: type = nested(other_two)
+
+identity: (t: type, value: t) -> (result: t) =
+    result = value
+end identity
+same: (t: type, left: t, right: t) -> (yes: bool) =
+    yes = left == right
+end same
+leaf: (second: bool) -> none ! first_two =
+    if second then fail atoms.second else fail atoms.first end if
+end leaf
+
+public main: () -> (code: i32) =
+    code = 1
+    first: first_two = atoms.first
+    repeated: reordered = identity(first)
+    deduplicated: again = identity(repeated)
+    third: other_two = atoms.third
+    combined: all_three = identity(third)
+    return when not same(first, deduplicated)
+    match combined
+        atoms.first: return
+        atoms.second: return
+        atoms.third: code = 1
+    end match
+    expected: first_two = atoms.second
+    mut recovered: bool = false
+    leaf(true) else (error)
+        recovered = same(error, expected)
+    end
+    return when not recovered
+    mut storage: i32 = 42
+    present: again_optional(i32) = addr storage
+    absent: optional(u8) = atoms.missing
+    match absent
+        atoms.missing: code = 1
+        ptr: return
+    end match
+    match present
+        atoms.missing: return
+        ptr (value): code = value.val
+    end match
+end main

@@ -2834,23 +2834,7 @@ package body Landin.Syntax.Parser is
                      --  names.  Parse_Type read the first name; only a type
                      --  declaration admits the following bars, so ordinary
                      --  expression precedence remains untouched.
-                     if not Type_Refused
-                       and then Peek = Tok.Bar
-                       and then not Formals.Is_Empty
-                     then
-                        --  D135 admits a parameterized alias or struct.  An
-                        --  atom union is a separate declaration alternative in
-                        --  [1795], not a `type` body, so retaining an
-                        --  Atom_Union_Type here would accept syntax the
-                        --  grammar excludes.
-                        Type_Refused := True;
-                        Refuse
-                          (Item    => Syn.Parameterized_Atom_Union,
-                           Where   => Here,
-                           Message => "a parameterized atom union is not"
-                                      & " enabled");
-                        Resync_Declaration;
-                     elsif not Type_Refused and then Peek = Tok.Bar then
+                     if not Type_Refused and then Peek = Tok.Bar then
                         declare
                            Members : Slot_Vectors.Vector;
                            Starts  : constant Landin.Source.Span :=
@@ -2859,32 +2843,12 @@ package body Landin.Syntax.Parser is
                            Members.Append (Aliased_Type);
                            while Peek = Tok.Bar loop
                               Advance;
-                              if Peek = Tok.Identifier then
-                                 declare
-                                    At_Member : constant Landin.Source.Span :=
-                                      Here;
-                                    Named_Member : constant
-                                      Landin.Source.Names.Name_Id :=
-                                        Named_Here;
-                                 begin
-                                    Advance;
-                                    Members.Append
-                                      (Add (Type_Reference, At_Member,
-                                            Named => Named_Member));
-                                 end;
-                              elsif Peek = Tok.Kw_Ptr then
-                                 --  D189/[0480]: `union_member` admits one
-                                 --  pointer type beside the atom names, so
-                                 --  the member is parsed as a type rather
-                                 --  than as a bare name.  How many pointers
-                                 --  a union may hold is the checker's, not
-                                 --  the grammar's.
-                                 declare
-                                    Member : constant Node_Id :=
-                                      Parse_Type (False, At_Name);
-                                 begin
-                                    Members.Append (Member);
-                                 end;
+                              if Peek in Tok.Identifier | Tok.Kw_Ptr then
+                                 --  A member may be a qualified alias or a
+                                 --  fully applied alias, as well as a pointer
+                                 --  written directly.  Normalization checks
+                                 --  the resulting atom-set/pointer identity.
+                                 Members.Append (Parse_Type (False, At_Name));
                               else
                                  Complain
                                    (Item    => Syn.Type_Expected,

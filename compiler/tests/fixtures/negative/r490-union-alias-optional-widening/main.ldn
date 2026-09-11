@@ -1,0 +1,4 @@
+first, second: atom
+optional: type = first | ptr i32
+joined: type (t: type) = t | second
+wrong: type = joined(optional)

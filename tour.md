@@ -2709,6 +2709,12 @@ end list
 
 ```
 
+An alias body may also unite atom sets after substitution. Declared atom names
+supply their singleton types, aliases flatten, and ordering or repeating members
+does not change the set. The same normalized result can name a function's error
+set or a generic actual. `missing | ptr T` retains the one-atom optional-pointer
+representation [0480]; substitution does not enable larger tagged unions.
+
 The enabled declaration form takes type parameters, each optionally carrying
 one direct concept constraint, and fixed integer parameters. Applications are
 fully applied and positional. A type actual may be any enabled concrete
