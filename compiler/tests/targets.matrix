@@ -697,6 +697,12 @@ negative/r470-container-entry-live-map | linux-x86-64, macos-arm64, synthetic-32
 negative/r470-container-entry-wrong-from | linux-x86-64, macos-arm64, synthetic-32
 negative/r470-container-missing-order-evidence | linux-x86-64, macos-arm64, synthetic-32
 negative/r470-scalar-reference-controls | linux-x86-64, macos-arm64
+negative/r480-callback-frame-escape | linux-x86-64, macos-arm64
+negative/r480-helper-frame-retention | linux-x86-64, macos-arm64
+negative/r480-nested-infallible-recovery | linux-x86-64
+negative/r480-reader-live-line | linux-x86-64
+negative/r480-region-frame-provider | linux-x86-64, macos-arm64, synthetic-32
+negative/r480-region-private-ledger | linux-x86-64, macos-arm64, synthetic-32
 negative/range-subtype-address | linux-x86-64, macos-arm64
 negative/range-subtype-base-is-not-an-integer | linux-x86-64, macos-arm64
 negative/range-subtype-bound-outside-base | linux-x86-64, macos-arm64
@@ -1223,6 +1229,7 @@ runtime/defer-does-not-unwind-traps | linux-x86-64
 runtime/derived-address-empty-slice-traps | linux-x86-64
 runtime/derived-array-slice-origin | linux-x86-64
 runtime/derived-containers | linux-x86-64
+runtime/derived-hosted-memory | linux-x86-64
 runtime/derived-parser | linux-x86-64
 runtime/derived-storage-address-origin | linux-x86-64
 runtime/diagnostic-loggers-dispatch | linux-x86-64
@@ -1450,6 +1457,13 @@ runtime/r470-array-field-range | linux-x86-64
 runtime/r470-array-inout-parameter | linux-x86-64
 runtime/r470-nested-guarded-field-range | linux-x86-64
 runtime/r470-scalar-operator-origins | linux-x86-64
+runtime/r480-arena-independent-results | linux-x86-64
+runtime/r480-arena-nested-exhaustion | linux-x86-64
+runtime/r480-generic-nested-recovery | linux-x86-64
+runtime/r480-generic-provider-entry | linux-x86-64
+runtime/r480-hosted-count | linux-x86-64
+runtime/r480-hosted-text | linux-x86-64
+runtime/r480-loop-fresh-view | linux-x86-64
 runtime/range-subtype-checks | linux-x86-64
 runtime/range-subtype-conversion-traps | linux-x86-64
 runtime/range-subtype-store-traps | linux-x86-64
