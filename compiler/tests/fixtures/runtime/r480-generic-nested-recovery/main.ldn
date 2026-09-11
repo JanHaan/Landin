@@ -1,0 +1,45 @@
+unavailable: atom
+action: type = concept (t: type)
+    close: (self: ptr mut t) -> none ! unavailable
+end action
+counter: type = struct
+    calls: i32
+end counter
+close_counter: (self: ptr mut counter) -> none ! unavailable =
+    inc self.val.calls
+    fail unavailable
+end close_counter
+counter is action (close: close_counter)
+
+display: type = concept (t: type)
+    read: (self: ptr t) -> (value: i32)
+end display
+read_counter: (self: ptr counter) -> (value: i32) = self.val.calls end read_counter
+counter is display (read: read_counter)
+
+select: (t: type, value: ptr mut t, broken: bool)
+        -> (result: ptr mut t from value) ! ... =
+    fail unavailable when broken
+    result = value
+end select
+
+run: (t: type is display, value: ptr mut t, erased: any action, broken: bool)
+     -> (result: i32) ! unavailable =
+    object := (select(value, broken) else (problem)
+        erased.close() else (close_problem) _ = close_problem end
+        fail problem
+    end)
+    shown: any display = any(object)
+    result = shown.read()
+end run
+
+public main: () -> (code: i32) =
+    mut item: counter = (calls: 41)
+    erased: any action = any(addr item)
+    first := run(addr item, erased, false) else 0
+    second := run(addr item, erased, true) else (problem)
+        if problem == unavailable then 1 else 0 end if
+    end
+    code = if first == 41 and second == 1 and item.calls == 42
+           then 42 else 1 end if
+end main

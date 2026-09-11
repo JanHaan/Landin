@@ -27618,10 +27618,15 @@ package body Landin.Stages.Checking is
                   --  Pass two may already have cached an ordinary call's
                   --  result while inferring a local or module binding; its
                   --  later body walk will then prune at that node, so finish
-                  --  its deferred recovery now.  Generic bodies were not
-                  --  checked during instance discovery and must instead be
-                  --  visited exactly once by their finalized view below.
-                  if Issue.View = Landin.Checking.No_Routine_Instance then
+                  --  its deferred recovery now.  Contextual discovery of an
+                  --  `any` construction can also infer and cache a generic
+                  --  initializer.  Finish that cached call's recovery in its
+                  --  own view; uncached generic calls still belong to the
+                  --  finalized body walk below.
+                  if Issue.View = Landin.Checking.No_Routine_Instance
+                    or else Landin.Checking.Type_Of
+                      (Types.all, Of_Tree.all, Issue.Node) /= Ty.Undecided
+                  then
                      declare
                         Checked : constant Ty.Type_Kind :=
                           Check_Call
