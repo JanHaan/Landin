@@ -1123,6 +1123,10 @@ the same word and the same place array literals use it in
 at [0560]. It has to typecheck for each of them, so 'of
 false' works where the rest are bool and 'of zeroed' works
 wherever the rest have a zero image.
+A nonzero fill needs at least one omitted field. All omitted fields have the
+same complete type, including array length and reference permission. Its value
+is evaluated once after the named values and copied into each remaining field
+in declaration order. A `zeroed` fill retains each field's own zero-image rule.
 This is not a default value: [0980] refused those on
 declarations, because a new parameter would then fit every
 existing call silently. Here the choice is made at each

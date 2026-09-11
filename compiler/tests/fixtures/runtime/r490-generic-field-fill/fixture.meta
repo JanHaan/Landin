@@ -1,0 +1,6 @@
+class: runtime
+summary: one exact contextual trailing fill is evaluated after labels once and copied into omitted scalar, array and aggregate fields
+program: main.ldn
+status: 42
+constructs: 0410, 0670, 0700, 0710, 0720, 1290, 1940
+targets: linux-x86-64

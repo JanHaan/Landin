@@ -1,0 +1,6 @@
+record: type = struct
+ kind: variant
+  empty | pair: (first: bool, second: i32, third: u32)
+ end kind
+end record
+f: () -> none = value: record = (kind: pair(first: true, of 1)) end f

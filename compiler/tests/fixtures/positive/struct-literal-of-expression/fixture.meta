@@ -1,0 +1,5 @@
+class: positive
+summary: the original homogeneous trailing nonzero fill now compiles without source substitution
+program: program.ldn
+constructs: 0190, 0670, 0710, 0720, 1810
+targets: linux-x86-64

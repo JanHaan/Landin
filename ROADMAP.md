@@ -5361,6 +5361,30 @@ Depends on: R4.60, R4.70, R4.80
 Run the full applicable construct, conformance, ABI, diagnostics, determinism,
 debugger and prototype suites on native Linux x86-64.
 
+The applicable audit found actual hosted gaps behind otherwise populated rows:
+[0650]'s distinct identities, [0670]'s inline declaration bodies and [0720]'s
+homogeneous nonzero field fills. Inline bodies preserve the original refused
+source unchanged as a positive fixture. D214 supersedes D65's overly broad
+homogeneous-fill refusal using one complete descriptor and one evaluated value;
+its heterogeneous and absent-context refusals preserve useful diagnostics.
+The atom-comparison probe separately exposed a verifier that required set
+inclusion for identity equality. D200 now states the existing checker rule
+precisely: disjoint and overlapping sets compare declaration identities, while
+stores still require inclusion and ordering remains forbidden.
+
+[1270]'s conformance-input key was previously attributed only to a collision
+refusal. Positive unequal-key collection and alias-normalized collision controls
+now pin both sides, and D148 includes the previously missing guarantee coverage.
+The lexical/module probe observes public imported results, comments, grouped
+atoms and local shadowing. Generic cleanup/recovery checks late argument
+execution under both `defer` and `undo`. The parser derivation's recursion is
+recorded as a chosen implementation, not as evidence that loops remain absent.
+The handoff's unsupported semicolon claim is corrected to the actual grammar.
+
+The progress renderer and status check select the first dependency-ready planned
+item in roadmap order when no item is active. This accommodates the R4-to-R5
+boundary without activating either R5 item or inventing a dependency between them.
+
 R4.80's recovery review isolated a pre-existing inference-frontier defect for
 this parity item. On canonical `5b2db329`, the program below exits 70: generic
 deduction needs the recovered error's inferred atom set, and discovering its

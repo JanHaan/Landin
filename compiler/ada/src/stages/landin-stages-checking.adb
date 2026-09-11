@@ -18761,6 +18761,170 @@ package body Landin.Stages.Checking is
             declare
                type Node_List is array (Natural range <>) of Syn.Node_Id;
                First : Node_List (1 .. Count) := [others => Syn.No_Node];
+
+               procedure Check_Payload
+                 (Payload_Field : Positive;
+                  Label, Given  : Syn.Node_Id);
+
+               procedure Check_Payload
+                 (Payload_Field : Positive;
+                  Label, Given  : Syn.Node_Id)
+               is
+               begin
+                  declare
+                     Shape : constant Landin.Checking.Field_Shape :=
+                       Landin.Checking.Nth_Variant_Case_Field
+                         (Types.all, Wrote, Field, Which,
+                          Payload_Field);
+                  begin
+                     case Shape.Kind is
+                        when Landin.Checking.Scalar_Field =>
+                           if Shape.Signature /=
+                                Landin.Checking.No_Signature
+                             and then Syn.Kind (Of_Tree, Given)
+                               = Syn.Zeroed_Literal
+                           then
+                              Bad.Report
+                                (Item    => Bad.Type_Mismatch,
+                                 Source  => Syn.Source_Of (Of_Tree),
+                                 Where   => Syn.Where (Of_Tree, Given),
+                                 Message => "a function-valued"
+                                            & " payload has no zero"
+                                            & " image",
+                                 Note    => "[0540]: a function"
+                                            & " address is never the"
+                                            & " null address",
+                                 Related => Syn.Origin
+                                   (Of_Tree, Label),
+                                 Because => "the variant payload field"
+                                            & " named here",
+                                 Into    => Found);
+                              Landin.Checking.Refuse
+                                (Types.all, Of_Tree, Given);
+                           elsif Shape.Signature /=
+                                Landin.Checking.No_Signature
+                           then
+                              declare
+                                 Got : constant Ty.Type_Kind :=
+                                   Synthesise (Of_Tree, Given);
+                              begin
+                                 if Got = Ty.Function_Value
+                                   and then not Signatures_Agree
+                                     (Shape.Signature,
+                                      Landin.Checking.Signature_Of
+                                        (Types.all, Of_Tree, Given))
+                                 then
+                                    Bad.Report
+                                      (Item    => Bad.Type_Mismatch,
+                                       Source  => Syn.Source_Of
+                                         (Of_Tree),
+                                       Where   => Syn.Where
+                                         (Of_Tree, Given),
+                                       Message => "this function has"
+                                         & " a different signature",
+                                       Note    => "[1000]: a function"
+                                         & " payload keeps its complete"
+                                         & " structural signature",
+                                       Related => Syn.Origin
+                                         (Of_Tree, Label),
+                                       Because => "the variant payload"
+                                         & " field named here",
+                                       Into    => Found);
+                                    Landin.Checking.Refuse
+                                      (Types.all, Of_Tree, Given);
+                                 elsif Got /= Ty.Function_Value
+                                   and then Got /= Ty.Ill_Typed
+                                 then
+                                    Require
+                                      (Of_Tree, Given,
+                                       Ty.Function_Value,
+                                       Syn.Origin (Of_Tree, Label),
+                                       "the function-valued variant"
+                                       & " payload field named here");
+                                 end if;
+                              end;
+                           elsif Syn.Kind (Of_Tree, Given)
+                                   = Syn.Zeroed_Literal
+                           then
+                              Landin.Checking.Note
+                                (Types.all, Of_Tree, Given,
+                                 Shape.Element);
+                           else
+                              Require
+                                (Of_Tree, Given, Shape.Element,
+                                 Syn.Origin (Of_Tree, Label),
+                                 "the variant payload field named"
+                                 & " here");
+                           end if;
+
+                           if Static_Image
+                             and then Landin.Checking.Type_Of
+                               (Types.all, Of_Tree, Given)
+                                 /= Ty.Ill_Typed
+                           then
+                              if Shape.Signature =
+                                   Landin.Checking.No_Signature
+                              then
+                                 Refuse_Static_Image_Subtree
+                                   (Of_Tree, Given,
+                                    "a module variant payload field");
+                              end if;
+
+                              if Subtree_Was_Refused (Given) then
+                                 Landin.Checking.Refuse
+                                   (Types.all, Of_Tree, Given);
+                              elsif not Is_Known (Of_Tree, Given) then
+                                 Bad.Report
+                                   (Item    =>
+                                      Bad.Not_Known_At_Compile_Time,
+                                    Source  => Syn.Source_Of (Of_Tree),
+                                    Where   => Syn.Where
+                                      (Of_Tree, Given),
+                                    Message => "this variant payload"
+                                      & " value has to be known when"
+                                      & " the module image is formed",
+                                    Note    => "[1940]: nothing runs"
+                                      & " before the entry point"
+                                      & " [1460]",
+                                    Into    => Found);
+                                 Landin.Checking.Refuse
+                                   (Types.all, Of_Tree, Given);
+                              end if;
+                           end if;
+
+                        when Landin.Checking.Reference_Field =>
+                           declare
+                              Descriptor : constant Landin.Checking
+                                .Reference_Descriptor :=
+                                  Landin.Checking.Descriptor_Of
+                                    (Types.all, Shape.Reference);
+                           begin
+                              Check_Contextual_Value
+                                (Of_Tree, Given,
+                                 (Kind => Descriptor.Kind,
+                                  Reference => Shape.Reference,
+                                  Concept => Descriptor.Concept,
+                                  others => <>),
+                                 Syn.Origin (Of_Tree, Label),
+                                 "the variant payload field named"
+                                 & " here");
+                           end;
+
+                        when Landin.Checking.Fixed_Array_Field =>
+                           Check_Fixed_Array_Payload
+                             (Label, Given, Shape);
+
+                        when Landin.Checking.Aggregate_Field =>
+                           Check_Aggregate_Payload
+                             (Label, Given, Shape);
+
+                        when Landin.Checking.Variant_Field =>
+                           raise Landin.Compiler_Defect with
+                             "a nested variant payload reached D76";
+                     end case;
+                  end;
+               end Check_Payload;
+
             begin
                for Position in
                  1 .. Construction_Field_Count (Of_Tree, Value)
@@ -18817,158 +18981,7 @@ package body Landin.Stages.Checking is
                         Landin.Checking.Note_Field
                           (Types.all, Of_Tree, Label, Payload_Field);
 
-                        declare
-                           Shape : constant Landin.Checking.Field_Shape :=
-                             Landin.Checking.Nth_Variant_Case_Field
-                               (Types.all, Wrote, Field, Which,
-                                Payload_Field);
-                        begin
-                           case Shape.Kind is
-                              when Landin.Checking.Scalar_Field =>
-                                 if Shape.Signature /=
-                                      Landin.Checking.No_Signature
-                                   and then Syn.Kind (Of_Tree, Given)
-                                     = Syn.Zeroed_Literal
-                                 then
-                                    Bad.Report
-                                      (Item    => Bad.Type_Mismatch,
-                                       Source  => Syn.Source_Of (Of_Tree),
-                                       Where   => Syn.Where (Of_Tree, Given),
-                                       Message => "a function-valued"
-                                                  & " payload has no zero"
-                                                  & " image",
-                                       Note    => "[0540]: a function"
-                                                  & " address is never the"
-                                                  & " null address",
-                                       Related => Syn.Origin
-                                         (Of_Tree, Label),
-                                       Because => "the variant payload field"
-                                                  & " named here",
-                                       Into    => Found);
-                                    Landin.Checking.Refuse
-                                      (Types.all, Of_Tree, Given);
-                                 elsif Shape.Signature /=
-                                      Landin.Checking.No_Signature
-                                 then
-                                    declare
-                                       Got : constant Ty.Type_Kind :=
-                                         Synthesise (Of_Tree, Given);
-                                    begin
-                                       if Got = Ty.Function_Value
-                                         and then not Signatures_Agree
-                                           (Shape.Signature,
-                                            Landin.Checking.Signature_Of
-                                              (Types.all, Of_Tree, Given))
-                                       then
-                                          Bad.Report
-                                            (Item    => Bad.Type_Mismatch,
-                                             Source  => Syn.Source_Of
-                                               (Of_Tree),
-                                             Where   => Syn.Where
-                                               (Of_Tree, Given),
-                                             Message => "this function has"
-                                               & " a different signature",
-                                             Note    => "[1000]: a function"
-                                               & " payload keeps its complete"
-                                               & " structural signature",
-                                             Related => Syn.Origin
-                                               (Of_Tree, Label),
-                                             Because => "the variant payload"
-                                               & " field named here",
-                                             Into    => Found);
-                                          Landin.Checking.Refuse
-                                            (Types.all, Of_Tree, Given);
-                                       elsif Got /= Ty.Function_Value
-                                         and then Got /= Ty.Ill_Typed
-                                       then
-                                          Require
-                                            (Of_Tree, Given,
-                                             Ty.Function_Value,
-                                             Syn.Origin (Of_Tree, Label),
-                                             "the function-valued variant"
-                                             & " payload field named here");
-                                       end if;
-                                    end;
-                                 elsif Syn.Kind (Of_Tree, Given)
-                                         = Syn.Zeroed_Literal
-                                 then
-                                    Landin.Checking.Note
-                                      (Types.all, Of_Tree, Given,
-                                       Shape.Element);
-                                 else
-                                    Require
-                                      (Of_Tree, Given, Shape.Element,
-                                       Syn.Origin (Of_Tree, Label),
-                                       "the variant payload field named"
-                                       & " here");
-                                 end if;
-
-                                 if Static_Image
-                                   and then Landin.Checking.Type_Of
-                                     (Types.all, Of_Tree, Given)
-                                       /= Ty.Ill_Typed
-                                 then
-                                    if Shape.Signature =
-                                         Landin.Checking.No_Signature
-                                    then
-                                       Refuse_Static_Image_Subtree
-                                         (Of_Tree, Given,
-                                          "a module variant payload field");
-                                    end if;
-
-                                    if Subtree_Was_Refused (Given) then
-                                       Landin.Checking.Refuse
-                                         (Types.all, Of_Tree, Given);
-                                    elsif not Is_Known (Of_Tree, Given) then
-                                       Bad.Report
-                                         (Item    =>
-                                            Bad.Not_Known_At_Compile_Time,
-                                          Source  => Syn.Source_Of (Of_Tree),
-                                          Where   => Syn.Where
-                                            (Of_Tree, Given),
-                                          Message => "this variant payload"
-                                            & " value has to be known when"
-                                            & " the module image is formed",
-                                          Note    => "[1940]: nothing runs"
-                                            & " before the entry point"
-                                            & " [1460]",
-                                          Into    => Found);
-                                       Landin.Checking.Refuse
-                                         (Types.all, Of_Tree, Given);
-                                    end if;
-                                 end if;
-
-                              when Landin.Checking.Reference_Field =>
-                                 declare
-                                    Descriptor : constant Landin.Checking
-                                      .Reference_Descriptor :=
-                                        Landin.Checking.Descriptor_Of
-                                          (Types.all, Shape.Reference);
-                                 begin
-                                    Check_Contextual_Value
-                                      (Of_Tree, Given,
-                                       (Kind => Descriptor.Kind,
-                                        Reference => Shape.Reference,
-                                        Concept => Descriptor.Concept,
-                                        others => <>),
-                                       Syn.Origin (Of_Tree, Label),
-                                       "the variant payload field named"
-                                       & " here");
-                                 end;
-
-                              when Landin.Checking.Fixed_Array_Field =>
-                                 Check_Fixed_Array_Payload
-                                   (Label, Given, Shape);
-
-                              when Landin.Checking.Aggregate_Field =>
-                                 Check_Aggregate_Payload
-                                   (Label, Given, Shape);
-
-                              when Landin.Checking.Variant_Field =>
-                                 raise Landin.Compiler_Defect with
-                                   "a nested variant payload reached D76";
-                           end case;
-                        end;
+                        Check_Payload (Payload_Field, Label, Given);
 
                         Failed := Failed
                           or else Landin.Checking.Type_Of
@@ -18987,16 +19000,62 @@ package body Landin.Stages.Checking is
                     and then Syn.Kind (Of_Tree, Fill)
                                /= Syn.Zeroed_Literal
                   then
-                     Bad.Report
-                       (Item    => Bad.Unsupported_Use,
-                        Source  => Syn.Source_Of (Of_Tree),
-                        Where   => Syn.Where (Of_Tree, Fill),
-                        Message => "a case construction's trailing `of`"
-                                   & " accepts only `zeroed`",
-                        Refused => Bad.Variant_Value,
-                        Into    => Found);
-                     Landin.Checking.Refuse (Types.all, Of_Tree, Fill);
-                     Failed := True;
+                     declare
+                        First_Missing : Natural := 0;
+                     begin
+                        for Candidate in First'Range loop
+                           if First (Candidate) = Syn.No_Node then
+                              if First_Missing = 0 then
+                                 First_Missing := Candidate;
+                              elsif not Landin.Checking.Field_Shapes_Agree
+                                (Types.all,
+                                 Landin.Checking.Nth_Variant_Case_Field
+                                   (Types.all, Wrote, Field, Which,
+                                    First_Missing),
+                                 Landin.Checking.Nth_Variant_Case_Field
+                                   (Types.all, Wrote, Field, Which,
+                                    Candidate))
+                              then
+                                 Bad.Report
+                                   (Item    => Bad.Type_Mismatch,
+                                    Source  => Syn.Source_Of (Of_Tree),
+                                    Where   => Syn.Where (Of_Tree, Fill),
+                                    Message => "a trailing fill needs one"
+                                               & " exact payload type",
+                                    Note    => "[0720]: the fill runs once"
+                                               & " without conversion",
+                                    Related => Syn.Origin (Of_Tree, Value),
+                                    Because => "the constructed value",
+                                    Into    => Found);
+                                 Landin.Checking.Refuse
+                                   (Types.all, Of_Tree, Fill);
+                                 Failed := True;
+                                 exit;
+                              end if;
+                           end if;
+                        end loop;
+                        if not Failed then
+                           if First_Missing = 0 then
+                              Bad.Report
+                                (Item    => Bad.Type_Mismatch,
+                                 Source  => Syn.Source_Of (Of_Tree),
+                                 Where   => Syn.Where (Of_Tree, Fill),
+                                 Message => "a value fill needs an omitted"
+                                            & " payload field",
+                                 Note    => "[0720]: the omitted field"
+                                            & " supplies the fill type",
+                                 Related => Syn.Origin (Of_Tree, Value),
+                                 Because => "the constructed value",
+                                 Into    => Found);
+                              Landin.Checking.Refuse
+                                (Types.all, Of_Tree, Fill);
+                           else
+                              Check_Payload (First_Missing, Value, Fill);
+                           end if;
+                           Failed := Landin.Checking.Type_Of
+                             (Types.all, Of_Tree, Fill) = Ty.Ill_Typed;
+                        end if;
+                     end;
                   end if;
 
                   if Fill /= Syn.No_Node
@@ -19130,7 +19189,10 @@ package body Landin.Stages.Checking is
                   return True;
                end if;
             end loop;
-            return False;
+            return Syn.Kind (Of_Tree, Node)
+                     in Syn.Call | Syn.Labeled_Application
+              and then Subtree_Was_Refused
+                (Syn.Recovery_Of (Of_Tree, Node));
          end Subtree_Was_Refused;
 
          procedure Check_Aggregate_Field
@@ -19504,6 +19566,164 @@ package body Landin.Stages.Checking is
                   end;
             end case;
          end Check_Array_Field;
+
+         procedure Check_Field_Value
+           (Field : Syn.Node_Id; Value : Syn.Node_Id; Which : Positive);
+
+         procedure Check_Field_Value
+           (Field : Syn.Node_Id; Value : Syn.Node_Id; Which : Positive)
+         is
+         begin
+            case Landin.Checking.Field_Kind_Of
+              (Types.all, Wrote, Which)
+            is
+               when Landin.Checking.Scalar_Field =>
+                  declare
+                     Shape : constant Landin.Checking.Field_Shape :=
+                       Landin.Checking.Field_Shape_Of
+                         (Types.all, Wrote, Which);
+                     Held : constant Ty.Scalar_Name := Shape.Element;
+                  begin
+                     if Shape.Signature /= Landin.Checking.No_Signature
+                       and then Syn.Kind (Of_Tree, Value)
+                         = Syn.Zeroed_Literal
+                     then
+                        Bad.Report
+                          (Item    => Bad.Type_Mismatch,
+                           Source  => Syn.Source_Of (Of_Tree),
+                           Where   => Syn.Where (Of_Tree, Value),
+                           Message => "a function-valued field has no"
+                                      & " zero image",
+                           Note    => "[0540]: a function address is"
+                                      & " never the null address",
+                           Related => Syn.Origin (Of_Tree, Field),
+                           Because => "the struct field named here",
+                           Into    => Found);
+                        Landin.Checking.Refuse
+                          (Types.all, Of_Tree, Value);
+                     elsif Shape.Signature /=
+                         Landin.Checking.No_Signature
+                     then
+                        declare
+                           Got : constant Ty.Type_Kind :=
+                             Synthesise (Of_Tree, Value);
+                        begin
+                           if Got = Ty.Function_Value
+                             and then not Signatures_Agree
+                               (Shape.Signature,
+                                Landin.Checking.Signature_Of
+                                  (Types.all, Of_Tree, Value))
+                           then
+                              Bad.Report
+                                (Item    => Bad.Type_Mismatch,
+                                 Source  => Syn.Source_Of (Of_Tree),
+                                 Where   => Syn.Where (Of_Tree, Value),
+                                 Message => "this function has a"
+                                            & " different signature",
+                                 Note    => "[1000]: a function-valued"
+                                            & " field keeps its complete"
+                                            & " structural signature",
+                                 Related => Syn.Origin
+                                   (Of_Tree, Field),
+                                 Because => "the struct field named"
+                                            & " here",
+                                 Into    => Found);
+                              Landin.Checking.Refuse
+                                (Types.all, Of_Tree, Value);
+                           elsif Got /= Ty.Function_Value
+                             and then Got /= Ty.Ill_Typed
+                           then
+                              Require
+                                (Of_Tree, Value, Ty.Function_Value,
+                                 Syn.Origin (Of_Tree, Field),
+                                 "the function-valued struct field"
+                                 & " named here");
+                           end if;
+                        end;
+                     elsif Syn.Kind (Of_Tree, Value)
+                             = Syn.Zeroed_Literal
+                     then
+                        --  D65 extends D42's contextual zero image to
+                        --  the ordinary scalar field this label names.
+                        Landin.Checking.Note
+                          (Types.all, Of_Tree, Value, Held);
+                     else
+                        Require
+                          (Of_Tree, Value, Held,
+                           Syn.Origin (Of_Tree, Field),
+                           "the struct field named here");
+                     end if;
+
+                     if Static_Image
+                       and then Landin.Checking.Type_Of
+                         (Types.all, Of_Tree, Value) /= Ty.Ill_Typed
+                     then
+                        if Shape.Signature =
+                             Landin.Checking.No_Signature
+                        then
+                           Refuse_Static_Image_Subtree
+                             (Of_Tree, Value,
+                              "a module struct literal field");
+                        end if;
+
+                        if Subtree_Was_Refused (Value) then
+                           Landin.Checking.Refuse
+                             (Types.all, Of_Tree, Value);
+                        elsif not Is_Known (Of_Tree, Value) then
+                           Bad.Report
+                             (Item    =>
+                                Bad.Not_Known_At_Compile_Time,
+                              Source  => Syn.Source_Of (Of_Tree),
+                              Where   => Syn.Where (Of_Tree, Value),
+                              Message => "this struct field value has"
+                                         & " to be known when the"
+                                         & " module image is formed",
+                              Note    => "[1940]: nothing runs before"
+                                         & " the entry point [1460]",
+                              Into    => Found);
+                           Landin.Checking.Refuse
+                             (Types.all, Of_Tree, Value);
+                        end if;
+                     end if;
+                  end;
+
+               when Landin.Checking.Reference_Field =>
+                  declare
+                     Shape : constant Landin.Checking.Field_Shape :=
+                       Landin.Checking.Field_Shape_Of
+                         (Types.all, Wrote, Which);
+                  begin
+                     declare
+                        Descriptor : constant
+                          Landin.Checking.Reference_Descriptor :=
+                            Landin.Checking.Descriptor_Of
+                              (Types.all, Shape.Reference);
+                     begin
+                        Check_Contextual_Value
+                          (Of_Tree, Value,
+                           (Kind => Descriptor.Kind,
+                            Reference => Shape.Reference,
+                            Concept => Descriptor.Concept,
+                            others => <>),
+                           Syn.Origin (Of_Tree, Field),
+                           "the reference-bearing struct field named"
+                           & " here");
+                     end;
+                  end;
+
+               when Landin.Checking.Fixed_Array_Field =>
+                  Check_Array_Field (Field, Value, Which);
+
+               when Landin.Checking.Aggregate_Field =>
+                  Check_Aggregate_Field (Field, Value, Which);
+
+               when Landin.Checking.Variant_Field =>
+                  Check_Variant_Value
+                    (Of_Tree, Field, Value, Wrote, Which,
+                     Static_Image);
+            end case;
+         end Check_Field_Value;
+
       begin
          --  A refused field or a target extent overflow leaves the body
          --  identified but deliberately without a layout.  That refusal
@@ -19565,154 +19785,7 @@ package body Landin.Stages.Checking is
                   Landin.Checking.Note_Field
                     (Types.all, Of_Tree, Field, Which);
 
-                  case Landin.Checking.Field_Kind_Of
-                    (Types.all, Wrote, Which)
-                  is
-                     when Landin.Checking.Scalar_Field =>
-                        declare
-                           Shape : constant Landin.Checking.Field_Shape :=
-                             Landin.Checking.Field_Shape_Of
-                               (Types.all, Wrote, Which);
-                           Held : constant Ty.Scalar_Name := Shape.Element;
-                        begin
-                           if Shape.Signature /= Landin.Checking.No_Signature
-                             and then Syn.Kind (Of_Tree, Value)
-                               = Syn.Zeroed_Literal
-                           then
-                              Bad.Report
-                                (Item    => Bad.Type_Mismatch,
-                                 Source  => Syn.Source_Of (Of_Tree),
-                                 Where   => Syn.Where (Of_Tree, Value),
-                                 Message => "a function-valued field has no"
-                                            & " zero image",
-                                 Note    => "[0540]: a function address is"
-                                            & " never the null address",
-                                 Related => Syn.Origin (Of_Tree, Field),
-                                 Because => "the struct field named here",
-                                 Into    => Found);
-                              Landin.Checking.Refuse
-                                (Types.all, Of_Tree, Value);
-                           elsif Shape.Signature /=
-                               Landin.Checking.No_Signature
-                           then
-                              declare
-                                 Got : constant Ty.Type_Kind :=
-                                   Synthesise (Of_Tree, Value);
-                              begin
-                                 if Got = Ty.Function_Value
-                                   and then not Signatures_Agree
-                                     (Shape.Signature,
-                                      Landin.Checking.Signature_Of
-                                        (Types.all, Of_Tree, Value))
-                                 then
-                                    Bad.Report
-                                      (Item    => Bad.Type_Mismatch,
-                                       Source  => Syn.Source_Of (Of_Tree),
-                                       Where   => Syn.Where (Of_Tree, Value),
-                                       Message => "this function has a"
-                                                  & " different signature",
-                                       Note    => "[1000]: a function-valued"
-                                                  & " field keeps its complete"
-                                                  & " structural signature",
-                                       Related => Syn.Origin
-                                         (Of_Tree, Field),
-                                       Because => "the struct field named"
-                                                  & " here",
-                                       Into    => Found);
-                                    Landin.Checking.Refuse
-                                      (Types.all, Of_Tree, Value);
-                                 elsif Got /= Ty.Function_Value
-                                   and then Got /= Ty.Ill_Typed
-                                 then
-                                    Require
-                                      (Of_Tree, Value, Ty.Function_Value,
-                                       Syn.Origin (Of_Tree, Field),
-                                       "the function-valued struct field"
-                                       & " named here");
-                                 end if;
-                              end;
-                           elsif Syn.Kind (Of_Tree, Value)
-                                   = Syn.Zeroed_Literal
-                           then
-                              --  D65 extends D42's contextual zero image to
-                              --  the ordinary scalar field this label names.
-                              Landin.Checking.Note
-                                (Types.all, Of_Tree, Value, Held);
-                           else
-                              Require
-                                (Of_Tree, Value, Held,
-                                 Syn.Origin (Of_Tree, Field),
-                                 "the struct field named here");
-                           end if;
-
-                           if Static_Image
-                             and then Landin.Checking.Type_Of
-                               (Types.all, Of_Tree, Value) /= Ty.Ill_Typed
-                           then
-                              if Shape.Signature =
-                                   Landin.Checking.No_Signature
-                              then
-                                 Refuse_Static_Image_Subtree
-                                   (Of_Tree, Value,
-                                    "a module struct literal field");
-                              end if;
-
-                              if Subtree_Was_Refused (Value) then
-                                 Landin.Checking.Refuse
-                                   (Types.all, Of_Tree, Value);
-                              elsif not Is_Known (Of_Tree, Value) then
-                                 Bad.Report
-                                   (Item    =>
-                                      Bad.Not_Known_At_Compile_Time,
-                                    Source  => Syn.Source_Of (Of_Tree),
-                                    Where   => Syn.Where (Of_Tree, Value),
-                                    Message => "this struct field value has"
-                                               & " to be known when the"
-                                               & " module image is formed",
-                                    Note    => "[1940]: nothing runs before"
-                                               & " the entry point [1460]",
-                                    Into    => Found);
-                                 Landin.Checking.Refuse
-                                   (Types.all, Of_Tree, Value);
-                              end if;
-                           end if;
-                        end;
-
-                     when Landin.Checking.Reference_Field =>
-                        declare
-                           Shape : constant Landin.Checking.Field_Shape :=
-                             Landin.Checking.Field_Shape_Of
-                               (Types.all, Wrote, Which);
-                        begin
-                           declare
-                              Descriptor : constant
-                                Landin.Checking.Reference_Descriptor :=
-                                  Landin.Checking.Descriptor_Of
-                                    (Types.all, Shape.Reference);
-                           begin
-                              Check_Contextual_Value
-                                (Of_Tree, Value,
-                                 (Kind => Descriptor.Kind,
-                                  Reference => Shape.Reference,
-                                  Concept => Descriptor.Concept,
-                                  others => <>),
-                                 Syn.Origin (Of_Tree, Field),
-                                 "the reference-bearing struct field named"
-                                 & " here");
-                           end;
-                        end;
-
-                     when Landin.Checking.Fixed_Array_Field =>
-                        Check_Array_Field (Field, Value, Which);
-
-                     when Landin.Checking.Aggregate_Field =>
-                        Check_Aggregate_Field (Field, Value, Which);
-
-                     when Landin.Checking.Variant_Field =>
-                        Check_Variant_Value
-                          (Of_Tree, Field, Value, Wrote, Which,
-                           Static_Image);
-                  end case;
+                  Check_Field_Value (Field, Value, Which);
 
                   Failed := Failed
                     or else Landin.Checking.Type_Of
@@ -19730,16 +19803,58 @@ package body Landin.Stages.Checking is
             if Fill /= Syn.No_Node
               and then Syn.Kind (Of_Tree, Fill) /= Syn.Zeroed_Literal
             then
-               Bad.Report
-                 (Item    => Bad.Unsupported_Use,
-                  Source  => Syn.Source_Of (Of_Tree),
-                  Where   => Syn.Where (Of_Tree, Fill),
-                  Message => "a struct literal's trailing `of` accepts only"
-                             & " `zeroed` in this slice",
-                  Refused => Bad.Struct_Value,
-                  Into    => Found);
-               Landin.Checking.Refuse (Types.all, Of_Tree, Fill);
-               Failed := True;
+               declare
+                  First_Missing : Natural := 0;
+               begin
+                  for Which in First'Range loop
+                     if First (Which) = Syn.No_Node then
+                        if First_Missing = 0 then
+                           First_Missing := Which;
+                        elsif not Landin.Checking.Field_Shapes_Agree
+                          (Types.all, Landin.Checking.Field_Shape_Of
+                             (Types.all, Wrote, First_Missing),
+                           Landin.Checking.Field_Shape_Of
+                             (Types.all, Wrote, Which))
+                        then
+                           Bad.Report
+                             (Item    => Bad.Type_Mismatch,
+                              Source  => Syn.Source_Of (Of_Tree),
+                              Where   => Syn.Where (Of_Tree, Fill),
+                              Message => "a trailing fill needs one exact"
+                                         & " type for all omitted fields",
+                              Note    => "[0720]: the fill is evaluated once"
+                                         & " without per-field conversion",
+                              Related => Syn.Origin (Of_Tree, Literal),
+                              Because => "the constructed value",
+                              Into    => Found);
+                           Landin.Checking.Refuse
+                             (Types.all, Of_Tree, Fill);
+                           Failed := True;
+                           exit;
+                        end if;
+                     end if;
+                  end loop;
+                  if not Failed then
+                     if First_Missing = 0 then
+                        Bad.Report
+                          (Item    => Bad.Type_Mismatch,
+                           Source  => Syn.Source_Of (Of_Tree),
+                           Where   => Syn.Where (Of_Tree, Fill),
+                           Message => "a value fill needs an omitted field"
+                                      & " to supply its type",
+                           Note    => "[0720]: write the value separately"
+                                      & " when no field consumes it",
+                           Related => Syn.Origin (Of_Tree, Literal),
+                           Because => "the constructed value",
+                           Into    => Found);
+                        Landin.Checking.Refuse (Types.all, Of_Tree, Fill);
+                     else
+                        Check_Field_Value (Literal, Fill, First_Missing);
+                     end if;
+                     Failed := Landin.Checking.Type_Of
+                       (Types.all, Of_Tree, Fill) = Ty.Ill_Typed;
+                  end if;
+               end;
             end if;
 
             if Fill /= Syn.No_Node

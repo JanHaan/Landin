@@ -1,0 +1,86 @@
+triple: type = struct
+    first: i32
+    second: i32
+    third: i32
+end triple
+flags: type = struct
+    first: bool
+    second: bool
+    third: bool
+end flags
+rows: type = struct
+    first: [2]i32
+    second: [2]i32
+    third: [2]i32
+end rows
+nested: type = struct
+    first: triple
+    second: triple
+    third: triple
+end nested
+choice: type = struct
+    kind: variant
+        empty | values: (first: i32, second: i32, third: i32)
+    end kind
+end choice
+pointers: type = struct
+    label: i32
+    first: ptr mut i32
+    second: ptr mut i32
+end pointers
+callback: type = (value: i32) -> (result: i32)
+callbacks: type = struct
+    label: i32
+    first: callback
+    second: callback
+end callbacks
+static_choice: choice = (kind: values(first: 1, of 8))
+problem: atom
+constant: triple = (first: 1, of 7)
+mut state: triple
+mut trace: i32 = 0
+next: () -> (value: i32) =
+    inc trace
+    value = trace
+end next
+copy: (t: type, value: t) -> (result: t) = result = value end copy
+ordinary: (value: i32) -> (result: i32) = result = value + 1 end ordinary
+fallible: () -> (value: i32) ! problem =
+    inc trace
+    fail problem
+end fallible
+public main: () -> (code: i32) =
+    v: triple = (first: next(), of next())
+    f: flags = (first: true, of false)
+    r: rows = (first: [1, 2], of [3, 4])
+    n := nested(first: v, of copy(v))
+    c: choice = (kind: values(first: next(), of next()))
+    recovered: triple = (first: 0, of fallible() else (error) _ = error next() end)
+    mut backing: i32 = 17
+    refs: pointers = (label: 1, of addr backing)
+    functions: callbacks = (label: 2, of ordinary)
+    state = (first: 10, of state.first + 1)
+    mut cases_ok: bool = false
+    match c.kind
+        empty: cases_ok = false
+        values(first, second, third):
+            cases_ok = first == 3 and second == 4 and third == 4
+    end match
+    mut static_ok: bool = false
+    match static_choice.kind
+        empty: static_ok = false
+        values(first, second, third):
+            static_ok = first == 1 and second == 8 and third == 8
+    end match
+    code = if trace == 6 and v.first == 1 and v.second == 2 and v.third == 2
+              and f.first and not f.second and not f.third
+              and r.first[0] == 1 and r.second[0] == 3 and r.third[1] == 4
+              and n.second.second == 2 and n.third.third == 2
+              and constant.second == 7 and constant.third == 7
+              and cases_ok and static_ok and recovered.second == 6
+              and recovered.third == 6 and refs.first.val == 17
+              and refs.second.val == 17 and functions.first(5) == 6
+              and functions.second(8) == 9 and state.second == 11
+              and state.third == 11
+           then 42 else 1 end if
+end main

@@ -1,0 +1,9 @@
+record: type = struct
+ first: i32
+ second: i32
+ third: i32
+end record
+f: () -> none =
+ mut missing: i32
+ value: record = (first: 0, of missing)
+end f

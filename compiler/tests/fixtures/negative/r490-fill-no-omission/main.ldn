@@ -1,0 +1,4 @@
+record: type = struct
+ first: bool
+end record
+f: () -> none = value: record = (first: true, of false) end f
