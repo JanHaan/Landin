@@ -1,0 +1,9 @@
+first, second: atom
+pointer: type (t: type) = ptr t
+optional: type (t: type) = first | ptr t
+atoms: type (t: type) = first | second | t
+two_ptrs: type (t: type) = first | ptr t | ptr u8
+tagged: type (t: type) = first | second | ptr t
+nested_two: type (t: type) = first | pointer(t) | ptr u8
+nested_tagged: type (t: type) = optional(t) | second
+nested_atoms: type (t: type) = atoms(t) | ptr u8
