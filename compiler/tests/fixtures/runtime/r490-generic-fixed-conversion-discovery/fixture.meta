@@ -1,0 +1,6 @@
+class: runtime
+summary: conversion discovery preserves fixed-formal values through match bodies and nested generic forwarding
+program: main.ldn
+status: 42
+constructs: 0310, 0650, 0690, 1210, 1290, 1300, 1490
+targets: linux-x86-64
