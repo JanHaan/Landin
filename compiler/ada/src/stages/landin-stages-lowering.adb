@@ -3338,7 +3338,50 @@ package body Landin.Stages.Lowering is
                      end if;
                   end;
                end loop;
-               if Construction_Fill (Of_Tree, Node) /= Syn.No_Node then
+               if Construction_Fill (Of_Tree, Node) /= Syn.No_Node
+                 and then Syn.Kind
+                   (Of_Tree, Construction_Fill (Of_Tree, Node))
+                     /= Syn.Zeroed_Literal
+               then
+                  declare
+                     Fill : constant Syn.Node_Id :=
+                       Construction_Fill (Of_Tree, Node);
+                     First_Missing : Positive := Seen'First;
+                  begin
+                     while Seen (First_Missing) loop
+                        First_Missing := First_Missing + 1;
+                     end loop;
+                     declare
+                        Child : constant IR.Field_Shape :=
+                          IR.Nth_Aggregate_Field
+                            (Unit.all, Shape, First_Missing);
+                        Saved : constant IR.Slot_Id :=
+                          Shaped_Temporary (Child, Site_Of (Of_Tree, Fill));
+                        Place : constant Stored_Place :=
+                          Stored_At ((Kind => IR.Frame_Slot, Slot => Saved));
+                     begin
+                        Write_Shaped_Value
+                          (Of_Tree, Fill, Scope, Child, Place);
+                        if Current = IR.No_Block then
+                           return;
+                        end if;
+                        for Field in Seen'Range loop
+                           if not Seen (Field) then
+                              if Child.Kind = IR.Scalar_Field_Shape then
+                                 Store_Shaped_Scalar
+                                   (Child_Place (Destination, Field), Child,
+                                    IR.Emit_Load
+                                      (Unit.all, Filling, Saved, Site), Site);
+                              else
+                                 Copy_Shaped_Storage
+                                   (Place, Child_Place (Destination, Field),
+                                    Child, Site);
+                              end if;
+                           end if;
+                        end loop;
+                     end;
+                  end;
+               elsif Construction_Fill (Of_Tree, Node) /= Syn.No_Node then
                   for Field in Seen'Range loop
                      if not Seen (Field) then
                         declare
@@ -3386,6 +3429,9 @@ package body Landin.Stages.Lowering is
             declare
                Which : constant Positive := Positive
                  (Landin.Checking.Field_Index (Types.all, Of_Tree, Node));
+               Seen : array
+                 (1 .. IR.Variant_Case_Field_Count (Unit.all, Shape, Which))
+                   of Boolean := [others => False];
             begin
                IR.Emit_Variant_Select
                  (Unit.all, Filling, Destination.Place,
@@ -3401,6 +3447,7 @@ package body Landin.Stages.Lowering is
                           (Landin.Checking.Field_Index
                              (Types.all, Of_Tree, Label));
                      begin
+                        Seen (Field) := True;
                         Write_Shaped_Value
                           (Of_Tree, Construction_Field_Value (Of_Tree, Label),
                            Scope, IR.Nth_Variant_Case_Field
@@ -3409,6 +3456,55 @@ package body Landin.Stages.Lowering is
                         exit when Current = IR.No_Block;
                      end;
                   end loop;
+                  if Current /= IR.No_Block
+                    and then Construction_Fill (Of_Tree, Node) /= Syn.No_Node
+                    and then Syn.Kind
+                      (Of_Tree, Construction_Fill (Of_Tree, Node))
+                        /= Syn.Zeroed_Literal
+                  then
+                     declare
+                        Fill : constant Syn.Node_Id :=
+                          Construction_Fill (Of_Tree, Node);
+                        First_Missing : Positive := Seen'First;
+                     begin
+                        while Seen (First_Missing) loop
+                           First_Missing := First_Missing + 1;
+                        end loop;
+                        declare
+                           Child : constant IR.Field_Shape :=
+                             IR.Nth_Variant_Case_Field
+                               (Unit.all, Shape, Which, First_Missing);
+                           Saved : constant IR.Slot_Id :=
+                             Shaped_Temporary (Child, Site_Of (Of_Tree, Fill));
+                           Place : constant Stored_Place :=
+                             Stored_At
+                               ((Kind => IR.Frame_Slot, Slot => Saved));
+                        begin
+                           Write_Shaped_Value
+                             (Of_Tree, Fill, Scope, Child, Place);
+                           if Current = IR.No_Block then
+                              return;
+                           end if;
+                           for Field in Seen'Range loop
+                              if not Seen (Field) then
+                                 if Child.Kind = IR.Scalar_Field_Shape then
+                                    Store_Shaped_Scalar
+                                      (Child_Place
+                                         (Destination, Field, Which), Child,
+                                       IR.Emit_Load
+                                         (Unit.all, Filling, Saved, Site),
+                                       Site);
+                                 else
+                                    Copy_Shaped_Storage
+                                      (Place, Child_Place
+                                         (Destination, Field, Which),
+                                       Child, Site);
+                                 end if;
+                              end if;
+                           end loop;
+                        end;
+                     end;
+                  end if;
                end if;
             end;
          elsif Shape.Kind = IR.Array_Field_Shape
@@ -14710,7 +14806,7 @@ package body Landin.Stages.Lowering is
                      type Node_Array is
                        array (Positive range <>) of Syn.Node_Id;
                      Nodes : Node_Array (1 .. Count) :=
-                       [others => Syn.No_Node];
+                       [others => Construction_Fill (Of_Tree, Given)];
                   begin
                      for Written in
                        1 .. Construction_Field_Count (Of_Tree, Given)
@@ -14786,7 +14882,9 @@ package body Landin.Stages.Lowering is
                      type Node_Array is
                        array (Positive range <>) of Syn.Node_Id;
                      Nodes : Node_Array (1 .. Count) :=
-                       [others => Syn.No_Node];
+                       [others => (if Is_Case_Construction (Of_Tree, Given)
+                                   then Construction_Fill (Of_Tree, Given)
+                                   else Syn.No_Node)];
                   begin
                      if Is_Case_Construction (Of_Tree, Given) then
                         for Written in
@@ -14921,7 +15019,7 @@ package body Landin.Stages.Lowering is
                   type Node_Array is
                     array (Positive range <>) of Syn.Node_Id;
                   Nodes : Node_Array (1 .. Top_Count) :=
-                    [others => Syn.No_Node];
+                    [others => Construction_Fill (Of_Tree, Literal)];
                begin
                   for Written in
                     1 .. Construction_Field_Count (Of_Tree, Literal)
@@ -15026,10 +15124,45 @@ package body Landin.Stages.Lowering is
                return False;
             end Contains_Aggregate;
 
+            function Has_Value_Fill (Node : Syn.Node_Id) return Boolean;
+
+            function Has_Value_Fill (Node : Syn.Node_Id) return Boolean is
+            begin
+               if Node = Syn.No_Node then
+                  return False;
+               end if;
+               if Syn.Kind (Of_Tree, Node) in Syn.Struct_Literal
+                 | Syn.Labeled_Application | Syn.Call
+               then
+                  declare
+                     Fill : constant Syn.Node_Id :=
+                       Construction_Fill (Of_Tree, Node);
+                  begin
+                     if Fill /= Syn.No_Node
+                       and then Syn.Kind (Of_Tree, Fill) /= Syn.Zeroed_Literal
+                     then
+                        return True;
+                     end if;
+                  end;
+               end if;
+               for Slot in 1 .. Syn.Slot_Count (Of_Tree, Node) loop
+                  if Has_Value_Fill (Syn.Slot (Of_Tree, Node, Slot)) then
+                     return True;
+                  end if;
+               end loop;
+               return Syn.Kind (Of_Tree, Node)
+                        in Syn.Call | Syn.Labeled_Application
+                 and then Has_Value_Fill (Syn.Recovery_Of (Of_Tree, Node));
+            end Has_Value_Fill;
+
             function Needs_Recursive_Image return Boolean;
 
             function Needs_Recursive_Image return Boolean is
             begin
+               if Has_Value_Fill (Literal)
+               then
+                  return True;
+               end if;
                for Field in 1 .. Count loop
                   if Contains_Aggregate
                     (IR.Nth_Field_Shape (Unit.all, Item, Field))

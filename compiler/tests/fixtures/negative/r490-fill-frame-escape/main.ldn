@@ -1,0 +1,9 @@
+record: type = struct
+ first: i32
+ second: ptr i32
+ third: ptr i32
+end record
+f: () -> (value: record) =
+ local: i32 = 1
+ value = (first: 0, of addr local)
+end f

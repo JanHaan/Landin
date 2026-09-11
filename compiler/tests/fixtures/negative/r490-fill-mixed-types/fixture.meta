@@ -1,0 +1,6 @@
+class: negative
+summary: trailing field fill preserves mixed types boundary
+program: main.ldn
+codes: L0301
+constructs: 0670, 0710, 0720
+targets: linux-x86-64

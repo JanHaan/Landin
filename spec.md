@@ -4827,7 +4827,7 @@ last needs the representation D60 explicitly deferred. All were declined.
 `negative/struct-literal-field-named-twice`;
 `negative/struct-literal-field-not-given`;
 `negative/struct-literal-unknown-field`;
-`negative/struct-literal-of-expression-not-enabled`;
+`positive/struct-literal-of-expression`;
 `negative/struct-literal-field-type-mismatch`;
 `negative/struct-literal-reads-incoming-state`;
 `negative/struct-literal-without-layout`;
@@ -4876,7 +4876,7 @@ node, IR operation, verifier rule, backend address form, target fact, layout or
 static image changes.
 
 A nested array literal remains refused as a scalar element, and no other
-general array value is introduced. A general trailing `of expression` remains
+general array value is introduced. At this increment a general trailing `of expression` was
 refused: the one expression node has one committed type, while omitted fields
 may be heterogeneous; converting it per field is not enabled, and evaluating
 it again per field would violate the once-only rule. Inferred literals still
@@ -4889,6 +4889,9 @@ D71 a selected module-array-field source.
 The all-`of`
 spelling remains D63's redundant parser refusal, and general aggregate values
 remain outside this slice.
+D214 supersedes the homogeneous-fill refusal: equal complete descriptors need
+neither multiple node types nor conversion, so one evaluated value can be copied
+into every omitted field. Heterogeneous fills remain refused.
 
 **Why the field destination:** the selected field already owns exactly the
 shape, storage, diagnostics, ordering and target-derived operation the written
@@ -4911,7 +4914,7 @@ representation; and the last duplicates whole `zeroed`. All were declined.
 `negative/struct-literal-array-field-source-unassigned`;
 `negative/struct-literal-nested-array-value-not-enabled`;
 `negative/immutable-struct-literal-assignment`;
-`negative/struct-literal-of-expression-not-enabled`; the generated token and
+`positive/struct-literal-of-expression`; the generated token and
 IR records; and `runtime/struct-literal-array-field-order` on Linux x86-64.
 
 ### D66 — A typed module struct literal is a static field image
@@ -8990,6 +8993,7 @@ classified failure boundary before the repository gate can pass.
 | `slices.bounds-known` | static | 0570, 0580, 1950 | L0300 or L0306 | `negative/index-outside-the-length`, `negative/readonly-slice-write` |
 | `slices.bounds-runtime` | trap | 0570, 0580, 1120, 1950, 1960 | trap, outside [1120]'s region | `runtime/computed-array-index-traps`, `runtime/local-array-computed-store-traps`, `runtime/slice-index-read-traps`, `runtime/slice-index-write-traps`, `runtime/slice-half-open-upper-traps`, `runtime/slice-inclusive-upper-traps`, `runtime/slice-lower-after-upper-traps` |
 | `atoms.sets` | static | 0630, 0640 | L0301 or L0312; equality compares declaration identities without requiring set inclusion, while ordering and atom/numeric mixing remain refused | `negative/atom-match-not-exhaustive`, `runtime/atom-values-cross-the-abi`, `runtime/r490-generic-atom-identity` |
+| `aggregates.fill` | static | 0410, 0670, 0710, 0720 | L0301 for unequal omitted-field descriptors or a value fill without a destination; one exact contextual value is evaluated after written labels and copied in declaration order; ordinary origin and assignment diagnostics remain | `runtime/r490-generic-field-fill`, `negative/r490-fill-mixed-types`, `negative/r490-fill-array-shapes`, `negative/r490-fill-pointer-permissions`, `negative/r490-fill-frame-escape`, `negative/r490-fill-unassigned` |
 | `aggregates.variants` | static | 0670, 0680, 0690, 0700, 0710, 0720, 0750, 1210 | L0301, L0308--L0312 or L0313 | `negative/struct-literal-field-not-given`, `negative/variant-match-not-exhaustive` |
 | `origins.escape` | static | 0480, 0770, 0780, 0790, 0800, 0830, 0840 | L0314--L0316; [0790]'s exact `from` comparison applies to an actual returned reference, while a provably empty optional-pointer arm has no origin and is not `Untracked`; a retained provider wrapper keeps its ordinary inner argument's origin without requiring that argument to be declared `escaping`, and tracked pool constructor sources join | `negative/frame-origin-return`, `negative/borrowed-source-inout`, `negative/returned-reference-missing-from`, `negative/core-arena-frame-escape`, `negative/core-pool-frame-escape`, `negative/core-pool-bookkeeping-frame-escape`, `negative/core-failing-frame-escape`, `negative/core-text-frame-slice-escape`, `negative/core-diag-frame-message-escape`, `negative/r440-parser-frame-arena`, `runtime/diagnostic-loggers-dispatch`, `runtime/r420-failing-providers`, `negative/r480-recovery-retains-borrow`, `negative/r480-recovery-exposed-storage`, `negative/r480-reader-live-line` |
 | `origins.aliasing-limit` | outside | 0770, 0910 | non-guarantee: a pre-existing copy or indistinguishable arena is not tracked | `positive/reference-origins-and-consume`, `negative/use-after-sink` |
@@ -12824,3 +12828,44 @@ without any of those claims.
 `negative/r480-helper-frame-retention`, `negative/array-reference-frame-return`,
 `negative/core-text-frame-slice-escape`, `negative/any-frame-origin-escape`,
 and `runtime/any-untracked-pointer-origin`.
+
+### D214 — A trailing value fill has one exact type and one evaluation
+
+**The tour said** [0720] permits `of false` when the remaining fields are bool
+and requires the fill to typecheck for every omitted field. D65 had refused all
+nonzero fills because one syntax node cannot have several types or be evaluated
+several times. R4.90's audit found that its homogeneous refusal was broader than
+that reasoning: one exact descriptor needs neither conversion nor re-evaluation.
+
+**Chosen:** a nonzero trailing fill requires at least one omitted field, and all
+omitted fields have one complete identical descriptor, including array extent,
+nominal identity, reference permission and function signature. The omitted field
+supplies the same context as an explicit label. `zeroed` keeps its existing
+per-field zero-image rule and may cover heterogeneous fields or no fields.
+A nonzero fill with no omitted field is refused because there is no destination
+to supply its contextual type; an independently wanted effect is written as a
+separate statement.
+
+Written labels commit in source order. The fill is then evaluated once into
+ordinary temporary storage and copied to omitted fields in declaration order.
+The same rule covers case payloads, whole assignments, construction calls and
+nested aggregate/array fields. A failure or control transfer during evaluation
+uses ordinary recovery and cleanup; no copy is performed on an edge that leaves.
+A module image requires the same compile-time values as explicit labels and
+reuses the existing recursive image representation. Reference-containing fills
+retain their origins, and repeated copies confer no ownership or allocation
+lifetime guarantee. This changes no allocator or arena rule.
+
+**The alternatives:** evaluating a fill once per omitted field changes observable
+calls; assigning a separate inferred type to one node corrupts shared checking
+facts; converting per field changes the language's explicit-conversion rule.
+All remain declined. D65's exact-homogeneous alternative is enabled by the
+once-evaluated scalar, array, aggregate, pointer, callback and recovery evidence.
+The grammar still requires a named field before trailing `of`; the all-`of`
+spelling remains excluded, and complete `zeroed` retains its existing spelling.
+
+**Pinned by** `positive/struct-literal-of-expression`,
+`runtime/r490-generic-field-fill`, `negative/r490-fill-mixed-types`,
+`negative/r490-fill-array-shapes`, `negative/r490-fill-pointer-permissions`,
+`negative/r490-fill-case-mixed-types`, `negative/r490-fill-no-omission`,
+`negative/r490-fill-frame-escape` and `negative/r490-fill-unassigned`.

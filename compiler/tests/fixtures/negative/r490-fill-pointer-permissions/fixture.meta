@@ -1,0 +1,6 @@
+class: negative
+summary: trailing field fill preserves pointer permissions boundary
+program: main.ldn
+codes: L0301
+constructs: 0440, 0720
+targets: linux-x86-64

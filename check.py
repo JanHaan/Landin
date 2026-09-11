@@ -3557,6 +3557,7 @@ def check_coverage_registers(full_run):
             "allocation.reclamation",
             "slices.bounds-known",
             "slices.bounds-runtime", "atoms.sets", "aggregates.variants",
+            "aggregates.fill",
             "origins.escape", "origins.aliasing-limit", "functions.abi",
             "functions.caller", "functions.linkage", "optimization.outcomes",
             "extern.c-boundary", "host.arguments-startup", "host.io",

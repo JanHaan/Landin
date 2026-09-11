@@ -1,0 +1,6 @@
+record: type = struct
+ first: i32
+ second: ptr i32
+ third: ptr mut i32
+end record
+f: (p: ptr mut i32) -> none = value: record = (first: 0, of p) end f
