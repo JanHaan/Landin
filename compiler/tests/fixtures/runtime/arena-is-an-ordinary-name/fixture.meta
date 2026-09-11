@@ -1,6 +1,6 @@
 class: runtime
-summary: [1760] promises a program that avoids a construct never trips over its keyword, so D191 refuses [0820]'s block by shape and leaves `arena` an ordinary binding, assignment target and loop label
-constructs: 1130, 1760, 1800
+summary: D212 withdrawal preserves arena as an ordinary user-declared type, parameter type, binding, assignment target and loop label
+constructs: 0820, 1130, 1760, 1800
 program: main.ldn
 status: 42
 targets: linux-x86-64

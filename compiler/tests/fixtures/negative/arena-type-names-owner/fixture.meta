@@ -1,5 +1,5 @@
 class: negative
-summary: D196 makes the refused arena type name R4.80 in its rendered diagnostic
+summary: D212 names the withdrawn arena type and ordinary allocator migration
 expect: expected.txt
 targets: linux-x86-64, macos-arm64
 args: ../tests/fixtures/negative/arena-type-not-enabled/program.ldn

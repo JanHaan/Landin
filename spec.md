@@ -747,12 +747,13 @@ parse error. The roadmap owns that list; this grammar owns what is
 already true.
 R4.30 enables [1430]'s import alias and [1440]'s selected import forms;
 D201 states their binding and visibility rules.
-R4.10 recognizes [0820]'s lexical `arena` block at a statement position and
-refuses it by name, and the checker refuses the built-in `arena` type name
-[0780] writes a parameter with; D196 assigns both to R4.80. `arena` is not a
-word the keyword rule spells and `core/mem` declares a type of that name, so
-the block is recognized by the shape `arena name do` and nothing else spelled
-`arena` is touched.
+D212 withdraws [0820]'s formerly promised lexical `arena` block and builtin
+`arena` type. Both retain a named diagnostic citing R4.80's decision and the
+ordinary allocator replacement; their refusal is permanent rather than pending
+implementation. `arena` is not a keyword: a declared type, parameter, local,
+call or label with that spelling remains ordinary. Only the statement shape
+`arena name do` and an otherwise-unresolved builtin type spelling receive the
+migration diagnostic. No compiler rule recognizes the module `core/mem`.
 
 ### [1840] The kernel's scopes, outermost first
 
@@ -8978,7 +8979,7 @@ classified failure boundary before the repository gate can pass.
 | `raw.prefix` | static | 0420, 0500, 0510 | L0202 prevents representation access; `core/mem` reports `raw_full`, `uninitialized`, `raw_empty` or `raw_not_empty` before an invalid transition | `negative/core-mem-private-representation`, `runtime/core-mem-raw-storage` |
 | `raw.backing` | outside | 0430, 0470, 0510, 1720 | non-guarantee: the supplied byte pointer may be invalid, misaligned or smaller than the declared capacity | `runtime/core-mem-raw-storage` |
 | `allocation.failure` | static | 0300, 0940, 1230, 1280, 1290, 1310, 1360, 1975 | allocators report `core/mem.out_of_memory`, which a caller must handle or declare; arenas reject exhaustion and unrepresentable request arithmetic before mutation, vectors check extents and growth before provider calls and preserve the old list on failure, and heap refusal, finite pool exhaustion, injected refusal and delegated inner refusal use the same channel | `runtime/core-mem-allocators`, `runtime/core-mem-arena-boundaries`, `runtime/core-vec-pointer-storage`, `runtime/r420-vec-capacity-boundaries`, `runtime/r420-vec-growth-boundary`, `runtime/r420-vec-growth-transaction`, `runtime/derived-parser`, `runtime/hosted-heap-provider`, `runtime/r420-pool-provider`, `runtime/r420-failing-providers` |
-| `allocation.backing` | outside | 0430, 0470, 0770, 1360, 1720 | non-guarantee: caller-supplied arena or pool storage may be invalid or cease to live after an origin-erasing pointer conversion; tracked pool base and bookkeeping origins join, but one untracked constituent makes the whole provider untracked; backing validity and exact capacities remain the caller's responsibility | `runtime/core-mem-allocators`, `runtime/core-mem-arena-boundaries`, `runtime/r420-pool-provider`, `negative/core-arena-frame-escape`, `negative/core-pool-frame-escape`, `negative/core-pool-bookkeeping-frame-escape` |
+| `allocation.backing` | outside | 0430, 0470, 0770, 0820, 1360, 1720 | non-guarantee: caller-supplied arena or pool storage may be invalid or cease to live after an origin-erasing pointer conversion; tracked pool base and bookkeeping origins join, but one untracked constituent makes the whole provider untracked; backing validity and exact capacities remain the caller's responsibility; D212 withdraws lexical-region guarantees and preserves independent direct, helper and side-effect allocator results | `runtime/r480-arena-independent-results`, `runtime/r480-arena-nested-exhaustion`, `runtime/core-mem-allocators`, `runtime/core-mem-arena-boundaries`, `runtime/r420-pool-provider`, `negative/core-arena-frame-escape`, `negative/core-pool-frame-escape`, `negative/core-pool-bookkeeping-frame-escape` |
 | `allocation.reclamation` | static | 0430, 0470, 0790, 1360 | heap release and a pool free of a currently occupied exact address and extent return real live storage; pool reuse is lowest-index first, stale same-address/same-size identity is outside the guarantee, and counted free delegates once with a live count exact only for valid-free use | `runtime/hosted-heap-provider`, `runtime/r420-pool-provider`, `runtime/r420-failing-providers` |
 | `slices.bounds-known` | static | 0570, 0580, 1950 | L0300 or L0306 | `negative/index-outside-the-length`, `negative/readonly-slice-write` |
 | `slices.bounds-runtime` | trap | 0570, 0580, 1120, 1950, 1960 | trap, outside [1120]'s region | `runtime/computed-array-index-traps`, `runtime/local-array-computed-store-traps`, `runtime/slice-index-read-traps`, `runtime/slice-index-write-traps`, `runtime/slice-half-open-upper-traps`, `runtime/slice-inclusive-upper-traps`, `runtime/slice-lower-after-upper-traps` |
@@ -9243,9 +9244,9 @@ cleanup paths have deterministic executable evidence. Both returned allocator
 handles retain `from base`; returning one over frame storage is L0314. Freeing
 does not reclaim monotonic space. The pointer and extent remain unsafe
 caller-supplied backing under [0430], [0470] and [1720]. This ordinary library
-allocator is not [0820]'s built-in lexical `arena` block, whose exact region
-semantics D191 re-owned to R4.20 and D196 transfers to R4.80. Both written
-forms are refused by name against R4.80.
+allocator is the explicit-authority replacement for [0820]'s formerly promised
+builtin forms. D212 withdraws both after D191 and D196 exposed the missing
+backing and escape semantics; the named refusals now report that disposition.
 
 `core/vec.list(item)` contains one D151 `mem.storage(item)`. It threads an
 allocator through `reserve`, `push` and `release`, while `length`, `capacity`,
@@ -11474,6 +11475,10 @@ all, and the `types.values` guarantee row.
 
 ### D191 — The region and the derivation cut are core's; the arena block is refused by name
 
+D196 carries this increment's unresolved arena questions forward; D212 now
+settles them by withdrawing both builtin forms. The original rationale below
+records why the compiler first added the named refusals.
+
 **The tour said** that `arena` is built in, both as a block and as the type a
 parameter is written with at [0780] [0820], and that derivation stops at the
 three primitives of [0500] — `offset`, `base_of` and `slice_from` — which
@@ -11830,6 +11835,10 @@ extents, a non-null empty allocation, the old and replacement allocations
 coexisting during `vec.list(ptr node)` growth, and no live block after release.
 
 ### D196 — The library omits pointer conveniences and transfers lexical arena to the hosted application
+
+D212 now discharges the arena handoff below with explicit-authority library
+semantics and permanent withdrawal of both builtin forms. The pointer
+convenience dispositions remain unchanged.
 
 **R4.20 inherited** D191's [0500], [0810] and [0820] dispositions. Its exit
 explicitly permits recording the two pointer conveniences as unneeded and
@@ -12744,3 +12753,62 @@ and aggregate calls, or change existing programs' outcomes. All are rejected.
 runtime and ABI oracle under none/off, size/off, size/auto and speed/auto;
 focused generic/erased cases additionally run none/all and speed/all.
 ROADMAP.md retains the implementation and authoritative native completion gate.
+
+### D212 — Arena authority is explicit and allocation does not create a region
+
+**The tour promised** a builtin `arena` type and `arena name do` block whose
+allocations had frame origin locally and independent allocated origin through
+a helper. W7 argued that every escaping result would pass the block's exit.
+D191 asked for a real type, backing, exhaustion and origin contract; D196
+identified the helper-side-effect path that argument omitted.
+
+**Chosen:** withdraw both builtin forms. An arena is an ordinary allocator
+value with explicit backing and extent, such as `mem.arena_over`. Ordinary
+conformance supplies allocation and free. The existing inout-receiver
+`mem.allocator` is a generic evidence contract, not itself object-safe; an
+ordinary pointer-receiver adapter permits calls through `any` without changing
+that contract. The frontend has no privileged knowledge of `core/mem`. The
+named refusals remain migration diagnostics pointing to R4.80's decision, not promises to
+enable these forms later. Declared names spelled `arena` remain ordinary.
+
+The caller chooses backing and capacity on every target: a real array, static
+storage, or storage explicitly acquired from another provider. Target-sized
+extents and checked request arithmetic determine exhaustion. A monotonic
+provider reports `out_of_memory` without changing state when the request does
+not fit; the counted provider can force the same edge. Nested ordinary scopes
+create no implicit provider or region. Separate backing yields independent
+exhaustion; reusing or overlapping backing remains manual lifetime policy.
+The backing owner releases acquired storage explicitly, arranging `defer` for
+normal, failure, return, break and continue exits when needed. No implicit
+cleanup, guessed frame buffer, hosted heap fallback or destructor is added.
+
+Independent allocator results keep the existing no-`from` contract. It permits
+simultaneous allocations and helper results used by the caller, including
+pointer-containing aggregates, slices, erased values and callback state.
+The implementation's explicit integer-to-pointer conversion removes tracked
+origin under [0470]; this is a non-guarantee for both direct and helper calls.
+The helper may also retain that result in module storage without returning it
+through any caller boundary. Backing validity is still required for every use.
+An ordinary tracked frame pointer or arena handle retaining its base remains
+subject to the existing escape checks; these checks do not infer provenance
+through explicit unsafe conversions or impose a borrow on allocation results.
+
+**Why not the alternatives:** W7's omitted module-store path is executable
+without returning a value, so checking only the caller block exit is
+insufficient. Retaining the allocator's mutable borrow on each result would
+reject its next allocation and defeat the ordinary allocation idiom. A new
+region effect system across erased calls, callbacks and helper side effects
+would be a different semantic design, unsupported by the local origin model;
+pretending an unsafe integer conversion preserves that promise would be false.
+The existing explicit authority model handles the derived hosted application
+without any of those claims.
+
+**Pinned by** `runtime/r480-arena-independent-results`,
+`runtime/r480-arena-nested-exhaustion`, `runtime/core-mem-allocators`,
+`runtime/core-mem-arena-boundaries`,
+`runtime/arena-is-an-ordinary-name`, `negative/arena-block-names-owner`,
+`negative/arena-type-names-owner`, `negative/core-arena-frame-escape`,
+`negative/frame-origin-return`, `negative/r480-callback-frame-escape`,
+`negative/r480-helper-frame-retention`, `negative/array-reference-frame-return`,
+`negative/core-text-frame-slice-escape`, `negative/any-frame-origin-escape`,
+and `runtime/any-untracked-pointer-origin`.

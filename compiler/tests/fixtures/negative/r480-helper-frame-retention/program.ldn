@@ -1,0 +1,10 @@
+absent: atom
+optional: type = absent | ptr u8
+mut saved: optional = absent
+retain: (escaping value: ptr u8) -> none =
+    saved = value
+end retain
+bad: () -> none =
+    value: u8 = 7
+    retain(addr value)
+end bad

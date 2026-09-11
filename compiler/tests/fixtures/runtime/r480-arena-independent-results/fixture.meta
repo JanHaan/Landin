@@ -1,0 +1,7 @@
+class: runtime
+summary: D212 explicit arena authority permits simultaneous generic and erased allocations and helper side-effect retention without a lexical escape guarantee
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0430, 0470, 0770, 0780, 0790, 0820, 0940, 1310, 1360, 1580, 1690
+targets: linux-x86-64

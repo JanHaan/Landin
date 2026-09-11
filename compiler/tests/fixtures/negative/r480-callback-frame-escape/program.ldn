@@ -1,0 +1,12 @@
+callback: type = extern(c) (state: ptr u8) -> (value: u8)
+callback_state: type = struct
+    call: callback
+    state: ptr u8
+end callback_state
+extern(c) invoke: (state: ptr u8) -> (value: u8) =
+    value = state.val
+end invoke
+bad: () -> (result: callback_state) =
+    value: u8 = 7
+    result = (call: invoke, state: addr value)
+end bad

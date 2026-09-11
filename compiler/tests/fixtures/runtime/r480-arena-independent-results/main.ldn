@@ -1,0 +1,116 @@
+import core/mem
+
+--  Every retained value is read while real module backing is still alive.
+--  No dangling dereference is used to demonstrate the untracked boundary.
+mut backing: [128]u8 = zeroed
+absent: atom
+optional: type = absent | ptr mut u8
+mut saved: optional = absent
+
+readable: type = concept (item: type)
+    read: (self: ptr item) -> (value: u8)
+end readable
+read_byte: (self: ptr u8) -> (value: u8) =
+    value = self.val
+end read_byte
+u8 is readable (read: read_byte)
+
+--  mem.allocator's inout receiver is a generic evidence contract. An
+--  ordinary object-safe adapter supplies explicit pointer-receiver any calls.
+allocator_view: type = concept (provider: type)
+    alloc: (self: ptr mut provider, size: usize, alignment: usize)
+           -> (block: ptr mut u8) ! mem.out_of_memory
+    free: (self: ptr mut provider, block: ptr mut u8, size: usize) -> none
+end allocator_view
+arena_alloc: (self: ptr mut mem.arena, size: usize, alignment: usize)
+             -> (block: ptr mut u8) ! mem.out_of_memory =
+    block = try mem.allocate(self.val, size, alignment)
+end arena_alloc
+arena_free: (self: ptr mut mem.arena, block: ptr mut u8, size: usize)
+            -> none =
+    mem.free(self.val, block, size)
+end arena_free
+mem.arena is allocator_view (alloc: arena_alloc, free: arena_free)
+
+pair: type = struct
+    first: ptr mut u8
+    second: ptr mut u8
+end pair
+callback: type = extern(c) (state: ptr mut u8) -> (value: u8)
+callback_state: type = struct
+    call: callback
+    state: ptr mut u8
+end callback_state
+extern(c) invoke: (state: ptr mut u8) -> (value: u8) =
+    value = state.val
+end invoke
+
+helper: (provider: type is mem.allocator, inout arena: provider,
+         value: u8) -> (result: ptr mut u8) ! mem.out_of_memory =
+    result = try mem.new(arena, value)
+end helper
+
+retain: (provider: type is mem.allocator, inout arena: provider)
+        -> none ! mem.out_of_memory =
+    --  W7's missing path: this result never returns through the caller block.
+    saved = try helper(arena, u8(37))
+end retain
+
+aggregate: (provider: type is mem.allocator, inout arena: provider)
+           -> (result: pair) ! mem.out_of_memory =
+    first := try helper(arena, u8(11))
+    second := try helper(arena, u8(13))
+    result = (first: first, second: second)
+end aggregate
+
+view: (provider: type is mem.allocator, inout arena: provider)
+      -> (result: []mut u8) ! mem.out_of_memory =
+    initial: [2]u8 = [17, 19]
+    storage := try mem.new(arena, initial)
+    result = storage.val[0..<2]
+end view
+
+erased: (provider: type is mem.allocator, inout arena: provider)
+        -> (result: any readable) ! mem.out_of_memory =
+    object := try helper(arena, u8(23))
+    result = any(object)
+end erased
+
+callback_result: (provider: type is mem.allocator, inout arena: provider)
+                 -> (result: callback_state) ! mem.out_of_memory =
+    object := try helper(arena, u8(29))
+    result = (call: invoke, state: object)
+end callback_result
+
+run: () -> (ok: bool) ! mem.out_of_memory =
+    ok = false
+    mut arena := mem.arena_over(addr backing[0], 128)
+    mut first := try mem.allocate(arena, usize(1), usize(1))
+    first.val = 7
+    second := try helper(arena, u8(9))
+    held := try aggregate(arena)
+    bytes := try view(arena)
+    dynamic := try erased(arena)
+    state := try callback_result(arena)
+    try retain(arena)
+    --  Erased allocator dispatch is the same ordinary conformance.
+    mut erased_arena: any allocator_view = any(addr arena)
+    mut last := try erased_arena.alloc(1, 1)
+    last.val = 31
+    ok = first.val == 7 and second.val == 9
+      and held.first.val == 11 and held.second.val == 13
+      and bytes[0] == 17 and bytes[1] == 19
+      and dynamic.read() == 23 and state.call(state.state) == 29
+      and last.val == 31
+end run
+
+public main: () -> (code: i32) =
+    ok: bool = run() else false
+    --  The helper's side effect survived run's provider handle and frame.
+    --  The real backing still lives; nothing here dereferences dead storage.
+    matched: bool = match saved
+        absent: false
+        ptr (retained): retained.val == 37
+    end match
+    code = if ok and matched then 42 else 1 end if
+end main

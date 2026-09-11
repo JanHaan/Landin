@@ -1,5 +1,14 @@
+arena: type = struct
+    value: i32
+end arena
+
+ordinary: (value: arena) -> (result: i32) =
+    result = value.value
+end ordinary
+
 public main: () -> (code: i32) =
-    mut arena: i32 = 40
+    value: arena = arena(value: 40)
+    mut arena: i32 = ordinary(value)
     arena = arena + 1
     arena: loop do
         inc arena
