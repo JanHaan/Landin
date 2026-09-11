@@ -1707,7 +1707,7 @@ package body Landin.Syntax.Parser is
                   Refuse
                     (Item    => Syn.Indexing,
                      Where   => Here,
-                     Message => "indexing is not enabled yet");
+                     Message => "an index requires a named place");
                   Resync_Brackets;
                end if;
             end Refuse_Any_Index;
@@ -2161,7 +2161,8 @@ package body Landin.Syntax.Parser is
                     (Item    => (if In_Parameter then Syn.Type_Parameter
                                  else Syn.Declared_Type),
                      Where   => At_Type,
-                     Message => "`type` is not enabled yet");
+                     Message => "`type` requires a type declaration"
+                                & " or a generic formal");
                   Advance;
                   return Add (Error_Type, At_Type);
                end if;
@@ -2233,7 +2234,8 @@ package body Landin.Syntax.Parser is
                   Refuse
                     (Item    => Syn.Struct_Type,
                      Where   => At_Type,
-                     Message => "a struct is not enabled yet");
+                     Message => "an inline struct requires a named"
+                                & " type declaration");
                   --  The `(` is left where it is: Resync_Declaration
                   --  counts nesting from here, and skipping it first
                   --  would leave `x: i32` looking like the next
@@ -6777,8 +6779,8 @@ package body Landin.Syntax.Parser is
                      Refuse
                        (Item    => Syn.Struct_All_Of,
                         Where   => At_Item,
-                        Message => "an all-`of` struct literal is not"
-                                   & " enabled yet");
+                        Message => "a struct literal requires at least"
+                                   & " one labelled field");
                      Advance;
                      Resync_Parentheses;
 
@@ -7128,8 +7130,8 @@ package body Landin.Syntax.Parser is
                   Refuse
                     (Item    => Syn.Struct_All_Of,
                      Where   => Starts,
-                     Message => "an all-`of` construction is not enabled"
-                                & " yet");
+                     Message => "a labelled construction requires"
+                                & " at least one labelled field");
                   Resync_Parentheses;
 
                   while Peek = Tok.Left_Bracket loop

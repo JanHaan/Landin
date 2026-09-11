@@ -2539,9 +2539,13 @@ def check_refused_constructs(full_run):
 
     words = spellings("Real_Word")
     if words is None:
-        out.append(("compiler/ada/src/syntax/landin-syntax-parser.adb", 1,
-                    "the refused-word table could not be read"))
-    else:
+        # Once the final contextual spelling is enabled, there is no table.
+        # A remaining enum still requires its readable spelling function.
+        if re.search(r"type\s+Real_Word\s+is\b", parser_text):
+            out.append(("compiler/ada/src/syntax/landin-syntax-parser.adb", 1,
+                        "the refused-word table could not be read"))
+        words = {}
+    if words:
         for name, word in sorted(words.items()):
             if word in keywords:
                 out.append((

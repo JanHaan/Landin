@@ -750,7 +750,11 @@ guess the compiler gets to make. Meeting one is a diagnostic that
 names the construct and says which work enables it, so a program
 written against the whole tour fails with a list rather than with a
 parse error. The roadmap owns that list; this grammar owns what is
-already true.
+already true. A named diagnostic for a disallowed source shape within an
+implemented construct instead identifies the source-form boundary recorded by
+that work; it must not claim that the complete construct remains unimplemented.
+For example, indexing requires a named place, inline structs require a named
+type declaration, and a labelled construction starts with a labelled field.
 R4.30 enables [1430]'s import alias and [1440]'s selected import forms;
 D201 states their binding and visibility rules.
 D212 withdraws [0820]'s formerly promised lexical `arena` block and builtin
@@ -1521,7 +1525,11 @@ concrete. A private declared routine may write `! ...`; whole-module checking
 then takes the least fixed point containing every atom it fails with and every
 concrete or inferred set propagated by `try`. Mutually recursive private
 routines are solved together. An inferred empty set makes the routine
-infallible.
+infallible. Generic deduction from a recovered error waits for its complete
+finalized set, including through local aliases. D215 refuses only a circular
+key/effect dependency in which choosing a generic instance requires the inferred
+effects of that same unresolved instance; ordinary and mutual error recursion
+remain least-fixed-point inference.
 
 `fail atom` leaves by the error outcome and carries no successful result. The
 atom's possible set must be a subset of the routine's finalized declared set.
@@ -8414,7 +8422,12 @@ one inferred set, while unequal keys retain separate signatures and may settle
 to different sets. An empty result becomes infallible; a nonempty result becomes
 a concrete atom set before body checking resumes and before lowering. Call
 recovery, `try`, `fail`, `defer`, and `undo` then use only that finalized
-ordinary descriptor.
+ordinary descriptor. D215 closes error inference and generic discovery together:
+a recovered atom set and its aliases become deduction inputs only after their
+component's effects are complete. New instances may expose further components;
+the final inventory is frozen only after this frontier closes. A circular
+key/effect dependency that cannot supply a complete actual is L0301, without a
+provisional atom set or instance key.
 
 The checker interns an opaque routine identity from the source template and
 complete normalized actual tuple. Equal keys reuse one identity; unequal keys
@@ -9010,14 +9023,14 @@ classified failure boundary before the repository gate can pass.
 | `execution.resource-exhaustion` | outside | 0950, 1770, 1970 | non-guarantee: the kernel sets no recursion-depth, stack, or host-resource bound | `runtime/recursive-fibonacci` |
 | `consume.local` | static | 0910 | L0302 or L0315 | `negative/use-after-sink`, `negative/sunk-inout-not-restored` |
 | `consume.copy-before` | static | 0860, 0910, 1720 | a value copied before the sink remains independently usable | `runtime/copy-before-sink-remains-live` |
-| `errors.control` | static | 0940, 0960, 0970 | L0301 for an undeclared or unhandled outcome | `negative/unhandled-declared-error`, `runtime/declared-errors-direct-and-inferred` |
+| `errors.control` | static | 0940, 0960, 0970 | L0301 for an undeclared or unhandled outcome | `negative/unhandled-declared-error`, `runtime/declared-errors-direct-and-inferred`, `runtime/r490-generic-recovery-frontier`, `negative/r490-generic-error-key-cycle` |
 | `results.destructure` | static | 0990 | L0200, L0301, L0302 or L0308 | `negative/result-destructure-needs-multiple`, `runtime/r230-composition` |
 | `functions.anonymous` | static | 1010 | L0201 for capture; complete signature checks otherwise apply | `negative/anonymous-function-captures-local`, `runtime/inferred-function-values` |
 | `control.flow` | static | 1050, 1060, 1070, 1080, 1090 | L0200 or L0201 at a condition-binding scope boundary; L0301 or L0302 at every condition, reachable join and exit | `negative/condition-declaration-body-shadowing`, `negative/condition-declaration-not-bool`, `negative/condition-declaration-out-of-scope`, `negative/if-expression-missing-else`, `runtime/condition-declarations`, `runtime/control-expression-edges-keep-source-order` |
 | `control.loops` | static | 1130, 1140, 1150, 1160, 1170, 1180, 1190, 1320, 1330 | L0301 for a non-bool condition, mismatched range, non-traversable source, missing/ambiguous/non-exact iterable evidence, or incomplete/inconsistent value exit; L0303 for a write to a read-only storage element or copied iterable item; a taken transfer runs active defers and targets its named or nearest loop edge, while natural completion alone enters `complete` | `negative/loop-condition-not-bool`, `negative/loop-value-missing-break-value`, `negative/loop-value-missing-completion`, `negative/loop-value-type-mismatch`, `negative/for-range-needs-integer`, `negative/for-range-endpoints-disagree`, `negative/for-source-not-traversable`, `negative/for-collection-element-read-only`, `negative/for-array-element-read-only`, `negative/for-any-element-read-only`, `negative/for-iterable-ambiguous-evidence`, `negative/for-iterable-item-read-only`, `negative/for-iterable-missing-conformance`, `negative/text-traversal-item-is-read-only`, `runtime/loop-control-flow`, `runtime/loop-values`, `runtime/for-range-traversal`, `runtime/for-collection-traversal`, `runtime/for-aggregate-element-traversal`, `runtime/for-any-element-traversal`, `runtime/for-iterable-evidence-traversal`, `runtime/hosted-text-traversal`, `runtime/r480-recovery-loop-transfer`, `runtime/r480-loop-fresh-view` |
 | `cleanup.defer` | static | 1100 | the registered call is checked at every ordinary and successful-return edge | `negative/defer-read-not-assigned-on-return`, `runtime/defer-cleanups-follow-control-edges` |
 | `cleanup.undo` | static | 1110, 1200 | the registered call is checked at every propagated-failure edge | `negative/undo-read-not-assigned-on-failure`, `runtime/undo-cleanups-follow-failure-edges` |
-| `generics.substitution` | static | 1220, 1280, 1290, 1300, 1310, 1350, 1490, 1500, 1520, 1540, 1650, 1660, 1700 | L0300, L0301, L0306, L0307, L0313 or L0318; a concrete `ptr T` field retains the exact referent and permission descriptor | `negative/generic-routine-undeduced-formal`, `negative/generic-reference-field-permission-distinct`, `runtime/generic-explicit-static`, `runtime/generic-reference-fields`, `runtime/generic-structural-deduction`, `runtime/core-vec-pointer-storage`, `runtime/r480-generic-nested-recovery`, `runtime/r480-concrete-error-deduction` |
+| `generics.substitution` | static | 1220, 1280, 1290, 1300, 1310, 1350, 1490, 1500, 1520, 1540, 1650, 1660, 1700 | L0300, L0301, L0306, L0307, L0313 or L0318; a concrete `ptr T` field retains the exact referent and permission descriptor | `negative/generic-routine-undeduced-formal`, `negative/generic-reference-field-permission-distinct`, `runtime/generic-explicit-static`, `runtime/generic-reference-fields`, `runtime/generic-structural-deduction`, `runtime/core-vec-pointer-storage`, `runtime/r480-generic-nested-recovery`, `runtime/r480-concrete-error-deduction`, `runtime/r490-generic-inferred-recovery`, `runtime/r490-generic-recovery-frontier`, `negative/r490-generic-recovery-conflict`, `negative/r490-recovery-expanding-generic` |
 | `concepts.conformance` | static | 1230, 1240, 1250, 1260, 1270, 1340 | L0301 or L0317--L0319 | `negative/conformance-collision`, `negative/constraint-not-satisfied`, `negative/compiler-concept-reserved`, `positive/r490-conformance-input-keys`, `negative/r490-conformance-input-alias-collision` |
 | `any.construction` | static | 1370, 1380 | L0301, L0314 or L0318 | `negative/any-source-not-pointer`, `negative/any-readonly-source-for-mutable-entry` |
 | `any.dispatch` | static | 1390 | malformed table positions cannot be produced by accepted source; verifier failure is a compiler defect | `negative/any-entry-not-object-safe`, `runtime/any-heterogeneous-dispatch` |
@@ -12869,3 +12882,51 @@ spelling remains excluded, and complete `zeroed` retains its existing spelling.
 `negative/r490-fill-array-shapes`, `negative/r490-fill-pointer-permissions`,
 `negative/r490-fill-case-mixed-types`, `negative/r490-fill-no-omission`,
 `negative/r490-fill-frame-escape` and `negative/r490-fill-unassigned`.
+
+### D215 — Error-dependent generic discovery closes before inventory freeze
+
+**The tour said** that private inferred errors close over callees [0960] and
+that generic calls deduce their type from their arguments [1300]. D138 requires
+complete normalized instance keys. The inherited implementation nevertheless
+froze its signature inventory before the recovered error's type could discover
+an ordinary generic call. R4.90 reproduced the resulting compiler defect on the
+accepted R4.80 baseline without changing the program's inferred error spelling.
+
+**Chosen:** error inference and generic discovery advance together. A recovery
+binding has the finalized complete set of its callee; an inferred local alias
+retains that type, and neither an unknown type nor a provisional set is cached
+as its answer. The checker closes effect components whose dependencies are
+known, then resumes dependent discovery in each caller's own instance view.
+Equal complete sets share a key; unequal sets retain separate instances. Ordinary
+and mutual recursive error components, same-key generic recursion, nested
+recovery, erased-provider discovery and traversal-header deduction use this same
+process. Deferred discovery retains its template-expansion ancestry so D138's
+non-finite different-key expansion refusal cannot be bypassed by recovery.
+
+A circular key/effect dependency is refused with L0301 only after the available
+inference and discovery frontier stops advancing: completing a generic actual
+would require the inferred effects of the unresolved instance selected by that
+actual. The report names the deduction site and the generic declaration. This
+is the same complete-key boundary as D138's existing refusal of a still-inferred
+function descriptor as a direct type actual; it does not reject ordinary error
+recursion or recursive recovery into an infallible generic observer.
+
+**The alternatives:** guessing an atom set makes an intermediate descriptor part
+of an instance identity; suppressing the inventory assertion conceals stale graph
+and cache state; requiring explicit errors everywhere removes an ordinary
+inferred composition. All are declined. General symbolic evaluation of a generic
+body to infer its own incomplete key is not part of deduction. Finalized concrete
+signatures remain the only error representation reaching verified IR, and the
+final signature-count assertion remains in place.
+
+**Pinned by** `runtime/r490-generic-inferred-recovery`,
+`runtime/r490-generic-recovery-frontier`,
+`runtime/r480-concrete-error-deduction`,
+`negative/r490-generic-error-key-cycle`,
+`negative/r490-generic-error-key-cycle-reordered`,
+`negative/r490-generic-error-key-cycle-nested`,
+`negative/r490-generic-inferred-function-actual`,
+`negative/r490-generic-recovery-conflict`,
+`negative/r490-inferred-recovery-immutable`,
+`negative/r490-recovery-expanding-generic` and the checking case
+`recovery deduction interns final sets`.
