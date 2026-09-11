@@ -16,9 +16,9 @@ at the other.
 **Status: specification 0.1.0. The compiler can build and run Landin programs
 for 64-bit Linux. It handles functions, user-defined data types, generic
 routines, pointers, errors, control flow, modules, evidence-table dispatch and
-`any`. Hosted containers, allocators, text and I/O in `core` and a complete
-recovering configuration parser now run alongside the automatically tested
-FizzBuzz, number-theory, searching
+`any`. Hosted containers, allocators, text and I/O in `core`, a complete
+recovering configuration parser and a hosted log filter now run alongside the
+automatically tested FizzBuzz, number-theory, searching
 and sorting programs, plus correctness-scale fannkuch-redux, Mandelbrot and
 FASTA workloads. Support for macOS, microcontrollers and the broader standard
 library is still to come.**
@@ -228,7 +228,7 @@ release compiler builds. ROADMAP.md records the complete closure evidence.
 Debug provenance remains independent of DWARF encoding for a possible future
 PDB emitter; PDB support is not implemented.
 
-**Current roadmap work: R4.80 — Complete and run the derived hosted application.**
+**Next roadmap item: R4.90 — Close Linux hosted parity (planned).**
 
 `refine --debug=full --emit=exe program.ldn -o program` requests Linux source
 debugging. The default is `--debug=none`; debugging metadata is independent of

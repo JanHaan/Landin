@@ -2,5 +2,5 @@ class: runtime
 summary: concrete recovery values supply their actual atom set to generic deduction during discovery
 program: main.ldn
 status: 42
-constructs: 0940, 1030, 1340
+constructs: 0940, 1030, 1290, 1300
 targets: linux-x86-64

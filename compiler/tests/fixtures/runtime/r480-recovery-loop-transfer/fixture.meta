@@ -2,5 +2,5 @@ class: runtime
 summary: slice-call recovery contributes conditional and labeled loop exits with ordinary cleanup
 program: main.ldn
 status: 42
-constructs: 0520, 0940, 1030, 1040, 1130, 1140, 1150
+constructs: 0520, 0940, 1030, 1040, 1130, 1140, 1150, 1910
 targets: linux-x86-64
