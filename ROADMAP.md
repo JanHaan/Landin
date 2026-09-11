@@ -5418,8 +5418,15 @@ frontier: inference publishes only complete component sets before resuming
 recovery-dependent generic discovery, and freezes inventory only at completion.
 Meaningful controls cover exact-key interning, unequal keys, aliases, nested
 recoveries, traversal headers, recursion, immutable recovery values and the
-precise circular-key refusal. Existing R4.80 concrete-error, nested recovery and
-control-transfer oracles remain unchanged.
+precise circular-key refusal. Independent review additionally reproduced an
+alias-only rethrow losing its effect (and crashing inside an ordinary recursive
+component), and an erased parameterized provider being selected before its
+recovered actual was complete. Following alias initializers into effect edges
+and delaying contextual provider discovery resolve both, with chained aliases,
+mutual recursion and separate generic-view controls. The broader fixture check
+also exposed a repeated nested-handler diagnostic; finalized handlers now retain
+their facts without issuing that diagnostic twice. Existing R4.80 concrete-error,
+nested recovery and control-transfer oracles remain unchanged.
 
 ```landin
 problem: atom
