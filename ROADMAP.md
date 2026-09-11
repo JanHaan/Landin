@@ -5470,6 +5470,21 @@ also exposed a repeated nested-handler diagnostic; finalized handlers now retain
 their facts without issuing that diagnostic twice. Existing R4.80 concrete-error,
 nested recovery and control-transfer oracles remain unchanged.
 
+The first native acceptance candidate, `a5d3491f`, exposed three further
+composition regressions in the release suite. Its failed run
+`20260911T163146Z-05257869374f` is retained and supplies no approval. Ordinary
+IEEE named constants had entered an array-field image path after D213 widened
+module-image discovery; ordinary scalar and atom data now retain their existing
+lowering path after distinct representation folding. Nonreading `lenof` on a
+type alias now uses the type path rather than the ordinary-value refusal path.
+Forward callback and reference image dependencies use their complete declared
+descriptors before their initializer expressions have been checked. The static
+dependency graph and its cycle refusals remain unchanged. These fixes preserve
+the original named-float, imported/128-alias measurement and huge recursive
+static-selection oracles. Added compositions cover generic distinct IEEE images,
+nonreading type/value measurements and callback/atom/distinct static selection;
+the existing module scalar-field-read refusal remains pinned separately.
+
 ```landin
 problem: atom
 leaf: () -> none ! ... = fail problem end leaf
@@ -5498,7 +5513,10 @@ them. This table does not withdraw any construct.
 Closure records the complete applicable implementation and independent review
 in this candidate. At candidate preparation, focused native fixtures, the full
 parser and verifier suites, recorded positive IR, object-quality profiles and
-the complete parser's three native GDB profiles had passed. The complete derived parser, containers and
+the complete parser's three native GDB profiles had passed. The acceptance
+repairs also passed the complete checking, frontend-review and lowering suites
+in both compiler modes and their focused runtime/refusal controls. The complete
+derived parser, containers and
 hosted application retain their behavioral oracles, source identities, build
 report/assembly determinism and debugging profiles. Baseline code generation
 retains its existing numeric/object bounds; no competitive optimization claim

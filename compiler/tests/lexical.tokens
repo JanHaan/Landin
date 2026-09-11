@@ -52923,6 +52923,47 @@ file negative/r490-distinct-exact-base/main.ldn tokens 28
   90 91 )
   92 95 end
   96 99 bad
+file negative/r490-distinct-float-static-field/main.ldn tokens 40
+  0 6 scalar
+  6 7 :
+  8 12 type
+  13 14 =
+  15 23 distinct
+  24 27 f32
+  28 34 holder
+  34 35 :
+  36 40 type
+  41 42 =
+  43 49 struct
+  54 60 narrow
+  60 61 :
+  62 68 scalar
+  69 72 end
+  73 79 holder
+  80 86 stored
+  86 87 :
+  88 94 holder
+  95 96 =
+  97 98 (
+  98 104 narrow
+  104 105 :
+  106 112 scalar
+  112 113 (
+  113 116 f32
+  116 117 .
+  117 120 nan
+  120 121 )
+  121 122 )
+  123 128 value
+  128 129 :
+  130 133 f32
+  134 135 =
+  136 139 f32
+  139 140 (
+  140 146 stored
+  146 147 .
+  147 153 narrow
+  153 154 )
 file negative/r490-distinct-generic-formal-type-value/main.ldn tokens 52
   0 3 bad
   3 4 :
@@ -53183,6 +53224,42 @@ file negative/r490-distinct-no-fields/main.ldn tokens 37
   131 132 x
   133 136 end
   137 140 bad
+file negative/r490-distinct-no-inherited-length/main.ldn tokens 35
+  0 3 row
+  3 4 :
+  5 9 type
+  10 11 =
+  12 13 [
+  13 14 3
+  14 15 ]
+  15 18 u16
+  19 25 hidden
+  25 26 :
+  27 31 type
+  32 33 =
+  34 42 distinct
+  43 46 row
+  47 53 public
+  54 58 main
+  58 59 :
+  60 61 (
+  61 62 )
+  63 65 ->
+  66 67 (
+  67 71 code
+  71 72 :
+  73 76 i32
+  76 77 )
+  78 79 =
+  80 84 code
+  85 86 =
+  87 90 i32
+  90 91 (
+  91 96 lenof
+  97 103 hidden
+  103 104 )
+  105 108 end
+  109 113 main
 file negative/r490-distinct-no-operators/main.ldn tokens 23
   0 6 number
   6 7 :

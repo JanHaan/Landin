@@ -718,12 +718,14 @@ negative/r490-distinct-c-array | linux-x86-64, macos-arm64, synthetic-32
 negative/r490-distinct-conformance | linux-x86-64, macos-arm64, synthetic-32
 negative/r490-distinct-discard-type-value | linux-x86-64, macos-arm64, synthetic-32
 negative/r490-distinct-exact-base | linux-x86-64, macos-arm64, synthetic-32
+negative/r490-distinct-float-static-field | linux-x86-64, macos-arm64, synthetic-32
 negative/r490-distinct-generic-formal-type-value | linux-x86-64, macos-arm64, synthetic-32
 negative/r490-distinct-generic-identity | linux-x86-64, macos-arm64, synthetic-32
 negative/r490-distinct-generic-type-value | linux-x86-64, macos-arm64, synthetic-32
 negative/r490-distinct-identity | linux-x86-64, macos-arm64, synthetic-32
 negative/r490-distinct-module-cycle | linux-x86-64, macos-arm64, synthetic-32
 negative/r490-distinct-no-fields | linux-x86-64, macos-arm64, synthetic-32
+negative/r490-distinct-no-inherited-length | linux-x86-64, macos-arm64, synthetic-32
 negative/r490-distinct-no-operators | linux-x86-64, macos-arm64, synthetic-32
 negative/r490-distinct-origin | linux-x86-64, macos-arm64, synthetic-32
 negative/r490-distinct-reference-identity | linux-x86-64, macos-arm64, synthetic-32
@@ -1545,6 +1547,7 @@ runtime/r490-generic-atom-fields | linux-x86-64
 runtime/r490-generic-atom-identity | linux-x86-64
 runtime/r490-generic-atom-storage | linux-x86-64
 runtime/r490-generic-cleanup-recovery | linux-x86-64
+runtime/r490-generic-distinct-float-images | linux-x86-64
 runtime/r490-generic-erased-recovery | linux-x86-64
 runtime/r490-generic-erased-recovery-views | linux-x86-64
 runtime/r490-generic-field-fill | linux-x86-64
@@ -1552,10 +1555,12 @@ runtime/r490-generic-fill-recovery | linux-x86-64
 runtime/r490-generic-fixed-conversion-discovery | linux-x86-64
 runtime/r490-generic-inferred-recovery | linux-x86-64
 runtime/r490-generic-inline-struct | linux-x86-64
+runtime/r490-generic-nonreading-measurements | linux-x86-64
 runtime/r490-generic-recovery-alias-chains | linux-x86-64
 runtime/r490-generic-recovery-frontier | linux-x86-64
 runtime/r490-generic-recursive-alias | linux-x86-64
 runtime/r490-generic-static-fills | linux-x86-64
+runtime/r490-generic-static-selection-descriptors | linux-x86-64
 runtime/r490-generic-union-alias | linux-x86-64
 runtime/r490-lexical-module-observation | linux-x86-64
 runtime/r490-review-generic-distinct-atom-array | linux-x86-64

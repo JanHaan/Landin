@@ -1,0 +1,6 @@
+scalar: type = distinct f32
+holder: type = struct
+    narrow: scalar
+end holder
+stored: holder = (narrow: scalar(f32.nan))
+value: f32 = f32(stored.narrow)

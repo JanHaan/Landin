@@ -1,0 +1,6 @@
+class: negative
+summary: distinct extraction does not enable an ordinary scalar field read in a module initializer
+program: main.ldn
+codes: L0305
+constructs: 0240, 0650, 0670, 0700, 1940
+targets: linux-x86-64, macos-arm64, synthetic-32
