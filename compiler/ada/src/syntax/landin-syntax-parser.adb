@@ -2834,6 +2834,22 @@ package body Landin.Syntax.Parser is
                      --  names.  Parse_Type read the first name; only a type
                      --  declaration admits the following bars, so ordinary
                      --  expression precedence remains untouched.
+                     if not Type_Refused and then Peek = Tok.Bar
+                       and then Kind (Result, Aliased_Type) not in
+                         Type_Name | Type_Reference | Member_Selection
+                           | Type_Application | Pointer_Type
+                     then
+                        Complain
+                          (Item => Syn.Type_Expected,
+                           Where => Where (Result, Aliased_Type),
+                           Message => "a union member names a type or writes"
+                             & " one pointer type",
+                           Note => "[1795]: direct array, slice and function"
+                             & " type spellings are not union members",
+                           Related => At_Name,
+                           Because => "the type declared here");
+                        Type_Refused := True;
+                     end if;
                      if not Type_Refused and then Peek = Tok.Bar then
                         declare
                            Members : Slot_Vectors.Vector;
