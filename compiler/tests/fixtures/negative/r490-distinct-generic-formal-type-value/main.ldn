@@ -1,0 +1,5 @@
+bad: (item: type, value: item) -> (result: i32) =
+    _ = value
+    result = i32(item)
+end bad
+public main: () -> (code: i32) = code = bad(i32(42)) end main
