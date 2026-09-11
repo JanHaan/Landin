@@ -977,6 +977,9 @@ no_access: atom
 
 An enumeration is a union of atoms.
 north, south, east and west were declared at [0100].
+An atom set can be an array element, a struct field or a variant payload.
+These retain the declared set: a write needs one of its members, and reading
+it back grants no integer operations or conversions.
 
 ```landin
 compass: type = north | south | east | west

@@ -1,0 +1,6 @@
+class: runtime
+summary: atom arrays preserve exact sets through storage and generic copies
+program: main.ldn
+status: 42
+constructs: 0520, 0570, 0630, 0640, 1300, 1350, 1940
+targets: linux-x86-64

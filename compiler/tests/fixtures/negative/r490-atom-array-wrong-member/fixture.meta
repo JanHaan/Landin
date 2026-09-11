@@ -1,0 +1,6 @@
+class: negative
+summary: an atom-array store must remain within its declared set
+program: main.ldn
+codes: L0301
+constructs: 0520, 0630, 0640
+targets: linux-x86-64

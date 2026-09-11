@@ -186,6 +186,7 @@ package body Landin.Checking is
          raise Landin.Compiler_Defect with "an array actual is malformed";
       elsif Element.Kind = Scalar_Field
         and then Element.Signature = No_Signature
+        and then Element.Atoms = No_Atom_Set
       then
          return Fixed_Array_Type_Actual (Length, Element.Element);
       elsif Element.Kind = Aggregate_Field then
@@ -210,6 +211,7 @@ package body Landin.Checking is
       end if;
       return (if Key.Element_Shape.Kind /= Scalar_Field
                 or else Key.Element_Shape.Signature /= No_Signature
+                or else Key.Element_Shape.Atoms /= No_Atom_Set
               then Key.Element_Shape
               elsif Key.Nominal /= No_Nominal_Type
               then (Kind => Aggregate_Field, Nominal => Key.Nominal,
@@ -291,6 +293,7 @@ package body Landin.Checking is
       end if;
       return (if Key.Element_Shape.Kind /= Scalar_Field
                 or else Key.Element_Shape.Signature /= No_Signature
+                or else Key.Element_Shape.Atoms /= No_Atom_Set
               then Shaped_Array_Element
               elsif Key.Nominal = No_Nominal_Type
               then Scalar_Array_Element else Nominal_Array_Element);
@@ -377,6 +380,7 @@ package body Landin.Checking is
          when Fixed_Array_Actual_Type =>
             if Key.Element_Shape.Kind /= Scalar_Field
               or else Key.Element_Shape.Signature /= No_Signature
+              or else Key.Element_Shape.Atoms /= No_Atom_Set
             then
                return Key.Owner = Of_Table'Address
                  and then Holds (Of_Table, Key.Element_Shape);
@@ -1709,6 +1713,7 @@ package body Landin.Checking is
       if Shape.Kind /= Fixed_Array_Field or else Shape.Cases /= 0
         or else Shape.Payloads_First /= 0
         or else Shape.Signature /= No_Signature
+        or else Shape.Atoms /= No_Atom_Set
         or else (Shape.Reference /= No_Reference
                  and then Shape.Nominal /= No_Nominal_Type)
       then
@@ -1916,6 +1921,7 @@ package body Landin.Checking is
       Nominal : Nominal_Type_Id;
       Shape   : Field_Shape) return Field_Shape
      is (if Shape.Kind /= Scalar_Field or else Shape.Signature /= No_Signature
+           or else Shape.Atoms /= No_Atom_Set
          then Shape
          elsif Nominal /= No_Nominal_Type
          then (Kind => Aggregate_Field, Nominal => Nominal, others => <>)
@@ -3769,7 +3775,8 @@ package body Landin.Checking is
               Array_Shape'(Length => Length, Element => Element,
                         Has_Complex_Element =>
                                 Shape.Kind /= Scalar_Field
-                                or else Shape.Signature /= No_Signature,
+                                or else Shape.Signature /= No_Signature
+                                or else Shape.Atoms /= No_Atom_Set,
                         Complex_Element => Shape, others => <>);
          else
             declare
@@ -3783,7 +3790,8 @@ package body Landin.Checking is
                  Array_Shape'(Length => Length, Element => Element,
                               Has_Complex_Element =>
                                 Shape.Kind /= Scalar_Field
-                                or else Shape.Signature /= No_Signature,
+                                or else Shape.Signature /= No_Signature
+                                or else Shape.Atoms /= No_Atom_Set,
                               Complex_Element => Shape, others => <>);
             end;
          end if;
@@ -3966,7 +3974,8 @@ package body Landin.Checking is
            Array_Shape'(Length => Length, Element => Element,
                         Has_Complex_Element =>
                                 Shape.Kind /= Scalar_Field
-                                or else Shape.Signature /= No_Signature,
+                                or else Shape.Signature /= No_Signature
+                                or else Shape.Atoms /= No_Atom_Set,
                         Complex_Element => Shape, others => <>);
       else
          declare
@@ -3981,7 +3990,8 @@ package body Landin.Checking is
               Array_Shape'(Length => Length, Element => Element,
                               Has_Complex_Element =>
                                 Shape.Kind /= Scalar_Field
-                                or else Shape.Signature /= No_Signature,
+                                or else Shape.Signature /= No_Signature
+                                or else Shape.Atoms /= No_Atom_Set,
                               Complex_Element => Shape, others => <>);
          end;
       end if;

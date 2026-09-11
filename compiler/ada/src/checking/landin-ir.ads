@@ -3400,7 +3400,8 @@ package Landin.IR is
       Result       : Landin.Types.Scalar_Name;
       Site         : Landin.Provenance.Origin;
       Nested       : Path_Step_Array := No_Path_Steps;
-      Signature    : Signature_Id := No_Signature) return Value_Id
+      Signature    : Signature_Id := No_Signature;
+      Atoms         : Atom_Set_Id := No_Atom_Set) return Value_Id
      with Pre => Is_Emitting (Into, Item)
                  and then Landin.Provenance.Is_Known (Site),
           Post => Holds (Into, Item, Emit_Variant_Field_Load'Result);

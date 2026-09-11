@@ -5066,7 +5066,8 @@ package body Landin.Tests.Verifier_Suite is
      (Item : in out Landin.Testing.Context)
    is
       type Scenario_Kind is
-        (Sound, Wrong_Load, Wrong_Store, Address_Metadata, Legacy_Metadata);
+        (Sound, Subset_Store, Narrow_Load, Wrong_Load, Wrong_Store,
+         Address_Metadata, Legacy_Metadata);
       Work : Landin.Stages.Compilation :=
         Landin.Stages.Create (Landin.Targets.Linux_X86_64);
       Site : Landin.Provenance.Origin;
@@ -5076,14 +5077,20 @@ package body Landin.Tests.Verifier_Suite is
          declare
             Unit : IR.Unit;
             Routine : IR.Item_Id;
-            Expected, Equivalent, Other : IR.Atom_Set_Id;
+            Expected, Equivalent, Other, Narrow : IR.Atom_Set_Id;
             Cell, Address : IR.Slot_Id;
             Block : IR.Block_Id;
             Value, Wrong, Origin, Loaded, Stored : IR.Value_Id;
          begin
             IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
-            Expected := IR.Add_Atom_Set (Unit, [1 => 5]);
-            Equivalent := IR.Add_Atom_Set (Unit, [1 => 5]);
+            if Scenario in Subset_Store | Narrow_Load then
+               Expected := IR.Add_Atom_Set (Unit, [5, 6]);
+               Equivalent := IR.Add_Atom_Set (Unit, [5, 6]);
+            else
+               Expected := IR.Add_Atom_Set (Unit, [1 => 5]);
+               Equivalent := IR.Add_Atom_Set (Unit, [1 => 5]);
+            end if;
+            Narrow := IR.Add_Atom_Set (Unit, [1 => 5]);
             Other := IR.Add_Atom_Set (Unit, [1 => 6]);
             Routine := IR.Add_Item
               (Unit, IR.Routine, 1, Landin.Types.No_Value, Site);
@@ -5095,7 +5102,9 @@ package body Landin.Tests.Verifier_Suite is
             Block := IR.Add_Block
               (Unit, Routine, Landin.Resolution.Program_Scope, Site);
             IR.Enter (Unit, Routine, Block);
-            Value := IR.Emit_Atom (Unit, Routine, 5, Equivalent, Site);
+            Value := IR.Emit_Atom
+              (Unit, Routine, 5,
+               (if Scenario = Subset_Store then Narrow else Equivalent), Site);
             Wrong := IR.Emit_Atom (Unit, Routine, 6, Other, Site);
             IR.Emit_Store (Unit, Routine, Cell, Value, Site);
             Origin := IR.Emit_Place_Address
@@ -5116,6 +5125,9 @@ package body Landin.Tests.Verifier_Suite is
                when Wrong_Load | Legacy_Metadata =>
                   IR.Testing_Support.Overwrite_Value_Atoms
                     (Unit, Routine, Loaded, Other);
+               when Narrow_Load =>
+                  IR.Testing_Support.Overwrite_Value_Atoms
+                    (Unit, Routine, Loaded, Narrow);
                when Wrong_Store =>
                   IR.Testing_Support.Overwrite_Operand
                     (Unit, Routine, Stored, 2, Wrong);
@@ -5123,11 +5135,11 @@ package body Landin.Tests.Verifier_Suite is
                   IR.Testing_Support.Overwrite_Value_Atoms
                     (Unit, Routine,
                      IR.Nth_Operand (Unit, Routine, Loaded, 1), Expected);
-               when Sound => null;
+               when Sound | Subset_Store => null;
             end case;
             Expect
               (Item, V.Check (Unit),
-               (if Scenario = Sound then V.Nothing_Wrong
+               (if Scenario in Sound | Subset_Store then V.Nothing_Wrong
                 else V.Atom_Metadata_Disagrees),
                "typed indirect atom shape: " & Scenario'Image);
          end;

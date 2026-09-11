@@ -1,0 +1,6 @@
+class: negative
+summary: a zero-length array retains its nonzeroable atom element
+program: main.ldn
+codes: L0301
+constructs: 0520, 0630, 0640
+targets: linux-x86-64

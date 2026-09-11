@@ -5378,6 +5378,11 @@ The atom-comparison probe separately exposed a verifier that required set
 inclusion for identity equality. D200 now states the existing checker rule
 precisely: disjoint and overlapping sets compare declaration identities, while
 stores still require inclusion and ordering remains forbidden.
+D216 closes the same identity gap in ordinary and generic atom fields, variant
+payloads and fixed arrays. Exact descriptors survive storage, slice views,
+static images and generic keys; indirect writes admit member subsets while
+loads retain the full destination set. Nonmember, numeric, arithmetic,
+unequal-copy, zero-image and unequal-fill refusals pin the other side.
 
 [1270]'s conformance-input key was previously attributed only to a collision
 refusal. Positive unequal-key collection and alias-normalized collision controls

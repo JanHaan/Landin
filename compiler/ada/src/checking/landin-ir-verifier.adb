@@ -1980,8 +1980,11 @@ package body Landin.IR.Verifier is
               (Of_Unit, Shape.Pointee, Pointee_Of (Of_Unit, Item, Scalar))
             then
                return Address_Value_Disagrees;
-            elsif not Atom_Metadata_Agrees
-              (Shape.Atoms, Atom_Set_Of (Of_Unit, Item, Scalar))
+            elsif not
+              (if Op = Store_Indirect then Atom_Metadata_Is_Subset
+                 (Atom_Set_Of (Of_Unit, Item, Scalar), Shape.Atoms)
+               else Atom_Metadata_Agrees
+                 (Shape.Atoms, Atom_Set_Of (Of_Unit, Item, Scalar)))
             then
                return Atom_Metadata_Disagrees;
             end if;

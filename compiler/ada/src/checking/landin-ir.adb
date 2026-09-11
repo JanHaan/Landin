@@ -3822,8 +3822,23 @@ package body Landin.IR is
             Pointee => Pointee_Of (Into, Item, Value),
             Signature => Signature_Of (Into, Item, Value),
             Atoms => Atom_Set_Of (Into, Item, Value), others => <>);
+         Fits : Boolean := Same_Shape (Into, Shape, Source);
       begin
-         if not Same_Shape (Into, Shape, Source) then
+         if not Fits and then Holds (Into, Source.Atoms)
+           and then Holds (Into, Shape.Atoms)
+         then
+            declare
+               Widened : Field_Shape := Source;
+            begin
+               Widened.Atoms := Shape.Atoms;
+               Fits := Same_Shape (Into, Shape, Widened);
+               for Index in 1 .. Atom_Count (Into, Source.Atoms) loop
+                  Fits := Fits and then Contains_Atom
+                    (Into, Shape.Atoms, Nth_Atom (Into, Source.Atoms, Index));
+               end loop;
+            end;
+         end if;
+         if not Fits then
             raise Landin.Compiler_Defect with
               "a typed indirect store disagrees with its reached shape";
          end if;
@@ -4380,7 +4395,8 @@ package body Landin.IR is
       Result        : Landin.Types.Scalar_Name;
       Site          : Landin.Provenance.Origin;
       Nested        : Path_Step_Array := No_Path_Steps;
-      Signature     : Signature_Id := No_Signature) return Value_Id
+      Signature     : Signature_Id := No_Signature;
+      Atoms         : Atom_Set_Id := No_Atom_Set) return Value_Id
    is
       Steps : constant Run := Stored_Path (Into, Nested);
    begin
@@ -4391,6 +4407,7 @@ package body Landin.IR is
                       Site                  => Site,
                       Source                => Source,
                       Signature             => Signature,
+                      Atom_Set              => Atoms,
                       Element_Field         => Field,
                       Nested                => Steps,
                       Variant_Case          => Which,

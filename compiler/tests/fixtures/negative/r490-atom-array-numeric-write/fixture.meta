@@ -1,0 +1,6 @@
+class: negative
+summary: numeric storage cannot impersonate an atom element
+program: main.ldn
+codes: L0301
+constructs: 0520, 0630, 0640
+targets: linux-x86-64

@@ -1,0 +1,2 @@
+north, south: atom
+f: () -> none = mut a: [1]north = [north] a[0] = south end f

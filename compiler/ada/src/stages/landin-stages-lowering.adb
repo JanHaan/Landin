@@ -1810,6 +1810,7 @@ package body Landin.Stages.Lowering is
               "a non-array signature part was requested as an element";
          elsif Part.Element_Shape.Kind /= Landin.Checking.Scalar_Field
            or else Part.Element_Shape.Signature /= Landin.Checking.No_Signature
+           or else Part.Element_Shape.Atoms /= Landin.Checking.No_Atom_Set
          then
             return Neutral_Shape (Part.Element_Shape);
          elsif Part.Nominal /= Landin.Checking.No_Nominal_Type then
@@ -7363,7 +7364,13 @@ package body Landin.Stages.Lowering is
                               Positive (Alias.Field), Positive (Alias.Which),
                               Positive (Alias.Payload_Field), Carrier, Site,
                               Nested => Alias_Steps (Of_Tree, Alias),
-                              Signature => Signature);
+                              Signature => Signature,
+                              Atoms =>
+                                (if Held = Ty.Atom_Value
+                                 then Atom_Set_For
+                                   (Landin.Checking.Atom_Set_Of
+                                      (Types.all, Means))
+                                 else IR.No_Atom_Set));
                         end if;
                         case Alias.Source.Kind is
                            when IR.Module_Datum =>
