@@ -1,0 +1,3 @@
+problem: atom
+joined: type (t: type) = problem | t
+bad: type = joined(i32)

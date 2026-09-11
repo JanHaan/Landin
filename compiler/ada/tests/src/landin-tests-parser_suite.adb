@@ -2032,7 +2032,8 @@ package body Landin.Tests.Parser_Suite is
                  (Parsed, Landin.Syntax.Nth_Declaration (Parsed, 2))
                else Landin.Syntax.Error_Declaration);
             Into := Unbounded.To_Unbounded_String
-              (Landin.Diagnostics.Code
+              (if Landin.Diagnostics.Count (Found) = 0 then ""
+               else Landin.Diagnostics.Code
                  (Landin.Diagnostics.Get (Found, 1)));
          end;
       end Parse;
@@ -2057,8 +2058,8 @@ package body Landin.Tests.Parser_Suite is
       Landin.Testing.Check
         (Item, Declarations = 2
           and then Second = Landin.Syntax.Type_Declaration
-          and then Unbounded.To_String (Code) = "L0010",
-         "a parameterized atom union is refused, not parsed as a union");
+          and then Unbounded.To_String (Code) = "",
+         "a parameterized atom union follows the ordinary union grammar");
    end Parameterized_Alias_Errors_Keep_Grammar_Boundaries;
 
    procedure Imports_Are_A_File_Prelude

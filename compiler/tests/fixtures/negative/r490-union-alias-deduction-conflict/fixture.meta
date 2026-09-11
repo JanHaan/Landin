@@ -1,0 +1,6 @@
+class: negative
+summary: unequal normalized union sets remain conflicting repeated generic actuals
+program: main.ldn
+codes: L0301
+constructs: 0480, 0630, 0640, 1290, 1350, 1795
+targets: linux-x86-64, macos-arm64, synthetic-32

@@ -1,0 +1,2 @@
+problem: atom
+bad: type (t: type) = i32 | t | problem

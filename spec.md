@@ -317,7 +317,7 @@ spelling of it.
 ```landin-grammar
 type_declaration ::= identifier ":" "type"
                      ("=" (atom_union | range_subtype | type | struct_body)
-                     | type_formals "=" (type | struct_body))
+                     | type_formals "=" (atom_union | type | struct_body))
 range_subtype   ::= (scalar_name | declaration_reference) "range"
                     expression ".." expression
 concept_declaration ::= identifier ":" "type" "=" concept_body
@@ -342,7 +342,7 @@ type_formal     ::= identifier ":" "type" constraint?
                   | "fixed" identifier ":" type
 constraint      ::= "is" concept_reference
 atom_union      ::= union_member "|" union_member ("|" union_member)*
-union_member    ::= declaration_reference | pointer_type
+union_member    ::= declaration_reference | type_application | pointer_type
 struct_body      ::= ("layout" "(" ("c" | "optimal") ")")?
                      ("struct" member+ "end" identifier?
                      | "(" field ("," field)* ")")
@@ -8120,8 +8120,9 @@ fixed n: u32) = rhs`, with `fixed` before its name. `fixed` is reserved. Its
 arguments are positional: a type application is `name(type_argument, ...)`,
 where an argument is a type or an integer for a fixed formal. A fixed formal
 may supply an array bound, so `[n]t` is an alias body. The grammar admits that
-formal list before either an alias type or a struct body. A parameterized atom
-union remains outside the enabled kernel. D142 later adds one direct concept
+formal list before an alias type, atom-union body or struct body. R4.90 closes
+the earlier parameterized atom-union exclusion by applying the existing
+structural-set and alias-substitution rules. D142 later adds one direct concept
 constraint to a type formal without changing this positional substitution. The
 same compile-time-only binders are admitted in declared-routine syntax and
 resolution; D138 enables exact direct-call deduction, and D139 separately
@@ -8133,8 +8134,20 @@ declared type or the declaration right-hand side. Thus a formal may name one
 written later, but the formals do not escape to the module or another
 declaration.
 
+Union members are normalized recursively under the current substitution,
+including declared atom singletons, qualified names and fully applied aliases.
+Repeated atoms and source order do not change the interned structural set.
+Symbolic declaration checking validates independent members while leaving the
+result undecided; it never invents a partial atom-set key or records a concrete
+instance answer on template syntax. The resulting alias participates in the
+ordinary error-set, assignment and generic-key rules. A one-atom pointer union
+uses D189's existing descriptor, including the empty atom of a substituted
+optional-pointer alias. Two pointer members are still refused, and two or more
+atoms beside a pointer retain the R7.20 refusal; no new carrier is introduced.
+
 A fully applied alias is normalized during checking. Its enabled result is a
-scalar, fixed-array or nominal aggregate descriptor; an alias around a
+scalar, fixed-array, atom-set, pointer or nominal aggregate descriptor; an alias
+around a
 parameterized struct instance keeps that instance's identity rather than
 introducing another one. A fully applied struct instead interns D137's nominal
 instance. A struct type formal accepts every enabled concrete
@@ -8171,14 +8184,24 @@ would leak its name and create collisions unrelated aliases cannot share. A
 function-shaped type maker would instead introduce execution where [1350]
 requires substitution. All were declined.
 
-**Pinned by** the parameterized-alias and parameterized-struct parser and
+**Pinned by** `positive/parameterized-atom-union`,
+`runtime/r490-generic-union-alias`,
+`negative/r490-union-alias-nonatom`,
+`negative/r490-union-alias-unused-nonatom`,
+`negative/r490-union-alias-two-pointers`,
+`negative/r490-union-alias-tagged-pointer`,
+`negative/r490-union-alias-optional-widening`,
+`negative/r490-union-concrete-optional-widening`,
+`negative/r490-union-alias-deduction-conflict`, the checking case
+`union aliases keep exact instance keys`, and the parameterized-alias and
+parameterized-struct parser and
 resolution public-seam cases; the checking and lowering public-seam cases;
 `positive/parameterized-type-alias-scalar`,
 `positive/parameterized-type-alias-fixed-array`; the repository `core/vec`
 module and `runtime/core-vec-pointer-storage`; the
 `positive/parameterized-struct-basic`,
 `positive/parameterized-struct-instances`; the `negative/parameterized-alias-*`,
-`negative/parameterized-atom-union`, `negative/parameterized-struct-*` and
+`negative/parameterized-struct-*` and
 `negative/nominal-struct-recursive-layout` fixtures; the generated lexical,
 construct and IR records; and `runtime/parameterized-type-alias-fixed-array`
 and `runtime/parameterized-struct-values` on Linux x86-64.

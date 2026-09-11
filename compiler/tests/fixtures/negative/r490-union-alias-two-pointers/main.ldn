@@ -1,0 +1,3 @@
+missing: atom
+bad: type (t: type) = missing | ptr t | ptr u8
+wrong: type = bad(i32)
