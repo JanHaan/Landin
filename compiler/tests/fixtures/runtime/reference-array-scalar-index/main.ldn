@@ -33,6 +33,7 @@ public main: () -> (code: i32) =
         match problem
             refused: caught = true
         end match
+        0
     end
     if first == 22 and second == 22 and third == 17 and fourth == 22
       and selections == 3 and indices == 4 and caught then
