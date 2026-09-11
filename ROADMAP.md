@@ -5381,6 +5381,17 @@ execution under both `defer` and `undo`. The parser derivation's recursion is
 recorded as a chosen implementation, not as evidence that loops remain absent.
 The handoff's unsupported semicolon claim is corrected to the actual grammar.
 
+The audit also distinguishes scoped obligations from future work. D188's range
+compositions, D189's multi-atom pointer unions and D190's u128/i128/f16 remain
+explicitly owned by R7.20 under the current normative restrictions. Native macOS
+arm64 belongs to R5 and the freestanding target and hardware constructs to R6;
+prototype 1 is not a Linux hosted workload. D212's two builtin arena forms stay
+withdrawn, with their migration diagnostics and ordinary-identifier controls.
+Caller-backed allocation, independent simultaneous results, generic/erased
+providers, `core/region`, explicit capacity, local origin checks and `defer`
+cleanup remain executed obligations. None of those is withdrawn by the parity
+closure or replaced with an allocator special case.
+
 The progress renderer and status check select the first dependency-ready planned
 item in roadmap order when no item is active. This accommodates the R4-to-R5
 boundary without activating either R5 item or inventing a dependency between them.
@@ -5433,7 +5444,8 @@ identical assembly and behavior under the pinned toolchain.
 
 ### R4 gate
 
-- Every hosted construct the tour describes is implemented on Linux x86-64.
+- Every applicable hosted construct under the current normative specification
+  is implemented on Linux x86-64.
 - Complete derived prototypes 2, 3 and 4 run with useful debugging.
 - Correct baseline code generation is measured; competitive optimization is
   not a gate.
