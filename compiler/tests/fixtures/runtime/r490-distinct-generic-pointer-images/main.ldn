@@ -1,0 +1,22 @@
+missing: atom
+maybe: type = missing | ptr i32
+hidden: type = distinct maybe
+absent_image: hidden = hidden(missing)
+absent: maybe = maybe(absent_image)
+address: type = ptr i32
+opaque: type = distinct address
+numeric: opaque = opaque(ptr(usize(42)))
+pointer: address = address(numeric)
+text_id: type = distinct cstring
+text_image: text_id = text_id("ok")
+text: cstring = cstring(text_image)
+public main: () -> (code: i32) =
+    code = 1
+    match absent
+        missing:
+            if usize(pointer) == 42 and usize(text) > 0 then
+                code = 42
+            end if
+        ptr: code = 2
+    end match
+end main

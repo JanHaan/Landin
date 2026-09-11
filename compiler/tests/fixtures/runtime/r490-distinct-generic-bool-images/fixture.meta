@@ -1,0 +1,6 @@
+class: runtime
+summary: direct, nested, aliased and generic distinct bool images retain both truth values
+program: main.ldn
+status: 42
+constructs: 0180, 0350, 0650, 0670, 0700, 1280, 1940
+targets: linux-x86-64

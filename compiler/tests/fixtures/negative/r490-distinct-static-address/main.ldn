@@ -1,0 +1,19 @@
+missing: atom
+maybe: type = missing | ptr i32
+hidden: type = distinct maybe
+value: i32 = 42
+absent_image: hidden = hidden(missing)
+present_image: hidden = hidden(addr value)
+absent: maybe = maybe(absent_image)
+present: maybe = maybe(present_image)
+public main: () -> (code: i32) =
+ code = 1
+ match absent
+   missing: code = 2
+   ptr: return
+ end match
+ match present
+   missing: code = 3
+   ptr(found): code = found.val
+ end match
+end main

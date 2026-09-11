@@ -1,0 +1,6 @@
+class: runtime
+summary: distinct optional, numeric and cstring pointer images preserve exact carrier semantics
+program: main.ldn
+status: 42
+constructs: 0430, 0470, 0480, 0600, 0650, 0700, 1940
+targets: linux-x86-64

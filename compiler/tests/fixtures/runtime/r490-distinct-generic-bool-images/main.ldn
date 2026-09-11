@@ -1,0 +1,30 @@
+flag: type = distinct bool
+alias: type = flag
+outer: type = distinct alias
+true_flag: alias = flag(true)
+false_flag: flag = alias(false)
+copy_flag: alias = true_flag
+direct_true: bool = bool(flag(true))
+direct_false: bool = bool(alias(false))
+from_true: bool = bool(copy_flag)
+from_false: bool = bool(false_flag)
+nested: outer = outer(alias(false))
+inside: alias = alias(nested)
+from_nested: bool = bool(inside)
+logical: bool = bool(true_flag) and not bool(false_flag)
+box: type = struct
+    first: flag
+    second: outer
+end box
+stored: box = (first: flag(false), second: outer(alias(true)))
+copy: (item: type, value: item) -> (result: item) = value end copy
+public main: () -> (code: i32) =
+    extracted: alias = alias(stored.second)
+    if direct_true and not direct_false and from_true and not from_false
+       and not from_nested and logical and not bool(stored.first)
+       and bool(copy(extracted)) then
+        code = 42
+    else
+        code = 1
+    end if
+end main

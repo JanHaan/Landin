@@ -1,0 +1,4 @@
+flag: type = distinct bool
+stored_flag: flag = flag(true)
+plain_flag: bool = bool(stored_flag)
+public main: () -> (code: i32) = code = if plain_flag then 42 else 1 end if end main

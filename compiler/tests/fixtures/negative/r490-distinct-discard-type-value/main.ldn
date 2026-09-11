@@ -1,0 +1,5 @@
+handle: type = distinct i32
+public main: () -> (code: i32) =
+    _ = handle
+    code = 42
+end main

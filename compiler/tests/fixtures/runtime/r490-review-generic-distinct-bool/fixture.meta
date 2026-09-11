@@ -1,0 +1,6 @@
+class: runtime
+summary: a distinct module bool preserves its static truth image on extraction
+program: main.ldn
+status: 42
+constructs: 0180, 0650, 0700, 1940
+targets: linux-x86-64
