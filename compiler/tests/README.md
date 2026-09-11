@@ -76,7 +76,8 @@ feedback cannot look like the complete suite by accident. Run
 Every runtime and ABI fixture runs separately under `none/off`, `size/off`,
 `size/auto` and `speed/auto` (objective/specialization). Focused names containing
 `generic`, `any-` or `r450`, plus `allocator-vec-pressure`,
-`diagnostic-loggers-dispatch`, `core-io-erased-system` and `derived-containers`,
+`diagnostic-loggers-dispatch`, `core-io-erased-system`, `derived-containers`
+and the complete derived hosted application fixtures,
 also run `none/all`
 and `speed/all`. A selected runtime/ABI fixture uses the same matrix. Artifact
 names and assertion labels include the profile. Each profile independently
@@ -104,7 +105,13 @@ status-42 and empty-output oracle. Its reports must identify real `core`
 container instances and factual specialization actions with retained evidence
 ABIs; forced specialization must actually select a container entry. Its object
 measurements are observations, not a new size budget or timing claim.
-The quality and debugger runners give this large rooted workload a separate
+The complete `derived-hosted-memory` application also runs all six quality
+profiles with its status-42 and empty-output oracle. Source inventories must
+reach its real application module; factual specialization reports and emitted
+indirect machine calls must preserve runtime provider dispatch even with
+forced specialization. Measurements remain object observations without a
+new size or timing threshold.
+The quality and debugger runners give these large rooted workloads a separate
 900-second compiler-subprocess limit: its full-debug compilation already
 exceeds the ordinary 120-second limit on a native development host. Executable
 and debugger timeouts remain 120 seconds; slow compilation does not excuse a
@@ -146,6 +153,17 @@ not depend on GDB automatically printing return values. The runner retains
 source maps, build reports and transcripts;
 it checks source hashes, line tables, stripping and exact executable identity
 for the whole reached library closure, not a fixture-only copy of it.
+The complete `derived-hosted-memory` application is a third workload, using
+none/off, size/auto and size/all. GDB stops inside the runtime-selected
+`sample_keep` and `text_emit` providers, identifies their actual source lines,
+inspects the sampling state before and after its increment and the destination
+delivery cursor, and requires the caller stack to include `process`, `run` and
+the fixture entry point. The whole
+memory-world application then completes its status-42 oracle. The same full
+source inventory, assembly hashes, executable identity, line-table, stripping
+and source-map checks apply to this application and its reached library
+closure. These sessions exercise ordinary `any` dispatch in the application;
+the real hosted I/O fixtures separately assert native process behavior.
 `python3 compiler/tests/debugging/test_check.py` exercises transcript refusals
 without GDB; `scripts/debug.sh` runs those regressions before the real sessions.
 
@@ -598,3 +616,16 @@ stands in for the prototype. This same workload is mandatory in the six-profile
 runtime matrix, object-quality measurements and source-debugger acceptance
 above. These local runners do not replace the exact-revision native gate in
 `ROADMAP.md`.
+
+`runtime/derived-hosted-memory` hosts the complete prototype-4-derived
+application in `examples/derived_hosted/app`. The runnable hosted entry and
+its derivation map live in `examples/derived_hosted`. Runtime configuration
+constructs heterogeneous filters and either a counting or text destination;
+the processing loop calls their ordinary `any` evidence entries. The reader
+retains partial lines across chunks and emits a final unterminated line.
+Copied arguments and message storage survive helper returns, and delivery
+retains its committed byte cursor across an explicit retry. The memory world
+makes input fragmentation, output contents and failure cleanup deterministic;
+the hosted fixtures use the same application with actual native Linux I/O.
+The memory composition is also mandatory in all six quality profiles and the
+three debugger workload profiles described above.
