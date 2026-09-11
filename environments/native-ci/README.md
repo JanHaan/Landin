@@ -127,8 +127,10 @@ previous repository-controlled CI. The runner account can modify its own
 storage: these are durable operational records, not tamper-proof attestations
 or protection against a hostile maintainer.
 
-Promotion validates the tag, fetches canonical main, requires fast-forward
-ancestry and atomically pushes the tag plus main without force. Tag collisions
+Promotion uses canonical `git@git.sr.ht:~sinnfrei/landin` with the maintainer's
+existing Git SSH credentials. It validates the tag, fetches canonical main,
+requires fast-forward ancestry and atomically pushes the tag plus main without
+force. Pages reads canonical refs over HTTPS. Tag collisions
 and non-fast-forward races refuse the operation without partial promotion.
 Direct unapproved main pushes are not prevented by server-side protection;
 the publication guard refuses them.

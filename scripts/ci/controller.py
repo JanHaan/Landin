@@ -24,6 +24,7 @@ from approval import CANONICAL, read_approval, remote_ref, tag_name
 ROOT = Path(__file__).resolve().parents[2]
 STATE = Path.home() / ".local/state/landin/acceptance"
 REMOTE_WORK = "/home/landin/work/.acceptance"
+PROMOTION_REMOTE = "git@git.sr.ht:~sinnfrei/landin"
 
 # Only the fixed envelope names are unpacked by this bootstrap. Repository
 # code performs full validation before initializing any durable run state.
@@ -187,7 +188,7 @@ def approve(root, bundle):
     return approval["commit"]
 
 
-def promote(root, commit, remote=CANONICAL):
+def promote(root, commit, remote=PROMOTION_REMOTE):
     clean_checkout(root)
     read_approval(root, commit)
     git(root, "fetch", "--no-tags", remote, "refs/heads/main")
