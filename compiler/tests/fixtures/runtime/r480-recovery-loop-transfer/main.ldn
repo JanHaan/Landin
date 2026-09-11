@@ -1,0 +1,39 @@
+again, finished: atom
+bytes: [1]u8 = [42]
+mut cleanups: i32 = 0
+
+mark: () -> none = inc cleanups end mark
+
+next: (inout state: i32) -> (line: []u8) ! again | finished =
+    inc state
+    fail again when state == 2
+    fail finished when state >= 4
+    line = bytes[0..<1]
+end next
+
+public main: () -> (code: i32) =
+    mut state: i32 = 0
+    mut total: i32 = 0
+    loop do
+        defer mark()
+        line: []u8 = next(state) else (problem)
+            continue when problem == again
+            break when problem == finished
+            bytes[0..<0]
+        end
+        total += i32(line[0])
+    end loop
+    outer: loop do
+        defer mark()
+        loop do
+            defer mark()
+            line: []u8 = next(state) else (problem)
+                _ = problem
+                break outer
+            end
+            total += i32(line[0])
+        end loop
+    end outer
+    code = if state == 5 and total == 84 and cleanups == 6
+           then 42 else 1 end if
+end main
