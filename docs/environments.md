@@ -1,40 +1,35 @@
 # Development and validation environments
 
-`ROADMAP.md` R0.70 owns this document. It records which environment produces
-which kind of evidence. Canonical hosting is git.sr.ht with builds.sr.ht,
-selected at R0.70; GitHub holds an automated mirror only. Only the CI
-manifests name those providers, while every validation command they run below
-is an ordinary repository command.
+`ROADMAP.md` R0.70 owns this document. Canonical hosting remains git.sr.ht;
+GitHub is an automated mirror. Explicit committed-revision native acceptance
+is the current Linux authority. Historical SourceHut gate results below keep
+their original meaning.
 
-## The three environments
+## Environments
 
 | environment | role | status |
 |---|---|---|
-| native macOS arm64 | the development loop while writing the bootstrap | working |
-| Apple Container, `linux/amd64` under Rosetta | the local Linux loop | working |
-| builds.sr.ht, `debian/stable` on x86-64 hardware | the authoritative Linux gate | working |
+| native macOS arm64 | bootstrap development loop | working |
+| Apple Container, `linux/amd64` under Rosetta | supplemental local Linux loop | working |
+| native Linux x86-64 runner | explicit exact-revision acceptance | working |
+| builds.sr.ht | approved-main Pages publication and GitHub mirror | working |
 
-The gate runs from `.build.yml` on every push. It installs the pinned
-Ada toolchain from `environments/pins.sh`, builds from clean, runs the suite in
-debug and in release, runs `check.py`, and prints `refine --identify` so that
-the no-version-claim rule is visible in the log rather than only in a test.
-For R4.40 it also selects Debian stable's versioned `clang-19` package and
-prints its exact revision, so a binding-generator test log identifies the
-frontend it exercised. The existing `libc6-dev` package is that frontend's
-Linux header set and root sysroot; it is not inferred from the machine running
-`refine`.
+The acceptance controller runs `scripts/ci/policy.json`'s eight isolated jobs
+against one committed archive. Clean debug/release suites, native report
+identity, quality and native GDB retain their existing oracles; Clang-19
+bindings and complete document/tooling checks also remain required. Actual
+tool versions, binary hashes, environment, commands, logs and artifacts are
+retained outside mutable slots. A verified durable export precedes the ordinary
+annotated administrative approval tag and atomic main promotion. See
+[`environments/native-ci/README.md`](../environments/native-ci/README.md) for
+commands, deployment, trust boundaries, retention and interrupted-run recovery.
 
-Last, and only from `main`, it renders the reading copies and publishes them
-to pages.sr.ht. That step produces no evidence and carries no authority: it
-runs after every check above has passed, so a red gate cannot put a page up,
-and a build with no secrets — a mailed patch has none — never reaches it. It
-is there because a page that moves only when somebody remembers to run
-`scripts/site.sh --publish` is a page that drifts from the document it reads.
-
-A separate non-gate, `.builds/github-mirror.yml`, uses the existing repository
-SSH secret to copy every SourceHut branch and tag to
-https://github.com/JanHaan/Landin. It carries no evidence and cannot affect the
-Linux gate's verdict; git.sr.ht remains canonical.
+SourceHut's `.build.yml` publishes only current canonical main with its exact
+validated approval tag, before accessing the licensed font checkout. Manual
+`scripts/site.sh --publish` uses the same guard. `.builds/github-mirror.yml`
+mirrors every canonical branch and tag. Neither manifest runs compiler tests;
+the former automatic Nix manifest has been retired in favor of explicit supplemental native
+Nix checks when the shell's inputs change.
 
 Native macOS arm64 is a *development* loop at R0. It becomes a validated
 target of its own at R5, with its own compiler build, platform tools and
@@ -142,7 +137,7 @@ evidence; the native gate uses GDB directly and has no fallback.
 
 `environments/pins.sh` remains the one place an independently downloaded Ada
 toolchain version or checksum is written; `check.py` holds the recipe,
-`compiler/ada/TOOLCHAIN.md`, the CI manifest and the nix shell to those same
+`compiler/ada/TOOLCHAIN.md`, the native acceptance policy and the nix shell to those same
 values. Objects are kept
 apart per host by `LANDIN_BUILD_TAG`, which `scripts/env.sh` defaults to
 `os-arch`: one checkout is built by two hosts, and `.ali` files from both in
@@ -227,15 +222,11 @@ links through the wrapper, which is why the compiler built in that shell and
 the programs it emitted did not. The flake now points every triplet-prefixed
 driver the archive ships at the wrapper.
 
-Both of those were found by hand, which is why `.builds/nix.yml` now checks
-this shell at builds.sr.ht: it is the only environment that can. It is a
-second manifest and deliberately not part of the gate — a red run there says
-a convenience broke, not that Landin did — and it runs the ordinary
-`scripts/toolchain.sh` and `scripts/test.sh` inside `nix develop`. It also
-runs only when a file this shell is made of changed, because the pinned
-archives are 501 MB and builds.sr.ht keeps nothing between builds, so the
-alternative is paying that on every push to check a convenience.
-
+Both of those were found by hand. The former automatic Nix manifest checked
+the shell at builds.sr.ht as a non-gate only when shell inputs changed.
+That automatic manifest is now retired. Run the same `scripts/toolchain.sh`
+and `scripts/test.sh` explicitly inside `nix develop` on native Linux after
+shell-input changes; this remains supplemental environment validation.
 Its first run settles both halves. The shell built on x86-64 nix with the
 pinned GNAT 16.1.0 and GPRbuild 26.0.0, and the suite passed 133 cases with
 no failures — `runtime fixtures execute` among them, which is the case that
@@ -270,10 +261,9 @@ translates them — so since R1.80 produces runnable executables, instruction-le
 timing-sensitive results from this loop are not authority. That distinction is
 why the roadmap named the native gate before there was any code to run in it,
 and it is why the gate now exists: from R1.80 onwards, `refine` emits
-instructions, and only the sourcehut job runs them on the hardware they were
-emitted for.
+instructions. The original SourceHut gate ran them on their target hardware;
+explicit native acceptance now preserves that requirement.
 
-Hosting is therefore no longer an open question: the repository lives on
-git.sr.ht and its CI is builds.sr.ht. `scripts/` stays provider-neutral —
-nothing in it names a provider — and the CI manifests are the files that do,
-which is what keeps those integrations replaceable.
+Hosting remains canonical git.sr.ht. SourceHut handles Pages and mirroring;
+`scripts/ci/` owns explicit native acceptance and canonical approval validation.
+The underlying compiler and test commands remain ordinary repository scripts.

@@ -1,143 +1,27 @@
-#  The authoritative Linux x86-64 gate.
-#
-#  ROADMAP.md R0.70 makes native Linux x86-64 the authority for Linux
-#  behaviour, and the local Apple Container loop the convenience.  This
-#  manifest is that authority: builds.sr.ht runs it on real x86-64 hardware,
-#  with no translation between the compiler and the instruction set.
-#
-#  The pinned Ada toolchain comes from environments/pins.sh, the same file the
-#  container recipe reads, and every archive is checksum-verified before it
-#  is unpacked.  R4.40's external Clang frontend instead comes from this
-#  image's versioned Debian package set, as compiler/ada/TOOLCHAIN.md records.
-#
-#  It also publishes the reading copies, last and only from main.  That is a
-#  convenience and not part of the gate's authority: it produces no evidence,
-#  and it runs only after every check above has passed, so a red gate cannot
-#  put a page up.
-
+# SourceHut publishes approved canonical main; native acceptance owns testing.
 image: debian/stable
 
 packages:
-  - binutils
   - ca-certificates
-  #  R4.40's external header frontend; libc6-dev below is its Linux sysroot.
-  - clang-19
-  - curl
-  #  R4.60's scripted source-debugger acceptance gate.
-  - gdb
-  #  hut publishes the reading copies; see the pages task.
+  - git
   - hut
-  - libc6-dev
+  - openssh-client
   - python3
 
-#  A token for one thing, generated for this job and gone with it: hut may
-#  replace the contents of the pages site and nothing else.
 oauth: pages.sr.ht/PAGES:RW
 
-#  The code face the pages are set in is licensed, not open, and lives in
-#  the private landin-fonts repository; the pages task clones it with the
-#  existing repository SSH key.  The same secret lets the separate mirror
-#  job write GitHub.  Only a build submitted by the account holding it
-#  receives it, which is one more reason a mailed patch never publishes.
-#  The font repository is not a `sources:` entry because those are cloned
-#  before any task runs, and a build without the key would fail there, in
-#  the gate.
+# Existing repository key, used only after the canonical approval guard.
 secrets:
   - be6acc31-1dff-4c27-94c0-d223f13d5f8a
 
-environment:
-  LANDIN_TOOLCHAINS: /home/build/toolchains
-  LANDIN_BUILD_TAG: srht-x86-64
-
 tasks:
-  #  Recorded first, so a captured log names the compiler that produced it.
-  - toolchain: |
-      cd landin
-      . ./environments/pins.sh
-      landin_install_toolchain "$LANDIN_TOOLCHAINS" x86_64-linux
-      echo "LANDIN_GNAT_HOME=$LANDIN_TOOLCHAINS/gnat-$LANDIN_GNAT_VERSION" \
-        >> ~/.buildenv
-      echo "LANDIN_GPRBUILD_HOME=$LANDIN_TOOLCHAINS/gprbuild-$LANDIN_GPRBUILD_VERSION" \
-        >> ~/.buildenv
-      echo "export LANDIN_GNAT_HOME LANDIN_GPRBUILD_HOME" >> ~/.buildenv
-
-  - identify: |
-      cd landin
-      uname -a
-      ./scripts/toolchain.sh
-      #  The generator consumes Clang's external JSON AST, so its exact
-      #  frontend belongs in the captured gate log too.
-      clang-19 --version
-      gdb --version
-
-  #  From clean, because a gate that reports on somebody else's objects is
-  #  not a gate.
-  - build: |
-      cd landin
-      ./scripts/clean.sh --all
-      ./scripts/build.sh
-
-  - test: |
-      cd landin
-      ./scripts/test.sh
-
-  #  Release drops the assertions, so a rule that only holds with -gnata
-  #  shows up here rather than in a later surprise.
-  - release: |
-      cd landin
-      LANDIN_BUILD_MODE=release ./scripts/test.sh
-
-  #  Native filesystem identity cannot be proved by the fake filesystem.
-  - report-identity: |
-      cd landin
-      python3 compiler/tests/test_native_report_identity.py \
-        --refine "$PWD/compiler/ada/build/$LANDIN_BUILD_TAG/debug/bin/refine"
-      python3 compiler/tests/test_native_report_identity.py \
-        --refine "$PWD/compiler/ada/build/$LANDIN_BUILD_TAG/release/bin/refine"
-
-  #  Numeric acceptance against objects assembled by the checksum-pinned
-  #  Linux toolchain, separately for both compiler build modes.
-  - quality: |
-      cd landin
-      ./scripts/quality.sh
-      LANDIN_BUILD_MODE=release ./scripts/quality.sh
-
-  #  Source debugging must work on native x86-64 in both compiler modes.
-  - debugging: |
-      cd landin
-      ./scripts/debug.sh
-      LANDIN_BUILD_MODE=release ./scripts/debug.sh
-
-  #  Real header extraction and generated C execution require the external
-  #  frontend; the document checker deliberately does not.
-  - bindings: |
-      cd landin
-      CLANG=clang-19 python3 bindings/test.py
-
-  - checks: |
-      cd landin
-      python3 scripts/tests/test_build_inventory.py
-      python3 scripts/tests/test_roadmap_progress.py
-      python3 check.py
-
-  #  The chassis must still refuse to claim a version.
-  - identity: |
-      cd landin
-      "./compiler/ada/build/$LANDIN_BUILD_TAG/debug/bin/refine" --identify
-
-  #  Render, verify and publish https://www.701.dev.  The pages used
-  #  to move only when somebody remembered to run scripts/site.sh --publish,
-  #  which is how documentation and its reading copy drift apart.
-  #
-  #  Only from main, so a branch cannot replace the published site, and so a
-  #  build submitted without secrets -- a mailed patch has none, and hut
-  #  would have no token -- never reaches this task at all.
   - pages: |
       cd landin
       if [ "${GIT_REF:-}" != "refs/heads/main" ]; then
           echo "landin: ${GIT_REF:-no ref} is not main; not publishing"
           exit 0
       fi
+      python3 scripts/ci/approval.py
       #  The build image trusts no host, so git.sr.ht's key is pinned
       #  here rather than accepted on first use: it is the one published
       #  at https://man.sr.ht/git.sr.ht/#ssh-host-keys, and a mismatch is

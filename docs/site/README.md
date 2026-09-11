@@ -52,13 +52,14 @@ absorb silently, losing structure that no word count could miss.
 ./scripts/site.sh --publish    # and upload to pages.sr.ht
 ```
 
-The CI gate runs the second command itself, as its last task and only from
-`main`: every push that changes a document republishes the pages it is read
-on. `.build.yml` asks builds.sr.ht for a `pages.sr.ht/PAGES:RW` token for
-that one job, so no long-lived credential is stored anywhere. Publishing by
-hand is for a preview, or for putting the site back after something went out
-that should not have.
-
+SourceHut's Pages-only `.build.yml` runs the second command from approved
+canonical `main`. It validates the exact administrative approval tag before
+accessing private fonts. `scripts/site.sh --publish` applies the same guard to
+manual publication, refusing dirty, unapproved or known-stale checkouts.
+The Pages job receives a `pages.sr.ht/PAGES:RW` token for that job. Native
+acceptance and evidence export happen before promotion; see
+[`environments/native-ci/README.md`](../../environments/native-ci/README.md).
+Non-publishing renders remain available for previews.
 Publishing by hand needs [`hut`](https://sr.ht/~emersion/hut/) configured
 with a token that has the `PAGES:RW` scope. The site goes to
 `www.701.dev` and then to `701.dev`: pages.sr.ht serves one site per domain

@@ -51,7 +51,7 @@ python3 check.py prototype-2-parser.md
 
 # Render every document as HTML, verify nothing was dropped, and package
 # it for pages.sr.ht.  --publish uploads it, which the CI gate also does on
-# every push to main; see docs/site/README.md.
+# approved promotion to main; see docs/site/README.md.
 ./scripts/site.sh
 
 # On a nix machine, a shell holding the pinned toolchain, python3 and hut.
@@ -60,9 +60,20 @@ python3 check.py prototype-2-parser.md
 nix develop
 ```
 
-Pushing runs `.build.yml` on x86-64 hardware at builds.sr.ht: that job is the authoritative Linux gate, and it builds from clean in debug and release. A local pass is not a substitute for it, and since R1.80 — when `refine` began emitting executable instructions — it has been the only environment that runs them on the hardware they were emitted for. Its last task renders and publishes the reading copies, from `main` only: a documentation change reaches <https://www.701.dev> by being pushed, not by anyone running `scripts/site.sh --publish`.
+Explicit exact-revision native acceptance is authoritative for Linux x86-64.
+`python3 scripts/ci/controller.py accept COMMIT` runs the canonical eight-job
+policy against one committed archive, retains host evidence and exports a
+verified local copy. Development runs are incremental/filtered feedback and
+cannot approve a revision. See `environments/native-ci/README.md` for acceptance,
+status, resume, export, administrative approval tags and atomic promotion.
 
-A push also submits two non-gates. `.builds/nix.yml` checks the `nix develop` shell and skips itself unless the push touched a file that shell is made of. `.builds/github-mirror.yml` copies the canonical git.sr.ht branches and tags to <https://github.com/JanHaan/Landin> with the existing repository SSH secret. Neither carries authority. All three manifests are submitted because builds.sr.ht looks for `.build.yml` and `.builds/*.yml` alike. Adding a fourth would need a reason — four manifests per push is the limit, beyond which builds.sr.ht chooses at random.
+A push submits only `.build.yml` (Pages) and `.builds/github-mirror.yml`.
+Pages publishes from canonical main only after validating its exact annotated
+`ci/accepted/FULL_COMMIT` approval; `scripts/site.sh --publish` has the same
+fail-closed guard. GitHub mirrors canonical branches and tags. Neither job
+runs compiler acceptance. Nix shell checks are explicit supplemental native
+Nix validation when shell inputs change; the former automatic Nix manifest is retired.
+Historical SourceHut gate links remain evidence for their original revisions.
 
 `check.py` uses only the Python standard library and changes to its own directory, so it can also be invoked by absolute path from elsewhere. It is a heuristic invariant checker, not a parser, compiler, formatter, or semantic test suite. Run the full command after documentation changes; targeted checking of an absolute `tour.md` path does not run all citation checks.
 
@@ -74,7 +85,7 @@ host that cannot finish the target. Only that case red is a green Mac run;
 
 `scripts/test.sh` builds and then runs `compiler/ada`'s complete test program;
 `scripts/linux-loop.sh` runs the same thing in the pinned Linux image. Those
-are the two runnable test gates. `scripts/dev-build.sh` and
+are complete local test commands; exact-revision native acceptance owns closure. `scripts/dev-build.sh` and
 `scripts/dev-test.sh` use GPRbuild's checksum mode for fast feedback, and the
 latter accepts one exact `--suite`, `--case`, or `--fixture` selector. A
 filtered run says `FILTERED` in its transcript and is not gate evidence. There

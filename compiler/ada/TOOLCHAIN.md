@@ -26,7 +26,8 @@ C adapters.  The selected target is always `x86_64-pc-linux-gnu`; on the
 gate and local container, `clang-19` comes from the existing `debian/stable`
 package channel and `libc6-dev` supplies the matching headers and root
 sysroot.  The versioned package name prevents a moving default Clang major;
-`.build.yml` records the exact installed revision with `clang-19 --version`.
+`scripts/ci/policy.json` requires `clang-19 --version`; native acceptance
+retains the exact installed revision and binary hash.
 
 The Linux nix shell selects `llvmPackages."19".clang`, with `glibc.dev`, from
 the package set fixed by `flake.lock`.  The Darwin shell deliberately gains no

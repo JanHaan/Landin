@@ -1,0 +1,168 @@
+{
+  "schema": 1,
+  "platform": "Linux-x86_64",
+  "pins": "environments/pins.sh",
+  "build_tag": "native-ci",
+  "clang": "clang-19",
+  "jobs": [
+    {
+      "id": "suite-debug",
+      "mode": "debug",
+      "commands": [
+        [
+          "./scripts/clean.sh",
+          "--all"
+        ],
+        [
+          "./scripts/build.sh"
+        ],
+        [
+          "./scripts/test.sh"
+        ],
+        [
+          "python3",
+          "compiler/tests/test_native_report_identity.py",
+          "--refine",
+          "{refine}"
+        ],
+        [
+          "{refine}",
+          "--identify"
+        ]
+      ]
+    },
+    {
+      "id": "suite-release",
+      "mode": "release",
+      "commands": [
+        [
+          "./scripts/clean.sh",
+          "--all"
+        ],
+        [
+          "./scripts/build.sh"
+        ],
+        [
+          "./scripts/test.sh"
+        ],
+        [
+          "python3",
+          "compiler/tests/test_native_report_identity.py",
+          "--refine",
+          "{refine}"
+        ],
+        [
+          "{refine}",
+          "--identify"
+        ]
+      ]
+    },
+    {
+      "id": "quality-debug",
+      "mode": "debug",
+      "commands": [
+        [
+          "./scripts/clean.sh",
+          "--all"
+        ],
+        [
+          "./scripts/build.sh"
+        ],
+        [
+          "./scripts/quality.sh"
+        ]
+      ]
+    },
+    {
+      "id": "quality-release",
+      "mode": "release",
+      "commands": [
+        [
+          "./scripts/clean.sh",
+          "--all"
+        ],
+        [
+          "./scripts/build.sh"
+        ],
+        [
+          "./scripts/quality.sh"
+        ]
+      ]
+    },
+    {
+      "id": "debugger-debug",
+      "mode": "debug",
+      "commands": [
+        [
+          "./scripts/clean.sh",
+          "--all"
+        ],
+        [
+          "./scripts/build.sh"
+        ],
+        [
+          "./scripts/debug.sh"
+        ]
+      ]
+    },
+    {
+      "id": "debugger-release",
+      "mode": "release",
+      "commands": [
+        [
+          "./scripts/clean.sh",
+          "--all"
+        ],
+        [
+          "./scripts/build.sh"
+        ],
+        [
+          "./scripts/debug.sh"
+        ]
+      ]
+    },
+    {
+      "id": "bindings",
+      "mode": "debug",
+      "commands": [
+        [
+          "clang-19",
+          "--version"
+        ],
+        [
+          "python3",
+          "bindings/test.py"
+        ]
+      ]
+    },
+    {
+      "id": "documents",
+      "mode": "debug",
+      "commands": [
+        [
+          "python3",
+          "scripts/tests/test_build_inventory.py"
+        ],
+        [
+          "python3",
+          "scripts/tests/test_roadmap_progress.py"
+        ],
+        [
+          "python3",
+          "scripts/tests/test_ci.py"
+        ],
+        [
+          "python3",
+          "compiler/tests/debugging/test_check.py"
+        ],
+        [
+          "python3",
+          "check.py"
+        ],
+        [
+          "./scripts/site.sh"
+        ]
+      ]
+    }
+  ]
+}

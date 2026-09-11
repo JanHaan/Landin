@@ -233,7 +233,7 @@ test $? -eq 42
 
 Each program returns 42 when its result is the expected one. They are runtime
 fixtures as well as examples, so the authoritative Linux gate compiles, runs
-and checks all ten on every push.
+and checks all ten during explicit complete native acceptance.
 
 ## Metadata
 

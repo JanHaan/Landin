@@ -55,12 +55,12 @@ version solving, publishing and the broader ecosystem remain outside scope.
 - Target order is Linux x86-64, native macOS arm64, then emulator-first
   Cortex-M. Apple Container running linux/amd64 under Rosetta is the local
   Linux loop; native Linux x86-64 CI is authoritative for Linux behavior.
-  Hosting is git.sr.ht with builds.sr.ht for that gate, decided at R0.70.
-  Only `.build.yml` names it; the commands it runs are the ordinary ones.
-  The nix shell is checked by a second manifest, `.builds/nix.yml`, which is
-  not a gate and produces evidence for nothing in the table: it exists only
-  because that shell has broken twice on what nothing else reaches, and it
-  runs only when a file that shell is made of changed.
+  Hosting remains canonical git.sr.ht. Explicit exact-revision native
+  acceptance now owns the Linux gate through `scripts/ci/policy.json` and
+  `scripts/ci/controller.py`; R0.70's original SourceHut evidence remains
+  historical. SourceHut runs approved-main Pages and GitHub mirroring only.
+  The Nix shell is checked explicitly on native Nix when its inputs change;
+  that supplemental check is not a required acceptance job.
 - Native macOS arm64 has its own compiler build, platform-tool and debugger
   gate. A Linux container is not evidence for Darwin behavior.
 - Ada package specifications and stage fixtures are tested seams so a future
@@ -308,6 +308,18 @@ loop therefore keeps one-shot containers, avoids building twice in its
 default command, and has checksum-based developer wrappers for minimum
 recompilation and focused harness runs. Canonical debug and release commands
 still clean on a changed source manifest and still run the whole suite.
+
+The R4.70 integration subsequently migrates current acceptance authority to
+explicit committed-revision native runs. `scripts/ci/policy.json` retains the
+complete eight-job matrix; source/tree/policy and retained evidence hashes
+bind an annotated administrative `ci/accepted/FULL_COMMIT` approval. Maintainer
+Git write access is the trust root. The controller exports a verified durable
+copy before approval and atomically promotes approval plus fast-forward main.
+SourceHut retains only Pages and mirror; both automatic and manual publication
+require the shared canonical approval guard. Failed/partial runs never approve,
+and approved evidence has no automatic expiry. Deployment, recovery and
+supplemental Nix commands are in `environments/native-ci/README.md`. Original
+R0.70 environment results above remain historical evidence.
 
 ### R0 gate
 
@@ -5060,7 +5072,7 @@ and selected locals in unoptimized and baseline-optimized builds.
 
 ### R4.70 — Complete and run the derived container program
 
-Status: active
+Status: complete
 Depends on: R4.20, R4.50, R4.60
 
 Turn prototype 3 into a complete hosted `.ldn` program and negative corpus,
@@ -5154,6 +5166,17 @@ source-debugger acceptance, as transferred by R4.20.
 
 Exit evidence: list, small vector, map and tree paths execute on Linux x86-64;
 raw-storage, evidence and origin invariants are exercised.
+
+R4.70 closed with native Linux x86-64 SourceHut
+[job 1885323](https://builds.sr.ht/~sinnfrei/job/1885323) for
+`72f6fffbe496329f880fd6300221059cdd3da51a`: clean debug/release complete
+suites, native report identity, object quality, native GDB, Clang-19 bindings
+and document checks all passed. The complete suite passed 559 cases and
+188984 checks in both native compiler modes; the derived container workload
+ran all six fixture/quality profiles and all three native debugger profiles.
+The independent implementation review and retained mutation controls precede
+that exact-revision gate. This historical result remains R4.70's closure
+proof as acceptance moves to the tracked native runner. R4.80 remains planned.
 
 ### R4.80 — Complete and run the derived hosted application
 
