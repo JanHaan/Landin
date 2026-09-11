@@ -1,0 +1,6 @@
+class: runtime
+summary: inferred errors and generic recovery in trailing constructor fill
+program: main.ldn
+status: 42
+constructs: 0720, 0940, 1030, 1300
+targets: linux-x86-64

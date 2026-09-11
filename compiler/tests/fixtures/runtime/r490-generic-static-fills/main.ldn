@@ -1,0 +1,15 @@
+callback: type = (value: i32) -> (result: i32)
+callbacks: type = (label: i32, first: callback, second: callback)
+rows: type = (label: i32, first: [2]i32, second: [2]i32)
+pair: type = (left: i32, right: i32)
+nested: type = (label: i32, first: pair, second: pair)
+functions: callbacks = (label: 0, of increment)
+arrays: rows = (label: 0, of [10, 11])
+objects: nested = (label: 0, of (left: 10, right: 11))
+increment: (value: i32) -> (result: i32) = value + 1 end increment
+public main: () -> (code: i32) =
+    code = if functions.first(0) == 1 and functions.second(1) == 2
+        and arrays.first[0] == 10 and arrays.second[1] == 11
+        and objects.first.left == 10 and objects.second.right == 11
+        then 42 else 1 end if
+end main

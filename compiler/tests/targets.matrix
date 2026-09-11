@@ -520,7 +520,6 @@ negative/parameterized-alias-unused-fixed-bool | linux-x86-64, macos-arm64
 negative/parameterized-alias-unused-function-result | linux-x86-64, macos-arm64
 negative/parameterized-alias-unused-nontype | linux-x86-64, macos-arm64
 negative/parameterized-alias-unused-unknown | linux-x86-64, macos-arm64
-negative/parameterized-atom-union | linux-x86-64, macos-arm64
 negative/parameterized-conformance-collision | linux-x86-64, macos-arm64, synthetic-32
 negative/parameterized-conformance-entry-signature-mismatch | linux-x86-64, macos-arm64, synthetic-32
 negative/parameterized-struct-alias-cycle-inner-first | linux-x86-64, macos-arm64
@@ -708,6 +707,32 @@ negative/r480-recovery-zero-divisor | linux-x86-64
 negative/r480-region-frame-provider | linux-x86-64, macos-arm64, synthetic-32
 negative/r480-region-private-ledger | linux-x86-64, macos-arm64, synthetic-32
 negative/r490-conformance-input-alias-collision | linux-x86-64, macos-arm64, synthetic-32
+negative/r490-fill-array-shapes | linux-x86-64
+negative/r490-fill-atom-sets | linux-x86-64
+negative/r490-fill-case-mixed-types | linux-x86-64
+negative/r490-fill-frame-escape | linux-x86-64
+negative/r490-fill-mixed-types | linux-x86-64
+negative/r490-fill-no-omission | linux-x86-64
+negative/r490-fill-pointer-permissions | linux-x86-64
+negative/r490-fill-unassigned | linux-x86-64
+negative/r490-generic-error-key-cycle | linux-x86-64, macos-arm64
+negative/r490-generic-error-key-cycle-nested | linux-x86-64, macos-arm64
+negative/r490-generic-error-key-cycle-reordered | linux-x86-64, macos-arm64
+negative/r490-generic-inferred-function-actual | linux-x86-64, macos-arm64
+negative/r490-generic-recovery-conflict | linux-x86-64, macos-arm64
+negative/r490-inferred-recovery-immutable | linux-x86-64, macos-arm64
+negative/r490-inline-struct-empty | linux-x86-64, macos-arm64, synthetic-32
+negative/r490-inline-struct-nominal-mismatch | linux-x86-64, macos-arm64, synthetic-32
+negative/r490-inline-struct-trailing-comma | linux-x86-64, macos-arm64, synthetic-32
+negative/r490-recovery-expanding-generic | linux-x86-64, macos-arm64
+negative/r490-union-alias-deduction-conflict | linux-x86-64, macos-arm64, synthetic-32
+negative/r490-union-alias-direct-array | linux-x86-64, macos-arm64, synthetic-32
+negative/r490-union-alias-nonatom | linux-x86-64, macos-arm64, synthetic-32
+negative/r490-union-alias-optional-widening | linux-x86-64, macos-arm64, synthetic-32
+negative/r490-union-alias-tagged-pointer | linux-x86-64, macos-arm64, synthetic-32
+negative/r490-union-alias-two-pointers | linux-x86-64, macos-arm64, synthetic-32
+negative/r490-union-alias-unused-nonatom | linux-x86-64, macos-arm64, synthetic-32
+negative/r490-union-concrete-optional-widening | linux-x86-64, macos-arm64, synthetic-32
 negative/range-subtype-address | linux-x86-64, macos-arm64
 negative/range-subtype-base-is-not-an-integer | linux-x86-64, macos-arm64
 negative/range-subtype-bound-outside-base | linux-x86-64, macos-arm64
@@ -817,13 +842,11 @@ negative/struct-literal-field-not-given | linux-x86-64, macos-arm64
 negative/struct-literal-field-type-mismatch | linux-x86-64, macos-arm64
 negative/struct-literal-nested-array-value-not-enabled | linux-x86-64, macos-arm64
 negative/struct-literal-not-enabled | linux-x86-64, macos-arm64
-negative/struct-literal-of-expression-not-enabled | linux-x86-64, macos-arm64
 negative/struct-literal-reads-incoming-state | linux-x86-64, macos-arm64
 negative/struct-literal-unknown-field | linux-x86-64, macos-arm64
 negative/struct-literal-without-layout | linux-x86-64, macos-arm64
 negative/struct-measurement-fold-overflow | linux-x86-64, macos-arm64
 negative/struct-needs-a-field | linux-x86-64, macos-arm64
-negative/struct-not-enabled | linux-x86-64, macos-arm64
 negative/struct-return-unassigned | linux-x86-64, macos-arm64
 negative/struct-state-read-as-a-value | linux-x86-64, macos-arm64
 negative/struct-type-name-is-not-storage | linux-x86-64, macos-arm64
@@ -982,6 +1005,7 @@ positive/if-elsif-else | linux-x86-64, macos-arm64
 positive/if-one-line | linux-x86-64, macos-arm64
 positive/if-plain | linux-x86-64, macos-arm64
 positive/infallible-function-values | linux-x86-64, macos-arm64, synthetic-32
+positive/inline-struct-declaration | linux-x86-64, macos-arm64, synthetic-32
 positive/lenof-array-literal-does-not-read-elements | linux-x86-64, macos-arm64
 positive/lenof-remains-a-name | linux-x86-64, macos-arm64
 positive/lenof-uninitialized-fixed-array | linux-x86-64, macos-arm64
@@ -1051,6 +1075,7 @@ positive/ordinary-struct-function-signature-alias-last | linux-x86-64, macos-arm
 positive/ordinary-struct-function-signature-recursion | linux-x86-64, macos-arm64
 positive/ordinary-struct-mutual-function-signatures-left-first | linux-x86-64, macos-arm64
 positive/ordinary-struct-mutual-function-signatures-right-first | linux-x86-64, macos-arm64
+positive/parameterized-atom-union | linux-x86-64, macos-arm64, synthetic-32
 positive/parameterized-conformance-lookup | linux-x86-64, macos-arm64, synthetic-32
 positive/parameterized-struct-basic | linux-x86-64, macos-arm64
 positive/parameterized-struct-identity-only | linux-x86-64, macos-arm64
@@ -1120,6 +1145,7 @@ positive/struct-array-field-zeroed-assignment | linux-x86-64, macos-arm64
 positive/struct-construction-contexts | linux-x86-64, macos-arm64
 positive/struct-literal-array-field-forms | linux-x86-64, macos-arm64
 positive/struct-literal-contexts | linux-x86-64, macos-arm64
+positive/struct-literal-of-expression | linux-x86-64
 positive/struct-module-state | linux-x86-64, macos-arm64
 positive/struct-type-is-declared | linux-x86-64, macos-arm64
 positive/struct-zeroed-assignment | linux-x86-64, macos-arm64
@@ -1474,6 +1500,13 @@ runtime/r480-loop-fresh-view | linux-x86-64
 runtime/r480-recovery-loop-transfer | linux-x86-64
 runtime/r490-generic-atom-identity | linux-x86-64
 runtime/r490-generic-cleanup-recovery | linux-x86-64
+runtime/r490-generic-field-fill | linux-x86-64
+runtime/r490-generic-fill-recovery | linux-x86-64
+runtime/r490-generic-inferred-recovery | linux-x86-64
+runtime/r490-generic-inline-struct | linux-x86-64
+runtime/r490-generic-recovery-frontier | linux-x86-64
+runtime/r490-generic-static-fills | linux-x86-64
+runtime/r490-generic-union-alias | linux-x86-64
 runtime/r490-lexical-module-observation | linux-x86-64
 runtime/range-subtype-checks | linux-x86-64
 runtime/range-subtype-conversion-traps | linux-x86-64

@@ -1,0 +1,8 @@
+problem: atom
+triple: type = (first: i32, second: i32, third: i32)
+leaf: () -> (result: i32) ! ... = fail problem end leaf
+observe: (t: type, value: t) -> none = _ = value end observe
+public main: () -> (code: i32) =
+    result := triple(first: 0, of leaf() else (error) observe(error) 21 end)
+    code = result.second + result.third
+end main
