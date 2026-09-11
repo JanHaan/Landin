@@ -964,6 +964,9 @@ GUIDES = [
          nav="the environments", group="the implementation",
          blurb="Which machine produces which kind of evidence, and which "
                "one is the authority."),
+    dict(key="native-ci", src="environments/native-ci/README.md",
+         out="native-ci.html", nav="native acceptance", group="the implementation", blurb="Committed native acceptance, retained evidence, "
+         "approval and publication operations."),
     dict(key="editors", src="highlight/README.md", out="editors.html",
          nav="editor and IDE support", group="the implementation",
          blurb="Installable Landin highlighting for Zed, VS Code, Neovim, "

@@ -2,7 +2,7 @@
 #  The pinned toolchain, in one place.
 #
 #  compiler/ada/TOOLCHAIN.md records these for a reader; this file is what
-#  the container recipe, the CI manifest and the nix shell use, so a version
+#  the container recipe, native acceptance and the nix shell use, so a version
 #  can only be changed in one place.  check.py compares them all on a full
 #  run -- including that flake.nix reads this file rather than naming a
 #  version of its own: every file naming a compiler version is another

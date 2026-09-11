@@ -10,6 +10,12 @@
 
 . "$(dirname -- "$0")/env.sh"
 
+# Both SourceHut and direct publication validate canonical approval before
+# rendering, private-font access, or publisher invocation.
+if [ "${1:-}" = "--publish" ]; then
+    python3 "$LANDIN_ROOT/scripts/ci/approval.py" --root "$LANDIN_ROOT"
+fi
+
 Site="$LANDIN_ROOT/docs/site/site"
 Tarball="$LANDIN_ROOT/docs/site/landin-site.tar.gz"
 Domain="${LANDIN_PAGES_DOMAIN:-www.701.dev}"
@@ -41,6 +47,8 @@ if [ "${1:-}" = "--publish" ]; then
         echo "landin: not publishing without every face; see assets/fonts/README.md" >&2
         exit 1
     fi
+    # Recheck after rendering so a concurrent edit or newer main refuses upload.
+    python3 "$LANDIN_ROOT/scripts/ci/approval.py" --root "$LANDIN_ROOT"
     hut pages publish -d "$Domain" "$Tarball"
     echo "published: https://$Domain"
     if [ -n "$Alias" ]; then

@@ -1673,7 +1673,7 @@ def check_pinned_toolchain(full_run):
     #  Both are held to reading the pins rather than naming one: a build that
     #  fetches a different compiler than the recipe does is not a slower
     #  build, it is a different compiler.
-    for relative in ("flake.nix", ".build.yml"):
+    for relative in ("flake.nix", "scripts/ci/policy.json"):
         path = os.path.join(ROOT, relative)
         if not os.path.exists(path):
             continue
@@ -4872,23 +4872,10 @@ def check_optimization_contract(full_run):
                          + r"\)", harness):
             out.append((paths[6], 1, "runtime profile missing: "
                         + objective + "/" + specialization))
-    gate = io.open(".build.yml", encoding="utf-8").read()
-    if "LANDIN_BUILD_MODE=release ./scripts/quality.sh" not in gate:
-        out.append((".build.yml", 1, "release object quality is not gated"))
     for runner in ("compiler/tests/test_native_report_identity.py",
                    "scripts/tests/test_build_inventory.py"):
         out += absent([runner])
-        if "python3 " + runner not in gate:
-            out.append((".build.yml", 1, runner + " is not gated"))
-    for mode in ("debug", "release"):
-        identity_command = (
-            "python3 compiler/tests/test_native_report_identity.py "
-            + chr(92) + "\n"
-            + '        --refine "$PWD/compiler/ada/build/$LANDIN_BUILD_TAG/'
-            + mode + '/bin/refine"')
-        if identity_command not in gate:
-            out.append((".build.yml", 1,
-                        mode + " native report identity is not gated"))
+    out += check_native_ci(full_run)
     tour = io.open(TOUR_NAME, encoding="utf-8").read()
     array_section = tour.split("### [0590]", 1)[1].split("### [0600]", 1)[0]
     if "Arithmetic and comparison" in array_section or "reduce_add(" in array_section:
@@ -4902,13 +4889,48 @@ def check_debugger_contract(full_run):
         return []
     paths = ["scripts/debug.sh", "compiler/tests/debugging/check.py"]
     out = absent(paths)
-    gate = io.open(".build.yml", encoding="utf-8").read()
-    for command in ("./scripts/debug.sh",
-                    "LANDIN_BUILD_MODE=release ./scripts/debug.sh"):
-        if not any(line.strip() == command for line in gate.splitlines()):
-            out.append((".build.yml", 1, command + " is not gated"))
-    if not re.search(r"^  - gdb$", gate, re.M):
-        out.append((".build.yml", 1, "native debugger gate has no GDB"))
+    # check_native_ci independently holds both native debugger modes to the
+    # canonical policy, including the clean builds and required tool identity.
+    return out
+
+
+def check_native_ci(full_run):
+    """Preserve the complete native gate while SourceHut only publishes/mirrors."""
+    if not full_run:
+        return []
+    import importlib.util
+    import json
+    out = []
+    path = os.path.join(ROOT, "scripts/ci/common.py")
+    try:
+        module_spec = importlib.util.spec_from_file_location("landin_ci_contract", path)
+        contract = importlib.util.module_from_spec(module_spec)
+        module_spec.loader.exec_module(contract)
+        contract.validate_policy(contract.read_json(os.path.join(ROOT, "scripts/ci/policy.json")))
+    except (OSError, ValueError, TypeError, KeyError) as exc:
+        out.append((path, 1, "native acceptance policy: " + str(exc)))
+    manifests = {".build.yml"}
+    builds = os.path.join(ROOT, ".builds")
+    if os.path.isdir(builds):
+        manifests.update(".builds/" + name for name in os.listdir(builds)
+                         if name.endswith((".yml", ".yaml")))
+    if manifests != {".build.yml", ".builds/github-mirror.yml"}:
+        out.append((".build.yml", 1, "only Pages and mirror manifests may remain"))
+    pages = io.open(os.path.join(ROOT, ".build.yml"), encoding="utf-8").read()
+    tasks = re.findall(r"^  - ([a-z][a-z-]*): [|]$", pages, re.M)
+    if tasks != ["pages"]:
+        out.append((".build.yml", 1, "SourceHut must have exactly the Pages task"))
+    guard = "python3 scripts/ci/approval.py"
+    if guard not in pages or pages.index(guard) > pages.find("git clone"):
+        out.append((".build.yml", 1, "Pages must guard approval before font access"))
+    if '${GIT_REF:-}' not in pages or '!= "refs/heads/main"' not in pages:
+        out.append((".build.yml", 1, "Pages must skip non-main refs"))
+    if re.search(r"^  - (clang-19|gdb|binutils)$", pages, re.M):
+        out.append((".build.yml", 1, "SourceHut must not install acceptance tools"))
+    site = io.open(os.path.join(ROOT, "scripts/site.sh"), encoding="utf-8").read()
+    guard = 'python3 "$LANDIN_ROOT/scripts/ci/approval.py" --root "$LANDIN_ROOT"'
+    if guard not in site or site.index(guard) > site.find('render_html.py'):
+        out.append(("scripts/site.sh", 1, "manual publication must guard before rendering"))
     return out
 
 

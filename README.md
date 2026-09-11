@@ -79,8 +79,10 @@ An automatically maintained GitHub mirror is at
 **<https://github.com/JanHaan/Landin>**. Changes still originate on SourceHut;
 the mirror copies its branches and tags.
 
-The CI gate republishes the pages as its last task on every push to `main`,
-so they read what the repository says. To render or publish by hand:
+Explicit native acceptance approves an exact committed revision. SourceHut
+publishes the reading copies after approved promotion to canonical `main`;
+manual publication uses the same guard. See
+`environments/native-ci/README.md` for acceptance operations. To render or publish:
 
 ```sh
 ./scripts/site.sh              # render, verify, package
@@ -204,8 +206,8 @@ R4.20 completes the hosted `core` library slice: explicit heap, arena, pool
 and failing allocators; initialized storage, vectors, small vectors, maps,
 trees and sorting; checked runtime text helpers; and interchangeable system
 and memory I/O worlds. Compiled clients exercise their bounded composition,
-allocation failures and rollback. The complete container and hosted
-application programs remain R4.70 and R4.80 work.
+allocation failures and rollback. R4.70 completes the derived container
+program; the hosted application remains R4.80 work.
 
 R4.50 completes deterministic baseline code generation: compact numeric-array
 loops, strict-saving `layout(optimal)` placement, independently controlled
@@ -220,7 +222,7 @@ release compiler builds. ROADMAP.md records the complete closure evidence.
 Debug provenance remains independent of DWARF encoding for a possible future
 PDB emitter; PDB support is not implemented.
 
-**Current roadmap work: R4.70 — Complete and run the derived container program.**
+**Next roadmap item: R4.80 — Complete and run the derived hosted application (planned).**
 
 `refine --debug=full --emit=exe program.ldn -o program` requests Linux source
 debugging. The default is `--debug=none`; debugging metadata is independent of
