@@ -9151,6 +9151,39 @@ package body Landin.Stages.Checking is
             --  infer a declaration which deliberately has no initializer.
             Discover_Generic_Calls
               (Of_Tree, Syn.Match_Subject (Of_Tree, Node));
+            declare
+               Subject : constant Syn.Node_Id :=
+                 Syn.Match_Subject (Of_Tree, Node);
+            begin
+               if Syn.Kind (Of_Tree, Subject) = Syn.Name_Reference
+                 and then Res.Verdict_Of (Meanings.all, Of_Tree, Subject)
+                   = Res.Bound
+               then
+                  declare
+                     Id : constant Res.Declaration_Id :=
+                       Res.Bound_To (Meanings.all, Of_Tree, Subject);
+                  begin
+                     if Res.Sort_Of (Meanings.all, Id) = Res.Error_Binding
+                       and then Landin.Checking.State_Of (Types.all, Id)
+                         = Landin.Checking.Untouched
+                     then
+                        --  The error graph has not settled this atom set.
+                        --  Atom arms have no payload descriptors to prepare;
+                        --  discover their calls now and check the header
+                        --  against the actual final set with the body.
+                        for Index in 1 .. Syn.Match_Arm_Count
+                          (Of_Tree, Node)
+                        loop
+                           Discover_Generic_Calls
+                             (Of_Tree, Syn.Body_Of
+                                (Of_Tree,
+                                 Syn.Nth_Match_Arm (Of_Tree, Node, Index)));
+                        end loop;
+                        return;
+                     end if;
+                  end;
+               end if;
+            end;
             Check_Match
               (Of_Tree, Node, Ty.No_Value, Discover_Only => True);
             return;
