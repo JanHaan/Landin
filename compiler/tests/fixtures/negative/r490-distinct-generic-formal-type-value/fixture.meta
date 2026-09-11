@@ -1,0 +1,6 @@
+class: negative
+summary: a generic type formal used as a conversion value refuses without binding inference
+program: main.ldn
+codes: L0301
+constructs: 0650, 0700, 1290, 1795
+targets: linux-x86-64, macos-arm64, synthetic-32

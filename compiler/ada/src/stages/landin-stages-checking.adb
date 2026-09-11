@@ -7154,6 +7154,22 @@ package body Landin.Stages.Checking is
             return Ty.Ill_Typed;
          end if;
 
+         --  A fixed formal has a declared scalar type but no initializer
+         --  or declaration storage.  Every expression and shape-discovery
+         --  client must use that type without entering binding inference.
+         --  The active routine instance supplies its value during lowering.
+         if Res.Sort_Of (Meanings.all, Id) = Res.Fixed_Parameter then
+            declare
+               Of_Tree : constant not null access constant Syn.Tree :=
+                 Tree_For (Res.Source_Of (Meanings.all, Id));
+               Node : constant Syn.Node_Id :=
+                 Res.Node_Of (Meanings.all, Id);
+            begin
+               return Type_At
+                 (Of_Tree.all, Syn.Declared_Type (Of_Tree.all, Node));
+            end;
+         end if;
+
          case Landin.Checking.State_Of (Types.all, Id) is
             when Landin.Checking.Settled =>
                return Landin.Checking.Type_Of (Types.all, Id);
@@ -16048,13 +16064,11 @@ package body Landin.Stages.Checking is
             declare
                Means : constant Res.Declaration_Id :=
                  Res.Bound_To (Meanings.all, Of_Tree, Node);
-               --  A fixed actual is an expression without declaration
-               --  storage.  Conversion discovery can ask this shape path
-               --  about it; preserve Bound_Value's substitution semantics.
                Held  : constant Ty.Type_Kind :=
-                 (if Res.Sort_Of (Meanings.all, Means) = Res.Fixed_Parameter
-                  then Synthesise (Of_Tree, Node)
-                  else Settled_Type (Means));
+                 (if Res.Sort_Of (Meanings.all, Means)
+                    in Res.Module_Type | Res.Module_Concept
+                      | Res.Type_Parameter
+                  then Ty.Undecided else Settled_Type (Means));
             begin
                if Res.Sort_Of (Meanings.all, Means)
                  in Res.Module_Type | Res.Module_Concept | Res.Type_Parameter
@@ -16651,6 +16665,14 @@ package body Landin.Stages.Checking is
          begin
             if Res.Sort_Of (Meanings.all, Means)
               in Res.Module_Type | Res.Module_Concept | Res.Type_Parameter
+              and then not
+                (Res.Sort_Of (Meanings.all, Means) = Res.Module_Type
+                 and then
+                   (Settled_Type (Means) = Ty.Fixed_Array
+                    or else (Settled_Type (Means) = Ty.Aggregate
+                      and then not Landin.Checking.Is_Distinct
+                        (Types.all,
+                         Landin.Checking.Nominal_Of (Types.all, Means)))))
             then
                Bad.Report
                  (Item => Bad.Type_Mismatch,
@@ -16694,27 +16716,6 @@ package body Landin.Stages.Checking is
                   Because => "this generic template",
                   Into    => Found);
                return Kept (Ty.Ill_Typed);
-            end if;
-
-            --  A fixed formal is a compile-time scalar supplied by the active
-            --  routine instance.  Its value is not declaration storage and so
-            --  must not enter Infer, which is solely the path for a binding's
-            --  initializer.  The declared integer type is nevertheless the
-            --  ordinary expression type used by conversions and operators;
-            --  lowering substitutes the matching instance actual directly.
-            if Res.Sort_Of (Meanings.all, Means) = Res.Fixed_Parameter then
-               declare
-                  Formal_Tree : constant not null access constant Syn.Tree :=
-                    Tree_For (Res.Source_Of (Meanings.all, Means));
-                  Formal_Node : constant Syn.Node_Id :=
-                    Res.Node_Of (Meanings.all, Means);
-               begin
-                  return Kept
-                    (Type_At
-                       (Formal_Tree.all,
-                        Syn.Declared_Type
-                          (Formal_Tree.all, Formal_Node)));
-               end;
             end if;
 
             declare
@@ -17902,9 +17903,15 @@ package body Landin.Stages.Checking is
                                not in Syn.Name_Reference | Syn.Member_Selection
                              or else Res.Verdict_Of
                                (Meanings.all, Of_Tree, Value) /= Res.Bound
-                             or else Settled_Type
-                               (Res.Bound_To (Meanings.all, Of_Tree, Value))
-                                 = Ty.Aggregate)
+                             or else
+                               (Res.Sort_Of
+                                  (Meanings.all, Res.Bound_To
+                                     (Meanings.all, Of_Tree, Value))
+                                  not in Res.Module_Concept
+                                    | Res.Type_Parameter
+                                and then Settled_Type
+                                  (Res.Bound_To (Meanings.all, Of_Tree, Value))
+                                    = Ty.Aggregate))
                           and then
                             (if Syn.Kind (Of_Tree, Value)
                               in Syn.Name_Reference | Syn.Member_Selection
