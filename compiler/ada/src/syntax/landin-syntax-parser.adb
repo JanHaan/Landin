@@ -3571,8 +3571,7 @@ package body Landin.Syntax.Parser is
                         Complain
                           (Syn.Name_Expected, Here,
                            "a field belongs after the comma",
-                           Note => "[0670]: an inline body has named fields",
-                           Related => Opened, Because => "this struct");
+                           Note => "[0670]: an inline body has named fields");
                         exit;
                      end if;
                   end if;
