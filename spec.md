@@ -8187,6 +8187,7 @@ requires substitution. All were declined.
 **Pinned by** `positive/parameterized-atom-union`,
 `runtime/r490-generic-union-alias`,
 `negative/r490-union-alias-nonatom`,
+`negative/r490-union-alias-direct-array`,
 `negative/r490-union-alias-unused-nonatom`,
 `negative/r490-union-alias-two-pointers`,
 `negative/r490-union-alias-tagged-pointer`,
