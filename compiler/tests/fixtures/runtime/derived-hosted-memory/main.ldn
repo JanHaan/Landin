@@ -168,7 +168,7 @@ failure_sweep: () -> (ok: bool) =
         return when failing.live(counted) <> 0 or files[0].opened or files[1].opened
           or failing.successes(counted) <> failing.frees(counted)
         if succeeded then
-            ok = budget > 15
+            ok = budget > 0 and budget == failing.attempts(counted)
             return
         end if
         inc budget
