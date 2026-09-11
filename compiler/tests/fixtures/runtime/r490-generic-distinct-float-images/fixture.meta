@@ -1,0 +1,6 @@
+class: runtime
+summary: ordinary and distinct IEEE named images retain scalar identity through aliases, fields and generic calls
+program: main.ldn
+status: 42
+constructs: 0170, 0210, 0240, 0290, 0350, 0650, 0670, 0700, 1280, 1940
+targets: linux-x86-64

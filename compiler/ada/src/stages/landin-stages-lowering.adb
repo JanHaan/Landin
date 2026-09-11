@@ -16624,6 +16624,19 @@ package body Landin.Stages.Lowering is
                return;
             end if;
 
+            --  Ordinary scalar data are emitted by Lower_Module_Binding.
+            --  D213 adds the representation-folding case above, not array
+            --  image semantics for every scalar initializer.  In particular,
+            --  an IEEE named value or a qualified atom is not a struct field.
+            --  Booleans retain their separate shared static-folder path.
+            if Landin.Checking.Type_Of (Types.all, Id)
+              in Ty.Scalar_Name | Ty.Atom_Value
+              and then Landin.Checking.Type_Of (Types.all, Id) /= Ty.Bool
+            then
+               Where (Id) := Resolved;
+               return;
+            end if;
+
             if Landin.Checking.Type_Of (Types.all, Id) = Ty.Function_Value then
                declare
                   Item : constant IR.Item_Id := IR.Item_For (Unit.all, Id);

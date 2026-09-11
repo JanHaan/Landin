@@ -1,0 +1,28 @@
+wide_float: type = distinct f64
+narrow_float: type = distinct f32
+ordinary_infinity: f64 = f64.infinity
+ordinary_copy: f64 = ordinary_infinity
+wrapped_infinity: wide_float = wide_float(f64.infinity)
+wrapped_nan: narrow_float = narrow_float(-f32.nan)
+extracted_infinity: f64 = f64(wrapped_infinity)
+extracted_nan: f32 = f32(wrapped_nan)
+sample: type = struct
+    wide: wide_float
+    narrow: narrow_float
+end sample
+stored: sample = (wide: wide_float(-f64.infinity), narrow: narrow_float(f32.nan))
+copy: (item: type, value: item) -> (result: item) = value end copy
+public main: () -> (code: i32) =
+    local_infinity := f64(copy(wrapped_infinity))
+    local_negative := f64(copy(stored.wide))
+    local_nan := f32(copy(wrapped_nan))
+    selected_nan: f32 = f32(stored.narrow)
+    if ordinary_copy > 1.0e300 and extracted_infinity > 1.0e300
+       and local_infinity > 1.0e300 and local_negative < -1.0e300
+       and extracted_nan <> extracted_nan and selected_nan <> selected_nan
+       and local_nan <> local_nan then
+        code = 42
+    else
+        code = 1
+    end if
+end main
