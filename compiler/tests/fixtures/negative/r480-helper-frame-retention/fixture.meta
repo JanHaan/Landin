@@ -1,0 +1,6 @@
+class: negative
+summary: D212 helper-side-effect retention still refuses an ordinary tracked frame argument
+program: program.ldn
+codes: L0314
+constructs: 0770, 0780, 0820
+targets: linux-x86-64, macos-arm64

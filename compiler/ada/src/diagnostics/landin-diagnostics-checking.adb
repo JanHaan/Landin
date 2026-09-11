@@ -34,7 +34,9 @@ package body Landin.Diagnostics.Checking is
          Add_Note
            (Built,
             "ROADMAP.md " & Enabled_By (Refused)
-            & " is where it is enabled");
+            & (if Refused = Arena_Region
+               then " withdraws this form; pass an ordinary allocator"
+               else " is where it is enabled"));
       elsif Note /= "" then
          Add_Note (Built, Note);
       end if;

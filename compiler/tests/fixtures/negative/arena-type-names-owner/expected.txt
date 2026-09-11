@@ -1,7 +1,7 @@
-error[L0304]: `arena` is not enabled yet
+error[L0304]: the builtin `arena` type is withdrawn
   --> ../tests/fixtures/negative/arena-type-not-enabled/program.ldn:1:13
   |
 1 | report: (a: arena) -> none =
   |             ^^^^^
   = note: the tour describes it at [0820]
-  = note: ROADMAP.md R4.80 is where it is enabled
+  = note: ROADMAP.md R4.80 withdraws this form; pass an ordinary allocator

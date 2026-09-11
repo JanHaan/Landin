@@ -5193,8 +5193,11 @@ package body Landin.Stages.Checking is
                           (Item    => Bad.Unsupported_Use,
                            Source  => Syn.Source_Of (Of_Tree),
                            Where   => Syn.Where (Of_Tree, Written),
-                           Message => "`" & Spelled_Here
-                                      & "` is not enabled yet",
+                           Message =>
+                             (if Bad."=" (Named, Bad.Arena_Handle)
+                              then "the builtin `arena` type is withdrawn"
+                              else "`" & Spelled_Here
+                                   & "` is not enabled yet"),
                            Refused => Bad.Refusal (Named),
                            Into    => Found);
                      end if;

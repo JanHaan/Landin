@@ -1,5 +1,5 @@
 class: negative
-summary: [0780] writes a parameter with [0820]'s built-in arena type and D196 transfers it to R4.80, so the checker refuses the name rather than reporting it as declared nowhere
+summary: D212 permanently withdraws the builtin arena type with a named migration diagnostic
 constructs: 0820, 0780, 1830
 program: program.ldn
 codes: L0304

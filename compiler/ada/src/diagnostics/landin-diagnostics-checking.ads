@@ -182,10 +182,9 @@ package Landin.Diagnostics.Checking is
       --  tag-plus-pointer carrier [1870] describes, which is an IR pair,
       --  storage, an ABI position and a backend of its own.
       Tagged_Pointer_Union,
-      --  D191: [0820] says `arena` is built in both as a block and as the
-      --  type a parameter is written with at [0780].  The parser refuses
-      --  the block; this refuses the type name, so the second half of the
-      --  paragraph is not reported as a name declared nowhere.
+      --  D212 withdraws [0820]'s builtin type and lexical block.  Keep
+      --  migration guidance for the unresolved type spelling; a declared
+      --  ordinary type of that name has already resolved normally.
       Arena_Region);
 
    function Construct (Item : Refused_Use)
@@ -211,7 +210,7 @@ package Landin.Diagnostics.Checking is
    --
    --  `arena` is here and not in the parser's word table for the reason
    --  this stage exists: `core/mem` declares a type of that name, so
-   --  whether a written `arena` is [0820]'s built-in one is a question
+   --  whether `arena` is the withdrawn builtin spelling is a question
    --  about what it resolved to and not about the bytes.
    type Refused_Type_Name is
      (Wide_Unsigned, Wide_Signed, Float_16, Arena_Handle);
@@ -269,8 +268,8 @@ private
             --  needs; D189 closes [0480]'s one-atom form and deliberately
             --  does not decide that one.
             when Tagged_Pointer_Union => "R7.20",
-            --  D196 transfers both written forms and D191's complete
-            --  region questions to the derived hosted application.
+            --  D212 closes both forms with permanent withdrawal and
+            --  explicit ordinary allocator migration guidance.
             when Arena_Region       => "R4.80");
 
 end Landin.Diagnostics.Checking;

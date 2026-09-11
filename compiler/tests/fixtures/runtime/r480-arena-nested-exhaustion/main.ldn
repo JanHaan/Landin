@@ -1,0 +1,68 @@
+import core/mem
+
+stopped: atom
+absent: atom
+optional: type = absent | ptr mut u8
+
+leave: (inout arena: mem.failing, mode: u8) -> none ! stopped =
+    block := mem.allocate(arena, usize(1), usize(1)) else (problem)
+        _ = problem
+        fail stopped
+    end
+    defer mem.free(arena, block, usize(1))
+    if mode == 0 then
+        return
+    end if
+    if mode == 1 then
+        fail stopped
+    end if
+end leave
+
+nested: (inout outer: mem.failing, inout inner: mem.failing)
+         -> (ok: bool) ! mem.out_of_memory =
+    ok = false
+    first := try mem.allocate(outer, usize(1), usize(1))
+    defer mem.free(outer, first, usize(1))
+    mut steps: u8 = 0
+    while steps < 2 do
+        inc steps
+        block := try mem.allocate(inner, usize(1), usize(1))
+        defer mem.free(inner, block, usize(1))
+        continue when steps == 1
+        break
+    end while
+    --  Exact inner capacity is spent; refusal must not mutate the offset.
+    refused: optional = mem.allocate(inner, usize(1), usize(1)) else absent
+    empty: bool = match refused
+        absent: true
+        ptr: false
+    end match
+    --  The outer provider has independent authority and still works.
+    second := try mem.allocate(outer, usize(1), usize(1))
+    defer mem.free(outer, second, usize(1))
+    ok = empty and outer.used == 2 and inner.used == 2
+      and inner.allocations == 2 and inner.frees == 2
+end nested
+
+public main: () -> (code: i32) =
+    code = 1
+    mut outer_bytes: [4]u8 = zeroed
+    mut inner_bytes: [2]u8 = zeroed
+    mut outer := mem.fail_over(addr outer_bytes[0], 4, 4)
+    mut inner := mem.fail_over(addr inner_bytes[0], 2, 3)
+    ok: bool = nested(outer, inner) else false
+    return when not ok
+    return when outer.frees <> 2 or inner.remaining <> 1
+    leave(outer, 0) else (problem)
+        _ = problem
+        return
+    end
+    leave(outer, 1) else (problem)
+        _ = problem
+    end
+    if outer.used == 4 and outer.allocations == 4
+      and outer.frees == 4 and inner.used == 2
+    then
+        code = 42
+    end if
+end main

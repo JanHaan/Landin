@@ -5066,7 +5066,8 @@ package body Landin.Syntax.Parser is
                            Refuse
                              (Item    => Syn.Arena_Block,
                               Where   => At_Word,
-                              Message => "`arena` is not enabled yet");
+                              Message =>
+                                "the lexical `arena` block is withdrawn");
 
                            if not Skip_Past_Closer (Closer) then
                               Resync_Statement;

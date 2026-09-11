@@ -1,5 +1,5 @@
 class: negative
-summary: [0820] opens a scratch region as a lexical block and D196 transfers its region semantics to R4.80, so the parser recognizes the shape and refuses it by name
+summary: D212 permanently withdraws the builtin arena block with a named migration diagnostic
 constructs: 0820, 1830
 program: program.ldn
 codes: L0010

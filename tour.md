@@ -1352,7 +1352,8 @@ push_front: (inout head: ptr mut node, escaping item: ptr mut node)
     head = item
 end push_front
 
-build: (a: arena) -> (head: ptr node) =
+build: (A: type is mem.allocator, inout a: A)
+       -> (head: ptr node) ! mem.out_of_memory =
     n := try mem.new(T: node, a: a)
     push_front(head, n)             -- allocated, fine
 
@@ -1444,59 +1445,70 @@ and the rejected `slice_from`; none supplies another derivation rule. The
 initialized-prefix state machine remains responsible for exposing only values
 that have actually been stored [0510].
 
-### [0820] arena is built in
+### [0820] Arenas are ordinary allocators with explicit backing
 
-arena is built in, both as the block below and as the type
-a parameter is written with at [0780]. There is nothing to
-import for it.
-A scratch arena is a block, so its extent is exact rather
-than guessed. Everything from it has frame origin, which is
-why a local may be referenced from inside it. Nothing from
-it may leave the block. There is no general reset: to start
-over, open another block.
-Passed on as a parameter the arena is an ordinary allocator
-again, and what comes out of it there is allocated rather
-than frame. That has to be so, or a block arena would be
-useless beyond the function that opened it — and it is
-sound for a reason worth saying rather than leaving
-implicit: the block is the outermost extent, so anything
-that would outlive it passes the block on its way out, and
-the check there catches it.
+An arena is an ordinary library value, not a builtin type or lexical region.
+Import `core/mem` and write `mem.arena`, or accept any provider satisfying
+`mem.allocator`. Both formerly promised forms, `arena name do` and the
+otherwise-undeclared builtin type `arena`, are withdrawn by D212. Their named
+diagnostics explain the change; a declared type or ordinary identifier named
+`arena` remains valid.
+
+`mem.arena_over(base, size)` supplies the backing address and byte capacity
+explicitly. The handle retains the base's origin. Allocation aligns the
+absolute address and advances a monotonic offset; individual frees do nothing.
+A caller can supply a fixed array on a constrained target or explicitly
+acquired hosted storage, choosing the actual capacity rather than a hidden
+frame buffer. Overflow or an extent that does not fit reports
+`mem.out_of_memory` before changing the offset. A `mem.failing` provider adds
+an explicit successful-allocation budget [1360].
 
 ```landin
-report: (data: []u8) -> none =
-    arena scratch do
-        mut buf := try mem.new_slice(T: u8, a: scratch, n: 1024)
-        format_into(buf, data)
-        write_out(buf)
-    end scratch
-end report
+import core/mem
 
+report: () -> (code: i32) =
+    mut backing: [1024]u8 = zeroed
+    mut scratch := mem.arena_over(addr backing[0], 1024)
+    code = 1
+    first := mem.new(scratch, u8(7)) else (problem)
+        _ = problem
+        return
+    end
+    second := mem.new(scratch, u8(9)) else (problem)
+        _ = problem
+        return
+    end
+    code = i32(first.val) + i32(second.val)
+end report
 ```
 
-`core/mem` also has an explicit `arena` allocator over a supplied byte pointer
-and extent. That library value is useful where storage already exists: its
-handle derives from the supplied pointer, allocation aligns the absolute base
-address plus its monotonic offset, and individual `free` calls do nothing. It
-is not the block construct above and receives no stronger pointer guarantee
-than its unsafe backing storage. The paired `failing` arena adds an allocation
-budget so an out-of-memory edge is deterministic in tests. [1360] records the providers'
-zero-size, zero-alignment and arithmetic-failure contracts.
-The block above is a region before it is syntax: the type its name has, where
-its bytes come from, whether exhaustion fails or traps, and how "everything
-from it has frame origin, and allocated once the arena is passed on" survives
-[0790]'s rule that an allocator's result borrows nothing, are four questions
-the allocator surface answers and not this paragraph. D196 transfers both
-written forms and all four questions to R4.80, the complete prototype-4
-application. Until it resolves them, `arena name do` and a parameter written
-`a: arena` are each refused by name against R4.80.
+For bulk hosted cleanup, `core/region.new_region(addr provider)` creates an
+ordinary allocator that records its acquired extents through that provider.
+An explicit `defer region.release_region(program)` releases them together.
+The region value borrows its provider; its allocations are still independent,
+and its bookkeeping also consumes the supplied provider's capacity. A finite
+caller-backed provider therefore remains finite, with no hidden heap fallback.
+This library operation is not the withdrawn lexical escape guarantee.
 
-The claim above that every escape passes the block is not yet a checked rule.
-A helper can allocate through an ordinary allocator and retain the independent
-result in module storage without returning it through the block. R4.80 must
-account for that path as well as returned references before enabling this
-promise. Explicit caller-backed `mem.arena` remains an ordinary unsafe
-allocator with the weaker contract described above.
+The allocator's independent no-`from` result permits both live allocations
+and useful helper results. It does not acquire a lexical frame origin when
+called inside a block. In particular, a helper can store an allocated result
+in module storage without returning it through that block. W7's former
+argument that every escape crosses the block boundary therefore does not
+establish the promised check. Borrowing the mutable allocator for each result
+would also prevent its next ordinary allocation [0790].
+
+The backing owner arranges its lifetime and explicit cleanup. A frame array
+ends with its frame; hosted allocations need explicit release, which `defer`
+can run on normal, failure, return and loop-transfer exits [1100]. Nested
+ordinary blocks and providers do not infer a shared region: disjoint backing
+has independent capacity, while overlapping backing and outstanding aliases
+remain the caller's responsibility. Do not use results after backing ends or
+is reused. Direct and helper-returned pointers, aggregates, slices, `any` and
+callback state all obey the ordinary origin rules; none gains an arena-specific
+escape check. The explicit integer-to-pointer conversion inside allocation is
+[0470]'s existing non-guarantee, not proof of a longer lifetime. Tracked direct
+frame references and provider handles still cannot escape [0770] [0780].
 
 ### [0830] A view derived from a local borrows it
 
@@ -2896,7 +2908,8 @@ Building one is explicit. The concept comes from context
 where it can; otherwise name it.
 
 ```landin
-screen: (a: arena) -> (items: []any widget) ! out_of_memory =
+screen: (A: type is mem.allocator, inout a: A)
+        -> (items: []any widget) ! out_of_memory =
     b := try mem.new(T: button, a: a)
     b.val = button(text: "OK")
 
@@ -3506,12 +3519,13 @@ public main: () -> (code: i32) =
     mut h := io.host()          -- out of nothing, once, here
     mut w: any io.world = any(addr h)
     args := copy_arguments(w)   -- application-owned representation
-    arena program do
-        stream := w.err()
-        mut logger := diag.to(addr w, addr stream)
-        mut d := any(addr logger)
-        code = run(w, program, d, args) else 1
-    end program
+    mut backing := heap.host()
+    mut program := region.new_region(addr backing)
+    defer region.release_region(program)
+    stream := w.err()
+    mut logger := diag.to(addr w, addr stream)
+    mut d := any(addr logger)
+    code = run(w, program, d, args) else 1
 end main
 ```
 
@@ -3532,12 +3546,14 @@ not learn the difference.
 test_drops_debug: () -> none =
     mut h := io.in_memory([(name: "in.log", body: "DEBUG a\nERROR b\n")])
     mut w: any io.world = any(addr h)
-    arena scratch do
-        mut logger := diag.new_log(N: 32)
-        mut d := any(addr logger)
-        kept := run(w, scratch, d, []) else 0
-        assert(kept == 1)
-    end scratch
+    mut bytes: [4096]u8 = zeroed
+    mut backing := mem.arena_over(addr bytes[0], 4096)
+    mut scratch := region.new_region(addr backing)
+    defer region.release_region(scratch)
+    mut logger := diag.new_log(N: 32)
+    mut d := any(addr logger)
+    kept := run(w, scratch, d, []) else 0
+    assert(kept == 1)
 end test_drops_debug
 ```
 
