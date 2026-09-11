@@ -137,7 +137,11 @@ reports `out_of_memory` before allocator state changes.
 D196 records the sketch's `offset` and `base_of` names as unnecessary for the
 implemented library. The actual allocator uses [0470]'s explicit conversion;
 [0810] describes its untracked result. This explicit caller-backed pool does
-not require the lexical arena block whose resolution belongs to R4.80.
+not require a lexical arena block. D212 [0820] withdraws that block and its
+builtin parameter type: this explicit allocator remains ordinary source,
+with no-`from` allocation results and manual backing lifetime. Prototype 4
+adds explicit bulk cleanup over a supplied provider; it does not make these
+results borrow the allocator or claim to detect helper-side-effect escapes.
 
 ## core/mem  —  a bump allocator over borrowed storage
 

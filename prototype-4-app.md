@@ -12,7 +12,7 @@ What it presses on, none of which the first three prototypes touched:
 
 - `any` — real heterogeneous dispatch. The chain is built from argv, so its
   shape is unknown until run time and no generic can express it
-- arenas — one for the program and blocks for scratch, side by side
+- arenas — explicit program and scratch providers, with caller-owned lifetimes
 - `Io` — which the tour has never specified at all
 - the root — where a capability comes from when nobody handed you one
 - entry — argc and argv, and what a hosted program is handed
@@ -33,12 +33,14 @@ shared with prototypes 2 and 3.
 
 ---
 
-D196's current disposition qualifies W7's historical resolution below: a
-helper can retain an independent allocator result in module state without
-returning it through the arena block. R4.80 owns both refused arena forms and
-all four D191 design questions, including that side-effect escape path. The
-library slice's explicit caller-backed arena does not establish the block's
-promised checks.
+D212 [0820] supersedes W7's historical resolution below: a helper can retain an
+independent allocator result in module state without returning it through a
+lexical boundary. Both builtin arena forms are withdrawn. The derivative uses
+an ordinary `core/region` allocator over an explicit provider, with explicit
+bulk cleanup; its allocations keep [0790]'s independent results. The compiler
+does not promise transitive lifetime checks for those results. Direct tracked
+references, source-derived views, and erased callback state retain their
+existing local checks. The historical W7 finding remains unedited.
 
 The bounded memory-world pressure uses ordinary `core/io.memory` with explicit
 caller file tables, output/error buffers and injected argument descriptors.
@@ -541,6 +543,8 @@ end build
 
 ```landin
 import core/mem
+import core/heap
+import core/region
 import core/text
 import core/vec
 import config/diag
@@ -550,14 +554,16 @@ import app/dest
 import app/config
 
 ```
-Everything for the whole run comes out of one arena: the filters,
-the destination, the reader's buffer. None of it is freed one
-piece at a time.
+Everything retained for the whole run comes from one explicit region: the
+filters, the destination, copied arguments and reader storage. Its caller
+releases the region after closing the files and retiring every alias. A
+region's allocator contract is ordinary; the lifetime discipline is manual.
 args is a parameter and not io.args(): a run handed an in-memory
 world must be handed its command line too, or the root is only
 half replaced and the test cannot say what it is testing.
 ```landin
-run: (inout h: any io.world, inout a: arena, inout d: any diag.log,
+run: (A: type is mem.allocator, inout h: any io.world, inout a: A,
+      inout d: any diag.log,
       escaping args: []cstring) -> (kept: u32) ! ... =
     mut cfg := try config.build(h, a, args, d)
 
@@ -623,7 +629,10 @@ public main: () -> (code: i32) =
     mut h := io.host()
     w := any(addr h)
 
-    arena program do
+    begin
+        mut backing := heap.host()
+        mut program := region.new_region(addr backing)
+        defer region.release_region(program)
         mut logger := diag.to(w.err())
         d := any(addr logger)
 
@@ -635,7 +644,7 @@ public main: () -> (code: i32) =
 
         print_summary(w, kept)
         code = if d.failed() then 1 else 0 end if
-    end program
+    end
 end main
 
 ```
@@ -644,18 +653,22 @@ never learns which world it was handed.
 The test argument descriptor array has module backing, as do its string
 literals, so both levels satisfy `run`'s retention contract.
 ```landin
-test_args: [1]cstring = ["in.log"]
+test_args: [5]cstring = ["--level", "ERROR", "--out", "out.log", "in.log"]
+mut test_backing: [64 * 1024]u8 = zeroed
 
 test_drops_debug_lines: () -> none =
     mut h := io.in_memory([(name: "in.log", body: "DEBUG a\nERROR b\n")])
     w := any(addr h)
-    arena scratch do
+    begin
+        mut backing := mem.arena_over(addr test_backing[0], lenof test_backing)
+        mut scratch := region.new_region(addr backing)
+        defer region.release_region(scratch)
         mut logger := diag.new_log(N: 32)
         d := any(addr logger)
-        kept := run(w, scratch, d, test_args[0..<1]) else 0
+        kept := run(w, scratch, d, test_args[0..<5]) else 0
         assert(kept == 1)
         assert(text.eq(io.written(h), "ERROR b\n"))
-    end scratch
+    end
 end test_drops_debug_lines
 ```
 
@@ -671,13 +684,15 @@ allocation or truncation. `diag.streaming` retains a pointer to the erased
 world and a borrowed stream rather than naming the system provider. The
 historical sketches and findings below retain their original spelling.
 
-The arena is a block, so its extent is exact and everything the
-program allocated dies with it [0820]. Hosted, that is the same
-moment the process exits, so the block is bookkeeping rather than
-necessity — but it is the same code that would run where it is
-necessary, which was the point of the range from 32 KB to 32 TB.
-What is not stated anywhere is what happens to that frame origin
-when the arena is passed on as a parameter, which it is here. [W7]
+The ordinary block supplies cleanup scope, not a new allocation origin.
+`defer region.release_region` runs on normal, failure and control-transfer
+exits [0820]. Its provider determines capacity: the hosted root explicitly
+selects the heap, while the memory example names its byte extent. Metadata
+uses that same authority, so finite capacity includes the allocation ledger.
+Individual arena frees do nothing, and releasing a region over an arena does
+not restore the arena's used offset. A new explicitly backed arena is a
+separate lifetime chosen by its caller. W7's former block-escape argument is
+not a guarantee of either provider.
 
 R2.80 makes this prototype's `any` pressure executable without changing the
 sketch: construction erases an exact pointer/conformance, every exposed entry

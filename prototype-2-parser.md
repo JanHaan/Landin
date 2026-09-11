@@ -231,7 +231,7 @@ end next
 
 ```landin
 import core/text
-import core/arena
+import core/mem
 import config/lex
 import config/diag
 
@@ -305,7 +305,7 @@ failing, because a broken entry must not end the file.
 
 ```landin
 parse_entry: (inout p: parser, inout d: any diag.log,
-              inout a: arena)
+              inout a: mem.arena)
               -> (v: ptr mut value_kind, got: bool)
               ! out_of_memory | too_deep =
 
@@ -378,7 +378,7 @@ log whether the result is trustworthy.
 ---
 
 ```landin
-public parse_file: (src: utf8, inout d: any diag.log, inout a: arena)
+public parse_file: (src: utf8, inout d: any diag.log, inout a: mem.arena)
                     -> (items: []mut ptr mut value_kind)
                     ! out_of_memory | too_deep =
 
@@ -421,14 +421,17 @@ import config/diag
 
 The world is a parameter, not a module member: naming it 'io'
 here would shadow the module of the same name and every call in
-the body would read a field of the parameter instead. arena is
-built in, so there is nothing to import for it.
+the body would read a field of the parameter instead. The caller supplies an
+ordinary `mem.arena` over an explicit backing extent; there is no builtin arena
+type or region block under D212 [0820]. The running derivative uses named
+module arrays for its exact capacities, including the exhaustion case.
 
 ```landin
-run: (inout w: any io.world, path: utf8) -> (code: i32) =
+run: (inout w: any io.world, inout scratch: mem.arena, path: utf8)
+     -> (code: i32) =
     code = 0
 
-    arena scratch do
+    begin
         src := io.read_file(w, scratch, path) else (e)
             io.write_line(w, "cannot read that file")
             code = 2
@@ -468,18 +471,21 @@ concrete type for reading back what was stored.
         end if
 
         apply(items)
-    end scratch
+    end
 end run
 
 ```
 
-What the scratch arena does here is worth spelling out. Every
-string the parser cut out of the source, every node it built and
-every formatted message live in it, and not one of them is freed
-by name. The block ends and all of it is gone at once. Because
-the arena is a block, the compiler knows its extent exactly, so
-items and src cannot leave: they have frame origin, and returning
-them would be refused.
+The caller owns the scratch backing and its lifetime. The arena's individual
+free operations do nothing; leaving this ordinary block does not reclaim its
+backing or prove that every allocated reference stayed inside. D212 [0820]
+withdraws that earlier promise: an allocator result has no `from` relationship
+to the allocator, so helpers may return useful nodes and simultaneous
+allocations remain possible. Direct source-derived views still carry their
+ordinary origins. The running derivative's module arrays keep backing alive;
+a caller reusing storage must first retire every node, source view and message.
+Prototype 4's complete derivative adds explicit region cleanup over a supplied
+provider, without claiming a transitive escape check.
 
 ---
 

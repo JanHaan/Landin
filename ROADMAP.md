@@ -2848,7 +2848,7 @@ that has no implementation owner.
 | `[0790]` | hosted-now | R2.50 | matrix evidence |
 | `[0800]` | hosted-now | R2.50 | matrix evidence |
 | `[0810]` | hosted-now | R4.20 | D196 states [0470]'s actual derivation cut; the `pointer.integer-origin` evidence pins its non-guarantee |
-| `[0820]` | later-r4 | R4.80 | D196 transfers both named refusals and all four D191 questions, including helper-side-effect escapes |
+| `[0820]` | hosted-now | R4.80 | D212 withdraws the lexical block and builtin parameter type; explicit ordinary allocator authority, capacity and cleanup replace the unsupported transitive escape promise |
 | `[0830]` | hosted-now | R2.50 | matrix evidence |
 | `[0840]` | hosted-now | R2.50 | matrix evidence |
 | `[0850]` | freestanding | R6.80 | scheduled volatile-access work |
@@ -5176,7 +5176,8 @@ and document checks all passed. The complete suite passed 559 cases and
 ran all six fixture/quality profiles and all three native debugger profiles.
 The independent implementation review and retained mutation controls precede
 that exact-revision gate. This historical result remains R4.70's closure
-proof as acceptance moves to the tracked native runner. R4.80 remains planned.
+proof as acceptance moves to the tracked native runner. R4.80 owns the
+complete hosted application.
 
 ### R4.80 — Complete and run the derived hosted application
 
