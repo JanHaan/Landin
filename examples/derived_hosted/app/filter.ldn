@@ -1,0 +1,65 @@
+import core/text
+
+public filter: type = concept (item: type)
+    keep: (self: ptr mut item, line: []u8) -> (yes: bool)
+end filter
+public level_filter: type = struct
+    least: u8
+end level_filter
+public match_filter: type = struct
+    needle: []u8
+end match_filter
+public sample_filter: type = struct
+    every: usize
+    seen: usize
+end sample_filter
+
+has_level: (line: []u8, word: []u8) -> (yes: bool) =
+    yes = false
+    return when lenof line < lenof word
+    for at in usize(0)..<lenof word do return when line[at] <> word[at] end for
+    yes = lenof line == lenof word
+    if lenof line > lenof word then
+        yes = line[lenof word] == 32 or line[lenof word] == 9
+    end if
+end has_level
+public level_of: (line: []u8) -> (level: u8) =
+    level = 0
+    if has_level(line, "DEBUG") then level = 1 end if
+    if has_level(line, "INFO") then level = 2 end if
+    if has_level(line, "WARN") then level = 3 end if
+    if has_level(line, "ERROR") then level = 4 end if
+    if has_level(line, "FATAL") then level = 5 end if
+end level_of
+
+level_keep: (self: ptr mut level_filter, line: []u8) -> (yes: bool) =
+    yes = level_of(line) >= self.val.least
+end level_keep
+match_keep: (self: ptr mut match_filter, line: []u8) -> (yes: bool) =
+    valid: utf8 = text.from_bytes(line) else (problem)
+        _ = problem
+        yes = false
+        return
+    end
+    _ = valid
+    yes = false
+    needle: []u8 = self.val.needle
+    return when lenof needle > lenof line
+    mut at: usize = 0
+    while at <= lenof line - lenof needle do
+        mut n: usize = 0
+        while n < lenof needle and line[at + n] == needle[n] do inc n end while
+        if n == lenof needle then yes = true
+            return end if
+        inc at
+    end while
+end match_keep
+sample_keep: (self: ptr mut sample_filter, line: []u8) -> (yes: bool) =
+    _ = line
+    --  R480_DEBUG_SAMPLE
+    inc self.val.seen
+    yes = self.val.seen % self.val.every == 0
+end sample_keep
+level_filter is filter (keep: level_keep)
+match_filter is filter (keep: match_keep)
+sample_filter is filter (keep: sample_keep)

@@ -1,0 +1,94 @@
+import core/io
+import core/mem
+import core/vec
+
+--  A message owns copied arbitrary bytes. Its cursor commits only successful
+--  one-byte writes. For the repository world providers, a failed one-byte
+--  write has transferred zero bytes. Retry never repeats a committed prefix.
+public message: type = struct
+    bytes: vec.list(u8)
+    delivered: usize
+end message
+public new_message: () -> (value: message) =
+    bytes := vec.new_list(item: u8)
+    value = (bytes: bytes, delivered: 0)
+end new_message
+public append: (provider: type is mem.allocator, inout allocator: provider,
+                inout value: message, bytes: []u8)
+               -> none ! mem.out_of_memory =
+    count: usize = vec.length(value.bytes)
+    maximum: usize = 0 -% 1
+    fail mem.out_of_memory when lenof bytes > maximum - count
+    --  Reserve first: failure preserves the entire previous message.
+    try vec.reserve(value.bytes, allocator, count + lenof bytes)
+    for byte in bytes do try vec.push(value.bytes, allocator, byte) end for
+end append
+public deliver: (inout value: message, world: any io.world, stream: io.file)
+                -> none ! io.io_failed =
+    while value.delivered < vec.length(value.bytes) do
+        bytes := vec.used(value.bytes)
+        try world.write(stream, bytes[value.delivered..<value.delivered + 1])
+        inc value.delivered
+    end while
+end deliver
+public clear_message: (inout value: message) -> none =
+    while vec.length(value.bytes) > 0 do
+        _ = vec.pop(value.bytes) else (problem) _ = problem end
+    end while
+    value.delivered = 0
+end clear_message
+public drop_message: (provider: type is mem.allocator, inout allocator: provider,
+                      inout value: message) -> none =
+    vec.release(value.bytes, allocator)
+    value.delivered = 0
+end drop_message
+
+public dest: type = concept (item: type)
+    emit: (self: ptr mut item, world: any io.world, inout line: message)
+          -> none ! io.io_failed
+    done: (self: ptr mut item, world: any io.world) -> none ! io.io_failed
+end dest
+public text_dest: type = struct
+    stream: io.file
+end text_dest
+public count_dest: type = struct
+    by_level: [8]usize
+    total: usize
+end count_dest
+text_emit: (self: ptr mut text_dest, world: any io.world, inout line: message)
+           -> none ! io.io_failed =
+    --  R480_DEBUG_TEXT
+    try deliver(line, world, self.val.stream)
+end text_emit
+text_done: (self: ptr mut text_dest, world: any io.world)
+           -> none ! io.io_failed =
+    _ = self
+    _ = world
+end text_done
+count_emit: (self: ptr mut count_dest, world: any io.world, inout line: message)
+            -> none ! io.io_failed =
+    _ = world
+    bytes := vec.used(line.bytes)
+    level: u8 = level_of(bytes)
+    inc self.val.by_level[usize(level)]
+    inc self.val.total
+end count_emit
+public print_number: (world: any io.world, stream: io.file, number: usize)
+                     -> none ! io.io_failed =
+    if number >= 10 then try print_number(world, stream, number / 10) end if
+    mut digit: [1]u8 = zeroed
+    digit[0] = u8(number % 10) + 48
+    try world.write(stream, digit[0..<1])
+end print_number
+count_done: (self: ptr mut count_dest, world: any io.world)
+            -> none ! io.io_failed =
+    stream: io.file = world.out()
+    for level in usize(0)..<usize(8) do
+        try print_number(world, stream, usize(level))
+        try world.write(stream, ": ")
+        try print_number(world, stream, self.val.by_level[level])
+        try world.write(stream, "\n")
+    end for
+end count_done
+text_dest is dest (emit: text_emit, done: text_done)
+count_dest is dest (emit: count_emit, done: count_done)

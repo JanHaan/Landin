@@ -1,0 +1,4 @@
+DEBUG keep
+INFO keep
+WARN drop
+ERROR keep

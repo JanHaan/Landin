@@ -1,0 +1,7 @@
+class: negative
+summary: a complete reader cannot refill while its previous line view remains live
+program: main.ldn
+root: ../../../../..
+codes: L0315
+constructs: 0800, 0830
+targets: linux-x86-64

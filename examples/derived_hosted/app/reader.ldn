@@ -1,0 +1,72 @@
+import core/io
+import core/mem
+import core/vec
+
+public at_end: atom
+public reader: type = struct
+    opened: io.file
+    chunk: mem.byte_buffer
+    line: vec.list(u8)
+    filled: usize
+    position: usize
+    ended: bool
+end reader
+
+public open_reader: (provider: type is mem.allocator, inout allocator: provider,
+                     world: any io.world, path: ptr u8, chunk_size: usize)
+                    -> (value: reader)
+                    ! io.not_found | io.no_access | io.io_failed | mem.out_of_memory =
+    fail io.io_failed when chunk_size == 0
+    opened: io.file = try world.open_read(path)
+    chunk := mem.new_bytes(allocator, chunk_size) else (problem)
+        world.close(opened) else (close_problem) _ = close_problem end
+        fail problem
+    end
+    line := vec.new_list(item: u8)
+    value = (opened: opened, chunk: chunk, line: line,
+             filled: 0, position: 0, ended: false)
+end open_reader
+
+public next_line: (provider: type is mem.allocator, inout allocator: provider,
+                   inout value: reader, world: any io.world)
+                  -> (line: []u8 from value)
+                  ! io.io_failed | mem.out_of_memory | at_end =
+    while vec.length(value.line) > 0 do
+        _ = vec.pop(value.line) else (problem) _ = problem end
+    end while
+    loop do
+        if value.position == value.filled then
+            if value.ended then
+                fail at_end when vec.length(value.line) == 0
+                line = vec.used(value.line)
+                return
+            end if
+            value.filled = try world.read(value.opened, mem.bytes(value.chunk))
+            value.position = 0
+            if value.filled == 0 then value.ended = true end if
+        else
+            byte: u8 = chunk_byte(value.chunk, value.position)
+            inc value.position
+            if byte == 10 then
+                line = vec.used(value.line)
+                return
+            end if
+            try vec.push(value.line, allocator, byte)
+        end if
+    end loop
+end next_line
+
+public shut_reader: (provider: type is mem.allocator, inout allocator: provider,
+                     world: any io.world, sink value: reader)
+                    -> none ! io.io_failed =
+    mut chunk := value.chunk
+    mut line := value.line
+    mem.drop_bytes(allocator, chunk)
+    vec.release(line, allocator)
+    try world.close(value.opened)
+end shut_reader
+
+chunk_byte: (chunk: mem.byte_buffer, position: usize) -> (byte: u8) =
+    bytes := mem.bytes(chunk)
+    byte = bytes[position]
+end chunk_byte

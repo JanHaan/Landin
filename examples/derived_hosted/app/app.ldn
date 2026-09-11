@@ -1,0 +1,75 @@
+import core/io
+import core/diag
+import core/mem
+import core/vec
+
+public process: (provider: type is mem.allocator, inout allocator: provider,
+                 world: any io.world, inout cfg: config,
+                 inout reading: reader) -> (kept: usize)
+                ! io.io_failed | mem.out_of_memory =
+    mut pending := new_message()
+    defer drop_message(allocator, pending)
+    kept = 0
+    loop do
+        line: []u8 = next_line(allocator, reading, world) else (problem)
+            break when problem == at_end
+            fail mem.out_of_memory when problem == mem.out_of_memory
+            fail io.io_failed
+        end
+        mut pass: bool = true
+        for selected in vec.used(cfg.chain) do
+            pass = selected.keep(line)
+            break when not pass
+        end for
+        if pass then
+            try append(allocator, pending, line)
+            try append(allocator, pending, "\n")
+            --  One explicit retry. The buffered cursor survives failure;
+            --  a second failure is terminal and normal cleanup still runs.
+            try emit_retry(cfg.to, world, pending)
+            clear_message(pending)
+            inc kept
+        end if
+    end loop
+    try cfg.to.done(world)
+end process
+
+public run_logged: (provider: type is mem.allocator, inout allocator: provider,
+             world: any io.world, chunk_size: usize, log: any diag.log) -> (kept: usize)
+            ! bad_argument | mem.out_of_memory
+            | io.not_found | io.no_access | io.io_failed =
+    mut cfg := try build_logged(allocator, world, log)
+    mut reader := open_reader(allocator, world, cfg.input, chunk_size)
+      else (problem)
+        close_config(world, cfg) else (close_problem) _ = close_problem end
+        fail problem
+    end
+    kept = process(allocator, world, cfg, reader) else (problem)
+        shut_reader(allocator, world, reader) else (close_problem) _ = close_problem end
+        close_config(world, cfg) else (close_problem) _ = close_problem end
+        fail problem
+    end
+    shut_reader(allocator, world, reader) else (problem)
+        close_config(world, cfg) else (close_problem) _ = close_problem end
+        fail problem
+    end
+    try close_config(world, cfg)
+end run_logged
+
+public run: (provider: type is mem.allocator, inout allocator: provider,
+             world: any io.world, chunk_size: usize) -> (kept: usize)
+            ! bad_argument | mem.out_of_memory
+            | io.not_found | io.no_access | io.io_failed =
+    stream: io.file = world.err()
+    mut logger := diag.to(addr world, addr stream)
+    log: any diag.log = any(addr logger)
+    kept = try run_logged(allocator, world, chunk_size, log)
+end run
+
+emit_retry: (to: any dest, world: any io.world, inout pending: message)
+            -> none ! io.io_failed =
+    to.emit(world, pending) else (problem)
+        _ = problem
+        try to.emit(world, pending)
+    end
+end emit_retry
