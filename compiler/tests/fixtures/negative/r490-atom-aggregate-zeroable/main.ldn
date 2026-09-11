@@ -1,0 +1,4 @@
+problem: atom
+record: type = (value: problem)
+cell: type (item: type is zeroable) = (value: item)
+bad: type = cell(record)

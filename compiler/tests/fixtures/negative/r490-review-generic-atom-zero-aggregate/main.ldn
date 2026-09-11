@@ -1,0 +1,7 @@
+north, south: atom
+problems: type = north | south
+holder: type = (value: problems)
+stored: holder = zeroed
+public main: () -> (code: i32) =
+ code = if stored.value <> north and stored.value <> south then 42 else 1 end if
+end main

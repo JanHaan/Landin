@@ -1,0 +1,11 @@
+north, south: atom
+problems: type = north | south
+callback: type = (value: i32) -> (result: i32)
+holder: type = (handler: callback)
+wrapped: type = distinct i32
+atoms: [0]problems
+callbacks: [0]holder
+handles: [0]wrapped
+public main: () -> (code: i32) =
+    code = if lenof atoms == 0 and lenof callbacks == 0 and lenof handles == 0 then 42 else 1 end if
+end main

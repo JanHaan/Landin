@@ -1,0 +1,6 @@
+class: runtime
+summary: distinct static atom arrays retain metadata through extraction and slice writes
+program: main.ldn
+status: 42
+constructs: 0520, 0630, 0650
+targets: linux-x86-64

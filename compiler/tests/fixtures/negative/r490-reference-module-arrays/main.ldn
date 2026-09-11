@@ -1,0 +1,3 @@
+callback: type = () -> none
+first: [2]ptr i32
+second: [2]callback

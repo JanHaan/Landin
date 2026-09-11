@@ -1,0 +1,5 @@
+problem: atom
+record: type = (first: problem, second: problem)
+f: () -> none =
+    value: record = (first: problem, of zeroed)
+end f
