@@ -3,5 +3,5 @@ summary: the complete prototype-3 derivative composes initialized containers, he
 program: main.ldn
 root: ../../../../..
 status: 42
-constructs: 0430, 0470, 0510, 0540, 0550, 0770, 0790, 0800, 0830, 0860, 0900, 1200, 1230, 1240, 1250, 1290, 1320, 1340, 1350, 1360, 1370, 1380, 1390
+constructs: 0430, 0470, 0510, 0540, 0550, 0650, 0770, 0790, 0800, 0830, 0860, 0900, 1200, 1230, 1240, 1250, 1290, 1320, 1340, 1350, 1360, 1370, 1380, 1390
 targets: linux-x86-64

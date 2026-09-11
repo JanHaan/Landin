@@ -788,10 +788,11 @@ make the node representation serializable: copying a text descriptor does not
 copy or relocate its backing. [0860]'s shallow reference-field limits still
 apply to the retained names.
 
-R4.20's library uses a private one-`u32` nominal wrapper for `node_id`, with
-explicit `id` and `ordinal` functions. This preserves handle identity through
-already enabled structs; it does not enable the general `distinct` syntax
-shown above. New branches may name only existing contiguous children. Empty
+R4.90's library uses the `distinct u32` representation shown above for
+`node_id`. Construction and extraction are explicit; the `id` and `ordinal`
+convenience functions retain that same boundary. This replaces R4.20's
+one-field nominal workaround. New branches may name only existing contiguous
+children. Empty
 branches are allowed, and shared children are counted once per incoming path.
 Each immutable node stores its checked `u32` leaf total, so queries use bounded
 stack space even for deep structures. Overflow is a declared refusal before

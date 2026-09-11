@@ -802,7 +802,7 @@ tree_append_retry: () -> (ok: bool) =
                 _ = problem
                 return
             end
-        if tree.ordinal(added) <> u32(at) then
+        if u32(added) <> u32(at) then
             ids_ok = false
         end if
         inc at
@@ -848,7 +848,7 @@ tree_append_retry: () -> (ok: bool) =
                 retained = false
                 0
             end
-        if tree.ordinal(tree.id(u32(at))) <> u32(at)
+        if u32(tree.node_id(u32(at))) <> u32(at)
           or lenof name <> 4 or first_byte[0] <> 108 or leaves <> 1
         then
             retained = false
@@ -875,7 +875,7 @@ tree_append_retry: () -> (ok: bool) =
         tree.release(value, state)
         return
     end
-    appended: bool = tree.ordinal(root) == 8 and tree.length(value) == 9
+    appended: bool = u32(root) == 8 and tree.length(value) == 9
                      and lenof root_name == 6 and root_first[0] == 98
                      and total == 8
                      and failing.attempts(state) == 5
