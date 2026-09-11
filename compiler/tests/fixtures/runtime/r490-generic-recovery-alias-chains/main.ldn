@@ -1,0 +1,38 @@
+problem, denied: atom
+leaf: (which: bool) -> none ! ... =
+    fail problem when which
+    fail denied
+end leaf
+relay: (t: type, value: t, which: bool) -> none ! ... =
+    _ = value
+    leaf(which) else (error)
+        first := error
+        second := first
+        third := second
+        fail third
+    end
+end relay
+left: (stop: bool) -> none ! ... =
+    fail problem when stop
+    try right()
+end left
+right: () -> none ! ... =
+    left(true) else (error)
+        first := error
+        second := first
+        fail second
+    end
+end right
+public main: () -> (code: i32) =
+    mut total: i32 = 0
+    relay(42, true) else (error)
+        total += if error == problem then 1 else 100 end if
+    end
+    relay(false, false) else (error)
+        total += if error == denied then 2 else 100 end if
+    end
+    left(false) else (error)
+        total += if error == problem then 4 else 100 end if
+    end
+    code = if total == 7 then 42 else 1 end if
+end main

@@ -1,0 +1,12 @@
+problem: atom
+self: (stop: bool) -> none ! ... =
+    fail problem when stop
+    self(true) else (error)
+        alias := error
+        fail alias
+    end
+end self
+public main: () -> (code: i32) =
+    code = 1
+    self(false) else (error) _ = error code = 42 end
+end main
