@@ -1,0 +1,47 @@
+problem: atom
+mut events: i32 = 0
+
+mark: (value: i32) -> none =
+    events = events * 10 + value
+end mark
+
+copy: (t: type, value: t) -> (result: t) =
+    result = value
+end copy
+
+choose: (value: i32, broken: bool) -> (result: i32) ! problem =
+    mark(value)
+    fail problem when broken
+    result = value
+end choose
+
+probe: (failing: bool) -> none ! problem =
+    -- Arguments and their recoveries execute at cleanup, in reverse order.
+    defer mark(choose(1, false) else (error)
+        _ = copy(error)
+        9
+    end)
+    undo mark(choose(2, true) else (error)
+        _ = copy(error)
+        3
+    end)
+    mark(5)
+    fail problem when failing
+    mark(6)
+end probe
+
+public main: () -> (code: i32) =
+    code = 1
+    probe(false) else (error)
+        _ = error
+        return
+    end
+    return when events <> 5611
+    events = 0
+    mut recovered: bool = false
+    probe(true) else (error)
+        recovered = error == problem
+    end
+    return when not recovered or events <> 52311
+    code = 42
+end main

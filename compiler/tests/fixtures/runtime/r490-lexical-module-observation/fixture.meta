@@ -1,0 +1,7 @@
+class: runtime
+summary: imported public result observes line/block/doc comments, comment token boundaries, grouped atoms and nested shadowing
+program: main.ldn
+root: .
+status: 42
+constructs: 0010, 0020, 0030, 0090, 0100, 0140, 1410, 1780
+targets: linux-x86-64
