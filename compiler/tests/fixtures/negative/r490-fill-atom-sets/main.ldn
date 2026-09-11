@@ -1,0 +1,10 @@
+north, south: atom
+vertical: type = north | south
+record: type = struct
+    first: i32
+    second: vertical
+    third: north
+end record
+f: () -> none =
+    value: record = (first: 0, of north)
+end f
