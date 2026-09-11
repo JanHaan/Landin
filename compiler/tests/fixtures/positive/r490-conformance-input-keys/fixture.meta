@@ -1,0 +1,5 @@
+class: positive
+summary: one represented type registers the same concept for distinct normalized input identities
+program: main.ldn
+constructs: 1230, 1240, 1270, 1280
+targets: linux-x86-64, macos-arm64, synthetic-32

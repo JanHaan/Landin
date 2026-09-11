@@ -1,0 +1,6 @@
+class: runtime
+summary: deferred argument recoveries keep evaluation timing, failure-only undo and concrete generic error deduction
+program: main.ldn
+status: 42
+constructs: 0410, 0940, 1030, 1100, 1110, 1200, 1290, 1300, 1920
+targets: linux-x86-64

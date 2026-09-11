@@ -1,0 +1,6 @@
+lookup: type = concept (t: type, index: type)
+end lookup
+
+index_alias: type = u32
+i32 is lookup (index: u32)
+i32 is lookup (index: index_alias)

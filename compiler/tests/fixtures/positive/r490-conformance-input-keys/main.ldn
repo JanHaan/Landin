@@ -1,0 +1,18 @@
+lookup: type = concept (t: type, index: type)
+    get: (value: t, at: index) -> (answer: i32)
+end lookup
+
+signed_get: (value: i32, at: i32) -> (answer: i32) =
+    answer = value + at
+end signed_get
+unsigned_get: (value: i32, at: u32) -> (answer: i32) =
+    answer = value - i32(at)
+end unsigned_get
+
+-- The input identity is part of the key, and labels are not its order.
+i32 is lookup (index: i32, get: signed_get)
+i32 is lookup (get: unsigned_get, index: u32)
+
+public main: () -> (code: i32) =
+    code = 42
+end main

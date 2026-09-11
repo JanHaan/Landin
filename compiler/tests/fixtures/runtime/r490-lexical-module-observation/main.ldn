@@ -1,0 +1,11 @@
+import provider
+
+-- This source deliberately makes comments and nested shadowing observable.
+public main: () -> (code: i32) =
+    value: i32 = provider.answer()
+    nested: i32 = begin
+        value: i32 = 5
+        value
+    end
+    code = if value == 37 and nested == 5 then value + nested else 1 end if
+end main

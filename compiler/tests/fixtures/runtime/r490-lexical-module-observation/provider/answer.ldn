@@ -1,0 +1,9 @@
+-- A line comment must discard these otherwise meaningful tokens: fail unknown
+--( An outer block hides code = 1 and nests --( end answer )-- correctly. )--
+north, south: atom
+
+--- This doc comment attaches to the exported routine below.
+public answer: () -> (value: i32) =
+    value = if not--( token boundary )--false and north <> south
+            then 37 else 1 end if
+end answer
