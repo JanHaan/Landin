@@ -9268,6 +9268,45 @@ package body Landin.Stages.Checking is
          if Syn.Kind (Of_Tree, Node) in Syn.Call | Syn.Labeled_Application
            and then Syn.Recovery_Of (Of_Tree, Node) /= Syn.No_Node
          then
+            declare
+               Recovery : constant Syn.Node_Id :=
+                 Syn.Recovery_Of (Of_Tree, Node);
+               Signature : constant Landin.Checking.Signature_Id :=
+                 Effective_Call_Signature (Of_Tree, Node);
+            begin
+               if Signature /= Landin.Checking.No_Signature
+                 and then Landin.Checking.Signature_Error_Form
+                   (Types.all, Signature) = Landin.Checking.Concrete
+                 and then Syn.Name (Of_Tree, Recovery)
+                   /= Landin.Source.Names.No_Name
+               then
+                  declare
+                     Id : constant Res.Declaration_Id :=
+                       Declaration_At (Syn.Source_Of (Of_Tree), Recovery);
+                     Errors : constant Landin.Checking.Atom_Set_Id :=
+                       Landin.Checking.Signature_Errors
+                         (Types.all, Signature);
+                  begin
+                     if Landin.Checking.State_Of (Types.all, Id)
+                       = Landin.Checking.Untouched
+                     then
+                        --  Concrete errors already have their final type.
+                        --  Generic calls in this recovery may deduce from
+                        --  the error value before the ordinary body walk.
+                        Landin.Checking.Begin_Inference (Types.all, Id);
+                        if Errors = Landin.Checking.No_Atom_Set then
+                           Landin.Checking.Settle
+                             (Types.all, Id, Ty.Ill_Typed);
+                        else
+                           Landin.Checking.Note_Atom_Set
+                             (Types.all, Id, Errors);
+                           Landin.Checking.Settle
+                             (Types.all, Id, Ty.Atom_Value);
+                        end if;
+                     end if;
+                  end;
+               end if;
+            end;
             Discover_Generic_Calls
               (Of_Tree, Syn.Recovery_Of (Of_Tree, Node));
          end if;
