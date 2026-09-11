@@ -33,7 +33,7 @@ public deliver: (inout value: message, world: any io.world, stream: io.file)
 end deliver
 public clear_message: (inout value: message) -> none =
     while vec.length(value.bytes) > 0 do
-        _ = vec.pop(value.bytes) else (problem) _ = problem end
+        _ = vec.pop(value.bytes) else u8(0)
     end while
     value.delivered = 0
 end clear_message
