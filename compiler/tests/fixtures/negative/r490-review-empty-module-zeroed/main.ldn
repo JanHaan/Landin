@@ -1,0 +1,4 @@
+north, south: atom
+problems: type = north | south
+atoms: [0]problems = zeroed
+public main: () -> (code: i32) = code = 42 end main

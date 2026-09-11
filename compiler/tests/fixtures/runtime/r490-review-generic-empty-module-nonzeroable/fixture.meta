@@ -1,0 +1,6 @@
+class: runtime
+summary: independent empty module initialization boundary probe
+program: main.ldn
+status: 42
+constructs: 0520, 0540, 1940
+targets: linux-x86-64

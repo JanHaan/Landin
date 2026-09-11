@@ -1,0 +1,6 @@
+class: negative
+summary: probe impossible zero atom supplied by omitted or zeroed image
+program: main.ldn
+constructs: 0630, 0540, 1940
+targets: linux-x86-64
+codes: L0301

@@ -12269,7 +12269,8 @@ package body Landin.Stages.Checking is
            (Part : Landin.Checking.Field_Shape) return Boolean
          is (case Part.Kind is
                 when Landin.Checking.Scalar_Field =>
-                  Part.Signature = Landin.Checking.No_Signature,
+                  Part.Signature = Landin.Checking.No_Signature
+                  and then Part.Atoms = Landin.Checking.No_Atom_Set,
                 when Landin.Checking.Reference_Field => False,
                 when Landin.Checking.Fixed_Array_Field =>
                   --  [0520]/[0540]: fixed-array zeroability follows its
@@ -25347,19 +25348,11 @@ package body Landin.Stages.Checking is
            and then Landin.Checking.Array_Length
              (Types.all,
               Declaration_At (Syn.Source_Of (Of_Tree), Node)) > 0
-           and then Landin.Checking.Array_Element_Nominal
-             (Types.all,
-              Declaration_At (Syn.Source_Of (Of_Tree), Node))
-                /= Landin.Checking.No_Nominal_Type
-           and then Landin.Checking.Has_Layout
-             (Types.all,
-              Landin.Checking.Array_Element_Nominal
-                (Types.all,
-                 Declaration_At (Syn.Source_Of (Of_Tree), Node)))
-           and then not Has_Zero_Image
-             (Landin.Checking.Array_Element_Nominal
-                (Types.all,
-                 Declaration_At (Syn.Source_Of (Of_Tree), Node)))
+           and then not Descriptor_Has_Zero_Image
+             (Shape_Descriptor
+                (Landin.Checking.Array_Element_Shape
+                   (Types.all,
+                    Declaration_At (Syn.Source_Of (Of_Tree), Node))))
          then
             Bad.Report
               (Item    => Bad.Type_Mismatch,
@@ -25367,8 +25360,8 @@ package body Landin.Stages.Checking is
                Where   => Syn.Where (Of_Tree, Node),
                Message => "this module array needs an explicit initial"
                           & " value",
-               Note    => "[0540]: its struct element contains a function"
-                          & " address, which has no zero image",
+               Note    => "[0540]: its complete element type has no"
+                          & " zero image",
                Related => Syn.Origin (Of_Tree, Written),
                Because => "the array type written here",
                Into    => Found);

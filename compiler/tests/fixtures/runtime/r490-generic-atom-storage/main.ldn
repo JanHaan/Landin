@@ -17,10 +17,15 @@ public main: () -> (code: i32) =
     local.second = north
     filled: pair(problems) = (first: south, of south)
     value: choice(problems) = (kind: values(first: north, of south))
+    empty_choice: choice(problems) = zeroed
     mut okay: bool = false
     match value.kind
         empty: okay = false
         values(first, second): okay = first == north and second == south
+    end match
+    match empty_choice.kind
+        empty: _ = okay
+        values(first, second): okay = false
     end match
     match static_choice.kind
         empty: okay = false

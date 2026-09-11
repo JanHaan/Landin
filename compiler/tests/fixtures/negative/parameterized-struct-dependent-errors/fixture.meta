@@ -1,6 +1,6 @@
 class: negative
-summary: substitution-dependent atom-set array failures are reported at each distinct application
+summary: atom-array shapes are admitted but each module value needs an atom initializer
 constructs: 0520, 0640, 0670, 1350, 1795
 program: program.ldn
 targets: linux-x86-64, macos-arm64
-codes: L0304, L0304
+codes: L0301, L0301

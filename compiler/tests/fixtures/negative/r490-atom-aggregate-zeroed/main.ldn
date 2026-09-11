@@ -1,0 +1,13 @@
+problem: atom
+record: type = (value: problem)
+nested: type = (values: [0]problem)
+choice: type = struct
+    kind: variant
+        payload: (value: problem) | empty
+    end kind
+end choice
+f: () -> none =
+    first: record = zeroed
+    second: nested = zeroed
+    third: choice = zeroed
+end f

@@ -1,0 +1,6 @@
+class: negative
+summary: complete storage descriptors refuse missing zero images
+program: main.ldn
+codes: L0301
+constructs: 0520, 0540, 0670, 1790
+targets: linux-x86-64

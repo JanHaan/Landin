@@ -2,5 +2,5 @@ class: runtime
 summary: atom fields retain identity across static images, fills, copies and variant bindings
 program: main.ldn
 status: 42
-constructs: 0520, 0550, 0630, 0640, 0670, 0720, 0730, 0760, 1300, 1350, 1940
+constructs: 0520, 0550, 0630, 0640, 0670, 0680, 0690, 0720, 1300, 1350, 1940
 targets: linux-x86-64

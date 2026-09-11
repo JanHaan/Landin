@@ -1,0 +1,5 @@
+problem: atom
+record: type = (value: problem)
+first: [2]problem
+second: [2][3]problem
+third: [2]record

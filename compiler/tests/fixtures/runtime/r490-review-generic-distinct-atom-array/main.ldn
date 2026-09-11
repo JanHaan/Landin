@@ -1,0 +1,15 @@
+north, south: atom
+problems: type = north | south
+values: type = [2]problems
+opaque: type = distinct values
+stored: opaque = opaque([north, south])
+recovered: values = values(stored)
+copy: (t: type, value: t) -> (result: t) = result = value end copy
+public main: () -> (code: i32) =
+    moved: opaque = copy(stored)
+    mut local: values = values(moved)
+    view: []mut problems = local[0..<2]
+    view[0] = south
+    code = if recovered[0] == north and recovered[1] == south
+      and local[0] == south and local[1] == south then 42 else 1 end if
+end main

@@ -1,0 +1,6 @@
+north, south: atom
+problems: type = north | south
+stored: [2]problems
+public main: () -> (code: i32) =
+ code = if stored[0] <> north and stored[0] <> south then 42 else 1 end if
+end main
