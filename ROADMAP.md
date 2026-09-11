@@ -5362,11 +5362,18 @@ Run the full applicable construct, conformance, ABI, diagnostics, determinism,
 debugger and prototype suites on native Linux x86-64.
 
 The applicable audit found actual hosted gaps behind otherwise populated rows:
-[0650]'s distinct identities, [0670]'s inline declaration bodies and [0720]'s
-homogeneous nonzero field fills. Inline bodies preserve the original refused
+[0650]'s distinct identities, [0670]'s inline declaration bodies, [0720]'s
+homogeneous nonzero field fills and [1350]'s parameterized atom-union aliases. Inline bodies preserve the original refused
 source unchanged as a positive fixture. D214 supersedes D65's overly broad
 homogeneous-fill refusal using one complete descriptor and one evaluated value;
 its heterogeneous and absent-context refusals preserve useful diagnostics.
+D135 now substitutes union members without caching template answers or partial
+sets. Canonical keys flatten aliases, qualify members and deduplicate atom
+identities. Optional-pointer alias flattening retains its original empty atom,
+so adding a different atom still reaches D189's multi-atom refusal; it no longer
+silently replaces the first atom. Malformed direct composite members are
+refused before syntax construction, while named nonatom members retain their
+semantic diagnostic.
 The atom-comparison probe separately exposed a verifier that required set
 inclusion for identity equality. D200 now states the existing checker rule
 precisely: disjoint and overlapping sets compare declaration identities, while

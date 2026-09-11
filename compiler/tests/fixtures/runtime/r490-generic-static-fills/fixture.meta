@@ -1,0 +1,6 @@
+class: runtime
+summary: static nested and callback fills preserve recursive images
+program: main.ldn
+status: 42
+constructs: 0540, 0670, 0710, 0720, 0870, 1940
+targets: linux-x86-64

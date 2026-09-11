@@ -8147,8 +8147,7 @@ atoms beside a pointer retain the R7.20 refusal; no new carrier is introduced.
 
 A fully applied alias is normalized during checking. Its enabled result is a
 scalar, fixed-array, atom-set, pointer or nominal aggregate descriptor; an alias
-around a
-parameterized struct instance keeps that instance's identity rather than
+around a parameterized struct instance keeps that instance's identity rather than
 introducing another one. A fully applied struct instead interns D137's nominal
 instance. A struct type formal accepts every enabled concrete
 identity: scalar, structural atom set, exact fixed array, nominal instance or
@@ -9030,8 +9029,7 @@ classified failure boundary before the repository gate can pass.
 | `slices.bounds-known` | static | 0570, 0580, 1950 | L0300 or L0306 | `negative/index-outside-the-length`, `negative/readonly-slice-write` |
 | `slices.bounds-runtime` | trap | 0570, 0580, 1120, 1950, 1960 | trap, outside [1120]'s region | `runtime/computed-array-index-traps`, `runtime/local-array-computed-store-traps`, `runtime/slice-index-read-traps`, `runtime/slice-index-write-traps`, `runtime/slice-half-open-upper-traps`, `runtime/slice-inclusive-upper-traps`, `runtime/slice-lower-after-upper-traps` |
 | `atoms.sets` | static | 0630, 0640 | L0301 or L0312; equality compares declaration identities without requiring set inclusion, while ordering and atom/numeric mixing remain refused | `negative/atom-match-not-exhaustive`, `runtime/atom-values-cross-the-abi`, `runtime/r490-generic-atom-identity` |
-| `aggregates.fill` | static | 0410, 0670, 0710, 0720 | L0301 for unequal omitted-field descriptors or a value fill without a destination; one exact contextual value is evaluated after written labels and copied in declaration order; ordinary origin and assignment diagnostics remain | `runtime/r490-generic-field-fill`, `negative/r490-fill-mixed-types`, `negative/r490-fill-array-shapes`, `negative/r490-fill-atom-sets`,
-`negative/r490-fill-pointer-permissions`, `negative/r490-fill-frame-escape`, `negative/r490-fill-unassigned` |
+| `aggregates.fill` | static | 0410, 0670, 0710, 0720 | L0301 for unequal omitted-field descriptors or a value fill without a destination; one exact contextual value is evaluated after written labels and copied in declaration order; ordinary origin and assignment diagnostics remain | `runtime/r490-generic-field-fill`, `negative/r490-fill-mixed-types`, `negative/r490-fill-array-shapes`, `negative/r490-fill-atom-sets`, `negative/r490-fill-pointer-permissions`, `negative/r490-fill-frame-escape`, `negative/r490-fill-unassigned` |
 | `aggregates.variants` | static | 0670, 0680, 0690, 0700, 0710, 0720, 0750, 1210 | L0301, L0308--L0312 or L0313 | `negative/struct-literal-field-not-given`, `negative/variant-match-not-exhaustive` |
 | `origins.escape` | static | 0480, 0770, 0780, 0790, 0800, 0830, 0840 | L0314--L0316; [0790]'s exact `from` comparison applies to an actual returned reference, while a provably empty optional-pointer arm has no origin and is not `Untracked`; a retained provider wrapper keeps its ordinary inner argument's origin without requiring that argument to be declared `escaping`, and tracked pool constructor sources join | `negative/frame-origin-return`, `negative/borrowed-source-inout`, `negative/returned-reference-missing-from`, `negative/core-arena-frame-escape`, `negative/core-pool-frame-escape`, `negative/core-pool-bookkeeping-frame-escape`, `negative/core-failing-frame-escape`, `negative/core-text-frame-slice-escape`, `negative/core-diag-frame-message-escape`, `negative/r440-parser-frame-arena`, `runtime/diagnostic-loggers-dispatch`, `runtime/r420-failing-providers`, `negative/r480-recovery-retains-borrow`, `negative/r480-recovery-exposed-storage`, `negative/r480-reader-live-line` |
 | `origins.aliasing-limit` | outside | 0770, 0910 | non-guarantee: a pre-existing copy or indistinguishable arena is not tracked | `positive/reference-origins-and-consume`, `negative/use-after-sink` |
@@ -12903,7 +12901,8 @@ The grammar still requires a named field before trailing `of`; the all-`of`
 spelling remains excluded, and complete `zeroed` retains its existing spelling.
 
 **Pinned by** `positive/struct-literal-of-expression`,
-`runtime/r490-generic-field-fill`, `negative/r490-fill-mixed-types`,
+`runtime/r490-generic-field-fill`, `runtime/r490-generic-fill-recovery`,
+`runtime/r490-generic-static-fills`, `negative/r490-fill-mixed-types`,
 `negative/r490-fill-array-shapes`, `negative/r490-fill-atom-sets`,
 `negative/r490-fill-pointer-permissions`,
 `negative/r490-fill-case-mixed-types`, `negative/r490-fill-no-omission`,
