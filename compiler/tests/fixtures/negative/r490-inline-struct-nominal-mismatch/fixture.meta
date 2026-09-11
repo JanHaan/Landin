@@ -1,0 +1,6 @@
+class: negative
+summary: separately declared inline bodies remain distinct nominal identities despite equal fields
+program: main.ldn
+codes: L0301
+constructs: 0670, 0710, 1795
+targets: linux-x86-64, macos-arm64, synthetic-32

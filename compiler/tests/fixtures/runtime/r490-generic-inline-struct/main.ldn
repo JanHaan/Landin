@@ -1,0 +1,33 @@
+pair: type = (left: i32, right: i32)
+pair_alias: type = pair
+box: type (t: type) = (value: t)
+callback: type = (value: i32) -> (result: i32)
+callback_box: type = (call: callback, bias: i32)
+compact: type = layout(optimal) (small: u8, wide: u64, last: u8)
+module_pair: pair = (left: 17, right: 25)
+
+increment: (value: i32) -> (result: i32) =
+    result = value + 1
+end increment
+copy: (t: type, value: t) -> (result: box(t)) =
+    result = (value: value)
+end copy
+swap: (inout value: pair) -> none =
+    saved: i32 = value.left
+    value.left = value.right
+    value.right = saved
+end swap
+
+public main: () -> (code: i32) =
+    code = 1
+    mut local: pair_alias = module_pair
+    swap(local)
+    nested: box(pair) = copy(local)
+    functions: callback_box = (call: increment, bias: 0)
+    placed: compact = (small: 1, wide: 40, last: 1)
+    return when module_pair.left <> 17 or module_pair.right <> 25
+      or nested.value.left <> 25 or nested.value.right <> 17
+      or sizeof compact <> 16
+      or placed.wide + u64(placed.small) + u64(placed.last) <> 42
+    code = functions.call(nested.value.left + nested.value.right - 1)
+end main

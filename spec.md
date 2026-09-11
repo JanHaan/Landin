@@ -290,7 +290,12 @@ A type declaration names a type, and names nothing new.
 D15 reads the second as deciding the first: without that word a
 declaration gives an existing type another name and the two are
 one type everywhere. A struct body [0670] has no existing type
-to alias and introduces the nominal type [0710]. Without formals its identity
+to alias and introduces the nominal type [0710]. Its parenthesized inline
+field list and its `struct ... end` block are the same declaration body.
+The inline body closes at `)` and needs at least one named field; it does not
+turn arbitrary nested type positions into anonymous structural identities.
+A following `->` instead identifies the ordinary function-signature type.
+Without formals its identity
 is this declaration's empty-actual instance. With formals, D137 makes each
 fully applied normalized actual tuple a distinct instance of this declaration;
 an alias of either keeps that same identity. Every alias chain has to reach a scalar type, atom set, fixed array, function
@@ -339,7 +344,8 @@ constraint      ::= "is" concept_reference
 atom_union      ::= union_member "|" union_member ("|" union_member)*
 union_member    ::= declaration_reference | pointer_type
 struct_body      ::= ("layout" "(" ("c" | "optimal") ")")?
-                     "struct" member+ "end" identifier?
+                     ("struct" member+ "end" identifier?
+                     | "(" field ("," field)* ")")
 member           ::= field | variant_part
 field            ::= identifier ":" type
 variant_part     ::= identifier ":" "variant" variant_case

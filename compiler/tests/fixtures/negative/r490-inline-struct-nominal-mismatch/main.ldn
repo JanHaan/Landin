@@ -1,0 +1,4 @@
+first: type = (value: i32)
+second: type = (value: i32)
+value: first = (value: 42)
+wrong: second = value
