@@ -170,5 +170,46 @@ class HostedParity(unittest.TestCase):
         self.assertEqual(self.problems(kinds=(), status="active"), [])
 
 
+class QualityWorkloads(unittest.TestCase):
+    def problems(self, missing=None, profile_missing=False):
+        names = tuple(name for name in ("derived-parser", "derived-containers",
+                                        "derived-hosted-memory") if name != missing)
+        profiles = (("none", "off"), ("size", "off"), ("size", "auto"),
+                    ("speed", "auto"), ("none", "all"), ("speed", "all"))
+        return CHECK.quality_workload_problems({
+            "FIXTURE_NAMES": names,
+            "profiles_for": lambda name: profiles[:-1] if profile_missing else profiles})
+
+    def test_complete_prototypes_and_repeated_profiles_are_required(self):
+        self.assertEqual(self.problems(), [])
+        for missing in ("derived-parser", "derived-containers", "derived-hosted-memory"):
+            self.assertTrue(self.problems(missing=missing))
+        self.assertTrue(self.problems(profile_missing=True))
+
+
+class DebuggerWorkloads(unittest.TestCase):
+    def problems(self, workloads=("parser", "containers", "hosted"),
+                 profiles=(("none-off", "none", "off"),
+                           ("size-auto", "size", "auto"),
+                           ("size-all", "size", "all"))):
+        def schedule(measure):
+            return {name: {profile[0]: measure(name, profile)
+                           for profile in profiles} for name in workloads}
+        return CHECK.debugger_workload_problems({"measure_workloads": schedule})
+
+    def test_all_complete_prototypes_and_profiles_are_required(self):
+        self.assertEqual(self.problems(), [])
+        for missing in ("parser", "containers", "hosted"):
+            self.assertTrue(self.problems(workloads=tuple(
+                name for name in ("parser", "containers", "hosted")
+                if name != missing)))
+
+    def test_missing_or_mislabelled_profile_is_refused(self):
+        self.assertTrue(self.problems(profiles=(("none-off", "none", "off"),)))
+        self.assertTrue(self.problems(profiles=(
+            ("none-off", "none", "off"), ("size-auto", "none", "off"),
+            ("size-all", "size", "all"))))
+
+
 if __name__ == "__main__":
     unittest.main()

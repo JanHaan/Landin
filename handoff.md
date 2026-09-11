@@ -269,7 +269,16 @@ destinations at runtime. Messages retain a delivery cursor for explicit retry.
 cleanup. D212 withdraws both builtin arena forms and W7's transitive escape
 promise while preserving ordinary local origins and independent allocations.
 
-**Current roadmap work: R4.90 — Close Linux hosted parity.**
+R4.90 closes Linux hosted parity, including distinct representations,
+inline struct declarations, homogeneous field fills, parameterized atom unions,
+atom storage and recovered-error generic discovery. Complete derived prototypes
+2, 3 and 4 retain native execution and debugging coverage. ROADMAP.md binds the
+exact containing revision's acceptance and delivery evidence to its annotated
+approval tag and durable native bundle.
+
+**Next roadmap item: R5.10 — Establish the native macOS compiler environment (planned).**
+
+This is the next planned item; R5 has not begun.
 
 `refine` runs the frontend, lowers and
 verifies target-neutral IR, emits Linux x86-64 assembly, and can assemble and

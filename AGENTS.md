@@ -5,14 +5,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Repository state
 
 Landin is a language specification with a working Ada bootstrap compiler. R0,
-R1, R2 and R3 are complete. `refine` scans and parses every
+R1, R2, R3 and R4 are complete. `refine` scans and parses every
 `.ldn` file it is given, resolves the files as one module, checks every type
 and definite assignment, lowers accepted functions into verified
 target-neutral IR, emits Linux x86-64 assembly, and can invoke a
 triplet-selected toolchain to assemble and link a hosted executable. Runtime
 fixtures execute those binaries on the native Linux x86-64 gate. A small
-repository-owned `core` library and the complete prototype-2-derived parser
-execute through that path. There is no native macOS arm64 or Cortex-M backend,
+repository-owned `core` library and complete derived prototypes 2, 3 and 4
+execute through that path with native source-debugging coverage. There is no native macOS arm64 or Cortex-M backend,
 and the broader standard library remains future work. Under
 `compiler/ada/` are the Ada 2022 GPRbuild projects, the `refine` executable,
 source and diagnostic foundations, host adapters, target facts, stage seams,
@@ -191,8 +191,10 @@ R0 established the bootstrap chassis, R1 built the executable language kernel
 and first Linux x86-64 path, R2 settled the semantic and representation core
 from executable cases, and R3 delivered the first major compiler milestone: a
 complete derived parser program with useful diagnostics, evidence-table
-dispatch, and `any` but without specialization. R4 is completing the hosted
-Linux x86-64 path; `ROADMAP.md` names the active item.
+dispatch, and `any` but without specialization. R4 completed the hosted
+Linux x86-64 path and its applicable parity audit. R5 remains planned;
+`ROADMAP.md` names the next dependency-ready item and owns the exact revision's
+acceptance and delivery evidence.
 
 The roadmap ends at a feature-complete pre-v1 compiler/toolchain slice. Production claims, release versioning, package acquisition, competitive optimization, and self-hosting remain outside it. Do not change any version or release designation without explicit user approval, and do not assume SemVer.
 

@@ -228,7 +228,16 @@ release compiler builds. ROADMAP.md records the complete closure evidence.
 Debug provenance remains independent of DWARF encoding for a possible future
 PDB emitter; PDB support is not implemented.
 
-**Current roadmap work: R4.90 — Close Linux hosted parity.**
+R4.90 closes Linux hosted parity, including distinct representations,
+inline struct declarations, homogeneous field fills, parameterized atom unions,
+atom storage and recovered-error generic discovery. Complete derived prototypes
+2, 3 and 4 retain native execution and debugging coverage. ROADMAP.md binds the
+exact containing revision's acceptance and delivery evidence to its annotated
+approval tag and durable native bundle.
+
+**Next roadmap item: R5.10 — Establish the native macOS compiler environment (planned).**
+
+This is the next planned item; R5 has not begun.
 
 `refine --debug=full --emit=exe program.ldn -o program` requests Linux source
 debugging. The default is `--debug=none`; debugging metadata is independent of

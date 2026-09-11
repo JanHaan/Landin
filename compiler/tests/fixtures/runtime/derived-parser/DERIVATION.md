@@ -6,6 +6,16 @@ The original remains the design record; the compiled implementation lives in
 directory supplies the host boundary, input, expected diagnostics, and exit
 oracle.
 
+R4.90 adds this complete derivative to `compiler/tests/debugging/check.py` in
+none/off, size/auto and size/all. Native GDB observes initialized parser state,
+recursive source frames, syntax recovery, nesting depth and the final fixture
+flags. These sessions retain the input file, exact diagnostic output and exit
+oracle above; the stripped executable must preserve them too. Source maps,
+line tables and build identity cover the whole reached library closure.
+The quality runner also repeats all six profile builds, requires byte-identical
+assembly and build reports, and executes each measured object against the same
+input, diagnostics and status oracle.
+
 | Prototype evidence | Executable evidence |
 |---|---|
 | Y1: syntax faults are handled, world-dependent failures use the error channel | Three syntax faults are logged and recovered in order; a one-byte arena produces `mem.out_of_memory`, and a logger aimed at a closed descriptor produces `io.io_failed`. |

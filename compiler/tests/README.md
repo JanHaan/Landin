@@ -105,11 +105,16 @@ objdump and size from that checksum-pinned installation, not an arbitrary host
 PATH. It compiles and repeats each request, parses factual JSON, assembles the
 same output to ELF objects, measures sections, function bytes, prologue frames
 and disassembled instruction sites, and executes that same assembly against
-exact exit/empty-stdout/empty-stderr oracles. Its probes cover scalar chains
+exact exit/stdout/stderr oracles. Its probes cover scalar chains
 and loops, a tiny leaf, compact large-array arithmetic with real stack-page
 touches, explicit optimal layout, single-instance evidence specialization,
 a source-level two-instance size/speed threshold and final private-body
 folding. The specialization and folding probes also run none/all and speed/all.
+The complete `derived-parser` client runs all six quality profiles with its
+original input path, three ordered diagnostics and status 42. Repeated requests
+must produce byte-identical assembly and build reports, and the measured object
+must execute that original oracle. Its source inventory reaches the real parser
+and lexer; object measurements add no size or timing threshold.
 The complete `derived-containers` client runs all six profiles, preserving its
 status-42 and empty-output oracle. Its reports must identify real `core`
 container instances and factual specialization actions with retained evidence
@@ -151,7 +156,15 @@ selected parameters and locals. The native gate runs it separately with debug
 and release builds of the Ada compiler. The script fails if its tools or
 debugger operations are unavailable; missing debugger evidence is not a pass.
 
-The complete `derived-containers` program is a second workload in that same
+The complete `derived-parser` program runs in the same runner using none/off,
+size/auto and size/all. It receives the fixture's original input path and must
+produce its exact ordered diagnostics and status 42, including after stripping.
+GDB inspects initialized parser state, recursive source frames, recovery,
+nesting depth and the final success/failure flags. Its whole reached source
+inventory receives the same source-map, line-table and build-identity checks.
+`check.py` holds the complete P2/P3/P4 workload schedule to all three profiles.
+
+The complete `derived-containers` program is another workload in that same
 runner, using none/off, size/auto and size/all. Source markers in its real
 `containers_run` path locate the sorted list and completed composition. Two
 concrete `evidence_less` calls use the same high-bit operand as signed and
@@ -163,7 +176,7 @@ not depend on GDB automatically printing return values. The runner retains
 source maps, build reports and transcripts;
 it checks source hashes, line tables, stripping and exact executable identity
 for the whole reached library closure, not a fixture-only copy of it.
-The complete `derived-hosted-memory` application is a third workload, using
+The complete `derived-hosted-memory` application is another workload, using
 none/off, size/auto and size/all. GDB stops inside the runtime-selected
 `sample_keep` and `text_emit` providers, identifies their actual source lines,
 inspects the sampling state before and after its increment and the destination
@@ -655,5 +668,11 @@ registered compile-time rules whose exact acceptance/refusal is the oracle.
 `check.py` enforces this boundary when the parity item closes; it does not infer
 semantic adequacy from metadata. The audit adds distinct and inline nominal
 types, exact once-evaluated field fills, atom comparisons across structural
-sets, conformance-key controls and recovered-error generic deduction. D212's
+sets, atom-bearing arrays/fields/payloads, parameterized union aliases,
+conformance-key controls and recovered-error generic deduction. Review probes
+include static distinct Boolean/pointer images, type-name misuse, exact union
+application diagnostics and unused symbolic pointer obligations. Original
+refusal sources promoted to enabled grammar remain byte-for-byte positive
+fixtures, and all unchanged R4.80 recovery and provider oracles remain required.
+D212's
 ordinary allocator authority and all existing workload profiles remain required.

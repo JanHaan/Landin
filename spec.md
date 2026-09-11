@@ -9004,7 +9004,7 @@ classified failure boundary before the repository gate can pass.
 | `declarations.names` | static | 0040, 0050, 0060, 0080, 0090, 0100, 0110, 0120, 0130, 0140, 1790, 1795, 1850 | L0200 or L0201 | `negative/duplicate-in-a-module`, `negative/local-used-above-its-declaration` |
 | `types.values` | static | 0070, 0150, 0160, 0170, 0180, 0190, 0200, 0210, 0250, 1870, 1880, 1890 | L0300, L0301 or L0304 | `negative/character-literal-needs-u32`, `negative/float-literal-not-enabled`, `negative/float-type-not-enabled`, `negative/integer-literal-not-a-float`, `negative/literal-above-its-type`, `negative/refused-widths-name-their-owner`, `negative/type-name-is-not-a-type`, `negative/wide-integer-not-enabled` |
 | `float.ieee` | static | 0170, 0210, 0220, 0230, 0240, 0290, 0350, 1940 | f32/f64 decimal and hexadecimal literals plus inherently typed infinity and canonical quiet NaN names follow IEEE binary32/binary64 through runtime and module arithmetic and comparison, preserving exact hexadecimal values, nearest-even rounding, gradual underflow, signed zero and unordered NaN behavior; arithmetic NaNs use the canonical quiet pattern, L0300 rejects a finite literal that becomes infinity, and L0301 rejects an invalid named special, a width mismatch, mixed classes and integer-only operators | `negative/float-remainder-is-integer-only`, `negative/float-special-name-unknown`, `negative/float-special-on-integer-type`, `negative/float-special-width-mismatch`, `negative/hex-float-overflows-context`, `runtime/float-decimal-runtime`, `runtime/float-hexadecimal-runtime`, `runtime/float-named-specials`, `runtime/module-float-arithmetic` |
-| `distinct.identity` | static | 0310, 0430, 0650, 0700, 1280, 1290, 1940, 1975 | a distinct declaration and each normalized generic application retain nominal identity with exact base size, alignment and bytes; explicit construction and extraction preserve origins, static images and compatible C transport; L0301 rejects identity mixing and inherited operations, L0308 refuses representation fields, L0318 refuses inherited conformance and zeroable membership, and L0314 preserves escape refusals | `runtime/r490-distinct-scalars`, `runtime/r490-distinct-generic-representations`, `runtime/r490-distinct-generic-dispatch`, `runtime/r490-distinct-module-images`, `abi/r490-distinct-c-roundtrip`, `negative/r490-distinct-identity`, `negative/r490-distinct-no-operators`, `negative/r490-distinct-no-fields`, `negative/r490-distinct-conformance`, `negative/r490-distinct-zeroable`, `negative/r490-distinct-origin` |
+| `distinct.identity` | static | 0310, 0430, 0650, 0700, 1280, 1290, 1940, 1975 | a distinct declaration and each normalized generic application retain nominal identity with exact base size, alignment and bytes; explicit construction and extraction preserve origins, static images and compatible C transport; L0301 rejects identity mixing and inherited operations, L0308 refuses representation fields, L0318 refuses inherited conformance and zeroable membership, and L0314 preserves escape refusals | `runtime/r490-distinct-scalars`, `runtime/r490-distinct-generic-representations`, `runtime/r490-distinct-generic-dispatch`, `runtime/r490-distinct-module-images`, `abi/r490-distinct-c-roundtrip`, `runtime/r490-review-generic-distinct-bool`, `runtime/r490-distinct-generic-bool-images`, `runtime/r490-distinct-generic-pointer-images`, `runtime/r490-generic-fixed-conversion-discovery`, `negative/r490-distinct-type-value`, `negative/r490-distinct-alias-type-value`, `negative/r490-distinct-generic-type-value`, `negative/r490-distinct-discard-type-value`, `negative/r490-distinct-static-address`, `negative/r490-distinct-identity`, `negative/r490-distinct-no-operators`, `negative/r490-distinct-no-fields`, `negative/r490-distinct-conformance`, `negative/r490-distinct-zeroable`, `negative/r490-distinct-origin` |
 | `conversion.integer` | trap | 0150, 0190, 0310, 0470, 0700, 1120, 1460, 1670, 1880, 1940, 1950, 1960 | explicit conversion among enabled integer types preserves the mathematical value; L0300 rejects a known value outside the destination range and a runtime value outside it traps, without truncation, wrapping or signedness reinterpretation, outside [1120]'s region | `negative/integer-conversion-known-binding-out-of-range`, `negative/integer-conversion-known-out-of-range`, `runtime/integer-conversion-out-of-range-traps`, `runtime/integer-conversion-signed-overflow-traps`, `runtime/integer-conversion-unsigned-overflow-traps`, `runtime/integer-conversions` |
 | `conversion.float-width` | trap | 0170, 0210, 0230, 0240, 0310, 0700, 1880, 1940, 1950, 1960 | explicit f32/f64 conversion widens exactly or narrows to nearest with ties to even, preserving signed zero and the infinity/NaN class; L0300 rejects a known finite narrowing overflow and an equivalent runtime conversion traps | `negative/float-width-conversion-known-out-of-range`, `runtime/float-width-conversion-overflow-traps`, `runtime/float-width-conversions` |
 | `conversion.integer-to-float` | static | 0150, 0170, 0190, 0210, 0310, 0700, 1880, 1940, 1960 | explicit conversion from every enabled integer to f32 or f64 preserves the mathematical value when exact and otherwise rounds to nearest with ties to even; the enabled integer range cannot overflow either float width | `runtime/integer-to-float-conversions` |
@@ -12926,7 +12926,11 @@ identity still governs Landin signature compatibility. A distinct array,
 slice, atom, ordinary Landin record or erased view remains outside C exactly
 when its base does. Static construction and extraction preserve D132's
 module images and [1940]'s folds; they introduce no startup code or compile-time
-execution of user functions.
+execution of user functions. A type declaration is not itself a runtime value.
+Static Boolean extraction uses Boolean bounds; optional-null, numeric-pointer
+and C-string images retain the ordinary pointer construction and relocation
+rules. A module storage address remains outside [1940]'s known-value forms and
+is owned by R6.60; wrapping it does not change that existing boundary.
 
 **The alternatives:** accepting `distinct` as an alias would erase the property
 for which both prototypes use it. Rewriting source uses as ordinary named
@@ -12940,6 +12944,16 @@ keys.
 `runtime/r490-distinct-generic-representations`,
 `runtime/r490-distinct-generic-dispatch`,
 `runtime/r490-distinct-module-images`, `abi/r490-distinct-c-roundtrip`,
+`runtime/r490-review-generic-distinct-bool`,
+`runtime/r490-distinct-generic-bool-images`,
+`runtime/r490-distinct-generic-pointer-images`,
+`runtime/r490-generic-fixed-conversion-discovery`,
+`negative/r490-distinct-type-value`,
+`negative/r490-distinct-alias-type-value`,
+`negative/r490-distinct-generic-type-value`,
+`negative/r490-distinct-generic-formal-type-value`,
+`negative/r490-distinct-discard-type-value`,
+`negative/r490-distinct-static-address`,
 `negative/r490-distinct-identity`,
 `negative/r490-distinct-no-operators`, `negative/r490-distinct-exact-base`,
 `negative/r490-distinct-no-fields`, `negative/r490-distinct-zeroable`,
@@ -13067,7 +13081,11 @@ A write may supply a member of its destination set. Reading preserves the
 whole destination set, and aggregate or array copying requires the same complete
 descriptor. Neither the carrier nor a singleton set grants numeric operations,
 conversions or an all-zero value. D143's zeroability requirement still applies
-to an empty array. D214's fill requires equal omitted-field descriptors even
+to an empty array for explicit `zeroed` or concept membership. D131's existing
+implicit empty module-array exception remains: no element exists to initialize.
+Recursive aggregate zeroability inspects atom metadata;
+an omitted module image cannot silently create a zero atom, pointer or function
+address. D214's fill requires equal omitted-field descriptors even
 when one source atom would be a member of each unequal set.
 
 **The alternatives:** treating stored atoms as ordinary integers erases identity
@@ -13076,13 +13094,26 @@ breaks structural generic keys. Both are declined. This completes the ordinary
 composition rule without changing atom equality, D189's optional-pointer
 restriction, C boundary eligibility or inference's complete-key requirement.
 
-**Pinned by** `runtime/r490-generic-atom-arrays`,
+**Pinned by** `negative/parameterized-struct-dependent-errors` (the original
+source now refuses its missing atom initializers),
+`positive/parameterized-struct-template-order-inner-first`,
+`positive/parameterized-struct-template-order-outer-first`,
+`positive/parameterized-struct-unused-shape` (all original source bytes),
+`runtime/r490-generic-atom-arrays`,
 `runtime/r490-generic-atom-fields`, `runtime/r490-generic-atom-storage`,
+`runtime/r490-review-generic-distinct-atom-array`,
 `negative/r490-atom-array-numeric-write`,
 `negative/r490-atom-array-wrong-member`,
 `negative/r490-atom-array-copy-identity`,
 `negative/r490-atom-array-arithmetic`, `negative/r490-atom-array-zeroed`,
-`negative/r490-generic-atom-field-member`, `negative/r490-fill-atom-sets`
+`negative/r490-generic-atom-field-member`, `negative/r490-fill-atom-sets`,
+`negative/r490-atom-aggregate-zeroed`, `negative/r490-atom-aggregate-zeroable`,
+`negative/r490-atom-module-arrays`, `negative/r490-atom-fill-zeroed`,
+`negative/r490-reference-module-arrays`,
+`negative/r490-review-generic-atom-zero-aggregate`,
+`negative/r490-review-generic-atom-zero-array`,
+`negative/r490-review-empty-module-zeroed`,
+`runtime/r490-review-generic-empty-module-nonzeroable`
 and the verifier case `typed indirect atoms are checked`, whose corrupt-load
 and invalid-write controls preserve the distinction between exact reads and
 subset writes.
