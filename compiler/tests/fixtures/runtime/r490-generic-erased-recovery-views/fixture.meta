@@ -1,0 +1,6 @@
+class: runtime
+summary: recovery-dependent nominal providers retain exact tables in each generic caller view
+program: main.ldn
+status: 42
+constructs: 0940, 0960, 1030, 1290, 1300, 1360
+targets: linux-x86-64

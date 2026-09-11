@@ -1,0 +1,6 @@
+class: runtime
+summary: inferred recovery discovers an erased parameterized provider
+program: main.ldn
+status: 42
+constructs: 0940, 1030, 1300, 1360
+targets: linux-x86-64

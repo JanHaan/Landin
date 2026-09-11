@@ -1,0 +1,6 @@
+class: runtime
+summary: local recovery alias rethrow preserves inferred set
+program: main.ldn
+status: 42
+constructs: 0940, 1030
+targets: linux-x86-64

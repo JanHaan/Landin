@@ -1005,6 +1005,7 @@ package body Landin.Stages.Checking is
         (Index_Type => Positive, Element_Type => Pending_Selection);
       Pending_Selections : Selection_Lists.Vector;
       Deferred_Error_Calls : Selection_Lists.Vector;
+      Checked_Recovery_Calls : Selection_Lists.Vector;
       Blocked_Error_Calls : Selection_Lists.Vector;
       type Discovery_Parent is record
          Child, Parent : Landin.Checking.Routine_Instance_Id;
@@ -9337,6 +9338,13 @@ package body Landin.Stages.Checking is
                begin
                   if Landin.Checking.State_Of (Types.all, Id)
                     = Landin.Checking.Untouched
+                    or else
+                      (Landin.Checking.State_Of (Types.all, Id)
+                         = Landin.Checking.Settled
+                       and then Landin.Checking.Type_Of (Types.all, Id)
+                         = Ty.Any_Value
+                       and then Res.Sort_Of (Meanings.all, Id)
+                         in Res.Local_Binding | Res.Module_Binding)
                   then
                      if Res.Sort_Of (Meanings.all, Id) = Res.Error_Binding then
                         return True;
@@ -9415,9 +9423,15 @@ package body Landin.Stages.Checking is
              = Syn.Any_Construction
            and then Declared_As_Node (Of_Tree, Node) = Ty.Any_Value
          then
-            --  Written context can instantiate a parameterized provider.
-            --  Preserve that context before queued erased calls need its
-            --  concrete table; flow and origins still run with the body.
+            --  The written `any` descriptor can be settled while its
+            --  initializer still waits on a recovered generic actual.
+            --  Neither construction nor selected entries may cache a missing
+            --  provider before that concrete nominal instance exists.
+            if Needs_Error_Type
+              (Of_Tree, Syn.Value_Of (Of_Tree, Node))
+            then
+               return;
+            end if;
             Check_Contextual_Value
               (Of_Tree, Syn.Value_Of (Of_Tree, Node),
                (Kind => Ty.Any_Value,
@@ -9506,6 +9520,7 @@ package body Landin.Stages.Checking is
                           | Res.Module_Concept)
                  and then Landin.Checking.Signature_Of
                    (Types.all, Of_Tree, Callee) = Landin.Checking.No_Signature
+                 and then not Needs_Error_Type (Of_Tree, Callee)
                  and then Selected_From
                    (Of_Tree, Syn.Target_Of (Of_Tree, Callee)) = Ty.Any_Value
                then
@@ -11480,6 +11495,10 @@ package body Landin.Stages.Checking is
          if Syn.Recovery_Of (Of_Tree, Node) /= Syn.No_Node
            and then Landin.Checking.Signature_Error_Form
              (Types.all, Signature) /= Landin.Checking.Inferred
+           and then not Checked_Recovery_Calls.Contains
+             (Pending_Selection'
+                (Syn.Source_Of (Of_Tree), Node,
+                 Landin.Checking.Current_Routine_View (Types.all)))
            and then
              (Syn.Name
                 (Of_Tree, Syn.Recovery_Of (Of_Tree, Node))
@@ -11510,6 +11529,13 @@ package body Landin.Stages.Checking is
                   else Landin.Checking.Signature_Origin
                     (Types.all, Signature));
             begin
+               --  Replaying a cached outer recovery can revisit a nested
+               --  call already checked in its own deferred pass.  Its final
+               --  signature and caller view give one body-check obligation.
+               Checked_Recovery_Calls.Append
+                 (Pending_Selection'
+                    (Syn.Source_Of (Of_Tree), Node,
+                     Landin.Checking.Current_Routine_View (Types.all)));
                if Errors = Landin.Checking.No_Atom_Set then
                   Bad.Report
                     (Item    => Bad.Type_Mismatch,
@@ -27503,6 +27529,8 @@ package body Landin.Stages.Checking is
          Recovery_Signatures : array (1 .. Declaration_Last) of
            Landin.Checking.Signature_Id :=
              [others => Landin.Checking.No_Signature];
+         Including_Alias : array (1 .. Declaration_Last) of Boolean :=
+           [others => False];
 
          type Call_Issue is record
             Source : Landin.Source.Source_Id := Landin.Source.No_Source;
@@ -27588,6 +27616,42 @@ package body Landin.Stages.Checking is
                               Positive
                                 (Recovery_Signatures (Positive (Id)))) :=
                                True;
+                        elsif Landin.Checking.State_Of (Types.all, Id)
+                          = Landin.Checking.Untouched
+                          and then Res.Sort_Of (Meanings.all, Id)
+                            in Res.Local_Binding | Res.Module_Binding
+                          and then Syn.Kind
+                            (Tree_For (Res.Source_Of (Meanings.all, Id)).all,
+                             Res.Node_Of (Meanings.all, Id)) = Syn.Binding
+                        then
+                           --  An alias need not have been demanded by a
+                           --  generic actual.  Follow its initializer to
+                           --  the effect edge even inside an unresolved
+                           --  recursive component; demanding its type here
+                           --  would wait on the component we are solving.
+                           if Including_Alias (Positive (Id)) then
+                              Open_Body (Caller) := True;
+                           else
+                              Including_Alias (Positive (Id)) := True;
+                              Include_Expression
+                                (Tree_For
+                                   (Res.Source_Of (Meanings.all, Id)).all,
+                                 Syn.Value_Of
+                                   (Tree_For
+                                      (Res.Source_Of (Meanings.all, Id)).all,
+                                    Res.Node_Of (Meanings.all, Id)),
+                                 Caller, Into);
+                              Including_Alias (Positive (Id)) := False;
+                              if Needs_Error_Type (Of_Tree, Node)
+                                and then Syn.Value_Of
+                                  (Tree_For
+                                     (Res.Source_Of (Meanings.all, Id)).all,
+                                   Res.Node_Of (Meanings.all, Id))
+                                      = Syn.No_Node
+                              then
+                                 Open_Body (Caller) := True;
+                              end if;
+                           end if;
                         else
                            if Needs_Error_Type (Of_Tree, Node) then
                               Open_Body (Caller) := True;
