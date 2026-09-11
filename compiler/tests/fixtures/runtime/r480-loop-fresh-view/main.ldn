@@ -1,0 +1,25 @@
+refresh: (inout source: u32) -> (view: ptr u32 from source) =
+    inc source
+    view = addr source
+end refresh
+
+increment: (inout source: u32) -> none =
+    inc source
+end increment
+
+public main: () -> (code: i32) =
+    mut source: u32 = 0
+    mut total: u32 = 0
+    for iteration in 0..<3 do
+        view := refresh(source)
+        total += view.val
+        _ = iteration
+    end for
+    for iteration in 0..<3 do
+        increment(source)
+        view := addr source
+        total += view.val
+        _ = iteration
+    end for
+    code = if total == 21 and source == 6 then 42 else 1 end if
+end main

@@ -1,0 +1,6 @@
+class: runtime
+summary: each loop declaration creates a fresh view after mutating its source without retaining the prior iteration's borrow
+program: main.ldn
+status: 42
+constructs: 0430, 0770, 0790, 0800, 0830, 0900, 1130, 1150
+targets: linux-x86-64

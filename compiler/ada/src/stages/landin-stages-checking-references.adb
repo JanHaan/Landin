@@ -888,6 +888,16 @@ package body Landin.Stages.Checking.References is
               is (Syn.Condition_Of (Of_Tree, Node) /= Syn.No_Node);
          begin
             case Syn.Kind (Of_Tree, Node) is
+               when Syn.Binding =>
+                  if Reads_In (Syn.Value_Of (Of_Tree, Node), Since) then
+                     return Reading;
+                  end if;
+                  if Declaration_At (Of_Tree, Node) = Borrower then
+                     --  A declaration starts a new lifetime on a loop
+                     --  back edge. Later reads use that new value.
+                     Result.Falls := False;
+                  end if;
+
                when Syn.Assignment =>
                   if Reads_In (Syn.Value_Of (Of_Tree, Node), Since) then
                      return Reading;
@@ -1856,6 +1866,10 @@ package body Landin.Stages.Checking.References is
                     Declaration_At (Tree, Node);
                begin
                   if Id /= Res.No_Declaration then
+                     --  The fixed point may retain the previous loop
+                     --  iteration's value. It is not in scope while this
+                     --  fresh declaration evaluates its initializer.
+                     Origins (Id) := No_Origin;
                      Origins (Id) := Fact_Of (Tree, Syn.Value_Of (Tree, Node));
                   end if;
                end;
