@@ -29,9 +29,15 @@ cleanup: (t: type, value: ptr mut t, erased: any action)
     try erased.close()
 end cleanup
 
+infallible: (t: type, value: ptr mut t)
+            -> (result: ptr mut t from value) ! ... =
+    result = value
+end infallible
+
 run: (t: type is display, value: ptr mut t, erased: any action, broken: bool)
      -> (result: i32) ! unavailable =
     object := (select(value, broken) else (problem)
+        _ = infallible(value) else (close_problem) value end
         cleanup(value, erased) else (close_problem) _ = close_problem end
         fail problem
     end)
