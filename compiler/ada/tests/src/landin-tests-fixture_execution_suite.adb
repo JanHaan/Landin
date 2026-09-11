@@ -493,9 +493,12 @@ package body Landin.Tests.Fixture_Execution_Suite is
      (if Ada.Strings.Fixed.Index (Name (Case_Item), "generic") > 0
          or else Ada.Strings.Fixed.Index (Name (Case_Item), "any-") > 0
          or else Ada.Strings.Fixed.Index (Name (Case_Item), "r450") > 0
+         or else Ada.Strings.Fixed.Index (Name (Case_Item), "r480") > 0
+         or else Ada.Strings.Fixed.Index
+           (Name (Case_Item), "derived-hosted") = 1
          or else Name (Case_Item) in "allocator-vec-pressure"
            | "diagnostic-loggers-dispatch" | "core-io-erased-system"
-           | "derived-containers"
+           | "derived-containers" | "derived-hosted"
       then Profiles'Length else 4);
 
    procedure Append_Profile
