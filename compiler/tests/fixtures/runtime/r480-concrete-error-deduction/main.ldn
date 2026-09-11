@@ -1,0 +1,18 @@
+problem: atom
+mut calls: u32 = 0
+
+leaf: () -> none ! problem =
+    fail problem
+end leaf
+
+observe: (item: type, value: item) -> none =
+    _ = value
+    inc calls
+end observe
+
+public main: () -> (code: i32) =
+    leaf() else (error)
+        observe(error)
+    end
+    code = if calls == 1 then 42 else 1 end if
+end main
