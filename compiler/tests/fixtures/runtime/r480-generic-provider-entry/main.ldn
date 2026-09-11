@@ -1,0 +1,70 @@
+unavailable: atom
+pair: type = struct
+    first: i32
+    second: i32
+end pair
+source: type = concept (item: type)
+    get: (self: ptr mut item, increment: pair, inout observed: [2]i32)
+         -> (answer: pair) ! unavailable
+end source
+counter: type = struct
+    number: i32
+    blocked: bool
+end counter
+counter_get: (self: ptr mut counter, increment: pair,
+              inout observed: [2]i32) -> (answer: pair) ! unavailable =
+    fail unavailable when self.val.blocked
+    self.val.number += increment.first
+    observed[0] = self.val.number
+    observed[1] = self.val.number + increment.second
+    answer = (first: observed[0], second: observed[1])
+end counter_get
+counter is source (get: counter_get)
+
+wrapper: type (provider: type) = struct
+    parent: provider
+end wrapper
+wrap: (provider: type is source, parent: provider) -> (value: wrapper(provider)) =
+    value = (parent: parent)
+end wrap
+wrapped_get: (provider: type is source, self: ptr mut wrapper(provider),
+              increment: pair, inout observed: [2]i32)
+             -> (answer: pair) ! unavailable =
+    answer = try provider.get(addr self.val.parent, increment, observed)
+end wrapped_get
+(provider: type is source) wrapper(provider) is source (get: wrapped_get)
+
+direct: (provider: type is source, inout state: provider,
+         increment: pair, inout observed: [2]i32)
+        -> (answer: pair) ! unavailable =
+    answer = try provider.get(addr state, increment, observed)
+end direct
+
+public main: () -> (code: i32) =
+    code = 1
+    initial: counter = (number: 10, blocked: false)
+    mut state := wrap(wrap(initial))
+    increment: pair = (first: 3, second: 2)
+    mut observed: [2]i32 = zeroed
+    first: pair = direct(state, increment, observed) else (problem)
+        _ = problem
+        return
+    end
+    erased: any source = any(addr state)
+    second: pair = erased.get(increment, observed) else (problem)
+        _ = problem
+        return
+    end
+    return when first.first <> 13 or first.second <> 15
+      or second.first <> 16 or second.second <> 18
+      or observed[0] <> 16 or observed[1] <> 18
+    state.parent.parent.blocked = true
+    mut rejected: bool = false
+    fallback: pair = zeroed
+    _ = erased.get(increment, observed) else (problem)
+        rejected = problem == unavailable
+        fallback
+    end
+    return when not rejected or observed[0] <> 16 or observed[1] <> 18
+    code = 42
+end main

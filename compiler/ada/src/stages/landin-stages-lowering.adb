@@ -411,6 +411,22 @@ package body Landin.Stages.Lowering is
       Generic_Signatures : Generic_Signature_Map :=
         [others => IR.No_Signature];
 
+      --  A constrained provider has hidden evidence parameters. Its table
+      --  entry binds those parameters and retains the concept's written ABI.
+      type Provider_Item_Map is
+        array (Source_Routine_Instance) of IR.Item_Id;
+      Provider_Items : Provider_Item_Map := [others => IR.No_Item];
+      type Bound_Provider is record
+         Source : Landin.Checking.Routine_Instance_Id :=
+           Landin.Checking.No_Routine_Instance;
+         Item   : IR.Item_Id := IR.No_Item;
+         Target : IR.Item_Id := IR.No_Item;
+      end record;
+      type Bound_Provider_Array is
+        array (Source_Routine_Instance) of Bound_Provider;
+      Bound_Providers : Bound_Provider_Array;
+      Bound_Provider_Count : Natural := 0;
+
       function Evidence_For
         (Source : Landin.Checking.Conformance_Id) return IR.Evidence_Id;
 
@@ -12297,9 +12313,15 @@ package body Landin.Stages.Lowering is
       --  [1800]: a function
       ------------------------------------------------------------
 
-      procedure Lower_Routine (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
+      procedure Lower_Routine
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id;
+         Bound_Item : IR.Item_Id := IR.No_Item;
+         Bound_Target : IR.Item_Id := IR.No_Item);
 
-      procedure Lower_Routine (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
+      procedure Lower_Routine
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id;
+         Bound_Item : IR.Item_Id := IR.No_Item;
+         Bound_Target : IR.Item_Id := IR.No_Item)
       is
          Src : constant Landin.Source.Source_Id := Syn.Source_Of (Of_Tree);
          Site : constant Landin.Provenance.Origin :=
@@ -12325,7 +12347,8 @@ package body Landin.Stages.Lowering is
             then Declaration_At (Src, Node) else Res.No_Declaration);
       begin
          Filling :=
-           (if Landin.Checking.Current_Routine_View (Types.all)
+           (if Bound_Item /= IR.No_Item then Bound_Item
+            elsif Landin.Checking.Current_Routine_View (Types.all)
                   /= Landin.Checking.No_Routine_Instance
             then IR.Item_For_Instance
               (Unit.all,
@@ -12367,7 +12390,9 @@ package body Landin.Stages.Lowering is
             View : constant Landin.Checking.Routine_Instance_Id :=
               Landin.Checking.Current_Routine_View (Types.all);
          begin
-            if View /= Landin.Checking.No_Routine_Instance then
+            if View /= Landin.Checking.No_Routine_Instance
+              and then Bound_Item = IR.No_Item
+            then
                for Which in 1 .. Landin.Checking.Routine_Evidence_Count
                  (Types.all, View)
                loop
@@ -12564,7 +12589,111 @@ package body Landin.Stages.Lowering is
 
          Active_Result := Result;
 
-         if Syn.Kind (Of_Tree, Runs) = Syn.Block then
+         if Bound_Target /= IR.No_Item then
+            --  Forward the complete source ABI, inserting only this concrete
+            --  provider's evidence environment. The ordinary generic body
+            --  remains the implementation, including its failure channel.
+            declare
+               View : constant Landin.Checking.Routine_Instance_Id :=
+                 Landin.Checking.Current_Routine_View (Types.all);
+               Hidden : constant Natural :=
+                 Landin.Checking.Routine_Evidence_Count (Types.all, View);
+               Stored : constant Boolean := Gives_Type in
+                 Ty.Aggregate | Ty.Fixed_Array | Ty.Slice_Value | Ty.Any_Value;
+               Count : constant Natural := IR.Parameter_Count
+                 (Unit.all, Filling);
+               type Argument_Array is array (Positive range <>)
+                 of IR.Value_Id;
+               Arguments : Argument_Array (1 .. Count + Hidden);
+               Argument_Count : Natural := 0;
+               Errors : constant IR.Atom_Set_Id := IR.Signature_Errors
+                 (Unit.all, IR.Signature_Of (Unit.all, Bound_Target));
+               Failure : IR.Slot_Id := IR.No_Slot;
+               Call : IR.Value_Id;
+            begin
+               Open (Fresh (Of_Tree, Runs, Signature));
+               if Stored then
+                  Argument_Count := Argument_Count + 1;
+                  Arguments (Argument_Count) := IR.Emit_Storage_Address
+                    (Unit.all, Filling,
+                     (Kind => IR.Frame_Slot, Slot => Result), Site);
+               end if;
+               for Which in 1 .. Hidden loop
+                  Argument_Count := Argument_Count + 1;
+                  Arguments (Argument_Count) := IR.Emit_Evidence_Address
+                    (Unit.all, Filling, Evidence_For
+                       (Landin.Checking.Nth_Routine_Evidence
+                          (Types.all, View, Which)), Site);
+               end loop;
+               for Which in (if Stored then 2 else 1) .. Count loop
+                  declare
+                     Slot : constant IR.Slot_Id := IR.Nth_Parameter
+                       (Unit.all, Filling, Which);
+                  begin
+                     Argument_Count := Argument_Count + 1;
+                     if IR.Is_Address (Unit.all, Filling, Slot) then
+                        Arguments (Argument_Count) := IR.Emit_Place_Address
+                          (Unit.all, Filling,
+                           (Kind => IR.Runtime_Address, Address => Slot),
+                           Site);
+                     elsif IR.Is_Aggregate (Unit.all, Filling, Slot)
+                       or else IR.Is_Array (Unit.all, Filling, Slot)
+                     then
+                        Arguments (Argument_Count) := IR.Emit_Storage_Address
+                          (Unit.all, Filling,
+                           (Kind => IR.Frame_Slot, Slot => Slot), Site);
+                     else
+                        Arguments (Argument_Count) := IR.Emit_Load
+                          (Unit.all, Filling, Slot, Site);
+                     end if;
+                  end;
+               end loop;
+               if Errors /= IR.No_Atom_Set then
+                  Failure := IR.Add_Slot
+                    (Unit.all, Filling, Ty.U32, Res.No_Declaration, Site,
+                     Atoms => Errors);
+               end if;
+               Call := IR.Emit_Call
+                 (Unit.all, Filling, Bound_Target,
+                  (if Stored then Ty.No_Value
+                   else IR.Result_Of (Unit.all, Bound_Target)), Site,
+                  Failure => Failure);
+               for Argument of Arguments loop
+                  IR.Add_Argument (Unit.all, Filling, Call, Argument);
+               end loop;
+               if not Stored and then Result /= IR.No_Slot then
+                  IR.Emit_Store (Unit.all, Filling, Result, Call, Site);
+               end if;
+               if Failure /= IR.No_Slot then
+                  declare
+                     Error : constant IR.Value_Id := IR.Emit_Load
+                       (Unit.all, Filling, Failure, Site);
+                     Test : constant IR.Value_Id := IR.Emit_Failure_Test
+                       (Unit.all, Filling, Error, Site);
+                     Failed : constant IR.Block_Id := Fresh
+                       (Of_Tree, Runs, Signature);
+                     Succeeded : constant IR.Block_Id := Fresh
+                       (Of_Tree, Runs, Signature);
+                  begin
+                     IR.Emit_Branch
+                       (Unit.all, Filling, Test, Failed, Succeeded, Site);
+                     IR.Leave_Block (Unit.all, Filling);
+                     Current := IR.No_Block;
+                     Open (Failed);
+                     declare
+                        Carried : constant IR.Value_Id := IR.Emit_Load
+                          (Unit.all, Filling, Failure, Site);
+                     begin
+                        IR.Emit_Fail (Unit.all, Filling, Carried, Site);
+                     end;
+                     IR.Leave_Block (Unit.all, Filling);
+                     Current := IR.No_Block;
+                     Open (Succeeded);
+                  end;
+               end if;
+               Leave_With (Result, Site);
+            end;
+         elsif Syn.Kind (Of_Tree, Runs) = Syn.Block then
             declare
                Inside : constant Res.Scope_Id :=
                  Res.Scope_At (Meanings.all, Of_Tree, Runs);
@@ -13225,8 +13354,52 @@ package body Landin.Stages.Lowering is
                raise Landin.Compiler_Defect with
                  "a selected evidence provider has no routine item";
             end if;
-            IR.Add_Evidence_Entry
-              (Unit.all, To_Evidence, Target, Signature_For (Signature));
+            if Provider_Instance /= Landin.Checking.No_Routine_Instance
+              and then Landin.Checking.Routine_Evidence_Count
+                (Types.all, Provider_Instance) > 0
+            then
+               declare
+                  Index : constant Positive :=
+                    Landin.Checking.Routine_Identities.Position
+                      (Types.all, Provider_Instance);
+               begin
+                  if Provider_Items (Index) = IR.No_Item then
+                     declare
+                        Made : constant IR.Item_Id := IR.Add_Item
+                          (Unit.all, IR.Routine, Res.No_Declaration,
+                           IR.Result_Of (Unit.all, Target),
+                           IR.Origin_Of (Unit.all, Target),
+                           IR.Nominal_Of (Unit.all, Target));
+                     begin
+                        if IR.Atom_Set_Of (Unit.all, Target) /= IR.No_Atom_Set
+                        then
+                           IR.Set_Atom_Set
+                             (Unit.all, Made,
+                              IR.Atom_Set_Of (Unit.all, Target));
+                        elsif IR.Result_Of (Unit.all, Target) = Ty.Fixed_Array
+                        then
+                           IR.Set_Array
+                             (Unit.all, Made,
+                              IR.Array_Element_Shape (Unit.all, Target),
+                              IR.Array_Length (Unit.all, Target));
+                        end if;
+                        IR.Set_Signature
+                          (Unit.all, Made, Signature_For (Signature));
+                        Provider_Items (Index) := Made;
+                        Bound_Provider_Count := Bound_Provider_Count + 1;
+                        Bound_Providers (Bound_Provider_Count) :=
+                          (Source => Provider_Instance,
+                           Item => Made, Target => Target);
+                     end;
+                  end if;
+                  IR.Add_Evidence_Entry
+                    (Unit.all, To_Evidence, Provider_Items (Index),
+                     Signature_For (Signature));
+               end;
+            else
+               IR.Add_Evidence_Entry
+                 (Unit.all, To_Evidence, Target, Signature_For (Signature));
+            end if;
          end Add_Provider;
 
          procedure Add_Closure
@@ -16238,6 +16411,30 @@ package body Landin.Stages.Lowering is
               Tree_For (Routine_Entry.Source);
          begin
             Lower_Routine (Of_Tree.all, Routine_Entry.Node);
+         end;
+      end loop;
+
+      for Index in 1 .. Bound_Provider_Count loop
+         declare
+            Entry_Point : Bound_Provider renames Bound_Providers (Index);
+            Template : constant Res.Declaration_Id :=
+              Landin.Checking.Routine_Template_Of
+                (Types.all, Entry_Point.Source);
+            Of_Tree : constant not null access constant Syn.Tree :=
+              Tree_For (Res.Source_Of (Meanings.all, Template));
+            Previous : Landin.Checking.Routine_Instance_Id;
+         begin
+            Landin.Checking.Activate_Routine_View
+              (Types.all, Entry_Point.Source, Previous);
+            Lower_Routine
+              (Of_Tree.all, Res.Node_Of (Meanings.all, Template),
+               Bound_Item => Entry_Point.Item,
+               Bound_Target => Entry_Point.Target);
+            Landin.Checking.Restore_Routine_View (Types.all, Previous);
+         exception
+            when others =>
+               Landin.Checking.Restore_Routine_View (Types.all, Previous);
+               raise;
          end;
       end loop;
 
