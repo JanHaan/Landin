@@ -50,7 +50,7 @@ state. Source-derived output and argument views retain local origin checks.
 Descriptors, nested backing, nonoverlap and copied-handle validity remain
 manual obligations under D153. Small complete library clients exercise these
 contracts. The complete R4.80 derivative is `examples/derived_hosted`, whose
-`runtime/derived-hosted-memory/DERIVATION.md` maps `read`, `filter`, `dest`,
+`compiler/tests/fixtures/runtime/derived-hosted-memory/DERIVATION.md` maps `read`, `filter`, `dest`,
 `config` and the command-line root to their executable sources and support.
 
 At the system boundary D207 keeps errno in the explicit provider state,

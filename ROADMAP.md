@@ -5215,6 +5215,99 @@ named `arena`, generic and erased allocator calls, and explicit caller-backed
 `mem.arena`. Enable the promised construct with evidence or amend its
 normative promise on evidence before the hosted parity gate.
 
+The complete source is `examples/derived_hosted`, with the section-by-section
+and W1-W7 mapping in
+`compiler/tests/fixtures/runtime/derived-hosted-memory/DERIVATION.md`.
+The app directly reuses prototype 2's text and diagnostic capabilities and
+prototype 3's initialized storage, vectors and allocator providers. The
+separately complete parser and container support programs remain in the
+acceptance corpus; command-line options do not require a recursive parser.
+
+D212 discharges both [0820] forms and all four inherited questions:
+
+- Both builtin forms are withdrawn, with named migration diagnostics. The
+  value is an ordinary declared allocator type, with ordinary two-operation
+  conformance. `core/mem` has no frontend privilege. The object-safe erased
+  adapter remains distinct from `mem.allocator`'s generic inout contract.
+- Backing and capacity are explicit. `core/region` records payload extents
+  against its supplied parent, with ledger storage charged to that same
+  authority. The hosted root chooses the heap; finite callers choose their
+  own backing. Explicit release returns payloads and ledger to the parent;
+  an arena parent's no-op free does not reclaim its consumed extent. `defer`
+  supplies ordinary cleanup across normal, failure and control-transfer exits.
+- Finite providers report deterministic `out_of_memory`; nested explicit
+  backing and nested region wrappers have no hidden capacity or heap fallback.
+  A refused ledger acquisition returns the just-acquired payload to the
+  parent, while previous live allocations remain intact.
+- Allocation results retain their ordinary independent no-`from` behavior.
+  Direct and helper-returned pointers, aggregates, slices, `any` and callback
+  state remain useful, including simultaneous allocations. The helper-side-
+  effect module-store counterexample disproves W7's old lexical guarantee.
+  Unsafe address conversion stays a non-guarantee. Tracked direct frame
+  references and provider handles retain their existing escape checks.
+
+The reader grows complete lines across arbitrary explicit chunks, preserves
+empty and final unterminated lines, and returns a view derived from its reader.
+Configuration copies all retained argument bytes before parsing. Level,
+substring and sampling filters are ordered runtime-selected `any` values;
+text and counting destinations are selected through the same ordinary evidence
+mechanism. Recoverable sampling diagnostics use the parser's `any diag.log`.
+Messages own arbitrary copied bytes and a committed cursor. One-byte writes
+make progress exact under the repository world providers; the application
+retries once from that cursor and terminates on a second failure. Counts and
+diagnostics terminate on write failure without replaying an unknown prefix.
+Read/allocation failures are terminal for the reader. Files close once on
+normal and handled failure exits; close failure never triggers another close.
+
+The full reader exposed a compiler liveness defect: the loop fixed point kept
+a prior iteration's local view alive while declaring its replacement. A fresh
+binding now clears that old fact before initialization, and future-use scans
+recognize the new declaration lifetime. `runtime/r480-loop-fresh-view` pins
+both a view-returning mutator and mutation before the next declaration;
+existing loop-carried, conditional-replacement and live-reader negatives
+retain their original refusal oracles.
+
+Contextual discovery of a generic initializer used by `any` also exposed a
+cached-call defect: its successful value was known before error inference
+finished, so the later body walk skipped an unchecked recovery subtree.
+Finalized cached generic calls now check that subtree in their own instance
+view. `runtime/r480-generic-nested-recovery` exercises nested erased cleanup
+and failure propagation; all six profiles fail internally with the old path
+and execute correctly with the repair.
+The recovery's generic calls are also discovered explicitly before freezing
+the error graph: syntax stores that subtree beside ordinary child slots.
+`negative/r480-nested-infallible-recovery` and independent review probes
+require one appropriate diagnostic instead of an internal failure. Bounded
+re-review confirmed both infallible-call and mismatched-recovery refusals;
+the native checking suite passed all 83 cases and 1184 checks.
+
+Explicitly constrained generic conformance providers exposed a separate
+evidence-entry ABI mismatch. A target-neutral entry now binds their concrete
+evidence and forwards the unchanged concept signature to the ordinary generic
+body. `any` retains its two-word representation. The six-profile
+`runtime/r480-generic-provider-entry` regression covers nested evidence,
+direct and erased dispatch, aggregate arguments/results, inout arrays and
+failure propagation; its old lowering fails internally in every profile.
+
+`runtime/derived-hosted-memory` specifies the complete deterministic workload:
+long/chunked/final/empty lines, retained arguments after source mutation,
+heterogeneous selection, arbitrary binary message copying, committed-prefix
+retry, exact diagnostics, finite/nested regions, allocation-failure sweeps
+including ledger growth, and read/write/close/configuration failure cleanup.
+`runtime/r480-hosted-count` and `runtime/r480-hosted-text` use actual hosted
+arguments and files; the text case reads back its long final line and removes
+its temporary file. Negative controls also keep the region provider's origin
+and ledger privacy. `check.py` holds the derivation to the source inventory,
+P2/P3 support and complete W1-W7 register.
+
+Every `r480` and `derived-hosted` runtime fixture runs all six required
+optimization/specialization profiles. The complete memory workload also runs
+six object-quality profiles and three native GDB profiles, retaining source
+identity, report/assembly determinism, indirect dispatch, provider state,
+call stacks and stripped-image oracles. These supplement every existing
+runtime/ABI/workload, identity, bindings and document check; none replaces
+full native acceptance. R4.90 remains planned.
+
 Exit evidence: the application selects heterogeneous implementations at
 runtime, processes hosted I/O and executes on Linux x86-64.
 
