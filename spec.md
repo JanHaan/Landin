@@ -989,7 +989,7 @@ that scalar is evaluated once and broadcast, not implicitly converted.
 | `%`, and [0300]'s `+%` `-%` `*%` | one integer type, and that type back [0290] |
 | `&` `^` `\|`, and the unary `~` | one integer type, and that type back [0330] |
 | `<<` `>>` | an integer shifted by an integer of that same type, and that type back [0320]. The amount is not bounded by the width: [0320] fills with zeros beyond it for any amount. |
-| `==` `<>` `<` `<=` `>` `>=` | one type on both sides, and a bool back [0350]; atom sets have identity equality and inequality only. D200: the type is a scalar, an atom set, a pointer or a function value; two pointers must point at one type, permission aside, and a slice, an erased value, an array or a struct has no comparison |
+| `==` `<>` `<` `<=` `>` `>=` | one type on both sides, and a bool back [0350]; atom sets have identity equality and inequality only, including between disjoint or overlapping sets. D200: the type is a scalar, an atom set, a pointer or a function value; two pointers must point at one type, permission aside, and a slice, an erased value, an array or a struct has no comparison |
 | `and` `or` `not` | bool, and a bool back [0340] |
 | unary `-` | one integer or float type, and that type back |
 
@@ -8983,7 +8983,7 @@ classified failure boundary before the repository gate can pass.
 | `allocation.reclamation` | static | 0430, 0470, 0790, 1360 | heap release and a pool free of a currently occupied exact address and extent return real live storage; pool reuse is lowest-index first, stale same-address/same-size identity is outside the guarantee, and counted free delegates once with a live count exact only for valid-free use | `runtime/hosted-heap-provider`, `runtime/r420-pool-provider`, `runtime/r420-failing-providers` |
 | `slices.bounds-known` | static | 0570, 0580, 1950 | L0300 or L0306 | `negative/index-outside-the-length`, `negative/readonly-slice-write` |
 | `slices.bounds-runtime` | trap | 0570, 0580, 1120, 1950, 1960 | trap, outside [1120]'s region | `runtime/computed-array-index-traps`, `runtime/local-array-computed-store-traps`, `runtime/slice-index-read-traps`, `runtime/slice-index-write-traps`, `runtime/slice-half-open-upper-traps`, `runtime/slice-inclusive-upper-traps`, `runtime/slice-lower-after-upper-traps` |
-| `atoms.sets` | static | 0630, 0640 | L0301 or L0312 | `negative/atom-match-not-exhaustive`, `runtime/atom-values-cross-the-abi` |
+| `atoms.sets` | static | 0630, 0640 | L0301 or L0312; equality compares declaration identities without requiring set inclusion, while ordering and atom/numeric mixing remain refused | `negative/atom-match-not-exhaustive`, `runtime/atom-values-cross-the-abi`, `runtime/r490-generic-atom-identity` |
 | `aggregates.variants` | static | 0670, 0680, 0690, 0700, 0710, 0720, 0750, 1210 | L0301, L0308--L0312 or L0313 | `negative/struct-literal-field-not-given`, `negative/variant-match-not-exhaustive` |
 | `origins.escape` | static | 0480, 0770, 0780, 0790, 0800, 0830, 0840 | L0314--L0316; [0790]'s exact `from` comparison applies to an actual returned reference, while a provably empty optional-pointer arm has no origin and is not `Untracked`; a retained provider wrapper keeps its ordinary inner argument's origin without requiring that argument to be declared `escaping`, and tracked pool constructor sources join | `negative/frame-origin-return`, `negative/borrowed-source-inout`, `negative/returned-reference-missing-from`, `negative/core-arena-frame-escape`, `negative/core-pool-frame-escape`, `negative/core-pool-bookkeeping-frame-escape`, `negative/core-failing-frame-escape`, `negative/core-text-frame-slice-escape`, `negative/core-diag-frame-message-escape`, `negative/r440-parser-frame-arena`, `runtime/diagnostic-loggers-dispatch`, `runtime/r420-failing-providers`, `negative/r480-recovery-retains-borrow`, `negative/r480-recovery-exposed-storage`, `negative/r480-reader-live-line` |
 | `origins.aliasing-limit` | outside | 0770, 0910 | non-guarantee: a pre-existing copy or indistinguishable arena is not tracked | `positive/reference-origins-and-consume`, `negative/use-after-sink` |
@@ -9008,7 +9008,7 @@ classified failure boundary before the repository gate can pass.
 | `cleanup.defer` | static | 1100 | the registered call is checked at every ordinary and successful-return edge | `negative/defer-read-not-assigned-on-return`, `runtime/defer-cleanups-follow-control-edges` |
 | `cleanup.undo` | static | 1110, 1200 | the registered call is checked at every propagated-failure edge | `negative/undo-read-not-assigned-on-failure`, `runtime/undo-cleanups-follow-failure-edges` |
 | `generics.substitution` | static | 1220, 1280, 1290, 1300, 1310, 1350, 1490, 1500, 1520, 1540, 1650, 1660, 1700 | L0300, L0301, L0306, L0307, L0313 or L0318; a concrete `ptr T` field retains the exact referent and permission descriptor | `negative/generic-routine-undeduced-formal`, `negative/generic-reference-field-permission-distinct`, `runtime/generic-explicit-static`, `runtime/generic-reference-fields`, `runtime/generic-structural-deduction`, `runtime/core-vec-pointer-storage`, `runtime/r480-generic-nested-recovery`, `runtime/r480-concrete-error-deduction` |
-| `concepts.conformance` | static | 1230, 1240, 1250, 1260, 1340 | L0301 or L0317--L0319 | `negative/conformance-collision`, `negative/constraint-not-satisfied`, `negative/compiler-concept-reserved` |
+| `concepts.conformance` | static | 1230, 1240, 1250, 1260, 1270, 1340 | L0301 or L0317--L0319 | `negative/conformance-collision`, `negative/constraint-not-satisfied`, `negative/compiler-concept-reserved`, `positive/r490-conformance-input-keys`, `negative/r490-conformance-input-alias-collision` |
 | `any.construction` | static | 1370, 1380 | L0301, L0314 or L0318 | `negative/any-source-not-pointer`, `negative/any-readonly-source-for-mutable-entry` |
 | `any.dispatch` | static | 1390 | malformed table positions cannot be produced by accepted source; verifier failure is a compiler defect | `negative/any-entry-not-object-safe`, `runtime/any-heterogeneous-dispatch` |
 | `modules.visibility` | static | 1410, 1420, 1430, 1440, 1450, 1480 | L0006 or L0007 for an unresolved root; L0200 for duplicate import bindings, L0201 for missing selected names, L0202 for private members or representations and L0203 for reserved tool names | `negative/module-not-found`, `negative/imported-private-name`, `negative/core-mem-private-representation`, `negative/core-text-private-position`, `runtime/core-mem-raw-storage`, `negative/import-selected-private`, `negative/import-selected-missing`, `negative/import-selected-duplicate`, `runtime/import-alias-selected-identities`, `runtime/import-contextual-as` |
@@ -12239,7 +12239,10 @@ compare, and `[]u8 == []u8` or `any C == any C` passed the checker and was
 an internal defect in lowering.
 
 **Chosen:** a comparison operand is a scalar of [1790], an atom set (identity
-only, as [1890] already said), a pointer, or a function value. Two pointers
+only, as [1890] already said), a pointer, or a function value. Atom equality
+and inequality compare declaration identities across any two structural sets;
+neither set must include the other. This changes no store or call-argument
+subset rule. Two pointers
 compare by address and must point at one type; permission does not enter,
 because [0440] lets a mut pointer stand where a plain one does and an
 address comparison writes through neither. Two function values must agree
@@ -12257,7 +12260,10 @@ without changing what the compiler accepts today.
 **Pinned by** `negative/slice-comparison-refused`,
 `negative/any-comparison-refused`,
 `negative/pointer-comparison-referent-mismatch` and
-`positive/pointer-comparison-same-referent`.
+`positive/pointer-comparison-same-referent`,
+`runtime/r490-generic-atom-identity`,
+`runtime/r490-lexical-module-observation` and the verifier case
+`atom comparisons keep identity`.
 
 ### D201 — Import suffixes bind file-local names without new identities
 

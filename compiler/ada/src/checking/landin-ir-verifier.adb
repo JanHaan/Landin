@@ -6066,6 +6066,10 @@ package body Landin.IR.Verifier is
                                     end if;
                                  end;
 
+                                 --  [0630]: equality compares declaration
+                                 --  identities even for disjoint sets. Set
+                                 --  inclusion constrains stores, not this
+                                 --  operation; atom ordering is forbidden.
                                  declare
                                     Left_Atoms : constant Atom_Set_Id :=
                                       Atom_Set_Of (Of_Unit, Id, L);
@@ -6077,14 +6081,11 @@ package body Landin.IR.Verifier is
                                       or else
                                         (Left_Atoms /= No_Atom_Set
                                          and then
-                                           (Op not in Comparison_Kind
-                                            or else
-                                              (not Atom_Metadata_Is_Subset
-                                                 (Left_Atoms, Right_Atoms)
-                                               and then not
-                                                 Atom_Metadata_Is_Subset
-                                                   (Right_Atoms,
-                                                    Left_Atoms))))
+                                           (Op not in Equal_To | Not_Equal_To
+                                            or else not Holds
+                                              (Of_Unit, Left_Atoms)
+                                            or else not Holds
+                                              (Of_Unit, Right_Atoms)))
                                     then
                                        return
                                          (Kind => Atom_Metadata_Disagrees,

@@ -963,7 +963,9 @@ do not apply, because there is no single element layout.
 
 Atoms: one declaration, one value, its own type. This is
 the one place where a declaration introduces a type and a
-value at once, because they coincide.
+value at once, because they coincide. Equality and inequality compare those
+declaration identities, including values drawn from disjoint or overlapping
+atom sets; no ordering or numeric conversion is implied.
 
 ```landin
 not_found: atom
@@ -2522,8 +2524,8 @@ conversion, constraint search or user code participates. The compile-time
 formals create no runtime parameters or ABI positions. A generic routine name
 is still template syntax rather than a standalone function value; a direct call
 is what selects an instance. Private `! ...` is inferred for that concrete
-instance before its body is lowered. Constraints and evidence remain later
-work.
+instance before its body is lowered. Constraints and evidence use the
+completed whole-program conformance register described in [1230]–[1280].
 
 Inside a concrete routine instance, a fixed formal may also be used as an
 ordinary expression of its declared integer type. Each such use is replaced by

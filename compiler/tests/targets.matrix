@@ -707,6 +707,7 @@ negative/r480-recovery-retains-borrow | linux-x86-64
 negative/r480-recovery-zero-divisor | linux-x86-64
 negative/r480-region-frame-provider | linux-x86-64, macos-arm64, synthetic-32
 negative/r480-region-private-ledger | linux-x86-64, macos-arm64, synthetic-32
+negative/r490-conformance-input-alias-collision | linux-x86-64, macos-arm64, synthetic-32
 negative/range-subtype-address | linux-x86-64, macos-arm64
 negative/range-subtype-base-is-not-an-integer | linux-x86-64, macos-arm64
 negative/range-subtype-bound-outside-base | linux-x86-64, macos-arm64
@@ -1090,6 +1091,7 @@ positive/r440-parameterized-struct-template-order-outer-first-arrays | linux-x86
 positive/r440-parameterized-struct-unused-numeric-array-shape | linux-x86-64, macos-arm64
 positive/r450-array-arithmetic-source | linux-x86-64, macos-arm64
 positive/r450-optimal-layout-source | linux-x86-64, macos-arm64
+positive/r490-conformance-input-keys | linux-x86-64, macos-arm64, synthetic-32
 positive/range-subtype-exit-before-the-check | linux-x86-64, macos-arm64
 positive/range-subtypes | linux-x86-64, macos-arm64
 positive/recursive-module-images | linux-x86-64, synthetic-32
@@ -1470,6 +1472,9 @@ runtime/r480-hosted-count | linux-x86-64
 runtime/r480-hosted-text | linux-x86-64
 runtime/r480-loop-fresh-view | linux-x86-64
 runtime/r480-recovery-loop-transfer | linux-x86-64
+runtime/r490-generic-atom-identity | linux-x86-64
+runtime/r490-generic-cleanup-recovery | linux-x86-64
+runtime/r490-lexical-module-observation | linux-x86-64
 runtime/range-subtype-checks | linux-x86-64
 runtime/range-subtype-conversion-traps | linux-x86-64
 runtime/range-subtype-store-traps | linux-x86-64

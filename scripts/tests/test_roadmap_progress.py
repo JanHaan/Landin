@@ -69,8 +69,15 @@ class RoadmapProgress(unittest.TestCase):
         self.assertEqual(progress["current"]["key"], "R4.50")
         self.assertEqual(progress["following"]["key"], "R4.60")
 
-    def test_ambiguous_status_pointers_are_refused(self):
+    def test_multiple_active_status_pointers_are_refused(self):
         two_active = ACTIVE_ITEM.replace("Status: planned", "Status: active", 1)
+        marker = "**Current roadmap work: R4.50 — Finish the baseline.**"
+        problems = self.project_status(two_active, marker)
+        self.assertTrue(any("2 active" in problem[2] for problem in problems))
+        with self.assertRaisesRegex(SystemExit, "exactly one active"):
+            RENDER.roadmap_progress(two_active)
+
+    def test_parallel_ready_items_follow_roadmap_order(self):
         two_ready = BETWEEN_ITEMS + """\
 
 ### R4.70 — Start the container program
@@ -78,15 +85,17 @@ class RoadmapProgress(unittest.TestCase):
 Status: planned
 Depends on: none
 """
-        marker = "**Current roadmap work: R4.50 — Finish the baseline.**"
-        for name, roadmap, needle in (
-                ("active", two_active, "2 active"),
-                ("ready", two_ready, "2 dependency-ready")):
-            with self.subTest(name=name):
-                problems = self.project_status(roadmap, marker)
-                self.assertTrue(any(needle in problem[2] for problem in problems))
-                with self.assertRaisesRegex(SystemExit, "exactly one active"):
-                    RENDER.roadmap_progress(roadmap)
+        marker = ("**Next roadmap item: R4.60 — Start source debugging "
+                  "(planned).**")
+        self.assertEqual(self.project_status(two_ready, marker), [])
+        progress = RENDER.roadmap_progress(two_ready)
+        self.assertIsNone(progress["current"])
+        self.assertEqual(progress["following"]["key"], "R4.60")
+        wrong = marker.replace("R4.60 — Start source debugging",
+                               "R4.70 — Start the container program")
+        problems = self.project_status(two_ready, wrong)
+        self.assertTrue(any("roadmap status pointer" in problem[2]
+                            for problem in problems))
 
     def test_unavailable_status_is_refused(self):
         roadmap = BETWEEN_ITEMS.replace("Status: planned", "Status: blocked", 1)
@@ -119,6 +128,46 @@ Depends on: none
         self.assertIn("next planned item", index)
         self.assertIn("R4.60", index)
         self.assertNotIn('<div class="roadmap-now">', index)
+
+
+class HostedParity(unittest.TestCase):
+    def problems(self, *, kinds=("runtime",), targets="linux-x86-64",
+                 program="main.ldn", applicability="hosted-now",
+                 static=False, codes="L0301", status="complete"):
+        rows = [(7, {"Construct": "`[0650]`", "Applicability": applicability,
+                     "Owner": "R4.90", "Disposition": "audited"})]
+        fixtures = {kind + "/probe": ("fixture.meta", {
+            "program": program, "constructs": "0650", "targets": targets,
+            "codes": codes}) for kind in kinds}
+        static_rows = [(9, {"Construct": "`[0650]`", "Accepted": "none",
+                            "Refused": "`negative/probe`",
+                            "Rationale": "a compile-time prohibition"})] if static else []
+        return CHECK.hosted_parity_problems(
+            {"R4.90": status}, rows, static_rows, fixtures)
+
+    def test_runtime_and_abi_are_linux_execution_witnesses(self):
+        for kind in ("runtime", "abi"):
+            self.assertEqual(self.problems(kinds=(kind,)), [])
+
+    def test_refusal_or_emission_alone_cannot_close_runtime_surface(self):
+        for kind in ("negative", "positive"):
+            self.assertTrue(self.problems(kinds=(kind,)))
+
+    def test_other_target_and_metadata_without_program_are_not_execution(self):
+        self.assertTrue(self.problems(targets="macos-arm64"))
+        self.assertTrue(self.problems(program=""))
+
+    def test_static_exception_requires_its_exact_diagnostic_program(self):
+        self.assertEqual(self.problems(kinds=("negative",), static=True), [])
+        self.assertTrue(self.problems(kinds=("runtime",), static=True))
+        self.assertTrue(self.problems(kinds=("negative",), static=True, codes=""))
+
+    def test_later_r4_cannot_survive_closure(self):
+        self.assertTrue(self.problems(applicability="later-r4"))
+        self.assertEqual(self.problems(applicability="freestanding"), [])
+
+    def test_active_audit_does_not_claim_closure(self):
+        self.assertEqual(self.problems(kinds=(), status="active"), [])
 
 
 if __name__ == "__main__":

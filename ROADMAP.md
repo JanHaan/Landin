@@ -95,8 +95,9 @@ recorded where the work can be read.
 Dependencies name work IDs only. `none` is the only empty dependency value.
 A phase closes only when every work item in it is complete and its phase gate
 has reproducible evidence. Exploration may run early when dependencies allow,
-but phases are claimed in order. There are no dates, estimates or release
-versions in this roadmap.
+but phases are claimed in order. Between active items, the published next item is the first dependency-ready
+planned item in roadmap order; several ready items do not start work implicitly.
+There are no dates, estimates or release versions in this roadmap.
 
 A rejected normative construct must first be removed or explicitly deferred
 in `tour.md`; the roadmap cannot overrule the specification. A transferred
@@ -2766,7 +2767,9 @@ model used before the Cortex-M backend exists.
 This register assigns every normative construct to the first target slice that
 must account for it. `hosted-now` is the R4.10 closure set: each such row must
 have corpus evidence or a named refusal, and R4.10 cannot close while one of
-its own named refusals remains. The other classes are scheduled later in R4,
+its own named refusals remains. R4.90 tightens closure to a Linux runtime or ABI
+program oracle for every hosted row, except the explicitly audited compile-time
+rules in its register. Refusal alone cannot demonstrate an implemented operation. The other classes are scheduled later in R4,
 belong to the freestanding path, are explicitly deferred, or state a principle
 that has no implementation owner.
 
@@ -5352,7 +5355,7 @@ runtime, processes hosted I/O and executes on Linux x86-64.
 
 ### R4.90 — Close Linux hosted parity
 
-Status: planned
+Status: active
 Depends on: R4.60, R4.70, R4.80
 
 Run the full applicable construct, conformance, ABI, diagnostics, determinism,
@@ -5378,6 +5381,21 @@ public main: () -> (code: i32) =
     code = 42
 end main
 ```
+
+#### Hosted compile-time evidence
+
+These rules are observed while compiling. Every other hosted applicability row
+requires a Linux runtime/ABI fixture with a program and an attributed construct;
+`check.py` also rejects surviving `later-r4` rows and incomplete R4 owners when
+R4.90 closes. The metadata is an auditable claim, not proof of the source oracle's
+adequacy. The independent review reads those oracles and the native gate executes
+them. This table does not withdraw any construct.
+
+| Construct | Accepted | Refused | Rationale |
+| --- | --- | --- | --- |
+| `[1270]` | `positive/r490-conformance-input-keys` | `negative/conformance-collision`, `negative/r490-conformance-input-alias-collision` | Whole-program conformance keys include normalized input tuples; unequal keys coexist and equal keys collide before runtime. |
+| `[1400]` | none | `negative/local-array-literal-inferred-element-mismatch` | Heterogeneous implicit boxing is deliberately absent; mismatched element types are rejected. Ordinary explicit `any` dispatch has separate executed rows. |
+| `[1860]` | none | `negative/name-declared-nowhere`, `negative/condition-declaration-out-of-scope` | Every name must resolve in its scope; the observable failure is a compiler diagnostic. |
 
 Exit evidence: all applicable matrices are complete; equivalent builds produce
 identical assembly and behavior under the pinned toolchain.

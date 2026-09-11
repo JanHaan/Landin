@@ -14,20 +14,20 @@
 #  200 constructs, 192 with evidence, 8 with neither.
 #
 #  id    defined in  evidence
-0010   tour        accepted emitted                   Line comment, to end of line
-0020   tour        accepted emitted                   Block comment. Nests properly
-0030   tour        accepted emitted                   Doc comment. Attaches to the declaration that follows
+0010   tour        accepted emitted executed          Line comment, to end of line
+0020   tour        accepted emitted executed          Block comment. Nests properly
+0030   tour        accepted emitted executed          Doc comment. Attaches to the declaration that follows
 0040   tour        accepted emitted executed refused  Full form: name, type, value
 0050   tour        accepted emitted executed refused  Type inferred from the value
 0060   tour        accepted emitted executed refused  Mutable binding
 0070   tour        accepted emitted executed refused  Two questions about a reference
 0080   tour        accepted emitted executed refused  Declaration only
-0090   tour        accepted emitted refused           Exported from the module
+0090   tour        accepted emitted executed refused  Exported from the module
 0100   tour        accepted emitted executed          Several names may share one declaration
 0110   tour        accepted emitted executed refused  Left of ':' is always the name being introduced
 0120   tour        accepted emitted executed refused refused-by-name Types are declared like any other value, with 'type'
 0130   tour        accepted emitted executed refused  Order inside a module does not matter
-0140   tour        accepted emitted                   An inner scope may shadow an outer name
+0140   tour        accepted emitted executed          An inner scope may shadow an outer name
 0150   tour        accepted emitted executed refused refused-by-name Integers: u8 u16 u32 u64 u128, i8 i16 i32 i64 i128
 0160   tour        accepted emitted executed refused  Pointer-width integers: usize, isize
 0170   tour        accepted emitted executed refused refused-by-name Floating point: f16, f32, f64
@@ -140,7 +140,7 @@
 1240   tour        accepted emitted executed refused  A conformance registers one type against one concept
 1250   tour        accepted emitted executed refused  A conformance for a parameterised type binds its variables
 1260   tour        accepted emitted executed refused  A concept entry's error set has to be concrete
-1270   tour        refused                            The register is keyed by (type
+1270   tour        accepted emitted refused           The register is keyed by (type
 1280   tour        accepted emitted executed refused  Conformances may be declared anywhere
 1290   tour        accepted emitted executed refused refused-by-name A generic function takes the type as an ordinary parameter
 1300   tour        accepted emitted executed refused  At the call site the type is inferred from the arguments
@@ -191,7 +191,7 @@
 1750   spec        accepted emitted executed refused  A source file is bytes
 1760   spec        accepted emitted executed refused  Identifiers are lower case, and no identifier is a keyword
 1770   spec        accepted emitted executed refused  The kernel's literals include characters, floats and text
-1780   spec        accepted emitted refused           A comment ends a token, and its opener says which kind it is
+1780   spec        accepted emitted executed refused  A comment ends a token, and its opener says which kind it is
 1790   spec        accepted emitted executed refused  A binding names one thing, and says how much it may change
 1795   spec        accepted emitted executed refused  A type declaration names a type, and names nothing new
 1800   spec        accepted emitted executed refused  A function is a value with a body, and its returns are named

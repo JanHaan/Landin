@@ -4993,6 +4993,72 @@ package body Landin.Tests.Verifier_Suite is
       end loop;
    end Recursive_Image_Relocations_And_Widths;
 
+   procedure Atom_Comparisons_Keep_Identity
+     (Item : in out Landin.Testing.Context);
+
+   procedure Atom_Comparisons_Keep_Identity
+     (Item : in out Landin.Testing.Context)
+   is
+      type Scenario_Kind is
+        (Disjoint, Overlap, Same_Set, Numeric_Right, Invalid_Set,
+         Ordered, Arithmetic);
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Site : Landin.Provenance.Origin;
+   begin
+      Ready (Work, Site);
+      for Scenario in Scenario_Kind loop
+         for Equal in Boolean loop
+            declare
+               Unit : IR.Unit;
+               Routine : IR.Item_Id;
+               Left_Set, Right_Set : IR.Atom_Set_Id;
+               Block : IR.Block_Id;
+               Left, Right, Compared : IR.Value_Id;
+               Op : constant IR.Binary_Kind :=
+                 (if Scenario = Ordered then IR.Less_Than
+                  elsif Scenario = Arithmetic then IR.Add
+                  elsif Equal then IR.Equal_To else IR.Not_Equal_To);
+            begin
+               IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+               Left_Set := IR.Add_Atom_Set (Unit, [1, 2]);
+               Right_Set := IR.Add_Atom_Set
+                 (Unit, (if Scenario = Disjoint then IR.Atom_Array'[3, 4]
+                         elsif Scenario = Overlap then IR.Atom_Array'[2, 3]
+                         else IR.Atom_Array'[1, 2]));
+               Routine := IR.Add_Item
+                 (Unit, IR.Routine, 1, Landin.Types.No_Value, Site);
+               Block := IR.Add_Block
+                 (Unit, Routine, Landin.Resolution.Program_Scope, Site);
+               IR.Enter (Unit, Routine, Block);
+               Left := IR.Emit_Atom (Unit, Routine, 1, Left_Set, Site);
+               Right :=
+                 (if Scenario = Numeric_Right then IR.Emit_Number
+                    (Unit, Routine, Landin.Types.U32, 6, False, Site)
+                  else IR.Emit_Atom
+                    (Unit, Routine,
+                     (if Scenario = Disjoint then 3 else 2), Right_Set, Site));
+               if Scenario = Invalid_Set then
+                  IR.Testing_Support.Overwrite_Value_Atoms
+                    (Unit, Routine, Right, IR.Atom_Set_Id'Last);
+               end if;
+               Compared := IR.Emit_Binary
+                 (Unit, Routine, Op, Left, Right,
+                  (if Scenario = Arithmetic then Landin.Types.U32
+                   else Landin.Types.Bool), Site);
+               pragma Unreferenced (Compared);
+               IR.Emit_Leave (Unit, Routine, IR.No_Value, Site);
+               IR.Leave_Block (Unit, Routine);
+               Expect
+                 (Item, V.Check (Unit),
+                  (if Scenario in Disjoint | Overlap | Same_Set
+                   then V.Nothing_Wrong else V.Atom_Metadata_Disagrees),
+                  "atom comparison identity: " & Scenario'Image);
+            end;
+         end loop;
+      end loop;
+   end Atom_Comparisons_Keep_Identity;
+
    procedure Typed_Indirect_Atoms_Are_Checked
      (Item : in out Landin.Testing.Context);
 
@@ -6470,6 +6536,9 @@ package body Landin.Tests.Verifier_Suite is
       Landin.Testing.Register
         (Into, "verifier", "pointee graphs are checked",
          Pointee_Graphs_Are_Checked'Access);
+      Landin.Testing.Register
+        (Into, "verifier", "atom comparisons keep identity",
+         Atom_Comparisons_Keep_Identity'Access);
       Landin.Testing.Register
         (Into, "verifier", "typed indirect atoms are checked",
          Typed_Indirect_Atoms_Are_Checked'Access);
