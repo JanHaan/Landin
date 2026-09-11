@@ -5180,7 +5180,7 @@ proof as acceptance moves to the tracked native runner. R4.80 remains planned.
 
 ### R4.80 — Complete and run the derived hosted application
 
-Status: planned
+Status: active
 Depends on: R4.20, R4.30, R4.40, R4.70
 
 Turn prototype 4 into a complete hosted `.ldn` program with heterogeneous
