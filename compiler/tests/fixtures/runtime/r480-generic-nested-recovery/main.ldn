@@ -32,7 +32,12 @@ end cleanup
 run: (t: type is display, value: ptr mut t, erased: any action, broken: bool)
      -> (result: i32) ! unavailable =
     object := (select(value, broken) else (problem)
-        cleanup(value, erased) else (close_problem) _ = close_problem end
+        match problem
+            unavailable:
+                cleanup(value, erased) else (close_problem)
+                    _ = close_problem
+                end
+        end match
         fail problem
     end)
     shown: any display = any(object)
