@@ -1,7 +1,7 @@
 import core/io
 import examples/derived_hosted/app
 extern(c) unlink: (path: cstring) -> (status: i32)
-path: []u8 = "build/r480-hosted-output.txt\0"
+path: []u8 = "build/r480-hosted-output.txt\x00"
 
 public main: () -> (code: i32) =
     code = 1
