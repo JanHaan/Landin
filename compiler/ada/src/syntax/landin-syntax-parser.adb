@@ -50,45 +50,8 @@ package body Landin.Syntax.Parser is
         | Tok.Kw_Mut | Tok.End_Of_Input => True,
       others => False];
 
-   ------------------------------------------------------------------
-   --  The words the tour spells and the kernel does not reserve
-   --
-   --  [1760] reserves thirty-three words, and none of them is `loop`,
-   --  `while`, `for`, `break` or `continue`.
-   --  Every one of those lexes as an ordinary identifier, so
-   --  the scan cannot refuse it and only the parser can: at a statement
-   --  position, an identifier that is one of these is the construct the
-   --  tour describes and not a name someone forgot a colon after. Enabled
-   --  contextual words such as `match`, `begin`, `defer` and `undo` are
-   --  recognised separately and therefore do not belong in this table.
-   --
-   --  This is the other half of what Landin.Tokens.Construct does for the
-   --  deferred signs, and it is derived rather than guessed: check.py
-   --  holds every spelling here to a keyword the tour actually writes and
-   --  every construct to a paragraph that actually exists.
-   --
-   --  A word belongs here only when the spelling alone decides.  D191's
-   --  [0820] `arena` does not: `core/mem` declares a type of that name,
-   --  `examples/config_parser` passes a parameter spelled `arena`, and a
-   --  loop may be labelled one.  Its block is recognised by the shape
-   --  `arena name do` in the statement dispatch instead, so the table
-   --  keeps meaning what it says -- a spelling that is never anything
-   --  else.
-   ------------------------------------------------------------------
-
-   type Refused_Word is
-     (Word_None,
-      Word_Distinct);
-
-   subtype Real_Word is Refused_Word range Word_Distinct .. Word_Distinct;
-
-   function Spelling (Item : Real_Word) return String
-     is (case Item is
-            when Word_Distinct => "distinct");
-
-   function Refusal (Item : Real_Word) return Syn.Refused_Construct
-     is (case Item is
-            when Word_Distinct => Syn.Distinct_Type);
+   --  Every currently parsed contextual word remains an ordinary name
+   --  outside the syntactic position which gives it its special meaning.
 
    --  The scalar names [1790].  These are the types the kernel predeclares,
    --  not keywords, which is why they are compared by interned identity
@@ -191,10 +154,8 @@ package body Landin.Syntax.Parser is
             --  times -- so the declaration ends at the refusal.
             Type_Refused : Boolean := False;
 
-            Word_Id : constant array (Real_Word)
-              of Landin.Source.Names.Name_Id :=
-                [for W in Real_Word =>
-                   Landin.Source.Names.Intern (Names, Spelling (W))];
+            Distinct_Id : constant Landin.Source.Names.Name_Id :=
+              Landin.Source.Names.Intern (Names, "distinct");
 
             Lenof_Id : constant Landin.Source.Names.Name_Id :=
               Landin.Source.Names.Intern (Names, "lenof");
@@ -238,7 +199,7 @@ package body Landin.Syntax.Parser is
             Complete_Id : constant Landin.Source.Names.Name_Id :=
               Landin.Source.Names.Intern (Names, "complete");
 
-            --  D191's [0820].  Deliberately not in Real_Word: `arena` is an
+            --  D212's withdrawn [0820] block shape: `arena` is an
             --  ordinary name everywhere else, and the block is recognised
             --  by its shape rather than by its spelling.
             Arena_Id : constant Landin.Source.Names.Name_Id :=
@@ -382,7 +343,6 @@ package body Landin.Syntax.Parser is
             function Skip_Past_Closer
               (Word : Landin.Source.Names.Name_Id) return Boolean;
             function Too_Deep (Opener : Landin.Source.Span) return Boolean;
-            function Word_At_Hand return Refused_Word;
 
             ------------------------------------------------------------
             --  The productions
@@ -1059,20 +1019,6 @@ package body Landin.Syntax.Parser is
                return False;
             end Too_Deep;
 
-            function Word_At_Hand return Refused_Word is
-            begin
-               if Peek /= Tok.Identifier then
-                  return Word_None;
-               end if;
-
-               for W in Real_Word loop
-                  if Word_Id (W) = Named_Here then
-                     return W;
-                  end if;
-               end loop;
-
-               return Word_None;
-            end Word_At_Hand;
 
             function Previous return Landin.Source.Span
               is (if Index = 1 then Here
@@ -2391,20 +2337,6 @@ package body Landin.Syntax.Parser is
                   end;
                end if;
 
-               --  [0650]'s `distinct` is not reserved, so only the parser
-               --  can meet it, and [1795] made a type position somewhere a
-               --  name may stand -- without this it reads as a type name
-               --  and the report is about the token after it.
-               if Word_At_Hand = Word_Distinct then
-                  Type_Refused := True;
-                  Refuse
-                    (Item    => Syn.Distinct_Type,
-                     Where   => At_Type,
-                     Message => "`distinct` is not enabled yet");
-                  Advance;
-                  return Add (Error_Type, At_Type);
-               end if;
-
                if Peek = Tok.Identifier then
                   declare
                      Spelled : constant Landin.Source.Names.Name_Id :=
@@ -2739,6 +2671,24 @@ package body Landin.Syntax.Parser is
                   then
                      Aliased_Type := Parse_Struct_Body
                        (Named, At_Name, Compact => True);
+                  elsif Peek = Tok.Identifier
+                    and then Named_Here = Distinct_Id
+                    and then (Ahead (1) in Tok.Kw_Ptr | Tok.Left_Bracket
+                                | Tok.Left_Paren
+                      or else (Ahead (1) = Tok.Identifier
+                        and then Ahead (2) not in Tok.Colon | Tok.Colon_Equal))
+                  then
+                     declare
+                        Starts : constant Landin.Source.Span := Here;
+                        Base : Node_Id;
+                     begin
+                        Advance;
+                        Base := Parse_Type (False, At_Name);
+                        Aliased_Type := Add
+                          (Distinct_Body, Starts,
+                           Extent => Join (Starts, After_Previous),
+                           Children => [Base]);
+                     end;
                   else
                      Aliased_Type := Parse_Type (False, At_Name);
 
@@ -4372,7 +4322,6 @@ package body Landin.Syntax.Parser is
                   --  this is an assignment rather than the expression
                   --  body [1800] offers instead of a block.
                   if Peek = Tok.Identifier
-                    and then Word_At_Hand = Word_None
                     and then Ahead (1) not in Tok.Colon | Tok.Colon_Equal
                     and then After_Selectors
                                not in Tok.Equal | Tok.Compound_Assign
@@ -4785,7 +4734,6 @@ package body Landin.Syntax.Parser is
                     | Break_Id | Continue_Id
                     or else Opens_Unchecked
                     or else Opens_Arena_Block
-                    or else Word_At_Hand /= Word_None
                     or else Ahead (1) in Tok.Colon | Tok.Colon_Equal
                     or else After_Selectors in Tok.Equal | Tok.Compound_Assign;
                end Clearly_A_Statement;
@@ -5177,38 +5125,6 @@ package body Landin.Syntax.Parser is
                      elsif Opens_Unchecked then
                         return Parse_Unchecked_Block (Context);
                      end if;
-
-                     declare
-                        Word : constant Refused_Word := Word_At_Hand;
-                     begin
-                        if Word /= Word_None then
-                           declare
-                              At_Word : constant Landin.Source.Span :=
-                                Here;
-                              Closer  : constant
-                                Landin.Source.Names.Name_Id := Named_Here;
-                           begin
-                              Refuse
-                                (Item    => Refusal (Word),
-                                 Where   => At_Word,
-                                 Message => "`" & Spelling (Word)
-                                            & "` is not enabled yet");
-
-                              --  A refused construct closes itself, so
-                              --  swallowing its own `end` keeps that
-                              --  `end` from being read as the enclosing
-                              --  function's and turning one refusal into
-                              --  three reports.
-                              if not Skip_Past_Closer (Closer) then
-                                 Resync_Statement;
-                              end if;
-
-                              return Add
-                                (Error_Statement, At_Word,
-                                 Join (Start, After_Previous));
-                           end;
-                        end if;
-                     end;
 
                      if Ahead (1) in Tok.Colon | Tok.Colon_Equal then
                         return Parse_Binding
@@ -6043,8 +5959,7 @@ package body Landin.Syntax.Parser is
                                       and then Named_Ahead (2)
                                         in Loop_Id | While_Id | For_Id)
                                    and then
-                                     (Word_At_Hand /= Word_None
-                                      or else Ahead (1)
+                                     (Ahead (1)
                                         in Tok.Colon | Tok.Colon_Equal
                                       or else After_Selectors
                                         in Tok.Equal | Tok.Compound_Assign))));

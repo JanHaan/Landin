@@ -93,7 +93,6 @@ package Landin.Diagnostics.Syntactic is
    type Refused_Construct is
      (Declared_Type,
       Struct_Type,
-      Distinct_Type,
       Type_Parameter,
       --  Bracketed constructs whose spelling the parser alone can tell
       --  from [1790]'s array type and [0520]'s array literal.
@@ -116,7 +115,6 @@ package Landin.Diagnostics.Syntactic is
      is (case Item is
             when Declared_Type        => "[0120]",
             when Struct_Type          => "[0670]",
-            when Distinct_Type        => "[0650]",
             when Type_Parameter       => "[1290]",
             when Array_Repetition     => "[0560]",
             when Indexing             => "[0570]",
@@ -156,7 +154,6 @@ private
             --  The remaining R2.20 constructs each wait for their own
             --  aggregate slice.
             when Struct_Type
-               | Distinct_Type
                | Array_Repetition
                | Indexing
                | Struct_All_Of         => "R2.20",

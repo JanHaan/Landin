@@ -1,0 +1,5 @@
+number: type = distinct u32
+cell: type (item: type is zeroable) = struct
+    value: item
+end cell
+bad: type = cell(number)

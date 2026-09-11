@@ -1,0 +1,70 @@
+numbers: type = [2]i32
+opaque_numbers: type = distinct numbers
+point: type = struct
+    x: i32
+end point
+opaque_point: type = distinct point
+address: type = ptr mut i32
+opaque_address: type = distinct address
+items: type = []i32
+opaque_items: type = distinct items
+callback: type = (input: i32) -> (output: i32)
+opaque_callback: type = distinct callback
+problem: atom
+other: atom
+problems: type = problem | other
+opaque_problems: type = distinct problems
+tag: type (item: type, fixed label: u32) = distinct item
+handle: type = tag(u32, 7)
+outer: type = distinct handle
+choice: type = struct
+    kind: variant
+        empty |
+        number: (value: i32)
+    end kind
+end choice
+opaque_choice: type = distinct choice
+
+copy: (item: type, value: item) -> (result: item) =
+    result = value
+end copy
+add: (input: i32) -> (output: i32) = input + 1 end add
+
+public main: () -> (code: i32) =
+    a: opaque_numbers = opaque_numbers([10, 20])
+    b: numbers = numbers(a)
+    p: point = (x: 30)
+    q: opaque_point = opaque_point(p)
+    r: point = point(q)
+    mut value: i32 = 40
+    ptr_value: opaque_address = opaque_address(addr value)
+    extracted: address = address(ptr_value)
+    extracted.val = 41
+    view: items = b[0..<2]
+    hidden: opaque_items = opaque_items(view)
+    visible: items = items(hidden)
+    called: opaque_callback = opaque_callback(add)
+    function: callback = callback(called)
+    error: problems = problem
+    held_error: opaque_problems = opaque_problems(error)
+    got_error: problems = problems(held_error)
+    h: handle = handle(7)
+    copied: handle = copy(h)
+    nested: outer = outer(copied)
+    unwrapped: handle = handle(nested)
+    variant: choice = (kind: number(value: 8))
+    opaque: opaque_choice = opaque_choice(variant)
+    restored: choice = choice(opaque)
+    mut variant_ok: bool = false
+    match restored.kind
+        empty: variant_ok = false
+        number(n): variant_ok = n == 8
+    end match
+    if b[1] == 20 and r.x == 30 and visible[0] == 10
+      and u32(unwrapped) == 7 and got_error == problem and variant_ok
+    then
+        code = function(value)
+    else
+        code = 1
+    end if
+end main

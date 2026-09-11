@@ -610,6 +610,7 @@ package Landin.Checking is
       --  Function and reference fields retain complete target-neutral type
       --  evidence beside their one-word or two-word runtime carriers.
       Signature : Signature_Id            := No_Signature;
+      Atoms : Atom_Set_Id := No_Atom_Set;
       --  For Fixed_Array_Field this is the immediate reference element.
       Reference : Reference_Id            := No_Reference;
    end record;
@@ -835,6 +836,29 @@ package Landin.Checking is
      array (Positive range <>) of Signature_Part;
 
    No_Signature_Parts : constant Signature_Part_Array (1 .. 0) := [];
+
+   --  A distinct declaration owns an opaque nominal identity.  Its base
+   --  descriptor is retained separately from its transparent storage shape;
+   --  the representation child is never a source-visible field.
+   function Is_Distinct
+     (Of_Table : Table; Id : Nominal_Type_Id) return Boolean
+     with Pre => Holds (Of_Table, Id);
+
+   function Distinct_Base
+     (Of_Table : Table; Id : Nominal_Type_Id) return Signature_Part
+     with Pre => Holds (Of_Table, Id) and then Is_Distinct (Of_Table, Id);
+
+   procedure Note_Distinct_Base
+     (Into : in out Table; Id : Nominal_Type_Id; Base : Signature_Part)
+     with Pre => Holds (Into, Id);
+
+   function Distinct_Conversion_Of
+     (Of_Table : Table; Of_Tree : Landin.Syntax.Tree;
+      Node : Landin.Syntax.Node_Id) return Nominal_Type_Id;
+
+   procedure Note_Distinct_Conversion
+     (Into : in out Table; Of_Tree : Landin.Syntax.Tree;
+      Node : Landin.Syntax.Node_Id; Conversion : Nominal_Type_Id);
 
    type Return_Source_Association is record
       Result    : Positive := 1;
@@ -2491,6 +2515,8 @@ private
       Has_Reference : Boolean := False;
       Reference : Reference_Id := No_Reference;
       Has_Text_Conversion : Boolean := False;
+      Has_Distinct_Conversion : Boolean := False;
+      Distinct_Conversion : Nominal_Type_Id := No_Nominal_Type;
       Has_Variadic_Part : Boolean := False;
       Variadic_Part : Natural := 0;
       Text_Conversion : Text_Conversion_Kind := No_Text_Conversion;
@@ -2550,6 +2576,7 @@ private
       Node_Signatures : Signature_Id_Vectors.Vector;
       Node_References : Reference_Id_Vectors.Vector;
       Node_Text_Conversions : Text_Conversion_Vectors.Vector;
+      Node_Distinct_Conversions : Nominal_Id_Vectors.Vector;
       Node_Constraints : Constraint_Id_Vectors.Vector;
       Node_Owed_Checks : Constraint_Id_Vectors.Vector;
       Node_Concepts : Concept_Id_Vectors.Vector;
@@ -2592,6 +2619,7 @@ private
       Constraints  : Constraint_Descriptor_Vectors.Vector;
       Signatures   : Signature_Vectors.Vector;
       Signature_Parts : Signature_Part_Vectors.Vector;
+      Distinct_Bases : Signature_Part_Vectors.Vector;
       Return_Sources : Return_Source_Vectors.Vector;
       Layouts      : Layout_Vectors.Vector;
       Field_Offsets : Offset_Vectors.Vector;

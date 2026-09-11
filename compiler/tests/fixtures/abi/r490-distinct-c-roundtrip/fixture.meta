@@ -1,0 +1,7 @@
+class: abi
+summary: opaque scalar, floating, pointer and C record identities cross SysV in both directions
+program: program.ldn
+c-sources: peer.c
+status: 42
+constructs: 0310, 0650, 0700, 0750, 1570, 1580, 1600, 1975
+targets: linux-x86-64

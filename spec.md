@@ -43,7 +43,7 @@ enclosing production recognises. Thus 'of', 'lenof', 'variant', 'begin',
 'match', 'defer', 'undo', 'unchecked', 'caller', 'range', 'arena', 'loop',
 'while', 'for', 'do', 'break', 'continue', 'complete', 'with', 'concept',
 'is', 'as', 'option', 'compiler', 'assembler', 'linker', 'c', 'layout',
-'optimal', 'link' and 'symbol' remain
+'optimal', 'link', 'symbol' and 'distinct' remain
 identifier tokens everywhere their contextual productions do not meet them.
 D202 separately reserves the three tool names as declaration/import bindings;
 that semantic reservation does not turn their tokens into keywords.
@@ -282,9 +282,9 @@ text_name     ::= "utf8" | "utf16" | "cstring"
 
 ```
 
-### [1795] A type declaration names a type, and names nothing new
+### [1795] Type aliases and declared identities
 
-A type declaration names a type, and names nothing new.
+A type declaration without a body or `distinct` names an existing type.
 [0120] declares a type like any other value and [0650] writes
 'distinct' to make one that is not the type it was written from.
 D15 reads the second as deciding the first: without that word a
@@ -316,8 +316,9 @@ spelling of it.
 
 ```landin-grammar
 type_declaration ::= identifier ":" "type"
-                     ("=" (atom_union | range_subtype | type | struct_body)
-                     | type_formals "=" (atom_union | type | struct_body))
+                     ("=" (atom_union | range_subtype | distinct_body | type | struct_body)
+                     | type_formals "=" (atom_union | distinct_body | type | struct_body))
+distinct_body   ::= "distinct" type
 range_subtype   ::= (scalar_name | declaration_reference) "range"
                     expression ".." expression
 concept_declaration ::= identifier ":" "type" "=" concept_body
@@ -1411,7 +1412,11 @@ A C signature is nongeneric and infallible, takes only `in` runtime
 parameters, and returns at most one value. Its admitted values are the enabled
 integer scalars, bool, pointers, D189's named one-atom pointer unions, f32, f64,
 fixed C function values and recursively compatible nonempty `layout(c)` structs.
-Such structs contain those leaves, nested C structs and nonempty fixed arrays of
+D213 distinct identities over an admitted scalar, pointer, callback or C
+record have their base's layout and transport, while retaining their own
+Landin signature identity. A distinct identity does not make an excluded
+base admissible. Such structs contain those leaves, nested C structs and
+nonempty fixed arrays of
 compatible fields, with the selected C field offsets, alignment and trailing
 padding. Ordinary Landin structs, variants, slices, text and `any` do not
 become C records by having a similar byte count. Arrays are fields or pointees,
@@ -1966,7 +1971,7 @@ conversion at every use is not an alias, so the language would have no way to
 give a type a second name at all.
 
 **Pinned by** `positive/type-declaration-aliases-a-scalar`,
-`negative/distinct-not-enabled`.
+`runtime/r490-distinct-scalars` and `negative/r490-distinct-identity`.
 
 ### D16 — A field of a struct local is assigned on its own
 
@@ -8993,6 +8998,7 @@ classified failure boundary before the repository gate can pass.
 | `declarations.names` | static | 0040, 0050, 0060, 0080, 0090, 0100, 0110, 0120, 0130, 0140, 1790, 1795, 1850 | L0200 or L0201 | `negative/duplicate-in-a-module`, `negative/local-used-above-its-declaration` |
 | `types.values` | static | 0070, 0150, 0160, 0170, 0180, 0190, 0200, 0210, 0250, 1870, 1880, 1890 | L0300, L0301 or L0304 | `negative/character-literal-needs-u32`, `negative/float-literal-not-enabled`, `negative/float-type-not-enabled`, `negative/integer-literal-not-a-float`, `negative/literal-above-its-type`, `negative/refused-widths-name-their-owner`, `negative/type-name-is-not-a-type`, `negative/wide-integer-not-enabled` |
 | `float.ieee` | static | 0170, 0210, 0220, 0230, 0240, 0290, 0350, 1940 | f32/f64 decimal and hexadecimal literals plus inherently typed infinity and canonical quiet NaN names follow IEEE binary32/binary64 through runtime and module arithmetic and comparison, preserving exact hexadecimal values, nearest-even rounding, gradual underflow, signed zero and unordered NaN behavior; arithmetic NaNs use the canonical quiet pattern, L0300 rejects a finite literal that becomes infinity, and L0301 rejects an invalid named special, a width mismatch, mixed classes and integer-only operators | `negative/float-remainder-is-integer-only`, `negative/float-special-name-unknown`, `negative/float-special-on-integer-type`, `negative/float-special-width-mismatch`, `negative/hex-float-overflows-context`, `runtime/float-decimal-runtime`, `runtime/float-hexadecimal-runtime`, `runtime/float-named-specials`, `runtime/module-float-arithmetic` |
+| `distinct.identity` | static | 0310, 0430, 0650, 0700, 1280, 1290, 1940, 1975 | a distinct declaration and each normalized generic application retain nominal identity with exact base size, alignment and bytes; explicit construction and extraction preserve origins, static images and compatible C transport; L0301 rejects identity mixing and inherited operations, L0308 refuses representation fields, L0318 refuses inherited conformance and zeroable membership, and L0314 preserves escape refusals | `runtime/r490-distinct-scalars`, `runtime/r490-distinct-generic-representations`, `runtime/r490-distinct-generic-dispatch`, `runtime/r490-distinct-module-images`, `abi/r490-distinct-c-roundtrip`, `negative/r490-distinct-identity`, `negative/r490-distinct-no-operators`, `negative/r490-distinct-no-fields`, `negative/r490-distinct-conformance`, `negative/r490-distinct-zeroable`, `negative/r490-distinct-origin` |
 | `conversion.integer` | trap | 0150, 0190, 0310, 0470, 0700, 1120, 1460, 1670, 1880, 1940, 1950, 1960 | explicit conversion among enabled integer types preserves the mathematical value; L0300 rejects a known value outside the destination range and a runtime value outside it traps, without truncation, wrapping or signedness reinterpretation, outside [1120]'s region | `negative/integer-conversion-known-binding-out-of-range`, `negative/integer-conversion-known-out-of-range`, `runtime/integer-conversion-out-of-range-traps`, `runtime/integer-conversion-signed-overflow-traps`, `runtime/integer-conversion-unsigned-overflow-traps`, `runtime/integer-conversions` |
 | `conversion.float-width` | trap | 0170, 0210, 0230, 0240, 0310, 0700, 1880, 1940, 1950, 1960 | explicit f32/f64 conversion widens exactly or narrows to nearest with ties to even, preserving signed zero and the infinity/NaN class; L0300 rejects a known finite narrowing overflow and an equivalent runtime conversion traps | `negative/float-width-conversion-known-out-of-range`, `runtime/float-width-conversion-overflow-traps`, `runtime/float-width-conversions` |
 | `conversion.integer-to-float` | static | 0150, 0170, 0190, 0210, 0310, 0700, 1880, 1940, 1960 | explicit conversion from every enabled integer to f32 or f64 preserves the mathematical value when exact and otherwise rounds to nearest with ties to even; the enabled integer range cannot overflow either float width | `runtime/integer-to-float-conversions` |
@@ -11191,8 +11197,9 @@ results, so `p + 1`, `p & mask`, `-p` and `p >> 2` are `u8` values, `p < q` is
 a `bool`, `sizeof percent` measures `u8`, and there is no constrained
 arithmetic and no constraint join rule. That is why [1730]
 names distinct types and range subtypes as two habits and not one: [0650]'s
-`distinct` is this rule's complement, and composing the two remains R2.20's
-question.
+`distinct` is this rule's complement. D213 implements distinct identities;
+composing them with a constrained representation retains the R7.20 ownership
+of the constrained compositions refused below.
 
 The base is written as a scalar name or a declared name whose alias chain
 reaches an enabled integer scalar; a float, a bool, a struct, an array or a
@@ -12864,6 +12871,78 @@ without any of those claims.
 `negative/r480-helper-frame-retention`, `negative/array-reference-frame-return`,
 `negative/core-text-frame-slice-escape`, `negative/any-frame-origin-escape`,
 and `runtime/any-untracked-pointer-origin`.
+
+### D213 — Distinct types have opaque identity and transparent representation
+
+**The tour said** that [0650] preserves representation, creates a different
+type, and inherits no operations. Prototype 3 uses this for `node_id` and
+prototype 4 for `file`. D15 settled ordinary aliases but the implementation
+still refused the general form after hosted parity required it.
+
+**Chosen:** `name: type = distinct base` creates one nominal identity. A
+parameterized declaration creates one identity per complete normalized actual
+tuple, including fixed actuals which do not affect its representation. An
+alias preserves that identity. Two declarations with the same base remain
+different, and neither is implicitly interchangeable with its base. The base
+may be any enabled represented type, including another distinct identity,
+arrays, ordinary or variant-bearing structs, atoms, references, callable
+values and erased values. A range-constrained representation retains D188's
+existing constrained-composition refusal and R7.20 owner.
+
+`name(value)` constructs that identity from one value of its exact base.
+`base(value)` extracts that same base from a distinct value; an ordinary alias
+may name a structural base. These operations preserve bytes and do not invoke
+user code. A contextual literal receives the base's complete descriptor.
+An integer or float conversion is a separate explicit step: extracting a
+`distinct u32` as `i32` directly is L0301, while `i32(u32(value))` states both
+operations. Copying, assignment, parameter passing and returning preserve the
+identity; arithmetic, comparisons, indexing, dereferencing, field selection
+and calls require an explicit extraction first. No representation field is
+visible in source. In particular, two values of the same distinct numeric
+type still inherit no arithmetic operation.
+
+Generic deduction, signature identity, reference referents and conformance keys
+retain the nominal identity. A distinct type may declare its own conformance,
+and that conformance supports ordinary constrained and erased dispatch. It
+inherits neither a user conformance nor compiler-owned `zeroable` membership,
+so `zeroed` is not an implicit construction. Wrapping or extracting a
+reference-bearing value preserves the existing origin and escape facts; these
+conversions neither erase provenance nor extend backing lifetime.
+
+Representation means the base's exact target size, alignment and byte image.
+The compiler stores an opaque nominal descriptor with one unnameable
+representation child and uses the existing native aggregate calling
+convention. This is an internal ABI classification, not an extra stored field
+or an inherited source operation. Foreign C signatures continue to require
+[1975]'s admitted boundary types. A distinct identity whose base is admitted
+there has the same C layout and SysV transport as that base; its nominal
+identity still governs Landin signature compatibility. A distinct array,
+slice, atom, ordinary Landin record or erased view remains outside C exactly
+when its base does. Static construction and extraction preserve D132's
+module images and [1940]'s folds; they introduce no startup code or compile-time
+execution of user functions.
+
+**The alternatives:** accepting `distinct` as an alias would erase the property
+for which both prototypes use it. Rewriting source uses as ordinary named
+wrapper structs would leave [0650] unimplemented and expose fields the construct
+does not promise. Inheriting base operations or conformances would contradict
+its third sentence. A universal scalar identity rewrite is unnecessary when
+an opaque nominal identity already carries complete nested layout and generic
+keys.
+
+**Pinned by** `runtime/r490-distinct-scalars`,
+`runtime/r490-distinct-generic-representations`,
+`runtime/r490-distinct-generic-dispatch`,
+`runtime/r490-distinct-module-images`, `abi/r490-distinct-c-roundtrip`,
+`negative/r490-distinct-identity`,
+`negative/r490-distinct-no-operators`, `negative/r490-distinct-exact-base`,
+`negative/r490-distinct-no-fields`, `negative/r490-distinct-zeroable`,
+`negative/r490-distinct-origin`, `negative/r490-distinct-reference-identity`,
+`negative/r490-distinct-conformance`, `negative/r490-distinct-generic-identity`,
+`negative/r490-distinct-c-array`, `negative/r490-distinct-module-cycle`,
+`negative/r490-distinct-slice-cycle`, and the IR unit case
+"atom images retain their declared set" in
+`compiler/ada/tests/src/landin-tests-ir_suite.adb`.
 
 ### D214 — A trailing value fill has one exact type and one evaluation
 

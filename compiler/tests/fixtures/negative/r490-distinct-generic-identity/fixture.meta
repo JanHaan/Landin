@@ -1,0 +1,6 @@
+class: negative
+summary: unused fixed actuals still distinguish generic nominal identity
+program: main.ldn
+codes: L0301
+constructs: 0650, 1280, 1300
+targets: linux-x86-64, macos-arm64, synthetic-32

@@ -993,7 +993,18 @@ meter:  type = distinct f32
 second: type = distinct f32
 ```
 
-meter + second is a compile error.
+Neither `meter + second` nor adding two `meter` values inherits `f32`'s
+arithmetic. Construct and extract explicitly:
+
+```landin
+length: meter = meter(2.5)
+raw: f32 = f32(length)
+```
+
+Aliases keep the identity; generic deduction and conformances distinguish it
+from its base and from every other distinct declaration. A distinct view keeps
+its backing origin when wrapped and extracted. D213 specifies these conversions
+and the unchanged target representation.
 
 ### [0660] Range subtype: checked at assignment and conversion
 

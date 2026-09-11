@@ -1,0 +1,5 @@
+left: type = distinct u32
+right: type = distinct u32
+bad: (value: ptr left) -> (result: ptr right from value) =
+    result = value
+end bad

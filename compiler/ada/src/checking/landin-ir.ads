@@ -1366,6 +1366,8 @@ package Landin.IR is
       Form   : Field_Image_Form     := Absent;
       Offset : Natural              := 0;
       Count  : Natural              := 0;
+      --  A scalar atom image stores its neutral declaration identity here
+      --  (or in the parallel top-level flat value), never a target atom code.
       Value  : Landin.Types.Folded  := 0;
       --  A routine relocation for a scalar function field.  The folded
       --  placeholder stays zero; the verifier proves this target's recursive

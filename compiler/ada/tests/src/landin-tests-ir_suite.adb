@@ -1142,6 +1142,51 @@ package body Landin.Tests.IR_Suite is
       end;
    end An_Aggregate_Datum_Image_Is_Compact;
 
+   procedure Atom_Images_Retain_Their_Declared_Set
+     (Item : in out Landin.Testing.Context);
+
+   procedure Atom_Images_Retain_Their_Declared_Set
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Site : Landin.Provenance.Origin;
+   begin
+      Frontend_Over (Work, Site);
+      for Valid in Boolean loop
+         declare
+            Unit : IR.Unit;
+            Atoms : IR.Atom_Set_Id;
+            Datum : IR.Item_Id;
+            Block : IR.Block_Id;
+         begin
+            IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+            Atoms := IR.Add_Atom_Set (Unit, [1 => 1]);
+            Datum := IR.Add_Item
+              (Unit, IR.Datum, 1, Landin.Types.Aggregate, Site);
+            IR.Add_Field
+              (Unit, Datum,
+               (Element => Landin.Types.U32, Atoms => Atoms, others => <>));
+            IR.Set_Aggregate_Image
+              (Unit, Datum,
+               [1 => (if Valid then 1 else 2)],
+               [1 => (others => <>)], [1 .. 0 => 0]);
+            Block := IR.Add_Block
+              (Unit, Datum, Landin.Resolution.Program_Scope, Site);
+            IR.Enter (Unit, Datum, Block);
+            IR.Emit_Leave (Unit, Datum, IR.No_Value, Site);
+            IR.Leave_Block (Unit, Datum);
+            Landin.Testing.Check
+              (Item, IR.Verifier.Check (Unit).Kind =
+                 (if Valid then IR.Verifier.Nothing_Wrong
+                  else IR.Verifier.Atom_Identity_Not_In_Set),
+               "a static atom identity must belong to its field's atom set: "
+               & IR.Verifier.Fault_Kind'Image
+                 (IR.Verifier.Check (Unit).Kind));
+         end;
+      end loop;
+   end Atom_Images_Retain_Their_Declared_Set;
+
    ------------------------------------------------------------------
    --  D22: a slot-reaching element operation
    ------------------------------------------------------------------
@@ -1990,6 +2035,9 @@ package body Landin.Tests.IR_Suite is
       Landin.Testing.Register
         (Into, "ir", "an array datum image is compact",
          An_Array_Datum_Image_Is_Compact'Access);
+      Landin.Testing.Register
+        (Into, "ir", "atom images retain their declared set",
+         Atom_Images_Retain_Their_Declared_Set'Access);
       Landin.Testing.Register
         (Into, "ir", "an aggregate datum image is compact",
          An_Aggregate_Datum_Image_Is_Compact'Access);

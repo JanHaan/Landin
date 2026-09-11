@@ -1,0 +1,6 @@
+class: runtime
+summary: distinct construction and exact extraction preserve module scalar and aggregate images
+program: main.ldn
+status: 42
+constructs: 0350, 0650, 0700, 1460, 1940
+targets: linux-x86-64

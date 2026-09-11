@@ -1,0 +1,6 @@
+class: runtime
+summary: distinct identities survive aliases, direct and indirect calls, generic deduction and erased conformance dispatch
+program: main.ldn
+status: 42
+constructs: 0430, 0650, 0700, 0870, 1000, 1280, 1290, 1300, 1370
+targets: linux-x86-64

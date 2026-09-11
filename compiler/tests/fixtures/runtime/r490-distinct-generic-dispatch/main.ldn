@@ -1,0 +1,22 @@
+handle: type = distinct u32
+alias: type = handle
+readable: type = concept (item: type)
+    read: (self: ptr item) -> (result: i32)
+end readable
+read_handle: (self: ptr handle) -> (result: i32) =
+    result = i32(u32(self.val))
+end read_handle
+handle is readable (read: read_handle)
+view_type: type = any readable
+hidden_view: type = distinct view_type
+copy: (item: type, value: item) -> (result: item) = value end copy
+forward: (value: alias) -> (result: handle) = copy(value) end forward
+public main: () -> (code: i32) =
+    original: handle = handle(42)
+    callback: (value: handle) -> (result: handle) = forward
+    value: alias = callback(original)
+    view: any readable = any(addr value)
+    wrapped: hidden_view = hidden_view(view)
+    visible: view_type = view_type(wrapped)
+    code = visible.read()
+end main

@@ -71,6 +71,16 @@ transcript begins with `FILTERED`, and an unknown selection fails: focused
 feedback cannot look like the complete suite by accident. Run
 `./scripts/test.sh` with no selector for the complete local gate.
 
+D213's `r490-distinct-*` fixtures cover exact base construction/extraction,
+opaque identity, no inherited operators or conformances, ordinary identifiers,
+generic/fixed identity keys, erased dispatch, origins and module image cycles.
+The two generic runtime fixtures run all six profiles; the module-image
+fixture checks scalar/float/atom images, arrays, nested records, slices, text
+and callback relocations. `abi/r490-distinct-c-roundtrip` crosses the native C
+boundary in both directions for integer, float, pointer and mixed C-record
+bases. The IR atom-image unit case accepts a member identity and rejects a
+stored identity absent from the field's set.
+
 ## Optimization profiles and object quality
 
 Every runtime and ABI fixture runs separately under `none/off`, `size/off`,

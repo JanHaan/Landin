@@ -1451,7 +1451,13 @@ package body Landin.Stages.Checking.References is
                return Result;
 
             when Syn.Call | Syn.Labeled_Application =>
-               if Landin.Checking.Text_Conversion_Of
+               if Landin.Checking.Distinct_Conversion_Of
+                 (Types.all, Tree, Node)
+                   /= Landin.Checking.No_Nominal_Type
+               then
+                  return Fact_Of
+                    (Tree, Syn.Nth_Argument (Tree, Node, 1));
+               elsif Landin.Checking.Text_Conversion_Of
                  (Types.all, Tree, Node)
                    /= Landin.Checking.No_Text_Conversion
                then

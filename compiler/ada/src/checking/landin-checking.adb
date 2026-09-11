@@ -741,6 +741,7 @@ package body Landin.Checking is
             Members.Count := Members.Count + 1;
          end loop;
          Into.Nominal_Templates.Append (Template);
+         Into.Distinct_Bases.Append (Signature_Part'(others => <>));
          Into.Nominal_Actual_Runs.Append (Members);
          Into.Layouts.Append (Aggregate_Layout'(others => <>));
       end;
@@ -1003,6 +1004,7 @@ package body Landin.Checking is
                Into.Node_Signatures.Append (No_Signature);
                Into.Node_References.Append (No_Reference);
                Into.Node_Text_Conversions.Append (No_Text_Conversion);
+               Into.Node_Distinct_Conversions.Append (No_Nominal_Type);
                Into.Node_Constraints.Append (No_Constraint);
                Into.Node_Owed_Checks.Append (No_Constraint);
                Into.Node_Concepts.Append (No_Concept);
@@ -1055,7 +1057,8 @@ package body Landin.Checking is
               and then Landin.Syntax.Type_Formal_Count (Of_Tree.all, Node) = 0
               and then Written /= Landin.Syntax.No_Node
               and then Landin.Syntax.Kind (Of_Tree.all, Written)
-                           = Landin.Syntax.Struct_Body
+                           in Landin.Syntax.Struct_Body
+                              | Landin.Syntax.Distinct_Body
             then
                declare
                   Made : constant Nominal_Type_Id :=
@@ -1268,6 +1271,24 @@ package body Landin.Checking is
 
    function Holds (Of_Table : Table; Id : Nominal_Type_Id) return Boolean
      is (Nominal_Identities.Holds (Of_Table, Id));
+
+   function Is_Distinct
+     (Of_Table : Table; Id : Nominal_Type_Id) return Boolean
+     is (Of_Table.Distinct_Bases
+           (Nominal_Identities.Position (Of_Table, Id)).Kind
+         /= Landin.Types.No_Value);
+
+   function Distinct_Base
+     (Of_Table : Table; Id : Nominal_Type_Id) return Signature_Part
+     is (Of_Table.Distinct_Bases
+           (Nominal_Identities.Position (Of_Table, Id)));
+
+   procedure Note_Distinct_Base
+     (Into : in out Table; Id : Nominal_Type_Id; Base : Signature_Part) is
+   begin
+      Into.Distinct_Bases
+        (Nominal_Identities.Position (Into, Id)) := Base;
+   end Note_Distinct_Base;
 
    function Template_Of
      (Of_Table : Table; Id : Nominal_Type_Id) return Declaration_Id
@@ -1714,6 +1735,11 @@ package body Landin.Checking is
          return False;
       end if;
       loop
+         if Current.Kind /= Scalar_Field
+           and then Current.Atoms /= No_Atom_Set
+         then
+            return False;
+         end if;
          if Current.Kind /= Fixed_Array_Field then
             if Current.Cases /= 0 or else Current.Payloads_First /= 0
               or else Current.Length /= 1
@@ -1724,6 +1750,10 @@ package body Landin.Checking is
                when Scalar_Field =>
                   return Current.Reference = No_Reference
                     and then Current.Nominal = No_Nominal_Type
+                    and then (Current.Atoms = No_Atom_Set
+                      or else (Current.Element = Landin.Types.U32
+                        and then Current.Signature = No_Signature
+                        and then Holds (Of_Table, Current.Atoms)))
                     and then (Current.Signature = No_Signature
                       or else (Current.Element = Landin.Types.Usize
                         and then Holds (Of_Table, Current.Signature)));
@@ -1759,7 +1789,8 @@ package body Landin.Checking is
          Current := Of_Table.Field_Shapes (Current.Payloads_First);
          if Current.Kind /= Fixed_Array_Field
            and then (Current.Kind /= Scalar_Field
-                     or else Current.Signature = No_Signature)
+                     or else (Current.Signature = No_Signature
+                       and then Current.Atoms = No_Atom_Set))
          then
             return False;
          end if;
@@ -1792,6 +1823,7 @@ package body Landin.Checking is
       end case;
       if Element.Kind = Fixed_Array_Field
         or else Element.Signature /= No_Signature
+        or else Element.Atoms /= No_Atom_Set
       then
          Made.Cases := 1;
          for Position in 1 .. Natural (Into.Field_Shapes.Length) loop
@@ -1841,6 +1873,11 @@ package body Landin.Checking is
               Array_Field_Element (Of_Table, Right));
       elsif Left.Kind = Scalar_Field then
          return Left.Element = Right.Element
+           and then (if Left.Atoms = No_Atom_Set
+                     then Right.Atoms = No_Atom_Set
+                     else Right.Atoms /= No_Atom_Set
+                       and then Atom_Sets_Agree
+                         (Of_Table, Left.Atoms, Right.Atoms))
            and then (if Left.Signature = No_Signature
                      then Right.Signature = No_Signature
                      else Right.Signature /= No_Signature
@@ -2049,6 +2086,48 @@ package body Landin.Checking is
          end;
       end if;
    end Note_Text_Conversion;
+
+   function Distinct_Conversion_Of
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id) return Nominal_Type_Id
+   is
+      Where : constant Positive := Slot (Of_Table, Of_Tree, Node);
+      Overlay : constant Natural := Node_Overlay_Position (Of_Table, Where);
+   begin
+      if Overlay /= 0
+        and then Of_Table.Node_Overlays (Overlay).Has_Distinct_Conversion
+      then
+         return Of_Table.Node_Overlays (Overlay).Distinct_Conversion;
+      end if;
+      return Of_Table.Node_Distinct_Conversions (Where);
+   end Distinct_Conversion_Of;
+
+   procedure Note_Distinct_Conversion
+     (Into       : in out Table;
+      Of_Tree    : Landin.Syntax.Tree;
+      Node       : Landin.Syntax.Node_Id;
+      Conversion : Nominal_Type_Id)
+   is
+      Where : constant Positive := Slot (Into, Of_Tree, Node);
+      Prior : constant Nominal_Type_Id :=
+        Distinct_Conversion_Of (Into, Of_Tree, Node);
+   begin
+      if Prior /= No_Nominal_Type and then Prior /= Conversion then
+         raise Landin.Compiler_Defect with
+           "one node was assigned two distinct conversions";
+      end if;
+      if Into.Current_Routine = No_Routine_Instance then
+         Into.Node_Distinct_Conversions (Where) := Conversion;
+      else
+         declare
+            Overlay : constant Positive := Ensure_Node_Overlay (Into, Where);
+         begin
+            Into.Node_Overlays (Overlay).Has_Distinct_Conversion := True;
+            Into.Node_Overlays (Overlay).Distinct_Conversion := Conversion;
+         end;
+      end if;
+   end Note_Distinct_Conversion;
 
    function Reference_Of
      (Of_Table : Table; Id : Declaration_Id) return Reference_Id

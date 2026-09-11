@@ -1,0 +1,4 @@
+number: type = distinct u32
+bad: (value: number) -> none =
+    _ = value + value
+end bad

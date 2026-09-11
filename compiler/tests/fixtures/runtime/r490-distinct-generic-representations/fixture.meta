@@ -1,0 +1,6 @@
+class: runtime
+summary: opaque distinct views preserve scalar, array, record, pointer, slice, callback and atom representations
+program: main.ldn
+status: 42
+constructs: 0430, 0520, 0570, 0640, 0650, 0700, 0870, 1280, 1300
+targets: linux-x86-64

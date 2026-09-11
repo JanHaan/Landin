@@ -1,0 +1,51 @@
+handle: type = distinct u32
+stored: handle = handle(40)
+raw: u32 = u32(stored) + 2
+numbers: type = [2]i32
+opaque_numbers: type = distinct numbers
+wrapped: opaque_numbers = opaque_numbers([10, 20])
+plain: numbers = numbers(wrapped)
+point: type = struct
+    x: i32
+end point
+opaque_point: type = distinct point
+original: point = (x: 30)
+hidden: opaque_point = opaque_point(original)
+visible: point = point(hidden)
+direct: point = point(opaque_point((x: 31)))
+span: type = []i32
+opaque_span: type = distinct span
+slice_image: opaque_span = opaque_span(plain[0 ..< 2])
+view: span = span(slice_image)
+text_id: type = distinct utf8
+message: text_id = text_id("hello")
+text: utf8 = utf8(message)
+callback: type = () -> (code: i32)
+opaque_callback: type = distinct callback
+answer: () -> (code: i32) = code = 42 end answer
+function_image: opaque_callback = opaque_callback(answer)
+callable: callback = callback(function_image)
+meter: type = distinct f32
+height: meter = meter(2.5)
+raw_height: f32 = f32(height)
+box: type = struct
+    value: handle
+    values: numbers
+end box
+boxed: box = (value: handle(4), values: numbers(wrapped))
+problem: atom
+other: atom
+problems: type = problem | other
+opaque_problems: type = distinct problems
+failure: opaque_problems = opaque_problems(problem)
+error: problems = problems(failure)
+public main: () -> (code: i32) =
+    if plain[1] == 20 and visible.x == 30 and direct.x == 31
+       and view[1] == 20 and lenof text == 5 and callable() == 42
+       and raw_height == 2.5 and u32(boxed.value) == 4
+       and boxed.values[1] == 20 and error == problem then
+        code = i32(raw)
+    else
+        code = 1
+    end if
+end main

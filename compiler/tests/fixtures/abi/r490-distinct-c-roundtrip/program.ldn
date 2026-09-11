@@ -1,0 +1,35 @@
+number: type = distinct u32
+real: type = distinct f32
+address: type = ptr i32
+opaque_address: type = distinct address
+pair: type = layout(c) struct
+    x: f64
+    y: u32
+end pair
+opaque_pair: type = distinct pair
+extern(c) c_number: (value: number) -> (result: number)
+extern(c) c_real: (value: real) -> (result: real)
+extern(c) c_address: (value: opaque_address) -> (result: opaque_address from value)
+extern(c) c_pair: (value: opaque_pair) -> (result: opaque_pair)
+public extern(c) landin_number: (value: number) -> (result: number) =
+    result = number(u32(value) + 1)
+end landin_number
+public extern(c) landin_real: (value: real) -> (result: real) =
+    result = real(f32(value) + 1.0)
+end landin_real
+public extern(c) landin_pair: (value: opaque_pair) -> (result: opaque_pair) =
+    raw := pair(value)
+    result = opaque_pair((x: raw.x + 1.0, y: raw.y + 1))
+end landin_pair
+public main: () -> (code: i32) =
+    value: i32 = 9
+    returned := address(c_address(opaque_address(addr value)))
+    result := pair(c_pair(opaque_pair((x: 2.5, y: 39))))
+    if u32(c_number(number(40))) == 42
+       and f32(c_real(real(2.5))) == 4.5
+       and returned.val == 9 and result.x == 4.5 and result.y == 41 then
+        code = 42
+    else
+        code = 1
+    end if
+end main

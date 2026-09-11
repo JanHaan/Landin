@@ -1,0 +1,6 @@
+address: type = ptr i32
+hidden: type = distinct address
+bad: () -> (result: hidden) =
+    local: i32 = 42
+    result = hidden(addr local)
+end bad

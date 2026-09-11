@@ -1,0 +1,6 @@
+class: negative
+summary: distinct identities inherit no conformance from the represented type
+program: main.ldn
+codes: L0318
+constructs: 0650, 1280, 1290
+targets: linux-x86-64, macos-arm64, synthetic-32
