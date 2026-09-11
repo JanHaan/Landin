@@ -1,0 +1,6 @@
+class: negative
+summary: distinct values inherit no base arithmetic
+program: main.ldn
+codes: L0301
+constructs: 0300, 0390, 0650
+targets: linux-x86-64, macos-arm64, synthetic-32

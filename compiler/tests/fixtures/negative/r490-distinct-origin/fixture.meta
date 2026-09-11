@@ -1,0 +1,6 @@
+class: negative
+summary: wrapping a local pointer in a distinct value preserves its local origin
+program: main.ldn
+codes: L0314
+constructs: 0430, 0650, 0870
+targets: linux-x86-64, macos-arm64, synthetic-32

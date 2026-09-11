@@ -149,6 +149,16 @@ package body Landin.Stages.Folding is
          return;
       end if;
 
+      --  D213 changes only nominal identity.  A checked representation
+      --  conversion preserves the complete scalar image, including float
+      --  bits, and follows the ordinary guarded module-name fold.
+      if Landin.Checking.Distinct_Conversion_Of
+        (Types.all, Of_Tree, Node) /= Landin.Checking.No_Nominal_Type
+      then
+         Operand (Syn.Nth_Argument (Of_Tree, Node, 1), Value, Known);
+         return;
+      end if;
+
       case Syn.Kind (Of_Tree, Node) is
          when Syn.Integer_Literal =>
             declare
@@ -311,7 +321,13 @@ package body Landin.Stages.Folding is
                   Means : constant Res.Declaration_Id :=
                     Res.Bound_To (Meanings.all, Of_Tree, Node);
                begin
-                  if Res.Sort_Of (Meanings.all, Means) = Res.Module_Binding
+                  if Res.Sort_Of (Meanings.all, Means) = Res.Module_Atom then
+                     --  Static images retain a neutral declaration identity;
+                     --  the target backend alone assigns its runtime code.
+                     Value := (if Held = Ty.Pointer_Value then 0
+                               else Ty.Folded (Means));
+                     Known := True;
+                  elsif Res.Sort_Of (Meanings.all, Means) = Res.Module_Binding
                   then
                      declare
                         Their_Tree : constant

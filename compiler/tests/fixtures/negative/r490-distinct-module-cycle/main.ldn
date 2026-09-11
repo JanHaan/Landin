@@ -1,0 +1,3 @@
+number: type = distinct u32
+left: number = number(u32(right))
+right: number = number(u32(left))

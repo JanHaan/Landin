@@ -1,0 +1,7 @@
+left: type = distinct u32
+right: type = distinct u32
+bad: () -> none =
+    value: left = left(4)
+    other: right = value
+    _ = other
+end bad

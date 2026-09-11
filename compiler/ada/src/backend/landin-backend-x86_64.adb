@@ -5520,6 +5520,11 @@ package body Landin.Backend.X86_64 is
                     (Directive (Size_Of (Shape.Element, Facts)) & " "
                      & (if Image.Target /= Landin.IR.No_Item
                         then Symbol (Image.Target)
+                        elsif Shape.Atoms /= Landin.IR.No_Atom_Set
+                        then Trimmed (Positive'Image
+                          (Atom_Code
+                             (Of_Unit, Landin.IR.Declaration_Id
+                                (if Top then Flat else Image.Value))))
                         else Trimmed
                           (Landin.Types.Folded'Image
                              ((if Top then Flat else Image.Value)))));

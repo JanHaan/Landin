@@ -1,0 +1,7 @@
+point: type = struct
+    x: i32
+end point
+hidden: type = distinct point
+bad: (value: hidden) -> (result: i32) =
+    result = value.x
+end bad

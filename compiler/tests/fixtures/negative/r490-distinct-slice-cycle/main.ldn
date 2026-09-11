@@ -1,0 +1,4 @@
+span: type = []u8
+hidden: type = distinct span
+left: hidden = hidden(span(right))
+right: hidden = hidden(span(left))

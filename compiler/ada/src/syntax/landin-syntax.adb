@@ -68,6 +68,7 @@ package body Landin.Syntax is
             when Atom_Union_Type          => 0,
             --  The base type and the two bound expressions.
             when Range_Subtype            => 3,
+            when Distinct_Body            => 1,
             when Inferred_Error_Set        => 0,
             --  The bound and the element type.
             when Array_Type               => 2,

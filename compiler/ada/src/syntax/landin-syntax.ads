@@ -305,6 +305,8 @@ package Landin.Syntax is
       --  bound expression and the upper bound expression.  The syntax
       --  retains both bounds as written; checking folds them.
       Range_Subtype,
+      --  [0650]: one base type behind a fresh opaque nominal identity.
+      Distinct_Body,
       --  `! ...` on a private function before inference has finalized it.
       Inferred_Error_Set,
       --  [0520]'s array, whose length is part of it.  Two slots: D136's
@@ -1306,7 +1308,7 @@ package Landin.Syntax is
    --  [1880]'s and a report about one points at the span it was written at.
    function Base_Type_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
      with Pre  => Contains (Of_Tree, Id)
-                  and then Kind (Of_Tree, Id) = Range_Subtype,
+                  and then Kind (Of_Tree, Id) in Range_Subtype | Distinct_Body,
           Post => Contains (Of_Tree, Base_Type_Of'Result);
 
    function Lower_Bound_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id

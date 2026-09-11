@@ -137,6 +137,40 @@ package body Landin.Stages.Lowering is
       Activity : constant not null access Landin.Configuration.Table :=
         Configurations (Context);
 
+      --  Scalar module expressions containing an opaque representation
+      --  conversion are folded with the shared guarded image folder before
+      --  the datum block is emitted. They never create runtime frame storage.
+      subtype Module_Image_Index is Res.Declaration_Id range
+        1 .. Res.Declaration_Id
+          (Natural'Max (1, Res.Declaration_Count (Meanings.all)));
+      Distinct_Image : array (Module_Image_Index) of Ty.Folded :=
+        [others => 0];
+      Has_Distinct_Image : array (Module_Image_Index) of Boolean :=
+        [others => False];
+
+      function Has_Distinct_Conversion
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
+
+      function Has_Distinct_Conversion
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean is
+      begin
+         if Node = Syn.No_Node then
+            return False;
+         elsif Landin.Checking.Distinct_Conversion_Of
+           (Types.all, Of_Tree, Node) /= Landin.Checking.No_Nominal_Type
+         then
+            return True;
+         end if;
+         for Position in 1 .. Syn.Slot_Count (Of_Tree, Node) loop
+            if Has_Distinct_Conversion
+              (Of_Tree, Syn.Slot (Of_Tree, Node, Position))
+            then
+               return True;
+            end if;
+         end loop;
+         return False;
+      end Has_Distinct_Conversion;
+
       function Tree_For (Id : Landin.Source.Source_Id)
         return not null access constant Syn.Tree
         is (Landin.Syntax.Forest.Tree_Of
@@ -1703,6 +1737,9 @@ package body Landin.Stages.Lowering is
                     (if Source.Signature /= Landin.Checking.No_Signature
                      then Signature_For (Source.Signature)
                      else IR.No_Signature),
+                  Atoms =>
+                    (if Source.Atoms /= Landin.Checking.No_Atom_Set
+                     then Atom_Set_For (Source.Atoms) else IR.No_Atom_Set),
                   others    => <>);
 
             when Landin.Checking.Reference_Field =>
@@ -3288,7 +3325,45 @@ package body Landin.Stages.Lowering is
          Site : constant Landin.Provenance.Origin := Site_Of (Of_Tree, Node);
          Kind : constant Syn.Node_Kind := Syn.Kind (Of_Tree, Node);
       begin
-         if Shape.Kind = IR.Scalar_Field_Shape then
+         if Landin.Checking.Distinct_Conversion_Of
+           (Types.all, Of_Tree, Node) /= Landin.Checking.No_Nominal_Type
+           and then Shape.Kind /= IR.Scalar_Field_Shape
+         then
+            declare
+               Nominal : constant Landin.Checking.Nominal_Type_Id :=
+                 Landin.Checking.Distinct_Conversion_Of
+                   (Types.all, Of_Tree, Node);
+               Value : constant Syn.Node_Id :=
+                 Syn.Nth_Argument (Of_Tree, Node, 1);
+            begin
+               if Type_At (Of_Tree, Node) = Ty.Aggregate
+                 and then Landin.Checking.Nominal_Of
+                   (Types.all, Of_Tree, Node) = Nominal
+               then
+                  Write_Shaped_Value
+                    (Of_Tree, Value, Scope,
+                     Neutral_Result_Part
+                       (Landin.Checking.Distinct_Base (Types.all, Nominal)),
+                     Child_Place (Destination, 1));
+               else
+                  declare
+                     Temporary : constant IR.Slot_Id := Shaped_Temporary
+                       (Neutral_Value_Shape (Of_Tree, Value), Site);
+                  begin
+                     Lower_Stored_Expression
+                       (Of_Tree, Value, Scope, Temporary);
+                     if Current /= IR.No_Block then
+                        Copy_Shaped_Storage
+                          (Child_Place
+                             (Stored_At
+                                ((Kind => IR.Frame_Slot, Slot => Temporary)),
+                              1),
+                           Destination, Shape, Site);
+                     end if;
+                  end;
+               end if;
+            end;
+         elsif Shape.Kind = IR.Scalar_Field_Shape then
             declare
                Value : constant IR.Value_Id :=
                  Lower_Expression (Of_Tree, Node, Scope);
@@ -3826,7 +3901,9 @@ package body Landin.Stages.Lowering is
          Ignored : IR.Value_Id;
          pragma Unreferenced (Ignored);
       begin
-         if Is_Struct_Construction (Of_Tree, Node)
+         if Landin.Checking.Distinct_Conversion_Of
+           (Types.all, Of_Tree, Node) /= Landin.Checking.No_Nominal_Type
+           or else Is_Struct_Construction (Of_Tree, Node)
            or else Syn.Kind (Of_Tree, Node)
              in Syn.Array_Literal | Syn.Array_Repetition
                 | Syn.Mixed_Array_Repetition | Syn.Zeroed_Literal
@@ -4062,6 +4139,32 @@ package body Landin.Stages.Lowering is
               "a lowered written argument has no source parameter";
          end Nth_Written_Parameter;
       begin
+         if Landin.Checking.Distinct_Conversion_Of
+           (Types.all, Of_Tree, Node) /= Landin.Checking.No_Nominal_Type
+         then
+            if Returns_Stored then
+               declare
+                  Shape : constant IR.Field_Shape :=
+                    Neutral_Value_Shape (Of_Tree, Node);
+                  Slot : constant IR.Slot_Id :=
+                    (if Destination = IR.No_Slot
+                     then Shaped_Temporary (Shape, Site)
+                     else Destination);
+                  Place : Stored_Place :=
+                    (Place => (Kind => IR.Frame_Slot, Slot => Slot),
+                     Base => Destination_Field,
+                     Steps => Stored_Path_Vectors.Empty_Vector);
+               begin
+                  for Step of Destination_Steps loop
+                     Place.Steps.Append (Step);
+                  end loop;
+                  Write_Shaped_Value (Of_Tree, Node, Scope, Shape, Place);
+                  return IR.No_Value;
+               end;
+            else
+               return Lower_Expression (Of_Tree, Node, Scope);
+            end if;
+         end if;
          if Source_Signature = Landin.Checking.No_Signature
            or else Signature = IR.No_Signature
            or else
@@ -6359,6 +6462,31 @@ package body Landin.Stages.Lowering is
                end;
             end;
          end if;
+         if Landin.Checking.Distinct_Conversion_Of
+           (Types.all, Of_Tree, Node) /= Landin.Checking.No_Nominal_Type
+         then
+            declare
+               Value : constant Syn.Node_Id :=
+                 Syn.Nth_Argument (Of_Tree, Node, 1);
+               Temporary : constant IR.Slot_Id :=
+                 Shaped_Temporary (Neutral_Value_Shape (Of_Tree, Value), Site);
+            begin
+               Lower_Stored_Expression (Of_Tree, Value, Scope, Temporary);
+               if Current = IR.No_Block then
+                  return IR.No_Value;
+               end if;
+               return IR.Emit_Load_Slot_Field
+                 (Unit.all, Filling, Temporary, 1,
+                  Scalar_At (Of_Tree, Node), Site,
+                  Signature =>
+                    (if Type_At (Of_Tree, Node) = Ty.Function_Value
+                     then Signature_For
+                       (Landin.Checking.Signature_Of
+                          (Types.all, Of_Tree, Node))
+                     else IR.No_Signature));
+            end;
+         end if;
+
          case Syn.Kind (Of_Tree, Node) is
             when Syn.If_Statement | Syn.Match_Statement | Syn.Bare_Block
                | Syn.Loop_Statement | Syn.While_Statement
@@ -12912,7 +13040,23 @@ package body Landin.Stages.Lowering is
             return;
          end if;
 
-         if Held = Ty.Function_Value then
+         if Has_Distinct_Image (Id) then
+            if Held = Ty.Atom_Value then
+               Answer := IR.Emit_Atom
+                 (Unit.all, Filling, Res.Declaration_Id (Distinct_Image (Id)),
+                  Atom_Set_For (Landin.Checking.Atom_Set_Of (Types.all, Id)),
+                  Site);
+            elsif Held in Ty.Float_Name then
+               Answer := IR.Emit_Float
+                 (Unit.all, Filling, Held,
+                  Ty.Magnitude (Distinct_Image (Id)), Site);
+            else
+               Answer := IR.Emit_Number
+                 (Unit.all, Filling, Held,
+                  Ty.Magnitude (abs Distinct_Image (Id)),
+                  Distinct_Image (Id) < 0, Site);
+            end if;
+         elsif Held = Ty.Function_Value then
             --  Static dependencies are already resolved, including leaves
             --  of later images.  Emit the datum in declaration order.
             Answer := IR.Emit_Function_Address
@@ -13776,6 +13920,42 @@ package body Landin.Stages.Lowering is
          --  share the same cycle guard and declaration-owned image cache.
          procedure Resolve_Image (Id : Res.Declaration_Id);
 
+         --  A checked extraction of an immediately constructed identity
+         --  reads the original image; no temporary module datum is needed.
+         function Representation_Source
+           (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Syn.Node_Id;
+
+         function Representation_Source
+           (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Syn.Node_Id
+         is
+            Conversion : constant Landin.Checking.Nominal_Type_Id :=
+              (if Node = Syn.No_Node then Landin.Checking.No_Nominal_Type
+               else Landin.Checking.Distinct_Conversion_Of
+                 (Types.all, Of_Tree, Node));
+         begin
+            if Conversion /= Landin.Checking.No_Nominal_Type
+              and then (Type_At (Of_Tree, Node) /= Ty.Aggregate
+                or else Landin.Checking.Nominal_Of
+                  (Types.all, Of_Tree, Node) /= Conversion)
+            then
+               declare
+                  Inner : constant Syn.Node_Id :=
+                    Syn.Nth_Argument (Of_Tree, Node, 1);
+               begin
+                  if Landin.Checking.Distinct_Conversion_Of
+                    (Types.all, Of_Tree, Inner) = Conversion
+                    and then Type_At (Of_Tree, Inner) = Ty.Aggregate
+                    and then Landin.Checking.Nominal_Of
+                      (Types.all, Of_Tree, Inner) = Conversion
+                  then
+                     return Representation_Source
+                       (Of_Tree, Syn.Nth_Argument (Of_Tree, Inner, 1));
+                  end if;
+               end;
+            end if;
+            return Node;
+         end Representation_Source;
+
          function Static_Field_Target
            (Of_Tree : Syn.Tree; Value : Syn.Node_Id) return IR.Item_Id;
 
@@ -13783,6 +13963,15 @@ package body Landin.Stages.Lowering is
            (Of_Tree : Syn.Tree; Value : Syn.Node_Id) return IR.Item_Id
          is
          begin
+            if Representation_Source (Of_Tree, Value) /= Value then
+               return Static_Field_Target
+                 (Of_Tree, Representation_Source (Of_Tree, Value));
+            elsif Landin.Checking.Distinct_Conversion_Of
+              (Types.all, Of_Tree, Value)
+                /= Landin.Checking.No_Nominal_Type
+            then
+               return Selected_Image (Of_Tree, Value).Image.Target;
+            end if;
             if Syn.Kind (Of_Tree, Value) = Syn.Anonymous_Function then
                return Anonymous_Item (Of_Tree, Value);
             elsif Syn.Kind (Of_Tree, Value) = Syn.Name_Reference
@@ -14036,7 +14225,14 @@ package body Landin.Stages.Lowering is
            (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Static_Selection
          is
             Result : Static_Selection;
+            Conversion : constant Landin.Checking.Nominal_Type_Id :=
+              Landin.Checking.Distinct_Conversion_Of
+                (Types.all, Of_Tree, Node);
          begin
+            if Representation_Source (Of_Tree, Node) /= Node then
+               return Selected_Image
+                 (Of_Tree, Representation_Source (Of_Tree, Node));
+            end if;
             if Syn.Kind (Of_Tree, Node) = Syn.Name_Reference then
                declare
                   Id : constant Res.Declaration_Id :=
@@ -14053,11 +14249,19 @@ package body Landin.Stages.Lowering is
                end;
             end if;
             Result := Selected_Image
-              (Of_Tree, Syn.Target_Of (Of_Tree, Node));
-            if Syn.Kind (Of_Tree, Node) = Syn.Member_Selection then
+              (Of_Tree,
+               (if Conversion /= Landin.Checking.No_Nominal_Type
+                then Syn.Nth_Argument (Of_Tree, Node, 1)
+                else Syn.Target_Of (Of_Tree, Node)));
+            if Conversion /= Landin.Checking.No_Nominal_Type
+              or else Syn.Kind (Of_Tree, Node) = Syn.Member_Selection
+            then
                declare
-                  Field : constant Positive := Positive
-                    (Landin.Checking.Field_Index (Types.all, Of_Tree, Node));
+                  Field : constant Positive :=
+                    (if Conversion /= Landin.Checking.No_Nominal_Type
+                     then 1 else Positive
+                       (Landin.Checking.Field_Index
+                          (Types.all, Of_Tree, Node)));
                   Child : constant IR.Field_Shape :=
                     IR.Nth_Aggregate_Field (Unit.all, Result.Shape, Field);
                begin
@@ -14156,6 +14360,15 @@ package body Landin.Stages.Lowering is
            (Of_Tree : Syn.Tree; Value : Syn.Node_Id) return IR.Item_Id
          is
          begin
+            if Representation_Source (Of_Tree, Value) /= Value then
+               return Static_Address_Target
+                 (Of_Tree, Representation_Source (Of_Tree, Value));
+            elsif Landin.Checking.Distinct_Conversion_Of
+              (Types.all, Of_Tree, Value)
+                /= Landin.Checking.No_Nominal_Type
+            then
+               return Selected_Image (Of_Tree, Value).Image.Target;
+            end if;
             if Syn.Kind (Of_Tree, Value)
                  in Syn.Text_Literal | Syn.Raw_Literal
             then
@@ -14180,6 +14393,85 @@ package body Landin.Stages.Lowering is
             raise Landin.Compiler_Defect with
               "a static cstring field has no data target";
          end Static_Address_Target;
+
+         function Static_Slice_Image
+           (Of_Tree : Syn.Tree; Value : Syn.Node_Id)
+            return IR.Aggregate_Field_Image;
+
+         function Static_Slice_Image
+           (Of_Tree : Syn.Tree; Value : Syn.Node_Id)
+            return IR.Aggregate_Field_Image
+         is
+            Result : IR.Aggregate_Field_Image :=
+              (Slice => True, Slice_Element => Slice_Shape (Of_Tree, Value),
+               others => <>);
+         begin
+            if Representation_Source (Of_Tree, Value) /= Value then
+               return Static_Slice_Image
+                 (Of_Tree, Representation_Source (Of_Tree, Value));
+            elsif Landin.Checking.Distinct_Conversion_Of
+              (Types.all, Of_Tree, Value)
+                /= Landin.Checking.No_Nominal_Type
+              or else Syn.Kind (Of_Tree, Value)
+                in Syn.Member_Selection | Syn.Element_Index
+            then
+               return Selected_Image (Of_Tree, Value).Image;
+            elsif Syn.Kind (Of_Tree, Value) = Syn.Empty_Slice_Literal then
+               return Result;
+            elsif Syn.Kind (Of_Tree, Value)
+              in Syn.Text_Literal | Syn.Raw_Literal
+            then
+               Result.Target := Text_Datum (Of_Tree, Value);
+               Result.Value := Ty.Folded
+                 (IR.Array_Length (Unit.all, Result.Target) - 1);
+            elsif Syn.Kind (Of_Tree, Value) = Syn.Name_Reference then
+               declare
+                  Source_Id : constant Res.Declaration_Id :=
+                    Res.Bound_To (Meanings.all, Of_Tree, Value);
+                  Item : constant IR.Item_Id :=
+                    IR.Item_For (Unit.all, Source_Id);
+               begin
+                  Resolve_Image (Source_Id);
+                  Result.Target := IR.Slice_Image_Source (Unit.all, Item);
+                  Result.Slice_First := IR.Slice_Image_First (Unit.all, Item);
+                  Result.Value :=
+                    Ty.Folded (IR.Slice_Image_Length (Unit.all, Item));
+               end;
+            elsif Syn.Kind (Of_Tree, Value)
+              in Syn.Inclusive_Slice | Syn.Half_Open_Slice
+            then
+               declare
+                  Base : constant Syn.Node_Id :=
+                    Syn.Target_Of (Of_Tree, Value);
+                  Source_Id : constant Res.Declaration_Id :=
+                    Res.Bound_To (Meanings.all, Of_Tree, Base);
+                  Lower, Upper : Ty.Folded;
+                  Lower_Known, Upper_Known : Boolean;
+               begin
+                  Fold_Constant
+                    (Of_Tree, Syn.Slice_Lower (Of_Tree, Value),
+                     Lower, Lower_Known);
+                  Fold_Constant
+                    (Of_Tree, Syn.Slice_Upper (Of_Tree, Value),
+                     Upper, Upper_Known);
+                  if not Lower_Known or else not Upper_Known
+                    or else Lower < 0 or else Upper < Lower
+                  then
+                     raise Landin.Compiler_Defect with
+                       "a checked distinct slice image has no static bounds";
+                  end if;
+                  Result.Target := IR.Item_For (Unit.all, Source_Id);
+                  Result.Slice_First := IR.Element_Total (Lower);
+                  Result.Value := Upper - Lower
+                    + (if Syn.Kind (Of_Tree, Value) = Syn.Inclusive_Slice
+                       then 1 else 0);
+               end;
+            else
+               raise Landin.Compiler_Defect with
+                 "a checked distinct slice has no static image";
+            end if;
+            return Result;
+         end Static_Slice_Image;
 
          procedure Copy_Field_Descriptor
            (Source_Item  : IR.Item_Id;
@@ -14622,6 +14914,19 @@ package body Landin.Stages.Lowering is
                   return;
                end if;
 
+               if Landin.Checking.Distinct_Conversion_Of
+                 (Types.all, Of_Tree, Given)
+                   /= Landin.Checking.No_Nominal_Type
+               then
+                  declare
+                     Source : constant Static_Selection :=
+                       Selected_Image (Of_Tree, Given);
+                  begin
+                     Clone_Array (Source.Item, Shape, Source.Image, Position);
+                  end;
+                  return;
+               end if;
+
                if IR.Array_Element_Is_Aggregate (Unit.all, Shape)
                  and then Syn.Kind (Of_Tree, Given)
                    in Syn.Array_Literal | Syn.Array_Repetition
@@ -14796,6 +15101,22 @@ package body Landin.Stages.Lowering is
                       Count  => 0,
                       Value  => 0,
                       others => <>));
+               elsif Landin.Checking.Distinct_Conversion_Of
+                 (Types.all, Of_Tree, Given)
+                   /= Landin.Checking.No_Nominal_Type
+                 and then Landin.Checking.Nominal_Of
+                   (Types.all, Of_Tree, Given)
+                     = Landin.Checking.Distinct_Conversion_Of
+                       (Types.all, Of_Tree, Given)
+               then
+                  declare
+                     First : constant Positive :=
+                       Reserve_Children (Position, IR.Nested, 1);
+                  begin
+                     Build_Field
+                       (IR.Nth_Aggregate_Field (Unit.all, Shape, 1),
+                        Syn.Nth_Argument (Of_Tree, Given, 1), First);
+                  end;
                elsif Is_Struct_Construction (Of_Tree, Given) then
                   declare
                      Count : constant Natural :=
@@ -14924,6 +15245,18 @@ package body Landin.Stages.Lowering is
                Known : Boolean := True;
                Target : IR.Item_Id := IR.No_Item;
             begin
+               if Representation_Source (Of_Tree, Given) /= Given then
+                  Build_Field
+                    (Shape, Representation_Source (Of_Tree, Given),
+                     Position, Top_Field);
+                  return;
+               end if;
+               if Given /= Syn.No_Node
+                 and then Type_At (Of_Tree, Given) = Ty.Slice_Value
+               then
+                  Put (Position, Static_Slice_Image (Of_Tree, Given));
+                  return;
+               end if;
                case Shape.Kind is
                   when IR.Scalar_Field_Shape =>
                      if Given /= Syn.No_Node
@@ -14973,6 +15306,11 @@ package body Landin.Stages.Lowering is
                end case;
             end Build_Field;
          begin
+            if Representation_Source (Of_Tree, Literal) /= Literal then
+               Set_Recursive_Image
+                 (Id, Of_Tree, Representation_Source (Of_Tree, Literal));
+               return;
+            end if;
             for Field in 1 .. Top_Count loop
                Descriptors.Append
                  (IR.Aggregate_Field_Image'(others => <>));
@@ -14980,6 +15318,17 @@ package body Landin.Stages.Lowering is
 
             if Array_Root then
                Build_Array (IR.Whole_Array_Shape (Unit.all, Item), Literal, 1);
+            elsif Landin.Checking.Distinct_Conversion_Of
+              (Types.all, Of_Tree, Literal)
+                /= Landin.Checking.No_Nominal_Type
+              and then Landin.Checking.Nominal_Of
+                (Types.all, Of_Tree, Literal)
+                  = Landin.Checking.Distinct_Conversion_Of
+                    (Types.all, Of_Tree, Literal)
+            then
+               Build_Field
+                 (IR.Nth_Field_Shape (Unit.all, Item, 1),
+                  Syn.Nth_Argument (Of_Tree, Literal, 1), 1, Top_Field => 1);
             elsif not Is_Struct_Construction (Of_Tree, Literal) then
                declare
                   Source : constant Static_Selection :=
@@ -15160,6 +15509,7 @@ package body Landin.Stages.Lowering is
             function Needs_Recursive_Image return Boolean is
             begin
                if Has_Value_Fill (Literal)
+                 or else Has_Distinct_Conversion (Of_Tree, Literal)
                then
                   return True;
                end if;
@@ -16219,6 +16569,22 @@ package body Landin.Stages.Lowering is
 
             Where (Id) := Visiting;
 
+            if Landin.Checking.Type_Of (Types.all, Id)
+              in Ty.Scalar_Name | Ty.Atom_Value
+              and then Landin.Checking.Type_Of (Types.all, Id) /= Ty.Bool
+              and then Has_Distinct_Conversion (Their_Tree.all, Value)
+            then
+               Fold_Constant
+                 (Their_Tree.all, Value,
+                  Distinct_Image (Id), Has_Distinct_Image (Id));
+               if not Has_Distinct_Image (Id) then
+                  raise Landin.Compiler_Defect with
+                    "a checked scalar representation image did not fold";
+               end if;
+               Where (Id) := Resolved;
+               return;
+            end if;
+
             if Landin.Checking.Type_Of (Types.all, Id) = Ty.Function_Value then
                declare
                   Item : constant IR.Item_Id := IR.Item_For (Unit.all, Id);
@@ -16236,6 +16602,46 @@ package body Landin.Stages.Lowering is
                end;
                Where (Id) := Resolved;
                return;
+            end if;
+
+            if Value /= Syn.No_Node
+              and then Landin.Checking.Distinct_Conversion_Of
+                (Types.all, Their_Tree.all, Value)
+                  /= Landin.Checking.No_Nominal_Type
+              and then Landin.Checking.Type_Of (Types.all, Id)
+                in Ty.Aggregate | Ty.Fixed_Array
+            then
+               Set_Recursive_Image (Id, Their_Tree.all, Value);
+               Where (Id) := Resolved;
+               return;
+            end if;
+
+            if Value /= Syn.No_Node
+              and then Landin.Checking.Distinct_Conversion_Of
+                (Types.all, Their_Tree.all, Value)
+                  /= Landin.Checking.No_Nominal_Type
+            then
+               if Landin.Checking.Type_Of (Types.all, Id) = Ty.Slice_Value then
+                  declare
+                     Image : constant IR.Aggregate_Field_Image :=
+                       Static_Slice_Image (Their_Tree.all, Value);
+                  begin
+                     IR.Set_Slice_Image
+                       (Unit.all, IR.Item_For (Unit.all, Id),
+                        Image.Slice_Element, IR.Element_Total (Image.Value),
+                        Image.Target, Image.Slice_First);
+                  end;
+                  Made (Id) := True;
+                  Where (Id) := Resolved;
+                  return;
+               elsif Is_C_String_Value (Their_Tree.all, Value) then
+                  IR.Set_Address_Target
+                    (Unit.all, IR.Item_For (Unit.all, Id),
+                     Static_Address_Target (Their_Tree.all, Value));
+                  Made (Id) := True;
+                  Where (Id) := Resolved;
+                  return;
+               end if;
             end if;
 
             if (Landin.Checking.Type_Of (Types.all, Id) = Ty.Fixed_Array
@@ -16466,9 +16872,9 @@ package body Landin.Stages.Lowering is
             loop
                if Res.Sort_Of (Meanings.all, Id) = Res.Module_Binding
                  and then Landin.Checking.Type_Of (Types.all, Id)
-                          in Ty.Bool | Ty.Fixed_Array | Ty.Aggregate
-                             | Ty.Pointer_Value | Ty.Slice_Value
-                             | Ty.Function_Value
+                          in Ty.Scalar_Name | Ty.Fixed_Array | Ty.Aggregate
+                             | Ty.Atom_Value | Ty.Pointer_Value
+                             | Ty.Slice_Value | Ty.Function_Value
                then
                   Resolve_Image (Id);
                end if;

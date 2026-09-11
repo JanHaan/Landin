@@ -4107,6 +4107,16 @@ package body Landin.IR.Verifier is
                              or else Image.Slice
                            then
                               return Aggregate_Field_Image_On_Scalar_Field;
+                           elsif Shape.Atoms /= No_Atom_Set
+                             and then
+                               (Scalar_Value <= 0
+                                or else Scalar_Value >
+                                  Landin.Types.Folded (Declaration_Id'Last)
+                                or else not Contains_Atom
+                                  (Of_Unit, Shape.Atoms,
+                                   Declaration_Id (Scalar_Value)))
+                           then
+                              return Atom_Identity_Not_In_Set;
                            elsif Shape.Signature /= No_Signature
                              and then
                                (Scalar_Value /= 0
@@ -4723,6 +4733,17 @@ package body Landin.IR.Verifier is
                                 (Kind =>
                                    Aggregate_Field_Image_On_Scalar_Field,
                                  Item => Id, others => <>);
+                           elsif Shape.Atoms /= No_Atom_Set
+                             and then
+                               (Held <= 0
+                                or else Held > Landin.Types.Folded
+                                  (Declaration_Id'Last)
+                                or else not Contains_Atom
+                                  (Of_Unit, Shape.Atoms,
+                                   Declaration_Id (Held)))
+                           then
+                              return (Kind => Atom_Identity_Not_In_Set,
+                                      Item => Id, others => <>);
                            elsif Shape.Signature /= No_Signature
                              and then
                                (Held /= 0

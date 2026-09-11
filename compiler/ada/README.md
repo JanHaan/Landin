@@ -268,6 +268,15 @@ Four packages own an order of magnitude more than any other, and a table
 cell is the wrong place to read a list that long.  Each is spelled out
 here, one paragraph per package, in the words the table used to hold.
 
+D213 distinct identities reuse the nominal inventory with one unnameable
+representation child. `Landin.Checking` retains the exact base descriptor and
+per-node conversion fact, including routine-instance overlays; the checker
+alone authorizes construction or extraction. Lowering preserves the base
+image and origins while native calls use aggregate storage. Admitted C bases
+retain their SysV classification. A scalar atom image keeps its declaration
+identity, checked against the field's atom set before the backend assigns a
+runtime code.
+
 **`Landin.Checking`** owns what type every runtime node and declaration has,
 including concrete parameterized-alias application shapes and D136's canonical
 folded array counts but no template/formal syntax metadata; D142's closed

@@ -1,0 +1,6 @@
+class: negative
+summary: static slice identity conversions preserve dependency cycle refusal
+program: main.ldn
+codes: L0305
+constructs: 0570, 0650, 1940
+targets: linux-x86-64, macos-arm64, synthetic-32

@@ -1,0 +1,4 @@
+number: type = distinct u32
+bad: (value: number) -> (result: i32) =
+    result = i32(value)
+end bad

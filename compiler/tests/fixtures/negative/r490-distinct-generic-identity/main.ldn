@@ -1,0 +1,8 @@
+tag: type (item: type, fixed label: u32) = distinct item
+left: type = tag(u32, 1)
+right: type = tag(u32, 2)
+main: () -> none =
+    a: left = left(1)
+    b: right = a
+    _ = b
+end main

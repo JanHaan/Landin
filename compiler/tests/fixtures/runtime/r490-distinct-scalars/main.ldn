@@ -1,0 +1,15 @@
+meter: type = distinct f32
+handle: type = distinct u32
+distinct: type = u32
+ordinary: type = distinct
+public main: () -> (code: i32) =
+    m: meter = meter(2.5)
+    h: handle = handle(42)
+    plain: ordinary = 3
+    if f32(m) == 2.5 and sizeof handle == sizeof u32
+       and alignof handle == alignof u32 and plain == 3 then
+        code = i32(u32(h))
+    else
+        code = 1
+    end if
+end main

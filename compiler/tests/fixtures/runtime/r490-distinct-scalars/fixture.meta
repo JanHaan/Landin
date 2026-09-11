@@ -1,0 +1,6 @@
+class: runtime
+summary: distinct scalar identities preserve their representations through explicit construction and extraction
+program: main.ldn
+status: 42
+constructs: 0310, 0650, 0700, 0800
+targets: linux-x86-64

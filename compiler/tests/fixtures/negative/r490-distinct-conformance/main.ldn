@@ -1,0 +1,13 @@
+readable: type = concept (item: type)
+    read: (self: ptr item) -> (result: i32)
+end readable
+base: type = struct
+    value: i32
+end base
+read_base: (self: ptr base) -> (result: i32) = self.val.value end read_base
+base is readable (read: read_base)
+hidden: type = distinct base
+cell: type (item: type is readable) = struct
+    value: item
+end cell
+bad: type = cell(hidden)
