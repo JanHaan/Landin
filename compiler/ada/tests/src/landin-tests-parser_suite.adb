@@ -153,9 +153,8 @@ package body Landin.Tests.Parser_Suite is
 
    procedure Agrees_With_The_Corpus (Item : in out Landin.Testing.Context)
    is
-      --  Deliberate real-host exception: this robustness case mutates the
-      --  repository fixture tree itself, just as the corpus agreement case
-      --  does, rather than testing a stage through the fake filesystem.
+      --  Deliberate real-host exception: read the repository's fixture
+      --  sources to compare the parser with the independent corpus oracle.
       Host      : Landin.Platform.Native.Native_Filesystem;
       Catalogue : Fixtures.Catalogue;
       Accepted  : Natural := 0;
@@ -976,6 +975,8 @@ package body Landin.Tests.Parser_Suite is
    procedure Survives_Every_Truncation
      (Item : in out Landin.Testing.Context)
    is
+      --  Deliberate real-host exception: read the repository corpus;
+      --  truncations are in-memory strings, never edits to its files.
       Host      : Landin.Platform.Native.Native_Filesystem;
       Catalogue : Fixtures.Catalogue;
       Cuts      : Natural := 0;
@@ -1059,6 +1060,8 @@ package body Landin.Tests.Parser_Suite is
       Random_Streams        : constant Positive := 512;
       Random_Length_Limit   : constant Positive := 96;
 
+      --  Deliberate real-host exception: read the repository corpus;
+      --  generated inputs stay in memory and do not alter its files.
       Host      : Landin.Platform.Native.Native_Filesystem;
       Catalogue : Fixtures.Catalogue;
       Tried     : Natural := 0;
@@ -1993,6 +1996,20 @@ package body Landin.Tests.Parser_Suite is
          Landin.Testing.Check
            (Item, Held and then Nodes > 0 and then Total = 0,
             "concept and is remain ordinary identifiers outside context");
+
+         Read_And_Parse
+           ("value := 1" & ASCII.LF & "is := 2" & ASCII.LF,
+            Codes, Total, Nodes, Held);
+         Landin.Testing.Check
+           (Item, Held and then Nodes > 0 and then Total = 0,
+            "conformance lookahead stops before a binding initializer");
+
+         Read_And_Parse
+           ("value := identity(1)" & ASCII.LF & "is := 2" & ASCII.LF,
+            Codes, Total, Nodes, Held);
+         Landin.Testing.Check
+           (Item, Held and then Nodes > 0 and then Total = 0,
+            "a call initializer cannot consume the following is binding");
       end;
    end Concepts_And_Conformances_Are_Represented;
 
@@ -2321,8 +2338,117 @@ package body Landin.Tests.Parser_Suite is
         (Item, Images, 1, "without := a labelled body is still an image");
    end Destructuring_Begins_A_Body;
 
+   procedure Recovery_Preserves_Valid_Heads
+     (Item : in out Landin.Testing.Context);
+
+   procedure Recovery_Preserves_Valid_Heads
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check (Prefix, Suffix : String);
+
+      procedure Check (Prefix, Suffix : String) is
+         Sources : Landin.Source.Sets.Source_Set;
+         Names   : Landin.Source.Names.Table;
+         Clean, Broken : Landin.Tokens.Token_Stream;
+         Clean_Report, Broken_Report : Landin.Diagnostics.Diagnostic_List;
+         Clean_Id : constant Landin.Source.Source_Id :=
+           Sources.Add ("clean.ldn", Prefix & Suffix);
+         Broken_Id : constant Landin.Source.Source_Id :=
+           Sources.Add ("broken.ldn", Prefix & ")" & ASCII.LF & Suffix);
+      begin
+         Landin.Tokens.Lexer.Lex (Sources.Get (Clean_Id), Names, Clean);
+         Landin.Tokens.Lexer.Lex (Sources.Get (Broken_Id), Names, Broken);
+         declare
+            Expected : constant Landin.Syntax.Tree :=
+              Landin.Syntax.Parser.Parse (Clean, Names, Clean_Report);
+            Actual : constant Landin.Syntax.Tree :=
+              Landin.Syntax.Parser.Parse (Broken, Names, Broken_Report);
+            Same : Boolean := Landin.Syntax.Node_Count (Expected)
+                              = Landin.Syntax.Node_Count (Actual);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Landin.Diagnostics.Count (Clean_Report), 0,
+               "valid recovery control: " & Suffix);
+            Landin.Testing.Check_Equal
+              (Item, Landin.Diagnostics.Count (Broken_Report), 1,
+               "only the stray token is diagnosed: " & Suffix);
+            if Same then
+               for Node in Landin.Syntax.Node_Id'(1)
+                 .. Landin.Syntax.Last_Node (Expected)
+               loop
+                  Same := Same and then
+                    Landin.Syntax.Kind (Expected, Node)
+                      = Landin.Syntax.Kind (Actual, Node);
+                  if Same and then Landin.Syntax.Has_Name
+                    (Landin.Syntax.Kind (Expected, Node))
+                  then
+                     Same := Landin.Syntax.Name (Expected, Node)
+                               = Landin.Syntax.Name (Actual, Node);
+                  end if;
+                  if Same then
+                     Same := Landin.Syntax.Slot_Count (Expected, Node)
+                               = Landin.Syntax.Slot_Count (Actual, Node);
+                     if Same then
+                        for Slot in 1 .. Landin.Syntax.Slot_Count
+                          (Expected, Node)
+                        loop
+                           Same := Same and then Landin.Syntax.Slot
+                             (Expected, Node, Slot) = Landin.Syntax.Slot
+                               (Actual, Node, Slot);
+                        end loop;
+                     end if;
+                  end if;
+                  if Landin.Syntax.Kind (Expected, Node)
+                    = Landin.Syntax.Function_Declaration
+                    and then Landin.Syntax.Kind (Actual, Node)
+                      = Landin.Syntax.Function_Declaration
+                  then
+                     Same := Same and then
+                       Landin.Syntax.Is_External (Expected, Node)
+                         = Landin.Syntax.Is_External (Actual, Node)
+                       and then Landin.Syntax.Uses_C_ABI (Expected, Node)
+                         = Landin.Syntax.Uses_C_ABI (Actual, Node);
+                  end if;
+               end loop;
+            end if;
+            Landin.Testing.Check
+              (Item, Same, "valid syntax survives recovery: " & Suffix);
+         end;
+      end Check;
+
+      procedure Statement (Text : String);
+
+      procedure Statement (Text : String) is
+      begin
+         Check
+           ("f: () -> none = loop do" & ASCII.LF,
+            Text & ASCII.LF & "end loop end f" & ASCII.LF);
+      end Statement;
+   begin
+      Check ("", "extern(c) read: () -> none" & ASCII.LF);
+      Check ("", "[2]u8 is thing (act: f)" & ASCII.LF);
+      Check ("", "ptr u8 is thing (act: f)" & ASCII.LF);
+      Check ("", "any thing is other (act: f)" & ASCII.LF);
+      Check ("", "u8 is thing (act: f)" & ASCII.LF);
+      Statement ("break");
+      Statement ("continue");
+      Statement ("defer finish()");
+      Statement ("undo finish()");
+      Statement ("loop do break end loop");
+      Statement ("while ready do break end while");
+      Statement ("for v in items do use(v) end for");
+      Statement ("match value ready: use() end match");
+      Statement ("begin use() end");
+      Statement ("unchecked begin use() end unchecked");
+      Statement ("value.part += 1");
+      Statement ("value.part()");
+   end Recovery_Preserves_Valid_Heads;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "parser", "recovery preserves valid heads",
+         Recovery_Preserves_Valid_Heads'Access);
       Landin.Testing.Register
         (Into, "parser", "C syntax recovery", C_Syntax_Recovery'Access);
       Landin.Testing.Register

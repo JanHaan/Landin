@@ -27,7 +27,8 @@ package body Landin.Syntax.Parser is
    --  `source_file ::= import_declaration* declaration*` [1740].
    Declaration_Anchor : constant Tok.Kind_Set :=
      [Tok.Kw_Import | Tok.Kw_Public | Tok.Kw_Mut | Tok.Kw_Fixed
-        | Tok.Identifier
+        | Tok.Kw_Extern | Tok.Identifier | Tok.Left_Bracket
+        | Tok.Kw_Ptr | Tok.Kw_Any
         | Tok.Left_Paren | Tok.End_Of_Input => True,
       others => False];
 
@@ -517,7 +518,8 @@ package body Landin.Syntax.Parser is
                loop
                   exit when Ahead (Step) = Tok.End_Of_Input;
                   exit when Parentheses = 0 and then Brackets = 0
-                    and then Ahead (Step) in Tok.Equal | Tok.Colon;
+                    and then Ahead (Step) in Tok.Equal | Tok.Colon
+                                              | Tok.Colon_Equal;
 
                   if Parentheses = 0 and then Brackets = 0
                     and then Ahead (Step) = Tok.Identifier
@@ -953,7 +955,8 @@ package body Landin.Syntax.Parser is
                   exit when Nesting = 0
                             and then (Peek /= Tok.Identifier
                                       or else Ahead (1) in Tok.Colon
-                                                | Tok.Colon_Equal);
+                                                | Tok.Colon_Equal
+                                      or else Starts_Conformance);
                end loop;
             end Resync_Declaration;
 
@@ -966,9 +969,15 @@ package body Landin.Syntax.Parser is
                   exit when Peek = Tok.Underscore
                             and then Ahead (1) = Tok.Equal;
                   exit when Peek = Tok.Identifier
-                            and then Ahead (1) in Tok.Colon
-                                     | Tok.Colon_Equal | Tok.Equal
-                                     | Tok.Left_Paren;
+                    and then
+                      (Named_Here in Loop_Id | While_Id | For_Id
+                         | Break_Id | Continue_Id | Defer_Id | Undo_Id
+                         | Match_Id | Begin_Id
+                       or else Opens_Unchecked
+                       or else Opens_Arena_Block
+                       or else Ahead (1) in Tok.Colon | Tok.Colon_Equal
+                       or else After_Selectors in Tok.Equal
+                         | Tok.Compound_Assign | Tok.Left_Paren);
                end loop;
             end Resync_Statement;
 
