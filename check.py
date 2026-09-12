@@ -1834,8 +1834,8 @@ def frontend_codes():
     the only two packages that turn a scanner fault or a parse failure into
     a code, and never from the number: the catalogue's own header forbids
     reading a stage off a code, because "a code is a name, not an address",
-    and L0010 is the standing proof, raised by the scanner today and by the
-    parser since R1.40.
+    and L0010 is the standing proof, born in lexical refusal and now raised
+    only by the parser.
     """
     rows = catalogue_rows()
     if rows is None:

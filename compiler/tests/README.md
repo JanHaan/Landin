@@ -85,7 +85,7 @@ stored identity absent from the field's set.
 
 Every runtime and ABI fixture runs separately under `none/off`, `size/off`,
 `size/auto` and `speed/auto` (objective/specialization). Focused names containing
-`generic`, `any-` or `r450`, plus `allocator-vec-pressure`,
+`generic`, `any-`, `r450` or `r480`, plus `allocator-vec-pressure`,
 `diagnostic-loggers-dispatch`, `core-io-erased-system`, `derived-containers`
 and the complete derived hosted application fixtures,
 also run `none/all`
@@ -310,7 +310,7 @@ whose first code belongs to one of those must derive exactly as a positive
 fixture does. `check.py` reads which codes the frontend raises out of
 `Landin.Diagnostics.Lexical` and `Landin.Diagnostics.Syntactic` rather than out
 of the number, because the catalogue's own header forbids reading a stage off a
-code — `L0010` is raised by the scanner and by the parser both.
+code — `L0010` began in lexical refusal and is now raised only by the parser.
 
 `codes` is an ordered list and not a set. Two refused constructs in one file
 are two reports, and a regression that doubles a count is invisible to a set,

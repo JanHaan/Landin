@@ -16,8 +16,8 @@
 --  describes it and which roadmap item enables it, and may invent neither.
 --
 --  Two facts about the codes.  L0010 is reused rather than reinvented: the
---  catalogue already records that it is raised by the scanner today and by
---  the parser at R1.40, and a refusal is one rule however it is spelled.
+--  parser retains the code born in lexical refusal, though the scanner no
+--  longer raises it. A refusal is one rule however it is spelled.
 --  And a failure whose rule is the same gets one code with two sentences,
 --  because prose lives at the raise site: `if: u32 = 1` and `_: u32 = 1`
 --  are both [1760] saying that this is not available as a name.

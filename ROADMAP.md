@@ -5620,7 +5620,7 @@ session, destructive output-collision experiment or resource-exhaustion sweep.
 | C4: variant payload alias lifetime | Implemented: payload storage lifetime is independent of reference-bearing type. Direct and known-alias replacements, inout calls, derived addresses, cleanup and reachable loop uses participate; runtime controls cover last use, siblings, copied computed subjects and descriptor rebinding. D217 pins the construction boundary, and pointer-backed retags preserve initializer effects. Both build modes pass the focused suites and fixture profiles. | Second batch implementation |
 | C5: dense inference matrices | Still present in source: effects, required sets and call edges are dense stack arrays. The old exhaustion threshold was not rerun. Move program-sized storage off the host stack and measure scaling without weakening inference completion. | Third batch |
 | C6: nested-call depth | Still present in source: the general call parser lacks its siblings' depth guard. Add balanced recovery and bounded depth regressions in both modes. No new overflow run was made. | Third batch |
-| M1: conformance lookahead | Still reproduced: `v := 1` followed by `is := 2` is falsely parsed as a conformance. Stop at the binding initializer delimiter and retain legitimate conformance controls. | Third batch |
+| M1: conformance lookahead | Repaired in the follow-up parser group: lookahead stops at the binding initializer delimiter. Small literal/call initializer controls preserve a following `is` binding; existing parameterized and ordinary conformance syntax stays covered. | Third batch implementation |
 | M2: consumed subplaces | Repaired bare element, enclosing-aggregate and descendant reads after sink. Field paths above and below an array index retain separate identities; computed reads account for possibly consumed elements. Assigning an ancestor restores its consumed descendants without reviving a consumed ancestor through a partial write. Ten negative cases and runtime sibling/copy/restoration controls pin the result. | Second batch implementation |
 | M4, M16: tour and prototype drift | Still present in sampled live text: uppercase formals/labels, `mem.new_slice`, references to the retired worklist and an unsupported file-handle union. R4.80 changed allocator wording, so re-read complete cross-prototype contracts before editing. Historical finding sections remain untouched. | Fourth batch |
 | M5: font history | Local ancestry and tree inventory confirm the font-addition commit remains reachable from `66927e93`. This is retained repository evidence, not a new interpretation of the license. Any public-history remedy requires a concrete maintainer decision and coordinated delivery; no history is rewritten here. | Maintainer disposition |
@@ -5656,6 +5656,80 @@ being silently promoted to bugs or discarded:
 | m26--m28 | Deterministic IR numbering, displayed pointer provenance, overlapping writeback/result semantics and redundant bounds checks need focused evidence. Code-size cost or undocumented behaviour alone does not establish wrong code. |
 | m29--m31 | Compact repetition cost and tool operand/symbol spelling remain visible in source. Use bounded assembly measurements and fake tool argv assertions; do not assemble multi-gigabyte fixtures or execute option-like filenames as experiments. |
 | m32 | Routine sharing and observable callback identity remain unconfirmed; reproduce with a small source case before changing optimization policy. |
+
+#### Follow-up review at the repair revision
+
+Paseo agent `1d4fbfe5-e992-4fdc-aacd-554f81557713` reviewed `0a3d0a28`,
+including the first three repair commits. Its completed source-only sweep and
+verifier/synthesis records have been reconciled here. The synthesis contains
+27 ranked entries, including repeated open work, informational observations
+and an explicitly refuted claim; these are not 27 newly reproduced defects.
+`N1` through `N27` below identify positions in that synthesis's ranked list, not its
+presentation's separately numbered major findings. No new agents, assembler
+sweep, debugger or stress campaign was used for this reconciliation.
+
+| Follow-up entries | Disposition and next action |
+| --- | --- |
+| N1, N4: frontend and R5 readiness | Duplicate A2/C2/M3, A3, C5, C6 and M1 above. R5 remains planned behind R4.91 and exact acceptance. The review adds no new measured exhaustion threshold. |
+| N2: declaration recovery | Confirmed with small parser inputs and repaired: recovery retains `extern`, array/pointer/erased conformance heads and ordinary named conformances. A C declaration retains both its bodyless flag and convention. |
+| N3: statement recovery | Confirmed and repaired for contextual loops, transfers, match, cleanup and blocks, plus selected assignment/call heads. The focused seam compares the valid source with one stray token inserted before it, requiring one report and preserved node kinds, names, child slots and C convention. |
+| N5, N7, N8: fixture inventory and low floors | Duplicate M14, with concrete parser/execution floor sites. Implement independent discovery/selection accounting and explicit obligations; do not replace historical floors with the report's fixed 955/233 counts. Counts alone cannot prove an intentionally removed fixture's semantic coverage survived. No fixture-deletion experiment was run. |
+| N6: wide slice stride | Duplicate A7/M19. Keep bounded instruction/operand evidence ahead of backend parity; possible inheritance by a future backend is not an observed current miscompile. |
+| N9: negatives without `program` | Confirmed by source: ordinary full-suite paths compare recorded bytes/status but skip exact `codes` comparison for these fixtures. Extend recorded-negative validation under M14, keeping stage attribution and report order explicit. |
+| N10: duplicate operand diagnostics | Two four-line compiler inputs confirm duplicate L0301/L0306 reports for float remainder by zero and a negative float shift. The late operand check revisits an operation whose integer-only typing already failed. Mark the failed operation and retain valid integer zero/shift checks. This remains third-batch work; both inputs exit reported and invoke no assembler. |
+| N11: `Expect` recovery after a refused lexeme | The forward search exists and intentionally avoids repeating a scanner diagnostic. Bound it at the current construct/list boundary and pin preservation of following valid syntax before changing suppression policy. An already refused compilation cannot advance merely because this helper returns success. |
+| N12, N23: `12z` and `!=` diagnostics | Source confirms the differing token runs and absent inequality hint. These are diagnostic actionability questions, not newly enabled spellings or accepted wrong code. Compare [1760]/[1770]/[1820] and existing lexical controls before deciding whether to widen malformed runs or add guidance. |
+| N13: fake filesystem paths | Confirmed exact-string lookup differs from native directory handling for trailing slashes. Repair through narrow directory-root/entry controls under m5; preserve fake failure injection and explicit identity semantics. |
+| N14: L0010 ownership comments | Repaired the catalogue, syntactic wrapper, fixture guide, checker docstring and repository guidance. D164 already records removal of the scanner's final deferred family; L0010 is now parser-only. Numeric bands still do not determine ownership. |
+| N15: parser determinism oracle | Retain under m1--m7. Add repeated parsing and canonical tree/report comparison for a small fixed set. The old generated-input case is not evidence for determinism and will not be rerun or expanded as part of this review. |
+| N16, N17, N18 | Duplicates A4/M11 native failures, M15 explicit profile selection, and M10 diagnostic excerpts. Keep their existing repair order and evidence requirements. |
+| N19: real-host exception comments | Repaired the two missing comments and the corpus agreement case's misleading claim to mutate files. These cases read the native repository corpus and alter strings only. Their broad generated-input workloads were not rerun. |
+| N20: undocumented `r480` profiles | Repaired the fixture guide to match existing selection. This closes the documentation omission, while M15 still owns replacing name-based policy with explicit metadata. |
+| N21: assignment through payload aliases | Refuted as a repair request: D78/D217 make an inout payload name an alias to storage, not a descriptor that assignment can rebind. Writing it remains a use of that storage. The existing negative write-after-retag control intentionally enforces this rule; removing the pattern-binding exclusion would weaken it. |
+| N22: runtime unwind tables | Confirmed limitation: emitted CFI is debug-only `.debug_frame`; `.eh_frame` consumers are not promised. Keep the existing source-debugging/frame-pointer contract. Runtime foreign exception unwinding requires a separate explicit semantic/ABI decision and is outside this repair slice; no debugger or unwind experiment was run. |
+| N24: retired No_Frontend source shape | Clarified the catalogue comment: file-independent driver errors need no source, source-attached errors do, and the retired row keeps its original contract. No live diagnostic or retired identifier is changed. |
+| N25, N26: range and sequencing | Passing review observations; no implementation task. Preserve the recorded resource model, backend order and R4.91 dependency gate. |
+| N27: chained-comparison poisoning | The review itself refuted this claim. Error diagnostics already stop the pipeline before checking; a structurally sound node does not override that stop. No repair is needed. |
+
+The follow-up review's nine coverage gaps remain explicit limits on its claims:
+expression/conformance recovery, extreme input scaling, diagnostic actionability,
+target-width arithmetic, fixture inventory, backend/tool integration, native
+failure modes, driver gating, and IR/reader-guide currency. The first eight map
+to the open rows above and the older minor register. The IR partition reported
+no surviving defect; absence of the IR reader guide at the reviewed commit is a coverage
+note, not a request to undo the separately authored guide. Future representation,
+verification-boundary or optimization changes must check that guide's integrated
+version. Source-only review and prior development tests do not establish full
+runtime or exact-revision acceptance.
+
+Follow-up development evidence: the macOS debug compiler builds with one
+build worker, and five targeted cases pass 295 checks: recovery heads,
+conformances, C-syntax recovery, parameterized alias recovery, and the fake-host
+R4.91 refusal-without-effects case. The new recovery case contains 17 short
+controls; two additional controls pin the conformance lookahead boundary.
+Each selected test has a 30-second timeout; the two diagnostic reproductions
+have 10-second timeouts. Release validation of this group remains outstanding.
+No Landin fixture was assembled, and existing broad coverage was not rerun.
+
+The next repair order remains: construction and coordinated final-value
+handling; bounded call recovery/inference storage; target operand and native
+failure boundaries; then fixture accounting, explicit profiles and remaining
+documentation contracts. The new parser recovery fixes join M1 in the current
+third batch. The source review is reconciled; the implementation and acceptance
+obligations stay active until their own evidence exists.
+
+Resource limits for further work are mandatory: check for existing `clang` or
+`cc1as` processes before execution and stop to report their PIDs/full commands
+if any exist. Do not run blanket assembler/linker coverage or parallel assembler
+work. Never assemble `positive/module-array-mixed-repetition`,
+`positive/module-array-repetition`, billion-element sources or their generated
+assembly. Before any explicit `clang -c`, inspect that exact file's `.rept`,
+`.zero`, `.space`, `.fill` and `.comm` expansion; skip unbounded or over-64-MiB
+images. At most one foreground clang process may run, with a timeout of at most
+30 seconds and one explicitly named, inspected input. No broad clang loops,
+unbounded stress/fuzz loops or giant generated cases are authorized. Reuse
+completed coverage; use short explicit timeouts and low concurrency for new
+bounded checks. Required exact acceptance is not waived by these limits.
 
 Implementation proceeds in four reviewable batches: finish the initial
 context/recovery regressions; repair origin/consume/output/build preservation;
