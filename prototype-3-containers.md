@@ -71,7 +71,12 @@ For ordinary initialized storage, `addr view[index]` retains the slice's
 source origin [0790], as does an address selected through a pointer's `.val`.
 The descriptor may be copied into a local binding without making its backing
 frame-local. This does not permit returning an address into a local array or
-constructing a view over uninitialized slots.
+constructing a view over uninitialized slots. [1910] also checks stores through
+caller-owned storage: moving a non-escaping reference to another origin is
+retention, while a same-origin update remains valid. The private `transfer`
+transition uses an explicit raw destination address for both first and later
+slots before publishing the new witness; that boundary is not an exemption
+for ordinary container or application stores.
 
 The scalar side of that distinction is [0840]: `lenof` and other scalar
 operators copy no reference into their result. A saved length may survive a
@@ -513,7 +518,10 @@ end push
 The inline arm assigns to `s.store` only after the last read through `buf`.
 D85/D121 make the binding an alias and [0830]'s liveness rule permits that
 final publication while refusing a caller's spill when a `used` view remains
-live. [Z7]
+live. Scalar payload aliases obey the same storage lifetime: a later write,
+derived-address use or pending cleanup still keeps the old payload live.
+`runtime/r491-payload-alias-last-use` and its negative companion exercise
+last-use publication, independent siblings and refused retags. [Z7]
 
 ```landin
 public used: (T: type is zeroable, fixed N: u32,

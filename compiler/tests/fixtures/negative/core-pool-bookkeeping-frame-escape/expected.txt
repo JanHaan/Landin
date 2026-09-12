@@ -3,8 +3,8 @@ error[L0314]: this returned reference still has frame origin
    |
 17 | bad: (base: ptr mut u8)
    | ^^^^^^^^^^^^^^^^^^^^^^^
-  --> ../tests/fixtures/negative/core-pool-bookkeeping-frame-escape/main.ldn:17:7
+  --> ../tests/fixtures/negative/core-pool-bookkeeping-frame-escape/main.ldn:19:5
    |
-17 | bad: (base: ptr mut u8)
-   |       ^^^^^^^^^^^^^^^^ the shorter-lived reference source
+19 |     mut records: [1]pool.slot = zeroed
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the shorter-lived reference source
   = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`

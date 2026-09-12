@@ -5548,8 +5548,9 @@ recovery, and the public-conformance diagnostic's secondary-label contract.
 The follow-up comparison with the independent reviews of `66b3b659` expands
 this slice. R4.90 acceptance did not close every finding in those older reviews.
 
-Sources: [0570], [0580], [0950], [1280], [1300], [1800], [1810], [1880],
-[1910]; D96, D138, D141. The original review's unconfirmed float-resource and
+Sources: [0430], [0480], [0570], [0580], [0770], [0780], [0790], [0830],
+[0900], [0910], [0950], [1220], [1280], [1300], [1800], [1810], [1880],
+[1910]; D78, D85, D96, D134, D138, D140, D141, D151, D187, D217. The original review's unconfirmed float-resource and
 varargs observations remain unconfirmed and supply no implementation mandate.
 
 Implementation is in the isolated `r491` worktree. The first batch retains full
@@ -5565,10 +5566,18 @@ Driver cases check that refused sources attempt no writes or host-tool calls.
 The second batch now also preserves source files against output collisions,
 validates build modes and holds build locks through compiler use and cleanup,
 and checks consumed storage across containing reads, replacement assignments
-and every observable exit. Origin escapes and live variant payload aliases
-remain the next repairs in this batch.
+and every observable exit. The next implementation also checks retained
+reference stores against their actual backing, preserves origins through known
+local alias writes, and keeps scalar variant payload aliases live through reads,
+writes, derived views, cleanup and inner-loop uses. Same-origin updates, declared
+retention, last-use retags and independent sibling storage remain permitted.
+Pointer-backed retags now use captured holder storage in lowering. The private
+raw transfer uses the same explicit destination-address boundary for its first
+and later slots; ordinary stores retain the origin check.
+The origin/payload group completes this batch's confirmed repairs. Next are
+the remaining construction, parser, host and bounded-scaling items below.
 
-Development evidence for these repairs: Linux debug and release pass the driver
+Development evidence for the preceding output/consume group: Linux debug and release pass the driver
 (46 cases), checking (85), lowering (93), complete recorded-diagnostic case
 (971 checks), and all three new consume fixtures. The runtime restoration
 fixture passes four optimization profiles in each mode. The parser corpus also
@@ -5577,6 +5586,18 @@ pass both modes. On macOS, the driver and 72 script/roadmap tests pass with the
 one existing Linux-only runner test skipped; all 13 build-lock/inventory tests
 pass on Linux. Full `check.py` and rendered-word preservation checks pass.
 This is development evidence; exact-revision acceptance remains outstanding.
+
+Origin/payload development evidence: Linux debug and release pass checking
+(85 cases, 1197 checks), lowering (93, 949), driver (46, 448), and the complete
+recorded-diagnostic case (977 checks). The two new negative fixtures pin ten
+origin/retention refusals and eleven payload-alias refusals. Both new runtime
+fixtures pass four optimization profiles in each mode, including retained
+variant references, pointer rebinding, initializer effects and computed
+copy-back. Existing initialized-object and pointer-vector growth fixtures pass
+four profiles in each mode. The complete container and hosted derivatives pass
+all six profiles with the final release compiler. The final two added runtime
+controls were rerun in both modes. Full `check.py` passes on macOS; no exact
+acceptance, debugger session or publication was run.
 
 #### Older review reconciliation
 
@@ -5594,9 +5615,9 @@ session, destructive output-collision experiment or resource-exhaustion sweep.
 | A1: artifact/source collisions | Repaired: every actual output is compared with all discovered sources and other outputs through the filesystem identity seam before any write or tool call. Fake-host regressions cover explicit/imported sources, aliases, assembly/executable/map collisions and inactive-map controls. Existing build-report reservations remain intact. | Second batch implementation |
 | C1: diagnostic label contracts | All five sites still violated the catalogue at the baseline; the four sibling minimal cases still exited 70. Initial implementation repairs imports, fixed conditionals, conformances, unconditional completion and continue-with-value. | First batch |
 | A2, C2, M3: final values and silent recovery | Still present at the baseline. The grammar derives statement-prefix/final-value bodies, including `r = zeroed(1)` as an assignment followed by a parenthesized value. These must be parsed correctly, rather than recorded as negative syntax fixtures. Recovery now diagnoses unexpected tokens, but final-body value semantics remain open: a final none-returning call must stay a statement after a named result has been assigned. This requires coordinated checker, flow, origin and lowering changes. | Recovery in first batch; final values in third batch |
-| A3: type-shaped construction arguments | Still reproduced: `box(value: ptr u8)` exits 70. Reject missing value projections in struct and variant contexts before accessing their syntax, with module/local controls. | Third batch |
-| C3: retained reference origins | Still reproduced: a local address stored through an `inout` pointer parameter is accepted and can escape its caller. The module-only store check remains. Cover inout parameters, pointees, slice elements and reference-bearing fields while preserving allowed long-lived stores. | Second batch |
-| C4: variant payload alias lifetime | Still reproduced: re-tagging under a live scalar inout payload alias is accepted. Track payload storage lifetime independently of whether its scalar type contains references; retain last-use controls. | Second batch |
+| A3: type-shaped construction arguments | Still reproduced: `box(value: ptr u8)` exits 70. Reject missing value projections in struct and variant contexts before accessing their syntax, with module/local controls. New ordinary source checks also found accepted variant-array literals reaching lowering without a case index; retain the literal initializer as an additional construction regression. | Third batch |
+| C3: retained reference origins | Implemented: destination storage checks cover inout parameters, pointees, slice elements and reference-bearing ordinary/variant fields. Known local alias writes preserve stored frame/parameter origins; an untracked sibling cannot mask them. Runtime controls retain declared retention, same-origin updates and independent pointer descriptors. Both build modes pass the focused suites and fixture profiles. | Second batch implementation |
+| C4: variant payload alias lifetime | Implemented: payload storage lifetime is independent of reference-bearing type. Direct and known-alias replacements, inout calls, derived addresses, cleanup and reachable loop uses participate; runtime controls cover last use, siblings, copied computed subjects and descriptor rebinding. D217 pins the construction boundary, and pointer-backed retags preserve initializer effects. Both build modes pass the focused suites and fixture profiles. | Second batch implementation |
 | C5: dense inference matrices | Still present in source: effects, required sets and call edges are dense stack arrays. The old exhaustion threshold was not rerun. Move program-sized storage off the host stack and measure scaling without weakening inference completion. | Third batch |
 | C6: nested-call depth | Still present in source: the general call parser lacks its siblings' depth guard. Add balanced recovery and bounded depth regressions in both modes. No new overflow run was made. | Third batch |
 | M1: conformance lookahead | Still reproduced: `v := 1` followed by `is := 2` is falsely parsed as a conformance. Stop at the binding initializer delimiter and retain legitimate conformance controls. | Third batch |

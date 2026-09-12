@@ -11630,8 +11630,11 @@ package body Landin.Stages.Lowering is
                            --  Base/Steps is the run that reaches it.
                            Holder : constant Syn.Node_Id :=
                              Syn.Target_Of (Of_Tree, Place);
+                           Referenced : constant Boolean :=
+                             Has_Reference_Storage (Of_Tree, Holder);
                            Computed : constant Boolean :=
-                             Has_Computed_Index (Of_Tree, Holder);
+                             Has_Computed_Index (Of_Tree, Holder)
+                             or else Referenced;
                            Named : constant Syn.Node_Id :=
                              (if Computed then Syn.No_Node
                               else Chain_Root (Of_Tree, Place));
@@ -11662,7 +11665,30 @@ package body Landin.Stages.Lowering is
                              (Landin.Checking.Field_Kind_Of
                                 (Types.all, Wrote, Field)
                                 = Landin.Checking.Variant_Field);
-                           if Computed then
+                           if Referenced then
+                              --  Capture the holder once, then select and
+                              --  write its actual variant part. A whole
+                              --  holder copy would overwrite sibling effects
+                              --  performed by payload expressions (D76).
+                              declare
+                                 Reached_Place : constant Stored_Place :=
+                                   Lower_Stored_Place
+                                     (Of_Tree, Holder, Scope);
+                              begin
+                                 if Current /= IR.No_Block then
+                                    declare
+                                       Into : constant IR.Storage :=
+                                         Addressed_Storage
+                                           (Reached_Place,
+                                            Neutral_Body (Wrote), Site);
+                                    begin
+                                       Write_Variant_Value
+                                         (Syn.Value_Of (Of_Tree, Stmt),
+                                          Wrote, Field, Into, Base => Field);
+                                    end;
+                                 end if;
+                              end;
+                           elsif Computed then
                               declare
                                  Holder_Place : constant Stored_Place :=
                                    Lower_Stored_Place
