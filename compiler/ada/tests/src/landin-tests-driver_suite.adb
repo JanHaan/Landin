@@ -1964,6 +1964,14 @@ package body Landin.Tests.Driver_Suite is
    begin
       for Executable in Boolean loop
          Check
+           ("triple: type = struct x: i32 y: i32 z: i32 end triple "
+            & "image: triple = triple(x: 1, of 2, of 3)",
+            "L0103", 1, Executable);
+         Check
+           ("triple: type = struct x: i32 y: i32 z: i32 end triple "
+            & "image: triple = triple(x: 1, of 2, y: 3)",
+            "L0103", 1, Executable);
+         Check
            ("problem: atom "
             & "retain: (escaping value: ptr i32) -> none = end retain "
             & "leaf: () -> none ! problem = fail problem end leaf "

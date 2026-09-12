@@ -6033,8 +6033,8 @@ checks used the existing debug binary, sequentially, with 10-second timeouts.
 | --- | --- | --- |
 | K1 | A1: runtime call in a reference-valued module struct field reaches lowering | Current debug witness exits 70; direct reference-field checking lacks the static-known gate. Add a source diagnostic for ordinary fields and variant payloads before image lowering, preserving permitted static references. Related to J30's image boundary, but a runtime call is distinct from J30's module-name/member form. |
 | K2 | A2: statements followed by a function's final value are refused | Already repaired by 7250d298 under A2/C2/M3. Reuse the final-value grammar, checking and runtime evidence; no replay needed. |
-| K3 | A3: labelled construction treats `any(...)` as a type | Current `Begins_Argument_Type` still treats every `Kw_Any` as a type start. Distinguish `any C` from the expression form, preserving contextual, nominal and generic type-argument controls. This is a separate follow-up to the repaired type-only construction refusals. |
-| K4 | A4: repeated or non-trailing `of` fills are accepted | Both tiny current debug witnesses exit 0. Enforce the grammar's single trailing fill without discarding later source or changing D214's evaluation order; keep valid fill and parser-recovery controls. |
+| K3 | A3: labelled construction treats `any(...)` as a type | Repaired: argument lookahead distinguishes the expression `any(...)` from the type `any C`, as it already does for pointer syntax. Parser projections remain separate; contextual and nominal erased-value constructions pass checking. Existing neutral type-argument and type-only refusal controls remain required. |
+| K4 | A4: repeated or non-trailing `of` fills are accepted | Repaired: a labelled application reports L0103 once when another argument follows its fill, while retaining the argument tree and later source. Controls cover repeated fills, later labels/positionals, nested valid and invalid fills, a field named `of`, and recovery. Fake-host driver refusals require no output/tool effects; D214's valid evaluation order is unchanged. |
 | K5 | A5: static-address search descends into unevaluated literal `lenof` | Current debug witness reports L0305 for an unevaluated address. Apply D31 consistently in the static-image address walk, retaining the actual module-address refusal and slice-descriptor evaluation boundaries. |
 | K6 | A6: distinct extraction inside a variant payload tests the outer node | Duplicate J55. The payload's `Given`, rather than the containing `Value`, owns the conversion exemption; preserve ordinary-field and static distinct-image controls. |
 | K7 | B1: indexed-field and pointer assignment destinations miss reads before the RHS | Repaired by 0f708770 under J1/J3/J74. Both imported current debug witnesses now produce exactly one L0302, including the formerly crashing unassigned pointer destination. |
@@ -6094,8 +6094,20 @@ worker; each selected test has a timeout of at most 30 seconds. Logs are in
 run no assembler, linker or generated Landin executable and do not replace
 exact-revision acceptance. No language sequencing rule changed.
 
-K8, K11 and K36 are repaired. K3/K4's parser boundaries are next, followed
-by K1/K5's static-image checks and the existing checker/conformance group.
+K3/K4 development evidence: nine selected cases pass 355 checks in each of
+macOS debug and Linux release. Fourteen small parser sources exercise the fill
+boundary and recovery; neutral projections, full erased-value constructions,
+ordinary nominal construction and prior type-only refusals remain covered.
+Two fake-host driver sources reject invalid fills without output or tool effects.
+The debug build first reported overlong test lines; after formatting corrections,
+the required clean rebuild passed under its 300-second limit. Both builds use
+one worker, and selected tests have timeouts of at most 30 seconds. Logs are in
+`.scratch/r491-construction-boundaries/` and `.scratch/r491-final-values/`.
+No assembler, linker or generated Landin executable ran. These are filtered
+development checks, not exact-revision acceptance.
+
+K3, K4, K8, K11 and K36 are repaired. K1/K5/K6's static-image checks are next,
+followed by the existing checker/conformance group.
 Keep J2's call-return contract question active. K12 needs a semantic
 disposition before implementation. The verifier, optimization, build-identity
 and ABI items above remain owned by the corresponding later repair groups.

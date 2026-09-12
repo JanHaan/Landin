@@ -10701,8 +10701,42 @@ package body Landin.Tests.Checking_Suite is
         (Item, Seen, 2, "both variant initializers were inspected");
    end Variant_Array_Elements_Keep_Case_Identity;
 
+   procedure Construction_Arguments_Keep_Value_Forms
+     (Item : in out Landin.Testing.Context);
+
+   procedure Construction_Arguments_Keep_Value_Forms
+     (Item : in out Landin.Testing.Context) is
+   begin
+      R440_Check_Source
+        (Item,
+         "display: type = concept (t: type)" & LF
+         & "get: (self: ptr t) -> (r: i32)" & LF
+         & "end display" & LF
+         & "thing: type = struct value: i32 end thing" & LF
+         & "get_thing: (self: ptr thing) -> (r: i32) =" & LF
+         & "r = self.val.value end get_thing" & LF
+         & "thing is display (get: get_thing)" & LF
+         & "holder: type = struct item: any display end holder" & LF
+         & "f: () -> none =" & LF
+         & "local: thing = (value: 42)" & LF
+         & "wrapped: holder = holder(item: any(addr local))" & LF
+         & "contextual: holder = (item: any(addr local))" & LF
+         & "end f" & LF);
+      R440_Check_Source
+        (Item,
+         "triple: type = struct x: i32 y: i32 z: i32 end triple" & LF
+         & "image: triple = triple(x: 1, of 2)" & LF
+         & "f: () -> none =" & LF
+         & "local: triple = triple(x: 1, y: 2, of 3)" & LF
+         & "contextual: triple = (x: 1, of 2)" & LF
+         & "end f" & LF);
+   end Construction_Arguments_Keep_Value_Forms;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "checking", "construction arguments keep value forms",
+         Construction_Arguments_Keep_Value_Forms'Access);
       Landin.Testing.Register
         (Into, "checking", "fresh bindings reset flow facts",
          Fresh_Bindings_Reset_Flow_Facts'Access);

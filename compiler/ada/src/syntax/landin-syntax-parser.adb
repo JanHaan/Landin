@@ -559,9 +559,9 @@ package body Landin.Syntax.Parser is
             begin
                if Peek = Tok.Left_Paren then
                   return Starts_Signature;
-               elsif Peek in Tok.Kw_Any | Tok.Kw_Extern then
+               elsif Peek = Tok.Kw_Extern then
                   return True;
-               elsif Peek = Tok.Kw_Ptr then
+               elsif Peek in Tok.Kw_Ptr | Tok.Kw_Any then
                   return Ahead (1) /= Tok.Left_Paren;
                elsif Peek /= Tok.Left_Bracket then
                   return False;
@@ -7075,6 +7075,8 @@ package body Landin.Syntax.Parser is
                Args             : Slot_Vectors.Vector;
                Named_Seen       : Boolean := False;
                Order_Complained : Boolean := False;
+               Fill_Seen        : Boolean := False;
+               Fill_Complained  : Boolean := False;
                Direct           : constant Boolean :=
                  Kind (Result, Callee) = Name_Reference;
             begin
@@ -7120,6 +7122,19 @@ package body Landin.Syntax.Parser is
                      declare
                         Before : constant Tok.Token_Index := Index;
                      begin
+                        if Fill_Seen and then not Fill_Complained then
+                           Complain
+                             (Item    => Syn.Token_Expected,
+                              Where   => Here,
+                              Message => "a construction fill must be the"
+                                         & " last argument",
+                              Note    => "[1810]: a labelled application"
+                                         & " permits one trailing `of`"
+                                         & " expression",
+                              Related => Starts,
+                              Because => "this labelled application");
+                           Fill_Complained := True;
+                        end if;
                         if Peek = Tok.Identifier
                           and then
                             (Ahead (1) = Tok.Colon
@@ -7137,6 +7152,7 @@ package body Landin.Syntax.Parser is
                                 Ahead (1) /= Tok.Colon;
                               RHS : Node_Id;
                            begin
+                              Fill_Seen := Fill_Seen or Is_Fill;
                               if not Named_Seen then
                                  --  Once a label appears every earlier
                                  --  positional child acquires the same
@@ -7202,7 +7218,9 @@ package body Landin.Syntax.Parser is
                                  else Parse_Expression);
                            begin
                               if Named_Seen then
-                                 if not Order_Complained then
+                                 if not Order_Complained
+                                   and then not Fill_Seen
+                                 then
                                     Complain
                                       (Item    => Syn.Positional_After_Named,
                                        Where   => At_Argument,
