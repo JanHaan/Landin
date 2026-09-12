@@ -40,7 +40,12 @@ an ordinary `core/region` allocator over an explicit provider, with explicit
 bulk cleanup; its allocations keep [0790]'s independent results. The compiler
 does not promise transitive lifetime checks for those results. Direct tracked
 references, source-derived views, and erased callback state retain their
-existing local checks. The historical W7 finding remains unedited.
+existing local checks. In particular, [1910] rejects retaining a frame or
+non-escaping reference by writing through a caller's pointer, slice or inout
+field. A known local alias cannot conceal that stored origin. This preserves
+the retained text and callback obligations shared with prototypes 2 and 3;
+independent allocator results and same-origin updates remain permitted.
+The historical W7 finding remains unedited.
 
 The bounded memory-world pressure uses ordinary `core/io.memory` with explicit
 caller file tables, output/error buffers and injected argument descriptors.

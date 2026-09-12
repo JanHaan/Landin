@@ -37,6 +37,7 @@ package body Landin.Stages.Checking.References is
    use type Syn.Node_Kind;
    use type Syn.Parameter_Convention;
    use type Ty.Type_Kind;
+   use type Ty.Magnitude;
 
    procedure Check_Function
      (Context       : in out Compilation;
@@ -99,8 +100,8 @@ package body Landin.Stages.Checking.References is
         (Value => (Presence => No_Edge, others => <>), others => <>);
       Empty_Origin : constant Origin_Fact :=
         (Value => (Presence => Empty_Optional, others => <>), others => <>);
-      --  This pass tracks values, not writes through aliases.  Never reuse
-      --  an empty-value proof for storage whose address can be exposed in
+      --  Known alias stores join origins, but calls can still write through
+      --  aliases. Never reuse an empty-value proof for storage exposed in
       --  this body, or for module state which another call can change.
       Exposed : Declaration_Bits := [others => False];
       type Origin_Table is
@@ -115,6 +116,10 @@ package body Landin.Stages.Checking.References is
       --  carried in either payload still points where the subject said.
       Pattern_Storage : array (Origins'Range) of Reference_Fact :=
         [others => No_Reference];
+      Pattern_Subject : array (Origins'Range) of Syn.Node_Id :=
+        [others => Syn.No_Node];
+      Pattern_Block : array (Origins'Range) of Syn.Node_Id :=
+        [others => Syn.No_Node];
       Falls_Through : Boolean := True;
       Parameter_Of : array (Origins'Range) of Natural := [others => 0];
       Parameter_Escapes : array (1 .. Parameters) of Boolean :=
@@ -220,6 +225,8 @@ package body Landin.Stages.Checking.References is
         (Tree : Syn.Tree; Node : Syn.Node_Id) return Res.Declaration_Id;
 
       function Has_References (Id : Res.Declaration_Id) return Boolean;
+      function Has_References
+        (Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
 
       function Match_Subject_Is_Copied
         (Tree : Syn.Tree; Subject : Syn.Node_Id) return Boolean;
@@ -270,7 +277,12 @@ package body Landin.Stages.Checking.References is
         (Borrower : Res.Declaration_Id;
          After    : Landin.Source.Byte_Offset) return Boolean;
 
-      procedure Check_Borrows (Tree : Syn.Tree; Call : Syn.Node_Id);
+      procedure Check_Borrows
+        (Tree : Syn.Tree; Call : Syn.Node_Id; Known : Argument_Facts);
+      function Check_Payload_Borrows
+        (Tree : Syn.Tree; Place : Syn.Node_Id;
+         After : Landin.Source.Byte_Offset; Storage : Reference_Fact)
+         return Boolean;
 
       procedure Check_Returns (Tree : Syn.Tree; At_Node : Syn.Node_Id);
 
@@ -316,9 +328,17 @@ package body Landin.Stages.Checking.References is
            Value_Fact'Max (Into_Fact.Presence, Other.Presence);
          Into_Fact.Frame := Into_Fact.Frame or Other.Frame;
          Into_Fact.Untracked := Into_Fact.Untracked or Other.Untracked;
+         --  An explicitly untracked alternative cannot erase a tracked
+         --  frame or parameter origin contributed by another alternative.
+         if Into_Fact.Frame then
+            Into_Fact.Untracked := False;
+         end if;
          for Position in Into_Fact.From'Range loop
             Into_Fact.From (Position) :=
               Into_Fact.From (Position) or Other.From (Position);
+            if Into_Fact.From (Position) then
+               Into_Fact.Untracked := False;
+            end if;
          end loop;
          for Id in Into_Fact.Derives'Range loop
             Into_Fact.Derives (Id) :=
@@ -421,6 +441,60 @@ package body Landin.Stages.Checking.References is
               and then Landin.Checking.Contains_References
                 (Types.all,
                  Landin.Checking.Array_Element_Shape (Types.all, Id));
+         end if;
+         return False;
+      end Has_References;
+
+      function Has_References
+        (Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
+      is
+         Kind : constant Ty.Type_Kind :=
+           Landin.Checking.Type_Of (Types.all, Tree, Node);
+      begin
+         if Kind in Ty.Pointer_Value | Ty.Slice_Value | Ty.Any_Value then
+            return True;
+         elsif Kind = Ty.Not_Typed
+           and then Syn.Kind (Tree, Node) = Syn.Member_Selection
+           and then Landin.Checking.Field_Index (Types.all, Tree, Node) > 0
+         then
+            --  A variant destination carries a field descriptor rather
+            --  than a general expression type.
+            return Landin.Checking.Contains_References
+              (Types.all, Landin.Checking.Field_Shape_Of
+                 (Types.all, Landin.Checking.Nominal_Of
+                    (Types.all, Tree, Syn.Target_Of (Tree, Node)),
+                  Landin.Checking.Field_Index (Types.all, Tree, Node)));
+         elsif Kind = Ty.Aggregate then
+            declare
+               Nominal : constant Landin.Checking.Nominal_Type_Id :=
+                 Landin.Checking.Nominal_Of (Types.all, Tree, Node);
+               Shape : constant Landin.Checking.Signature_Id :=
+                 Landin.Checking.Result_Shape_Of (Types.all, Tree, Node);
+            begin
+               if Landin.Checking.Holds (Types.all, Shape) then
+                  for Position in
+                    1 .. Landin.Checking.Signature_Result_Count
+                      (Types.all, Shape)
+                  loop
+                     if Landin.Checking.Contains_References
+                       (Types.all, Landin.Checking.Nth_Signature_Result
+                          (Types.all, Shape, Position))
+                     then
+                        return True;
+                     end if;
+                  end loop;
+                  return False;
+               end if;
+               return Nominal /= Landin.Checking.No_Nominal_Type
+                 and then Landin.Checking.Has_Layout (Types.all, Nominal)
+                 and then Landin.Checking.Contains_References
+                   (Types.all, Nominal);
+            end;
+         elsif Kind = Ty.Fixed_Array then
+            return Landin.Checking.Array_Length (Types.all, Tree, Node) > 0
+              and then Landin.Checking.Contains_References
+                (Types.all, Landin.Checking.Array_Element_Shape
+                   (Types.all, Tree, Node));
          end if;
          return False;
       end Has_References;
@@ -648,6 +722,16 @@ package body Landin.Stages.Checking.References is
         return Res.Declaration_Id
       is
       begin
+         if Fact.Frame then
+            for Id in Origins'Range loop
+               if Fact.Derives (Positive (Id))
+                 and then Res.Sort_Of (Meanings.all, Id)
+                   in Res.Local_Binding | Res.Named_Return
+               then
+                  return Id;
+               end if;
+            end loop;
+         end if;
          for Id in Origins'Range loop
             if Fact.Derives (Positive (Id)) then
                return Id;
@@ -791,6 +875,8 @@ package body Landin.Stages.Checking.References is
 
          function Is_Replacement (Place : Syn.Node_Id) return Boolean
            is (Syn.Kind (Of_Tree, Place) = Syn.Name_Reference
+               and then Res.Sort_Of (Meanings.all, Borrower)
+                 /= Res.Pattern_Binding
                and then Root_Declaration (Of_Tree, Place) = Borrower);
 
          procedure Absorb (Into_Summary : in out Summary; Arm : Summary);
@@ -1089,6 +1175,11 @@ package body Landin.Stages.Checking.References is
 
          Pending : Summary := (Falls => True, others => False);
       begin
+         for Action of Cleanup_Stack loop
+            if Action.Active and then Reads_In (Action.Call) then
+               return True;
+            end if;
+         end loop;
          if Positions.Is_Empty then
             --  An expression body: whatever follows the call is in it.
             return Reads_In (Body_Node, After);
@@ -1124,6 +1215,12 @@ package body Landin.Stages.Checking.References is
                   end;
                end if;
 
+               if Frame.Block = Pattern_Block (Borrower) then
+                  --  A later iteration establishes fresh arm bindings.
+                  --  Loops inside this arm were already checked above.
+                  return False;
+               end if;
+
                if Frame.Of_Loop /= Syn.No_Node then
                   if Pending.Falls or Pending.Continues then
                      if Reads_Around (Frame.Of_Loop)
@@ -1151,7 +1248,237 @@ package body Landin.Stages.Checking.References is
          return False;
       end Has_Future_Use;
 
-      procedure Check_Borrows (Tree : Syn.Tree; Call : Syn.Node_Id)
+      function Check_Payload_Borrows
+        (Tree : Syn.Tree; Place : Syn.Node_Id;
+         After : Landin.Source.Byte_Offset; Storage : Reference_Fact)
+         return Boolean
+      is
+         function Same_Path (Left, Right : Syn.Node_Id) return Boolean;
+         function Replaces (Subject : Syn.Node_Id) return Boolean;
+         function Replaces_Aliased_Storage (Pattern : Res.Declaration_Id)
+           return Boolean;
+         function Disjoint_Frame_Storage (Pattern : Res.Declaration_Id)
+           return Boolean;
+         function Known_Index
+           (Node : Syn.Node_Id; Value : out Ty.Magnitude) return Boolean;
+
+         function Known_Index
+           (Node : Syn.Node_Id; Value : out Ty.Magnitude) return Boolean
+         is
+            Overflowed : Boolean;
+         begin
+            Value := 0;
+            if Syn.Kind (Tree, Node) /= Syn.Integer_Literal then
+               return False;
+            end if;
+            Ty.Evaluate
+              (Landin.Source.Slice
+                 (Source (Context, Syn.Source_Of (Tree)),
+                  Syn.Digit_Span (Tree, Node)),
+               Syn.Base (Tree, Node), Value, Overflowed);
+            return not Overflowed;
+         end Known_Index;
+
+         function Same_Path (Left, Right : Syn.Node_Id) return Boolean is
+         begin
+            if Syn.Kind (Tree, Left) /= Syn.Kind (Tree, Right) then
+               return False;
+            end if;
+            case Syn.Kind (Tree, Left) is
+               when Syn.Name_Reference =>
+                  return Root_Declaration (Tree, Left) /= Res.No_Declaration
+                    and then Root_Declaration (Tree, Left)
+                      = Root_Declaration (Tree, Right);
+               when Syn.Member_Selection =>
+                  return Syn.Name (Tree, Left) = Syn.Name (Tree, Right)
+                    and then Same_Path
+                      (Syn.Target_Of (Tree, Left),
+                       Syn.Target_Of (Tree, Right));
+               when Syn.Element_Index =>
+                  declare
+                     L, R : Ty.Magnitude;
+                  begin
+                     return Same_Path
+                       (Syn.Target_Of (Tree, Left),
+                        Syn.Target_Of (Tree, Right))
+                       and then
+                         (not Known_Index (Syn.Index_Of (Tree, Left), L)
+                          or else not Known_Index
+                            (Syn.Index_Of (Tree, Right), R)
+                          or else L = R);
+                  end;
+               when others =>
+                  return False;
+            end case;
+         end Same_Path;
+
+         function Replaces (Subject : Syn.Node_Id) return Boolean is
+            Current : Syn.Node_Id := Subject;
+         begin
+            while Current /= Syn.No_Node loop
+               if Same_Path (Place, Current) then
+                  return True;
+               end if;
+               exit when Syn.Kind (Tree, Current)
+                 not in Syn.Member_Selection | Syn.Element_Index;
+               declare
+                  Target : constant Syn.Node_Id :=
+                    Syn.Target_Of (Tree, Current);
+               begin
+                  --  Replacing a descriptor does not overwrite its backing.
+                  exit when Landin.Checking.Type_Of
+                    (Types.all, Tree, Target)
+                      in Ty.Pointer_Value | Ty.Slice_Value;
+                  Current := Target;
+               end;
+            end loop;
+            return False;
+         end Replaces;
+
+         function Replaces_Aliased_Storage (Pattern : Res.Declaration_Id)
+           return Boolean
+         is
+            Same_Root : Boolean := False;
+         begin
+            if Root_Declaration (Tree, Place)
+              = Root_Declaration (Tree, Pattern_Subject (Pattern))
+            then
+               return False;
+            end if;
+            for Id in Storage.Derives'Range loop
+               Same_Root := Same_Root or else
+                 (Storage.Derives (Id) and then Pattern_Storage (Pattern)
+                    .Derives (Id));
+            end loop;
+            if not Same_Root then
+               return False;
+            end if;
+            --  Known address aliases share backing roots. A contextual
+            --  variant write or containing aggregate replacement through
+            --  one can invalidate aliases reached through another.
+            if Syn.Kind (Tree, Place) = Syn.Member_Selection
+              and then Landin.Checking.Type_Of (Types.all, Tree, Place)
+                = Ty.Not_Typed
+              and then Landin.Checking.Field_Index (Types.all, Tree, Place)
+                > 0
+            then
+               return True;
+            end if;
+            declare
+               Nominal : constant Landin.Checking.Nominal_Type_Id :=
+                 Landin.Checking.Nominal_Of (Types.all, Tree, Place);
+               Current : Syn.Node_Id := Pattern_Subject (Pattern);
+            begin
+               while Current /= Syn.No_Node loop
+                  if Nominal /= Landin.Checking.No_Nominal_Type
+                    and then Nominal = Landin.Checking.Nominal_Of
+                      (Types.all, Tree, Current)
+                  then
+                     return True;
+                  end if;
+                  exit when Syn.Kind (Tree, Current)
+                    not in Syn.Member_Selection | Syn.Element_Index;
+                  Current := Syn.Target_Of (Tree, Current);
+                  exit when Landin.Checking.Type_Of
+                    (Types.all, Tree, Current)
+                      in Ty.Pointer_Value | Ty.Slice_Value;
+               end loop;
+            end;
+            return False;
+         end Replaces_Aliased_Storage;
+
+         function Disjoint_Frame_Storage (Pattern : Res.Declaration_Id)
+           return Boolean
+         is
+            Left_Known, Right_Known : Boolean := False;
+
+            function Descriptor_Root (Node : Syn.Node_Id)
+              return Res.Declaration_Id;
+
+            function Descriptor_Root (Node : Syn.Node_Id)
+              return Res.Declaration_Id
+            is
+               Current : Syn.Node_Id := Node;
+            begin
+               while Syn.Kind (Tree, Current)
+                 in Syn.Member_Selection | Syn.Element_Index
+               loop
+                  Current := Syn.Target_Of (Tree, Current);
+                  if Landin.Checking.Type_Of (Types.all, Tree, Current)
+                    in Ty.Pointer_Value | Ty.Slice_Value
+                  then
+                     return Root_Declaration (Tree, Current);
+                  end if;
+               end loop;
+               return Res.No_Declaration;
+            end Descriptor_Root;
+
+            Left_Descriptor : constant Res.Declaration_Id :=
+              Descriptor_Root (Place);
+            Right_Descriptor : constant Res.Declaration_Id :=
+              Descriptor_Root (Pattern_Subject (Pattern));
+         begin
+            if not Storage.Frame or else not Pattern_Storage (Pattern).Frame
+            then
+               return False;
+            end if;
+            --  Selector facts also name the descriptor used to reach their
+            --  storage. Rebinding that descriptor does not identify the old
+            --  and new pointees. Both sides still need known backing roots.
+            for Id in Storage.Derives'Range loop
+               if Res.Declaration_Id (Id) /= Left_Descriptor
+                 and then Res.Declaration_Id (Id) /= Right_Descriptor
+               then
+                  Left_Known := Left_Known or Storage.Derives (Id);
+                  Right_Known := Right_Known
+                    or Pattern_Storage (Pattern).Derives (Id);
+                  if Storage.Derives (Id)
+                    and then Pattern_Storage (Pattern).Derives (Id)
+                  then
+                     return False;
+                  end if;
+               end if;
+            end loop;
+            return Left_Known and Right_Known;
+         end Disjoint_Frame_Storage;
+      begin
+         for Pattern in Origins'Range loop
+            if Pattern_Subject (Pattern) /= Syn.No_Node
+              and then not Disjoint_Frame_Storage (Pattern)
+              and then (Replaces (Pattern_Subject (Pattern))
+                        or else Replaces_Aliased_Storage (Pattern))
+            then
+               for Borrower in Origins'Range loop
+                  if (Borrower = Pattern
+                      or else (Has_References (Borrower)
+                               and then Origins (Borrower).Value.Derives
+                                 (Positive (Pattern))))
+                    and then Has_Future_Use (Borrower, After)
+                  then
+                     Bad.Report
+                       (Item    => Bad.Borrowed_Place,
+                        Source  => Syn.Source_Of (Tree),
+                        Where   => Syn.Where (Tree, Place),
+                        Message => "this may replace a variant while its"
+                                   & " payload storage is still in use",
+                        Note    => "D78/D85: payload aliases refer to the"
+                                   & " selected case's storage",
+                        Related => Syn.Origin
+                          (Tree_For
+                             (Res.Source_Of (Meanings.all, Borrower)).all,
+                           Res.Node_Of (Meanings.all, Borrower)),
+                        Because => "the live payload alias or derived view",
+                        Into    => Sink.all);
+                     return True;
+                  end if;
+               end loop;
+            end if;
+         end loop;
+         return False;
+      end Check_Payload_Borrows;
+
+      procedure Check_Borrows
+        (Tree : Syn.Tree; Call : Syn.Node_Id; Known : Argument_Facts)
       is
          Called : constant Landin.Checking.Signature_Id :=
            Call_Signature (Tree, Call);
@@ -1176,6 +1503,9 @@ package body Landin.Stages.Checking.References is
                if Part.Convention
                     in Syn.Inout_Convention | Syn.Sink_Convention
                  and then Mutated /= Res.No_Declaration
+                 and then not Check_Payload_Borrows
+                   (Tree, Argument, Syn.Where (Tree, Call).Last,
+                    Known_Fact (Tree, Known, Argument).Storage)
                then
                   --  [0830]: a borrow is a view.  A scalar computed from
                   --  one carries derivation facts for [0790]'s clauses but
@@ -1511,7 +1841,7 @@ package body Landin.Stages.Checking.References is
                         return No_Value_Edge;
                      end if;
                      Check_Escaping_Arguments (Tree, Node, Known);
-                     Check_Borrows (Tree, Node);
+                     Check_Borrows (Tree, Node, Known);
                      if Landin.Checking.Holds (Types.all, Called) then
                         for Returned in
                           1 .. Landin.Checking.Signature_Result_Count
@@ -1742,33 +2072,83 @@ package body Landin.Stages.Checking.References is
       is
          Id : constant Res.Declaration_Id := Root_Declaration (Tree, Place);
          Target : constant Origin_Fact := Fact_Of (Tree, Place);
-         Fact : constant Origin_Fact := Fact_Of (Tree, Value);
+         Fact : Origin_Fact := No_Origin;
+         Retag_First : constant Boolean :=
+           (Landin.Checking.Type_Of (Types.all, Tree, Place) = Ty.Not_Typed
+            and then not Match_Subject_Is_Copied (Tree, Place))
+           or else Syn.Kind (Tree, Value) = Syn.Struct_Literal
+           or else (Syn.Kind (Tree, Value) = Syn.Labeled_Application
+                    and then Res.Class_Of (Meanings.all, Tree, Value)
+                      = Res.Type_Construction);
+         Valid : constant Boolean :=
+           Landin.Checking.Type_Of (Types.all, Tree, Place) /= Ty.Ill_Typed
+           and then Landin.Checking.Type_Of
+             (Types.all, Tree, Value) /= Ty.Ill_Typed;
+
+         function Through_Descriptor return Boolean;
+
+         function Through_Descriptor return Boolean is
+            Current : Syn.Node_Id := Place;
+         begin
+            while Syn.Kind (Tree, Current)
+              in Syn.Member_Selection | Syn.Element_Index
+            loop
+               Current := Syn.Target_Of (Tree, Current);
+               if Landin.Checking.Type_Of (Types.all, Tree, Current)
+                 in Ty.Pointer_Value | Ty.Slice_Value
+               then
+                  return True;
+               end if;
+            end loop;
+            return False;
+         end Through_Descriptor;
       begin
-         pragma Unreferenced (Target);
-         if not Falls_Through
-           or else Id = Res.No_Declaration or else Id not in Origins'Range
+         if not Falls_Through then
+            return;
+         end if;
+         --  D76 selects a direct variant case before its payload values.
+         --  An old payload used by those values is therefore still live.
+         if Valid and then Retag_First and then Check_Payload_Borrows
+           (Tree, Place, Syn.Where (Tree, Place).Last, Target.Storage)
          then
             return;
          end if;
+         Fact := Fact_Of (Tree, Value);
+         if not Falls_Through then
+            return;
+         end if;
+         if Valid and then not Retag_First and then Check_Payload_Borrows
+           (Tree, Place, Syn.Where (Tree, Value).Last, Target.Storage)
+         then
+            return;
+         end if;
+         if not Has_References (Tree, Place) then
+            Fact := No_Origin;
+         end if;
 
-         if Res.Sort_Of (Meanings.all, Id) = Res.Module_Binding
+         if Valid
+           and then ((Id /= Res.No_Declaration
+              and then Res.Sort_Of (Meanings.all, Id) = Res.Module_Binding)
+             or else (not Target.Storage.Frame
+                      and then not Target.Storage.Untracked))
            and then not Fact.Value.Untracked
          then
             if Fact.Value.Frame then
                Report_Escape
                  (Tree, Value, Fact.Value,
-                  "this frame-origin reference cannot be stored in module"
-                  & " state",
+                  "this frame-origin reference cannot be stored in"
+                  & " storage outside this frame",
                   Syn.Origin (Tree, Place));
             else
                for Source in Fact.Value.From'Range loop
                   if Fact.Value.From (Source)
                     and then not Parameter_Escapes (Source)
+                    and then not Target.Storage.From (Source)
                   then
                      Report_Escape
                        (Tree, Value, Fact.Value,
                         "this non-escaping parameter cannot be retained in"
-                        & " module state",
+                        & " storage belonging to another origin",
                         Syn.Origin (Tree, Place));
                      exit;
                   end if;
@@ -1776,9 +2156,26 @@ package body Landin.Stages.Checking.References is
             end if;
          end if;
 
+         --  An address of known local storage keeps its declaration roots.
+         --  A write through that address must update their value facts too;
+         --  otherwise returning the local would forget the aliased write.
+         if Target.Storage.Frame then
+            for Stored in Origins'Range loop
+               if Stored /= Id
+                 and then Target.Storage.Derives (Positive (Stored))
+               then
+                  Join (Origins (Stored).Value, Fact.Value);
+                  Origins (Stored).Results.Clear;
+               end if;
+            end loop;
+         end if;
+
+         if Id = Res.No_Declaration or else Id not in Origins'Range then
+            return;
+         end if;
          if Syn.Kind (Tree, Place) = Syn.Name_Reference then
             Origins (Id) := Fact;
-         else
+         elsif not Through_Descriptor then
             Join (Origins (Id).Value, Fact.Value);
             --  A partial write invalidates positional detail until a whole
             --  replacement establishes it again; the union remains sound.
@@ -2074,6 +2471,12 @@ package body Landin.Stages.Checking.References is
                                     else No_Origin);
                                  Origins (Id).Value.Presence := Unknown_Value;
                                  Pattern_Storage (Id) := Subject_Storage;
+                                 Pattern_Subject (Id) :=
+                                   (if Match_Subject_Is_Copied
+                                         (Tree, Subject_Node)
+                                    then Syn.No_Node else Subject_Node);
+                                 Pattern_Block (Id) :=
+                                   Syn.Body_Of (Tree, This);
                               end if;
                            end;
                         end loop;

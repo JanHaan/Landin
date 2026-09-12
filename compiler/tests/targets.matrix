@@ -770,12 +770,14 @@ negative/r491-consumed-subplace-reads | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-empty-slice-scalar-contexts | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-generic-array-field-shape | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-generic-array-field-unassigned | linux-x86-64, macos-arm64, synthetic-32
+negative/r491-live-payload-aliases | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-malformed-public-start | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-match-extra-colon | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-match-extra-paren | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-public-conformance | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-public-fixed | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-public-import | linux-x86-64, macos-arm64, synthetic-32
+negative/r491-retained-reference-stores | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-sunk-inout-exit-edges | linux-x86-64, macos-arm64, synthetic-32
 negative/range-subtype-address | linux-x86-64, macos-arm64
 negative/range-subtype-base-is-not-an-integer | linux-x86-64, macos-arm64
@@ -1580,6 +1582,8 @@ runtime/r490-review-generic-empty-module-nonzeroable | linux-x86-64
 runtime/r491-consumed-place-restoration | linux-x86-64
 runtime/r491-generic-array-fields | linux-x86-64
 runtime/r491-generic-empty-slice-contexts | linux-x86-64
+runtime/r491-payload-alias-last-use | linux-x86-64
+runtime/r491-reference-store-origins | linux-x86-64
 runtime/range-subtype-checks | linux-x86-64
 runtime/range-subtype-conversion-traps | linux-x86-64
 runtime/range-subtype-store-traps | linux-x86-64

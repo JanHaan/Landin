@@ -1,0 +1,63 @@
+anchor: i32 = 0
+holder: type = struct
+    pointer: ptr i32
+end holder
+
+inout_frame: (inout target: ptr i32) -> none =
+    local: i32 = 1
+    target = addr local
+end inout_frame
+
+inout_parameter: (inout target: ptr i32, source: ptr i32) -> none =
+    target = source
+end inout_parameter
+
+pointee_frame: (target: ptr mut ptr i32) -> none =
+    local: i32 = 1
+    target.val = addr local
+end pointee_frame
+
+pointee_parameter: (target: ptr mut ptr i32, source: ptr i32) -> none =
+    target.val = source
+end pointee_parameter
+
+slice_frame: (target: []mut ptr i32) -> none =
+    local: i32 = 1
+    target[0] = addr local
+end slice_frame
+
+field_frame: (inout target: holder) -> none =
+    local: i32 = 1
+    target.pointer = addr local
+end field_frame
+
+aliased_local: () -> (result: ptr i32) =
+    local: i32 = 1
+    mut slot: ptr i32 = addr anchor
+    view: ptr mut ptr i32 = addr slot
+    view.val = addr local
+    result = slot
+end aliased_local
+
+aliased_untracked: () -> (result: ptr i32) =
+    local: i32 = 1
+    mut slot: ptr i32 = ptr(0x1000)
+    view: ptr mut ptr i32 = addr slot
+    view.val = addr local
+    result = slot
+end aliased_untracked
+
+aliased_parameter: (source: ptr i32) -> (result: ptr i32) =
+    mut slot: ptr i32 = ptr(0x1000)
+    view: ptr mut ptr i32 = addr slot
+    view.val = source
+    result = slot
+end aliased_parameter
+
+option: type = struct
+    kind: variant empty | present: (value: ptr i32) end kind
+end option
+variant_frame: (inout target: option) -> none =
+    local: i32 = 1
+    target.kind = present(value: addr local)
+end variant_frame

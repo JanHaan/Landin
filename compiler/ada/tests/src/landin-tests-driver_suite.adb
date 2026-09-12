@@ -1989,6 +1989,18 @@ package body Landin.Tests.Driver_Suite is
             & "consume(value) fail unavailable end f",
             "L0302", 1, Executable);
          Check
+           ("f: (inout target: ptr i32) -> none = "
+            & "local: i32 = 1 target = addr local end f",
+            "L0314", 1, Executable);
+         Check
+           ("choice: type = struct kind: variant "
+            & "pair: (first: i32, second: i32) | empty end kind end choice"
+            & LF & "f: () -> none = mut value: choice = "
+            & "(kind: pair(first: 40, second: 2)) match value.kind "
+            & "pair(first, inout second): begin value.kind = empty "
+            & "second = 42 end empty: begin end end match end f",
+            "L0315", 1, Executable);
+         Check
            ("public main: () -> (code: i32) = code = 1 ) end main",
             "L0110", 1, Executable);
          Check

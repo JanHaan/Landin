@@ -1,0 +1,9 @@
+class: negative
+summary: reads writes calls addresses cleanup and loop uses keep variant payload storage live
+program: main.ldn
+codes: L0315, L0315, L0315, L0315, L0315, L0315, L0315, L0315, L0315, L0315, L0315
+constructs: 0420, 0430, 0800, 0830, 0900, 1130, 1220, 1910
+targets: linux-x86-64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/r491-live-payload-aliases/main.ldn
+status: 1

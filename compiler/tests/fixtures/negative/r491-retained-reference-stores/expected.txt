@@ -1,0 +1,100 @@
+error[L0314]: this frame-origin reference cannot be stored in storage outside this frame
+  --> ../tests/fixtures/negative/r491-retained-reference-stores/main.ldn:8:14
+  |
+8 |     target = addr local
+  |              ^^^^^^^^^^
+  --> ../tests/fixtures/negative/r491-retained-reference-stores/main.ldn:7:5
+  |
+7 |     local: i32 = 1
+  |     ^^^^^^^^^^^^^^ the shorter-lived reference source
+  = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`
+error[L0314]: this non-escaping parameter cannot be retained in storage belonging to another origin
+  --> ../tests/fixtures/negative/r491-retained-reference-stores/main.ldn:12:14
+   |
+12 |     target = source
+   |              ^^^^^^
+  --> ../tests/fixtures/negative/r491-retained-reference-stores/main.ldn:11:42
+   |
+11 | inout_parameter: (inout target: ptr i32, source: ptr i32) -> none =
+   |                                          ^^^^^^^^^^^^^^^ the shorter-lived reference source
+  = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`
+error[L0314]: this frame-origin reference cannot be stored in storage outside this frame
+  --> ../tests/fixtures/negative/r491-retained-reference-stores/main.ldn:17:18
+   |
+17 |     target.val = addr local
+   |                  ^^^^^^^^^^
+  --> ../tests/fixtures/negative/r491-retained-reference-stores/main.ldn:16:5
+   |
+16 |     local: i32 = 1
+   |     ^^^^^^^^^^^^^^ the shorter-lived reference source
+  = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`
+error[L0314]: this non-escaping parameter cannot be retained in storage belonging to another origin
+  --> ../tests/fixtures/negative/r491-retained-reference-stores/main.ldn:21:18
+   |
+21 |     target.val = source
+   |                  ^^^^^^
+  --> ../tests/fixtures/negative/r491-retained-reference-stores/main.ldn:20:46
+   |
+20 | pointee_parameter: (target: ptr mut ptr i32, source: ptr i32) -> none =
+   |                                              ^^^^^^^^^^^^^^^ the shorter-lived reference source
+  = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`
+error[L0314]: this frame-origin reference cannot be stored in storage outside this frame
+  --> ../tests/fixtures/negative/r491-retained-reference-stores/main.ldn:26:17
+   |
+26 |     target[0] = addr local
+   |                 ^^^^^^^^^^
+  --> ../tests/fixtures/negative/r491-retained-reference-stores/main.ldn:25:5
+   |
+25 |     local: i32 = 1
+   |     ^^^^^^^^^^^^^^ the shorter-lived reference source
+  = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`
+error[L0314]: this frame-origin reference cannot be stored in storage outside this frame
+  --> ../tests/fixtures/negative/r491-retained-reference-stores/main.ldn:31:22
+   |
+31 |     target.pointer = addr local
+   |                      ^^^^^^^^^^
+  --> ../tests/fixtures/negative/r491-retained-reference-stores/main.ldn:30:5
+   |
+30 |     local: i32 = 1
+   |     ^^^^^^^^^^^^^^ the shorter-lived reference source
+  = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`
+error[L0314]: this returned reference still has frame origin
+  --> ../tests/fixtures/negative/r491-retained-reference-stores/main.ldn:34:1
+   |
+34 | aliased_local: () -> (result: ptr i32) =
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/r491-retained-reference-stores/main.ldn:35:5
+   |
+35 |     local: i32 = 1
+   |     ^^^^^^^^^^^^^^ the shorter-lived reference source
+  = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`
+error[L0314]: this returned reference still has frame origin
+  --> ../tests/fixtures/negative/r491-retained-reference-stores/main.ldn:42:1
+   |
+42 | aliased_untracked: () -> (result: ptr i32) =
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/r491-retained-reference-stores/main.ldn:43:5
+   |
+43 |     local: i32 = 1
+   |     ^^^^^^^^^^^^^^ the shorter-lived reference source
+  = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`
+error[L0316]: the returned reference does not derive from exactly the parameters named by its `from` clause
+  --> ../tests/fixtures/negative/r491-retained-reference-stores/main.ldn:50:1
+   |
+50 | aliased_parameter: (source: ptr i32) -> (result: ptr i32) =
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/r491-retained-reference-stores/main.ldn:50:42
+   |
+50 | aliased_parameter: (source: ptr i32) -> (result: ptr i32) =
+   |                                          ^^^^^^^^^^^^^^^ the named return and its declared sources
+  = note: [0790]: the written clause and every returning body edge agree both ways
+error[L0314]: this frame-origin reference cannot be stored in storage outside this frame
+  --> ../tests/fixtures/negative/r491-retained-reference-stores/main.ldn:62:19
+   |
+62 |     target.kind = present(value: addr local)
+   |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/r491-retained-reference-stores/main.ldn:61:5
+   |
+61 |     local: i32 = 1
+   |     ^^^^^^^^^^^^^^ the shorter-lived reference source
+  = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`
