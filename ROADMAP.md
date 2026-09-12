@@ -5799,7 +5799,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | Intake | Baseline observation | Evidence | Disposition and repair scope |
 | --- | --- | --- | --- |
 | J1 | A labeled application in statement position bypasses definite-assignment and use-after-sink analysis entirely | C | Repaired: labelled statements use the same flow dispatch as positional calls, including ordered runtime arguments, sink consumption and recovery. Paired initialized/unassigned and sink controls pass in both modes; driver refusals have no output/tool effects. |
-| J2 | A joined storage fact launders the escape check: a frame address can be written into caller or module storage and be accepted | C | Current debug reproduction: joined frame/caller destination accepted; direct caller destination reports L0314. Separate possible destination origins from facts that justify an escape exemption; retain C3 controls and the explicit untracked-origin boundary. |
+| J2 | A joined storage fact launders the escape check: a frame address can be written into caller or module storage and be accepted | C | Body-local joins repaired: retain independent external destinations and check every possible parameter destination before granting a store exemption. Nineteen paired controls pass in both modes, including local-only, same-origin, escaping and explicit untracked cases. The additional call-return destination-summary question below remains open; this repair does not infer callee bodies. |
 | J3 | A `sink` argument is not consumed when the call sits inside an ordinary expression, so use-after-sink is accepted | C | Repaired: evaluated nested calls retain mutable flow state in operators, literals, constructions, indexes, receivers and assignment destinations. Short-circuit joins retain possible consumption; fixed-array measurements and anonymous bodies remain unevaluated in the enclosing flow. Source-order and restoration controls pass in both modes. |
 | J4 | Lower_Slice loads a slice descriptor's two words through two independent lowerings of the same place, so a call in the access path runs twice and base/length can come from different objects | C | Open lowering repair: capture the reached slice descriptor once and load both words from that storage. Use a tiny side-effecting access-path control. |
 | J5 | A block struct whose closer does not name it swallows every declaration up to a later matching `end <name>`, with no diagnostic | C | Open parser boundary group: compare the normative grammar, preserve enclosing context and following declarations, and add small accepted/refused controls. |
@@ -5814,7 +5814,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J14 | The optional struct end name in [1795] is not optional: a bare `end` on a struct is refused as a stray token | C | Open parser boundary group: compare the normative grammar, preserve enclosing context and following declarations, and add small accepted/refused controls. |
 | J15 | The named refusal [1830] promises is missing for `noreturn`, `volatile` and multi-name bindings | C | Open refusal/document agreement: read [1830] and the enabled grammar first. Labelled bare blocks are absent from that grammar; do not enable them solely from the tour example. |
 | J16 | `lenof` on a slice is treated as a non-reading type constant, so an unassigned or sunk slice descriptor is read | C | Repaired: lenof reads a live, assigned slice descriptor. Fixed-array names and measured literal elements remain unevaluated. Slice length and index refusals include consumed descriptors without duplicate reports; both compiler modes pass the controls. |
-| J17 | `Require_Element` compares the sub-element run for equality instead of prefix containment, so a whole-child write inside an array element does not cover its leaves | C | Open flow follow-up to M2: account for slice descriptor reads, initialized descendant paths and nested failure edges. Test each shape with its direct control and applicable cleanup. |
+| J17 | `Require_Element` compares the sub-element run for equality instead of prefix containment, so a whole-child write inside an array element does not cover its leaves | C | Repaired: reads and branch merges use ancestor containment for an element's field path. Eleven paired controls pass in both modes: whole-child writes cover descendants, either branch order preserves common leaves, and siblings, other indices, parents and consumed descendants retain their independent obligations. Lookup walks only the selected path's ancestors. |
 | J18 | Match_Subject_Is_Copied disagrees with Lower_Variant_Match about a payload alias root, rejecting valid code as a frame escape | C | Open reference-shape agreement: align copied match/traversal roots with lowering and declared origins, retaining C4 alias-lifetime controls. |
 | J19 | A `try` nested in a non-control expression skips its failure-propagation edge: sunk `inout` parameters and `undo` arguments go unchecked | C | Repaired: nested try expressions retain their propagated failure edge, including undo reads and inout restoration after applicable cleanup. The success-only restoration is refused; restoration inside a failure cleanup is accepted. Both modes pass. |
 | J20 | Forced-specialization profiles silently skip the runtime/erased-* evidence-dispatch fixtures | C | Duplicate M15/N17: make specialization coverage explicit and validated; include erased dispatch fixtures through policy rather than filename prefixes. |
@@ -5959,20 +5959,45 @@ Landin assembly, linker sweep, runtime execution, debugger or mutation campaign
 was run. These filtered checks establish the repair group's development
 evidence, not the full R4.91 acceptance gate.
 
+The J2/J17 development batch adds `checking/joined destinations keep escape
+obligations` and `checking/assigned children cover element descendants`, with
+30 small accepted/refused sources. Two additional fake-host driver inputs
+require one L0314 and no output writes or tool invocations for both assembly
+and executable requests. Sixteen explicitly selected cases pass 356 checks in
+each of macOS debug and Linux release, including the retained C3/C4 origin,
+payload and consumed-place controls. The existing
+`runtime/r491-reference-store-origins` source also passes compiler-only checking
+in both modes; its executable was not built or run. Builds use one worker,
+selected tests have 30-second timeouts, and that source check has a 15-second
+timeout. Evidence is retained in `.scratch/r491-origin-joins/`. No Landin
+assembly, linking, runtime execution or debugger was used. This is filtered
+development evidence; exact acceptance remains outstanding.
+
+J2 retains a separate contract question found while reviewing this repair.
+A helper returning an expression that chooses between a parameter and a module
+address can satisfy its declared `from` set; at a subsequent call, the caller
+reconstructs only that declared origin and loses the possible module
+destination. A small compiler-only debug witness, `call-summary.ldn` in the
+same evidence directory, is accepted when the caller stores its same-origin
+parameter through that result. This behavior is observed, but its disposition
+must reconcile [0790]/[1910] with D217's explicit local-analysis boundary before
+J2 is fully closed. Do not infer a whole-program guarantee from the body-local
+repair or reject all accessor results without preserving valid same-origin
+controls. No interprocedural analysis or language rule was added in this batch.
+
 This intake extends the scope of the earlier repairs without erasing their
-controls: C3 covers the recorded direct destination/alias cases, while J2 owns
-joined destination facts; M2 covers the recorded consumed places. The
-J1/J3/J16/J19 repairs extend flow dispatch and nested effects, while J17 still
-owns descendant initialization within an array element.
+controls: C3 covers the recorded direct destination/alias cases, and J2 now
+covers body-local joined destination facts; M2 covers the recorded consumed
+places. The J1/J3/J16/J19 repairs extend flow dispatch and nested effects, and
+J17 extends descendant initialization within an array element.
 C4's lifetime repairs remain in force while J18/J73 compare reference roots.
 J21 is already repaired, J105 is partly superseded, and J100 remains distinct
 from the repaired initializer lookahead. Existing N-series dispositions and
 all earlier delivery evidence remain unchanged.
 
-The next repair group is joined destination origins (J2) and descendant
-initialization (J17), followed by checker refusal and type-identity boundaries
-including J7/J10/J12 and
-conformance failures. Each change needs paired accepted/refused controls and
+The next work is to settle J2's call-return contract question, then repair
+checker refusal and type-identity boundaries J7/J10/J12 and conformance
+failures J49/J51/J52. Each change needs paired accepted/refused controls and
 both compiler modes before closure. Then repair parser preservation and
 bounded recursion/inference storage, the accepted-value/control-flow lowering
 group, and backend/native boundaries. Complete fixture accounting, explicit

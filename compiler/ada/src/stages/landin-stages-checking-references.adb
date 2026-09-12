@@ -74,6 +74,7 @@ package body Landin.Stages.Checking.References is
 
       type Reference_Fact is record
          Frame      : Boolean := False;
+         External   : Boolean := False;
          Untracked  : Boolean := False;
          From       : Parameter_Bits := [others => False];
          Derives    : Declaration_Bits := [others => False];
@@ -237,6 +238,9 @@ package body Landin.Stages.Checking.References is
       function Fact_Of
         (Tree : Syn.Tree; Node : Syn.Node_Id) return Origin_Fact;
 
+      function Evaluate_Fact
+        (Tree : Syn.Tree; Node : Syn.Node_Id) return Origin_Fact;
+
       function Call_Signature
         (Tree : Syn.Tree; Call : Syn.Node_Id)
          return Landin.Checking.Signature_Id;
@@ -327,6 +331,7 @@ package body Landin.Stages.Checking.References is
          Into_Fact.Presence :=
            Value_Fact'Max (Into_Fact.Presence, Other.Presence);
          Into_Fact.Frame := Into_Fact.Frame or Other.Frame;
+         Into_Fact.External := Into_Fact.External or Other.External;
          Into_Fact.Untracked := Into_Fact.Untracked or Other.Untracked;
          --  An explicitly untracked alternative cannot erase a tracked
          --  frame or parameter origin contributed by another alternative.
@@ -1561,6 +1566,8 @@ package body Landin.Stages.Checking.References is
             case Res.Sort_Of (Meanings.all, Id) is
                when Res.Local_Binding | Res.Named_Return =>
                   Result.Frame := True;
+               when Res.Module_Binding =>
+                  Result.External := True;
                when Res.Parameter =>
                   declare
                      Parameter_Tree : constant
@@ -1592,6 +1599,27 @@ package body Landin.Stages.Checking.References is
       end Named_Storage_Fact;
 
       function Fact_Of (Tree : Syn.Tree; Node : Syn.Node_Id)
+        return Origin_Fact
+      is
+         Result : Origin_Fact := Evaluate_Fact (Tree, Node);
+      begin
+         --  A present reference with no local or parameter sources still
+         --  names external storage.  Record that alternative before a join
+         --  can hide it behind a frame or parameter bit.  Empty optionals
+         --  and unevaluated accumulators contribute no destination.
+         if Node /= Syn.No_Node and then Falls_Through
+           and then Has_References (Tree, Node)
+           and then Result.Value.Presence = Unknown_Value
+           and then not Result.Value.Frame
+           and then not Result.Value.Untracked
+           and then (for all Bit of Result.Value.From => not Bit)
+         then
+            Result.Value.External := True;
+         end if;
+         return Result;
+      end Fact_Of;
+
+      function Evaluate_Fact (Tree : Syn.Tree; Node : Syn.Node_Id)
         return Origin_Fact
       is
          Result : Origin_Fact := No_Origin;
@@ -1992,7 +2020,7 @@ package body Landin.Stages.Checking.References is
          Result.Results.Clear;
          Normalize_Scalar_Result;
          return Result;
-      end Fact_Of;
+      end Evaluate_Fact;
 
       procedure Check_Returns (Tree : Syn.Tree; At_Node : Syn.Node_Id) is
       begin
@@ -2084,6 +2112,15 @@ package body Landin.Stages.Checking.References is
            Landin.Checking.Type_Of (Types.all, Tree, Place) /= Ty.Ill_Typed
            and then Landin.Checking.Type_Of
              (Types.all, Tree, Value) /= Ty.Ill_Typed;
+         Module_Destination : constant Boolean :=
+           Id /= Res.No_Declaration
+           and then Res.Sort_Of (Meanings.all, Id) = Res.Module_Binding;
+         Parameter_Destination : constant Boolean :=
+           (for some Bit of Target.Storage.From => Bit);
+         External_Destination : constant Boolean :=
+           Module_Destination or Target.Storage.External
+           or (not Target.Storage.Frame and not Target.Storage.Untracked
+               and not Parameter_Destination);
 
          function Through_Descriptor return Boolean;
 
@@ -2126,14 +2163,14 @@ package body Landin.Stages.Checking.References is
             Fact := No_Origin;
          end if;
 
-         if Valid
-           and then ((Id /= Res.No_Declaration
-              and then Res.Sort_Of (Meanings.all, Id) = Res.Module_Binding)
-             or else (not Target.Storage.Frame
-                      and then not Target.Storage.Untracked))
-           and then not Fact.Value.Untracked
+         --  Storage facts describe possible destinations.  A local or
+         --  same-parameter alternative cannot excuse another destination
+         --  that would retain the value beyond its permitted origin.
+         if Valid and then not Fact.Value.Untracked
          then
-            if Fact.Value.Frame then
+            if Fact.Value.Frame
+              and then (External_Destination or Parameter_Destination)
+            then
                Report_Escape
                  (Tree, Value, Fact.Value,
                   "this frame-origin reference cannot be stored in"
@@ -2143,7 +2180,11 @@ package body Landin.Stages.Checking.References is
                for Source in Fact.Value.From'Range loop
                   if Fact.Value.From (Source)
                     and then not Parameter_Escapes (Source)
-                    and then not Target.Storage.From (Source)
+                    and then
+                      (External_Destination
+                       or else (for some Other in Target.Storage.From'Range
+                         => Other /= Source
+                           and then Target.Storage.From (Other)))
                   then
                      Report_Escape
                        (Tree, Value, Fact.Value,

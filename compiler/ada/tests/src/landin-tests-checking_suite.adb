@@ -212,6 +212,454 @@ package body Landin.Tests.Checking_Suite is
       Check_Source (Conforming => True);
    end Large_Loop_Frames_Stay_Off_The_Host_Stack;
 
+   procedure Joined_Destinations_Keep_Escape_Obligations
+     (Item : in out Landin.Testing.Context);
+
+   procedure Joined_Destinations_Keep_Escape_Obligations
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Source
+        (Label, Text : String; Accepted : Boolean);
+
+      procedure Check_Source
+        (Label, Text : String; Accepted : Boolean)
+      is
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Order : Landin.Stages.Pipeline;
+         Ran : Natural;
+         Src : Landin.Source.Source_Id;
+         pragma Unreferenced (Src);
+      begin
+         Src := Landin.Stages.Add_Source (Work, "joined-facts.ldn", Text);
+         Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
+         Landin.Stages.Append (Order, Names'Access);
+         Landin.Stages.Append (Order, Checker'Access);
+         Ran := Landin.Stages.Run (Order, Work);
+         declare
+            Reports : constant Landin.Diagnostics.Diagnostic_List :=
+              Landin.Stages.Report (Work);
+         begin
+            Landin.Testing.Check_Equal (Item, Ran, 4, Label & " reaches flow");
+            Landin.Testing.Check
+              (Item, Landin.Stages.Failed (Work) /= Accepted
+                 and then
+                   (if Accepted then Landin.Diagnostics.Count (Reports) = 0
+                    else Landin.Diagnostics.Count (Reports) = 1
+                      and then Landin.Diagnostics.Code
+                        (Landin.Diagnostics.Get (Reports, 1)) = "L0314"),
+               Label & " has its exact origin or assignment verdict");
+         end;
+      end Check_Source;
+   begin
+      Check_Source
+        ("frame and caller",
+         "anchor: i32 = 42" & LF
+         & "mut module_slot: ptr i32 = ptr(4096)" & LF
+         & "f: (inout out: ptr i32, flag: bool) -> none =" & LF
+         & "mut spare: ptr i32 = addr anchor" & LF
+         & "mut view: ptr mut ptr i32 = addr spare" & LF
+         & "if flag then view = addr out end if" & LF
+         & "inner: i32 = 1" & LF
+         & "view.val = addr inner" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("caller directly",
+         "anchor: i32 = 42" & LF
+         & "mut module_slot: ptr i32 = ptr(4096)" & LF
+         & "f: (inout out: ptr i32) -> none =" & LF
+         & "view: ptr mut ptr i32 = addr out" & LF
+         & "inner: i32 = 1" & LF
+         & "view.val = addr inner" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("frame only",
+         "anchor: i32 = 42" & LF
+         & "mut module_slot: ptr i32 = ptr(4096)" & LF
+         & "f: () -> none =" & LF
+         & "mut spare: ptr i32 = addr anchor" & LF
+         & "mut view: ptr mut ptr i32 = addr spare" & LF
+         & "inner: i32 = 1" & LF
+         & "view.val = addr inner" & LF
+         & "end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("two frame alternatives",
+         "anchor: i32 = 42" & LF
+         & "mut module_slot: ptr i32 = ptr(4096)" & LF
+         & "f: (flag: bool) -> none =" & LF
+         & "mut spare: ptr i32 = addr anchor" & LF
+         & "mut view: ptr mut ptr i32 = addr spare" & LF
+         & "mut other: ptr i32 = addr anchor" & LF
+         & "if flag then view = addr other end if" & LF
+         & "inner: i32 = 1" & LF
+         & "view.val = addr inner" & LF
+         & "end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("frame and module",
+         "anchor: i32 = 42" & LF
+         & "mut module_slot: ptr i32 = ptr(4096)" & LF
+         & "f: (flag: bool) -> none =" & LF
+         & "mut spare: ptr i32 = addr anchor" & LF
+         & "mut view: ptr mut ptr i32 = addr spare" & LF
+         & "if flag then view = addr module_slot end if" & LF
+         & "inner: i32 = 1" & LF
+         & "view.val = addr inner" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("module and frame reversed",
+         "anchor: i32 = 42" & LF
+         & "mut module_slot: ptr i32 = ptr(4096)" & LF
+         & "f: (flag: bool) -> none =" & LF
+         & "mut spare: ptr i32 = addr anchor" & LF
+         & "mut view: ptr mut ptr i32 = addr module_slot" & LF
+         & "if flag then view = addr spare end if" & LF
+         & "inner: i32 = 1" & LF
+         & "view.val = addr inner" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("parameter alternatives",
+         "anchor: i32 = 42" & LF
+         & "mut module_slot: ptr i32 = ptr(4096)" & LF
+         & "f: (inout a: ptr i32, inout b: ptr i32, flag: bool) -> "
+         & "none =" & LF
+         & "mut view: ptr mut ptr i32 = addr a" & LF
+         & "if flag then view = addr b end if" & LF
+         & "view.val = a" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("parameter alternatives reversed",
+         "anchor: i32 = 42" & LF
+         & "mut module_slot: ptr i32 = ptr(4096)" & LF
+         & "f: (inout a: ptr i32, inout b: ptr i32, flag: bool) -> "
+         & "none =" & LF
+         & "mut view: ptr mut ptr i32 = addr b" & LF
+         & "if flag then view = addr a end if" & LF
+         & "view.val = a" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("same parameter",
+         "anchor: i32 = 42" & LF
+         & "mut module_slot: ptr i32 = ptr(4096)" & LF
+         & "f: (inout a: ptr i32) -> none =" & LF
+         & "view: ptr mut ptr i32 = addr a" & LF
+         & "view.val = a" & LF
+         & "end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("same parameter and frame",
+         "anchor: i32 = 42" & LF
+         & "mut module_slot: ptr i32 = ptr(4096)" & LF
+         & "f: (inout a: ptr i32, flag: bool) -> none =" & LF
+         & "mut spare: ptr i32 = addr anchor" & LF
+         & "mut view: ptr mut ptr i32 = addr spare" & LF
+         & "if flag then view = addr a end if" & LF
+         & "view.val = a" & LF
+         & "end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("other parameter and frame",
+         "anchor: i32 = 42" & LF
+         & "mut module_slot: ptr i32 = ptr(4096)" & LF
+         & "f: (a: ptr i32, inout b: ptr i32, flag: bool) -> none =" & LF
+         & "mut spare: ptr i32 = addr anchor" & LF
+         & "mut view: ptr mut ptr i32 = addr spare" & LF
+         & "if flag then view = addr b end if" & LF
+         & "view.val = a" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("same parameter and module",
+         "anchor: i32 = 42" & LF
+         & "mut module_slot: ptr i32 = ptr(4096)" & LF
+         & "f: (inout a: ptr i32, flag: bool) -> none =" & LF
+         & "mut view: ptr mut ptr i32 = addr a" & LF
+         & "if flag then view = addr module_slot end if" & LF
+         & "view.val = a" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("escaping parameter across destinations",
+         "anchor: i32 = 42" & LF
+         & "mut module_slot: ptr i32 = ptr(4096)" & LF
+         & "f: (escaping a: ptr i32, inout b: ptr i32, flag: bool) "
+         & "-> none =" & LF
+         & "mut spare: ptr i32 = addr anchor" & LF
+         & "mut view: ptr mut ptr i32 = addr spare" & LF
+         & "if flag then view = addr b end if" & LF
+         & "view.val = a" & LF
+         & "end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("pure untracked destination",
+         "anchor: i32 = 42" & LF
+         & "mut module_slot: ptr i32 = ptr(4096)" & LF
+         & "f: () -> none =" & LF
+         & "view: ptr mut ptr i32 = ptr(4096)" & LF
+         & "inner: i32 = 1" & LF
+         & "view.val = addr inner" & LF
+         & "end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("untracked and caller",
+         "anchor: i32 = 42" & LF
+         & "mut module_slot: ptr i32 = ptr(4096)" & LF
+         & "f: (inout out: ptr i32, flag: bool) -> none =" & LF
+         & "mut view: ptr mut ptr i32 = ptr(4096)" & LF
+         & "if flag then view = addr out end if" & LF
+         & "inner: i32 = 1" & LF
+         & "view.val = addr inner" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("untracked and module",
+         "anchor: i32 = 42" & LF
+         & "mut module_slot: ptr i32 = ptr(4096)" & LF
+         & "f: (flag: bool) -> none =" & LF
+         & "mut view: ptr mut ptr i32 = ptr(4096)" & LF
+         & "if flag then view = addr module_slot end if" & LF
+         & "inner: i32 = 1" & LF
+         & "view.val = addr inner" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("control value destination",
+         "anchor: i32 = 42" & LF
+         & "mut module_slot: ptr i32 = ptr(4096)" & LF
+         & "f: (inout out: ptr i32, flag: bool) -> none =" & LF
+         & "mut spare: ptr i32 = addr anchor" & LF
+         & "view: ptr mut ptr i32 =" & LF
+         & "if flag then addr spare else addr out end if" & LF
+         & "inner: i32 = 1" & LF
+         & "view.val = addr inner" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("loop destination join",
+         "anchor: i32 = 42" & LF
+         & "mut module_slot: ptr i32 = ptr(4096)" & LF
+         & "f: (inout out: ptr i32, flag: bool) -> none =" & LF
+         & "mut spare: ptr i32 = addr anchor" & LF
+         & "mut view: ptr mut ptr i32 = addr spare" & LF
+         & "while flag do view = addr out break end while" & LF
+         & "inner: i32 = 1" & LF
+         & "view.val = addr inner" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("module reference value joins frame",
+         "anchor: i32 = 42" & LF
+         & "mut module_slot: ptr i32 = ptr(4096)" & LF
+         & "f: (flag: bool) -> none =" & LF
+         & "mut spare: ptr i32 = addr anchor" & LF
+         & "mut view: ptr mut ptr i32 = addr spare" & LF
+         & "if flag then view = addr module_slot end if" & LF
+         & "view.val = addr anchor" & LF
+         & "end f" & LF,
+         Accepted => True);
+   end Joined_Destinations_Keep_Escape_Obligations;
+
+   procedure Assigned_Children_Cover_Element_Descendants
+     (Item : in out Landin.Testing.Context);
+
+   procedure Assigned_Children_Cover_Element_Descendants
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Source
+        (Label, Text : String; Accepted : Boolean);
+
+      procedure Check_Source
+        (Label, Text : String; Accepted : Boolean)
+      is
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Order : Landin.Stages.Pipeline;
+         Ran : Natural;
+         Src : Landin.Source.Source_Id;
+         pragma Unreferenced (Src);
+      begin
+         Src := Landin.Stages.Add_Source (Work, "joined-facts.ldn", Text);
+         Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
+         Landin.Stages.Append (Order, Names'Access);
+         Landin.Stages.Append (Order, Checker'Access);
+         Ran := Landin.Stages.Run (Order, Work);
+         declare
+            Reports : constant Landin.Diagnostics.Diagnostic_List :=
+              Landin.Stages.Report (Work);
+         begin
+            Landin.Testing.Check_Equal (Item, Ran, 4, Label & " reaches flow");
+            Landin.Testing.Check
+              (Item, Landin.Stages.Failed (Work) /= Accepted
+                 and then
+                   (if Accepted then Landin.Diagnostics.Count (Reports) = 0
+                    else Landin.Diagnostics.Count (Reports) = 1
+                      and then Landin.Diagnostics.Code
+                        (Landin.Diagnostics.Get (Reports, 1)) = "L0302"),
+               Label & " has its exact origin or assignment verdict");
+         end;
+      end Check_Source;
+   begin
+      Check_Source
+        ("whole child covers two leaves",
+         "inner: type = struct y: i32 z: i32 end inner" & LF
+         & "outer: type = struct x: inner sibling: inner end outer" & LF
+         & "wrap: type = struct child: outer end wrap" & LF
+         & "take: (sink value: i32) -> none = end take" & LF
+         & "f: (flag: bool) -> (r: i32) =" & LF
+         & "mut a: [2]outer" & LF
+         & "src: inner = (y: 5, z: 6)" & LF
+         & "a[0].x = src" & LF
+         & "r = a[0].x.y + a[0].x.z" & LF
+         & "end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("whole child does not cover sibling",
+         "inner: type = struct y: i32 z: i32 end inner" & LF
+         & "outer: type = struct x: inner sibling: inner end outer" & LF
+         & "wrap: type = struct child: outer end wrap" & LF
+         & "take: (sink value: i32) -> none = end take" & LF
+         & "f: (flag: bool) -> (r: i32) =" & LF
+         & "mut a: [2]outer" & LF
+         & "src: inner = (y: 5, z: 6)" & LF
+         & "a[0].x = src" & LF
+         & "r = a[0].sibling.z" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("whole child does not cover other element",
+         "inner: type = struct y: i32 z: i32 end inner" & LF
+         & "outer: type = struct x: inner sibling: inner end outer" & LF
+         & "wrap: type = struct child: outer end wrap" & LF
+         & "take: (sink value: i32) -> none = end take" & LF
+         & "f: (flag: bool) -> (r: i32) =" & LF
+         & "mut a: [2]outer" & LF
+         & "src: inner = (y: 5, z: 6)" & LF
+         & "a[0].x = src" & LF
+         & "r = a[1].x.z" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("leaf does not cover sibling",
+         "inner: type = struct y: i32 z: i32 end inner" & LF
+         & "outer: type = struct x: inner sibling: inner end outer" & LF
+         & "wrap: type = struct child: outer end wrap" & LF
+         & "take: (sink value: i32) -> none = end take" & LF
+         & "f: (flag: bool) -> (r: i32) =" & LF
+         & "mut a: [2]outer" & LF
+         & "src: inner = (y: 5, z: 6)" & LF
+         & "a[0].x.y = 5" & LF
+         & "r = a[0].x.z" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("leaf does not cover parent",
+         "inner: type = struct y: i32 z: i32 end inner" & LF
+         & "outer: type = struct x: inner sibling: inner end outer" & LF
+         & "wrap: type = struct child: outer end wrap" & LF
+         & "take: (sink value: i32) -> none = end take" & LF
+         & "f: (flag: bool) -> (r: i32) =" & LF
+         & "mut a: [2]outer" & LF
+         & "src: inner = (y: 5, z: 6)" & LF
+         & "a[0].x.y = 5" & LF
+         & "b: inner = a[0].x" & LF
+         & "r = b.y" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("deeper child covers leaves",
+         "inner: type = struct y: i32 z: i32 end inner" & LF
+         & "outer: type = struct x: inner sibling: inner end outer" & LF
+         & "wrap: type = struct child: outer end wrap" & LF
+         & "take: (sink value: i32) -> none = end take" & LF
+         & "f: (flag: bool) -> (r: i32) =" & LF
+         & "mut a: [2]wrap" & LF
+         & "src: inner = (y: 5, z: 6)" & LF
+         & "a[0].child.x = src" & LF
+         & "r = a[0].child.x.z" & LF
+         & "end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("whole and leaf edges",
+         "inner: type = struct y: i32 z: i32 end inner" & LF
+         & "outer: type = struct x: inner sibling: inner end outer" & LF
+         & "wrap: type = struct child: outer end wrap" & LF
+         & "take: (sink value: i32) -> none = end take" & LF
+         & "f: (flag: bool) -> (r: i32) =" & LF
+         & "mut a: [2]outer" & LF
+         & "src: inner = (y: 5, z: 6)" & LF
+         & "if flag then a[0].x = src" & LF
+         & "else a[0].x.z = 6 end if" & LF
+         & "r = a[0].x.z" & LF
+         & "end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("leaf and whole edges",
+         "inner: type = struct y: i32 z: i32 end inner" & LF
+         & "outer: type = struct x: inner sibling: inner end outer" & LF
+         & "wrap: type = struct child: outer end wrap" & LF
+         & "take: (sink value: i32) -> none = end take" & LF
+         & "f: (flag: bool) -> (r: i32) =" & LF
+         & "mut a: [2]outer" & LF
+         & "src: inner = (y: 5, z: 6)" & LF
+         & "if flag then a[0].x.z = 6" & LF
+         & "else a[0].x = src end if" & LF
+         & "r = a[0].x.z" & LF
+         & "end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("join keeps missing sibling unassigned",
+         "inner: type = struct y: i32 z: i32 end inner" & LF
+         & "outer: type = struct x: inner sibling: inner end outer" & LF
+         & "wrap: type = struct child: outer end wrap" & LF
+         & "take: (sink value: i32) -> none = end take" & LF
+         & "f: (flag: bool) -> (r: i32) =" & LF
+         & "mut a: [2]outer" & LF
+         & "src: inner = (y: 5, z: 6)" & LF
+         & "if flag then a[0].x = src" & LF
+         & "else a[0].x.z = 6 end if" & LF
+         & "r = a[0].x.y" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("consumed descendant stays dead",
+         "inner: type = struct y: i32 z: i32 end inner" & LF
+         & "outer: type = struct x: inner sibling: inner end outer" & LF
+         & "wrap: type = struct child: outer end wrap" & LF
+         & "take: (sink value: i32) -> none = end take" & LF
+         & "f: (flag: bool) -> (r: i32) =" & LF
+         & "mut a: [2]outer" & LF
+         & "src: inner = (y: 5, z: 6)" & LF
+         & "a[0].x = src" & LF
+         & "take(a[0].x.y)" & LF
+         & "r = a[0].x.y" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("whole child restores consumed descendant",
+         "inner: type = struct y: i32 z: i32 end inner" & LF
+         & "outer: type = struct x: inner sibling: inner end outer" & LF
+         & "wrap: type = struct child: outer end wrap" & LF
+         & "take: (sink value: i32) -> none = end take" & LF
+         & "f: (flag: bool) -> (r: i32) =" & LF
+         & "mut a: [2]outer" & LF
+         & "src: inner = (y: 5, z: 6)" & LF
+         & "a[0].x = src" & LF
+         & "take(a[0].x.y)" & LF
+         & "a[0].x = src" & LF
+         & "r = a[0].x.y" & LF
+         & "end f" & LF,
+         Accepted => True);
+   end Assigned_Children_Cover_Element_Descendants;
+
    procedure Match_Aliases_Keep_Backing_Origins
      (Item : in out Landin.Testing.Context);
 
@@ -9671,6 +10119,12 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Register
         (Into, "checking", "R4.70 field ranges keep recursive children",
          R470_Field_Ranges_Keep_Recursive_Children'Access);
+      Landin.Testing.Register
+        (Into, "checking", "joined destinations keep escape obligations",
+         Joined_Destinations_Keep_Escape_Obligations'Access);
+      Landin.Testing.Register
+        (Into, "checking", "assigned children cover element descendants",
+         Assigned_Children_Cover_Element_Descendants'Access);
       Landin.Testing.Register
         (Into, "checking", "match aliases keep backing origins",
          Match_Aliases_Keep_Backing_Origins'Access);
