@@ -8958,8 +8958,118 @@ package body Landin.Tests.Lowering_Suite is
       end;
    end Construction_Storage_Stays_Addressable;
 
+   procedure Static_Slice_Fields_Keep_Descriptors
+     (Item : in out Landin.Testing.Context);
+
+   procedure Static_Slice_Fields_Keep_Descriptors
+     (Item : in out Landin.Testing.Context)
+   is
+      Source : constant String :=
+        "holder: type = struct value: utf8 end holder" & LF
+        & "row_holder: type = struct value: []u8 end row_holder" & LF
+        & "choice: type = struct kind: variant empty | text: "
+        & "(value: utf8) end kind end choice" & LF
+        & "outer: type = struct child: holder end outer" & LF
+        & "backing: [4]u8 = [65, 66, 67, 68]" & LF
+        & "source_text: utf8 = ""ABCD""" & LF
+        & "view: []u8 = backing[1 ..< 3]" & LF
+        & "direct: holder = (value: ""ABCD"")" & LF
+        & "from_name: holder = (value: source_text)" & LF
+        & "from_member: holder = (value: direct.value)" & LF
+        & "choice_image: choice = (kind: text(value: ""ABCD""))" & LF
+        & "choice_copy: choice = (kind: text(value: direct.value))" & LF
+        & "nested: outer = (child: (value: source_text))" & LF
+        & "blank: holder = (value: [])" & LF
+        & "sub: row_holder = (value: view)" & LF
+        & "sub_copy: row_holder = (value: sub.value)" & LF;
+
+      procedure Check_Target (Facts : Landin.Targets.Target_Facts);
+
+      procedure Check_Target (Facts : Landin.Targets.Target_Facts) is
+         Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+         Ran : Natural;
+      begin
+         Lower (Work, Source, Ran);
+         Landin.Testing.Check_Equal
+           (Item, Ran, 5, "the slice image source reaches lowering");
+         Landin.Testing.Check
+           (Item, not Landin.Stages.Failed (Work),
+            "literal, copied and variant slice images lower");
+         if Landin.Stages.Failed (Work) then
+            return;
+         end if;
+         declare
+            Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+            Direct : constant IR.Item_Id := Named_Item (Work, "direct");
+            Choice : constant IR.Item_Id := Named_Item (Work, "choice_image");
+            Copy : constant IR.Item_Id := Named_Item (Work, "choice_copy");
+            Nested : constant IR.Item_Id := Named_Item (Work, "nested");
+            Text : constant IR.Aggregate_Field_Image :=
+              IR.Field_Image_Of (Unit, Direct, 1);
+            Blank : constant IR.Aggregate_Field_Image :=
+              IR.Field_Image_Of (Unit, Named_Item (Work, "blank"), 1);
+            Sub : constant IR.Aggregate_Field_Image :=
+              IR.Field_Image_Of (Unit, Named_Item (Work, "sub"), 1);
+
+            procedure Check_Text (Image : IR.Aggregate_Field_Image);
+
+            procedure Check_Text (Image : IR.Aggregate_Field_Image) is
+            begin
+               Landin.Testing.Check
+                 (Item, Image.Slice and then Image.Value = 4
+                    and then Image.Slice_First = 0
+                    and then Image.Slice_Element.Kind = IR.Scalar_Field_Shape
+                    and then Image.Slice_Element.Element = Landin.Types.U8
+                    and then Image.Target /= IR.No_Item
+                    and then IR.Array_Length (Unit, Image.Target) = 5
+                    and then IR.Nth_Image (Unit, Image.Target, 1) = 65
+                    and then IR.Nth_Image (Unit, Image.Target, 4) = 68
+                    and then IR.Nth_Image (Unit, Image.Target, 5) = 0,
+                  "a text descriptor retains its backing bytes and shape");
+            end Check_Text;
+         begin
+            Check_Text (Text);
+            Check_Text
+              (IR.Field_Image_Of (Unit, Named_Item (Work, "from_name"), 1));
+            Check_Text
+              (IR.Field_Image_Of (Unit, Named_Item (Work, "from_member"), 1));
+            Check_Text (IR.Variant_Payload_Image_Of (Unit, Choice, 1, 1));
+            Check_Text (IR.Variant_Payload_Image_Of (Unit, Copy, 1, 1));
+            Check_Text
+              (IR.Descendant_Image_Of
+                 (Unit, Nested, IR.Field_Image_Of (Unit, Nested, 1), 1));
+            Landin.Testing.Check
+              (Item, IR.Field_Image_Of (Unit, Choice, 1).Value = 2
+                 and then IR.Field_Image_Of (Unit, Copy, 1).Value = 2,
+               "slice payloads retain their selected variant tag");
+            Landin.Testing.Check
+              (Item, Blank.Slice and then Blank.Value = 0
+                 and then Blank.Target = IR.No_Item
+                 and then Blank.Slice_Element.Element = Landin.Types.U8,
+               "the empty slice keeps a typed empty descriptor");
+            Landin.Testing.Check
+              (Item, Sub.Slice and then Sub.Value = 2
+                 and then Sub.Slice_First = 1
+                 and then Sub.Target = Named_Item (Work, "backing")
+                 and then Sub.Slice_Element.Element = Landin.Types.U8
+                 and then IR.Field_Image_Of
+                   (Unit, Named_Item (Work, "sub_copy"), 1) = Sub,
+               "slice copies retain their exact backing range");
+            Landin.Testing.Check
+              (Item, IR.Verifier.Check (Unit).Kind = IR.Verifier.Nothing_Wrong,
+               "all slice field descriptors satisfy the verifier");
+         end;
+      end Check_Target;
+   begin
+      Check_Target (Landin.Targets.Linux_X86_64);
+      Check_Target (Landin.Targets.Synthetic_32);
+   end Static_Slice_Fields_Keep_Descriptors;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "lowering", "static slice fields keep descriptors",
+         Static_Slice_Fields_Keep_Descriptors'Access);
       Landin.Testing.Register
         (Into, "lowering", "construction storage stays addressable",
          Construction_Storage_Stays_Addressable'Access);
