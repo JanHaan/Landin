@@ -102,6 +102,14 @@ independent element liveness. It preserves unevaluated fixed-array measurements 
 case requires the corresponding invalid sources to produce one L0302 before
 any output or tool invocation, for both assembly and executable requests.
 
+The checker case `joined destinations keep escape obligations` covers
+body-local joins of frame, parameter, module and untracked destinations, with
+accepted same-origin and escaping controls. Two driver refusal sources require
+one L0314 and no output or tool effects. `assigned children cover element
+descendants` checks whole-child initialization and branch containment in both
+orders, preserving independent siblings, indices and consumed leaves. These
+are small compiler checks; they neither assemble nor execute Landin programs.
+
 `negative/r491-operand-diagnostic-cascades` pins one type diagnostic for each
 invalid float remainder or shift while retaining an independent integer
 division-by-zero diagnostic inside a refused operator.

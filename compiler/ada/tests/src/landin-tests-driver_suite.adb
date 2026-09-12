@@ -1964,6 +1964,19 @@ package body Landin.Tests.Driver_Suite is
    begin
       for Executable in Boolean loop
          Check
+           ("anchor: i32 = 0 "
+            & "f: (inout out: ptr i32, flag: bool) -> none = "
+            & "mut spare: ptr i32 = addr anchor "
+            & "mut view: ptr mut ptr i32 = addr spare "
+            & "if flag then view = addr out end if "
+            & "inner: i32 = 1 view.val = addr inner end f",
+            "L0314", 1, Executable);
+         Check
+           ("f: (inout a: ptr i32, inout b: ptr i32, flag: bool) "
+            & "-> none = mut view: ptr mut ptr i32 = addr a "
+            & "if flag then view = addr b end if view.val = a end f",
+            "L0314", 1, Executable);
+         Check
            ("use: (value: i32, other: i32) -> none = end use "
             & "f: () -> none = later: i32 "
             & "use(value: 1, other: later) end f",

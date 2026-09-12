@@ -494,6 +494,9 @@ package body Landin.Stages.Checking.Flow is
          Message : String);
       procedure Require_Inout_Places_Live
         (At_Span : Landin.Source.Span; State : Assigned_Set);
+      function Element_Is_Assigned
+        (Fact : Element_Fact; State : Assigned_Set) return Boolean;
+
       procedure Require_Element
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
@@ -1181,6 +1184,35 @@ package body Landin.Stages.Checking.Flow is
          end;
       end Require_Computed_Element;
 
+      function Element_Is_Assigned
+        (Fact : Element_Fact; State : Assigned_Set) return Boolean
+      is
+         Above : Field_Path;
+      begin
+         if Array_Sets.Contains
+              (State.Whole_Arrays, (Fact.Declaration, Fact.Path))
+           or else Covered (Fact.Declaration, Fact.Path, State,
+                            Strictly_Above => True)
+           or else Element_Sets.Contains
+             (State.Elements,
+              (Fact.Declaration, Fact.Path, Fact.Position, No_Path))
+         then
+            return True;
+         end if;
+         --  Query only this path's ancestors, not every sparse fact in the
+         --  function.  The work is bounded by the selected field depth.
+         for Step of Fact.Below loop
+            Above.Append (Step);
+            if Element_Sets.Contains
+              (State.Elements,
+               (Fact.Declaration, Fact.Path, Fact.Position, Above))
+            then
+               return True;
+            end if;
+         end loop;
+         return False;
+      end Element_Is_Assigned;
+
       procedure Require_Element
         (Of_Tree  : Syn.Tree;
          Node     : Syn.Node_Id;
@@ -1190,15 +1222,10 @@ package body Landin.Stages.Checking.Flow is
          State    : Assigned_Set;
          Below    : Field_Path := No_Path) is
       begin
-         --  A fact about the whole element covers every part of it, so a
-         --  read of a part asks for either.
+         --  A whole element or child covers its descendants, but a written
+         --  leaf does not establish its parent or its siblings.
          if not Is_Tracked (Id)
-           or else Array_Sets.Contains (State.Whole_Arrays, (Id, Path))
-           or else Covered (Id, Path, State, Strictly_Above => True)
-           or else Element_Sets.Contains
-                     (State.Elements, (Id, Path, Position, No_Path))
-           or else Element_Sets.Contains
-                     (State.Elements, (Id, Path, Position, Below))
+           or else Element_Is_Assigned ((Id, Path, Position, Below), State)
          then
             return;
          end if;
@@ -1494,41 +1521,16 @@ package body Landin.Stages.Checking.Flow is
                end loop;
             end loop;
 
-            for Whole of Left.Whole_Arrays loop
-               if not Array_Sets.Contains (Branch.Whole_Arrays, Whole) then
-                  for Fact of Branch.Elements loop
-                     if Fact.Declaration = Whole.Declaration
-                       and then Fact.Path = Whole.Path
-                     then
-                        Element_Sets.Include (Merged.Elements, Fact);
-                     end if;
-                  end loop;
-               end if;
-            end loop;
-
-            for Whole of Branch.Whole_Arrays loop
-               if not Array_Sets.Contains (Left.Whole_Arrays, Whole) then
-                  for Fact of Left.Elements loop
-                     if Fact.Declaration = Whole.Declaration
-                       and then Fact.Path = Whole.Path
-                     then
-                        Element_Sets.Include (Merged.Elements, Fact);
-                     end if;
-                  end loop;
-               end if;
-            end loop;
-
+            --  Meet sparse facts using the same containment relation as a
+            --  read: a whole-child write on one edge covers a leaf written
+            --  on the other, in either branch order.
             for Fact of Branch.Elements loop
-               if Covered (Fact.Declaration, Fact.Path, Left,
-                           Strictly_Above => True)
-               then
+               if Element_Is_Assigned (Fact, Left) then
                   Element_Sets.Include (Merged.Elements, Fact);
                end if;
             end loop;
             for Fact of Left.Elements loop
-               if Covered (Fact.Declaration, Fact.Path, Branch,
-                           Strictly_Above => True)
-               then
+               if Element_Is_Assigned (Fact, Branch) then
                   Element_Sets.Include (Merged.Elements, Fact);
                end if;
             end loop;
