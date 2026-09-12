@@ -34,7 +34,7 @@ abstract project Landin_Common is
 
    package Compiler is
       for Default_Switches ("Ada") use Common_Switches & Mode_Switches;
-      --  Only the host stat adapter is C. Its structures come from the host
+      --  Only host POSIX adapters are C. Their structures come from the host
       --  headers; all compiler stages and emitted-code decisions remain Ada.
       for Default_Switches ("C") use
         ("-std=c11", "-Wall", "-Wextra", "-Werror", "-pedantic",

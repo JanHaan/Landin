@@ -212,6 +212,277 @@ package body Landin.Tests.Checking_Suite is
       Check_Source (Conforming => True);
    end Large_Loop_Frames_Stay_Off_The_Host_Stack;
 
+   procedure Try_Failures_Check_Reference_Cleanups
+     (Item : in out Landin.Testing.Context);
+
+   procedure Try_Failures_Check_Reference_Cleanups
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Source
+        (Label, Text : String; Accepted : Boolean);
+
+      procedure Check_Source
+        (Label, Text : String; Accepted : Boolean)
+      is
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Order : Landin.Stages.Pipeline;
+         Ran : Natural;
+         Src : Landin.Source.Source_Id;
+         pragma Unreferenced (Src);
+      begin
+         Src := Landin.Stages.Add_Source (Work, "try-origins.ldn", Text);
+         Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
+         Landin.Stages.Append (Order, Names'Access);
+         Landin.Stages.Append (Order, Checker'Access);
+         Ran := Landin.Stages.Run (Order, Work);
+         declare
+            Reports : constant Landin.Diagnostics.Diagnostic_List :=
+              Landin.Stages.Report (Work);
+         begin
+            Landin.Testing.Check_Equal (Item, Ran, 4, Label & " reaches flow");
+            Landin.Testing.Check
+              (Item, Landin.Stages.Failed (Work) /= Accepted
+                 and then
+                   (if Accepted then Landin.Diagnostics.Count (Reports) = 0
+                    else Landin.Diagnostics.Count (Reports) = 1
+                      and then Landin.Diagnostics.Code
+                        (Landin.Diagnostics.Get (Reports, 1)) = "L0314"),
+               Label & " has its exact origin or assignment verdict");
+         end;
+      end Check_Source;
+   begin
+      Check_Source
+        ("undo frame on try",
+         "problem: atom" & LF
+         & "anchor: i32 = 42" & LF
+         & "mut saved: ptr i32 = ptr(4096)" & LF
+         & "retain: (escaping value: ptr i32) -> none = saved = value"
+         & " end retain" & LF
+         & "use: (value: i32) -> none = end use" & LF
+         & "may_fail: () -> none ! problem = fail problem end may_fail" & LF
+         & "may_fail_with: (value: i32) -> none ! problem = fail"
+         & " problem end may_fail_with" & LF
+         & "number_fail: () -> (r: i32) ! problem = fail problem end"
+         & " number_fail" & LF
+         & "f: () -> none ! problem = local: i32 = 42 undo retain(addr"
+         & " local) try may_fail() end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("defer before success replacement",
+         "problem: atom" & LF
+         & "anchor: i32 = 42" & LF
+         & "mut saved: ptr i32 = ptr(4096)" & LF
+         & "retain: (escaping value: ptr i32) -> none = saved = value"
+         & " end retain" & LF
+         & "use: (value: i32) -> none = end use" & LF
+         & "may_fail: () -> none ! problem = fail problem end may_fail" & LF
+         & "may_fail_with: (value: i32) -> none ! problem = fail"
+         & " problem end may_fail_with" & LF
+         & "number_fail: () -> (r: i32) ! problem = fail problem end"
+         & " number_fail" & LF
+         & "f: () -> none ! problem = local: i32 = 42 mut view: ptr i32"
+         & " = addr local defer retain(view) try may_fail() view = addr"
+         & " anchor end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("direct failure control",
+         "problem: atom" & LF
+         & "anchor: i32 = 42" & LF
+         & "mut saved: ptr i32 = ptr(4096)" & LF
+         & "retain: (escaping value: ptr i32) -> none = saved = value"
+         & " end retain" & LF
+         & "use: (value: i32) -> none = end use" & LF
+         & "may_fail: () -> none ! problem = fail problem end may_fail" & LF
+         & "may_fail_with: (value: i32) -> none ! problem = fail"
+         & " problem end may_fail_with" & LF
+         & "number_fail: () -> (r: i32) ! problem = fail problem end"
+         & " number_fail" & LF
+         & "f: () -> none ! problem = local: i32 = 42 undo retain(addr"
+         & " local) fail problem end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("non-escaping parameter",
+         "problem: atom" & LF
+         & "anchor: i32 = 42" & LF
+         & "mut saved: ptr i32 = ptr(4096)" & LF
+         & "retain: (escaping value: ptr i32) -> none = saved = value"
+         & " end retain" & LF
+         & "use: (value: i32) -> none = end use" & LF
+         & "may_fail: () -> none ! problem = fail problem end may_fail" & LF
+         & "may_fail_with: (value: i32) -> none ! problem = fail"
+         & " problem end may_fail_with" & LF
+         & "number_fail: () -> (r: i32) ! problem = fail problem end"
+         & " number_fail" & LF
+         & "f: (value: ptr i32) -> none ! problem = undo retain(value)"
+         & " try may_fail() end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("escaping parameter",
+         "problem: atom" & LF
+         & "anchor: i32 = 42" & LF
+         & "mut saved: ptr i32 = ptr(4096)" & LF
+         & "retain: (escaping value: ptr i32) -> none = saved = value"
+         & " end retain" & LF
+         & "use: (value: i32) -> none = end use" & LF
+         & "may_fail: () -> none ! problem = fail problem end may_fail" & LF
+         & "may_fail_with: (value: i32) -> none ! problem = fail"
+         & " problem end may_fail_with" & LF
+         & "number_fail: () -> (r: i32) ! problem = fail problem end"
+         & " number_fail" & LF
+         & "f: (escaping value: ptr i32) -> none ! problem = undo"
+         & " retain(value) try may_fail() end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("static reference",
+         "problem: atom" & LF
+         & "anchor: i32 = 42" & LF
+         & "mut saved: ptr i32 = ptr(4096)" & LF
+         & "retain: (escaping value: ptr i32) -> none = saved = value"
+         & " end retain" & LF
+         & "use: (value: i32) -> none = end use" & LF
+         & "may_fail: () -> none ! problem = fail problem end may_fail" & LF
+         & "may_fail_with: (value: i32) -> none ! problem = fail"
+         & " problem end may_fail_with" & LF
+         & "number_fail: () -> (r: i32) ! problem = fail problem end"
+         & " number_fail" & LF
+         & "f: () -> none ! problem = undo retain(addr anchor) try"
+         & " may_fail() end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("undo skips success",
+         "problem: atom" & LF
+         & "anchor: i32 = 42" & LF
+         & "mut saved: ptr i32 = ptr(4096)" & LF
+         & "retain: (escaping value: ptr i32) -> none = saved = value"
+         & " end retain" & LF
+         & "use: (value: i32) -> none = end use" & LF
+         & "may_fail: () -> none ! problem = fail problem end may_fail" & LF
+         & "may_fail_with: (value: i32) -> none ! problem = fail"
+         & " problem end may_fail_with" & LF
+         & "number_fail: () -> (r: i32) ! problem = fail problem end"
+         & " number_fail" & LF
+         & "f: () -> none ! problem = local: i32 = 42 undo retain(addr"
+         & " local) return end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("recovered call does not propagate",
+         "problem: atom" & LF
+         & "anchor: i32 = 42" & LF
+         & "mut saved: ptr i32 = ptr(4096)" & LF
+         & "retain: (escaping value: ptr i32) -> none = saved = value"
+         & " end retain" & LF
+         & "use: (value: i32) -> none = end use" & LF
+         & "may_fail: () -> none ! problem = fail problem end may_fail" & LF
+         & "may_fail_with: (value: i32) -> none ! problem = fail"
+         & " problem end may_fail_with" & LF
+         & "number_fail: () -> (r: i32) ! problem = fail problem end"
+         & " number_fail" & LF
+         & "f: () -> none ! problem = local: i32 = 42 undo retain(addr"
+         & " local) may_fail() else 0 return end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("nested try",
+         "problem: atom" & LF
+         & "anchor: i32 = 42" & LF
+         & "mut saved: ptr i32 = ptr(4096)" & LF
+         & "retain: (escaping value: ptr i32) -> none = saved = value"
+         & " end retain" & LF
+         & "use: (value: i32) -> none = end use" & LF
+         & "may_fail: () -> none ! problem = fail problem end may_fail" & LF
+         & "may_fail_with: (value: i32) -> none ! problem = fail"
+         & " problem end may_fail_with" & LF
+         & "number_fail: () -> (r: i32) ! problem = fail problem end"
+         & " number_fail" & LF
+         & "f: () -> none ! problem = local: i32 = 42 undo retain(addr"
+         & " local) value: i32 = 1 + try number_fail() end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("labelled try",
+         "problem: atom" & LF
+         & "anchor: i32 = 42" & LF
+         & "mut saved: ptr i32 = ptr(4096)" & LF
+         & "retain: (escaping value: ptr i32) -> none = saved = value"
+         & " end retain" & LF
+         & "use: (value: i32) -> none = end use" & LF
+         & "may_fail: () -> none ! problem = fail problem end may_fail" & LF
+         & "may_fail_with: (value: i32) -> none ! problem = fail"
+         & " problem end may_fail_with" & LF
+         & "number_fail: () -> (r: i32) ! problem = fail problem end"
+         & " number_fail" & LF
+         & "f: () -> none ! problem = local: i32 = 42 undo retain(addr"
+         & " local) try may_fail_with(value: 0) end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("failure origins do not leak into success",
+         "problem: atom" & LF
+         & "anchor: i32 = 42" & LF
+         & "mut saved: ptr i32 = ptr(4096)" & LF
+         & "retain: (escaping value: ptr i32) -> none = saved = value"
+         & " end retain" & LF
+         & "use: (value: i32) -> none = end use" & LF
+         & "may_fail: () -> none ! problem = fail problem end may_fail" & LF
+         & "may_fail_with: (value: i32) -> none ! problem = fail"
+         & " problem end may_fail_with" & LF
+         & "number_fail: () -> (r: i32) ! problem = fail problem end"
+         & " number_fail" & LF
+         & "f: () -> (r: ptr i32) ! problem = local: i32 = 42 mut view:"
+         & " ptr i32 = addr anchor undo use(begin view = addr local 1"
+         & " end) try may_fail() r = view end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("failure restoration does not excuse success",
+         "problem: atom" & LF
+         & "anchor: i32 = 42" & LF
+         & "mut saved: ptr i32 = ptr(4096)" & LF
+         & "retain: (escaping value: ptr i32) -> none = saved = value"
+         & " end retain" & LF
+         & "use: (value: i32) -> none = end use" & LF
+         & "may_fail: () -> none ! problem = fail problem end may_fail" & LF
+         & "may_fail_with: (value: i32) -> none ! problem = fail"
+         & " problem end may_fail_with" & LF
+         & "number_fail: () -> (r: i32) ! problem = fail problem end"
+         & " number_fail" & LF
+         & "f: () -> (r: ptr i32) ! problem = local: i32 = 42 mut view:"
+         & " ptr i32 = addr local undo use(begin view = addr anchor 1"
+         & " end) try may_fail() r = view end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("failure uses post-argument origins",
+         "problem: atom" & LF
+         & "anchor: i32 = 42" & LF
+         & "mut saved: ptr i32 = ptr(4096)" & LF
+         & "retain: (escaping value: ptr i32) -> none = saved = value"
+         & " end retain" & LF
+         & "use: (value: i32) -> none = end use" & LF
+         & "may_fail: () -> none ! problem = fail problem end may_fail" & LF
+         & "may_fail_with: (value: i32) -> none ! problem = fail"
+         & " problem end may_fail_with" & LF
+         & "number_fail: () -> (r: i32) ! problem = fail problem end"
+         & " number_fail" & LF
+         & "f: () -> none ! problem = local: i32 = 42 mut view: ptr i32"
+         & " = addr anchor undo retain(view) try may_fail_with(begin"
+         & " view = addr local 1 end) end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("argument return prevents the call",
+         "problem: atom" & LF
+         & "anchor: i32 = 42" & LF
+         & "mut saved: ptr i32 = ptr(4096)" & LF
+         & "retain: (escaping value: ptr i32) -> none = saved = value"
+         & " end retain" & LF
+         & "use: (value: i32) -> none = end use" & LF
+         & "may_fail: () -> none ! problem = fail problem end may_fail" & LF
+         & "may_fail_with: (value: i32) -> none ! problem = fail"
+         & " problem end may_fail_with" & LF
+         & "number_fail: () -> (r: i32) ! problem = fail problem end"
+         & " number_fail" & LF
+         & "f: () -> none ! problem = local: i32 = 42 undo retain(addr"
+         & " local) try may_fail_with(begin return end) end f" & LF,
+         Accepted => True);
+   end Try_Failures_Check_Reference_Cleanups;
+
    procedure Joined_Destinations_Keep_Escape_Obligations
      (Item : in out Landin.Testing.Context);
 
@@ -10119,6 +10390,9 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Register
         (Into, "checking", "R4.70 field ranges keep recursive children",
          R470_Field_Ranges_Keep_Recursive_Children'Access);
+      Landin.Testing.Register
+        (Into, "checking", "try failures check reference cleanups",
+         Try_Failures_Check_Reference_Cleanups'Access);
       Landin.Testing.Register
         (Into, "checking", "joined destinations keep escape obligations",
          Joined_Destinations_Keep_Escape_Obligations'Access);

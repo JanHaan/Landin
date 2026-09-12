@@ -437,7 +437,7 @@ package body Landin.Tests.Platform_Suite is
          "an ordinary exit reports its own status and output");
 
       Landin.Platform.Native.Tools.Set_Limit (Runner, 0.2);
-      Landin.Platform.Add (Sleeping, "sleep 30");
+      Landin.Platform.Add (Sleeping, "sleep 2");
       Runner.Run ("sh", Sleeping, Result);
       Landin.Testing.Check
         (Item,
@@ -446,6 +446,83 @@ package body Landin.Tests.Platform_Suite is
              (Unbounded.To_String (Result.Output), "ran longer than") > 0,
          "a run past the limit is stopped, reported as timed out and named");
    end Native_Runs_Report_Status_And_Are_Bounded;
+
+   --  Deliberate native-host test: a fake cannot establish that a timeout
+   --  stops a descendant. The witness forks one child; both expire within
+   --  two seconds even if the runner is broken. No compiler is invoked.
+   procedure Native_Timeout_Stops_Descendants
+     (Item : in out Landin.Testing.Context);
+
+   procedure Native_Timeout_Stops_Descendants
+     (Item : in out Landin.Testing.Context)
+   is
+      Runner : Landin.Platform.Native.Tools.Native_Tool_Runner;
+      Result : Landin.Platform.Tool_Result;
+      Args   : Landin.Platform.Path_List :=
+        Landin.Platform.Arguments ("../tests/tool_process_probe.py");
+      Marker : constant String := Scratch & "/timeout-child.txt";
+   begin
+      Ada.Directories.Create_Path (Scratch);
+      if Ada.Directories.Exists (Marker) then
+         Ada.Directories.Delete_File (Marker);
+      end if;
+      Landin.Platform.Add (Args, Marker);
+      Landin.Platform.Native.Tools.Set_Limit (Runner, 0.4);
+      Runner.Run ("python3", Args, Result);
+      Landin.Testing.Check
+        (Item, Result.Ended = Landin.Platform.Timed_Out,
+         "the parent exceeded its deadline");
+      Landin.Testing.Check
+        (Item, Ada.Strings.Fixed.Index
+           (Unbounded.To_String (Result.Output), "child ready") > 0,
+         "the child started before the deadline");
+      delay 1.2;
+      Landin.Testing.Check
+        (Item, not Ada.Directories.Exists (Marker),
+         "the child cannot write after the timeout");
+   end Native_Timeout_Stops_Descendants;
+
+   --  Deliberate native-host coverage of the C argv and descriptor boundary.
+   --  Shell syntax in an actual argument must remain literal data.
+   procedure Native_Arguments_And_Capture_Are_Preserved
+     (Item : in out Landin.Testing.Context);
+
+   procedure Native_Arguments_And_Capture_Are_Preserved
+     (Item : in out Landin.Testing.Context)
+   is
+      Runner : Landin.Platform.Native.Tools.Native_Tool_Runner;
+      Result : Landin.Platform.Tool_Result;
+      Args   : Landin.Platform.Path_List := Landin.Platform.Arguments ("-c");
+      Text   : constant String :=
+        "two words; $(ignored)" & ASCII.LF & """quoted""";
+      Missed : Boolean := False;
+   begin
+      Landin.Platform.Add
+        (Args, "printf '%s' ""$1""; printf 'capture-stderr\n' >&2; exit 7");
+      Landin.Platform.Add (Args, "capture-control");
+      Landin.Platform.Add (Args, Text);
+      Runner.Run ("sh", Args, Result);
+      Landin.Testing.Check_Equal
+        (Item, Unbounded.To_String (Result.Output),
+         Text & "capture-stderr" & ASCII.LF,
+         "merged output preserves literal arguments and stderr");
+      Landin.Testing.Check
+        (Item, Result.Ended = Landin.Platform.Exited
+           and then Result.Exit_Code = 7,
+         "capture preserves nonzero exit status");
+      Runner.Run ("sh", Args, Result, Landin.Platform.Output_Only);
+      Landin.Testing.Check_Equal
+        (Item, Unbounded.To_String (Result.Output), Text,
+         "output-only capture excludes inherited stderr");
+      begin
+         Runner.Run ("landin-no-such-test-tool", Landin.Platform.No_Arguments,
+                     Result);
+      exception
+         when Landin.External_Tool_Failed => Missed := True;
+      end;
+      Landin.Testing.Check
+        (Item, Missed, "a missing executable is a host failure");
+   end Native_Arguments_And_Capture_Are_Preserved;
 
    procedure Fake_Writes_Are_Recorded
      (Item : in out Landin.Testing.Context);
@@ -690,6 +767,12 @@ package body Landin.Tests.Platform_Suite is
       Landin.Testing.Register
         (Into, "platform", "native runs report status and are bounded",
          Native_Runs_Report_Status_And_Are_Bounded'Access);
+      Landin.Testing.Register
+        (Into, "platform", "native timeout stops descendants",
+         Native_Timeout_Stops_Descendants'Access);
+      Landin.Testing.Register
+        (Into, "platform", "native arguments and capture are preserved",
+         Native_Arguments_And_Capture_Are_Preserved'Access);
       Landin.Testing.Register
         (Into, "platform", "fake writes are recorded",
          Fake_Writes_Are_Recorded'Access);

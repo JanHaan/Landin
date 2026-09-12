@@ -1709,7 +1709,27 @@ package body Landin.Stages.Checking.References is
                return No_Origin;
 
             when Syn.Try_Expression =>
-               return Fact_Of (Tree, Syn.Operand_Of (Tree, Node));
+               Result := Fact_Of (Tree, Syn.Operand_Of (Tree, Node));
+               if Falls_Through and then not Cleanup_Stack.Is_Empty then
+                  declare
+                     Continuing : Function_Table_Access :=
+                       new Function_Table'(Origins);
+                  begin
+                     --  Failure occurs after argument evaluation. Its
+                     --  cleanups see those origins, but any writes made
+                     --  while unwinding cannot change the success edge.
+                     Run_Cleanups
+                       (Tree, 1, Landin.Cleanup.Failure_Propagation);
+                     Origins := Continuing.all;
+                     Falls_Through := True;
+                     Free (Continuing);
+                  exception
+                     when others =>
+                        Free (Continuing);
+                        raise;
+                  end;
+               end if;
+               return Result;
 
             when Syn.Any_Construction =>
                Result := Fact_Of (Tree, Syn.Operand_Of (Tree, Node));
