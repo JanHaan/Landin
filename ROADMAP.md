@@ -6038,7 +6038,7 @@ checks used the existing debug binary, sequentially, with 10-second timeouts.
 | K5 | A5: static-address search descends into unevaluated literal `lenof` | Current debug witness reports L0305 for an unevaluated address. Apply D31 consistently in the static-image address walk, retaining the actual module-address refusal and slice-descriptor evaluation boundaries. |
 | K6 | A6: distinct extraction inside a variant payload tests the outer node | Duplicate J55. The payload's `Given`, rather than the containing `Value`, owns the conversion exemption; preserve ordinary-field and static distinct-image controls. |
 | K7 | B1: indexed-field and pointer assignment destinations miss reads before the RHS | Repaired by 0f708770 under J1/J3/J74. Both imported current debug witnesses now produce exactly one L0302, including the formerly crashing unassigned pointer destination. |
-| K8 | B2: propagated `try` failure omits reference-origin cleanup checks | Current debug witness accepts `undo retain(addr local)` on a propagated failure; `Try_Expression` in the reference pass still returns only its operand fact. Repair failure-applicable origin cleanup traversal with direct-fail, successful-path, defer/undo and nested controls. J19 repaired definite assignment in a different pass and does not close this issue. |
+| K8 | B2: propagated `try` failure omits reference-origin cleanup checks | Repaired: the reference pass runs failure-applicable cleanups after the call's arguments, then restores success-path origins. Fourteen controls cover direct/propagated failure, defer/undo, nested and labelled calls, escaping/static values, recovery, early transfers and independent success facts. A driver refusal requires one L0314 and no output/tool effects. Both modes pass; J19's definite-assignment repair remains independently covered. |
 | K9 | B3: discard/operator wrappers hide nested sink effects | Already repaired by 0f708770 under J3. Preserve the selected nested-call controls and their debug/release evidence; no second dispatch repair or broad rerun is needed. |
 | K10 | B4: missing-value checking omits pointer, slice and erased carriers | Already repaired by 7250d298: current `Needs_Value` includes all three carriers. Retain the existing final-value refusal controls and both-mode evidence. |
 | K11 | B5: a fresh loop binding inherits a consumed fact from the previous iteration | Current debug witness rejects a freshly initialized scalar with L0302. Resolve the fresh-binding/reset behavior against [1910], covering ordinary and destructuring bindings and preserving genuinely loop-carried consumption. The source observation is reproduced; the review's broader semantic verdict was left open. |
@@ -6066,12 +6066,28 @@ checks used the existing debug binary, sequentially, with 10-second timeouts.
 | K33 | H1: build-report collision checks reserve inactive product/map paths | Source still reserves all three paths before the actual-output list is formed. Extend the artifact/source identity repair with fake-host inactive-map/product controls and preserve refusal of real collisions; no filesystem overwrite experiment. |
 | K34 | H2: help/identify bypass invalid deferred options | Source still returns before target/mode/root/option validation. Reconcile the existing no-misuse informational-action contract using fake-host cases for all four reported combinations; preserve valid informational requests and J45's invalid-CLI stage boundary. |
 | K35 | H3: build manifest omits the selected C compiler identity | Additional build-staleness item beside M13/J77: record the actual configured compiler/toolchain identity used for the native C adapter and invalidate both clean/checksum paths appropriately. Use disposable fake-toolchain controls, without changing the machine's compiler installation. |
-| K36 | H4: timeout kills only the direct tool PID | Current native runner confirms direct-PID kill and wait. Resolve process-tree termination and reaping under A4/M11 before further native tool execution/acceptance. Use an isolated harmless child process with short deadlines and guaranteed cleanup; never use assembler descendants to test it. |
+| K36 | H4: timeout kills only the direct tool PID | Repaired: POSIX spawn establishes a private process group before exec; a monotonic timeout kills that group and reaps the direct child. Adapter exceptions also stop an owned child. Five focused native cases pass in both modes, including a short-lived descendant's delayed write, literal argument bytes, capture modes, exit/signal distinctions and missing executables. This supervises ordinary group members, not descendants deliberately leaving the group; all assembly limits still apply. |
 
-The intake adds two immediate reference/flow follow-ups, K8 and K11, and a
-resource-control prerequisite, K36. Resolve K36 before resuming native tool
-execution; compiler-only/source work can continue. Keep J2's call-return
-contract question active, then combine the existing checker/conformance group
+The K8/K36 batch passes 15 selected cases and 359 checks in each of macOS debug
+and Linux release: five native process cases and ten checker/driver/fixture
+cases. Three small positive fixtures verify assembly-text emission only;
+no assembler, linker or generated Landin executable was invoked. The native
+timeout witness forks one harmless child, whose delayed marker must remain
+absent; both processes expire within two seconds even with a broken runner.
+The failure-cleanup origin snapshot uses heap storage and is released on both
+ordinary and exceptional paths. Existing origin forwarding, untaken cleanup,
+payload, nested-flow and destination-join controls remain green.
+
+Builds used one worker. The first clean Linux build hit its 300-second wrapper
+limit before tests ran and was stopped; the retry completed under an explicit
+900-second build limit. Selected test invocations were limited to at most
+20 seconds. Logs are retained in `.scratch/r491-tool-timeouts/` and
+`.scratch/r491-try-origins/`. These are development results, not exact-revision
+acceptance; the resource restrictions below remain mandatory.
+
+K8 and K36 are repaired. K11's fresh-binding facts are the next flow follow-up,
+including ordinary/destructuring initializers and independent loop-carried
+consumption. Keep J2's call-return contract question active, then combine the existing checker/conformance group
 with K1/K3/K4/K5's static-image/parser boundaries. K12 needs a semantic
 disposition before implementation. The verifier, optimization, build-identity
 and ABI items above remain owned by the corresponding later repair groups.

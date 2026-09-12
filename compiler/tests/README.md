@@ -110,6 +110,12 @@ descendants` checks whole-child initialization and branch containment in both
 orders, preserving independent siblings, indices and consumed leaves. These
 are small compiler checks; they neither assemble nor execute Landin programs.
 
+`try failures check reference cleanups` checks origins on propagated failure
+after call arguments run. Its 14 small sources preserve escaping/static
+arguments, recovered calls, early transfers and success-path isolation while
+refusing frame/non-escaping references retained by failure cleanups. The driver
+refusal case also requires L0314 before any output or tool call.
+
 `negative/r491-operand-diagnostic-cascades` pins one type diagnostic for each
 invalid float remainder or shift while retaining an independent integer
 division-by-zero diagnostic inside a refused operator.
@@ -122,6 +128,13 @@ followed by none-returning calls or controls, and cleanup ordering.
 complete-value checks. `negative/r491-function-final-value-prefix` preserves
 the grammar's exclusion of unconditional exits and unchecked regions from a
 final expression's statement prefix.
+
+The platform cases `native timeout stops descendants` and `native arguments
+and capture are preserved` exercise the real host process adapter. The timeout
+witness in `tool_process_probe.py` forks one short-lived child and checks that
+it cannot write a delayed marker after the runner stops the group. These tests
+invoke no compiler, assembler or linker. Existing native cases retain ordinary
+exit, signal and default-capture coverage.
 
 ## Optimization profiles and object quality
 

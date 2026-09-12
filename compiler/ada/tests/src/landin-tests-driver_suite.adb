@@ -1964,6 +1964,13 @@ package body Landin.Tests.Driver_Suite is
    begin
       for Executable in Boolean loop
          Check
+           ("problem: atom "
+            & "retain: (escaping value: ptr i32) -> none = end retain "
+            & "leaf: () -> none ! problem = fail problem end leaf "
+            & "f: () -> none ! problem = local: i32 = 42 "
+            & "undo retain(addr local) try leaf() end f",
+            "L0314", 1, Executable);
+         Check
            ("anchor: i32 = 0 "
             & "f: (inout out: ptr i32, flag: bool) -> none = "
             & "mut spare: ptr i32 = addr anchor "
