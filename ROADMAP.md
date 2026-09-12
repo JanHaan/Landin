@@ -5711,7 +5711,7 @@ sweep, debugger or stress campaign was used for this reconciliation.
 | N5, N7, N8: fixture inventory and low floors | Duplicate M14, with concrete parser/execution floor sites. Implement independent discovery/selection accounting and explicit obligations; do not replace historical floors with the report's fixed 955/233 counts. Counts alone cannot prove an intentionally removed fixture's semantic coverage survived. No fixture-deletion experiment was run. |
 | N6: wide slice stride | Duplicate A7/M19. Keep bounded instruction/operand evidence ahead of backend parity; possible inheritance by a future backend is not an observed current miscompile. |
 | N9: negatives without `program` | Confirmed by source: ordinary full-suite paths compare recorded bytes/status but skip exact `codes` comparison for these fixtures. Extend recorded-negative validation under M14, keeping stage attribution and report order explicit. |
-| N10: duplicate operand diagnostics | Two four-line compiler inputs confirm duplicate L0301/L0306 reports for float remainder by zero and a negative float shift. The late operand check revisits an operation whose integer-only typing already failed. Mark the failed operation and retain valid integer zero/shift checks. This remains third-batch work; both inputs exit reported and invoke no assembler. |
+| N10: duplicate operand diagnostics | Repaired: failed compound operators retain their ill-typed result, and the late operand check skips that operator after visiting its children. Seven float remainder/shift refusals each report L0301 once; an independent nested integer division by zero still reports L0306. Existing integer zero-divisor and negative-shift controls retain their diagnostics. The new fixture and four selected existing controls pass in macOS debug and Linux release with 30-second per-case limits; no source is assembled. |
 | N11: `Expect` recovery after a refused lexeme | The forward search exists and intentionally avoids repeating a scanner diagnostic. Bound it at the current construct/list boundary and pin preservation of following valid syntax before changing suppression policy. An already refused compilation cannot advance merely because this helper returns success. |
 | N12, N23: `12z` and `!=` diagnostics | Source confirms the differing token runs and absent inequality hint. These are diagnostic actionability questions, not newly enabled spellings or accepted wrong code. Compare [1760]/[1770]/[1820] and existing lexical controls before deciding whether to widen malformed runs or add guidance. |
 | N13: fake filesystem paths | Confirmed exact-string lookup differs from native directory handling for trailing slashes. Repair through narrow directory-root/entry controls under m5; preserve fake failure injection and explicit identity semantics. |
@@ -5746,8 +5746,8 @@ Each selected test has a 30-second timeout; the two diagnostic reproductions
 have 10-second timeouts. Release validation of this group remains outstanding.
 No Landin fixture was assembled, and existing broad coverage was not rerun.
 
-The next repair order is coordinated final-value handling and duplicate
-operand diagnostics; bounded call recovery/inference storage; target operand and native
+The next repair order is coordinated final-value handling; bounded call
+recovery/inference storage; target operand and native
 failure boundaries; then fixture accounting, explicit profiles and remaining
 documentation contracts. The new parser recovery fixes join M1 in the current
 third batch. The source review is reconciled; the implementation and acceptance

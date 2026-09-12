@@ -1,0 +1,76 @@
+error[L0301]: this operator wants numbers and was given `f32`
+  --> ../tests/fixtures/negative/r491-operand-diagnostic-cascades/main.ldn:3:11
+  |
+3 |     value %= 0
+  |           ^^
+  --> ../tests/fixtures/negative/r491-operand-diagnostic-cascades/main.ldn:3:5
+  |
+3 |     value %= 0
+  |     ^^^^^^^^^^ here
+  = note: [1890]: ordinary arithmetic admits integers and floats; width and bit operators admit integers
+error[L0301]: this operator wants numbers and was given `f32`
+  --> ../tests/fixtures/negative/r491-operand-diagnostic-cascades/main.ldn:4:11
+  |
+4 |     value <<= -1
+  |           ^^^
+  --> ../tests/fixtures/negative/r491-operand-diagnostic-cascades/main.ldn:4:5
+  |
+4 |     value <<= -1
+  |     ^^^^^^^^^^^^ here
+  = note: [1890]: ordinary arithmetic admits integers and floats; width and bit operators admit integers
+error[L0301]: this operator wants numbers and was given `f32`
+  --> ../tests/fixtures/negative/r491-operand-diagnostic-cascades/main.ldn:5:11
+  |
+5 |     value >>= -1
+  |           ^^^
+  --> ../tests/fixtures/negative/r491-operand-diagnostic-cascades/main.ldn:5:5
+  |
+5 |     value >>= -1
+  |     ^^^^^^^^^^^^ here
+  = note: [1890]: ordinary arithmetic admits integers and floats; width and bit operators admit integers
+error[L0301]: this operator wants numbers and was given `f32`
+  --> ../tests/fixtures/negative/r491-operand-diagnostic-cascades/main.ldn:6:24
+  |
+6 |     remainder := value % 0
+  |                        ^
+  --> ../tests/fixtures/negative/r491-operand-diagnostic-cascades/main.ldn:6:18
+  |
+6 |     remainder := value % 0
+  |                  ^^^^^^^^^ here
+  = note: [1890]: ordinary arithmetic admits integers and floats; width and bit operators admit integers
+error[L0301]: this operator wants numbers and was given `f32`
+  --> ../tests/fixtures/negative/r491-operand-diagnostic-cascades/main.ldn:7:19
+  |
+7 |     left := value << -1
+  |                   ^^
+  --> ../tests/fixtures/negative/r491-operand-diagnostic-cascades/main.ldn:7:13
+  |
+7 |     left := value << -1
+  |             ^^^^^^^^^^^ here
+  = note: [1890]: ordinary arithmetic admits integers and floats; width and bit operators admit integers
+error[L0301]: this operator wants numbers and was given `f32`
+  --> ../tests/fixtures/negative/r491-operand-diagnostic-cascades/main.ldn:8:20
+  |
+8 |     right := value >> -1
+  |                    ^^
+  --> ../tests/fixtures/negative/r491-operand-diagnostic-cascades/main.ldn:8:14
+  |
+8 |     right := value >> -1
+  |              ^^^^^^^^^^^ here
+  = note: [1890]: ordinary arithmetic admits integers and floats; width and bit operators admit integers
+error[L0301]: this operator wants numbers and was given `f32`
+  --> ../tests/fixtures/negative/r491-operand-diagnostic-cascades/main.ldn:9:11
+  |
+9 |     value %= (1 / 0)
+  |           ^^
+  --> ../tests/fixtures/negative/r491-operand-diagnostic-cascades/main.ldn:9:5
+  |
+9 |     value %= (1 / 0)
+  |     ^^^^^^^^^^^^^^^^ here
+  = note: [1890]: ordinary arithmetic admits integers and floats; width and bit operators admit integers
+error[L0306]: this divisor is zero, and there is no quotient for it to produce
+  --> ../tests/fixtures/negative/r491-operand-diagnostic-cascades/main.ldn:9:19
+  |
+9 |     value %= (1 / 0)
+  |                   ^
+  = note: [1950]: an operand the operation cannot take is refused where the compiler knows it

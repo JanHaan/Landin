@@ -23021,7 +23021,11 @@ package body Landin.Stages.Checking is
                                      (Of_Tree, Node)),
                                 Place, Value, Node);
                         begin
-                           pragma Unreferenced (Result);
+                           if Result = Ty.Ill_Typed then
+                              Landin.Checking.Refuse
+                                (Types.all, Of_Tree, Node);
+                              return;
+                           end if;
                         end;
 
                         --  D188: a compound assignment stores the
@@ -28088,6 +28092,14 @@ package body Landin.Stages.Checking is
          end if;
 
          Operation := Syn.Kind (Of_Tree, Node);
+
+         --  An ill-typed operator has no numeric operand contract to check.
+         --  Its children were still visited for their independent faults.
+         if Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
+              = Ty.Ill_Typed
+         then
+            return;
+         end if;
 
          if Syn.Kind (Of_Tree, Node) = Syn.Assignment
            and then Syn.Assignment_Operation (Of_Tree, Node)

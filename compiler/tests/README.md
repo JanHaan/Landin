@@ -95,6 +95,10 @@ checker and lowering seam cases separately assert case identities and verified
 storage paths; driver cases assert that refused source writes no output and
 invokes no tool.
 
+`negative/r491-operand-diagnostic-cascades` pins one type diagnostic for each
+invalid float remainder or shift while retaining an independent integer
+division-by-zero diagnostic inside a refused operator.
+
 ## Optimization profiles and object quality
 
 Every runtime and ABI fixture runs separately under `none/off`, `size/off`,
