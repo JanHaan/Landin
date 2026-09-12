@@ -7834,6 +7834,331 @@ package body Landin.Tests.Checking_Suite is
 
    --  R4.91: runtime calls carry consumption and failure edges through
    --  enclosing expressions; measurement and callback bodies stay unevaluated.
+   procedure Fresh_Bindings_Reset_Flow_Facts
+     (Item : in out Landin.Testing.Context);
+
+   procedure Fresh_Bindings_Reset_Flow_Facts
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Source
+        (Label, Text : String; Accepted : Boolean;
+         Code : String := "L0302");
+
+      procedure Check_Source
+        (Label, Text : String; Accepted : Boolean;
+         Code : String := "L0302")
+      is
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Order : Landin.Stages.Pipeline;
+         Ran : Natural;
+         Src : Landin.Source.Source_Id;
+         pragma Unreferenced (Src);
+      begin
+         Src := Landin.Stages.Add_Source (Work, "fresh-bindings.ldn", Text);
+         Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
+         Landin.Stages.Append (Order, Names'Access);
+         Landin.Stages.Append (Order, Checker'Access);
+         Ran := Landin.Stages.Run (Order, Work);
+         declare
+            Reports : constant Landin.Diagnostics.Diagnostic_List :=
+              Landin.Stages.Report (Work);
+         begin
+            Landin.Testing.Check_Equal (Item, Ran, 4, Label & " reaches flow");
+            Landin.Testing.Check
+              (Item, Landin.Stages.Failed (Work) /= Accepted
+                 and then
+                   (if Accepted then Landin.Diagnostics.Count (Reports) = 0
+                    else Landin.Diagnostics.Count (Reports) = 1
+                      and then Landin.Diagnostics.Code
+                        (Landin.Diagnostics.Get (Reports, 1)) = Code),
+               Label & " retains its exact assignment verdict");
+         end;
+      end Check_Source;
+
+   begin
+      Check_Source
+        ("fresh initialized scalar",
+         "consume: (sink value: i32) -> none = end consume" & LF
+         & "consume_bool: (sink value: bool) -> none = end consume_bool" & LF
+         & "box: type = struct value: i32 end box" & LF
+         & "outer: type = struct child: box end outer" & LF
+         & "f: (keep: bool) -> none =" & LF
+         & "while keep do" & LF
+         & "value: i32 = 42" & LF
+         & "consume(value)" & LF
+         & "end while" & LF
+         & "end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("fresh consumed field",
+         "consume: (sink value: i32) -> none = end consume" & LF
+         & "consume_bool: (sink value: bool) -> none = end consume_bool" & LF
+         & "box: type = struct value: i32 end box" & LF
+         & "outer: type = struct child: box end outer" & LF
+         & "f: (keep: bool) -> none =" & LF
+         & "while keep do" & LF
+         & "value: box = (value: 42)" & LF
+         & "consume(value.value)" & LF
+         & "end while" & LF
+         & "end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("fresh consumed nested field",
+         "consume: (sink value: i32) -> none = end consume" & LF
+         & "consume_bool: (sink value: bool) -> none = end consume_bool" & LF
+         & "box: type = struct value: i32 end box" & LF
+         & "outer: type = struct child: box end outer" & LF
+         & "f: (keep: bool) -> none =" & LF
+         & "while keep do" & LF
+         & "value: outer = (child: (value: 42))" & LF
+         & "consume(value.child.value)" & LF
+         & "end while" & LF
+         & "end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("fresh consumed element",
+         "consume: (sink value: i32) -> none = end consume" & LF
+         & "consume_bool: (sink value: bool) -> none = end consume_bool" & LF
+         & "box: type = struct value: i32 end box" & LF
+         & "outer: type = struct child: box end outer" & LF
+         & "f: (keep: bool) -> none =" & LF
+         & "while keep do" & LF
+         & "value: [2]i32 = [1, 2]" & LF
+         & "consume(value[0])" & LF
+         & "end while" & LF
+         & "end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("fresh consumed element field",
+         "consume: (sink value: i32) -> none = end consume" & LF
+         & "consume_bool: (sink value: bool) -> none = end consume_bool" & LF
+         & "box: type = struct value: i32 end box" & LF
+         & "outer: type = struct child: box end outer" & LF
+         & "f: (keep: bool) -> none =" & LF
+         & "while keep do" & LF
+         & "value: [2]box = [(value: 1), (value: 2)]" & LF
+         & "consume(value[0].value)" & LF
+         & "end while" & LF
+         & "end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("fresh destructured results",
+         "pair: () -> (value: i32, other: i32) =" & LF
+         & "value = 42 other = 0 end pair" & LF
+         & "f: (keep: bool) -> none =" & LF
+         & "while keep do" & LF
+         & "(value: part, other: rest) := pair()" & LF
+         & "_ = part + rest" & LF
+         & "end while end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("destructured sink restriction is preserved",
+         "consume: (sink value: i32) -> none = end consume" & LF
+         & "pair: () -> (value: i32, other: i32) =" & LF
+         & "value = 42 other = 0 end pair" & LF
+         & "f: (keep: bool) -> none =" & LF
+         & "while keep do" & LF
+         & "(value: part, other: rest) := pair()" & LF
+         & "consume(part)" & LF
+         & "end while end f" & LF,
+         Accepted => False, Code => "L0301");
+      Check_Source
+        ("fresh condition binding",
+         "consume: (sink value: i32) -> none = end consume" & LF
+         & "consume_bool: (sink value: bool) -> none = end consume_bool" & LF
+         & "box: type = struct value: i32 end box" & LF
+         & "outer: type = struct child: box end outer" & LF
+         & "f: (keep: bool) -> none =" & LF
+         & "while ready: bool = keep do" & LF
+         & "consume_bool(ready)" & LF
+         & "end while" & LF
+         & "end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("fresh arm binding",
+         "consume: (sink value: i32) -> none = end consume" & LF
+         & "consume_bool: (sink value: bool) -> none = end consume_bool" & LF
+         & "box: type = struct value: i32 end box" & LF
+         & "outer: type = struct child: box end outer" & LF
+         & "f: (keep: bool) -> none =" & LF
+         & "while keep do" & LF
+         & "if ready: bool = keep then" & LF
+         & "consume_bool(ready)" & LF
+         & "end if" & LF
+         & "end while" & LF
+         & "end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("fresh range element",
+         "consume: (sink value: i32) -> none = end consume" & LF
+         & "consume_bool: (sink value: bool) -> none = end consume_bool" & LF
+         & "box: type = struct value: i32 end box" & LF
+         & "outer: type = struct child: box end outer" & LF
+         & "f: (keep: bool) -> none =" & LF
+         & "for value in 0 ..< 2 do" & LF
+         & "consume(value)" & LF
+         & "end for" & LF
+         & "end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("fresh array element",
+         "consume: (sink value: i32) -> none = end consume" & LF
+         & "consume_bool: (sink value: bool) -> none = end consume_bool" & LF
+         & "box: type = struct value: i32 end box" & LF
+         & "outer: type = struct child: box end outer" & LF
+         & "f: (values: [2]i32) -> none =" & LF
+         & "for value, index in values do" & LF
+         & "consume(value)" & LF
+         & "end for" & LF
+         & "end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("fresh assignment",
+         "consume: (sink value: i32) -> none = end consume" & LF
+         & "consume_bool: (sink value: bool) -> none = end consume_bool" & LF
+         & "box: type = struct value: i32 end box" & LF
+         & "outer: type = struct child: box end outer" & LF
+         & "f: (keep: bool) -> none =" & LF
+         & "while keep do" & LF
+         & "mut value: i32" & LF
+         & "value = 42" & LF
+         & "consume(value)" & LF
+         & "end while" & LF
+         & "end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("fresh unassigned scalar",
+         "consume: (sink value: i32) -> none = end consume" & LF
+         & "consume_bool: (sink value: bool) -> none = end consume_bool" & LF
+         & "box: type = struct value: i32 end box" & LF
+         & "outer: type = struct child: box end outer" & LF
+         & "f: (keep: bool) -> none =" & LF
+         & "while keep do" & LF
+         & "mut value: i32" & LF
+         & "_ = value" & LF
+         & "value = 42" & LF
+         & "end while" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("fresh unassigned field",
+         "consume: (sink value: i32) -> none = end consume" & LF
+         & "consume_bool: (sink value: bool) -> none = end consume_bool" & LF
+         & "box: type = struct value: i32 end box" & LF
+         & "outer: type = struct child: box end outer" & LF
+         & "f: (keep: bool) -> none =" & LF
+         & "while keep do" & LF
+         & "mut value: box" & LF
+         & "_ = value.value" & LF
+         & "value.value = 42" & LF
+         & "end while" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("fresh unassigned element",
+         "consume: (sink value: i32) -> none = end consume" & LF
+         & "consume_bool: (sink value: bool) -> none = end consume_bool" & LF
+         & "box: type = struct value: i32 end box" & LF
+         & "outer: type = struct child: box end outer" & LF
+         & "f: (keep: bool) -> none =" & LF
+         & "while keep do" & LF
+         & "mut value: [2]i32" & LF
+         & "_ = value[0]" & LF
+         & "value[0] = 42" & LF
+         & "end while" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("outer consumption persists",
+         "consume: (sink value: i32) -> none = end consume" & LF
+         & "consume_bool: (sink value: bool) -> none = end consume_bool" & LF
+         & "box: type = struct value: i32 end box" & LF
+         & "outer: type = struct child: box end outer" & LF
+         & "f: (keep: bool) -> none =" & LF
+         & "value: i32 = 42" & LF
+         & "while keep do" & LF
+         & "fresh: i32 = 42" & LF
+         & "_ = fresh" & LF
+         & "consume(value)" & LF
+         & "end while" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("initializer reads consumed outer",
+         "consume: (sink value: i32) -> none = end consume" & LF
+         & "consume_bool: (sink value: bool) -> none = end consume_bool" & LF
+         & "box: type = struct value: i32 end box" & LF
+         & "outer: type = struct child: box end outer" & LF
+         & "f: (keep: bool) -> none =" & LF
+         & "value: i32 = 42" & LF
+         & "consume(value)" & LF
+         & "while keep do" & LF
+         & "value: i32 = value" & LF
+         & "_ = value" & LF
+         & "end while" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("continue reaches fresh binding",
+         "consume: (sink value: i32) -> none = end consume" & LF
+         & "consume_bool: (sink value: bool) -> none = end consume_bool" & LF
+         & "box: type = struct value: i32 end box" & LF
+         & "outer: type = struct child: box end outer" & LF
+         & "f: (keep: bool) -> none =" & LF
+         & "while keep do" & LF
+         & "value: i32 = 42" & LF
+         & "consume(value)" & LF
+         & "continue" & LF
+         & "end while" & LF
+         & "end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("repeat read stays dead",
+         "consume: (sink value: i32) -> none = end consume" & LF
+         & "consume_bool: (sink value: bool) -> none = end consume_bool" & LF
+         & "box: type = struct value: i32 end box" & LF
+         & "outer: type = struct child: box end outer" & LF
+         & "f: (keep: bool) -> none =" & LF
+         & "while keep do" & LF
+         & "value: i32 = 42" & LF
+         & "consume(value)" & LF
+         & "_ = value" & LF
+         & "end while" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("inner loop retains outer instance",
+         "consume: (sink value: i32) -> none = end consume" & LF
+         & "consume_bool: (sink value: bool) -> none = end consume_bool" & LF
+         & "box: type = struct value: i32 end box" & LF
+         & "outer: type = struct child: box end outer" & LF
+         & "f: (keep: bool) -> none =" & LF
+         & "while keep do" & LF
+         & "value: i32 = 42" & LF
+         & "while keep do" & LF
+         & "consume(value)" & LF
+         & "end while" & LF
+         & "end while" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("initializer effects persist",
+         "consume: (sink value: i32) -> none = end consume" & LF
+         & "consume_bool: (sink value: bool) -> none = end consume_bool" & LF
+         & "box: type = struct value: i32 end box" & LF
+         & "outer: type = struct child: box end outer" & LF
+         & "f: (keep: bool) -> none =" & LF
+         & "other: i32 = 42" & LF
+         & "while keep do" & LF
+         & "value: i32 = begin consume(other) 42 end" & LF
+         & "_ = value" & LF
+         & "end while" & LF
+         & "end f" & LF,
+         Accepted => False);
+   end Fresh_Bindings_Reset_Flow_Facts;
+
    procedure Nested_Calls_Retain_Flow_Effects
      (Item : in out Landin.Testing.Context);
 
@@ -10378,6 +10703,9 @@ package body Landin.Tests.Checking_Suite is
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "checking", "fresh bindings reset flow facts",
+         Fresh_Bindings_Reset_Flow_Facts'Access);
       Landin.Testing.Register
         (Into, "checking", "variant arrays retain case identities",
          Variant_Array_Elements_Keep_Case_Identity'Access);

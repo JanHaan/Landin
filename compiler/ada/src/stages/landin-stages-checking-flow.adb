@@ -424,6 +424,8 @@ package body Landin.Stages.Checking.Flow is
       function Declaration_At
         (Src : Landin.Source.Source_Id; Node : Syn.Node_Id)
         return Res.Declaration_Id;
+      procedure Reset_Binding
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id; State : in out Assigned_Set);
       --  Whether the whole-array read is a D20 assignment source or a D21
       --  binding initializer.  Only Require_Array threads through, since
       --  every other whole-name read (a discard, an `inc`) is neither.
@@ -561,6 +563,71 @@ package body Landin.Stages.Checking.Flow is
 
          return Res.No_Declaration;
       end Declaration_At;
+
+      procedure Reset_Binding
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id; State : in out Assigned_Set)
+      is
+         Id : constant Res.Declaration_Id :=
+           Declaration_At (Syn.Source_Of (Of_Tree), Node);
+
+         procedure Forget (Facts : in out Element_Sets.Set);
+         procedure Forget (Facts : in out Nested_Sets.Set);
+         procedure Forget (Facts : in out Array_Sets.Set);
+
+         procedure Forget (Facts : in out Element_Sets.Set) is
+            Position : Element_Sets.Cursor :=
+              Facts.Ceiling ((Id, No_Path, 0, No_Path));
+            Previous : Element_Sets.Cursor;
+         begin
+            while Element_Sets.Has_Element (Position) loop
+               exit when Element_Sets.Element (Position).Declaration /= Id;
+               Previous := Position;
+               Element_Sets.Next (Position);
+               Facts.Delete (Previous);
+            end loop;
+         end Forget;
+
+         procedure Forget (Facts : in out Nested_Sets.Set) is
+            Position : Nested_Sets.Cursor := Facts.Ceiling ((Id, No_Path));
+            Previous : Nested_Sets.Cursor;
+         begin
+            while Nested_Sets.Has_Element (Position) loop
+               exit when Nested_Sets.Element (Position).Declaration /= Id;
+               Previous := Position;
+               Nested_Sets.Next (Position);
+               Facts.Delete (Previous);
+            end loop;
+         end Forget;
+
+         procedure Forget (Facts : in out Array_Sets.Set) is
+            Position : Array_Sets.Cursor := Facts.Ceiling ((Id, No_Path));
+            Previous : Array_Sets.Cursor;
+         begin
+            while Array_Sets.Has_Element (Position) loop
+               exit when Array_Sets.Element (Position).Declaration /= Id;
+               Previous := Position;
+               Array_Sets.Next (Position);
+               Facts.Delete (Previous);
+            end loop;
+         end Forget;
+      begin
+         if Id = Res.No_Declaration then
+            return;
+         end if;
+
+         --  A declaration starts a fresh lifetime on every execution. The
+         --  loop head may retain facts about its previous instance, but
+         --  neither an assignment nor a consumption belongs to this one.
+         for Field in 0 .. Widest_Struct loop
+            State.Fields (Positive (Id), Field) := False;
+            State.Dead_Fields (Positive (Id), Field) := False;
+         end loop;
+         Forget (State.Elements);
+         Forget (State.Whole_Arrays);
+         Forget (State.Nested);
+         Forget (State.Dead_Elements);
+         Forget (State.Dead_Nested);
+      end Reset_Binding;
 
       function Is_Tracked (Id : Res.Declaration_Id) return Boolean is
       begin
@@ -1883,6 +1950,7 @@ package body Landin.Stages.Checking.Flow is
                      Id : constant Res.Declaration_Id :=
                        Declaration_At (Syn.Source_Of (Of_Tree), Binding);
                   begin
+                     Reset_Binding (Of_Tree, Binding, Into);
                      if Id = Res.No_Declaration or else not Is_Tracked (Id)
                      then
                         return;
@@ -2002,6 +2070,11 @@ package body Landin.Stages.Checking.Flow is
                               Condition : constant Syn.Node_Id :=
                                 Syn.Condition_Of (Of_Tree, Node);
                            begin
+                              if Syn.Kind (Of_Tree, Condition) = Syn.Binding
+                              then
+                                 Reset_Binding
+                                   (Of_Tree, Condition, Body_State);
+                              end if;
                               Flow_Expression
                                 (Of_Tree,
                                  (if Syn.Kind (Of_Tree, Condition)
@@ -2173,6 +2246,9 @@ package body Landin.Stages.Checking.Flow is
                           Syn.Condition_Of (Of_Tree, This);
                         Test_Edges : Edge_Facts;
                      begin
+                        if Syn.Kind (Of_Tree, Condition) = Syn.Binding then
+                           Reset_Binding (Of_Tree, Condition, Remaining);
+                        end if;
                         Flow_Expression
                           (Of_Tree,
                            (if Syn.Kind (Of_Tree, Condition) = Syn.Binding
@@ -3037,6 +3113,7 @@ package body Landin.Stages.Checking.Flow is
                         Id : constant Res.Declaration_Id :=
                           Declaration_At (Syn.Source_Of (Of_Tree), Item);
                      begin
+                        Reset_Binding (Of_Tree, Item, State);
                         if Id = Res.No_Declaration
                           or else Landin.Checking.Type_Of (Types.all, Id)
                                     /= Ty.Ill_Typed
@@ -3051,6 +3128,22 @@ package body Landin.Stages.Checking.Flow is
                      Flow_Expression
                        (Of_Tree, Syn.Destructured_Value (Of_Tree, Item),
                         Result, State, Step, Initializer_Source);
+                     for Position in
+                       1 .. Syn.Destructured_Field_Count (Of_Tree, Item)
+                     loop
+                        declare
+                           Field : constant Syn.Node_Id :=
+                             Syn.Nth_Destructured_Field
+                               (Of_Tree, Item, Position);
+                        begin
+                           for Slot in 1 .. Syn.Slot_Count (Of_Tree, Field)
+                           loop
+                              Reset_Binding
+                                (Of_Tree, Syn.Slot (Of_Tree, Field, Slot),
+                                 State);
+                           end loop;
+                        end;
+                     end loop;
 
                   when Syn.Assignment =>
                      if Landin.Checking.Type_Of
