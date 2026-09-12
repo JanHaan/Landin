@@ -10732,8 +10732,202 @@ package body Landin.Tests.Checking_Suite is
          & "end f" & LF);
    end Construction_Arguments_Keep_Value_Forms;
 
+   procedure Static_Fields_Check_Evaluated_Values
+     (Item : in out Landin.Testing.Context);
+
+   procedure Static_Fields_Check_Evaluated_Values
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Source
+        (Label, Text : String; Accepted : Boolean;
+         Code : String := "L0305");
+
+      procedure Check_Source
+        (Label, Text : String; Accepted : Boolean;
+         Code : String := "L0305")
+      is
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Order : Landin.Stages.Pipeline;
+         Ran : Natural;
+         Src : Landin.Source.Source_Id;
+         pragma Unreferenced (Src);
+      begin
+         Src := Landin.Stages.Add_Source (Work, "static-fields.ldn", Text);
+         Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
+         Landin.Stages.Append (Order, Names'Access);
+         Landin.Stages.Append (Order, Checker'Access);
+         Ran := Landin.Stages.Run (Order, Work);
+         declare
+            Reports : constant Landin.Diagnostics.Diagnostic_List :=
+              Landin.Stages.Report (Work);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Ran, 4, Label & " reaches checking");
+            Landin.Testing.Check
+              (Item, Landin.Stages.Failed (Work) /= Accepted
+                 and then
+                   (if Accepted then Landin.Diagnostics.Count (Reports) = 0
+                    else Landin.Diagnostics.Count (Reports) = 1
+                      and then Landin.Diagnostics.Code
+                        (Landin.Diagnostics.Get (Reports, 1)) = Code),
+               Label & " retains its exact static-image verdict");
+         end;
+      end Check_Source;
+
+   begin
+      Check_Source
+        ("ordinary reference call",
+         "make: () -> (r: utf8) = r = ""ok"" end make" & LF
+         & "holder: type = struct value: utf8 end holder" & LF
+         & "image: holder = (value: make())" & LF,
+         Accepted => False);
+      Check_Source
+        ("nominal reference call",
+         "make: () -> (r: utf8) = r = ""ok"" end make" & LF
+         & "holder: type = struct value: utf8 end holder" & LF
+         & "image: holder = holder(value: make())" & LF,
+         Accepted => False);
+      Check_Source
+        ("reference fill call",
+         "make: () -> (r: utf8) = r = ""ok"" end make" & LF
+         & "holder: type = struct first: utf8 second: utf8 end holder" & LF
+         & "image: holder = (first: ""ok"", of make())" & LF,
+         Accepted => False);
+      Check_Source
+        ("nested reference call",
+         "make: () -> (r: utf8) = r = ""ok"" end make" & LF
+         & "holder: type = struct value: utf8 end holder" & LF
+         & "outer: type = struct child: holder end outer" & LF
+         & "image: outer = (child: (value: make()))" & LF,
+         Accepted => False);
+      Check_Source
+        ("variant reference call",
+         "make: () -> (r: utf8) = r = ""ok"" end make" & LF
+         & "choice: type = struct kind: variant empty | text: "
+         & "(value: utf8) end kind end choice" & LF
+         & "image: choice = (kind: text(value: make()))" & LF,
+         Accepted => False);
+      Check_Source
+        ("variant reference fill",
+         "make: () -> (r: utf8) = r = ""ok"" end make" & LF
+         & "choice: type = struct kind: variant empty | text: "
+         & "(first: utf8, second: utf8) end kind end choice" & LF
+         & "image: choice = (kind: text(first: ""ok"", of make()))" & LF,
+         Accepted => False);
+      Check_Source
+        ("direct reference call",
+         "make: () -> (r: utf8) = r = ""ok"" end make" & LF
+         & "image: utf8 = make()" & LF,
+         Accepted => False);
+      Check_Source
+        ("local reference calls",
+         "make: () -> (r: utf8) = r = ""ok"" end make" & LF
+         & "holder: type = struct value: utf8 end holder" & LF
+         & "choice: type = struct kind: variant empty | text: "
+         & "(value: utf8) end kind end choice" & LF
+         & "f: () -> none =" & LF
+         & "local: holder = (value: make())" & LF
+         & "selected: choice = (kind: text(value: make()))" & LF
+         & "end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("known reference fields",
+         "holder: type = struct text: utf8 pointer: ptr i32 end holder" & LF
+         & "image: holder = (text: ""ok"", pointer: ptr(4096))" & LF,
+         Accepted => True);
+      Check_Source
+        ("known variant reference",
+         "choice: type = struct kind: variant empty | text: "
+         & "(value: utf8) end kind end choice" & LF
+         & "image: choice = (kind: text(value: ""ok""))" & LF,
+         Accepted => True);
+      Check_Source
+        ("known empty slice",
+         "holder: type = struct value: utf8 end holder" & LF
+         & "image: holder = (value: [])" & LF,
+         Accepted => True);
+      Check_Source
+        ("reference type mismatch",
+         "make: () -> (r: i32) = r = 1 end make" & LF
+         & "holder: type = struct value: utf8 end holder" & LF
+         & "image: holder = (value: make())" & LF,
+         Accepted => False, Code => "L0301");
+      Check_Source
+        ("unevaluated address measurement",
+         "target: i32 = 0" & LF
+         & "image: usize = lenof ([usize(addr target)])" & LF,
+         Accepted => True);
+      Check_Source
+        ("unevaluated address field",
+         "target: i32 = 0" & LF
+         & "holder: type = struct n: usize end holder" & LF
+         & "image: holder = (n: lenof ([usize(addr target)]))" & LF,
+         Accepted => True);
+      Check_Source
+        ("unevaluated address payload",
+         "target: i32 = 0" & LF
+         & "choice: type = struct kind: variant empty | size: (n: "
+         & "usize) end kind end choice" & LF
+         & "image: choice = (kind: size(n: lenof ([usize(addr "
+         & "target)])))" & LF,
+         Accepted => True);
+      Check_Source
+        ("evaluated address field",
+         "target: i32 = 0" & LF
+         & "holder: type = struct n: usize end holder" & LF
+         & "image: holder = (n: usize(addr target))" & LF,
+         Accepted => False);
+      Check_Source
+        ("evaluated pointer field",
+         "target: i32 = 0" & LF
+         & "holder: type = struct p: ptr i32 end holder" & LF
+         & "image: holder = (p: addr target)" & LF,
+         Accepted => False);
+      Check_Source
+        ("distinct payload",
+         "meter: type = distinct u32" & LF
+         & "choice: type = struct kind: variant empty | spot: (m: "
+         & "meter) end kind end choice" & LF
+         & "image: choice = (kind: spot(m: meter(5)))" & LF,
+         Accepted => True);
+      Check_Source
+        ("distinct ordinary field",
+         "meter: type = distinct u32" & LF
+         & "holder: type = struct m: meter end holder" & LF
+         & "image: holder = (m: meter(5))" & LF,
+         Accepted => True);
+      Check_Source
+        ("distinct payload identity",
+         "meter: type = distinct u32" & LF
+         & "other: type = distinct u32" & LF
+         & "choice: type = struct kind: variant empty | spot: (m: "
+         & "meter) end kind end choice" & LF
+         & "image: choice = (kind: spot(m: other(5)))" & LF,
+         Accepted => False, Code => "L0301");
+      Check_Source
+        ("unevaluated address array element",
+         "target: i32 = 0" & LF
+         & "image: [2]usize = [lenof ([usize(addr target)]), 2]" & LF,
+         Accepted => True);
+      Check_Source
+        ("unevaluated address repeated element",
+         "target: i32 = 0" & LF
+         & "image: [2]usize = [2 of lenof ([usize(addr target)])]" & LF,
+         Accepted => True);
+      Check_Source
+        ("unevaluated address mixed repetition",
+         "target: i32 = 0" & LF
+         & "image: [2]usize = [0, of lenof ([usize(addr target)])]" & LF,
+         Accepted => True);
+   end Static_Fields_Check_Evaluated_Values;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "checking", "static fields check evaluated values",
+         Static_Fields_Check_Evaluated_Values'Access);
       Landin.Testing.Register
         (Into, "checking", "construction arguments keep value forms",
          Construction_Arguments_Keep_Value_Forms'Access);
