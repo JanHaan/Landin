@@ -1244,6 +1244,14 @@ package body Landin.Stages.Checking.Flow is
          Is_Element := False;
          Valid := False;
 
+         if Node /= Syn.No_Node
+           and then Syn.Kind (Of_Tree, Node) = Syn.Named_Return
+         then
+            Id := Declaration_At (Syn.Source_Of (Of_Tree), Node);
+            Valid := Id /= Res.No_Declaration;
+            return;
+         end if;
+
          if Indexed /= Syn.No_Node then
             declare
                Where : constant Syn.Node_Id :=
@@ -1811,7 +1819,8 @@ package body Landin.Stages.Checking.Flow is
            Node /= Syn.No_Node
            and then Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
              in Ty.Scalar_Name | Ty.Fixed_Array | Ty.Aggregate
-                | Ty.Function_Value | Ty.Atom_Value;
+                | Ty.Function_Value | Ty.Atom_Value | Ty.Pointer_Value
+                | Ty.Slice_Value | Ty.Any_Value;
       begin
          if Node = Syn.No_Node then
             Edges := Fallthrough_Edge;
@@ -2817,16 +2826,19 @@ package body Landin.Stages.Checking.Flow is
             end if;
 
             if Node /= Syn.No_Node
-              and then Syn.Kind (Of_Tree, Node) = Syn.Name_Reference
-              and then Res.Verdict_Of (Meanings.all, Of_Tree, Node)
-                       = Res.Bound
+              and then (Syn.Kind (Of_Tree, Node) = Syn.Named_Return
+                or else (Syn.Kind (Of_Tree, Node) = Syn.Name_Reference
+                  and then Res.Verdict_Of (Meanings.all, Of_Tree, Node)
+                    = Res.Bound))
             then
                declare
                   Id : constant Res.Declaration_Id :=
-                    Res.Bound_To (Meanings.all, Of_Tree, Node);
+                    (if Syn.Kind (Of_Tree, Node) = Syn.Named_Return
+                     then Declaration_At (Syn.Source_Of (Of_Tree), Node)
+                     else Res.Bound_To (Meanings.all, Of_Tree, Node));
                begin
                   if Is_Tracked (Id) then
-                     if Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
+                     if Landin.Checking.Type_Of (Types.all, Id)
                           = Ty.Fixed_Array
                      then
                         --  One fact stands for an extent D18 permits to be
@@ -3163,8 +3175,30 @@ package body Landin.Stages.Checking.Flow is
                   State, Value_Edges);
                Edges.Returns := Edges.Returns or Value_Edges.Returns;
                Edges.Falls_Through := Value_Edges.Falls_Through;
+               if Edges.Falls_Through and then Block = Body_Node
+                 and then Landin.Checking.Type_Of
+                   (Types.all, Of_Tree, Syn.Block_Value (Of_Tree, Block))
+                     /= Ty.No_Value
+               then
+                  for Which in 1 .. Syn.Return_Count (Of_Tree, Function_Node)
+                  loop
+                     declare
+                        Returned : constant Syn.Node_Id :=
+                          Syn.Nth_Return (Of_Tree, Function_Node, Which);
+                     begin
+                        Mark (Returned);
+                        Revive_Place (Of_Tree, Returned, State);
+                     end;
+                  end loop;
+               end if;
             end;
-         elsif Edges.Falls_Through and then Needs_Value then
+         end if;
+         if Edges.Falls_Through and then Needs_Value
+           and then (Syn.Block_Value (Of_Tree, Block) = Syn.No_Node
+             or else Landin.Checking.Type_Of
+               (Types.all, Of_Tree, Syn.Block_Value (Of_Tree, Block))
+                 = Ty.No_Value)
+         then
             Bad.Report
               (Item    => Bad.Type_Mismatch,
                Source  => Syn.Source_Of (Of_Tree),

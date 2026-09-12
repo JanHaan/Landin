@@ -1,0 +1,7 @@
+noop: () -> none = end noop
+returned: () -> (r: i32) = r = 42 return r end returned
+unchecked_prefix: () -> (r: i32) =
+    r = 42
+    unchecked begin noop() end unchecked
+    r
+end unchecked_prefix

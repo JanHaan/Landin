@@ -4264,7 +4264,7 @@ package body Landin.Syntax.Parser is
                               or else Opens_Unchecked
                               or else Opens_Arena_Block)
                   then
-                     return Parse_Block (Context);
+                     return Parse_Block (Context, Allow_Value => True);
                   end if;
 
                   --  Control forms overlap statements and expressions.  A
@@ -4295,7 +4295,8 @@ package body Landin.Syntax.Parser is
                                    | Bare_Block | Loop_Statement
                                    | While_Statement | For_Statement
                         then
-                           return Parse_Block (Context, Seed => Control);
+                           return Parse_Block
+                             (Context, Seed => Control, Allow_Value => True);
                         else
                            return Control;
                         end if;
@@ -4315,7 +4316,8 @@ package body Landin.Syntax.Parser is
                            return Tried;
                         end if;
 
-                        return Parse_Block (Context, Seed => Tried);
+                        return Parse_Block
+                          (Context, Seed => Tried, Allow_Value => True);
                      end;
                   end if;
 
@@ -4355,12 +4357,13 @@ package body Landin.Syntax.Parser is
                            return Parse_Expression_From (Called);
                         end if;
 
-                        return Parse_Block (Context, Seed => Called);
+                        return Parse_Block
+                          (Context, Seed => Called, Allow_Value => True);
                      end;
                   end if;
                end if;
 
-               return Parse_Block (Context);
+               return Parse_Block (Context, Allow_Value => Context.Returns);
             end Parse_Body;
 
             --  function ::= identifier ":" signature "=" body
@@ -4701,6 +4704,7 @@ package body Landin.Syntax.Parser is
                Start : constant Landin.Source.Span := Point;
                Items : Slot_Vectors.Vector;
                Value : Node_Id := No_Node;
+               Can_Have_Value : Boolean := Allow_Value;
 
                function At_Closer return Boolean;
                function Clearly_A_Statement return Boolean;
@@ -4770,7 +4774,27 @@ package body Landin.Syntax.Parser is
                         declare
                            Candidate : constant Node_Id := Parse_Expression;
                         begin
-                           if At_Closer
+                           if not Can_Have_Value then
+                              if Kind (Result, Candidate)
+                                   in If_Statement | Match_Statement
+                                      | Bare_Block | Loop_Statement
+                                      | While_Statement | For_Statement | Call
+                                      | Labeled_Application | Try_Expression
+                              then
+                                 Items.Append (Candidate);
+                              else
+                                 Complain
+                                   (Item    => Syn.Stray_Token,
+                                    Where   => Where (Result, Candidate),
+                                    Message => "this statement prefix cannot"
+                                               & " have a final value",
+                                    Note    => "[1800]: value prefixes exclude"
+                                               & " unconditional exits and"
+                                               & " unchecked regions");
+                                 Value := Candidate;
+                                 exit;
+                              end if;
+                           elsif At_Closer
                              and then Kind (Result, Candidate)
                                       in If_Statement | Match_Statement
                                          | Bare_Block | Loop_Statement
@@ -4825,6 +4849,23 @@ package body Landin.Syntax.Parser is
                                          & " call, a `return` or a"
                                          & " control expression",
                               Gate    => False);
+                        end;
+                     end if;
+
+                     if not Items.Is_Empty then
+                        declare
+                           Last : constant Node_Id := Items.Last_Element;
+                        begin
+                           if (Kind (Result, Last)
+                                 in Return_Statement | Fail_Statement
+                               and then Condition_Of (Result, Last) = No_Node)
+                             or else (Kind (Result, Last) = Bare_Block
+                               and then Is_Unchecked (Result, Last))
+                           then
+                              --  [1800]'s value_statement prefix excludes
+                              --  unconditional exits and unchecked regions.
+                              Can_Have_Value := False;
+                           end if;
                         end;
                      end if;
 

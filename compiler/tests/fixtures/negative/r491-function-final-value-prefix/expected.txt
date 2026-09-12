@@ -1,0 +1,12 @@
+error[L0110]: this statement prefix cannot have a final value
+  --> ../tests/fixtures/negative/r491-function-final-value-prefix/main.ldn:2:42
+  |
+2 | returned: () -> (r: i32) = r = 42 return r end returned
+  |                                          ^
+  = note: [1800]: value prefixes exclude unconditional exits and unchecked regions
+error[L0110]: this statement prefix cannot have a final value
+  --> ../tests/fixtures/negative/r491-function-final-value-prefix/main.ldn:6:5
+  |
+6 |     r
+  |     ^
+  = note: [1800]: value prefixes exclude unconditional exits and unchecked regions

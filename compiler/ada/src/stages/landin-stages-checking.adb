@@ -1042,7 +1042,8 @@ package body Landin.Stages.Checking is
          Expected     : Value_Context;
          Site         : Landin.Provenance.Origin;
          Because      : String;
-         Static_Image : Boolean := False);
+         Static_Image : Boolean := False;
+         Optional_Value : Boolean := False);
       function Synthesise_Control
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind;
 
@@ -1187,7 +1188,8 @@ package body Landin.Stages.Checking is
          Value_Site : Landin.Provenance.Origin :=
            Landin.Provenance.No_Origin;
          Value_Because : String := "";
-         Discover_Only : Boolean := False);
+         Discover_Only : Boolean := False;
+         Optional_Value : Boolean := False);
       procedure Check_Mixed_Array_Repetition
         (Of_Tree      : Syn.Tree;
          Site_Node    : Syn.Node_Id;
@@ -1233,7 +1235,8 @@ package body Landin.Stages.Checking is
          Expected : Value_Context := No_Value_Context;
          Value_Site : Landin.Provenance.Origin :=
            Landin.Provenance.No_Origin;
-         Value_Because : String := "");
+         Value_Because : String := "";
+         Routine_Body : Boolean := False);
       procedure Check_Routine_Body
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
       procedure Check_External_Declaration
@@ -21056,7 +21059,8 @@ package body Landin.Stages.Checking is
          Value_Site : Landin.Provenance.Origin :=
            Landin.Provenance.No_Origin;
          Value_Because : String := "";
-         Discover_Only : Boolean := False)
+         Discover_Only : Boolean := False;
+         Optional_Value : Boolean := False)
       is
          Subject : constant Syn.Node_Id := Syn.Match_Subject (Of_Tree, Node);
          Discovery : Natural := 0;
@@ -21072,7 +21076,8 @@ package body Landin.Stages.Checking is
             else
                Check_Block
                  (Of_Tree, Syn.Body_Of (Of_Tree, Arm), Returns,
-                  Expected, Value_Site, Value_Because);
+                  Expected, Value_Site, Value_Because,
+                  Routine_Body => Optional_Value);
             end if;
          end Visit_Arm;
 
@@ -23683,13 +23688,39 @@ package body Landin.Stages.Checking is
          Expected : Value_Context := No_Value_Context;
          Value_Site : Landin.Provenance.Origin :=
            Landin.Provenance.No_Origin;
-         Value_Because : String := "")
+         Value_Because : String := "";
+         Routine_Body : Boolean := False)
       is
       begin
          for Index in 1 .. Syn.Statement_Count (Of_Tree, Node) loop
             Check_Statement
               (Of_Tree, Syn.Nth_Statement (Of_Tree, Node, Index), Returns);
          end loop;
+
+         --  A routine can also finish by calling a none-returning routine
+         --  after assigning its named results. Syntax alone cannot select
+         --  that statement interpretation of the final call.
+         if Routine_Body
+           and then Syn.Block_Value (Of_Tree, Node) /= Syn.No_Node
+         then
+            declare
+               Value : constant Syn.Node_Id := Syn.Block_Value (Of_Tree, Node);
+            begin
+               if Syn.Kind (Of_Tree, Value)
+                    in Syn.Call | Syn.Labeled_Application | Syn.Try_Expression
+                 and then not Is_Struct_Construction (Of_Tree, Value)
+               then
+                  declare
+                     Got : constant Ty.Type_Kind :=
+                       Synthesise (Of_Tree, Value);
+                  begin
+                     if Got = Ty.No_Value then
+                        return;
+                     end if;
+                  end;
+               end if;
+            end;
+         end if;
 
          if Expected.Kind /= Ty.Undecided
            and then Syn.Block_Value (Of_Tree, Node) /= Syn.No_Node
@@ -23700,7 +23731,8 @@ package body Landin.Stages.Checking is
                 then Value_Site else Syn.Origin (Of_Tree, Node)),
                (if Value_Because /= ""
                 then Value_Because
-                else "the value produced by this control block"));
+                else "the value produced by this control block"),
+               Optional_Value => Routine_Body);
          elsif Syn.Block_Value (Of_Tree, Node) /= Syn.No_Node then
             --  A control form may also occupy the statement slot shared by
             --  calls.  Its final expression is still checked even though no
@@ -24173,7 +24205,8 @@ package body Landin.Stages.Checking is
          Expected     : Value_Context;
          Site         : Landin.Provenance.Origin;
          Because      : String;
-         Static_Image : Boolean := False)
+         Static_Image : Boolean := False;
+         Optional_Value : Boolean := False)
       is
       begin
          if Node = Syn.No_Node then
@@ -24208,7 +24241,9 @@ package body Landin.Stages.Checking is
            and then Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
              = Ty.Undecided
          then
-            Note_Context (Of_Tree, Node, Expected);
+            if not Optional_Value then
+               Note_Context (Of_Tree, Node, Expected);
+            end if;
 
             case Syn.Kind (Of_Tree, Node) is
                when Syn.If_Statement =>
@@ -24223,24 +24258,28 @@ package body Landin.Stages.Checking is
                            "the condition of this branch");
                         Check_Block
                           (Of_Tree, Syn.Body_Of (Of_Tree, This),
-                           Ty.Not_Typed, Expected, Site, Because);
+                           Ty.Not_Typed, Expected, Site, Because,
+                           Routine_Body => Optional_Value);
                      end;
                   end loop;
 
                   if Syn.Else_Body (Of_Tree, Node) /= Syn.No_Node then
                      Check_Block
                        (Of_Tree, Syn.Else_Body (Of_Tree, Node),
-                        Ty.Not_Typed, Expected, Site, Because);
+                        Ty.Not_Typed, Expected, Site, Because,
+                        Routine_Body => Optional_Value);
                   end if;
 
                when Syn.Match_Statement =>
                   Check_Match
-                    (Of_Tree, Node, Ty.Not_Typed, Expected, Site, Because);
+                    (Of_Tree, Node, Ty.Not_Typed, Expected, Site, Because,
+                     Optional_Value => Optional_Value);
 
                when Syn.Bare_Block =>
                   Check_Block
                     (Of_Tree, Syn.Body_Of (Of_Tree, Node),
-                     Ty.Not_Typed, Expected, Site, Because);
+                     Ty.Not_Typed, Expected, Site, Because,
+                     Routine_Body => Optional_Value);
 
                when Syn.Loop_Statement | Syn.While_Statement
                   | Syn.For_Statement =>
@@ -24251,6 +24290,46 @@ package body Landin.Stages.Checking is
                when others =>
                   raise Landin.Compiler_Defect;
             end case;
+            if Optional_Value then
+               declare
+                  function Has_Answer (Block : Syn.Node_Id) return Boolean;
+
+                  function Has_Answer (Block : Syn.Node_Id) return Boolean is
+                    (Block /= Syn.No_Node
+                     and then Syn.Block_Value (Of_Tree, Block) /= Syn.No_Node
+                     and then Landin.Checking.Type_Of
+                       (Types.all, Of_Tree, Syn.Block_Value (Of_Tree, Block))
+                         /= Ty.No_Value);
+
+                  Answer : Boolean := False;
+               begin
+                  case Syn.Kind (Of_Tree, Node) is
+                     when Syn.If_Statement =>
+                        for Arm in 1 .. Syn.Arm_Count (Of_Tree, Node) loop
+                           Answer := Answer or else Has_Answer
+                             (Syn.Body_Of (Of_Tree,
+                              Syn.Nth_Arm (Of_Tree, Node, Arm)));
+                        end loop;
+                        Answer := Answer or else Has_Answer
+                          (Syn.Else_Body (Of_Tree, Node));
+                     when Syn.Match_Statement =>
+                        for Arm in 1 .. Syn.Match_Arm_Count (Of_Tree, Node)
+                        loop
+                           Answer := Answer or else Has_Answer
+                             (Syn.Body_Of (Of_Tree,
+                              Syn.Nth_Match_Arm (Of_Tree, Node, Arm)));
+                        end loop;
+                     when Syn.Bare_Block =>
+                        Answer := Has_Answer (Syn.Body_Of (Of_Tree, Node));
+                     when others =>
+                        Answer := True;
+                  end case;
+                  Note_Context
+                    (Of_Tree, Node,
+                     (if Answer then Expected
+                      else (Kind => Ty.No_Value, others => <>)));
+               end;
+            end if;
             return;
          end if;
 
@@ -29172,7 +29251,7 @@ package body Landin.Stages.Checking is
             else
                Check_Block
                  (Of_Tree, Runs, Gives, Expected,
-                  Result_Site, "the returns this fills");
+                  Result_Site, "the returns this fills", Routine_Body => True);
             end if;
          else
             Check_Contextual_Value
