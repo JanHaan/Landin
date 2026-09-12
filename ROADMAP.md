@@ -5536,13 +5536,606 @@ Exit evidence: all applicable matrices are complete; equivalent builds produce
 identical assembly and behavior under the pinned toolchain. The bound acceptance
 record, approval tag and guarded publication records establish delivery.
 
+### R4.91 — Resolve post-R4 review findings
+
+Status: active
+Depends on: R4.90
+
+Review of accepted revision `66927e93` reproduced four defects in implemented
+hosted constructs. The initial implementation repairs generic fixed-array field
+arguments, missing contextual diagnostics for `[]`, undiagnosed statement
+recovery, and the public-conformance diagnostic's secondary-label contract.
+The follow-up comparison with the independent reviews of `66b3b659` expands
+this slice. R4.90 acceptance did not close every finding in those older reviews.
+
+Sources: [0430], [0480], [0570], [0580], [0770], [0780], [0790], [0830],
+[0900], [0910], [0950], [1220], [1280], [1300], [1800], [1810], [1880],
+[1910]; D78, D85, D96, D134, D138, D140, D141, D151, D187, D217. The original review's unconfirmed float-resource and
+varargs observations remain unconfirmed and supply no implementation mandate.
+
+Implementation is in the isolated `r491` worktree. The first batch retains full
+array descriptors in generic deduction; contextualizes empty slices before
+ordinary and concrete generic argument checking; refuses context-free empty
+slices; and repairs the five reviewed diagnostic-label violations without
+relaxing the catalogue. Recovery at end of input uses a point-capable diagnostic,
+and the syntax stage refuses to advance an undiagnosed unsound tree even in
+release builds. Runtime cases cover independent array copies, nested/module
+fields, atom/callback/pointer elements and empty-slice contexts.
+Driver cases check that refused sources attempt no writes or host-tool calls.
+
+The second batch now also preserves source files against output collisions,
+validates build modes and holds build locks through compiler use and cleanup,
+and checks consumed storage across containing reads, replacement assignments
+and every observable exit. The next implementation also checks retained
+reference stores against their actual backing, preserves origins through known
+local alias writes, and keeps scalar variant payload aliases live through reads,
+writes, derived views, cleanup and inner-loop uses. Same-origin updates, declared
+retention, last-use retags and independent sibling storage remain permitted.
+Pointer-backed retags now use captured holder storage in lowering. The private
+raw transfer uses the same explicit destination-address boundary for its first
+and later slots; ordinary stores retain the origin check.
+The origin/payload group completes this batch's confirmed repairs. The third
+batch also repairs contextual constructor arguments and variant-array
+initialization, alongside the follow-up parser recovery/lookahead group.
+Final-body values are now repaired as well. Remaining work includes parser
+depth, native failures and bounded inference storage.
+
+Development evidence for the preceding output/consume group: Linux debug and release pass the driver
+(46 cases), checking (85), lowering (93), complete recorded-diagnostic case
+(971 checks), and all three new consume fixtures. The runtime restoration
+fixture passes four optimization profiles in each mode. The parser corpus also
+passes both modes (23 cases, 5403 checks), and the earlier output/report checks
+pass both modes. On macOS, the driver and 72 script/roadmap tests pass with the
+one existing Linux-only runner test skipped; all 13 build-lock/inventory tests
+pass on Linux. Full `check.py` and rendered-word preservation checks pass.
+This is development evidence; exact-revision acceptance remains outstanding.
+
+Origin/payload development evidence: Linux debug and release pass checking
+(85 cases, 1197 checks), lowering (93, 949), driver (46, 448), and the complete
+recorded-diagnostic case (977 checks). The two new negative fixtures pin ten
+origin/retention refusals and eleven payload-alias refusals. Both new runtime
+fixtures pass four optimization profiles in each mode, including retained
+variant references, pointer rebinding, initializer effects and computed
+copy-back. Existing initialized-object and pointer-vector growth fixtures pass
+four profiles in each mode. The complete container and hosted derivatives pass
+all six profiles with the final release compiler. The final two added runtime
+controls were rerun in both modes. Full `check.py` passes on macOS; no exact
+acceptance, debugger session or publication was run.
+
+Construction implementation adds a shared guard on runtime field, payload and
+fill roles before reading their expression projection. It keeps static type
+arguments separate. Trailing `of` fills require an expression under [1810];
+the parser consumes a type-only RHS for balanced recovery and reports L0102.
+Seven field/payload cases pin L0301 and four fill cases pin L0102.
+The module storage-address exclusion now precedes the
+contextual struct early return, so nominal constructors cannot hide an address
+that an ordinary module value refuses. A callback's own body remains outside
+the static-image walk. No new syntax, static relocation form or language rule
+is introduced.
+
+For variant-array construction, the checker seam confirms both selected case
+indices were already present. The failing conversion was the destination's
+zero base field, not the case index. The contextual writer captures a reached
+variant-bearing aggregate as typed address storage before its field writes;
+it retains source order and uses the existing IR/address-verification contract.
+The new runtime fixture covers root and nested arrays, wrapped children,
+repetition and replacement without large images.
+
+Construction validation uses bounded development runs. The new checker and
+lowering seam cases pass on macOS debug and Linux release, alongside the
+selected constructor and variant-copy controls on macOS. All three new
+negative fixtures and the no-effects driver case pass; the final parser-fill
+split is rerun on both hosts. The positive static-argument, value-fill,
+local-address and callback controls pass on both hosts. The small runtime
+fixture exits 42 on Linux with `none/off`: its exact 13,445-byte assembly was
+inspected before one bounded pinned GNU-toolchain invocation; the only size
+directives were `.zero 8` and `.zero 4`. This is one runtime profile, not a
+complete profile gate. Generated fixture tables and full `check.py` pass.
+No giant fixture, assembler sweep, debugger session or exact acceptance was
+run for this repair group. R4.91 remains active.
+
+Final-body validation uses nine selected cases in macOS debug and Linux
+release: two parser controls, three lowering controls, the R4.91 no-effects
+driver case, the two new negative fixtures and the existing return-payload
+refusal. Both compilers emit the small new runtime fixture successfully. Its
+single Linux `none/off` execution exits 42; the exact 33,582-byte assembly was
+inspected before one foreground pinned GNU-toolchain invocation capped at
+30 seconds. Its only size directives were `.zero 8` and `.zero 4`.
+The fixture also checks that cleanup may read a just-filled result and that a
+final local value is captured before cleanup changes that local. Full
+`check.py` and regenerated fixture tables pass. This is bounded development
+evidence, not all-profile or exact-revision acceptance; R4.91 stays active.
+
+#### Older review reconciliation
+
+Paseo coordinator `27030a0b-54d1-4423-ab3b-82dfe079ece4` commissioned the
+independent Codex and Claude reviews of `66b3b659`. `A1` through `A9` below refer to
+the Codex report's numbered findings; `C`, `M` and `m` refer to the Claude
+report's original identifiers, not this roadmap's inherited review register.
+Their original severity labels are not automatically adopted. This comparison
+uses retained report text, source differences through `66927e93`, and small
+ordinary compiler regression inputs. It runs no new mutation campaign, debugger
+session, destructive output-collision experiment or resource-exhaustion sweep.
+
+| Older finding | Current disposition and evidence | Repair order |
+| --- | --- | --- |
+| A1: artifact/source collisions | Repaired: every actual output is compared with all discovered sources and other outputs through the filesystem identity seam before any write or tool call. Fake-host regressions cover explicit/imported sources, aliases, assembly/executable/map collisions and inactive-map controls. Existing build-report reservations remain intact. | Second batch implementation |
+| C1: diagnostic label contracts | All five sites still violated the catalogue at the baseline; the four sibling minimal cases still exited 70. Initial implementation repairs imports, fixed conditionals, conformances, unconditional completion and continue-with-value. | First batch |
+| A2, C2, M3: final values and silent recovery | Repaired: function blocks admit the existing statement-prefix/final-value grammar, including `r = zeroed(42)` as an assignment followed by a parenthesized value. The final value fills named result storage before cleanup, with matching assignment and origin facts. Final none-returning calls, try calls and statement controls retain named assignments; mixed value/no-value control edges remain refused, including reference results. Unconditional exits and unchecked regions still cannot prefix a final expression. The runtime fixture covers scalar, shaped, reference, generic, anonymous and fallible results; negative controls retain early-return, typing, escape and grammar refusals. | Recovery in first batch; final values implemented in third batch |
+| A3: type-shaped construction arguments | Repaired: seven type-only field/payload cases receive L0301 before value access; four type-only trailing fills receive L0102 under the existing expression grammar. Controls cover module, local and instantiated types. The variant-array initializer had valid case metadata; its root-array destination had base field zero. Lowering now captures the reached aggregate in the existing typed-address form before selecting its variant. Construction also preserves the existing L0305 module storage-address exclusion, including nested fields and payload fills; runtime-local addresses and callback bodies remain allowed. | Third batch implementation |
+| C3: retained reference origins | Implemented: destination storage checks cover inout parameters, pointees, slice elements and reference-bearing ordinary/variant fields. Known local alias writes preserve stored frame/parameter origins; an untracked sibling cannot mask them. Runtime controls retain declared retention, same-origin updates and independent pointer descriptors. Both build modes pass the focused suites and fixture profiles. | Second batch implementation |
+| C4: variant payload alias lifetime | Implemented: payload storage lifetime is independent of reference-bearing type. Direct and known-alias replacements, inout calls, derived addresses, cleanup and reachable loop uses participate; runtime controls cover last use, siblings, copied computed subjects and descriptor rebinding. D217 pins the construction boundary, and pointer-backed retags preserve initializer effects. Both build modes pass the focused suites and fixture profiles. | Second batch implementation |
+| C5: dense inference matrices | Still present in source: effects, required sets and call edges are dense stack arrays. The old exhaustion threshold was not rerun. Move program-sized storage off the host stack and measure scaling without weakening inference completion. | Third batch |
+| C6: nested-call depth | Still present in source: the general call parser lacks its siblings' depth guard. Add balanced recovery and bounded depth regressions in both modes. No new overflow run was made. | Third batch |
+| M1: conformance lookahead | Repaired in the follow-up parser group: lookahead stops at the binding initializer delimiter. Small literal/call initializer controls preserve a following `is` binding; existing parameterized and ordinary conformance syntax stays covered. | Third batch implementation |
+| M2: consumed subplaces | Repaired bare element, enclosing-aggregate and descendant reads after sink. Field paths above and below an array index retain separate identities; computed reads account for possibly consumed elements. Assigning an ancestor restores its consumed descendants without reviving a consumed ancestor through a partial write. Ten negative cases and runtime sibling/copy/restoration controls pin the result. | Second batch implementation |
+| M4, M16: tour and prototype drift | Still present in sampled live text: uppercase formals/labels, `mem.new_slice`, references to the retired worklist and an unsupported file-handle union. R4.80 changed allocator wording, so re-read complete cross-prototype contracts before editing. Historical finding sections remain untouched. | Fourth batch |
+| M5: font history | Local ancestry and tree inventory confirm the font-addition commit remains reachable from `66927e93`. This is retained repository evidence, not a new interpretation of the license. Any public-history remedy requires a concrete maintainer decision and coordinated delivery; no history is rewritten here. | Maintainer disposition |
+| M6: historical closure anchors | Historical rewrite provenance remains distinct from exact current acceptance. Reconcile the affected old anchors and phase-gate evidence without rewriting old acceptance claims as current ones. | Fourth batch |
+| M7: R4.70 obligations | Superseded by R4.70/R4.90: closure now records complete derivation, scalar-origin normalization, nested field ranges and direct parameter coverage. Preserve their fixtures and later full acceptance evidence. | Existing coverage |
+| M8: stale decisions/citations | Still present in sampled text, including active-R4.40 wording and pending pins. Audit the named citations against their actual rules before changing prose. | Fourth batch |
+| A5, M9: source-path bytes | Decoder still uses decoded text through ordinary stdout. The default check's result depends on stdout error policy; pin strict UTF-8 output and preserve original path bytes explicitly. | Third batch |
+| M10: diagnostic rendering growth | The whole-line-per-label implementation remains; the old stress measurement was not rerun. Bound excerpts while retaining useful primary/secondary spans. | Third batch |
+| A4, M11: native failures | Capture-read failure still becomes empty output; native writes still omit device failures from their ordinary outcome. Add explicit failure propagation and cleanup cases through host seams. Layout exception conflation remains a separate audit. | Third batch |
+| M12: stage organization | Large nested stage procedures and duplicated construction helpers remain. Refactor only with established behavioural controls; size alone is not a correctness finding. | Fourth batch |
+| M13: build mode and locks | Repaired: mode validation precedes path construction. Inherited OS locks cover build plus test execution; cleanup takes both mode locks or an exclusive all-tag lock. Permanent lock files survive cleanup, with no PID reclamation race. Disposable-tree regressions cover contention, nested builds, concurrent modes/tags, cleanup, stale context and termination. Rejected modes are tested only by loading the environment. | Second batch implementation |
+| M14: harness contracts | Runtime stream selection is still ignored, suite inventory remains incomplete, and coarse corpus floors remain. Replace these with exact discovery/contract checks without manufacturing fixed historical corpus counts. | Fourth batch |
+| M15: profile selection | Name-based selection remains. Some workload coverage expanded, but renaming a fixture still changes specialization coverage. Introduce explicit, validated profile policy. | Fourth batch |
+| A8, M18: publication and CI | The old automatic compiler manifest was replaced by native acceptance. Current publication verifies exact accepted canonical main, so the former unguarded-publication description is obsolete. Serialization during upload and private-font/highlighter/guide coverage still need checks against the new policy. No stale publication was observed. | Fourth batch |
+| A6: text traversal wording | The broad validated-view promise in [1810] still conflicts with the documented foreign C-string traversal boundary. Qualify it without changing the runtime trap contract. | Fourth batch |
+| A7, M19: emitted operand identities and stride | The wide slice stride still uses an immediate-only multiply, unlike guarded sibling sites. Test emitted instructions with the pinned assembler. Special symbol names require exact-identity controls on supported tools; an LLVM-only failure is not automatically a pinned-GNU defect. | Third batch |
+| A9, m18: third-party inventory | Root LICENSE still says only one third-party item. Reconcile the inventory with the already-present local notices; do not change license terms. | Fourth batch |
+| M17: stale refusal ownership | R4.90 changed the implicated notes to describe source-form boundaries and implemented distinct/fill forms. The earlier blanket enabled-yet report is superseded; retain bounded checks for any remaining inaccurate sites. | Existing coverage |
+
+The remaining minor observations retain these explicit dispositions rather than
+being silently promoted to bugs or discarded:
+
+| Older minor identifiers | Disposition |
+| --- | --- |
+| m1--m7 | Harness/oracle quality concerns remain: precise reports, trap intent, fresh artifacts, scanner wording, fake filesystem behaviour and input-generation coverage. Audit under the fourth batch. No new mutation campaign is authorized. |
+| m8--m9, m11 | Statement-loop values, intermediate constant overflow and explicit atom widening remain bounded semantic questions requiring current rule/case comparison, not confirmed new language decisions. |
+| m10 | Confirmed against [1910]'s every-return-edge obligation and repaired: explicit, guarded and propagated failure check consumed `inout` places after applicable cleanup. Expression-body completion now checks the same obligation. A consumed named result is also refused on successful return. Five refusal cases and successful `defer`/`undo` and result restoration controls pin these exit obligations. |
+| m12--m13, m22 | Lexical grammar, text validity and reference wording need a normative cross-check. Do not infer semantic changes from the heuristic recognizer alone. |
+| m14--m17, m21, m23 | Sampled dead helpers, ownership documentation, historical register names/counts, fixture summaries and source attachment assumptions need maintenance or invariant checks. Some surrounding prose changed after the old review. |
+| m19 | The automatic Nix manifest was retired, so that skip-path claim is obsolete. Container pin duplication and shell-pipeline status remain source-level observations. |
+| m20 | Quality and debugger workload coverage expanded at R4.90. The narrower claim about oracle independence still needs evaluation against current assertions; existing passing jobs are not proof of that independence. |
+| m24--m25 | Verifier partitioning and simplifier proof identity are latent concerns without an observed accepted-source defect. Validate with focused IR tests before altering passes. |
+| m26--m28 | Deterministic IR numbering, displayed pointer provenance, overlapping writeback/result semantics and redundant bounds checks need focused evidence. Code-size cost or undocumented behaviour alone does not establish wrong code. |
+| m29--m31 | Compact repetition cost and tool operand/symbol spelling remain visible in source. Use bounded assembly measurements and fake tool argv assertions; do not assemble multi-gigabyte fixtures or execute option-like filenames as experiments. |
+| m32 | Routine sharing and observable callback identity remain unconfirmed; reproduce with a small source case before changing optimization policy. |
+
+#### Follow-up review at the repair revision
+
+Paseo agent `1d4fbfe5-e992-4fdc-aacd-554f81557713` reviewed `0a3d0a28`,
+including the first three repair commits. Its completed source-only sweep and
+verifier/synthesis records have been reconciled here. The synthesis contains
+27 ranked entries, including repeated open work, informational observations
+and an explicitly refuted claim; these are not 27 newly reproduced defects.
+`N1` through `N27` below identify positions in that synthesis's ranked list, not its
+presentation's separately numbered major findings. No new agents, assembler
+sweep, debugger or stress campaign was used for this reconciliation.
+
+| Follow-up entries | Disposition and next action |
+| --- | --- |
+| N1, N4: frontend and R5 readiness | Duplicate A2/C2/M3, A3, C5, C6 and M1 above. R5 remains planned behind R4.91 and exact acceptance. The review adds no new measured exhaustion threshold. |
+| N2: declaration recovery | Confirmed with small parser inputs and repaired: recovery retains `extern`, array/pointer/erased conformance heads and ordinary named conformances. A C declaration retains both its bodyless flag and convention. |
+| N3: statement recovery | Confirmed and repaired for contextual loops, transfers, match, cleanup and blocks, plus selected assignment/call heads. The focused seam compares the valid source with one stray token inserted before it, requiring one report and preserved node kinds, names, child slots and C convention. |
+| N5, N7, N8: fixture inventory and low floors | Duplicate M14, with concrete parser/execution floor sites. Implement independent discovery/selection accounting and explicit obligations; do not replace historical floors with the report's fixed 955/233 counts. Counts alone cannot prove an intentionally removed fixture's semantic coverage survived. No fixture-deletion experiment was run. |
+| N6: wide slice stride | Duplicate A7/M19. Keep bounded instruction/operand evidence ahead of backend parity; possible inheritance by a future backend is not an observed current miscompile. |
+| N9: negatives without `program` | Confirmed by source: ordinary full-suite paths compare recorded bytes/status but skip exact `codes` comparison for these fixtures. Extend recorded-negative validation under M14, keeping stage attribution and report order explicit. |
+| N10: duplicate operand diagnostics | Repaired: failed compound operators retain their ill-typed result, and the late operand check skips that operator after visiting its children. Seven float remainder/shift refusals each report L0301 once; an independent nested integer division by zero still reports L0306. Existing integer zero-divisor and negative-shift controls retain their diagnostics. The new fixture and four selected existing controls pass in macOS debug and Linux release with 30-second per-case limits; no source is assembled. |
+| N11: `Expect` recovery after a refused lexeme | The forward search exists and intentionally avoids repeating a scanner diagnostic. Bound it at the current construct/list boundary and pin preservation of following valid syntax before changing suppression policy. An already refused compilation cannot advance merely because this helper returns success. |
+| N12, N23: `12z` and `!=` diagnostics | Source confirms the differing token runs and absent inequality hint. These are diagnostic actionability questions, not newly enabled spellings or accepted wrong code. Compare [1760]/[1770]/[1820] and existing lexical controls before deciding whether to widen malformed runs or add guidance. |
+| N13: fake filesystem paths | Confirmed exact-string lookup differs from native directory handling for trailing slashes. Repair through narrow directory-root/entry controls under m5; preserve fake failure injection and explicit identity semantics. |
+| N14: L0010 ownership comments | Repaired the catalogue, syntactic wrapper, fixture guide, checker docstring and repository guidance. D164 already records removal of the scanner's final deferred family; L0010 is now parser-only. Numeric bands still do not determine ownership. |
+| N15: parser determinism oracle | Retain under m1--m7. Add repeated parsing and canonical tree/report comparison for a small fixed set. The old generated-input case is not evidence for determinism and will not be rerun or expanded as part of this review. |
+| N16, N17, N18 | Duplicates A4/M11 native failures, M15 explicit profile selection, and M10 diagnostic excerpts. Keep their existing repair order and evidence requirements. |
+| N19: real-host exception comments | Repaired the two missing comments and the corpus agreement case's misleading claim to mutate files. These cases read the native repository corpus and alter strings only. Their broad generated-input workloads were not rerun. |
+| N20: undocumented `r480` profiles | Repaired the fixture guide to match existing selection. This closes the documentation omission, while M15 still owns replacing name-based policy with explicit metadata. |
+| N21: assignment through payload aliases | Refuted as a repair request: D78/D217 make an inout payload name an alias to storage, not a descriptor that assignment can rebind. Writing it remains a use of that storage. The existing negative write-after-retag control intentionally enforces this rule; removing the pattern-binding exclusion would weaken it. |
+| N22: runtime unwind tables | Confirmed limitation: emitted CFI is debug-only `.debug_frame`; `.eh_frame` consumers are not promised. Keep the existing source-debugging/frame-pointer contract. Runtime foreign exception unwinding requires a separate explicit semantic/ABI decision and is outside this repair slice; no debugger or unwind experiment was run. |
+| N24: retired No_Frontend source shape | Clarified the catalogue comment: file-independent driver errors need no source, source-attached errors do, and the retired row keeps its original contract. No live diagnostic or retired identifier is changed. |
+| N25, N26: range and sequencing | Passing review observations; no implementation task. Preserve the recorded resource model, backend order and R4.91 dependency gate. |
+| N27: chained-comparison poisoning | The review itself refuted this claim. Error diagnostics already stop the pipeline before checking; a structurally sound node does not override that stop. No repair is needed. |
+
+The follow-up review's nine coverage gaps remain explicit limits on its claims:
+expression/conformance recovery, extreme input scaling, diagnostic actionability,
+target-width arithmetic, fixture inventory, backend/tool integration, native
+failure modes, driver gating, and IR/reader-guide currency. The first eight map
+to the open rows above and the older minor register. The IR partition reported
+no surviving defect; absence of the IR reader guide at the reviewed commit is a coverage
+note, not a request to undo the separately authored guide. Future representation,
+verification-boundary or optimization changes must check that guide's integrated
+version. Source-only review and prior development tests do not establish full
+runtime or exact-revision acceptance.
+
+Follow-up development evidence: the macOS debug compiler builds with one
+build worker, and five targeted cases pass 295 checks: recovery heads,
+conformances, C-syntax recovery, parameterized alias recovery, and the fake-host
+R4.91 refusal-without-effects case. The new recovery case contains 17 short
+controls; two additional controls pin the conformance lookahead boundary.
+Each selected test has a 30-second timeout; the two diagnostic reproductions
+have 10-second timeouts. Release validation of this group remains outstanding.
+No Landin fixture was assembled, and existing broad coverage was not rerun.
+
+#### Additional review at the same repair baseline
+
+Paseo agent `60e74218-b6c7-416c-b259-2619912dcfc7` also reviewed
+`0a3d0a28`. Its retained report, decisions and raw verification records were
+reconciled against R4.91 at `7250d298`. This intake adds no new review agents
+or coverage campaign. `J1` through `J139` identify the report's presentation
+order: twelve critical headings, forty-eight major headings, then seventy-nine
+minor table rows. These are stable intake identifiers, not the raw JSON order.
+The original severity labels describe that review's ranking; they are not an
+independent assessment of current severity or evidence.
+
+The report contains 139 distinct observations: 124 marked confirmed by source
+inspection or reproduction, fifteen plausible, and thirteen separately refuted
+claims excluded from that total. Those refuted claims are not reopened here.
+The table preserves baseline evidence as `C` or `P`; an open row is an owned
+investigation/repair obligation, not a claim that this intake independently
+reproduced it. In particular, J53 retains the verifier's narrower plausible
+restoration question rather than its refuted general aliasing rationale.
+J45 and J70 require a contract disposition, and latent IR/API observations do
+not establish accepted-source failures merely by naming absent guards.
+
+The original review built and checked on macOS, with the documented Linux
+runtime case unavailable. It did not execute Linux runtime fixtures or validate
+release behavior. Its statement that disabled debug preconditions necessarily
+hand malformed IR to the backend in release is an untested prediction, not
+adopted evidence. No previous broad run was repeated to fill those gaps.
+
+Current intake evidence comprises eleven explicitly selected compiler-only
+runs in macOS debug, each with a ten-second timeout and optimization and
+specialization disabled. J1, J2 and J3 were accepted while their positional,
+direct-destination and bound-result controls respectively produced L0302,
+L0314 and L0302. J7, J9 and J10 each exited 70 without a source diagnostic;
+J12 accepted the constrained generic type case; J39 reproduced the false
+unclosed-function report. These establish eight current findings, not release
+or runtime outcomes. Sources and exact transcripts are retained locally in
+`.scratch/r491-review-60e74218/`, alongside the original report and a mapping
+from every J identifier to its raw record. No source was assembled or linked.
+
+| Intake | Baseline observation | Evidence | Disposition and repair scope |
+| --- | --- | --- | --- |
+| J1 | A labeled application in statement position bypasses definite-assignment and use-after-sink analysis entirely | C | Repaired: labelled statements use the same flow dispatch as positional calls, including ordered runtime arguments, sink consumption and recovery. Paired initialized/unassigned and sink controls pass in both modes; driver refusals have no output/tool effects. |
+| J2 | A joined storage fact launders the escape check: a frame address can be written into caller or module storage and be accepted | C | Body-local joins repaired: retain independent external destinations and check every possible parameter destination before granting a store exemption. Nineteen paired controls pass in both modes, including local-only, same-origin, escaping and explicit untracked cases. The additional call-return destination-summary question below remains open; this repair does not infer callee bodies. |
+| J3 | A `sink` argument is not consumed when the call sits inside an ordinary expression, so use-after-sink is accepted | C | Repaired: evaluated nested calls retain mutable flow state in operators, literals, constructions, indexes, receivers and assignment destinations. Short-circuit joins retain possible consumption; fixed-array measurements and anonymous bodies remain unevaluated in the enclosing flow. Source-order and restoration controls pass in both modes. |
+| J4 | Lower_Slice loads a slice descriptor's two words through two independent lowerings of the same place, so a call in the access path runs twice and base/length can come from different objects | C | Open lowering repair: capture the reached slice descriptor once and load both words from that storage. Use a tiny side-effecting access-path control. |
+| J5 | A block struct whose closer does not name it swallows every declaration up to a later matching `end <name>`, with no diagnostic | C | Open parser boundary group: compare the normative grammar, preserve enclosing context and following declarations, and add small accepted/refused controls. |
+| J6 | Module identity is the raw directory string, so a non-canonical or relative entry-directory spelling loads the entry module twice and splits its module state | C | Open module/source identity group: define canonical identity through the platform seam while preserving diagnostic spelling; test relative paths, trailing slashes and duplicate inputs with a fake filesystem. |
+| J7 | An inline parameterized type application in a declared type makes the R2.20 "not enabled yet" refusal silent, so checking accepts and lowering exits 70 | C | Current debug reproduction exits 70 with no source diagnostic. Repair the checker refusal/report-once path and require rejection before lowering/output in both modes. |
+| J8 | A call to a user declaration whose name is a builtin scalar or text name is silently read as a [0700] conversion, so the declaration is never called | C | Open call-classification repair: distinguish a resolved user declaration from an intrinsic conversion. Preserve shadowing and conversion controls. |
+| J9 | Comparing two function values is accepted by the checker and then crashes the IR verifier (exit 70) | C | Current debug reproduction exits 70. D200 admits matching function signatures; repair lowering/verifier agreement and test equality and inequality without changing that rule. |
+| J10 | Range slicing a non-array, non-slice value is accepted with no diagnostic and crashes lowering (exit 70) | C | Current debug reproduction exits 70 with no source diagnostic. Repair the checker refusal/report-once path and require rejection before lowering/output in both modes. |
+| J11 | Runtime variant case construction accepts a non-storage aggregate payload that lowering can only copy from storage (exit 70) | C | Open accepted-value lowering group: reproduce this storage/result shape narrowly, then preserve checked shape and initialization across its lowering path in both modes. |
+| J12 | Actual_Key erases [0660] range-subtype constraints, so a parameterized type application silently turns `percent` into `u8` | C | Current debug reproduction accepts cell(percent), an out-of-range field store and assignment to cell(u8). Apply the existing D188/R7.20 named refusal to parameterized type actuals before interning; do not silently enable constrained composites. |
+| J13 | Rendered diagnostic report is quadratic and unbounded; past Integer'Last the run dies with exit 70 and loses every diagnostic | P | Duplicate M10 with an additional report-size overflow concern. Bound rendering and preserve diagnostics; retain plausible status for the exhaustion claim and do not rerun the old stress case. |
+| J14 | The optional struct end name in [1795] is not optional: a bare `end` on a struct is refused as a stray token | C | Open parser boundary group: compare the normative grammar, preserve enclosing context and following declarations, and add small accepted/refused controls. |
+| J15 | The named refusal [1830] promises is missing for `noreturn`, `volatile` and multi-name bindings | C | Open refusal/document agreement: read [1830] and the enabled grammar first. Labelled bare blocks are absent from that grammar; do not enable them solely from the tour example. |
+| J16 | `lenof` on a slice is treated as a non-reading type constant, so an unassigned or sunk slice descriptor is read | C | Repaired: lenof reads a live, assigned slice descriptor. Fixed-array names and measured literal elements remain unevaluated. Slice length and index refusals include consumed descriptors without duplicate reports; both compiler modes pass the controls. |
+| J17 | `Require_Element` compares the sub-element run for equality instead of prefix containment, so a whole-child write inside an array element does not cover its leaves | C | Repaired: reads and branch merges use ancestor containment for an element's field path. Eleven paired controls pass in both modes: whole-child writes cover descendants, either branch order preserves common leaves, and siblings, other indices, parents and consumed descendants retain their independent obligations. Lookup walks only the selected path's ancestors. |
+| J18 | Match_Subject_Is_Copied disagrees with Lower_Variant_Match about a payload alias root, rejecting valid code as a frame escape | C | Open reference-shape agreement: align copied match/traversal roots with lowering and declared origins, retaining C4 alias-lifetime controls. |
+| J19 | A `try` nested in a non-control expression skips its failure-propagation edge: sunk `inout` parameters and `undo` arguments go unchecked | C | Repaired: nested try expressions retain their propagated failure edge, including undo reads and inout restoration after applicable cleanup. The success-only restoration is refused; restoration inside a failure cleanup is accepted. Both modes pass. |
+| J20 | Forced-specialization profiles silently skip the runtime/erased-* evidence-dispatch fixtures | C | Duplicate M15/N17: make specialization coverage explicit and validated; include erased dispatch fixtures through policy rather than filename prefixes. |
+| J21 | Array-literal element containing a variant part crashes lowering (Constraint_Error on Positive (Destination.Base)) | C | Already repaired by 1aa0746a under A3: normalize the root variant-array destination into typed storage. Retain the existing debug/release and runtime evidence; do not replay it. |
+| J22 | Several expression-lowering paths emit IR after the flow has already terminated, so a program the frontend accepts dies with an internal compiler defect (exit 70) | C | Open control-flow lowering group: preserve termination before further emission and create merge/post-loop blocks only when reachable. Use small edge-specific cases. |
+| J23 | Lower_If leaves an orphan merge block when a later arm's condition terminates the flow, and the IR verifier then rejects the unit | C | Open control-flow lowering group: preserve termination before further emission and create merge/post-loop blocks only when reachable. Use small edge-specific cases. |
+| J24 | Destructuring binding from a labelled-argument call or `try` raises a compiler defect (exit 70) | C | Open accepted-value lowering group: reproduce this storage/result shape narrowly, then preserve checked shape and initialization across its lowering path in both modes. |
+| J25 | Assignment to an anonymous multi-result aggregate from a labelled call, `try`, or loop value violates `Res.Bound_To`'s precondition | C | Open accepted-value lowering group: reproduce this storage/result shape narrowly, then preserve checked shape and initialization across its lowering path in both modes. |
+| J26 | A `complete` body that never falls through leaves the post-loop block with no predecessor, producing malformed IR | C | Open control-flow lowering group: preserve termination before further emission and create merge/post-loop blocks only when reachable. Use small edge-specific cases. |
+| J27 | Aggregate assignment to a computed or reference-borne place from a loop value raises "a contextual storage value has no rooted place" | C | Open accepted-value lowering group: reproduce this storage/result shape narrowly, then preserve checked shape and initialization across its lowering path in both modes. |
+| J28 | Anonymous function with a pointer result gets the wrong IR item result kind (exit 70) | C | Open accepted-value lowering group: reproduce this storage/result shape narrowly, then preserve checked shape and initialization across its lowering path in both modes. |
+| J29 | `Made` is set for an array-root image the code deliberately did not store, so the copy path violates `Image_Length`'s `Has_Image` precondition | C | Open accepted-value lowering group: reproduce this storage/result shape narrowly, then preserve checked shape and initialization across its lowering path in both modes. |
+| J30 | Module struct slice field initialized from a name or member selection raises "a static slice field has no image form" | C | Open accepted-value lowering group: reproduce this storage/result shape narrowly, then preserve checked shape and initialization across its lowering path in both modes. |
+| J31 | Module `ptr`/`cstring` binding with no initializer passes `Ty.Pointer_Value` to `IR.Emit_Number`'s `Integer_Name` parameter | C | Open accepted-value lowering group: reproduce this storage/result shape narrowly, then preserve checked shape and initialization across its lowering path in both modes. |
+| J32 | Module slice binding with no initializer calls `Slice_Shape` with `Syn.No_Node` | C | Open accepted-value lowering group: reproduce this storage/result shape narrowly, then preserve checked shape and initialization across its lowering path in both modes. |
+| J33 | Erased evidence table is built for a conformance whose sibling entry is not object-safe, with no D146 gate on that path | C | Open erased-conformance boundary: apply D146 object-safety checks to all entries required by a materialized table, with safe sibling controls. |
+| J34 | A struct field whose type is a user type named `variant` is misparsed as a variant part when the field name equals the struct name | C | Open parser boundary group: compare the normative grammar, preserve enclosing context and following declarations, and add small accepted/refused controls. |
+| J35 | A function closed with a bare `end` swallows the next declaration's name, rejecting a valid file | C | Open parser boundary group: compare the normative grammar, preserve enclosing context and following declarations, and add small accepted/refused controls. |
+| J36 | `Else_Closes_Arm` leaks into loops, bare blocks and unchecked regions nested in an `if` arm, rejecting a valid `call else value` | C | Open parser boundary group: compare the normative grammar, preserve enclosing context and following declarations, and add small accepted/refused controls. |
+| J37 | Nested call expressions have no depth guard: unhandled STORAGE_ERROR, raw traceback, exit 1 | C | Duplicate C6, extended to recursive public parser entry points. Add balanced depth guards and bounded recovery cases; no stack-overflow reproduction. |
+| J38 | A bare `break`/`continue` consumes the following `complete` as its label, deleting the complete clause's scope | C | Open parser boundary group: compare the normative grammar, preserve enclosing context and following declarations, and add small accepted/refused controls. |
+| J39 | Parser recovery skips the very anchor token it needs, producing a false "function is never closed" and corrupting all following declarations | C | Current debug reproduction still adds false L0104 after a missing parenthesis. Distinct from N2/N3: preserve an already-current list closer while proving recovery progress. |
+| J40 | A labelled bare block `scope: begin ... end scope` is parsed as a binding, and its `end` closes the enclosing function | C | Open refusal/document agreement: read [1830] and the enabled grammar first. Labelled bare blocks are absent from that grammar; do not enable them solely from the tour example. |
+| J41 | `break`/`continue` inside an anonymous function body is accepted by the parser when the enclosing function has a loop, then crashes the checker (exit 70) | C | Open parser boundary group: compare the normative grammar, preserve enclosing context and following declarations, and add small accepted/refused controls. |
+| J42 | Labelled application with an indexed or sliced callee raises an internal compiler defect (exit 70) in resolution | C | Open resolution group: preserve callee/type scope distinctions and report invalid source before consuming unresolved identities. Pin argument/binder order with small controls. |
+| J43 | An unclassified labelled application leaves callee and arguments unresolved; the typo is reported as a struct-construction context error | C | Open resolution group: preserve callee/type scope distinctions and report invalid source before consuming unresolved identities. Pin argument/binder order with small controls. |
+| J44 | Runtime parameters and named returns resolve their types before later binders are collected, so parameter order changes acceptance | C | Open resolution group: preserve callee/type scope distinctions and report invalid source before consuming unresolved identities. Pin argument/binder order with small controls. |
+| J45 | Any pre-flight CLI diagnostic silently disables the entire frontend (syntax/name/type checking) for the given sources | C | Disposition question, not accepted as a compiler correctness defect: invalid CLI input already returns nonzero. Compare the driver contract before expanding diagnostics or running stages without valid configuration. |
+| J46 | Multi-result placement check overflows Byte_Count and crashes with exit 70 on a written function type | C | Open result-layout boundary group: use checked target-byte arithmetic and settled layouts before placement; retain prior diagnostics. Source/seam tests only for enormous extents, never giant generated images. |
+| J47 | Duplicate member names in a non-parameterized struct body are never checked, so the second member is silently unreachable | C | Open name-uniqueness group: compare ordinary/template fields and static/erased inherited entries. Diagnose collisions without choosing meaning by declaration order. |
+| J48 | Static generic `T.entry(...)` silently resolves an inherited entry-name collision by parent declaration order instead of diagnosing it | C | Open name-uniqueness group: compare ordinary/template fields and static/erased inherited entries. Diagnose collisions without choosing meaning by declaration order. |
+| J49 | Any malformed concrete conformance entry list raises "a collected conformance lost its normalized key" (exit 70) instead of reporting its diagnostic | C | Open conformance failure group: stop invalid/unregistered/nominal-less candidates before normalized-key/provider/template access, preserving the original diagnostic. |
+| J50 | Cyclic concept constraint on the represented formal recurses without a visited set and overflows the stack | C | Open concept-graph guard: include represented-formal constraint edges in finite-cycle detection. Source inspection and bounded graph tests; no recursive exhaustion run. |
+| J51 | A used parameterized conformance with a bad entry list raises "selected conformance lost a provider" instead of reporting it | C | Open conformance failure group: stop invalid/unregistered/nominal-less candidates before normalized-key/provider/template access, preserving the original diagnostic. |
+| J52 | Select_Iterable_Conformance calls Template_Of with No_Nominal_Type for a nominal-less aggregate traversal source | C | Open conformance failure group: stop invalid/unregistered/nominal-less candidates before normalized-key/provider/template access, preserving the original diagnostic. |
+| J53 | Restoration after sinking through a slice view of an inout array | P | Plausible scope question only: the verifier refuted the general aliasing rationale. Determine whether a view rooted in an inout array carries its restoration obligation; preserve the documented aliasing non-guarantee. |
+| J54 | `sizeof`/`alignof` of an atom, atom-union or function type raises Landin.Compiler_Defect (exit 70) | C | Open checker boundary group: handle all admitted measured types and conversion arities explicitly; source mistakes must not become an unlocated internal defect. |
+| J55 | Check_Aggregate_Payload tests the distinct-conversion escape on the wrong node (`Value` instead of `Given`), falsely refusing a module variant payload | C | Open static-image validation group: use the actual payload/conversion node and validate bool/distinct leaves consistently before image lowering. Use tiny images only. |
+| J56 | A range subtype's bounds are never applied to a value that arrives through a control expression, so a statically-known out-of-range value compiles into an unconditional `ud2` | C | Open known-bound check: compare contextual/control and direct values against the existing static-range rule; preserve dynamic runtime checks. J116 remains plausible until narrowly established. |
+| J57 | Module image `bool` elements are never range-checked, so a non-0/1 bool image reaches lowering and aborts the compiler (exit 70) | C | Open static-image validation group: use the actual payload/conversion node and validate bool/distinct leaves consistently before image lowering. Use tiny images only. |
+| J58 | `Check_Struct_Image`'s ordinary aggregate-field branch drops the distinct-conversion alternative its three sibling branches have, so a distinct-typed struct field image is never folded (exit 70) | C | Open static-image validation group: use the actual payload/conversion node and validate bool/distinct leaves consistently before image lowering. Use tiny images only. |
+| J59 | A scalar or text conversion written with any argument count other than 1 crashes the compiler (exit 70, no diagnostic) | C | Open checker boundary group: handle all admitted measured types and conversion arities explicitly; source mistakes must not become an unlocated internal defect. |
+| J60 | Two named returns where one names a struct whose field type failed to resolve: Layout_Size precondition failure loses the whole report | C | Open result-layout boundary group: use checked target-byte arithmetic and settled layouts before placement; retain prior diagnostics. Source/seam tests only for enormous extents, never giant generated images. |
+| J61 | Slice_Address scales the slice lower bound with an unguarded imm32 `imulq`, so an element extent >= 2 GiB emits an unencodable instruction | C | Duplicate A7/M19/N6. Guard wide slice-stride operands; any later assembler check must satisfy the exact-file expansion and process limits below. |
+| J62 | Storage_Address's Frame_Slot arm has no unhomed-slot guard, unlike Slot_Address and Value_Address | P | Plausible backend guard concern: establish a reachable source or focused seam witness before repair. No large image or debugger run is authorized. |
+| J63 | A routine's named result binding gets an empty DWARF location list when its assignment is the last instruction that produces code | C | Open debug-location group: inspect emitted location ranges and address descriptions using small source/object evidence. New debugger sessions remain excluded. |
+| J64 | The DWARF alias walk calls Whole_Slot_Array_Shape and Nth_Field_Shape without the Is_Array and Field>0 guards | P | Plausible backend guard concern: establish a reachable source or focused seam witness before repair. No large image or debugger run is authorized. |
+| J65 | Frame_Is_Addressable's handler turns any Compiler_Defect from allocation or C ABI classification into a 'frame too wide' diagnostic | C | Open exception/report boundary audit under A4/M11: distinguish compiler invariant failures from host outcomes and retain already-decided diagnostics. J109/J112 are plausible; do not infer release behavior from disabled assertions. |
+| J66 | The hosted entry-point refusal (L0502) carries no source span (also behave-diag) | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
+| J67 | The DW_OP_bregN arm for a register-held address slot is unreachable, and the GP variable path omits the deref | C | Open debug-location group: inspect emitted location ranges and address descriptions using small source/object evidence. New debugger sessions remain excluded. |
+| J68 | Fill_Array adds a large element offset as a raw 32-bit immediate, while every nearby site loads the constant with movabsq first | P | Plausible backend guard concern: establish a reachable source or focused seam witness before repair. No large image or debugger run is authorized. |
+| J69 | Caret and underline are laid out in source bytes under a line echoed raw, so a label after a tab or multi-byte UTF-8 is misaligned | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
+| J70 | A `while ... complete` block establishes definite assignment after the loop, which spec.md:505 says it must not | C | Semantic agreement question: reconcile completion-block assignment with [1810]/D157 and the existing loop decisions. Sounder flow precision alone does not authorize changing the normative rule. |
+| J71 | tour [0220]'s `hex_value := 0xDEAD_BEEF` does not compile | C | Duplicate M4/M16 document parity work. Check complete examples against the enabled grammar, preserving historical finding sections. |
+| J72 | tour [0990]'s destructuring block cannot be written as printed: `whole.rem` glues onto the next line's `(` | C | Duplicate M4/M16 document parity work. Check complete examples against the enabled grammar, preserving historical finding sections. |
+| J73 | `addr` of a D160 traversal element binding is classified frame origin, refusing a legal `from`-declared return | C | Open reference-shape agreement: align copied match/traversal roots with lowering and declared origins, retaining C4 alias-lifetime controls. |
+| J74 | A compound assignment through an indexed member selection reads its index twice and emits a duplicate diagnostic | C | Repaired: destination evaluation reads the index once before the assigned value. Assignment marking only updates facts, so an unassigned compound indexed-field index reports L0302 once. Small write-order and independent-field controls pass in both modes. |
+| J75 | `Widest_Struct` rescans every node of every source file on each call and is invoked once per read | C | Open bounded scaling follow-up to C5: cache or move the whole-forest width query to an appropriate pass, with invalidation evidence; no broad timing sweep. |
+| J76 | First_Derivation points the escape diagnostic's related span at a module binding and calls it "the shorter-lived reference source" | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
+| J77 | Pipeline failures in build.sh's content manifest are silently swallowed | C | Duplicate m19 shell-pipeline status work: propagate manifest/image-tag input failures with disposable fake commands. J78 remains plausible. |
+| J78 | linux-loop.sh silently collapses to a constant image tag if the Containerfile cksum fails | P | Duplicate m19 shell-pipeline status work: propagate manifest/image-tag input failures with disposable fake commands. J78 remains plausible. |
+| J79 | Run_Negative hardcodes exit status 1, silently ignoring a negative fixture's own `status` metadata | C | Duplicate M14/N9 harness contracts: honor declared status together with ordered codes and report bytes; pin a deliberately differing metadata value through the harness seam. |
+| J80 | Slot_Element_Shape_Is_Valid returns False for every D84/D85 element operation whose base field is a variant part | C | Open verifier contract audit under m24: establish each malformed-IR witness with small direct seam tests, then return the intended Fault instead of accepting it or raising accidentally. These are not all demonstrated accepted-source defects. |
+| J81 | Emit_Function_Address is the only Emit_* without Is_Emitting in its precondition | P | Plausible IR API precondition concern: distinguish the documented caller contract from an observable source defect before adding release-time guards. |
+| J82 | Enter's "once per block, one at a time" rule is a precondition only; a re-Enter silently rebases the block's First_Value | P | Plausible IR API precondition concern: distinguish the documented caller contract from an observable source defect before adding release-time guards. |
+| J83 | Set_Slice_Image has no `not Has_Image` guard, unlike the five other image setters | P | Plausible IR API precondition concern: distinguish the documented caller contract from an observable source defect before adding release-time guards. |
+| J84 | Specialization reports retains_fallback=false for any specialized instance, even when indirect calls it could not devirtualize survive in that body | C | Open IR observability group: make fallback metadata and measured-type dumps represent actual IR; add independent assertions and check the integrated IR reader guide. |
+| J85 | The IR dump never renders Measured_Of, so every scalar sizeof/alignof records as the same line and a wrong measured type cannot move the golden file | C | Open IR observability group: make fallback metadata and measured-type dumps represent actual IR; add independent assertions and check the integrated IR reader guide. |
+| J86 | Dead first branch in Rooted_Steps: its guard is strictly implied by the next one and the bodies are identical | C | Maintenance observation, not an accepted-source defect: confirm reachability/readers before removing redundant code; preserve behavior and update ownership documentation where affected. |
+| J87 | The slice-element arm of Lower_Unconstrained is unreachable, because every slice index already satisfies Has_Reference_Storage and is taken by the earlier guard | C | Maintenance observation, not an accepted-source defect: confirm reachability/readers before removing redundant code; preserve behavior and update ownership documentation where affected. |
+| J88 | Redundant inout test inside a branch already known to be non-inout | C | Maintenance observation, not an accepted-source defect: confirm reachability/readers before removing redundant code; preserve behavior and update ownership documentation where affected. |
+| J89 | `Held = Ty.Bool` arm in `Lower_Datum`'s zero path is unreachable | C | Maintenance observation, not an accepted-source defect: confirm reachability/readers before removing redundant code; preserve behavior and update ownership documentation where affected. |
+| J90 | `Set_Image_From_Struct_Field` and its dispatch arm are unreachable since the member-selection redirect | C | Maintenance observation, not an accepted-source defect: confirm reachability/readers before removing redundant code; preserve behavior and update ownership documentation where affected. |
+| J91 | Block membership is never verified: block-run/In_Block agreement and the block partition of an item's value run go unchecked | C | Open verifier contract audit under m24: establish each malformed-IR witness with small direct seam tests, then return the intended Fault instead of accepting it or raising accidentally. These are not all demonstrated accepted-source defects. |
+| J92 | A variant shape's tag type is not held to being wide enough for its case count | C | Open verifier contract audit under m24: establish each malformed-IR witness with small direct seam tests, then return the intended Fault instead of accepting it or raising accidentally. These are not all demonstrated accepted-source defects. |
+| J93 | The item's Aliases run, and the Paths run inside each alias, are never bounded or validated by the verifier | C | Open verifier contract audit under m24: establish each malformed-IR witness with small direct seam tests, then return the intended Fault instead of accepting it or raising accidentally. These are not all demonstrated accepted-source defects. |
+| J94 | Scalar_Field_Of converts an unbounded Part_Position with Natural() on the runtime-address path, turning a Fault into a Constraint_Error | C | Open verifier contract audit under m24: establish each malformed-IR witness with small direct seam tests, then return the intended Fault instead of accepting it or raising accidentally. These are not all demonstrated accepted-source defects. |
+| J95 | Store into an aggregate or array slot is not refused, while Load from one is | C | Open verifier contract audit under m24: establish each malformed-IR witness with small direct seam tests, then return the intended Fault instead of accepting it or raising accidentally. These are not all demonstrated accepted-source defects. |
+| J96 | Load_Datum / Store_Datum refuse only an aggregate datum, not a fixed-array datum, and Load_Datum's result is never checked at all | C | Open verifier contract audit under m24: establish each malformed-IR witness with small direct seam tests, then return the intended Fault instead of accepting it or raising accidentally. These are not all demonstrated accepted-source defects. |
+| J97 | Flat aggregate-image path never checks Aggregate_Field_Image.Slice on variant payload leaves, but the backend acts on it | C | Open verifier contract audit under m24: establish each malformed-IR witness with small direct seam tests, then return the intended Fault instead of accepting it or raising accidentally. These are not all demonstrated accepted-source defects. |
+| J98 | Block_Unreachable only checks that an edge exists, so an unreachable cycle of blocks passes | C | Open verifier contract audit under m24: establish each malformed-IR witness with small direct seam tests, then return the intended Fault instead of accepting it or raising accidentally. These are not all demonstrated accepted-source defects. |
+| J99 | An upper-case letter gets the generic L0012 'no rule spells these bytes' citing [1750] | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
+| J100 | Repeated delimiter-free conformance/signature lookahead on malformed input | C | Open malformed-input lookahead cost, distinct from M1: 326e6a32 adds the := delimiter but does not bound delimiter-free identifier runs or unmatched-signature lookahead. No old scaling case was rerun. |
+| J101 | Expect's post-lexical-error forward scan crosses construct boundaries and mangles the parse | C | Duplicate N11: preserve construct/list boundaries after a scanner refusal without re-reporting that refused lexeme. |
+| J102 | Parse_Fixed_Conditional consumes the arm's condition when `if` is missing, producing a three-diagnostic cascade | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
+| J103 | Dead Is_Else guard in Parse_Fixed_Conditional's arm loop | C | Maintenance observation, not an accepted-source defect: confirm reachability/readers before removing redundant code; preserve behavior and update ownership documentation where affected. |
+| J104 | Nine contextual words cannot be assigned to as ordinary bindings, contradicting spec.md's identifier guarantee | C | Open parser boundary group: compare the normative grammar, preserve enclosing context and following declarations, and add small accepted/refused controls. |
+| J105 | Diagnostic and recovery for return followed by a name | C | Partly superseded by 7250d298: the final-value-prefix regression now reports one L0110. The targeted return-carries-value wording remains a diagnostic choice; the old cascade is not a current reproduction. |
+| J106 | Two `link(symbol:)` diagnostics cite [1580] (Importing from C) instead of [1610] | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
+| J107 | Match-arm control classification omits For_Statement, diverging from the three sibling lists | C | Open parser boundary group: compare the normative grammar, preserve enclosing context and following declarations, and add small accepted/refused controls. |
+| J108 | The same source passed twice under two spellings is read twice, so every declaration in it is reported as declared twice | C | Open module/source identity group: define canonical identity through the platform seam while preserving diagnostic spelling; test relative paths, trailing slashes and duplicate inputs with a fake filesystem. |
+| J109 | Only Compiler_Defect is caught around the pipeline, so an internal Constraint_Error/Program_Error discards the already-decided report | P | Open exception/report boundary audit under A4/M11: distinguish compiler invariant failures from host outcomes and retain already-decided diagnostics. J109/J112 are plausible; do not infer release behavior from disabled assertions. |
+| J110 | --root= with an empty value is left in the Roots list and could in principle drive a filesystem-root search | P | Plausible driver-input concern: investigate empty-root handling through fake filesystem effects only, never by traversing the real filesystem root. |
+| J111 | Padded() silently truncates a target name longer than 24 bytes instead of asserting | C | Open target-name contract: decide and enforce overflow behavior for the fixed-width display representation; no target-width arithmetic change is implied. |
+| J112 | Read_File/Write_File only catch Name_Error and Use_Error, not other Ada.IO_Exceptions | P | Open exception/report boundary audit under A4/M11: distinguish compiler invariant failures from host outcomes and retain already-decided diagnostics. J109/J112 are plausible; do not infer release behavior from disabled assertions. |
+| J113 | An ordinary local binding resolves its declared type after its own name enters scope, unlike a D185 condition binding | C | Open resolution group: preserve callee/type scope distinctions and report invalid source before consuming unresolved identities. Pin argument/binder order with small controls. |
+| J114 | A namespace import used as a value is reported as a misspelling that is not declared in any scope | C | Open resolution group: preserve callee/type scope distinctions and report invalid source before consuming unresolved identities. Pin argument/binder order with small controls. |
+| J115 | Resolution's retained call formal is order-dependent and read by no compiler stage | C | Maintenance observation, not an accepted-source defect: confirm reachability/readers before removing redundant code; preserve behavior and update ownership documentation where affected. |
+| J116 | A statically known out-of-range slice bound over a fixed array is not refused | P | Open known-bound check: compare contextual/control and direct values against the existing static-range rule; preserve dynamic runtime checks. J116 remains plausible until narrowly established. |
+| J117 | An untyped literal lower bound of a `for` range is committed to i32 before the upper bound is consulted, and the diagnostic blames the upper bound | C | Open type/shape agreement group: compare both equivalent spellings or contexts and preserve actual element, bound, payload and reference identity before changing acceptance. |
+| J118 | `zeroed` against a pointer/slice/atom context reports L0304 'needs a directly supplied initializer' pointing at completed R2.20, though the context is supplied and the refusal is permanent (also docs-code) | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
+| J119 | Distinct-type identity and zeroed mismatches are reported with struct wording and notes citing [0710] and function addresses | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
+| J120 | A refused range-subtype reference target cascades into a spurious L0303 about writing through an `in` parameter | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
+| J121 | A parameterized layout(c) struct's C-representation check is skipped in the symbolic template pass | C | Open template-only validation gap: check actual-independent invalid C fields. Do not hoist concrete-layout validation over symbolic fields, which would reject valid generic templates. |
+| J122 | Shown returns phrases that already carry an article, producing "this does not have the a pointer shape required here" (also check-5, behave-types, docs-code, check-3) | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
+| J123 | Reject_C_Signature and Validate_C_Layout pass the same origin as both primary span and Related span, printing the snippet twice | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
+| J124 | Multi-result placement sizes a fixed-array result by its U8 element placeholder, so the too-large check under-counts by the element size | C | Open result-layout boundary group: use checked target-byte arithmetic and settled layouts before placement; retain prior diagnostics. Source/seam tests only for enormous extents, never giant generated images. |
+| J125 | `sizeof`/`alignof` of an array type bounded by a fixed formal is refused inside a bound generic routine instance | C | Open type/shape agreement group: compare both equivalent spellings or contexts and preserve actual element, bound, payload and reference identity before changing acceptance. |
+| J126 | `Require` commits an untyped integer literal to `bool` for every non-scalar expected type, producing a bool-flavoured [1890] diagnostic for struct/array/pointer/any contexts | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
+| J127 | Out-of-range constant index diagnostic is missing its noun: "this index is outside the 2 this array has" | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
+| J128 | Is_Zeroed_Scalar_Place's Is_Direct_Named_Return alternative is dead | C | Maintenance observation, not an accepted-source defect: confirm reachability/readers before removing redundant code; preserve behavior and update ownership documentation where affected. |
+| J129 | Inferred `[n of x]` with a non-scalar repeated element emits no diagnostic of its own and leaves the value un-refused, so the user gets only a false "needs a counted inferred binding" message | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
+| J130 | A match arm's ordinary-struct payload alias may be copied by assignment but not used as an explicitly typed binding's initializer | C | Open type/shape agreement group: compare both equivalent spellings or contexts and preserve actual element, bound, payload and reference identity before changing acceptance. |
+| J131 | Two refusal sites lack the `Ill_Typed` guard their siblings have, so an already-refused operand draws a second, wrong-first diagnostic | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
+| J132 | `any(...)` over a refused pointer union runs conformance selection before the union guard, emitting a spurious L0318 ahead of the real refusal | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
+| J133 | One mistake in a generic template body is reported once per instantiation, so an actual-independent error is printed N times with identical span and text | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
+| J134 | `Checked_Instance_Count` is set to the post-loop instance count, so any routine instance created while the ready-instance loop itself runs is never offered to `Check_Routine_Body` | P | Plausible checking-table concern: prove the late-instance window or non-scalar query is reachable before treating it as a missed source check. |
+| J135 | Referents_Agree returns False for an erased `any` carrier, so References_Agree says an `any C` reference is not equal to itself | C | Open type/shape agreement group: compare both equivalent spellings or contexts and preserve actual element, bound, payload and reference identity before changing acceptance. |
+| J136 | Note_Owed_Check is the only node fact with neither a routine-instance overlay nor a double-write guard | C | Open checking-table invariant audit: establish the owed-check write/instance ownership contract with a focused seam and compare existing fact overlays. |
+| J137 | Field_Array_Element answers `bool` for an array field whose element is a struct, reference or nested array | P | Plausible checking-table concern: prove the late-instance window or non-scalar query is reachable before treating it as a missed source check. |
+| J138 | Out-of-scope type name in an anonymous function's signature gives duplicated and misleading L0304 diagnostics | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
+| J139 | Struct refused for a non-zeroable atom/pointer/slice/distinct field is told "a function address has no zero image" (also docs-code) | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
+
+The flow-dispatch repair closes J1/J3/J16/J19 and the related duplicate-index
+report J74. `checking/nested calls retain flow effects` contains 32 small
+accepted/refused controls spanning labelled calls, argument order, literals,
+short-circuiting, indexing, slice receivers, assignment destinations and nested
+failure cleanup. Reading a slice descriptor preserves independent element
+liveness: a consumed element stays dead, its known sibling stays live, and
+lenof reads neither element. The case also preserves the unevaluated fixed-array
+measurement and separately checked anonymous-body boundaries. Four new fake-host driver inputs
+require one L0302 and zero output writes/tool runs for both assembly and
+executable requests. No language rule or aliasing guarantee was widened.
+
+Development evidence for this group: ten explicitly selected cases pass 267
+checks in each of macOS debug and Linux release. Besides the new checker and
+driver controls, these cover fallthrough merges, defer/undo reads, the two
+existing unevaluated-lenof fixtures, consumed subplaces, sunk-inout exit edges
+and final-value refusals. Builds use one worker; each selected test has a
+30-second timeout. Logs are retained in `.scratch/r491-flow-effects/`. No
+Landin assembly, linker sweep, runtime execution, debugger or mutation campaign
+was run. These filtered checks establish the repair group's development
+evidence, not the full R4.91 acceptance gate.
+
+The J2/J17 development batch adds `checking/joined destinations keep escape
+obligations` and `checking/assigned children cover element descendants`, with
+30 small accepted/refused sources. Two additional fake-host driver inputs
+require one L0314 and no output writes or tool invocations for both assembly
+and executable requests. Sixteen explicitly selected cases pass 356 checks in
+each of macOS debug and Linux release, including the retained C3/C4 origin,
+payload and consumed-place controls. The existing
+`runtime/r491-reference-store-origins` source also passes compiler-only checking
+in both modes; its executable was not built or run. Builds use one worker,
+selected tests have 30-second timeouts, and that source check has a 15-second
+timeout. Evidence is retained in `.scratch/r491-origin-joins/`. No Landin
+assembly, linking, runtime execution or debugger was used. This is filtered
+development evidence; exact acceptance remains outstanding.
+
+J2 retains a separate contract question found while reviewing this repair.
+A helper returning an expression that chooses between a parameter and a module
+address can satisfy its declared `from` set; at a subsequent call, the caller
+reconstructs only that declared origin and loses the possible module
+destination. A small compiler-only debug witness, `call-summary.ldn` in the
+same evidence directory, is accepted when the caller stores its same-origin
+parameter through that result. This behavior is observed, but its disposition
+must reconcile [0790]/[1910] with D217's explicit local-analysis boundary before
+J2 is fully closed. Do not infer a whole-program guarantee from the body-local
+repair or reject all accessor results without preserving valid same-origin
+controls. No interprocedural analysis or language rule was added in this batch.
+
+This intake extends the scope of the earlier repairs without erasing their
+controls: C3 covers the recorded direct destination/alias cases, and J2 now
+covers body-local joined destination facts; M2 covers the recorded consumed
+places. The J1/J3/J16/J19 repairs extend flow dispatch and nested effects, and
+J17 extends descendant initialization within an array element.
+C4's lifetime repairs remain in force while J18/J73 compare reference roots.
+J21 is already repaired, J105 is partly superseded, and J100 remains distinct
+from the repaired initializer lookahead. Existing N-series dispositions and
+all earlier delivery evidence remain unchanged.
+
+The next work is to settle J2's call-return contract question, then repair
+checker refusal and type-identity boundaries J7/J10/J12 and conformance
+failures J49/J51/J52. Each change needs paired accepted/refused controls and
+both compiler modes before closure. Then repair parser preservation and
+bounded recursion/inference storage, the accepted-value/control-flow lowering
+group, and backend/native boundaries. Complete fixture accounting, explicit
+profiles, diagnostic/document agreement and the remaining focused IR audits
+before seeking exact acceptance. Small independent repairs may be interleaved,
+but a passing filtered run cannot close any untested group. Source-only giant
+layout findings remain source/seam work; no giant image reproduction is needed.
+The review intake is reconciled; implementation and acceptance remain active.
+
+#### Additional review consolidated at 1aa0746a
+
+Paseo agent `ea7e191d-6563-4a86-9dd7-8bb195813ec6` consolidated a review of
+`1aa0746a4e2d464f79142025fc10161c072aa4b4`, using the snapshot
+`/tmp/landin-review-1aa0746a.16TElI`. This predates the final-value and nested-flow
+repairs. Its 37 reported identifiers are reconciled into 36 rows below;
+D1a/D1b share one call-classification mechanism. K identifiers name this intake
+only, so the review's A/B/C identifiers cannot be confused with earlier ones.
+The original consolidation, available finder reports, source anchors and ten
+small current debug checks are retained in `.scratch/r491-review-ea7e191d/`.
+Current comparisons are against `ab2cc3fa`.
+
+The review mixes coordinator-reproduced cases, finder-only observations and
+explicitly unresolved contracts. Those distinctions survive intake: an old
+exit status is not current validation, and malformed-IR observations are not
+automatically source-reachable defects. Its C/G partitions were partial and
+the planned independent verification workflow did not complete. Historical
+debugger evidence for C1 is retained as provenance only; no debugger was run
+for this intake. No compiler build, Landin emission, assembly, linking,
+runtime execution or scaling campaign was performed here. The ten new source
+checks used the existing debug binary, sequentially, with 10-second timeouts.
+
+| Intake | Review identifier and observation | Current disposition and repair scope |
+| --- | --- | --- |
+| K1 | A1: runtime call in a reference-valued module struct field reaches lowering | Current debug witness exits 70; direct reference-field checking lacks the static-known gate. Add a source diagnostic for ordinary fields and variant payloads before image lowering, preserving permitted static references. Related to J30's image boundary, but a runtime call is distinct from J30's module-name/member form. |
+| K2 | A2: statements followed by a function's final value are refused | Already repaired by 7250d298 under A2/C2/M3. Reuse the final-value grammar, checking and runtime evidence; no replay needed. |
+| K3 | A3: labelled construction treats `any(...)` as a type | Current `Begins_Argument_Type` still treats every `Kw_Any` as a type start. Distinguish `any C` from the expression form, preserving contextual, nominal and generic type-argument controls. This is a separate follow-up to the repaired type-only construction refusals. |
+| K4 | A4: repeated or non-trailing `of` fills are accepted | Both tiny current debug witnesses exit 0. Enforce the grammar's single trailing fill without discarding later source or changing D214's evaluation order; keep valid fill and parser-recovery controls. |
+| K5 | A5: static-address search descends into unevaluated literal `lenof` | Current debug witness reports L0305 for an unevaluated address. Apply D31 consistently in the static-image address walk, retaining the actual module-address refusal and slice-descriptor evaluation boundaries. |
+| K6 | A6: distinct extraction inside a variant payload tests the outer node | Duplicate J55. The payload's `Given`, rather than the containing `Value`, owns the conversion exemption; preserve ordinary-field and static distinct-image controls. |
+| K7 | B1: indexed-field and pointer assignment destinations miss reads before the RHS | Repaired by 0f708770 under J1/J3/J74. Both imported current debug witnesses now produce exactly one L0302, including the formerly crashing unassigned pointer destination. |
+| K8 | B2: propagated `try` failure omits reference-origin cleanup checks | Repaired: the reference pass runs failure-applicable cleanups after the call's arguments, then restores success-path origins. Fourteen controls cover direct/propagated failure, defer/undo, nested and labelled calls, escaping/static values, recovery, early transfers and independent success facts. A driver refusal requires one L0314 and no output/tool effects. Both modes pass; J19's definite-assignment repair remains independently covered. |
+| K9 | B3: discard/operator wrappers hide nested sink effects | Already repaired by 0f708770 under J3. Preserve the selected nested-call controls and their debug/release evidence; no second dispatch repair or broad rerun is needed. |
+| K10 | B4: missing-value checking omits pointer, slice and erased carriers | Already repaired by 7250d298: current `Needs_Value` includes all three carriers. Retain the existing final-value refusal controls and both-mode evidence. |
+| K11 | B5: a fresh loop binding inherits a consumed fact from the previous iteration | Current debug witness rejects a freshly initialized scalar with L0302. Resolve the fresh-binding/reset behavior against [1910], covering ordinary and destructuring bindings and preserving genuinely loop-carried consumption. The source observation is reproduced; the review's broader semantic verdict was left open. |
+| K12 | B6: sink consumption occurs before later arguments finish evaluating | Current debug witness reports L0302 when a later argument returns before the call. This is a semantic sequencing question, not an adopted call-entry rule. Reconcile [0390]/[0910]/[1910], existing argument-order controls and cleanup before changing the sink point; include repeated-place arguments and early transfers. |
+| K13 | C1: multi-formal concept conformance loses its normalized key | Additional witness under J49, with historical coordinator reproduction/backtrace. Preserve both valid multi-formal conformance coverage and malformed-entry diagnostics; do not narrow the repair to one malformed list. No new debugger reproduction is required. |
+| K14 | C2: an all-return slice lower bound emits into terminated flow | Current tiny debug witness exits 70. Duplicate J22's terminated-expression lowering group, with an explicit lower-bound case and required upper-bound/ordinary-bound controls. |
+| K15 | D1a/D1b: scalar/text spelling overrides a resolved callable | Duplicate J8. Preserve both the scalar exit-70 and text false-refusal baseline witnesses and ordinary conversion controls; resolve meaning before intrinsic classification. |
+| K16 | D2: `Covers` accepts a different syntax forest with matching source ID and node count | API-seam identity question under the table-ownership audit. Establish the immutable-forest contract with small table tests before adding identity storage; no CLI defect was demonstrated. |
+| K17 | E1: array fill/element atom writes require exact sets | Source confirms `Fill_Array` and `Store_Element` still use exact atom metadata. Compare D216 subset writes with exact reads using small typed-IR and source controls. Finder source-reachability claims need their own bounded witness; the existing indirect-store repair is not evidence for these opcodes. |
+| K18 | E2: ordinary internal aggregate/array calls check only address carrier width | Source-only verifier gap under m24: validate hidden result and argument addresses against declared shape, extent and nominal identity, including valid generic/erased/C controls. The review's out-of-bounds consequence assumes malformed IR; no accepted-source overwrite was demonstrated. |
+| K19 | E3: pointer metadata can be erased or mixed in stores, calls and operations | Source-only verifier contract question under m24. Compare deliberate representation conversions and low-level address arithmetic with required pointee preservation before rejecting every plain-usize carrier. Add focused malformed-IR cases; source pointer rules alone do not define all IR operations. |
+| K20 | E4: scalar `Store` accepts a shaped slot or violates an accessor contract | Duplicate J95. Guard the slot kind before scalar access and require a verifier Fault in both modes; do not treat assertion-disabled predictions as measured release behavior. |
+| K21 | E5: instruction `In_Block` disagrees with its enclosing block run | Duplicate J91. Retain the no-result Leave/rewriter witness under m24 and validate ownership before consumers use it. |
+| K22 | E6: final run cursors allow trailing orphan entries | Additional complete-partition witness under m24/J91, covering values, fields and operands as well as block membership. Bound each cursor and require the final run to consume its owned vector; small direct seam tests only. |
+| K23 | F1: repeated module references cause exponential folding | Previously recorded in the R1 folding measurement above; attach the additional review provenance without treating its old timing samples as new results. Memoize completed facts with cycle and diagnostic controls when repairing this fold. Do not repeat the reported stress chain. |
+| K24 | F2: shared aggregate shapes are remeasured recursively without a cache | Distinct bounded-scaling item in `IR.Shape_Measurement`, not the module fold. Source retains recursive layout expansion. Establish cache ownership and target/shape invalidation using small shared graphs; the review's long timing runs are historical and must not be repeated. |
+| K25 | F3: devirtualization leaves a typed function-address projection live | Optimization candidate: the rewrite retains signature metadata and the simplifier's Plain predicate excludes it. Prove deadness and preserve any remaining users and verifier contracts before changing removal eligibility; do not clear a live function value's signature merely to satisfy that predicate. |
+| K26 | F4: address-exposure analysis rescans the unit per routine even with specialization off | Source confirms the per-routine query precedes the off decision. Compute shared exposure facts at the appropriate pass boundary or avoid unneeded work, preserving callback identity and observability; use small operation-count controls, not timing sweeps. |
+| K27 | F5: profitability recounts eligible instances for every instance | Source confirms the nested item scans. Count once per normalized template while preserving evidence proof, exposed roots and policy decisions; validate small mixed-template cases. |
+| K28 | F6: preflight, emission and full-debug output repeat allocation/frame planning | Maintenance/scaling observation, not wrong code. Evaluate reuse only with explicit unit/options/target ownership and debug-location agreement; retain J65's independent exception-classification question. No large-routine benchmark is needed. |
+| K29 | G1: wide slice stride uses an unencodable immediate multiply | Duplicate A7/M19/N6/J61. Keep source/seam evidence and the mandatory exact-file assembly limits; no giant extent or image reproduction. |
+| K30 | G3: first-class external C function address uses a bare PC-relative address | Open target/toolchain question: compare emitted address relocation with the supported PIE/shared-symbol link contract. The review established emission/reachability, not a native link failure. Preserve external/local callback controls; no linker run was made for intake. |
+| K31 | G4: outgoing stack sizes lack a wide-immediate fallback | Broad defect claim not established: current `Frame_Is_Addressable` already rejects over-wide C incoming and outgoing stack areas. Retain a focused encoding audit for any path that bypasses this preflight, including internal calls; do not claim all huge calls reach emission or construct huge arguments. |
+| K32 | G10: stack-argument start uses max(8, its alignment) | Unresolved ABI comparison, not a confirmed defect. Compare the C classifier's offset/alignment rule and existing native ABI fixtures against the supported contract before proposing a change. |
+| K33 | H1: build-report collision checks reserve inactive product/map paths | Source still reserves all three paths before the actual-output list is formed. Extend the artifact/source identity repair with fake-host inactive-map/product controls and preserve refusal of real collisions; no filesystem overwrite experiment. |
+| K34 | H2: help/identify bypass invalid deferred options | Source still returns before target/mode/root/option validation. Reconcile the existing no-misuse informational-action contract using fake-host cases for all four reported combinations; preserve valid informational requests and J45's invalid-CLI stage boundary. |
+| K35 | H3: build manifest omits the selected C compiler identity | Additional build-staleness item beside M13/J77: record the actual configured compiler/toolchain identity used for the native C adapter and invalidate both clean/checksum paths appropriately. Use disposable fake-toolchain controls, without changing the machine's compiler installation. |
+| K36 | H4: timeout kills only the direct tool PID | Repaired: POSIX spawn establishes a private process group before exec; a monotonic timeout kills that group and reaps the direct child. Adapter exceptions also stop an owned child. Five focused native cases pass in both modes, including a short-lived descendant's delayed write, literal argument bytes, capture modes, exit/signal distinctions and missing executables. This supervises ordinary group members, not descendants deliberately leaving the group; all assembly limits still apply. |
+
+The K8/K36 batch passes 15 selected cases and 359 checks in each of macOS debug
+and Linux release: five native process cases and ten checker/driver/fixture
+cases. Three small positive fixtures verify assembly-text emission only;
+no assembler, linker or generated Landin executable was invoked. The native
+timeout witness forks one harmless child, whose delayed marker must remain
+absent; both processes expire within two seconds even with a broken runner.
+The failure-cleanup origin snapshot uses heap storage and is released on both
+ordinary and exceptional paths. Existing origin forwarding, untaken cleanup,
+payload, nested-flow and destination-join controls remain green.
+
+Builds used one worker. The first clean Linux build hit its 300-second wrapper
+limit before tests ran and was stopped; the retry completed under an explicit
+900-second build limit. Selected test invocations were limited to at most
+20 seconds. Logs are retained in `.scratch/r491-tool-timeouts/` and
+`.scratch/r491-try-origins/`. These are development results, not exact-revision
+acceptance; the resource restrictions below remain mandatory.
+
+K8 and K36 are repaired. K11's fresh-binding facts are the next flow follow-up,
+including ordinary/destructuring initializers and independent loop-carried
+consumption. Keep J2's call-return contract question active, then combine the existing checker/conformance group
+with K1/K3/K4/K5's static-image/parser boundaries. K12 needs a semantic
+disposition before implementation. The verifier, optimization, build-identity
+and ABI items above remain owned by the corresponding later repair groups.
+The review's passing backend observations and inconclusive long-routine/stack
+scaling notes are coverage limits, not additional confirmed defects or reasons
+to replay stress tests. Intake is complete; implementation and exact acceptance
+remain open.
+
+Resource limits for further work are mandatory: check for existing `clang` or
+`cc1as` processes before execution and stop to report their PIDs/full commands
+if any exist. Do not run blanket assembler/linker coverage or parallel assembler
+work. Never assemble `positive/module-array-mixed-repetition`,
+`positive/module-array-repetition`, billion-element sources or their generated
+assembly. Before any explicit `clang -c`, inspect that exact file's `.rept`,
+`.zero`, `.space`, `.fill` and `.comm` expansion; skip unbounded or over-64-MiB
+images. At most one foreground clang process may run, with a timeout of at most
+30 seconds and one explicitly named, inspected input. No broad clang loops,
+unbounded stress/fuzz loops or giant generated cases are authorized. Reuse
+completed coverage; use short explicit timeouts and low concurrency for new
+bounded checks. Required exact acceptance is not waived by these limits.
+
+Implementation proceeds in four reviewable batches: finish the initial
+context/recovery regressions; repair origin/consume/output/build preservation;
+repair remaining frontend/backend/host boundaries and bounded scaling; then
+reconcile documentation, harness and CI coverage. Each batch keeps its focused
+positive and refusal controls. Confirmed defects and unresolved dispositions
+above remain owned here until repaired or explicitly transferred with reasons.
+
+Retained acceptance of `66927e93` is historical evidence and does not approve
+these repairs. The user's constraint excludes new mutation-based probing and
+debugger sessions. Normal builds and repository regressions remain authorized.
+Required debugger acceptance is not waived: R4.91 remains active until its full
+acceptance can be performed within the user's authorized scope.
+
+Exit evidence: focused regressions pass in both compiler build modes, including
+no output/tool invocation for rejected source; full document checks and compiler
+suites pass; every older finding above has a recorded disposition; and the
+committed repair revision completes canonical eight-job native acceptance,
+verified export and normal delivery binding. Filtered runs do not close it.
+
 ### R4 gate
 
-Status: complete
+Status: active
 
-The implementation and coverage gate is closed by R4.90. Its exact revision's
-full native acceptance and delivery evidence are bound as described above.
-R5.10 and R5.20 remain planned; closing this phase activates neither.
+R4.90's accepted closure remains recorded above. R4.91 reopens the current
+phase gate for the review repairs and their exact-revision acceptance.
+R5.10 and R5.20 remain planned and depend on those repairs. This gate closes
+again only after R4.91 meets its exit evidence.
 
 - Every applicable hosted construct under the current normative specification
   is implemented on Linux x86-64.
@@ -5558,7 +6151,7 @@ freestanding backend begins.
 ### R5.10 — Establish the native macOS compiler environment
 
 Status: planned
-Depends on: R0.70, R4.90
+Depends on: R0.70, R4.91
 
 Pin or bound the macOS arm64 GNAT/GPRbuild, Apple SDK, assembler, linker and
 debugger environment. Build and run `refine` natively; the Linux container is
@@ -5570,7 +6163,7 @@ native macOS arm64 with captured tool versions.
 ### R5.20 — Isolate target contracts
 
 Status: planned
-Depends on: R4.90, R0.60
+Depends on: R4.91, R0.60
 
 Refine target descriptions, ABI queries, assembly emission and debug emission
 so Darwin support does not enter parsing, checking or target-neutral IR

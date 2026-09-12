@@ -1,0 +1,36 @@
+error[L0305]: a module value cannot hold the address of storage in this compiler
+  --> ../tests/fixtures/negative/r491-construction-static-address/main.ldn:9:29
+  |
+9 | inferred := ref_cell(value: addr storage)
+  |                             ^^^^^^^^^^^^
+  = note: [1940]: a static address is a relocation the backend does not emit yet; R6.60 owns the vector tables that need one
+error[L0305]: a module value cannot hold the address of storage in this compiler
+  --> ../tests/fixtures/negative/r491-construction-static-address/main.ldn:10:27
+   |
+10 | typed: ref_cell = (value: addr storage)
+   |                           ^^^^^^^^^^^^
+  = note: [1940]: a static address is a relocation the backend does not emit yet; R6.60 owns the vector tables that need one
+error[L0305]: a module value cannot hold the address of storage in this compiler
+  --> ../tests/fixtures/negative/r491-construction-static-address/main.ldn:11:28
+   |
+11 | filled := box(first: 0, of addr storage)
+   |                            ^^^^^^^^^^^^
+  = note: [1940]: a static address is a relocation the backend does not emit yet; R6.60 owns the vector tables that need one
+error[L0305]: a module value cannot hold the address of storage in this compiler
+  --> ../tests/fixtures/negative/r491-construction-static-address/main.ldn:12:34
+   |
+12 | nested: wrapper = (item: (value: addr storage))
+   |                                  ^^^^^^^^^^^^
+  = note: [1940]: a static address is a relocation the backend does not emit yet; R6.60 owns the vector tables that need one
+error[L0305]: a module value cannot hold the address of storage in this compiler
+  --> ../tests/fixtures/negative/r491-construction-static-address/main.ldn:13:49
+   |
+13 | payload: choice = (kind: pair(first: 0, second: addr storage))
+   |                                                 ^^^^^^^^^^^^
+  = note: [1940]: a static address is a relocation the backend does not emit yet; R6.60 owns the vector tables that need one
+error[L0305]: a module value cannot hold the address of storage in this compiler
+  --> ../tests/fixtures/negative/r491-construction-static-address/main.ldn:14:49
+   |
+14 | payload_fill: choice = (kind: pair(first: 0, of addr storage))
+   |                                                 ^^^^^^^^^^^^
+  = note: [1940]: a static address is a relocation the backend does not emit yet; R6.60 owns the vector tables that need one

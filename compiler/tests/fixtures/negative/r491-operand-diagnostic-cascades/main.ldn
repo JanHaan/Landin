@@ -1,0 +1,10 @@
+f: () -> none =
+    mut value: f32 = 4.0
+    value %= 0
+    value <<= -1
+    value >>= -1
+    remainder := value % 0
+    left := value << -1
+    right := value >> -1
+    value %= (1 / 0)
+end f

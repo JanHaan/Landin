@@ -1,0 +1,6 @@
+class: runtime
+summary: payload writes last uses sibling updates copied matches and new iterations preserve alias semantics
+program: main.ldn
+status: 42
+constructs: 0420, 0430, 0520, 0800, 0830, 0900, 1220, 1910
+targets: linux-x86-64

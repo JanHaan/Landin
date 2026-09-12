@@ -1,0 +1,9 @@
+short: type = [1]i32
+row: type = [2]i32
+box: type = struct values: row end box
+copy: (t: type, value: t) -> (result: t) = value end copy
+public main: () -> (code: i32) =
+    b: box = (values: [1, 42])
+    values := copy(t: short, value: b.values)
+    code = 42
+end main

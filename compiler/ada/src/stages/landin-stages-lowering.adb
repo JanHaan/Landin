@@ -3394,6 +3394,26 @@ package body Landin.Stages.Lowering is
                Seen : array (1 .. IR.Aggregate_Field_Count (Unit.all, Shape))
                  of Boolean := [others => False];
             begin
+               --  Variant operations select a field of aggregate storage.
+               --  A root array instead retains Base zero and puts its index
+               --  in the path. Capture the reached aggregate as typed
+               --  address storage before selecting one of its variants.
+               if Destination.Base = 0
+                 and then not Destination.Steps.Is_Empty
+               then
+                  for Field in Seen'Range loop
+                     if IR.Nth_Aggregate_Field (Unit.all, Shape, Field).Kind
+                          = IR.Variant_Field_Shape
+                     then
+                        Write_Shaped_Value
+                          (Of_Tree, Node, Scope, Shape,
+                           Stored_At (Addressed_Storage
+                             (Destination, Shape, Site)));
+                        return;
+                     end if;
+                  end loop;
+               end if;
+
                --  D29 commits labels in source order; D64 fills omitted
                --  fields only afterwards, never clearing a value a label
                --  can still read from the destination.
@@ -11008,6 +11028,7 @@ package body Landin.Stages.Lowering is
                      if Held = Ty.No_Value
                        and then Syn.Kind (Of_Tree, Stmt)
                                   in Syn.Call | Syn.Labeled_Application
+                                     | Syn.Try_Expression
                      then
                         --  Calls overlap statement and expression syntax.
                         --  The parser can only know that a final call is the
@@ -11017,7 +11038,7 @@ package body Landin.Stages.Lowering is
                         --  block's optional destination.
                         declare
                            Ignored : constant IR.Value_Id :=
-                             Lower_Call (Of_Tree, Stmt, Scope);
+                             Lower_Expression (Of_Tree, Stmt, Scope);
                         begin
                            pragma Unreferenced (Ignored);
                         end;
@@ -11630,8 +11651,11 @@ package body Landin.Stages.Lowering is
                            --  Base/Steps is the run that reaches it.
                            Holder : constant Syn.Node_Id :=
                              Syn.Target_Of (Of_Tree, Place);
+                           Referenced : constant Boolean :=
+                             Has_Reference_Storage (Of_Tree, Holder);
                            Computed : constant Boolean :=
-                             Has_Computed_Index (Of_Tree, Holder);
+                             Has_Computed_Index (Of_Tree, Holder)
+                             or else Referenced;
                            Named : constant Syn.Node_Id :=
                              (if Computed then Syn.No_Node
                               else Chain_Root (Of_Tree, Place));
@@ -11662,7 +11686,30 @@ package body Landin.Stages.Lowering is
                              (Landin.Checking.Field_Kind_Of
                                 (Types.all, Wrote, Field)
                                 = Landin.Checking.Variant_Field);
-                           if Computed then
+                           if Referenced then
+                              --  Capture the holder once, then select and
+                              --  write its actual variant part. A whole
+                              --  holder copy would overwrite sibling effects
+                              --  performed by payload expressions (D76).
+                              declare
+                                 Reached_Place : constant Stored_Place :=
+                                   Lower_Stored_Place
+                                     (Of_Tree, Holder, Scope);
+                              begin
+                                 if Current /= IR.No_Block then
+                                    declare
+                                       Into : constant IR.Storage :=
+                                         Addressed_Storage
+                                           (Reached_Place,
+                                            Neutral_Body (Wrote), Site);
+                                    begin
+                                       Write_Variant_Value
+                                         (Syn.Value_Of (Of_Tree, Stmt),
+                                          Wrote, Field, Into, Base => Field);
+                                    end;
+                                 end if;
+                              end;
+                           elsif Computed then
                               declare
                                  Holder_Place : constant Stored_Place :=
                                    Lower_Stored_Place
@@ -12939,7 +12986,8 @@ package body Landin.Stages.Lowering is
                  Res.Scope_At (Meanings.all, Of_Tree, Runs);
             begin
                Open (Fresh (Of_Tree, Runs, Inside));
-               Lower_Statements (Of_Tree, Runs, Inside, Result);
+               Lower_Statements
+                 (Of_Tree, Runs, Inside, Result, Destination => Result);
 
                --  [0930]: the named return is assigned by every path that
                --  reaches the end, so falling off it leaves with the

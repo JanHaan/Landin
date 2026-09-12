@@ -1083,6 +1083,12 @@ and assignments made only on the right do not survive their join.
 A place passed to `sink` becomes unassigned at that exact binding-rooted path.
 Every read requires a later assignment on every arriving path, and a part sunk
 out of an `inout` parameter must be assigned again on every return edge [0910].
+Reading an enclosing aggregate reads its consumed parts too; assigning that
+aggregate restores those parts. Other fields and other known array elements
+remain independent. The `inout` obligation includes failure propagation:
+applicable `defer` and `undo` actions run before the exit check. Unlike a
+successful named result, the caller's `inout` storage remains observable after
+a recovered failure.
 This is definite assignment of one consumed place, not ownership; copies made
 before the sink remain live.
 
@@ -1094,8 +1100,17 @@ Taking the address of the local pointer or slice descriptor itself still has
 frame origin; copying a descriptor locally does not move its backing storage
 into the frame. A returned value
 with frame origin is refused. A retained `escaping` argument must be independent
-or derive only from parameters themselves declared `escaping`. Integer-created
-pointers are explicitly untracked [0470]. On each return edge, [0790]'s exact
+or derive only from parameters themselves declared `escaping`. A store checks
+its destination's backing storage, including `inout` parameters, pointer
+pointees, slice elements and reference-bearing fields or variant payloads.
+Caller storage cannot retain a frame reference or a non-escaping reference
+from another parameter origin. Updating storage with a reference from that
+same origin is permitted; retaining another parameter requires `escaping`.
+A known address alias to a local joins its writes into the local's value
+origins, while a pointee write does not change the pointer descriptor's origin.
+Integer-created pointers are explicitly untracked [0470]; joining one with a
+tracked frame or parameter reference does not erase the tracked restriction.
+On each return edge, [0790]'s exact
 `from` comparison applies to an actual tracked reference in the returned value.
 A provably empty arm of [0480]'s optional pointer carries no reference and
 therefore no origin to compare; it is not an `Untracked` reference. For every
@@ -1104,6 +1119,23 @@ exactly the signature's `from` set. A live local view records the binding it
 derives from; an `inout` or `sink` use of that binding is refused when the view
 is read before being replaced.
 Volatile reference paths remain exempt [0850].
+
+A match payload alias keeps its selected storage live even when the payload
+is scalar and carries no reference. Both reads and writes use that storage;
+a derived address or range, pending cleanup argument, or reachable inner-loop
+use also extends its lifetime. A direct retag, replacement of a containing
+object, or an `inout`/`sink` call that can replace it is refused until the last
+use. D76 selects a directly written case before evaluating its payload
+initializers, so reading an old alias in those initializers is still a live use.
+A whole containing construction also requires those aliases' last use before
+construction starts; copy a needed scalar first. A computed value destination
+keeps D134's temporary-and-copy-back order.
+Known address aliases participate in this local check. Different fields
+and known array elements remain independent, and a fresh match arm on a later
+outer-loop iteration creates fresh aliases. D134's copied computed-value
+subject instead aliases its own temporary; a copied scalar payload value
+keeps no borrow of the original. Rebinding a pointer descriptor does not
+replace the payload storage its earlier match selected.
 
 A reference-free scalar operator result carries no reference origin [0840].
 This includes a saved `lenof` result: using that number after an `inout` use of
@@ -5792,7 +5824,10 @@ A plain binding is an immutable `in` alias and `inout name` is mutable. Both
 refer directly to the matched object: reading loads that payload field, and an
 `inout` assignment updates it in place. Each binding is visible only in its
 arm's sibling scope. Duplicate names retain L0200 and a use outside the arm
-retains L0201.
+retains L0201. [1910] keeps the selected payload storage live through each
+alias's last use, including scalar writes and addresses derived from the
+payload. Retagging or replacing that storage earlier is L0315. The R4.91
+live-payload negative fixture and last-use runtime fixture pin this rule.
 
 This slice binds scalar payload fields. D85 later binds a fixed-array payload
 as an indexed array alias without making it a whole contextual value. Omitting
@@ -9043,7 +9078,7 @@ classified failure boundary before the repository gate can pass.
 | `atoms.sets` | static | 0630, 0640 | L0301 or L0312; equality compares declaration identities without requiring set inclusion, while ordering and atom/numeric mixing remain refused | `negative/atom-match-not-exhaustive`, `runtime/atom-values-cross-the-abi`, `runtime/r490-generic-atom-identity`, `runtime/r490-generic-atom-arrays`, `runtime/r490-generic-atom-fields`, `runtime/r490-generic-atom-storage`, `negative/r490-atom-array-wrong-member`, `negative/r490-generic-atom-field-member` |
 | `aggregates.fill` | static | 0410, 0670, 0710, 0720 | L0301 for unequal omitted-field descriptors or a value fill without a destination; one exact contextual value is evaluated after written labels and copied in declaration order; ordinary origin and assignment diagnostics remain | `runtime/r490-generic-field-fill`, `negative/r490-fill-mixed-types`, `negative/r490-fill-array-shapes`, `negative/r490-fill-atom-sets`, `negative/r490-fill-pointer-permissions`, `negative/r490-fill-frame-escape`, `negative/r490-fill-unassigned` |
 | `aggregates.variants` | static | 0670, 0680, 0690, 0700, 0710, 0720, 0750, 1210 | L0301, L0308--L0312 or L0313 | `negative/struct-literal-field-not-given`, `negative/variant-match-not-exhaustive` |
-| `origins.escape` | static | 0480, 0770, 0780, 0790, 0800, 0830, 0840 | L0314--L0316; [0790]'s exact `from` comparison applies to an actual returned reference, while a provably empty optional-pointer arm has no origin and is not `Untracked`; a retained provider wrapper keeps its ordinary inner argument's origin without requiring that argument to be declared `escaping`, and tracked pool constructor sources join | `negative/frame-origin-return`, `negative/borrowed-source-inout`, `negative/returned-reference-missing-from`, `negative/core-arena-frame-escape`, `negative/core-pool-frame-escape`, `negative/core-pool-bookkeeping-frame-escape`, `negative/core-failing-frame-escape`, `negative/core-text-frame-slice-escape`, `negative/core-diag-frame-message-escape`, `negative/r440-parser-frame-arena`, `runtime/diagnostic-loggers-dispatch`, `runtime/r420-failing-providers`, `negative/r480-recovery-retains-borrow`, `negative/r480-recovery-exposed-storage`, `negative/r480-reader-live-line` |
+| `origins.escape` | static | 0480, 0770, 0780, 0790, 0800, 0830, 0840, 1220, 1910 | L0314--L0316; [0790]'s exact `from` comparison applies to an actual returned reference, while a provably empty optional-pointer arm has no origin and is not `Untracked`; a retained provider wrapper keeps its ordinary inner argument's origin without requiring that argument to be declared `escaping`, tracked pool constructor sources join, destination storage prevents retained frame or foreign non-escaping origins, and payload aliases keep scalar storage live through last use | `negative/frame-origin-return`, `negative/borrowed-source-inout`, `negative/returned-reference-missing-from`, `negative/core-arena-frame-escape`, `negative/core-pool-frame-escape`, `negative/core-pool-bookkeeping-frame-escape`, `negative/core-failing-frame-escape`, `negative/core-text-frame-slice-escape`, `negative/core-diag-frame-message-escape`, `negative/r440-parser-frame-arena`, `runtime/diagnostic-loggers-dispatch`, `runtime/r420-failing-providers`, `negative/r480-recovery-retains-borrow`, `negative/r480-recovery-exposed-storage`, `negative/r480-reader-live-line`, `negative/r491-retained-reference-stores`, `negative/r491-live-payload-aliases`, `runtime/r491-reference-store-origins`, `runtime/r491-payload-alias-last-use` |
 | `origins.aliasing-limit` | outside | 0770, 0910 | non-guarantee: a pre-existing copy or indistinguishable arena is not tracked | `positive/reference-origins-and-consume`, `negative/use-after-sink` |
 | `functions.abi` | static | 0870, 0880, 0890, 0900, 0920, 0930, 0980, 1000, 1020, 1030, 1460, 1920, 1970 | L0301, L0302 or L0502 | `negative/call-with-too-few-arguments`, `runtime/r230-composition`, `runtime/r480-generic-provider-entry` |
 | `optimization.outcomes` | static | 0290, 0430, 1100, 1120, 1310, 1550 | D211 preserves effects, snapshots, cleanup, required traps, calling conventions and observable function identities under every optimization profile; malformed transformed IR is a compiler defect, never a source diagnostic | `runtime/r450-opt-effects`, `runtime/r450-opt-discarded-trap`, `runtime/r450-specialization-recursive-errors`, `runtime/r450-specialization-threshold`, `runtime/r450-x86-pressure`, `abi/r450-x86-callee-probes` |
@@ -9247,7 +9282,12 @@ tail release without changing the old value. Only after the full copy succeeds
 does the caller drain and dispose the old value and publish the replacement by
 assignment. `transfer` performs the copy as one initialized-source to
 next-destination transition, so a reference-valued item is not exposed as a
-borrow between the two raw values. `raw` never yields a slice over capacity and
+borrow between the two raw values. Its private destination address uses
+[0470]'s explicit integer-to-pointer boundary for both first and later slots;
+the complete typed store precedes publication of the extended witness. This
+manual raw-storage responsibility does not exempt ordinary stores from
+[1910]'s origin checks, and `unchecked` still removes only D187's named edges.
+`raw` never yields a slice over capacity and
 never gives spare storage a `T` image. The public checks are declared atom
 outcomes, not traps, because these are foreseeable container conditions
 [0940].
@@ -13122,3 +13162,37 @@ source now refuses its missing atom initializers),
 and the verifier case `typed indirect atoms are checked`, whose corrupt-load
 and invalid-write controls preserve the distinction between exact reads and
 subset writes.
+
+### D217 — Retained stores and payload replacement follow backing storage
+
+**The tour said** that frame references cannot be retained [0770], parameters
+are non-escaping by default [0780], origins join restrictively [0840], and
+payload aliases end at last use [1220]. It did not spell out destination-origin
+comparison or a whole construction's alias-check boundary.
+
+**Chosen:** [1910] checks the backing of a retained store, not merely its root
+binding. A reference from the same parameter origin may update that origin's
+storage; another retained parameter must be `escaping`. Writes through known
+local address aliases join into the local's stored origins. An untracked
+alternative never erases a tracked restriction, and writing a pointee does not
+change the pointer descriptor's own origin.
+
+Payload storage has its own lifetime even when its value is scalar. D76's
+direct case selection precedes its payload initializers. The local replacement
+check also requires last use before a whole containing construction starts;
+code that needs an old scalar saves it first. D134's computed value destination
+retains its existing temporary-and-copy-back order. These are local checks,
+not interprocedural alias analysis or a change to [0470]'s explicit boundary.
+
+**The alternatives:** checking only module bindings misses caller-owned
+storage; treating scalar payload names as copies contradicts D78's aliases.
+Letting an untracked alternative dominate a tracked one contradicts [0840].
+Tracking each field publication separately inside a whole construction would
+admit more initializer arrangements, but would make the borrow boundary depend
+on the construction's internal field schedule. The explicit last-use boundary
+keeps that rule visible at the containing assignment.
+
+**Pinned by** `negative/r491-retained-reference-stores`,
+`negative/r491-live-payload-aliases`, `runtime/r491-reference-store-origins`,
+`runtime/r491-payload-alias-last-use`, the driver's refusal-without-effects case,
+and the existing pointer-vector growth and initialized-allocation fixtures.

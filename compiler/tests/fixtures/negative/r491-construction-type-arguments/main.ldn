@@ -1,0 +1,18 @@
+box: type = struct first: i32 second: i32 end box
+cell: type (t: type) = struct value: t end cell
+integer_cell: type = cell(i32)
+choice: type = struct
+    kind: variant pair: (first: i32, second: i32) | empty end kind
+end choice
+
+module_field := box(first: ptr u8, second: 0)
+module_case: choice = (kind: pair(first: ptr u8, second: 0))
+module_generic := integer_cell(value: ptr u8)
+
+f: () -> none =
+    local_field: box = box(first: []u8, second: 0)
+    local_case: choice = (kind: pair(first: ptr u8, second: 0))
+    local_generic := integer_cell(value: ptr u8)
+    mut value: choice = (kind: empty)
+    value.kind = pair(first: ptr u8, second: 0)
+end f

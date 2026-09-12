@@ -1,0 +1,22 @@
+choice: type = struct
+    kind: variant pair: (first: i32, second: i32) | empty end kind
+end choice
+wrapper: type = struct item: choice end wrapper
+score: (value: choice) -> (result: i32) =
+    match value.kind
+        pair(first, second): result = first + second
+        empty: result = 0
+    end match
+end score
+public main: () -> (code: i32) =
+    mut values: [2]choice = [(kind: pair(first: 40, second: 2)), (kind: empty)]
+    nested: [1][2]choice = [[(kind: empty), (kind: pair(first: 1, second: 1))]]
+    wrapped: [1]wrapper = [(item: (kind: pair(first: 3, second: 4)))]
+    repeated: [2]choice = [of (kind: pair(first: 1, second: 2))]
+    code = score(values[0]) + score(values[1])
+    if score(nested[0][0]) <> 0 or score(nested[0][1]) <> 2 then code = 1 end if
+    if score(wrapped[0].item) <> 7 then code = 2 end if
+    if score(repeated[0]) + score(repeated[1]) <> 6 then code = 3 end if
+    values[0].kind = empty
+    if score(values[0]) <> 0 then code = 4 end if
+end main

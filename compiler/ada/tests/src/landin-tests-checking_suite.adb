@@ -212,6 +212,725 @@ package body Landin.Tests.Checking_Suite is
       Check_Source (Conforming => True);
    end Large_Loop_Frames_Stay_Off_The_Host_Stack;
 
+   procedure Try_Failures_Check_Reference_Cleanups
+     (Item : in out Landin.Testing.Context);
+
+   procedure Try_Failures_Check_Reference_Cleanups
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Source
+        (Label, Text : String; Accepted : Boolean);
+
+      procedure Check_Source
+        (Label, Text : String; Accepted : Boolean)
+      is
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Order : Landin.Stages.Pipeline;
+         Ran : Natural;
+         Src : Landin.Source.Source_Id;
+         pragma Unreferenced (Src);
+      begin
+         Src := Landin.Stages.Add_Source (Work, "try-origins.ldn", Text);
+         Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
+         Landin.Stages.Append (Order, Names'Access);
+         Landin.Stages.Append (Order, Checker'Access);
+         Ran := Landin.Stages.Run (Order, Work);
+         declare
+            Reports : constant Landin.Diagnostics.Diagnostic_List :=
+              Landin.Stages.Report (Work);
+         begin
+            Landin.Testing.Check_Equal (Item, Ran, 4, Label & " reaches flow");
+            Landin.Testing.Check
+              (Item, Landin.Stages.Failed (Work) /= Accepted
+                 and then
+                   (if Accepted then Landin.Diagnostics.Count (Reports) = 0
+                    else Landin.Diagnostics.Count (Reports) = 1
+                      and then Landin.Diagnostics.Code
+                        (Landin.Diagnostics.Get (Reports, 1)) = "L0314"),
+               Label & " has its exact origin or assignment verdict");
+         end;
+      end Check_Source;
+   begin
+      Check_Source
+        ("undo frame on try",
+         "problem: atom" & LF
+         & "anchor: i32 = 42" & LF
+         & "mut saved: ptr i32 = ptr(4096)" & LF
+         & "retain: (escaping value: ptr i32) -> none = saved = value"
+         & " end retain" & LF
+         & "use: (value: i32) -> none = end use" & LF
+         & "may_fail: () -> none ! problem = fail problem end may_fail" & LF
+         & "may_fail_with: (value: i32) -> none ! problem = fail"
+         & " problem end may_fail_with" & LF
+         & "number_fail: () -> (r: i32) ! problem = fail problem end"
+         & " number_fail" & LF
+         & "f: () -> none ! problem = local: i32 = 42 undo retain(addr"
+         & " local) try may_fail() end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("defer before success replacement",
+         "problem: atom" & LF
+         & "anchor: i32 = 42" & LF
+         & "mut saved: ptr i32 = ptr(4096)" & LF
+         & "retain: (escaping value: ptr i32) -> none = saved = value"
+         & " end retain" & LF
+         & "use: (value: i32) -> none = end use" & LF
+         & "may_fail: () -> none ! problem = fail problem end may_fail" & LF
+         & "may_fail_with: (value: i32) -> none ! problem = fail"
+         & " problem end may_fail_with" & LF
+         & "number_fail: () -> (r: i32) ! problem = fail problem end"
+         & " number_fail" & LF
+         & "f: () -> none ! problem = local: i32 = 42 mut view: ptr i32"
+         & " = addr local defer retain(view) try may_fail() view = addr"
+         & " anchor end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("direct failure control",
+         "problem: atom" & LF
+         & "anchor: i32 = 42" & LF
+         & "mut saved: ptr i32 = ptr(4096)" & LF
+         & "retain: (escaping value: ptr i32) -> none = saved = value"
+         & " end retain" & LF
+         & "use: (value: i32) -> none = end use" & LF
+         & "may_fail: () -> none ! problem = fail problem end may_fail" & LF
+         & "may_fail_with: (value: i32) -> none ! problem = fail"
+         & " problem end may_fail_with" & LF
+         & "number_fail: () -> (r: i32) ! problem = fail problem end"
+         & " number_fail" & LF
+         & "f: () -> none ! problem = local: i32 = 42 undo retain(addr"
+         & " local) fail problem end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("non-escaping parameter",
+         "problem: atom" & LF
+         & "anchor: i32 = 42" & LF
+         & "mut saved: ptr i32 = ptr(4096)" & LF
+         & "retain: (escaping value: ptr i32) -> none = saved = value"
+         & " end retain" & LF
+         & "use: (value: i32) -> none = end use" & LF
+         & "may_fail: () -> none ! problem = fail problem end may_fail" & LF
+         & "may_fail_with: (value: i32) -> none ! problem = fail"
+         & " problem end may_fail_with" & LF
+         & "number_fail: () -> (r: i32) ! problem = fail problem end"
+         & " number_fail" & LF
+         & "f: (value: ptr i32) -> none ! problem = undo retain(value)"
+         & " try may_fail() end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("escaping parameter",
+         "problem: atom" & LF
+         & "anchor: i32 = 42" & LF
+         & "mut saved: ptr i32 = ptr(4096)" & LF
+         & "retain: (escaping value: ptr i32) -> none = saved = value"
+         & " end retain" & LF
+         & "use: (value: i32) -> none = end use" & LF
+         & "may_fail: () -> none ! problem = fail problem end may_fail" & LF
+         & "may_fail_with: (value: i32) -> none ! problem = fail"
+         & " problem end may_fail_with" & LF
+         & "number_fail: () -> (r: i32) ! problem = fail problem end"
+         & " number_fail" & LF
+         & "f: (escaping value: ptr i32) -> none ! problem = undo"
+         & " retain(value) try may_fail() end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("static reference",
+         "problem: atom" & LF
+         & "anchor: i32 = 42" & LF
+         & "mut saved: ptr i32 = ptr(4096)" & LF
+         & "retain: (escaping value: ptr i32) -> none = saved = value"
+         & " end retain" & LF
+         & "use: (value: i32) -> none = end use" & LF
+         & "may_fail: () -> none ! problem = fail problem end may_fail" & LF
+         & "may_fail_with: (value: i32) -> none ! problem = fail"
+         & " problem end may_fail_with" & LF
+         & "number_fail: () -> (r: i32) ! problem = fail problem end"
+         & " number_fail" & LF
+         & "f: () -> none ! problem = undo retain(addr anchor) try"
+         & " may_fail() end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("undo skips success",
+         "problem: atom" & LF
+         & "anchor: i32 = 42" & LF
+         & "mut saved: ptr i32 = ptr(4096)" & LF
+         & "retain: (escaping value: ptr i32) -> none = saved = value"
+         & " end retain" & LF
+         & "use: (value: i32) -> none = end use" & LF
+         & "may_fail: () -> none ! problem = fail problem end may_fail" & LF
+         & "may_fail_with: (value: i32) -> none ! problem = fail"
+         & " problem end may_fail_with" & LF
+         & "number_fail: () -> (r: i32) ! problem = fail problem end"
+         & " number_fail" & LF
+         & "f: () -> none ! problem = local: i32 = 42 undo retain(addr"
+         & " local) return end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("recovered call does not propagate",
+         "problem: atom" & LF
+         & "anchor: i32 = 42" & LF
+         & "mut saved: ptr i32 = ptr(4096)" & LF
+         & "retain: (escaping value: ptr i32) -> none = saved = value"
+         & " end retain" & LF
+         & "use: (value: i32) -> none = end use" & LF
+         & "may_fail: () -> none ! problem = fail problem end may_fail" & LF
+         & "may_fail_with: (value: i32) -> none ! problem = fail"
+         & " problem end may_fail_with" & LF
+         & "number_fail: () -> (r: i32) ! problem = fail problem end"
+         & " number_fail" & LF
+         & "f: () -> none ! problem = local: i32 = 42 undo retain(addr"
+         & " local) may_fail() else 0 return end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("nested try",
+         "problem: atom" & LF
+         & "anchor: i32 = 42" & LF
+         & "mut saved: ptr i32 = ptr(4096)" & LF
+         & "retain: (escaping value: ptr i32) -> none = saved = value"
+         & " end retain" & LF
+         & "use: (value: i32) -> none = end use" & LF
+         & "may_fail: () -> none ! problem = fail problem end may_fail" & LF
+         & "may_fail_with: (value: i32) -> none ! problem = fail"
+         & " problem end may_fail_with" & LF
+         & "number_fail: () -> (r: i32) ! problem = fail problem end"
+         & " number_fail" & LF
+         & "f: () -> none ! problem = local: i32 = 42 undo retain(addr"
+         & " local) value: i32 = 1 + try number_fail() end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("labelled try",
+         "problem: atom" & LF
+         & "anchor: i32 = 42" & LF
+         & "mut saved: ptr i32 = ptr(4096)" & LF
+         & "retain: (escaping value: ptr i32) -> none = saved = value"
+         & " end retain" & LF
+         & "use: (value: i32) -> none = end use" & LF
+         & "may_fail: () -> none ! problem = fail problem end may_fail" & LF
+         & "may_fail_with: (value: i32) -> none ! problem = fail"
+         & " problem end may_fail_with" & LF
+         & "number_fail: () -> (r: i32) ! problem = fail problem end"
+         & " number_fail" & LF
+         & "f: () -> none ! problem = local: i32 = 42 undo retain(addr"
+         & " local) try may_fail_with(value: 0) end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("failure origins do not leak into success",
+         "problem: atom" & LF
+         & "anchor: i32 = 42" & LF
+         & "mut saved: ptr i32 = ptr(4096)" & LF
+         & "retain: (escaping value: ptr i32) -> none = saved = value"
+         & " end retain" & LF
+         & "use: (value: i32) -> none = end use" & LF
+         & "may_fail: () -> none ! problem = fail problem end may_fail" & LF
+         & "may_fail_with: (value: i32) -> none ! problem = fail"
+         & " problem end may_fail_with" & LF
+         & "number_fail: () -> (r: i32) ! problem = fail problem end"
+         & " number_fail" & LF
+         & "f: () -> (r: ptr i32) ! problem = local: i32 = 42 mut view:"
+         & " ptr i32 = addr anchor undo use(begin view = addr local 1"
+         & " end) try may_fail() r = view end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("failure restoration does not excuse success",
+         "problem: atom" & LF
+         & "anchor: i32 = 42" & LF
+         & "mut saved: ptr i32 = ptr(4096)" & LF
+         & "retain: (escaping value: ptr i32) -> none = saved = value"
+         & " end retain" & LF
+         & "use: (value: i32) -> none = end use" & LF
+         & "may_fail: () -> none ! problem = fail problem end may_fail" & LF
+         & "may_fail_with: (value: i32) -> none ! problem = fail"
+         & " problem end may_fail_with" & LF
+         & "number_fail: () -> (r: i32) ! problem = fail problem end"
+         & " number_fail" & LF
+         & "f: () -> (r: ptr i32) ! problem = local: i32 = 42 mut view:"
+         & " ptr i32 = addr local undo use(begin view = addr anchor 1"
+         & " end) try may_fail() r = view end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("failure uses post-argument origins",
+         "problem: atom" & LF
+         & "anchor: i32 = 42" & LF
+         & "mut saved: ptr i32 = ptr(4096)" & LF
+         & "retain: (escaping value: ptr i32) -> none = saved = value"
+         & " end retain" & LF
+         & "use: (value: i32) -> none = end use" & LF
+         & "may_fail: () -> none ! problem = fail problem end may_fail" & LF
+         & "may_fail_with: (value: i32) -> none ! problem = fail"
+         & " problem end may_fail_with" & LF
+         & "number_fail: () -> (r: i32) ! problem = fail problem end"
+         & " number_fail" & LF
+         & "f: () -> none ! problem = local: i32 = 42 mut view: ptr i32"
+         & " = addr anchor undo retain(view) try may_fail_with(begin"
+         & " view = addr local 1 end) end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("argument return prevents the call",
+         "problem: atom" & LF
+         & "anchor: i32 = 42" & LF
+         & "mut saved: ptr i32 = ptr(4096)" & LF
+         & "retain: (escaping value: ptr i32) -> none = saved = value"
+         & " end retain" & LF
+         & "use: (value: i32) -> none = end use" & LF
+         & "may_fail: () -> none ! problem = fail problem end may_fail" & LF
+         & "may_fail_with: (value: i32) -> none ! problem = fail"
+         & " problem end may_fail_with" & LF
+         & "number_fail: () -> (r: i32) ! problem = fail problem end"
+         & " number_fail" & LF
+         & "f: () -> none ! problem = local: i32 = 42 undo retain(addr"
+         & " local) try may_fail_with(begin return end) end f" & LF,
+         Accepted => True);
+   end Try_Failures_Check_Reference_Cleanups;
+
+   procedure Joined_Destinations_Keep_Escape_Obligations
+     (Item : in out Landin.Testing.Context);
+
+   procedure Joined_Destinations_Keep_Escape_Obligations
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Source
+        (Label, Text : String; Accepted : Boolean);
+
+      procedure Check_Source
+        (Label, Text : String; Accepted : Boolean)
+      is
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Order : Landin.Stages.Pipeline;
+         Ran : Natural;
+         Src : Landin.Source.Source_Id;
+         pragma Unreferenced (Src);
+      begin
+         Src := Landin.Stages.Add_Source (Work, "joined-facts.ldn", Text);
+         Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
+         Landin.Stages.Append (Order, Names'Access);
+         Landin.Stages.Append (Order, Checker'Access);
+         Ran := Landin.Stages.Run (Order, Work);
+         declare
+            Reports : constant Landin.Diagnostics.Diagnostic_List :=
+              Landin.Stages.Report (Work);
+         begin
+            Landin.Testing.Check_Equal (Item, Ran, 4, Label & " reaches flow");
+            Landin.Testing.Check
+              (Item, Landin.Stages.Failed (Work) /= Accepted
+                 and then
+                   (if Accepted then Landin.Diagnostics.Count (Reports) = 0
+                    else Landin.Diagnostics.Count (Reports) = 1
+                      and then Landin.Diagnostics.Code
+                        (Landin.Diagnostics.Get (Reports, 1)) = "L0314"),
+               Label & " has its exact origin or assignment verdict");
+         end;
+      end Check_Source;
+   begin
+      Check_Source
+        ("frame and caller",
+         "anchor: i32 = 42" & LF
+         & "mut module_slot: ptr i32 = ptr(4096)" & LF
+         & "f: (inout out: ptr i32, flag: bool) -> none =" & LF
+         & "mut spare: ptr i32 = addr anchor" & LF
+         & "mut view: ptr mut ptr i32 = addr spare" & LF
+         & "if flag then view = addr out end if" & LF
+         & "inner: i32 = 1" & LF
+         & "view.val = addr inner" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("caller directly",
+         "anchor: i32 = 42" & LF
+         & "mut module_slot: ptr i32 = ptr(4096)" & LF
+         & "f: (inout out: ptr i32) -> none =" & LF
+         & "view: ptr mut ptr i32 = addr out" & LF
+         & "inner: i32 = 1" & LF
+         & "view.val = addr inner" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("frame only",
+         "anchor: i32 = 42" & LF
+         & "mut module_slot: ptr i32 = ptr(4096)" & LF
+         & "f: () -> none =" & LF
+         & "mut spare: ptr i32 = addr anchor" & LF
+         & "mut view: ptr mut ptr i32 = addr spare" & LF
+         & "inner: i32 = 1" & LF
+         & "view.val = addr inner" & LF
+         & "end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("two frame alternatives",
+         "anchor: i32 = 42" & LF
+         & "mut module_slot: ptr i32 = ptr(4096)" & LF
+         & "f: (flag: bool) -> none =" & LF
+         & "mut spare: ptr i32 = addr anchor" & LF
+         & "mut view: ptr mut ptr i32 = addr spare" & LF
+         & "mut other: ptr i32 = addr anchor" & LF
+         & "if flag then view = addr other end if" & LF
+         & "inner: i32 = 1" & LF
+         & "view.val = addr inner" & LF
+         & "end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("frame and module",
+         "anchor: i32 = 42" & LF
+         & "mut module_slot: ptr i32 = ptr(4096)" & LF
+         & "f: (flag: bool) -> none =" & LF
+         & "mut spare: ptr i32 = addr anchor" & LF
+         & "mut view: ptr mut ptr i32 = addr spare" & LF
+         & "if flag then view = addr module_slot end if" & LF
+         & "inner: i32 = 1" & LF
+         & "view.val = addr inner" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("module and frame reversed",
+         "anchor: i32 = 42" & LF
+         & "mut module_slot: ptr i32 = ptr(4096)" & LF
+         & "f: (flag: bool) -> none =" & LF
+         & "mut spare: ptr i32 = addr anchor" & LF
+         & "mut view: ptr mut ptr i32 = addr module_slot" & LF
+         & "if flag then view = addr spare end if" & LF
+         & "inner: i32 = 1" & LF
+         & "view.val = addr inner" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("parameter alternatives",
+         "anchor: i32 = 42" & LF
+         & "mut module_slot: ptr i32 = ptr(4096)" & LF
+         & "f: (inout a: ptr i32, inout b: ptr i32, flag: bool) -> "
+         & "none =" & LF
+         & "mut view: ptr mut ptr i32 = addr a" & LF
+         & "if flag then view = addr b end if" & LF
+         & "view.val = a" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("parameter alternatives reversed",
+         "anchor: i32 = 42" & LF
+         & "mut module_slot: ptr i32 = ptr(4096)" & LF
+         & "f: (inout a: ptr i32, inout b: ptr i32, flag: bool) -> "
+         & "none =" & LF
+         & "mut view: ptr mut ptr i32 = addr b" & LF
+         & "if flag then view = addr a end if" & LF
+         & "view.val = a" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("same parameter",
+         "anchor: i32 = 42" & LF
+         & "mut module_slot: ptr i32 = ptr(4096)" & LF
+         & "f: (inout a: ptr i32) -> none =" & LF
+         & "view: ptr mut ptr i32 = addr a" & LF
+         & "view.val = a" & LF
+         & "end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("same parameter and frame",
+         "anchor: i32 = 42" & LF
+         & "mut module_slot: ptr i32 = ptr(4096)" & LF
+         & "f: (inout a: ptr i32, flag: bool) -> none =" & LF
+         & "mut spare: ptr i32 = addr anchor" & LF
+         & "mut view: ptr mut ptr i32 = addr spare" & LF
+         & "if flag then view = addr a end if" & LF
+         & "view.val = a" & LF
+         & "end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("other parameter and frame",
+         "anchor: i32 = 42" & LF
+         & "mut module_slot: ptr i32 = ptr(4096)" & LF
+         & "f: (a: ptr i32, inout b: ptr i32, flag: bool) -> none =" & LF
+         & "mut spare: ptr i32 = addr anchor" & LF
+         & "mut view: ptr mut ptr i32 = addr spare" & LF
+         & "if flag then view = addr b end if" & LF
+         & "view.val = a" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("same parameter and module",
+         "anchor: i32 = 42" & LF
+         & "mut module_slot: ptr i32 = ptr(4096)" & LF
+         & "f: (inout a: ptr i32, flag: bool) -> none =" & LF
+         & "mut view: ptr mut ptr i32 = addr a" & LF
+         & "if flag then view = addr module_slot end if" & LF
+         & "view.val = a" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("escaping parameter across destinations",
+         "anchor: i32 = 42" & LF
+         & "mut module_slot: ptr i32 = ptr(4096)" & LF
+         & "f: (escaping a: ptr i32, inout b: ptr i32, flag: bool) "
+         & "-> none =" & LF
+         & "mut spare: ptr i32 = addr anchor" & LF
+         & "mut view: ptr mut ptr i32 = addr spare" & LF
+         & "if flag then view = addr b end if" & LF
+         & "view.val = a" & LF
+         & "end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("pure untracked destination",
+         "anchor: i32 = 42" & LF
+         & "mut module_slot: ptr i32 = ptr(4096)" & LF
+         & "f: () -> none =" & LF
+         & "view: ptr mut ptr i32 = ptr(4096)" & LF
+         & "inner: i32 = 1" & LF
+         & "view.val = addr inner" & LF
+         & "end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("untracked and caller",
+         "anchor: i32 = 42" & LF
+         & "mut module_slot: ptr i32 = ptr(4096)" & LF
+         & "f: (inout out: ptr i32, flag: bool) -> none =" & LF
+         & "mut view: ptr mut ptr i32 = ptr(4096)" & LF
+         & "if flag then view = addr out end if" & LF
+         & "inner: i32 = 1" & LF
+         & "view.val = addr inner" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("untracked and module",
+         "anchor: i32 = 42" & LF
+         & "mut module_slot: ptr i32 = ptr(4096)" & LF
+         & "f: (flag: bool) -> none =" & LF
+         & "mut view: ptr mut ptr i32 = ptr(4096)" & LF
+         & "if flag then view = addr module_slot end if" & LF
+         & "inner: i32 = 1" & LF
+         & "view.val = addr inner" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("control value destination",
+         "anchor: i32 = 42" & LF
+         & "mut module_slot: ptr i32 = ptr(4096)" & LF
+         & "f: (inout out: ptr i32, flag: bool) -> none =" & LF
+         & "mut spare: ptr i32 = addr anchor" & LF
+         & "view: ptr mut ptr i32 =" & LF
+         & "if flag then addr spare else addr out end if" & LF
+         & "inner: i32 = 1" & LF
+         & "view.val = addr inner" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("loop destination join",
+         "anchor: i32 = 42" & LF
+         & "mut module_slot: ptr i32 = ptr(4096)" & LF
+         & "f: (inout out: ptr i32, flag: bool) -> none =" & LF
+         & "mut spare: ptr i32 = addr anchor" & LF
+         & "mut view: ptr mut ptr i32 = addr spare" & LF
+         & "while flag do view = addr out break end while" & LF
+         & "inner: i32 = 1" & LF
+         & "view.val = addr inner" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("module reference value joins frame",
+         "anchor: i32 = 42" & LF
+         & "mut module_slot: ptr i32 = ptr(4096)" & LF
+         & "f: (flag: bool) -> none =" & LF
+         & "mut spare: ptr i32 = addr anchor" & LF
+         & "mut view: ptr mut ptr i32 = addr spare" & LF
+         & "if flag then view = addr module_slot end if" & LF
+         & "view.val = addr anchor" & LF
+         & "end f" & LF,
+         Accepted => True);
+   end Joined_Destinations_Keep_Escape_Obligations;
+
+   procedure Assigned_Children_Cover_Element_Descendants
+     (Item : in out Landin.Testing.Context);
+
+   procedure Assigned_Children_Cover_Element_Descendants
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Source
+        (Label, Text : String; Accepted : Boolean);
+
+      procedure Check_Source
+        (Label, Text : String; Accepted : Boolean)
+      is
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Order : Landin.Stages.Pipeline;
+         Ran : Natural;
+         Src : Landin.Source.Source_Id;
+         pragma Unreferenced (Src);
+      begin
+         Src := Landin.Stages.Add_Source (Work, "joined-facts.ldn", Text);
+         Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
+         Landin.Stages.Append (Order, Names'Access);
+         Landin.Stages.Append (Order, Checker'Access);
+         Ran := Landin.Stages.Run (Order, Work);
+         declare
+            Reports : constant Landin.Diagnostics.Diagnostic_List :=
+              Landin.Stages.Report (Work);
+         begin
+            Landin.Testing.Check_Equal (Item, Ran, 4, Label & " reaches flow");
+            Landin.Testing.Check
+              (Item, Landin.Stages.Failed (Work) /= Accepted
+                 and then
+                   (if Accepted then Landin.Diagnostics.Count (Reports) = 0
+                    else Landin.Diagnostics.Count (Reports) = 1
+                      and then Landin.Diagnostics.Code
+                        (Landin.Diagnostics.Get (Reports, 1)) = "L0302"),
+               Label & " has its exact origin or assignment verdict");
+         end;
+      end Check_Source;
+   begin
+      Check_Source
+        ("whole child covers two leaves",
+         "inner: type = struct y: i32 z: i32 end inner" & LF
+         & "outer: type = struct x: inner sibling: inner end outer" & LF
+         & "wrap: type = struct child: outer end wrap" & LF
+         & "take: (sink value: i32) -> none = end take" & LF
+         & "f: (flag: bool) -> (r: i32) =" & LF
+         & "mut a: [2]outer" & LF
+         & "src: inner = (y: 5, z: 6)" & LF
+         & "a[0].x = src" & LF
+         & "r = a[0].x.y + a[0].x.z" & LF
+         & "end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("whole child does not cover sibling",
+         "inner: type = struct y: i32 z: i32 end inner" & LF
+         & "outer: type = struct x: inner sibling: inner end outer" & LF
+         & "wrap: type = struct child: outer end wrap" & LF
+         & "take: (sink value: i32) -> none = end take" & LF
+         & "f: (flag: bool) -> (r: i32) =" & LF
+         & "mut a: [2]outer" & LF
+         & "src: inner = (y: 5, z: 6)" & LF
+         & "a[0].x = src" & LF
+         & "r = a[0].sibling.z" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("whole child does not cover other element",
+         "inner: type = struct y: i32 z: i32 end inner" & LF
+         & "outer: type = struct x: inner sibling: inner end outer" & LF
+         & "wrap: type = struct child: outer end wrap" & LF
+         & "take: (sink value: i32) -> none = end take" & LF
+         & "f: (flag: bool) -> (r: i32) =" & LF
+         & "mut a: [2]outer" & LF
+         & "src: inner = (y: 5, z: 6)" & LF
+         & "a[0].x = src" & LF
+         & "r = a[1].x.z" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("leaf does not cover sibling",
+         "inner: type = struct y: i32 z: i32 end inner" & LF
+         & "outer: type = struct x: inner sibling: inner end outer" & LF
+         & "wrap: type = struct child: outer end wrap" & LF
+         & "take: (sink value: i32) -> none = end take" & LF
+         & "f: (flag: bool) -> (r: i32) =" & LF
+         & "mut a: [2]outer" & LF
+         & "src: inner = (y: 5, z: 6)" & LF
+         & "a[0].x.y = 5" & LF
+         & "r = a[0].x.z" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("leaf does not cover parent",
+         "inner: type = struct y: i32 z: i32 end inner" & LF
+         & "outer: type = struct x: inner sibling: inner end outer" & LF
+         & "wrap: type = struct child: outer end wrap" & LF
+         & "take: (sink value: i32) -> none = end take" & LF
+         & "f: (flag: bool) -> (r: i32) =" & LF
+         & "mut a: [2]outer" & LF
+         & "src: inner = (y: 5, z: 6)" & LF
+         & "a[0].x.y = 5" & LF
+         & "b: inner = a[0].x" & LF
+         & "r = b.y" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("deeper child covers leaves",
+         "inner: type = struct y: i32 z: i32 end inner" & LF
+         & "outer: type = struct x: inner sibling: inner end outer" & LF
+         & "wrap: type = struct child: outer end wrap" & LF
+         & "take: (sink value: i32) -> none = end take" & LF
+         & "f: (flag: bool) -> (r: i32) =" & LF
+         & "mut a: [2]wrap" & LF
+         & "src: inner = (y: 5, z: 6)" & LF
+         & "a[0].child.x = src" & LF
+         & "r = a[0].child.x.z" & LF
+         & "end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("whole and leaf edges",
+         "inner: type = struct y: i32 z: i32 end inner" & LF
+         & "outer: type = struct x: inner sibling: inner end outer" & LF
+         & "wrap: type = struct child: outer end wrap" & LF
+         & "take: (sink value: i32) -> none = end take" & LF
+         & "f: (flag: bool) -> (r: i32) =" & LF
+         & "mut a: [2]outer" & LF
+         & "src: inner = (y: 5, z: 6)" & LF
+         & "if flag then a[0].x = src" & LF
+         & "else a[0].x.z = 6 end if" & LF
+         & "r = a[0].x.z" & LF
+         & "end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("leaf and whole edges",
+         "inner: type = struct y: i32 z: i32 end inner" & LF
+         & "outer: type = struct x: inner sibling: inner end outer" & LF
+         & "wrap: type = struct child: outer end wrap" & LF
+         & "take: (sink value: i32) -> none = end take" & LF
+         & "f: (flag: bool) -> (r: i32) =" & LF
+         & "mut a: [2]outer" & LF
+         & "src: inner = (y: 5, z: 6)" & LF
+         & "if flag then a[0].x.z = 6" & LF
+         & "else a[0].x = src end if" & LF
+         & "r = a[0].x.z" & LF
+         & "end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("join keeps missing sibling unassigned",
+         "inner: type = struct y: i32 z: i32 end inner" & LF
+         & "outer: type = struct x: inner sibling: inner end outer" & LF
+         & "wrap: type = struct child: outer end wrap" & LF
+         & "take: (sink value: i32) -> none = end take" & LF
+         & "f: (flag: bool) -> (r: i32) =" & LF
+         & "mut a: [2]outer" & LF
+         & "src: inner = (y: 5, z: 6)" & LF
+         & "if flag then a[0].x = src" & LF
+         & "else a[0].x.z = 6 end if" & LF
+         & "r = a[0].x.y" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("consumed descendant stays dead",
+         "inner: type = struct y: i32 z: i32 end inner" & LF
+         & "outer: type = struct x: inner sibling: inner end outer" & LF
+         & "wrap: type = struct child: outer end wrap" & LF
+         & "take: (sink value: i32) -> none = end take" & LF
+         & "f: (flag: bool) -> (r: i32) =" & LF
+         & "mut a: [2]outer" & LF
+         & "src: inner = (y: 5, z: 6)" & LF
+         & "a[0].x = src" & LF
+         & "take(a[0].x.y)" & LF
+         & "r = a[0].x.y" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("whole child restores consumed descendant",
+         "inner: type = struct y: i32 z: i32 end inner" & LF
+         & "outer: type = struct x: inner sibling: inner end outer" & LF
+         & "wrap: type = struct child: outer end wrap" & LF
+         & "take: (sink value: i32) -> none = end take" & LF
+         & "f: (flag: bool) -> (r: i32) =" & LF
+         & "mut a: [2]outer" & LF
+         & "src: inner = (y: 5, z: 6)" & LF
+         & "a[0].x = src" & LF
+         & "take(a[0].x.y)" & LF
+         & "a[0].x = src" & LF
+         & "r = a[0].x.y" & LF
+         & "end f" & LF,
+         Accepted => True);
+   end Assigned_Children_Cover_Element_Descendants;
+
    procedure Match_Aliases_Keep_Backing_Origins
      (Item : in out Landin.Testing.Context);
 
@@ -7113,6 +7832,309 @@ package body Landin.Tests.Checking_Suite is
          Accepted => False);
    end Control_Edges_Merge_Only_Fallthrough;
 
+   --  R4.91: runtime calls carry consumption and failure edges through
+   --  enclosing expressions; measurement and callback bodies stay unevaluated.
+   procedure Nested_Calls_Retain_Flow_Effects
+     (Item : in out Landin.Testing.Context);
+
+   procedure Nested_Calls_Retain_Flow_Effects
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Source
+        (Label, Text : String; Accepted : Boolean);
+
+      procedure Check_Source
+        (Label, Text : String; Accepted : Boolean)
+      is
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Order : Landin.Stages.Pipeline;
+         Ran : Natural;
+         Src : Landin.Source.Source_Id;
+         pragma Unreferenced (Src);
+      begin
+         Src := Landin.Stages.Add_Source (Work, "nested-flow.ldn", Text);
+         Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
+         Landin.Stages.Append (Order, Names'Access);
+         Landin.Stages.Append (Order, Checker'Access);
+         Ran := Landin.Stages.Run (Order, Work);
+         declare
+            Reports : constant Landin.Diagnostics.Diagnostic_List :=
+              Landin.Stages.Report (Work);
+         begin
+            Landin.Testing.Check_Equal (Item, Ran, 4, Label & " reaches flow");
+            Landin.Testing.Check
+              (Item, Landin.Stages.Failed (Work) /= Accepted
+                 and then
+                   (if Accepted then Landin.Diagnostics.Count (Reports) = 0
+                    else Landin.Diagnostics.Count (Reports) = 1
+                      and then Landin.Diagnostics.Code
+                        (Landin.Diagnostics.Get (Reports, 1)) = "L0302"),
+               Label & " retains its exact assignment verdict");
+         end;
+      end Check_Source;
+
+      Prefix : constant String :=
+        "unavailable: atom" & LF
+         & "box: type = struct value: i32 end box" & LF
+         & "consume: (sink value: i32) -> (r: i32) =" & LF
+         & "    r = value end consume" & LF
+         & "use: (value: i32, other: i32) -> none = end use" & LF
+         & "observe: (value: i32) -> none = end observe" & LF
+         & "restore: (inout value: i32) -> none = value = 7 end restore" & LF
+         & "fallible: (sink value: i32) -> (r: i32) ! unavailable =" & LF
+         & "    fail unavailable when value == 0" & LF
+         & "    r = value" & LF
+         & "end fallible" & LF
+         & "slice_consumer: (sink view: []i32) -> none =" & LF
+         & "end slice_consumer" & LF
+         & "holder: type = struct view: []i32 end holder" & LF;
+   begin
+      Check_Source
+        ("labelled read", Prefix
+         & "f: () -> (r: i32) =" & LF
+         & "later: i32" & LF
+         & "use(value: 1, other: later)" & LF
+         & "r = 0" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("labelled initialized", Prefix
+         & "f: () -> (r: i32) =" & LF
+         & "later: i32 = 2" & LF
+         & "use(value: 1, other: later)" & LF
+         & "r = 0" & LF
+         & "end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("labelled sink", Prefix
+         & "f: () -> (r: i32) =" & LF
+         & "mut v: i32 = 1" & LF
+         & "_ = consume(value: v)" & LF
+         & "r = v" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("labelled sink statement", Prefix
+         & "take: (sink value: i32, tag: i32) -> none = end take" & LF
+         & "f: () -> (r: i32) =" & LF
+         & "mut v: i32 = 1" & LF
+         & "take(tag: 0, value: v)" & LF
+         & "r = v" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("discarded sink", Prefix
+         & "f: () -> (r: i32) =" & LF
+         & "mut v: i32 = 1" & LF
+         & "_ = consume(v)" & LF
+         & "r = v" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("binary sink", Prefix
+         & "f: () -> (r: i32) =" & LF
+         & "mut v: i32 = 1" & LF
+         & "n: i32 = 1 + consume(v)" & LF
+         & "r = v + n" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("argument order", Prefix
+         & "f: () -> (r: i32) =" & LF
+         & "mut v: i32 = 1" & LF
+         & "use(consume(v), v)" & LF
+         & "r = 0" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("labelled argument order", Prefix
+         & "f: () -> (r: i32) =" & LF
+         & "mut v: i32 = 1" & LF
+         & "use(other: consume(v), value: v)" & LF
+         & "r = 0" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("array element sink", Prefix
+         & "f: () -> (r: i32) =" & LF
+         & "mut v: i32 = 1" & LF
+         & "a: [1]i32 = [consume(v)]" & LF
+         & "r = v" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("constructed field sink", Prefix
+         & "f: () -> (r: i32) =" & LF
+         & "mut v: i32 = 1" & LF
+         & "b: box = (value: consume(v))" & LF
+         & "r = v" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("short circuit sink", Prefix
+         & "f: (flag: bool) -> (r: bool) =" & LF
+         & "mut v: i32 = 1" & LF
+         & "r = flag and (consume(v) == 0)" & LF
+         & "_ = v" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("restored nested sink", Prefix
+         & "f: () -> (r: i32) =" & LF
+         & "mut v: i32 = 1" & LF
+         & "_ = 1 + consume(v)" & LF
+         & "v = 7" & LF
+         & "r = v" & LF
+         & "end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("measured literal does not consume", Prefix
+         & "f: () -> (r: i32) =" & LF
+         & "mut v: i32 = 1" & LF
+         & "r = i32(lenof ([consume(v)])) + v" & LF
+         & "end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("measured literal does not read", Prefix
+         & "f: () -> (r: i32) =" & LF
+         & "v: i32" & LF
+         & "r = i32(lenof ([consume(v)]))" & LF
+         & "end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("fixed length does not read", Prefix
+         & "f: () -> (r: i32) =" & LF
+         & "a: [2]i32" & LF
+         & "r = i32(lenof a)" & LF
+         & "end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("slice length reads", Prefix
+         & "f: () -> (r: i32) =" & LF
+         & "s: []i32" & LF
+         & "r = i32(lenof s)" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("slice length after sink", Prefix
+         & "f: (s: []i32) -> (r: i32) =" & LF
+         & "slice_consumer(s)" & LF
+         & "r = i32(lenof s)" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("slice index after sink", Prefix
+         & "f: (s: []i32) -> (r: i32) =" & LF
+         & "slice_consumer(s)" & LF
+         & "r = s[0]" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("nested try restores only success", Prefix
+         & "f: (inout v: i32) -> none ! unavailable =" & LF
+         & "_ = 1 + try fallible(v)" & LF
+         & "v = 7" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("nested try undo restores", Prefix
+         & "f: (inout v: i32) -> none ! unavailable =" & LF
+         & "undo observe(begin v = 7 0 end)" & LF
+         & "_ = 1 + try fallible(v)" & LF
+         & "v = 7" & LF
+         & "end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("nested try undo reads", Prefix
+         & "f: (v: i32) -> (r: i32) ! unavailable =" & LF
+         & "mut later: i32" & LF
+         & "undo observe(later)" & LF
+         & "r = 1 + try fallible(v)" & LF
+         & "later = 7" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("index sink", Prefix
+         & "f: () -> (r: i32) =" & LF
+         & "mut v: i32 = 0" & LF
+         & "a: [1]i32 = [42]" & LF
+         & "_ = a[usize(consume(v))]" & LF
+         & "r = v" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("indexed field sink", Prefix
+         & "f: () -> (r: i32) =" & LF
+         & "mut v: i32 = 0" & LF
+         & "mut a: [1]box = [box(value: 42)]" & LF
+         & "_ = a[usize(consume(v))].value" & LF
+         & "r = v" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("slice receiver sink", Prefix
+         & "f: (s: []i32) -> (r: i32) =" & LF
+         & "mut v: i32 = 0" & LF
+         & "a: [1]holder = [holder(view: s)]" & LF
+         & "_ = a[usize(consume(v))].view[0]" & LF
+         & "r = v" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("anonymous body checked separately", Prefix
+         & "f: () -> (r: i32) =" & LF
+         & "cb: () -> (r: i32) = () -> (r: i32) =" & LF
+         & "mut v: i32 = 1" & LF
+         & "r = consume(v)" & LF
+         & "end" & LF
+         & "r = cb()" & LF
+         & "end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("indexed field destination consumes", Prefix
+         & "f: () -> (r: i32) = mut v: i32 = 0" & LF
+         & "mut a: [1]box = [box(value: 42)]" & LF
+         & "a[usize(consume(v))].value = 1" & LF
+         & "r = v end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("destination effects precede assigned value", Prefix
+         & "f: () -> (r: i32) = mut v: i32 = 0" & LF
+         & "mut a: [1]box = [box(value: 42)]" & LF
+         & "a[usize(consume(v))].value = v" & LF
+         & "r = 0 end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("compound index read is reported once", Prefix
+         & "f: () -> (r: i32) = index: usize" & LF
+         & "mut a: [1]box = [box(value: 42)]" & LF
+         & "a[index].value += 1" & LF
+         & "r = 0 end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("field destination does not read its contents", Prefix
+         & "f: () -> (r: i32) = mut b: box" & LF
+         & "b.value = 7 r = b.value end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("slice sibling stays live", Prefix
+         & "f: (s: []mut i32) -> (r: i32) =" & LF
+         & "_ = consume(s[0]) r = s[1] end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("consumed slice element stays dead", Prefix
+         & "f: (s: []mut i32) -> (r: i32) =" & LF
+         & "_ = consume(s[0]) r = s[0] end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("slice length does not read elements", Prefix
+         & "f: (s: []mut i32) -> (r: usize) =" & LF
+         & "_ = consume(s[0]) r = lenof s end f" & LF,
+         Accepted => True);
+   end Nested_Calls_Retain_Flow_Effects;
+
    --  [1100] registers syntax rather than an evaluated value, but ordinary
    --  call checking still fixes the complete direct or indirect signature
    --  and any stored result shape where the statement is written.
@@ -9294,8 +10316,71 @@ package body Landin.Tests.Checking_Suite is
          "the initial image of `first` is worked out from itself", "L0305");
    end R440_Recursive_Source_Contexts;
 
+   procedure Variant_Array_Elements_Keep_Case_Identity
+     (Item : in out Landin.Testing.Context);
+
+   procedure Variant_Array_Elements_Keep_Case_Identity
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Ran : Natural;
+      Src : Landin.Source.Source_Id;
+      Seen : Natural := 0;
+   begin
+      Src := Landin.Stages.Add_Source
+        (Work, "variant-array.ldn",
+         "choice: type = struct" & LF
+         & " kind: variant pair: (first: i32, second: i32)"
+         & " | empty end kind" & LF & "end choice" & LF
+         & "f: () -> none =" & LF
+         & " mut values: [2]choice ="
+         & " [(kind: pair(first: 40, second: 2)), (kind: empty)]" & LF
+         & "end f" & LF);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Configurer'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Landin.Stages.Append (Order, Checker'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+      Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "variant-valued array literals are accepted");
+      declare
+         Tree : constant not null access constant Landin.Syntax.Tree :=
+           Landin.Syntax.Forest.Tree_Of
+             (Landin.Stages.Trees (Work).all, Src);
+         Types : constant not null access Landin.Checking.Table :=
+           Landin.Stages.Types (Work);
+      begin
+         for Node in Landin.Syntax.Node_Id'(1)
+           .. Landin.Syntax.Last_Node (Tree.all)
+         loop
+            if Landin.Syntax.Kind (Tree.all, Node)
+                 = Landin.Syntax.Field_Value
+              and then Landin.Source.Names.Spelling
+                (Landin.Stages.Identities (Work).all,
+                 Landin.Syntax.Name (Tree.all, Node)) = "kind"
+            then
+               Seen := Seen + 1;
+               Landin.Testing.Check_Equal
+                 (Item, Landin.Checking.Field_Index
+                    (Types.all, Tree.all,
+                     Landin.Syntax.Value_Of (Tree.all, Node)),
+                  Seen, "each array element retains its selected case");
+            end if;
+         end loop;
+      end;
+      Landin.Testing.Check_Equal
+        (Item, Seen, 2, "both variant initializers were inspected");
+   end Variant_Array_Elements_Keep_Case_Identity;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "checking", "variant arrays retain case identities",
+         Variant_Array_Elements_Keep_Case_Identity'Access);
       Landin.Testing.Register
         (Into, "checking", "union aliases keep exact instance keys",
          Union_Aliases_Keep_Exact_Instance_Keys'Access);
@@ -9305,6 +10390,15 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Register
         (Into, "checking", "R4.70 field ranges keep recursive children",
          R470_Field_Ranges_Keep_Recursive_Children'Access);
+      Landin.Testing.Register
+        (Into, "checking", "try failures check reference cleanups",
+         Try_Failures_Check_Reference_Cleanups'Access);
+      Landin.Testing.Register
+        (Into, "checking", "joined destinations keep escape obligations",
+         Joined_Destinations_Keep_Escape_Obligations'Access);
+      Landin.Testing.Register
+        (Into, "checking", "assigned children cover element descendants",
+         Assigned_Children_Cover_Element_Descendants'Access);
       Landin.Testing.Register
         (Into, "checking", "match aliases keep backing origins",
          Match_Aliases_Keep_Backing_Origins'Access);
@@ -9537,6 +10631,9 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Register
         (Into, "checking", "control edges merge only fallthrough",
          Control_Edges_Merge_Only_Fallthrough'Access);
+      Landin.Testing.Register
+        (Into, "checking", "nested calls retain flow effects",
+         Nested_Calls_Retain_Flow_Effects'Access);
       Landin.Testing.Register
         (Into, "checking", "deferred calls are typed at registration",
          Deferred_Calls_Are_Typed_At_Registration'Access);

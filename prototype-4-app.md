@@ -40,13 +40,22 @@ an ordinary `core/region` allocator over an explicit provider, with explicit
 bulk cleanup; its allocations keep [0790]'s independent results. The compiler
 does not promise transitive lifetime checks for those results. Direct tracked
 references, source-derived views, and erased callback state retain their
-existing local checks. The historical W7 finding remains unedited.
+existing local checks. In particular, [1910] rejects retaining a frame or
+non-escaping reference by writing through a caller's pointer, slice or inout
+field. A known local alias cannot conceal that stored origin. This preserves
+the retained text and callback obligations shared with prototypes 2 and 3;
+independent allocator results and same-origin updates remain permitted.
+The historical W7 finding remains unedited.
 
 The bounded memory-world pressure uses ordinary `core/io.memory` with explicit
 caller file tables, output/error buffers and injected argument descriptors.
 Its nonempty reads distinguish EOF from zero-progress failure; partial writes
 retain their completed prefix, and a close error still consumes valid open
 state. Source-derived output and argument views retain local origin checks.
+If a handle is consumed out of an `inout` reader, [0910] requires replacement
+even when close fails and its caller recovers; consuming the whole reader by
+`sink` leaves no such returned-storage obligation. Applicable cleanup can
+restore a field before that exit check.
 Descriptors, nested backing, nonoverlap and copied-handle validity remain
 manual obligations under D153. Small complete library clients exercise these
 contracts. The complete R4.80 derivative is `examples/derived_hosted`, whose

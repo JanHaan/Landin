@@ -1,0 +1,110 @@
+error[L0315]: this may replace a variant while its payload storage is still in use
+  --> ../tests/fixtures/negative/r491-live-payload-aliases/main.ldn:13:13
+   |
+13 |             value.kind = empty
+   |             ^^^^^^^^^^
+  --> ../tests/fixtures/negative/r491-live-payload-aliases/main.ldn:12:14
+   |
+12 |         pair(first, inout second): begin
+   |              ^^^^^ the live payload alias or derived view
+  = note: D78/D85: payload aliases refer to the selected case's storage
+error[L0315]: this may replace a variant while its payload storage is still in use
+  --> ../tests/fixtures/negative/r491-live-payload-aliases/main.ldn:24:13
+   |
+24 |             value.kind = empty
+   |             ^^^^^^^^^^
+  --> ../tests/fixtures/negative/r491-live-payload-aliases/main.ldn:23:27
+   |
+23 |         pair(first, inout second): begin
+   |                           ^^^^^^ the live payload alias or derived view
+  = note: D78/D85: payload aliases refer to the selected case's storage
+error[L0315]: this may replace a variant while its payload storage is still in use
+  --> ../tests/fixtures/negative/r491-live-payload-aliases/main.ldn:35:13
+   |
+35 |             value = (kind: empty)
+   |             ^^^^^
+  --> ../tests/fixtures/negative/r491-live-payload-aliases/main.ldn:34:14
+   |
+34 |         pair(first, inout second): begin
+   |              ^^^^^ the live payload alias or derived view
+  = note: D78/D85: payload aliases refer to the selected case's storage
+error[L0315]: this may replace a variant while its payload storage is still in use
+  --> ../tests/fixtures/negative/r491-live-payload-aliases/main.ldn:46:19
+   |
+46 |             clear(value)
+   |                   ^^^^^
+  --> ../tests/fixtures/negative/r491-live-payload-aliases/main.ldn:45:27
+   |
+45 |         pair(first, inout second): begin
+   |                           ^^^^^^ the live payload alias or derived view
+  = note: D78/D85: payload aliases refer to the selected case's storage
+error[L0315]: this may replace a variant while its payload storage is still in use
+  --> ../tests/fixtures/negative/r491-live-payload-aliases/main.ldn:58:13
+   |
+58 |             value.kind = empty
+   |             ^^^^^^^^^^
+  --> ../tests/fixtures/negative/r491-live-payload-aliases/main.ldn:57:13
+   |
+57 |             saved: ptr mut i32 = addr second
+   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the live payload alias or derived view
+  = note: D78/D85: payload aliases refer to the selected case's storage
+error[L0315]: this may replace a variant while its payload storage is still in use
+  --> ../tests/fixtures/negative/r491-live-payload-aliases/main.ldn:70:13
+   |
+70 |             value.kind = empty
+   |             ^^^^^^^^^^
+  --> ../tests/fixtures/negative/r491-live-payload-aliases/main.ldn:68:14
+   |
+68 |         pair(first, inout second): begin
+   |              ^^^^^ the live payload alias or derived view
+  = note: D78/D85: payload aliases refer to the selected case's storage
+error[L0315]: this may replace a variant while its payload storage is still in use
+  --> ../tests/fixtures/negative/r491-live-payload-aliases/main.ldn:81:13
+   |
+81 |             alias.val.kind = empty
+   |             ^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/r491-live-payload-aliases/main.ldn:79:27
+   |
+79 |         pair(first, inout second): begin
+   |                           ^^^^^^ the live payload alias or derived view
+  = note: D78/D85: payload aliases refer to the selected case's storage
+error[L0315]: this may replace a variant while its payload storage is still in use
+  --> ../tests/fixtures/negative/r491-live-payload-aliases/main.ldn:94:17
+   |
+94 |                 value.kind = empty
+   |                 ^^^^^^^^^^
+  --> ../tests/fixtures/negative/r491-live-payload-aliases/main.ldn:91:14
+   |
+91 |         pair(first, inout second): begin
+   |              ^^^^^ the live payload alias or derived view
+  = note: D78/D85: payload aliases refer to the selected case's storage
+error[L0315]: this may replace a variant while its payload storage is still in use
+  --> ../tests/fixtures/negative/r491-live-payload-aliases/main.ldn:106:13
+    |
+106 |             alias.val = (kind: empty)
+    |             ^^^^^^^^^
+  --> ../tests/fixtures/negative/r491-live-payload-aliases/main.ldn:105:27
+    |
+105 |         pair(first, inout second): begin
+    |                           ^^^^^^ the live payload alias or derived view
+  = note: D78/D85: payload aliases refer to the selected case's storage
+error[L0315]: this may replace a variant while its payload storage is still in use
+  --> ../tests/fixtures/negative/r491-live-payload-aliases/main.ldn:117:13
+    |
+117 |             value.kind = pair(first: first, second: second)
+    |             ^^^^^^^^^^
+  --> ../tests/fixtures/negative/r491-live-payload-aliases/main.ldn:116:14
+    |
+116 |         pair(first, second):
+    |              ^^^^^ the live payload alias or derived view
+  = note: D78/D85: payload aliases refer to the selected case's storage
+error[L0315]: this may replace a variant while its payload storage is still in use
+  --> ../tests/fixtures/negative/r491-live-payload-aliases/main.ldn:126:13
+    |
+126 |             value = (kind: pair(first: first, second: second))
+    |             ^^^^^
+  --> ../tests/fixtures/negative/r491-live-payload-aliases/main.ldn:125:14
+    |
+125 |         pair(first, second):
+    |              ^^^^^ the live payload alias or derived view
+  = note: D78/D85: payload aliases refer to the selected case's storage

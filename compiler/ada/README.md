@@ -82,7 +82,7 @@ replaced.
 | `Landin.Diagnostics.Checking` | turning a type that does not agree or a checker-recognised deferred use into a diagnostic, including the refused-type table and L0304 ownership | invent a code, a construct, or a roadmap item |
 | `Landin.Platform` | the host interfaces every effect goes through | perform an effect |
 | `Landin.Platform.Native` | the only filesystem implementation | be reached except through the interface |
-| `Landin.Platform.Native.Tools` | the only process spawning, and the only GNAT-specific unit that touches the host; `Landin.Source_Maps` and `Landin.Build_Reports.Sources` use `GNAT.SHA256` as pure computation | grow a second host concern |
+| `Landin.Platform.Native.Tools` | process supervision and capture, using its host POSIX C adapter and GNAT path/temp-file support; `Landin.Source_Maps` and `Landin.Build_Reports.Sources` use `GNAT.SHA256` as pure computation | grow a second host concern |
 | `Landin.Targets` | target facts, typed architecture identity, layout arithmetic, physical evidence-cell offsets/extents and D147 any data/table offsets, extent and alignment derived from pointer facts | ask the host how wide a pointer is |
 | `Landin.Targets.Capabilities` | which described targets have a backend and the triplet selected to finish their output | infer capability from width, invoke a tool, or canonicalise a triplet |
 | `Landin.Configuration` | D139's immutable active-declaration view after target selection and D202's request mode/overrides, option origins and ordered library requests | mutate syntax, resolve an ordinary source name, or expose a general compiler module |
@@ -654,7 +654,7 @@ aspirational names in it.
 
 ## Building
 
-The stages remain Ada 2022. One host-only C adapter,
+The stages remain Ada 2022. The host-only C adapter
 `src/platform/landin_file_identity.c`, compares the host headers' `struct stat`
 identities without transcribing Darwin and Linux structure layouts into Ada.
 `Landin.Platform.Native.Paths_Overlap` combines it with canonical path lookup
@@ -662,7 +662,17 @@ for report/source/artifact preflight, including hard links, symbolic links and
 not-yet-created output leaves. An unresolved identity is refused conservatively;
 this does not protect against concurrent filesystem replacement. No host
 identity operation determines Landin target layout or emits program code.
-The shared project builds the adapter with warnings as errors; source checksums
+`src/platform/landin_tool_process.c` owns POSIX spawn attributes and wait/signal
+constants. `Native.Tools` passes the already-open capture descriptor and
+literal argument vector, starts each tool in its own process group, and uses a
+monotonic deadline. On timeout it kills that group and reaps the direct child
+before reporting `Timed_Out`; adapter exceptions also stop an owned child.
+The group is established before execution through
+[POSIX spawn attributes](https://pubs.opengroup.org/onlinepubs/007904975/functions/posix_spawn.html).
+Descendants that deliberately leave the group are outside this supervision
+contract. The focused native tests use a short-lived child and delayed marker,
+and preserve exit/signal distinctions, argument bytes and capture modes.
+The shared project builds both adapters with warnings as errors; source checksums
 include C sources and headers as well as Ada sources.
 
 See `TOOLCHAIN.md`. From the repository root:

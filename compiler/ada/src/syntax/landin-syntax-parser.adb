@@ -27,7 +27,8 @@ package body Landin.Syntax.Parser is
    --  `source_file ::= import_declaration* declaration*` [1740].
    Declaration_Anchor : constant Tok.Kind_Set :=
      [Tok.Kw_Import | Tok.Kw_Public | Tok.Kw_Mut | Tok.Kw_Fixed
-        | Tok.Identifier
+        | Tok.Kw_Extern | Tok.Identifier | Tok.Left_Bracket
+        | Tok.Kw_Ptr | Tok.Kw_Any
         | Tok.Left_Paren | Tok.End_Of_Input => True,
       others => False];
 
@@ -517,7 +518,8 @@ package body Landin.Syntax.Parser is
                loop
                   exit when Ahead (Step) = Tok.End_Of_Input;
                   exit when Parentheses = 0 and then Brackets = 0
-                    and then Ahead (Step) in Tok.Equal | Tok.Colon;
+                    and then Ahead (Step) in Tok.Equal | Tok.Colon
+                                              | Tok.Colon_Equal;
 
                   if Parentheses = 0 and then Brackets = 0
                     and then Ahead (Step) = Tok.Identifier
@@ -953,7 +955,8 @@ package body Landin.Syntax.Parser is
                   exit when Nesting = 0
                             and then (Peek /= Tok.Identifier
                                       or else Ahead (1) in Tok.Colon
-                                                | Tok.Colon_Equal);
+                                                | Tok.Colon_Equal
+                                      or else Starts_Conformance);
                end loop;
             end Resync_Declaration;
 
@@ -966,9 +969,15 @@ package body Landin.Syntax.Parser is
                   exit when Peek = Tok.Underscore
                             and then Ahead (1) = Tok.Equal;
                   exit when Peek = Tok.Identifier
-                            and then Ahead (1) in Tok.Colon
-                                     | Tok.Colon_Equal | Tok.Equal
-                                     | Tok.Left_Paren;
+                    and then
+                      (Named_Here in Loop_Id | While_Id | For_Id
+                         | Break_Id | Continue_Id | Defer_Id | Undo_Id
+                         | Match_Id | Begin_Id
+                       or else Opens_Unchecked
+                       or else Opens_Arena_Block
+                       or else Ahead (1) in Tok.Colon | Tok.Colon_Equal
+                       or else After_Selectors in Tok.Equal
+                         | Tok.Compound_Assign | Tok.Left_Paren);
                end loop;
             end Resync_Statement;
 
@@ -1210,7 +1219,9 @@ package body Landin.Syntax.Parser is
                       Where   => Public_At,
                       Message => "`public` cannot modify an import",
                       Note    => "[1450]: an import is a per-file prelude,"
-                                 & " not a declaration");
+                                 & " not a declaration",
+                      Related => Here,
+                      Because => "the import starts here");
                   return Parse_Import (Late => True);
                end if;
 
@@ -1310,7 +1321,9 @@ package body Landin.Syntax.Parser is
                                    & " conditional",
                         Note    => "D139: a fixed conditional selects module"
                                    & " declarations; it is not a declaration"
-                                   & " with an export modifier");
+                                   & " with an export modifier",
+                        Related => Here,
+                        Because => "the fixed conditional starts here");
                   end if;
                   return Parse_Fixed_Conditional;
                end if;
@@ -3059,7 +3072,9 @@ package body Landin.Syntax.Parser is
                      Where   => Public_At,
                      Message => "`public` cannot modify a conformance",
                      Note    => "[1280]: every reached conformance belongs"
-                                & " to the whole-program register");
+                                & " to the whole-program register",
+                     Related => Here,
+                     Because => "the conformance starts here");
                end if;
 
                if Peek = Tok.Left_Paren and then not Starts_Signature then
@@ -4249,7 +4264,7 @@ package body Landin.Syntax.Parser is
                               or else Opens_Unchecked
                               or else Opens_Arena_Block)
                   then
-                     return Parse_Block (Context);
+                     return Parse_Block (Context, Allow_Value => True);
                   end if;
 
                   --  Control forms overlap statements and expressions.  A
@@ -4280,7 +4295,8 @@ package body Landin.Syntax.Parser is
                                    | Bare_Block | Loop_Statement
                                    | While_Statement | For_Statement
                         then
-                           return Parse_Block (Context, Seed => Control);
+                           return Parse_Block
+                             (Context, Seed => Control, Allow_Value => True);
                         else
                            return Control;
                         end if;
@@ -4300,7 +4316,8 @@ package body Landin.Syntax.Parser is
                            return Tried;
                         end if;
 
-                        return Parse_Block (Context, Seed => Tried);
+                        return Parse_Block
+                          (Context, Seed => Tried, Allow_Value => True);
                      end;
                   end if;
 
@@ -4340,12 +4357,13 @@ package body Landin.Syntax.Parser is
                            return Parse_Expression_From (Called);
                         end if;
 
-                        return Parse_Block (Context, Seed => Called);
+                        return Parse_Block
+                          (Context, Seed => Called, Allow_Value => True);
                      end;
                   end if;
                end if;
 
-               return Parse_Block (Context);
+               return Parse_Block (Context, Allow_Value => Context.Returns);
             end Parse_Body;
 
             --  function ::= identifier ":" signature "=" body
@@ -4686,6 +4704,7 @@ package body Landin.Syntax.Parser is
                Start : constant Landin.Source.Span := Point;
                Items : Slot_Vectors.Vector;
                Value : Node_Id := No_Node;
+               Can_Have_Value : Boolean := Allow_Value;
 
                function At_Closer return Boolean;
                function Clearly_A_Statement return Boolean;
@@ -4755,7 +4774,27 @@ package body Landin.Syntax.Parser is
                         declare
                            Candidate : constant Node_Id := Parse_Expression;
                         begin
-                           if At_Closer
+                           if not Can_Have_Value then
+                              if Kind (Result, Candidate)
+                                   in If_Statement | Match_Statement
+                                      | Bare_Block | Loop_Statement
+                                      | While_Statement | For_Statement | Call
+                                      | Labeled_Application | Try_Expression
+                              then
+                                 Items.Append (Candidate);
+                              else
+                                 Complain
+                                   (Item    => Syn.Stray_Token,
+                                    Where   => Where (Result, Candidate),
+                                    Message => "this statement prefix cannot"
+                                               & " have a final value",
+                                    Note    => "[1800]: value prefixes exclude"
+                                               & " unconditional exits and"
+                                               & " unchecked regions");
+                                 Value := Candidate;
+                                 exit;
+                              end if;
+                           elsif At_Closer
                              and then Kind (Result, Candidate)
                                       in If_Statement | Match_Statement
                                          | Bare_Block | Loop_Statement
@@ -4813,6 +4852,23 @@ package body Landin.Syntax.Parser is
                         end;
                      end if;
 
+                     if not Items.Is_Empty then
+                        declare
+                           Last : constant Node_Id := Items.Last_Element;
+                        begin
+                           if (Kind (Result, Last)
+                                 in Return_Statement | Fail_Statement
+                               and then Condition_Of (Result, Last) = No_Node)
+                             or else (Kind (Result, Last) = Bare_Block
+                               and then Is_Unchecked (Result, Last))
+                           then
+                              --  [1800]'s value_statement prefix excludes
+                              --  unconditional exits and unchecked regions.
+                              Can_Have_Value := False;
+                           end if;
+                        end;
+                     end if;
+
                      if Index = Before then
                         raise Compiler_Defect
                           with "the parser did not advance over a"
@@ -4844,6 +4900,17 @@ package body Landin.Syntax.Parser is
                end if;
 
                case Peek is
+                  when Tok.End_Of_Input =>
+                     Complain
+                       (Item    => Syn.Expression_Expected,
+                        Where   => Start,
+                        Message => "a statement is missing here",
+                        Note    => "[1810]: a statement follows its"
+                                   & " introducer",
+                        Related => Context.Owner,
+                        Because => "this function's body");
+                     return Add (Error_Statement, Start);
+
                   when Tok.Kw_Public =>
                      Complain
                        (Item    => Syn.Public_On_Statement,
@@ -4977,6 +5044,13 @@ package body Landin.Syntax.Parser is
                      end if;
                      Advance;
                      Resync_Statement;
+                     Complain
+                       (Item    => Syn.Stray_Token,
+                        Where   => Join (Start, After_Previous),
+                        Message => "this begins no statement",
+                        Note    => "[1810]: parentheses begin a statement"
+                                   & " only in a destructuring binding",
+                        Gate    => False);
                      return Add
                        (Error_Statement, Start,
                         Join (Start, After_Previous));
@@ -5230,6 +5304,13 @@ package body Landin.Syntax.Parser is
                      begin
                         Advance;
                         Resync_Statement;
+                        Complain
+                          (Item    => Syn.Stray_Token,
+                           Where   => Join (At_Bad, After_Previous),
+                           Message => "this begins no statement",
+                           Note    => "[1810]: a statement must be a binding,"
+                                      & " assignment, call or control form",
+                           Gate    => False);
                         return Add
                           (Error_Statement, At_Bad,
                            Join (Start, After_Previous));
@@ -5299,9 +5380,7 @@ package body Landin.Syntax.Parser is
                         Where   => Here,
                         Message => "an unconditional loop cannot complete",
                         Note    => "[1170]: `complete` is the edge where a"
-                          & " finite loop runs out",
-                        Related => Opened,
-                        Because => "this unconditional loop");
+                          & " finite loop runs out");
                   end if;
                   Advance;
                   Completed := Parse_Block (Context);
@@ -5535,9 +5614,7 @@ package body Landin.Syntax.Parser is
                        (Item    => Syn.Stray_Token,
                         Where   => Here,
                         Message => "`continue` cannot carry a value",
-                        Note    => "[1190]: only `break` uses `with`",
-                        Related => Starts,
-                        Because => "this loop transfer");
+                        Note    => "[1190]: only `break` uses `with`");
                   end if;
                   Advance;
                   Value := Parse_Expression;
@@ -7100,6 +7177,20 @@ package body Landin.Syntax.Parser is
                                     Children => [1 => RHS],
                                     Named    => Label,
                                     Fills    => Is_Fill));
+                              if Is_Fill
+                                and then Expression_Projection
+                                  (Result, Args.Last_Element) = No_Node
+                              then
+                                 Complain
+                                   (Item    => Syn.Expression_Expected,
+                                    Where   => Where (Result, RHS),
+                                    Message => "a construction fill requires"
+                                               & " an expression",
+                                    Note    => "[1810]: trailing `of` fills"
+                                               & " are expressions",
+                                    Related => At_Label,
+                                    Because => "the fill begins here");
+                              end if;
                            end;
                         else
                            declare

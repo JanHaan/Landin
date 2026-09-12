@@ -1,0 +1,14 @@
+cell: type (t: type) = struct value: t end cell
+ref_cell: type = cell(ptr i32)
+box: type = struct first: i32 second: ptr i32 end box
+wrapper: type = struct item: ref_cell end wrapper
+choice: type = struct
+    kind: variant pair: (first: i32, second: ptr i32) | empty end kind
+end choice
+storage: i32 = 42
+inferred := ref_cell(value: addr storage)
+typed: ref_cell = (value: addr storage)
+filled := box(first: 0, of addr storage)
+nested: wrapper = (item: (value: addr storage))
+payload: choice = (kind: pair(first: 0, second: addr storage))
+payload_fill: choice = (kind: pair(first: 0, of addr storage))

@@ -1,0 +1,70 @@
+error[L0302]: this function can reach its `end` without assigning the return `r`
+  --> ../tests/fixtures/negative/r491-function-final-value-refusals/main.ldn:2:1
+  |
+2 | none_without_result: () -> (r: i32) = local: i32 = 1 noop() end none_without_result
+  | ^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/r491-function-final-value-refusals/main.ldn:2:29
+  |
+2 | none_without_result: () -> (r: i32) = local: i32 = 1 noop() end none_without_result
+  |                             ^ declared here with no value
+  = note: [1910]: no condition is believed, so a name assigned in one arm of an `if` and not in another is not assigned after it
+error[L0302]: `r` is read here and no path that arrives assigned it
+  --> ../tests/fixtures/negative/r491-function-final-value-refusals/main.ldn:3:46
+  |
+3 | read_before_final: () -> (r: i32) = local := r 42 end read_before_final
+  |                                              ^
+  --> ../tests/fixtures/negative/r491-function-final-value-refusals/main.ldn:3:27
+  |
+3 | read_before_final: () -> (r: i32) = local := r 42 end read_before_final
+  |                           ^ declared here with no value
+  = note: [1910]: no condition is believed, so a name assigned in one arm of an `if` and not in another is not assigned after it
+error[L0302]: this returns and no path that arrives assigned the return `r`
+  --> ../tests/fixtures/negative/r491-function-final-value-refusals/main.ldn:5:5
+  |
+5 |     return when early
+  |     ^^^^^^
+  --> ../tests/fixtures/negative/r491-function-final-value-refusals/main.ldn:4:41
+  |
+4 | early_without_result: (early: bool) -> (r: i32) =
+  |                                         ^ declared here with no value
+  = note: [1910]: no condition is believed, so a name assigned in one arm of an `if` and not in another is not assigned after it
+error[L0314]: this returned reference still has frame origin
+  --> ../tests/fixtures/negative/r491-function-final-value-refusals/main.ldn:8:1
+  |
+8 | frame_result: () -> (r: ptr i32) = local: i32 = 42 addr local end frame_result
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/r491-function-final-value-refusals/main.ldn:8:36
+  |
+8 | frame_result: () -> (r: ptr i32) = local: i32 = 42 addr local end frame_result
+  |                                    ^^^^^^^^^^^^^^^ the shorter-lived reference source
+  = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`
+error[L0301]: this is `bool` and `i32` belongs here
+  --> ../tests/fixtures/negative/r491-function-final-value-refusals/main.ldn:9:37
+  |
+9 | wrong_type: () -> (r: i32) = noop() true end wrong_type
+  |                                     ^^^^
+  --> ../tests/fixtures/negative/r491-function-final-value-refusals/main.ldn:9:19
+  |
+9 | wrong_type: () -> (r: i32) = noop() true end wrong_type
+  |                   ^^^^^^^^ the returns this fills
+  = note: [1890]: two types that must agree, and [0310] converts nothing between them
+error[L0301]: this control block can fall through without producing a value
+  --> ../tests/fixtures/negative/r491-function-final-value-refusals/main.ldn:12:28
+   |
+12 |     if choose then 42 else noop() end if
+   |                            ^^^^^^
+  --> ../tests/fixtures/negative/r491-function-final-value-refusals/main.ldn:12:5
+   |
+12 |     if choose then 42 else noop() end if
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this control expression needs a value
+  = note: D124: an early return needs no joined value, but every fallthrough edge does
+error[L0301]: this control block can fall through without producing a value
+  --> ../tests/fixtures/negative/r491-function-final-value-refusals/main.ldn:16:27
+   |
+16 |     if choose then p else noop() end if
+   |                           ^^^^^^
+  --> ../tests/fixtures/negative/r491-function-final-value-refusals/main.ldn:16:5
+   |
+16 |     if choose then p else noop() end if
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this control expression needs a value
+  = note: D124: an early return needs no joined value, but every fallthrough edge does

@@ -1,0 +1,100 @@
+error[L0302]: this place was consumed by `sink` and has not been assigned again
+  --> ../tests/fixtures/negative/r491-consumed-subplace-reads/main.ldn:15:14
+   |
+15 |     result = xs[0]
+   |              ^^^^^
+  --> ../tests/fixtures/negative/r491-consumed-subplace-reads/main.ldn:13:5
+   |
+13 |     mut xs: [2]i32 = [1, 2]
+   |     ^^^^^^^^^^^^^^^^^^^^^^^ the binding containing the consumed place
+  = note: [0910]: a sunk place is dead until assignment
+error[L0302]: this place was consumed by `sink` and has not been assigned again
+  --> ../tests/fixtures/negative/r491-consumed-subplace-reads/main.ldn:22:14
+   |
+22 |     result = xs[index]
+   |              ^^^^^^^^^
+  --> ../tests/fixtures/negative/r491-consumed-subplace-reads/main.ldn:19:5
+   |
+19 |     mut xs: [2]i32 = [1, 2]
+   |     ^^^^^^^^^^^^^^^^^^^^^^^ the binding containing the consumed place
+  = note: [0910]: a sunk place is dead until assignment
+error[L0302]: this place was consumed by `sink` and has not been assigned again
+  --> ../tests/fixtures/negative/r491-consumed-subplace-reads/main.ldn:28:22
+   |
+28 |     copied: [2]i32 = xs
+   |                      ^^
+  --> ../tests/fixtures/negative/r491-consumed-subplace-reads/main.ldn:26:5
+   |
+26 |     mut xs: [2]i32 = [1, 2]
+   |     ^^^^^^^^^^^^^^^^^^^^^^^ the binding containing the consumed place
+  = note: [0910]: a sunk place is dead until assignment
+error[L0302]: this place was consumed by `sink` and has not been assigned again
+  --> ../tests/fixtures/negative/r491-consumed-subplace-reads/main.ldn:35:20
+   |
+35 |     copied: pair = value
+   |                    ^^^^^
+  --> ../tests/fixtures/negative/r491-consumed-subplace-reads/main.ldn:33:5
+   |
+33 |     mut value: pair = (first: 1, second: 2)
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the binding containing the consumed place
+  = note: [0910]: a sunk place is dead until assignment
+error[L0302]: this place was consumed by `sink` and has not been assigned again
+  --> ../tests/fixtures/negative/r491-consumed-subplace-reads/main.ldn:42:20
+   |
+42 |     copied: pair = value.child
+   |                    ^^^^^^^^^^^
+  --> ../tests/fixtures/negative/r491-consumed-subplace-reads/main.ldn:40:5
+   |
+40 |     mut value: holder = (child: (first: 1, second: 2), sibling: (first: 3, second: 4))
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the binding containing the consumed place
+  = note: [0910]: a sunk place is dead until assignment
+error[L0302]: this place was consumed by `sink` and has not been assigned again
+  --> ../tests/fixtures/negative/r491-consumed-subplace-reads/main.ldn:49:22
+   |
+49 |     copied: holder = value
+   |                      ^^^^^
+  --> ../tests/fixtures/negative/r491-consumed-subplace-reads/main.ldn:47:5
+   |
+47 |     mut value: holder = (child: (first: 1, second: 2), sibling: (first: 3, second: 4))
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the binding containing the consumed place
+  = note: [0910]: a sunk place is dead until assignment
+error[L0302]: this place was consumed by `sink` and has not been assigned again
+  --> ../tests/fixtures/negative/r491-consumed-subplace-reads/main.ldn:56:14
+   |
+56 |     result = value.child.first
+   |              ^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/r491-consumed-subplace-reads/main.ldn:54:5
+   |
+54 |     mut value: holder = (child: (first: 1, second: 2), sibling: (first: 3, second: 4))
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the binding containing the consumed place
+  = note: [0910]: a sunk place is dead until assignment
+error[L0302]: this place was consumed by `sink` and has not been assigned again
+  --> ../tests/fixtures/negative/r491-consumed-subplace-reads/main.ldn:62:20
+   |
+62 |     copied: pair = xs[0]
+   |                    ^^^^^
+  --> ../tests/fixtures/negative/r491-consumed-subplace-reads/main.ldn:60:5
+   |
+60 |     mut xs: [2]pair = [(first: 1, second: 2), (first: 3, second: 4)]
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the binding containing the consumed place
+  = note: [0910]: a sunk place is dead until assignment
+error[L0302]: this place was consumed by `sink` and has not been assigned again
+  --> ../tests/fixtures/negative/r491-consumed-subplace-reads/main.ldn:69:14
+   |
+69 |     result = xs[0].first
+   |              ^^^^^^^^^^^
+  --> ../tests/fixtures/negative/r491-consumed-subplace-reads/main.ldn:67:5
+   |
+67 |     mut xs: [2]pair = [(first: 1, second: 2), (first: 3, second: 4)]
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the binding containing the consumed place
+  = note: [0910]: a sunk place is dead until assignment
+error[L0302]: this place was consumed by `sink` and has not been assigned again
+  --> ../tests/fixtures/negative/r491-consumed-subplace-reads/main.ldn:76:14
+   |
+76 |     result = value.second
+   |              ^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/r491-consumed-subplace-reads/main.ldn:73:5
+   |
+73 |     mut value: pair = (first: 1, second: 2)
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the binding containing the consumed place
+  = note: [0910]: a sunk place is dead until assignment

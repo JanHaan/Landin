@@ -1,0 +1,6 @@
+class: runtime
+summary: function statement prefixes fill scalar shaped and reference results before cleanup and preserve none calls
+program: main.ldn
+constructs: 0410, 0520, 0790, 0880, 0930, 1010, 1080, 1100, 1800, 1910
+targets: linux-x86-64
+status: 42

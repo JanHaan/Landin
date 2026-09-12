@@ -1,0 +1,145 @@
+choice: type = struct
+    kind: variant pair: (first: i32, second: i32) | empty end kind
+end choice
+holder: type = struct
+    left: choice
+    right: choice
+end holder
+clear: (inout value: choice) -> none = value.kind = empty end clear
+
+last_use: () -> (result: i32) =
+    mut value: choice = (kind: pair(first: 40, second: 1))
+    match value.kind
+        pair(first, inout second): begin
+            second = 2
+            result = first + second
+            clear(value)
+        end
+        empty: result = 0
+    end match
+end last_use
+
+copied_value: () -> (result: i32) =
+    mut value: choice = (kind: pair(first: 40, second: 2))
+    match value.kind
+        pair(first, second): begin
+            copied: i32 = first + second
+            value = (kind: empty)
+            result = copied
+        end
+        empty: result = 0
+    end match
+end copied_value
+
+siblings: () -> (result: i32) =
+    mut value: holder = (left: (kind: pair(first: 40, second: 2)), right: (kind: empty))
+    match value.left.kind
+        pair(first, second): begin
+            value.right.kind = pair(first: 1, second: 1)
+            result = first + second
+        end
+        empty: result = 0
+    end match
+end siblings
+
+array_siblings: () -> (result: i32) =
+    mut values: [2]choice = zeroed
+    values[0].kind = pair(first: 40, second: 2)
+    match values[0].kind
+        pair(first, second): begin
+            values[1].kind = pair(first: 1, second: 1)
+            result = first + second
+            values[0].kind = empty
+        end
+        empty: result = 0
+    end match
+end array_siblings
+
+computed_copy: (index: usize) -> (result: i32) =
+    mut values: [2]choice = zeroed
+    values[0].kind = pair(first: 40, second: 2)
+    match values[index].kind
+        pair(first, inout second): begin
+            values[index].kind = empty
+            second = 2
+            result = first + second
+        end
+        empty: result = 0
+    end match
+end computed_copy
+
+rebound_pointer: () -> (result: i32) =
+    mut original: choice = (kind: pair(first: 40, second: 2))
+    mut other: choice = (kind: empty)
+    mut pointer: ptr mut choice = addr original
+    match pointer.val.kind
+        pair(first, second): begin
+            pointer = addr other
+            pointer.val.kind = empty
+            result = first + second
+        end
+        empty: result = 0
+    end match
+end rebound_pointer
+
+iterations: () -> (result: i32) =
+    mut count: usize = 0
+    result = 0
+    while count < 2 do
+        mut value: choice = (kind: pair(first: 20, second: 1))
+        match value.kind
+            pair(first, second): begin
+                result += first + second
+                value.kind = empty
+            end
+            empty: result = 0
+        end match
+        inc count
+    end while
+end iterations
+
+computed_destination: (index: usize) -> (result: i32) =
+    mut values: [1]choice = zeroed
+    values[0].kind = pair(first: 40, second: 2)
+    match values[0].kind
+        pair(first, second):
+            values[index].kind = pair(first: first, second: second)
+        empty: begin end
+    end match
+    match values[0].kind
+        pair(first, second): result = first + second
+        empty: result = 1
+    end match
+end computed_destination
+
+observed: type = struct
+    stamp: i32
+    kind: variant present: (value: i32) | absent end kind
+end observed
+mark: (inout target: observed) -> (result: i32) =
+    target.stamp = 42
+    result = target.stamp
+end mark
+pointer_effects: () -> (result: i32) =
+    mut target: observed = (stamp: 0, kind: absent)
+    alias: ptr mut observed = addr target
+    alias.val.kind = present(value: mark(target))
+    result = target.stamp
+    match target.kind
+        present(value): if value <> 42 then result = 1 end if
+        absent: result = 1
+    end match
+end pointer_effects
+
+public main: () -> (code: i32) =
+    code = 1
+    return when last_use() <> 42
+    return when copied_value() <> 42
+    return when siblings() <> 42
+    return when array_siblings() <> 42
+    return when computed_copy(0) <> 42
+    return when rebound_pointer() <> 42
+    return when computed_destination(0) <> 42
+    return when pointer_effects() <> 42
+    code = iterations()
+end main

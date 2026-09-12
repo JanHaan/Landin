@@ -1,0 +1,3 @@
+public fixed if true then
+value: i32 = 42
+end if

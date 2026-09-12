@@ -108,7 +108,7 @@
 0920   tour        accepted emitted executed refused  Multiple named returns
 0930   tour        accepted emitted executed refused  Every named return must be assigned before return
 0940   tour        accepted emitted executed refused  Errors: a declared set of atoms in one dedicated register
-0950   tour        accepted emitted executed          Not everything that goes wrong belongs in that channel
+0950   tour        accepted emitted executed refused  Not everything that goes wrong belongs in that channel
 0960   tour        accepted emitted executed refused  Propagating: try, visible at the call site
 0970   tour        accepted emitted executed refused  Early exit
 0980   tour        accepted emitted executed refused  Calls: positional first, then named
@@ -119,7 +119,7 @@
 1030   tour        accepted emitted executed refused  Handling
 1040   tour        accepted emitted executed refused  A caller parameter is filled in by the compiler with the call site
 1050   tour        accepted emitted executed refused  Branch
-1060   tour        accepted emitted executed          Every construct has a one-line form
+1060   tour        accepted emitted executed refused  Every construct has a one-line form
 1070   tour        accepted emitted executed refused  A declaration is allowed in a condition
 1080   tour        accepted emitted executed refused  A block has the value of its last expression
 1090   tour        accepted emitted executed          Bare block, for scoping
