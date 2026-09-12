@@ -339,6 +339,80 @@ package body Landin.Tests.Parser_Suite is
    --  Ordinary-struct literal recognition and retained refusals
    ------------------------------------------------------------------
 
+   procedure Construction_Fills_Are_Trailing
+     (Item : in out Landin.Testing.Context);
+
+   procedure Construction_Fills_Are_Trailing
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Program
+        (Text : String; Expected : String; Because : String);
+
+      procedure Check_Program
+        (Text : String; Expected : String; Because : String)
+      is
+         Codes : Unbounded.Unbounded_String;
+         Total : Natural;
+         Nodes : Natural;
+         Held  : Boolean;
+      begin
+         Read_And_Parse (Text, Codes, Total, Nodes, Held);
+         Landin.Testing.Check (Item, Held, Because & ": the tree is sound");
+         Landin.Testing.Check (Item, Nodes > 0, Because & ": a tree exists");
+         Landin.Testing.Check_Equal
+           (Item, Unbounded.To_String (Codes), Expected,
+            Because & ": the intended refusal owns the report");
+      end Check_Program;
+   begin
+      Check_Program
+        ("f: () -> none = _ = triple(x: 1, of 2) end f" & ASCII.LF,
+         "", "one fill");
+      Check_Program
+        ("f: () -> none = _ = triple(x: 1, of 2, of 3) end f"
+         & ASCII.LF,
+         "L0103", "repeated fill");
+      Check_Program
+        ("f: () -> none = _ = triple(x: 1, of 2, y: 3) end f" & ASCII.LF,
+         "L0103", "field after fill");
+      Check_Program
+        ("f: () -> none = _ = triple(x: 1, of 2, y: 3, of 4) end f"
+         & ASCII.LF,
+         "L0103", "several later arguments");
+      Check_Program
+        ("f: () -> none = _ = triple(x: 1, of 2, 3) end f" & ASCII.LF,
+         "L0103", "positional after fill");
+      Check_Program
+        ("f: () -> none = _ = triple(of: 1, y: 2) end f" & ASCII.LF,
+         "", "fill label is ordinary");
+      Check_Program
+        ("f: () -> none = _ = triple(x: 1, of of + 2) end f" & ASCII.LF,
+         "", "fill expression mentions of");
+      Check_Program
+        ("f: () -> none = _ = triple(x: triple(x: 1, of 2), of 3) end f"
+         & ASCII.LF,
+         "", "nested fill");
+      Check_Program
+        ("f: () -> none = _ = triple(x: triple(x: 1, of 2, of 3), of 4) end f"
+         & ASCII.LF,
+         "L0103", "nested repeated fill");
+      Check_Program
+        ("f: () -> none = _ = holder(item: any(addr local)) end f" & ASCII.LF,
+         "", "any expression");
+      Check_Program
+        ("f: () -> none = _ = generic(item: any service) end f" & ASCII.LF,
+         "", "any type");
+      Check_Program
+        ("f: () -> none = _ = (item: any(addr local)) end f" & ASCII.LF,
+         "", "contextual any expression");
+      Check_Program
+        ("f: () -> none = _ = (x: 1, of 2) end f" & ASCII.LF,
+         "", "contextual fill");
+      Check_Program
+        ("f: () -> none = _ = triple(x: 1, of 2, y: 3) end f"
+         & ASCII.LF & "after: i32 = +" & ASCII.LF,
+         "L0103, L0102", "a fill refusal preserves later source");
+   end Construction_Fills_Are_Trailing;
+
    procedure Struct_Literal_Shapes_Are_Refused_Once
      (Item : in out Landin.Testing.Context);
 
@@ -436,7 +510,9 @@ package body Landin.Tests.Parser_Suite is
            & "    array: [4]u32," & ASCII.LF
            & "    signature: (x: i32) -> (r: u32)," & ASCII.LF
            & "    count: 4," & ASCII.LF
-           & "    value: source(1 + 2))" & ASCII.LF
+           & "    value: source(1 + 2)," & ASCII.LF
+           & "    erased_type: any service," & ASCII.LF
+           & "    erased_value: any(addr local))" & ASCII.LF
            & "  _ = target(1, named: 2)" & ASCII.LF
            & "  _ = target(named: 1, 2, 3)" & ASCII.LF
            & "  _ = target(1)" & ASCII.LF
@@ -476,7 +552,7 @@ package body Landin.Tests.Parser_Suite is
                          = Landin.Syntax.Name_Reference,
                      "a labelled application retains its direct callee");
 
-                  if Landin.Syntax.Argument_Count (Parsed, Node) = 7 then
+                  if Landin.Syntax.Argument_Count (Parsed, Node) = 9 then
                      declare
                         Scalar    : constant Landin.Syntax.Node_Id :=
                           Landin.Syntax.Nth_Argument (Parsed, Node, 1);
@@ -490,7 +566,28 @@ package body Landin.Tests.Parser_Suite is
                           Landin.Syntax.Nth_Argument (Parsed, Node, 6);
                         Value     : constant Landin.Syntax.Node_Id :=
                           Landin.Syntax.Nth_Argument (Parsed, Node, 7);
+                        Any_Type  : constant Landin.Syntax.Node_Id :=
+                          Landin.Syntax.Nth_Argument (Parsed, Node, 8);
+                        Any_Value : constant Landin.Syntax.Node_Id :=
+                          Landin.Syntax.Nth_Argument (Parsed, Node, 9);
                      begin
+                        Landin.Testing.Check
+                          (Item,
+                           Landin.Syntax.Expression_Projection
+                             (Parsed, Any_Type) = Landin.Syntax.No_Node
+                           and then Landin.Syntax.Kind
+                             (Parsed, Landin.Syntax.Type_Projection
+                               (Parsed, Any_Type)) = Landin.Syntax.Any_Type,
+                           "any C retains its type-only projection");
+                        Landin.Testing.Check
+                          (Item,
+                           Landin.Syntax.Type_Projection
+                             (Parsed, Any_Value) = Landin.Syntax.No_Node
+                           and then Landin.Syntax.Kind
+                             (Parsed, Landin.Syntax.Expression_Projection
+                               (Parsed, Any_Value)) =
+                                 Landin.Syntax.Any_Construction,
+                           "any(...) retains its expression projection");
                         Landin.Testing.Check
                           (Item,
                            Landin.Syntax.Expression_Projection
@@ -2446,6 +2543,9 @@ package body Landin.Tests.Parser_Suite is
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "parser", "construction fills are trailing",
+         Construction_Fills_Are_Trailing'Access);
       Landin.Testing.Register
         (Into, "parser", "recovery preserves valid heads",
          Recovery_Preserves_Valid_Heads'Access);
