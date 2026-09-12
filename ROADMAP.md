@@ -5827,7 +5827,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J27 | Aggregate assignment to a computed or reference-borne place from a loop value raises "a contextual storage value has no rooted place" | C | Open accepted-value lowering group: reproduce this storage/result shape narrowly, then preserve checked shape and initialization across its lowering path in both modes. |
 | J28 | Anonymous function with a pointer result gets the wrong IR item result kind (exit 70) | C | Open accepted-value lowering group: reproduce this storage/result shape narrowly, then preserve checked shape and initialization across its lowering path in both modes. |
 | J29 | `Made` is set for an array-root image the code deliberately did not store, so the copy path violates `Image_Length`'s `Has_Image` precondition | C | Open accepted-value lowering group: reproduce this storage/result shape narrowly, then preserve checked shape and initialization across its lowering path in both modes. |
-| J30 | Module struct slice field initialized from a name or member selection raises "a static slice field has no image form" | C | Open accepted-value lowering group: reproduce this storage/result shape narrowly, then preserve checked shape and initialization across its lowering path in both modes. |
+| J30 | Module struct slice field initialized from a name or member selection raises "a static slice field has no image form" | C | Open accepted-value lowering group: route checked slice fields through the existing complete descriptor image path, preserving target, offset, length and element shape. The K1 follow-up also reproduces exit 70 for a small valid variant slice literal: the legacy variant image path treats its descriptor as a numeric array. Retain direct/nested/variant and module-name/member controls in both modes; evidence is in `.scratch/r491-static-fields/`. |
 | J31 | Module `ptr`/`cstring` binding with no initializer passes `Ty.Pointer_Value` to `IR.Emit_Number`'s `Integer_Name` parameter | C | Open accepted-value lowering group: reproduce this storage/result shape narrowly, then preserve checked shape and initialization across its lowering path in both modes. |
 | J32 | Module slice binding with no initializer calls `Slice_Shape` with `Syn.No_Node` | C | Open accepted-value lowering group: reproduce this storage/result shape narrowly, then preserve checked shape and initialization across its lowering path in both modes. |
 | J33 | Erased evidence table is built for a conformance whose sibling entry is not object-safe, with no D146 gate on that path | C | Open erased-conformance boundary: apply D146 object-safety checks to all entries required by a materialized table, with safe sibling controls. |
@@ -5852,7 +5852,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J52 | Select_Iterable_Conformance calls Template_Of with No_Nominal_Type for a nominal-less aggregate traversal source | C | Open conformance failure group: stop invalid/unregistered/nominal-less candidates before normalized-key/provider/template access, preserving the original diagnostic. |
 | J53 | Restoration after sinking through a slice view of an inout array | P | Plausible scope question only: the verifier refuted the general aliasing rationale. Determine whether a view rooted in an inout array carries its restoration obligation; preserve the documented aliasing non-guarantee. |
 | J54 | `sizeof`/`alignof` of an atom, atom-union or function type raises Landin.Compiler_Defect (exit 70) | C | Open checker boundary group: handle all admitted measured types and conversion arities explicitly; source mistakes must not become an unlocated internal defect. |
-| J55 | Check_Aggregate_Payload tests the distinct-conversion escape on the wrong node (`Value` instead of `Given`), falsely refusing a module variant payload | C | Open static-image validation group: use the actual payload/conversion node and validate bool/distinct leaves consistently before image lowering. Use tiny images only. |
+| J55 | Check_Aggregate_Payload tests the distinct-conversion escape on the wrong node (`Value` instead of `Given`), falsely refusing a module variant payload | C | Repaired with K6: query the payload expression's distinct conversion, retaining matching, mismatched-nominal and ordinary-field controls. |
 | J56 | A range subtype's bounds are never applied to a value that arrives through a control expression, so a statically-known out-of-range value compiles into an unconditional `ud2` | C | Open known-bound check: compare contextual/control and direct values against the existing static-range rule; preserve dynamic runtime checks. J116 remains plausible until narrowly established. |
 | J57 | Module image `bool` elements are never range-checked, so a non-0/1 bool image reaches lowering and aborts the compiler (exit 70) | C | Open static-image validation group: use the actual payload/conversion node and validate bool/distinct leaves consistently before image lowering. Use tiny images only. |
 | J58 | `Check_Struct_Image`'s ordinary aggregate-field branch drops the distinct-conversion alternative its three sibling branches have, so a distinct-typed struct field image is never folded (exit 70) | C | Open static-image validation group: use the actual payload/conversion node and validate bool/distinct leaves consistently before image lowering. Use tiny images only. |
@@ -6031,12 +6031,12 @@ checks used the existing debug binary, sequentially, with 10-second timeouts.
 
 | Intake | Review identifier and observation | Current disposition and repair scope |
 | --- | --- | --- |
-| K1 | A1: runtime call in a reference-valued module struct field reaches lowering | Current debug witness exits 70; direct reference-field checking lacks the static-known gate. Add a source diagnostic for ordinary fields and variant payloads before image lowering, preserving permitted static references. Related to J30's image boundary, but a runtime call is distinct from J30's module-name/member form. |
+| K1 | A1: runtime call in a reference-valued module struct field reaches lowering | Repaired: ordinary and variant reference fields require a compile-time-known value when forming a module image. Runtime calls, including nested fields and fills, report L0305 before lowering; an already ill-typed field keeps its original diagnostic. Local calls and permitted static references still pass checking. J30 separately owns accepted slice-image lowering, including the additional valid variant literal found here. |
 | K2 | A2: statements followed by a function's final value are refused | Already repaired by 7250d298 under A2/C2/M3. Reuse the final-value grammar, checking and runtime evidence; no replay needed. |
 | K3 | A3: labelled construction treats `any(...)` as a type | Repaired: argument lookahead distinguishes the expression `any(...)` from the type `any C`, as it already does for pointer syntax. Parser projections remain separate; contextual and nominal erased-value constructions pass checking. Existing neutral type-argument and type-only refusal controls remain required. |
 | K4 | A4: repeated or non-trailing `of` fills are accepted | Repaired: a labelled application reports L0103 once when another argument follows its fill, while retaining the argument tree and later source. Controls cover repeated fills, later labels/positionals, nested valid and invalid fills, a field named `of`, and recovery. Fake-host driver refusals require no output/tool effects; D214's valid evaluation order is unchanged. |
-| K5 | A5: static-address search descends into unevaluated literal `lenof` | Current debug witness reports L0305 for an unevaluated address. Apply D31 consistently in the static-image address walk, retaining the actual module-address refusal and slice-descriptor evaluation boundaries. |
-| K6 | A6: distinct extraction inside a variant payload tests the outer node | Duplicate J55. The payload's `Given`, rather than the containing `Value`, owns the conversion exemption; preserve ordinary-field and static distinct-image controls. |
+| K5 | A5: static-address search descends into unevaluated literal `lenof` | Repaired: the address walk skips D31's unevaluated literal measurement, and field/array/repetition static exclusions stop at measurements too. Small scalar, struct, variant, literal-array and repetition controls accept these measurements; actual address images remain L0305. Slice descriptor reads remain covered by the existing nested-flow controls. |
+| K6 | A6: distinct extraction inside a variant payload tests the outer node | Repaired with J55: the payload's `Given`, rather than the enclosing case construction, owns the distinct-conversion exemption. A matching static distinct payload passes; a different nominal identity remains L0301, and the ordinary-field control is retained. |
 | K7 | B1: indexed-field and pointer assignment destinations miss reads before the RHS | Repaired by 0f708770 under J1/J3/J74. Both imported current debug witnesses now produce exactly one L0302, including the formerly crashing unassigned pointer destination. |
 | K8 | B2: propagated `try` failure omits reference-origin cleanup checks | Repaired: the reference pass runs failure-applicable cleanups after the call's arguments, then restores success-path origins. Fourteen controls cover direct/propagated failure, defer/undo, nested and labelled calls, escaping/static values, recovery, early transfers and independent success facts. A driver refusal requires one L0314 and no output/tool effects. Both modes pass; J19's definite-assignment repair remains independently covered. |
 | K9 | B3: discard/operator wrappers hide nested sink effects | Already repaired by 0f708770 under J3. Preserve the selected nested-call controls and their debug/release evidence; no second dispatch repair or broad rerun is needed. |
@@ -6106,8 +6106,22 @@ one worker, and selected tests have timeouts of at most 30 seconds. Logs are in
 No assembler, linker or generated Landin executable ran. These are filtered
 development checks, not exact-revision acceptance.
 
-K3, K4, K8, K11 and K36 are repaired. K1/K5/K6's static-image checks are next,
-followed by the existing checker/conformance group.
+K1/K5/K6 development evidence: ten selected cases pass 377 checks in each of
+macOS debug and Linux release. Twenty-three small checker sources cover static
+reference calls, fields/fills and payloads, runtime counterparts, literal
+measurements and distinct nominal identity. Four pre-existing negative fixtures
+retain storage-read/static-call refusals; nested-flow controls retain slice
+reads. Driver checks require one L0305 and no output/tool effects for both
+ordinary and variant runtime reference initializers. The debug build reported
+one overlong test line before a corrected clean rebuild; both final builds use
+one worker and selected tests have timeouts of at most 30 seconds. Evidence is
+in `.scratch/r491-static-fields/` and `.scratch/r491-final-values/`. No assembler,
+linker or generated Landin executable ran. J30's valid variant slice remains an
+explicit lowering gap, not a successful end-to-end positive control in this
+checker batch. Exact-revision acceptance remains outstanding.
+
+K1, K3, K4, K5, K6, K8, K11 and K36 are repaired. J30's accepted slice-image
+lowering is next, followed by the existing checker/conformance group.
 Keep J2's call-return contract question active. K12 needs a semantic
 disposition before implementation. The verifier, optimization, build-identity
 and ABI items above remain owned by the corresponding later repair groups.

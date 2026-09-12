@@ -19056,6 +19056,10 @@ package body Landin.Stages.Checking is
       begin
          if Where = Syn.No_Node then
             return;
+         elsif Syn.Kind (Of_Tree, Where) = Syn.Len_Of then
+            --  D31's literal elements are checked for their scalar type,
+            --  but are not values stored in this static image.
+            return;
          end if;
 
          --  A conversion's callee is a resolved type, not a storage read.
@@ -19288,7 +19292,7 @@ package body Landin.Stages.Checking is
                Got := Synthesise (Of_Tree, Given);
                if Static_Image and then Got /= Ty.Ill_Typed
                  and then Landin.Checking.Distinct_Conversion_Of
-                   (Types.all, Of_Tree, Value)
+                   (Types.all, Of_Tree, Given)
                      = Landin.Checking.No_Nominal_Type
                then
                   Bad.Report
@@ -19784,6 +19788,24 @@ package body Landin.Stages.Checking is
                                  Syn.Origin (Of_Tree, Label),
                                  "the variant payload field named"
                                  & " here");
+                              if Static_Image
+                                and then Landin.Checking.Type_Of
+                                  (Types.all, Of_Tree, Given) /= Ty.Ill_Typed
+                                and then not Is_Known (Of_Tree, Given)
+                              then
+                                 Bad.Report
+                                   (Item => Bad.Not_Known_At_Compile_Time,
+                                    Source => Syn.Source_Of (Of_Tree),
+                                    Where => Syn.Where (Of_Tree, Given),
+                                    Message => "this variant payload"
+                                      & " value has to be known when"
+                                      & " the module image is formed",
+                                    Note => "[1940]: nothing runs before"
+                                      & " the entry point [1460]",
+                                    Into => Found);
+                                 Landin.Checking.Refuse
+                                   (Types.all, Of_Tree, Given);
+                              end if;
                            end;
 
                         when Landin.Checking.Fixed_Array_Field =>
@@ -20607,6 +20629,24 @@ package body Landin.Stages.Checking is
                            Syn.Origin (Of_Tree, Field),
                            "the reference-bearing struct field named"
                            & " here");
+                        if Static_Image
+                          and then Landin.Checking.Type_Of
+                            (Types.all, Of_Tree, Value) /= Ty.Ill_Typed
+                          and then not Is_Known (Of_Tree, Value)
+                        then
+                           Bad.Report
+                             (Item => Bad.Not_Known_At_Compile_Time,
+                              Source => Syn.Source_Of (Of_Tree),
+                              Where => Syn.Where (Of_Tree, Value),
+                              Message => "this struct field value has"
+                                & " to be known when the"
+                                & " module image is formed",
+                              Note => "[1940]: nothing runs before"
+                                & " the entry point [1460]",
+                              Into => Found);
+                           Landin.Checking.Refuse
+                             (Types.all, Of_Tree, Value);
+                        end if;
                      end;
                   end;
 
@@ -20893,6 +20933,9 @@ package body Landin.Stages.Checking is
                         when Syn.Array_Literal    => "a nested array literal",
                         when others               => "");
                begin
+                  if Syn.Kind (Of_Tree, Where) = Syn.Len_Of then
+                     return;
+                  end if;
                   if What /= "" then
                      Bad.Report
                        (Item    => Bad.Unsupported_Use,
@@ -21023,6 +21066,9 @@ package body Landin.Stages.Checking is
                         when Syn.Array_Literal    => "a nested array literal",
                         when others               => "");
                begin
+                  if Syn.Kind (Of_Tree, Where) = Syn.Len_Of then
+                     return;
+                  end if;
                   if What /= "" then
                      Bad.Report
                        (Item    => Bad.Unsupported_Use,
@@ -25349,6 +25395,13 @@ package body Landin.Stages.Checking is
          if Node = Syn.No_Node
            or else Syn.Kind (Of_Tree, Node) = Syn.Anonymous_Function
          then
+            return Syn.No_Node;
+         elsif Syn.Kind (Of_Tree, Node) = Syn.Len_Of
+           and then Syn.Kind (Of_Tree, Syn.Operand_Of (Of_Tree, Node))
+             = Syn.Array_Literal
+         then
+            --  D31 measures source shape; no literal element becomes part
+            --  of the module image or contributes an address relocation.
             return Syn.No_Node;
          elsif Syn.Kind (Of_Tree, Node) = Syn.Address_Of then
             return Node;
