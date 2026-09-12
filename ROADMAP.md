@@ -6041,7 +6041,7 @@ checks used the existing debug binary, sequentially, with 10-second timeouts.
 | K8 | B2: propagated `try` failure omits reference-origin cleanup checks | Repaired: the reference pass runs failure-applicable cleanups after the call's arguments, then restores success-path origins. Fourteen controls cover direct/propagated failure, defer/undo, nested and labelled calls, escaping/static values, recovery, early transfers and independent success facts. A driver refusal requires one L0314 and no output/tool effects. Both modes pass; J19's definite-assignment repair remains independently covered. |
 | K9 | B3: discard/operator wrappers hide nested sink effects | Already repaired by 0f708770 under J3. Preserve the selected nested-call controls and their debug/release evidence; no second dispatch repair or broad rerun is needed. |
 | K10 | B4: missing-value checking omits pointer, slice and erased carriers | Already repaired by 7250d298: current `Needs_Value` includes all three carriers. Retain the existing final-value refusal controls and both-mode evidence. |
-| K11 | B5: a fresh loop binding inherits a consumed fact from the previous iteration | Current debug witness rejects a freshly initialized scalar with L0302. Resolve the fresh-binding/reset behavior against [1910], covering ordinary and destructuring bindings and preserving genuinely loop-carried consumption. The source observation is reproduced; the review's broader semantic verdict was left open. |
+| K11 | B5: a fresh loop binding inherits a consumed fact from the previous iteration | Repaired: each executed declaration clears its prior instance's assigned and consumed facts, including sparse fields/elements. Ordinary, condition and traversal bindings start fresh; destructured results retain their existing sink restriction. Twenty-one controls preserve outer loop-carried consumption, initializer effects, uninitialized reads and repeated reads after a sink. This applies [0080]/[1910] without changing the sink point or adding ownership. |
 | K12 | B6: sink consumption occurs before later arguments finish evaluating | Current debug witness reports L0302 when a later argument returns before the call. This is a semantic sequencing question, not an adopted call-entry rule. Reconcile [0390]/[0910]/[1910], existing argument-order controls and cleanup before changing the sink point; include repeated-place arguments and early transfers. |
 | K13 | C1: multi-formal concept conformance loses its normalized key | Additional witness under J49, with historical coordinator reproduction/backtrace. Preserve both valid multi-formal conformance coverage and malformed-entry diagnostics; do not narrow the repair to one malformed list. No new debugger reproduction is required. |
 | K14 | C2: an all-return slice lower bound emits into terminated flow | Current tiny debug witness exits 70. Duplicate J22's terminated-expression lowering group, with an explicit lower-bound case and required upper-bound/ordinary-bound controls. |
@@ -6085,10 +6085,18 @@ limit before tests ran and was stopped; the retry completed under an explicit
 `.scratch/r491-try-origins/`. These are development results, not exact-revision
 acceptance; the resource restrictions below remain mandatory.
 
-K8 and K36 are repaired. K11's fresh-binding facts are the next flow follow-up,
-including ordinary/destructuring initializers and independent loop-carried
-consumption. Keep J2's call-return contract question active, then combine the existing checker/conformance group
-with K1/K3/K4/K5's static-image/parser boundaries. K12 needs a semantic
+K11 development evidence: eight selected cases pass 160 checks in each of
+macOS debug and Linux release. The new checker case has 21 small sources;
+related cases cover nested call effects, descendant initialization, fallthrough
+joins, defer/undo and consumed-place exit obligations. Both builds use one
+worker; each selected test has a timeout of at most 30 seconds. Logs are in
+`.scratch/r491-fresh-bindings/` and `.scratch/r491-final-values/`. These checks
+run no assembler, linker or generated Landin executable and do not replace
+exact-revision acceptance. No language sequencing rule changed.
+
+K8, K11 and K36 are repaired. K3/K4's parser boundaries are next, followed
+by K1/K5's static-image checks and the existing checker/conformance group.
+Keep J2's call-return contract question active. K12 needs a semantic
 disposition before implementation. The verifier, optimization, build-identity
 and ABI items above remain owned by the corresponding later repair groups.
 The review's passing backend observations and inconclusive long-routine/stack
