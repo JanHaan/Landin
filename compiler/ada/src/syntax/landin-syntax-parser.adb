@@ -7136,6 +7136,20 @@ package body Landin.Syntax.Parser is
                                     Children => [1 => RHS],
                                     Named    => Label,
                                     Fills    => Is_Fill));
+                              if Is_Fill
+                                and then Expression_Projection
+                                  (Result, Args.Last_Element) = No_Node
+                              then
+                                 Complain
+                                   (Item    => Syn.Expression_Expected,
+                                    Where   => Where (Result, RHS),
+                                    Message => "a construction fill requires"
+                                               & " an expression",
+                                    Note    => "[1810]: trailing `of` fills"
+                                               & " are expressions",
+                                    Related => At_Label,
+                                    Because => "the fill begins here");
+                              end if;
                            end;
                         else
                            declare

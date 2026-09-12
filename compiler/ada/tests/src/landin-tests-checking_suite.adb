@@ -9294,8 +9294,71 @@ package body Landin.Tests.Checking_Suite is
          "the initial image of `first` is worked out from itself", "L0305");
    end R440_Recursive_Source_Contexts;
 
+   procedure Variant_Array_Elements_Keep_Case_Identity
+     (Item : in out Landin.Testing.Context);
+
+   procedure Variant_Array_Elements_Keep_Case_Identity
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Ran : Natural;
+      Src : Landin.Source.Source_Id;
+      Seen : Natural := 0;
+   begin
+      Src := Landin.Stages.Add_Source
+        (Work, "variant-array.ldn",
+         "choice: type = struct" & LF
+         & " kind: variant pair: (first: i32, second: i32)"
+         & " | empty end kind" & LF & "end choice" & LF
+         & "f: () -> none =" & LF
+         & " mut values: [2]choice ="
+         & " [(kind: pair(first: 40, second: 2)), (kind: empty)]" & LF
+         & "end f" & LF);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Configurer'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Landin.Stages.Append (Order, Checker'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+      Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "variant-valued array literals are accepted");
+      declare
+         Tree : constant not null access constant Landin.Syntax.Tree :=
+           Landin.Syntax.Forest.Tree_Of
+             (Landin.Stages.Trees (Work).all, Src);
+         Types : constant not null access Landin.Checking.Table :=
+           Landin.Stages.Types (Work);
+      begin
+         for Node in Landin.Syntax.Node_Id'(1)
+           .. Landin.Syntax.Last_Node (Tree.all)
+         loop
+            if Landin.Syntax.Kind (Tree.all, Node)
+                 = Landin.Syntax.Field_Value
+              and then Landin.Source.Names.Spelling
+                (Landin.Stages.Identities (Work).all,
+                 Landin.Syntax.Name (Tree.all, Node)) = "kind"
+            then
+               Seen := Seen + 1;
+               Landin.Testing.Check_Equal
+                 (Item, Landin.Checking.Field_Index
+                    (Types.all, Tree.all,
+                     Landin.Syntax.Value_Of (Tree.all, Node)),
+                  Seen, "each array element retains its selected case");
+            end if;
+         end loop;
+      end;
+      Landin.Testing.Check_Equal
+        (Item, Seen, 2, "both variant initializers were inspected");
+   end Variant_Array_Elements_Keep_Case_Identity;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "checking", "variant arrays retain case identities",
+         Variant_Array_Elements_Keep_Case_Identity'Access);
       Landin.Testing.Register
         (Into, "checking", "union aliases keep exact instance keys",
          Union_Aliases_Keep_Exact_Instance_Keys'Access);

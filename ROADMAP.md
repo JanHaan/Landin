@@ -5574,8 +5574,11 @@ retention, last-use retags and independent sibling storage remain permitted.
 Pointer-backed retags now use captured holder storage in lowering. The private
 raw transfer uses the same explicit destination-address boundary for its first
 and later slots; ordinary stores retain the origin check.
-The origin/payload group completes this batch's confirmed repairs. Next are
-the remaining construction, parser, host and bounded-scaling items below.
+The origin/payload group completes this batch's confirmed repairs. The third
+batch also repairs contextual constructor arguments and variant-array
+initialization, alongside the follow-up parser recovery/lookahead group.
+Remaining work includes final-body values, parser depth, native failures and
+bounded inference storage.
 
 Development evidence for the preceding output/consume group: Linux debug and release pass the driver
 (46 cases), checking (85), lowering (93), complete recorded-diagnostic case
@@ -5599,6 +5602,38 @@ all six profiles with the final release compiler. The final two added runtime
 controls were rerun in both modes. Full `check.py` passes on macOS; no exact
 acceptance, debugger session or publication was run.
 
+Construction implementation adds a shared guard on runtime field, payload and
+fill roles before reading their expression projection. It keeps static type
+arguments separate. Trailing `of` fills require an expression under [1810];
+the parser consumes a type-only RHS for balanced recovery and reports L0102.
+Seven field/payload cases pin L0301 and four fill cases pin L0102.
+The module storage-address exclusion now precedes the
+contextual struct early return, so nominal constructors cannot hide an address
+that an ordinary module value refuses. A callback's own body remains outside
+the static-image walk. No new syntax, static relocation form or language rule
+is introduced.
+
+For variant-array construction, the checker seam confirms both selected case
+indices were already present. The failing conversion was the destination's
+zero base field, not the case index. The contextual writer captures a reached
+variant-bearing aggregate as typed address storage before its field writes;
+it retains source order and uses the existing IR/address-verification contract.
+The new runtime fixture covers root and nested arrays, wrapped children,
+repetition and replacement without large images.
+
+Construction validation uses bounded development runs. The new checker and
+lowering seam cases pass on macOS debug and Linux release, alongside the
+selected constructor and variant-copy controls on macOS. All three new
+negative fixtures and the no-effects driver case pass; the final parser-fill
+split is rerun on both hosts. The positive static-argument, value-fill,
+local-address and callback controls pass on both hosts. The small runtime
+fixture exits 42 on Linux with `none/off`: its exact 13,445-byte assembly was
+inspected before one bounded pinned GNU-toolchain invocation; the only size
+directives were `.zero 8` and `.zero 4`. This is one runtime profile, not a
+complete profile gate. Generated fixture tables and full `check.py` pass.
+No giant fixture, assembler sweep, debugger session or exact acceptance was
+run for this repair group. R4.91 remains active.
+
 #### Older review reconciliation
 
 Paseo coordinator `27030a0b-54d1-4423-ab3b-82dfe079ece4` commissioned the
@@ -5615,7 +5650,7 @@ session, destructive output-collision experiment or resource-exhaustion sweep.
 | A1: artifact/source collisions | Repaired: every actual output is compared with all discovered sources and other outputs through the filesystem identity seam before any write or tool call. Fake-host regressions cover explicit/imported sources, aliases, assembly/executable/map collisions and inactive-map controls. Existing build-report reservations remain intact. | Second batch implementation |
 | C1: diagnostic label contracts | All five sites still violated the catalogue at the baseline; the four sibling minimal cases still exited 70. Initial implementation repairs imports, fixed conditionals, conformances, unconditional completion and continue-with-value. | First batch |
 | A2, C2, M3: final values and silent recovery | Still present at the baseline. The grammar derives statement-prefix/final-value bodies, including `r = zeroed(1)` as an assignment followed by a parenthesized value. These must be parsed correctly, rather than recorded as negative syntax fixtures. Recovery now diagnoses unexpected tokens, but final-body value semantics remain open: a final none-returning call must stay a statement after a named result has been assigned. This requires coordinated checker, flow, origin and lowering changes. | Recovery in first batch; final values in third batch |
-| A3: type-shaped construction arguments | Still reproduced: `box(value: ptr u8)` exits 70. Reject missing value projections in struct and variant contexts before accessing their syntax, with module/local controls. New ordinary source checks also found accepted variant-array literals reaching lowering without a case index; retain the literal initializer as an additional construction regression. | Third batch |
+| A3: type-shaped construction arguments | Repaired: seven type-only field/payload cases receive L0301 before value access; four type-only trailing fills receive L0102 under the existing expression grammar. Controls cover module, local and instantiated types. The variant-array initializer had valid case metadata; its root-array destination had base field zero. Lowering now captures the reached aggregate in the existing typed-address form before selecting its variant. Construction also preserves the existing L0305 module storage-address exclusion, including nested fields and payload fills; runtime-local addresses and callback bodies remain allowed. | Third batch implementation |
 | C3: retained reference origins | Implemented: destination storage checks cover inout parameters, pointees, slice elements and reference-bearing ordinary/variant fields. Known local alias writes preserve stored frame/parameter origins; an untracked sibling cannot mask them. Runtime controls retain declared retention, same-origin updates and independent pointer descriptors. Both build modes pass the focused suites and fixture profiles. | Second batch implementation |
 | C4: variant payload alias lifetime | Implemented: payload storage lifetime is independent of reference-bearing type. Direct and known-alias replacements, inout calls, derived addresses, cleanup and reachable loop uses participate; runtime controls cover last use, siblings, copied computed subjects and descriptor rebinding. D217 pins the construction boundary, and pointer-backed retags preserve initializer effects. Both build modes pass the focused suites and fixture profiles. | Second batch implementation |
 | C5: dense inference matrices | Still present in source: effects, required sets and call edges are dense stack arrays. The old exhaustion threshold was not rerun. Move program-sized storage off the host stack and measure scaling without weakening inference completion. | Third batch |
@@ -5711,8 +5746,8 @@ Each selected test has a 30-second timeout; the two diagnostic reproductions
 have 10-second timeouts. Release validation of this group remains outstanding.
 No Landin fixture was assembled, and existing broad coverage was not rerun.
 
-The next repair order remains: construction and coordinated final-value
-handling; bounded call recovery/inference storage; target operand and native
+The next repair order is coordinated final-value handling and duplicate
+operand diagnostics; bounded call recovery/inference storage; target operand and native
 failure boundaries; then fixture accounting, explicit profiles and remaining
 documentation contracts. The new parser recovery fixes join M1 in the current
 third batch. The source review is reconciled; the implementation and acceptance

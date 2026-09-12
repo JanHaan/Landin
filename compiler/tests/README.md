@@ -81,6 +81,20 @@ boundary in both directions for integer, float, pointer and mixed C-record
 bases. The IR atom-image unit case accepts a member identity and rejects a
 stored identity absent from the field's set.
 
+The R4.91 construction regressions distinguish runtime field/payload/fill
+arguments from static type arguments. `negative/r491-construction-type-arguments`
+pins value diagnostics in module and local contexts.
+`negative/r491-construction-type-fills` pins expression diagnostics for
+type-only trailing fills and preserves recovery through later declarations.
+`negative/r491-construction-static-address` preserves the existing static-image
+address exclusion. `positive/r491-construction-static-arguments` retains generic
+type arguments, local addresses, value fills and a callback body that takes a
+local address. `runtime/r491-variant-array-construction` exercises small root,
+nested and wrapped arrays, repetition and later variant replacement. The
+checker and lowering seam cases separately assert case identities and verified
+storage paths; driver cases assert that refused source writes no output and
+invokes no tool.
+
 ## Optimization profiles and object quality
 
 Every runtime and ABI fixture runs separately under `none/off`, `size/off`,

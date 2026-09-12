@@ -1,0 +1,9 @@
+class: negative
+summary: constructors and variant payloads preserve the existing module storage-address exclusion
+program: main.ldn
+codes: L0305, L0305, L0305, L0305, L0305, L0305
+constructs: 0430, 0710, 0720, 0900, 1940
+targets: linux-x86-64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/r491-construction-static-address/main.ldn
+status: 1

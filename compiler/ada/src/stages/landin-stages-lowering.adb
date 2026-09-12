@@ -3394,6 +3394,26 @@ package body Landin.Stages.Lowering is
                Seen : array (1 .. IR.Aggregate_Field_Count (Unit.all, Shape))
                  of Boolean := [others => False];
             begin
+               --  Variant operations select a field of aggregate storage.
+               --  A root array instead retains Base zero and puts its index
+               --  in the path. Capture the reached aggregate as typed
+               --  address storage before selecting one of its variants.
+               if Destination.Base = 0
+                 and then not Destination.Steps.Is_Empty
+               then
+                  for Field in Seen'Range loop
+                     if IR.Nth_Aggregate_Field (Unit.all, Shape, Field).Kind
+                          = IR.Variant_Field_Shape
+                     then
+                        Write_Shaped_Value
+                          (Of_Tree, Node, Scope, Shape,
+                           Stored_At (Addressed_Storage
+                             (Destination, Shape, Site)));
+                        return;
+                     end if;
+                  end loop;
+               end if;
+
                --  D29 commits labels in source order; D64 fills omitted
                --  fields only afterwards, never clearing a value a label
                --  can still read from the destination.

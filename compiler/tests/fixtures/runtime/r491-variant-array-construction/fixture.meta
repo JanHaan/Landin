@@ -1,0 +1,6 @@
+class: runtime
+summary: variant literals construct root nested and wrapped array elements with preserved case payloads and replacement
+program: main.ldn
+status: 42
+constructs: 0520, 0550, 0710, 0720, 0900, 1220
+targets: linux-x86-64
