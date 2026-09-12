@@ -5798,9 +5798,9 @@ from every J identifier to its raw record. No source was assembled or linked.
 
 | Intake | Baseline observation | Evidence | Disposition and repair scope |
 | --- | --- | --- | --- |
-| J1 | A labeled application in statement position bypasses definite-assignment and use-after-sink analysis entirely | C | Current debug reproduction: labelled statement accepted; positional control reports L0302. Include labelled statements in flow dispatch and pin assignment, sink and recovery effects. |
+| J1 | A labeled application in statement position bypasses definite-assignment and use-after-sink analysis entirely | C | Repaired: labelled statements use the same flow dispatch as positional calls, including ordered runtime arguments, sink consumption and recovery. Paired initialized/unassigned and sink controls pass in both modes; driver refusals have no output/tool effects. |
 | J2 | A joined storage fact launders the escape check: a frame address can be written into caller or module storage and be accepted | C | Current debug reproduction: joined frame/caller destination accepted; direct caller destination reports L0314. Separate possible destination origins from facts that justify an escape exemption; retain C3 controls and the explicit untracked-origin boundary. |
-| J3 | A `sink` argument is not consumed when the call sits inside an ordinary expression, so use-after-sink is accepted | C | Current debug reproduction: discarded sink call accepted; bound-result control reports L0302. Walk nested calls with mutable flow state, preserving evaluation order. |
+| J3 | A `sink` argument is not consumed when the call sits inside an ordinary expression, so use-after-sink is accepted | C | Repaired: evaluated nested calls retain mutable flow state in operators, literals, constructions, indexes, receivers and assignment destinations. Short-circuit joins retain possible consumption; fixed-array measurements and anonymous bodies remain unevaluated in the enclosing flow. Source-order and restoration controls pass in both modes. |
 | J4 | Lower_Slice loads a slice descriptor's two words through two independent lowerings of the same place, so a call in the access path runs twice and base/length can come from different objects | C | Open lowering repair: capture the reached slice descriptor once and load both words from that storage. Use a tiny side-effecting access-path control. |
 | J5 | A block struct whose closer does not name it swallows every declaration up to a later matching `end <name>`, with no diagnostic | C | Open parser boundary group: compare the normative grammar, preserve enclosing context and following declarations, and add small accepted/refused controls. |
 | J6 | Module identity is the raw directory string, so a non-canonical or relative entry-directory spelling loads the entry module twice and splits its module state | C | Open module/source identity group: define canonical identity through the platform seam while preserving diagnostic spelling; test relative paths, trailing slashes and duplicate inputs with a fake filesystem. |
@@ -5813,10 +5813,10 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J13 | Rendered diagnostic report is quadratic and unbounded; past Integer'Last the run dies with exit 70 and loses every diagnostic | P | Duplicate M10 with an additional report-size overflow concern. Bound rendering and preserve diagnostics; retain plausible status for the exhaustion claim and do not rerun the old stress case. |
 | J14 | The optional struct end name in [1795] is not optional: a bare `end` on a struct is refused as a stray token | C | Open parser boundary group: compare the normative grammar, preserve enclosing context and following declarations, and add small accepted/refused controls. |
 | J15 | The named refusal [1830] promises is missing for `noreturn`, `volatile` and multi-name bindings | C | Open refusal/document agreement: read [1830] and the enabled grammar first. Labelled bare blocks are absent from that grammar; do not enable them solely from the tour example. |
-| J16 | `lenof` on a slice is treated as a non-reading type constant, so an unassigned or sunk slice descriptor is read | C | Open flow follow-up to M2: account for slice descriptor reads, initialized descendant paths and nested failure edges. Test each shape with its direct control and applicable cleanup. |
+| J16 | `lenof` on a slice is treated as a non-reading type constant, so an unassigned or sunk slice descriptor is read | C | Repaired: lenof reads a live, assigned slice descriptor. Fixed-array names and measured literal elements remain unevaluated. Slice length and index refusals include consumed descriptors without duplicate reports; both compiler modes pass the controls. |
 | J17 | `Require_Element` compares the sub-element run for equality instead of prefix containment, so a whole-child write inside an array element does not cover its leaves | C | Open flow follow-up to M2: account for slice descriptor reads, initialized descendant paths and nested failure edges. Test each shape with its direct control and applicable cleanup. |
 | J18 | Match_Subject_Is_Copied disagrees with Lower_Variant_Match about a payload alias root, rejecting valid code as a frame escape | C | Open reference-shape agreement: align copied match/traversal roots with lowering and declared origins, retaining C4 alias-lifetime controls. |
-| J19 | A `try` nested in a non-control expression skips its failure-propagation edge: sunk `inout` parameters and `undo` arguments go unchecked | C | Open flow follow-up to M2: account for slice descriptor reads, initialized descendant paths and nested failure edges. Test each shape with its direct control and applicable cleanup. |
+| J19 | A `try` nested in a non-control expression skips its failure-propagation edge: sunk `inout` parameters and `undo` arguments go unchecked | C | Repaired: nested try expressions retain their propagated failure edge, including undo reads and inout restoration after applicable cleanup. The success-only restoration is refused; restoration inside a failure cleanup is accepted. Both modes pass. |
 | J20 | Forced-specialization profiles silently skip the runtime/erased-* evidence-dispatch fixtures | C | Duplicate M15/N17: make specialization coverage explicit and validated; include erased dispatch fixtures through policy rather than filename prefixes. |
 | J21 | Array-literal element containing a variant part crashes lowering (Constraint_Error on Positive (Destination.Base)) | C | Already repaired by 1aa0746a under A3: normalize the root variant-array destination into typed storage. Retain the existing debug/release and runtime evidence; do not replay it. |
 | J22 | Several expression-lowering paths emit IR after the flow has already terminated, so a program the frontend accepts dies with an internal compiler defect (exit 70) | C | Open control-flow lowering group: preserve termination before further emission and create merge/post-loop blocks only when reachable. Use small edge-specific cases. |
@@ -5871,7 +5871,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J71 | tour [0220]'s `hex_value := 0xDEAD_BEEF` does not compile | C | Duplicate M4/M16 document parity work. Check complete examples against the enabled grammar, preserving historical finding sections. |
 | J72 | tour [0990]'s destructuring block cannot be written as printed: `whole.rem` glues onto the next line's `(` | C | Duplicate M4/M16 document parity work. Check complete examples against the enabled grammar, preserving historical finding sections. |
 | J73 | `addr` of a D160 traversal element binding is classified frame origin, refusing a legal `from`-declared return | C | Open reference-shape agreement: align copied match/traversal roots with lowering and declared origins, retaining C4 alias-lifetime controls. |
-| J74 | A compound assignment through an indexed member selection reads its index twice and emits a duplicate diagnostic | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
+| J74 | A compound assignment through an indexed member selection reads its index twice and emits a duplicate diagnostic | C | Repaired: destination evaluation reads the index once before the assigned value. Assignment marking only updates facts, so an unassigned compound indexed-field index reports L0302 once. Small write-order and independent-field controls pass in both modes. |
 | J75 | `Widest_Struct` rescans every node of every source file on each call and is invoked once per read | C | Open bounded scaling follow-up to C5: cache or move the whole-forest width query to an appropriate pass, with invalidation evidence; no broad timing sweep. |
 | J76 | First_Derivation points the escape diagnostic's related span at a module binding and calls it "the shorter-lived reference source" | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
 | J77 | Pipeline failures in build.sh's content manifest are silently swallowed | C | Duplicate m19 shell-pipeline status work: propagate manifest/image-tag input failures with disposable fake commands. J78 remains plausible. |
@@ -5938,17 +5938,40 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J138 | Out-of-scope type name in an anonymous function's signature gives duplicated and misleading L0304 diagnostics | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
 | J139 | Struct refused for a non-zeroable atom/pointer/slice/distinct field is told "a function address has no zero image" (also docs-code) | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
 
+The flow-dispatch repair closes J1/J3/J16/J19 and the related duplicate-index
+report J74. `checking/nested calls retain flow effects` contains 32 small
+accepted/refused controls spanning labelled calls, argument order, literals,
+short-circuiting, indexing, slice receivers, assignment destinations and nested
+failure cleanup. Reading a slice descriptor preserves independent element
+liveness: a consumed element stays dead, its known sibling stays live, and
+lenof reads neither element. The case also preserves the unevaluated fixed-array
+measurement and separately checked anonymous-body boundaries. Four new fake-host driver inputs
+require one L0302 and zero output writes/tool runs for both assembly and
+executable requests. No language rule or aliasing guarantee was widened.
+
+Development evidence for this group: ten explicitly selected cases pass 267
+checks in each of macOS debug and Linux release. Besides the new checker and
+driver controls, these cover fallthrough merges, defer/undo reads, the two
+existing unevaluated-lenof fixtures, consumed subplaces, sunk-inout exit edges
+and final-value refusals. Builds use one worker; each selected test has a
+30-second timeout. Logs are retained in `.scratch/r491-flow-effects/`. No
+Landin assembly, linker sweep, runtime execution, debugger or mutation campaign
+was run. These filtered checks establish the repair group's development
+evidence, not the full R4.91 acceptance gate.
+
 This intake extends the scope of the earlier repairs without erasing their
 controls: C3 covers the recorded direct destination/alias cases, while J2 owns
-joined destination facts; M2 covers the recorded consumed places, while
-J1/J3/J16/J17/J19 own missing dispatch, nested effects and related paths.
+joined destination facts; M2 covers the recorded consumed places. The
+J1/J3/J16/J19 repairs extend flow dispatch and nested effects, while J17 still
+owns descendant initialization within an array element.
 C4's lifetime repairs remain in force while J18/J73 compare reference roots.
 J21 is already repaired, J105 is partly superseded, and J100 remains distinct
 from the repaired initializer lookahead. Existing N-series dispositions and
 all earlier delivery evidence remain unchanged.
 
-The next repair order is the flow/origin group J1/J2/J3/J16/J17/J19, followed
-by checker refusal and type-identity boundaries including J7/J10/J12 and
+The next repair group is joined destination origins (J2) and descendant
+initialization (J17), followed by checker refusal and type-identity boundaries
+including J7/J10/J12 and
 conformance failures. Each change needs paired accepted/refused controls and
 both compiler modes before closure. Then repair parser preservation and
 bounded recursion/inference storage, the accepted-value/control-flow lowering

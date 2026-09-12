@@ -1964,6 +1964,26 @@ package body Landin.Tests.Driver_Suite is
    begin
       for Executable in Boolean loop
          Check
+           ("use: (value: i32, other: i32) -> none = end use "
+            & "f: () -> none = later: i32 "
+            & "use(value: 1, other: later) end f",
+            "L0302", 1, Executable);
+         Check
+           ("consume: (sink value: i32) -> (r: i32) = value end consume "
+            & "f: () -> (r: i32) = mut value: i32 = 1 "
+            & "_ = 1 + consume(value) r = value end f",
+            "L0302", 1, Executable);
+         Check
+           ("missing: atom "
+            & "consume: (sink value: i32) -> (r: i32) ! missing = "
+            & "fail missing when value == 0 r = value end consume "
+            & "f: (inout value: i32) -> none ! missing = "
+            & "_ = 1 + try consume(value) value = 7 end f",
+            "L0302", 1, Executable);
+         Check
+           ("f: () -> (r: usize) = values: []i32 r = lenof values end f",
+            "L0302", 1, Executable);
+         Check
            ("box: type = struct value: ptr i32 end box "
             & "storage: i32 = 42 x := box(value: addr storage)",
             "L0305", 1, Executable);

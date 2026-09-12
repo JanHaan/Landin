@@ -7113,6 +7113,309 @@ package body Landin.Tests.Checking_Suite is
          Accepted => False);
    end Control_Edges_Merge_Only_Fallthrough;
 
+   --  R4.91: runtime calls carry consumption and failure edges through
+   --  enclosing expressions; measurement and callback bodies stay unevaluated.
+   procedure Nested_Calls_Retain_Flow_Effects
+     (Item : in out Landin.Testing.Context);
+
+   procedure Nested_Calls_Retain_Flow_Effects
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Source
+        (Label, Text : String; Accepted : Boolean);
+
+      procedure Check_Source
+        (Label, Text : String; Accepted : Boolean)
+      is
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Order : Landin.Stages.Pipeline;
+         Ran : Natural;
+         Src : Landin.Source.Source_Id;
+         pragma Unreferenced (Src);
+      begin
+         Src := Landin.Stages.Add_Source (Work, "nested-flow.ldn", Text);
+         Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
+         Landin.Stages.Append (Order, Names'Access);
+         Landin.Stages.Append (Order, Checker'Access);
+         Ran := Landin.Stages.Run (Order, Work);
+         declare
+            Reports : constant Landin.Diagnostics.Diagnostic_List :=
+              Landin.Stages.Report (Work);
+         begin
+            Landin.Testing.Check_Equal (Item, Ran, 4, Label & " reaches flow");
+            Landin.Testing.Check
+              (Item, Landin.Stages.Failed (Work) /= Accepted
+                 and then
+                   (if Accepted then Landin.Diagnostics.Count (Reports) = 0
+                    else Landin.Diagnostics.Count (Reports) = 1
+                      and then Landin.Diagnostics.Code
+                        (Landin.Diagnostics.Get (Reports, 1)) = "L0302"),
+               Label & " retains its exact assignment verdict");
+         end;
+      end Check_Source;
+
+      Prefix : constant String :=
+        "unavailable: atom" & LF
+         & "box: type = struct value: i32 end box" & LF
+         & "consume: (sink value: i32) -> (r: i32) =" & LF
+         & "    r = value end consume" & LF
+         & "use: (value: i32, other: i32) -> none = end use" & LF
+         & "observe: (value: i32) -> none = end observe" & LF
+         & "restore: (inout value: i32) -> none = value = 7 end restore" & LF
+         & "fallible: (sink value: i32) -> (r: i32) ! unavailable =" & LF
+         & "    fail unavailable when value == 0" & LF
+         & "    r = value" & LF
+         & "end fallible" & LF
+         & "slice_consumer: (sink view: []i32) -> none =" & LF
+         & "end slice_consumer" & LF
+         & "holder: type = struct view: []i32 end holder" & LF;
+   begin
+      Check_Source
+        ("labelled read", Prefix
+         & "f: () -> (r: i32) =" & LF
+         & "later: i32" & LF
+         & "use(value: 1, other: later)" & LF
+         & "r = 0" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("labelled initialized", Prefix
+         & "f: () -> (r: i32) =" & LF
+         & "later: i32 = 2" & LF
+         & "use(value: 1, other: later)" & LF
+         & "r = 0" & LF
+         & "end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("labelled sink", Prefix
+         & "f: () -> (r: i32) =" & LF
+         & "mut v: i32 = 1" & LF
+         & "_ = consume(value: v)" & LF
+         & "r = v" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("labelled sink statement", Prefix
+         & "take: (sink value: i32, tag: i32) -> none = end take" & LF
+         & "f: () -> (r: i32) =" & LF
+         & "mut v: i32 = 1" & LF
+         & "take(tag: 0, value: v)" & LF
+         & "r = v" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("discarded sink", Prefix
+         & "f: () -> (r: i32) =" & LF
+         & "mut v: i32 = 1" & LF
+         & "_ = consume(v)" & LF
+         & "r = v" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("binary sink", Prefix
+         & "f: () -> (r: i32) =" & LF
+         & "mut v: i32 = 1" & LF
+         & "n: i32 = 1 + consume(v)" & LF
+         & "r = v + n" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("argument order", Prefix
+         & "f: () -> (r: i32) =" & LF
+         & "mut v: i32 = 1" & LF
+         & "use(consume(v), v)" & LF
+         & "r = 0" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("labelled argument order", Prefix
+         & "f: () -> (r: i32) =" & LF
+         & "mut v: i32 = 1" & LF
+         & "use(other: consume(v), value: v)" & LF
+         & "r = 0" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("array element sink", Prefix
+         & "f: () -> (r: i32) =" & LF
+         & "mut v: i32 = 1" & LF
+         & "a: [1]i32 = [consume(v)]" & LF
+         & "r = v" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("constructed field sink", Prefix
+         & "f: () -> (r: i32) =" & LF
+         & "mut v: i32 = 1" & LF
+         & "b: box = (value: consume(v))" & LF
+         & "r = v" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("short circuit sink", Prefix
+         & "f: (flag: bool) -> (r: bool) =" & LF
+         & "mut v: i32 = 1" & LF
+         & "r = flag and (consume(v) == 0)" & LF
+         & "_ = v" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("restored nested sink", Prefix
+         & "f: () -> (r: i32) =" & LF
+         & "mut v: i32 = 1" & LF
+         & "_ = 1 + consume(v)" & LF
+         & "v = 7" & LF
+         & "r = v" & LF
+         & "end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("measured literal does not consume", Prefix
+         & "f: () -> (r: i32) =" & LF
+         & "mut v: i32 = 1" & LF
+         & "r = i32(lenof ([consume(v)])) + v" & LF
+         & "end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("measured literal does not read", Prefix
+         & "f: () -> (r: i32) =" & LF
+         & "v: i32" & LF
+         & "r = i32(lenof ([consume(v)]))" & LF
+         & "end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("fixed length does not read", Prefix
+         & "f: () -> (r: i32) =" & LF
+         & "a: [2]i32" & LF
+         & "r = i32(lenof a)" & LF
+         & "end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("slice length reads", Prefix
+         & "f: () -> (r: i32) =" & LF
+         & "s: []i32" & LF
+         & "r = i32(lenof s)" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("slice length after sink", Prefix
+         & "f: (s: []i32) -> (r: i32) =" & LF
+         & "slice_consumer(s)" & LF
+         & "r = i32(lenof s)" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("slice index after sink", Prefix
+         & "f: (s: []i32) -> (r: i32) =" & LF
+         & "slice_consumer(s)" & LF
+         & "r = s[0]" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("nested try restores only success", Prefix
+         & "f: (inout v: i32) -> none ! unavailable =" & LF
+         & "_ = 1 + try fallible(v)" & LF
+         & "v = 7" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("nested try undo restores", Prefix
+         & "f: (inout v: i32) -> none ! unavailable =" & LF
+         & "undo observe(begin v = 7 0 end)" & LF
+         & "_ = 1 + try fallible(v)" & LF
+         & "v = 7" & LF
+         & "end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("nested try undo reads", Prefix
+         & "f: (v: i32) -> (r: i32) ! unavailable =" & LF
+         & "mut later: i32" & LF
+         & "undo observe(later)" & LF
+         & "r = 1 + try fallible(v)" & LF
+         & "later = 7" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("index sink", Prefix
+         & "f: () -> (r: i32) =" & LF
+         & "mut v: i32 = 0" & LF
+         & "a: [1]i32 = [42]" & LF
+         & "_ = a[usize(consume(v))]" & LF
+         & "r = v" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("indexed field sink", Prefix
+         & "f: () -> (r: i32) =" & LF
+         & "mut v: i32 = 0" & LF
+         & "mut a: [1]box = [box(value: 42)]" & LF
+         & "_ = a[usize(consume(v))].value" & LF
+         & "r = v" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("slice receiver sink", Prefix
+         & "f: (s: []i32) -> (r: i32) =" & LF
+         & "mut v: i32 = 0" & LF
+         & "a: [1]holder = [holder(view: s)]" & LF
+         & "_ = a[usize(consume(v))].view[0]" & LF
+         & "r = v" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("anonymous body checked separately", Prefix
+         & "f: () -> (r: i32) =" & LF
+         & "cb: () -> (r: i32) = () -> (r: i32) =" & LF
+         & "mut v: i32 = 1" & LF
+         & "r = consume(v)" & LF
+         & "end" & LF
+         & "r = cb()" & LF
+         & "end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("indexed field destination consumes", Prefix
+         & "f: () -> (r: i32) = mut v: i32 = 0" & LF
+         & "mut a: [1]box = [box(value: 42)]" & LF
+         & "a[usize(consume(v))].value = 1" & LF
+         & "r = v end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("destination effects precede assigned value", Prefix
+         & "f: () -> (r: i32) = mut v: i32 = 0" & LF
+         & "mut a: [1]box = [box(value: 42)]" & LF
+         & "a[usize(consume(v))].value = v" & LF
+         & "r = 0 end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("compound index read is reported once", Prefix
+         & "f: () -> (r: i32) = index: usize" & LF
+         & "mut a: [1]box = [box(value: 42)]" & LF
+         & "a[index].value += 1" & LF
+         & "r = 0 end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("field destination does not read its contents", Prefix
+         & "f: () -> (r: i32) = mut b: box" & LF
+         & "b.value = 7 r = b.value end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("slice sibling stays live", Prefix
+         & "f: (s: []mut i32) -> (r: i32) =" & LF
+         & "_ = consume(s[0]) r = s[1] end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("consumed slice element stays dead", Prefix
+         & "f: (s: []mut i32) -> (r: i32) =" & LF
+         & "_ = consume(s[0]) r = s[0] end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("slice length does not read elements", Prefix
+         & "f: (s: []mut i32) -> (r: usize) =" & LF
+         & "_ = consume(s[0]) r = lenof s end f" & LF,
+         Accepted => True);
+   end Nested_Calls_Retain_Flow_Effects;
+
    --  [1100] registers syntax rather than an evaluated value, but ordinary
    --  call checking still fixes the complete direct or indirect signature
    --  and any stored result shape where the statement is written.
@@ -9600,6 +9903,9 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Register
         (Into, "checking", "control edges merge only fallthrough",
          Control_Edges_Merge_Only_Fallthrough'Access);
+      Landin.Testing.Register
+        (Into, "checking", "nested calls retain flow effects",
+         Nested_Calls_Retain_Flow_Effects'Access);
       Landin.Testing.Register
         (Into, "checking", "deferred calls are typed at registration",
          Deferred_Calls_Are_Typed_At_Registration'Access);

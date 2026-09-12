@@ -30,7 +30,6 @@ package body Landin.Stages.Checking.Flow is
    use type Landin.Syntax.Node_Kind;
    use type Landin.Tokens.Assignment_Operator;
    use type Landin.Types.Type_Kind;
-   use type Landin.Types.Reference_View;
    use type Landin.Types.Magnitude;
    use type Landin.Checking.Element_Count;
    use type Landin.Checking.Field_Kind;
@@ -448,7 +447,8 @@ package body Landin.Stages.Checking.Flow is
       procedure Revive_Place
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id; State : in out Assigned_Set);
       function Require_Live
-        (Of_Tree : Syn.Tree; Node : Syn.Node_Id; State : Assigned_Set)
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id; State : Assigned_Set;
+         Report_Error : Boolean := True)
          return Boolean;
       procedure Flow_Expression
         (Of_Tree : Syn.Tree;
@@ -457,7 +457,7 @@ package body Landin.Stages.Checking.Flow is
          State   : in out Assigned_Set;
          Edges   : out Edge_Facts;
          Whole_As : Whole_Array_Read := Assignment_Source);
-      function Contains_Control
+      function Contains_Flow_Effects
         (Of_Tree : Syn.Tree; Root : Syn.Node_Id) return Boolean;
       procedure Flow_Block
         (Of_Tree : Syn.Tree;
@@ -852,6 +852,9 @@ package body Landin.Stages.Checking.Flow is
                return True;
             end if;
          end loop;
+         --  Reading a slice descriptor does not read its referenced
+         --  elements.  An indexed read still checks the selected element;
+         --  an inline aggregate read still includes its consumed parts.
          for Fact of State.Dead_Elements loop
             if Fact.Declaration = Id then
                return True;
@@ -1357,7 +1360,8 @@ package body Landin.Stages.Checking.Flow is
       end Revive_Place;
 
       function Require_Live
-        (Of_Tree : Syn.Tree; Node : Syn.Node_Id; State : Assigned_Set)
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id; State : Assigned_Set;
+         Report_Error : Boolean := True)
          return Boolean
       is
          Id : Res.Declaration_Id;
@@ -1415,10 +1419,15 @@ package body Landin.Stages.Checking.Flow is
                                or else Fact.Position = Position)
                      and then (Prefix (Below, Fact.Below)
                                or else Prefix (Fact.Below, Below))
-                  else Prefix (Path, Fact.Path)));
+                  else Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
+                         /= Ty.Slice_Value
+                    and then Prefix (Path, Fact.Path)));
          end loop;
          if not Dead then
             return True;
+         end if;
+         if not Report_Error then
+            return False;
          end if;
 
          declare
@@ -1618,11 +1627,15 @@ package body Landin.Stages.Checking.Flow is
             return;
          end if;
 
-         --  `lenof name` asks only for a type constant.  Forming an
+         --  A fixed-array `lenof` asks only for a type constant.  Forming an
          --  anonymous function likewise forms one static code address; its
          --  separately checked no-capture body reads nothing in this flow.
          if Syn.Kind (Of_Tree, Node)
-              in Syn.Len_Of | Syn.Anonymous_Function
+              in Syn.Size_Of | Syn.Align_Of | Syn.Anonymous_Function
+           or else (Syn.Kind (Of_Tree, Node) = Syn.Len_Of
+                    and then Landin.Checking.Type_Of
+                      (Types.all, Of_Tree, Syn.Operand_Of (Of_Tree, Node))
+                        /= Ty.Slice_Value)
          then
             return;
          end if;
@@ -1772,7 +1785,7 @@ package body Landin.Stages.Checking.Flow is
          end loop;
       end Read_Names;
 
-      function Contains_Control
+      function Contains_Flow_Effects
         (Of_Tree : Syn.Tree; Root : Syn.Node_Id) return Boolean
       is
       begin
@@ -1780,32 +1793,36 @@ package body Landin.Stages.Checking.Flow is
             return False;
          end if;
 
+         --  These forms do not evaluate their children in this function.
+         --  D31 includes calls inside an array literal measured by lenof.
+         if Syn.Kind (Of_Tree, Root)
+              in Syn.Anonymous_Function | Syn.Size_Of | Syn.Align_Of
+           or else (Syn.Kind (Of_Tree, Root) = Syn.Len_Of
+                    and then Landin.Checking.Type_Of
+                      (Types.all, Of_Tree, Syn.Operand_Of (Of_Tree, Root))
+                        /= Ty.Slice_Value)
+         then
+            return False;
+         end if;
+
          if Syn.Kind (Of_Tree, Root)
               in Syn.If_Statement | Syn.Match_Statement | Syn.Bare_Block
                  | Syn.Loop_Statement | Syn.While_Statement
-                 | Syn.For_Statement
-         then
-            return True;
-         end if;
-
-         --  A recovered call splits control even when its fallback is a
-         --  simple expression. Keep enclosing operators on the edge-aware
-         --  walk so recovery reads and transfers use their actual state.
-         if Syn.Kind (Of_Tree, Root) in Syn.Call | Syn.Labeled_Application
-           and then Syn.Recovery_Of (Of_Tree, Root) /= Syn.No_Node
+                 | Syn.For_Statement | Syn.Call | Syn.Labeled_Application
+                 | Syn.Try_Expression
          then
             return True;
          end if;
 
          for Position in 1 .. Syn.Slot_Count (Of_Tree, Root) loop
-            if Contains_Control
+            if Contains_Flow_Effects
                  (Of_Tree, Syn.Slot (Of_Tree, Root, Position))
             then
                return True;
             end if;
          end loop;
          return False;
-      end Contains_Control;
+      end Contains_Flow_Effects;
 
       procedure Flow_Expression
         (Of_Tree : Syn.Tree;
@@ -1830,6 +1847,21 @@ package body Landin.Stages.Checking.Flow is
          Edges := No_Edges;
 
          case Syn.Kind (Of_Tree, Node) is
+            when Syn.Anonymous_Function | Syn.Size_Of | Syn.Align_Of =>
+               Edges := Fallthrough_Edge;
+
+            when Syn.Len_Of =>
+               if Landin.Checking.Type_Of
+                 (Types.all, Of_Tree, Syn.Operand_Of (Of_Tree, Node))
+                   = Ty.Slice_Value
+               then
+                  Flow_Expression
+                    (Of_Tree, Syn.Operand_Of (Of_Tree, Node), Result,
+                     State, Edges, Whole_As);
+               else
+                  Edges := Fallthrough_Edge;
+               end if;
+
             when Syn.Loop_Statement | Syn.While_Statement
                | Syn.For_Statement =>
                declare
@@ -2500,6 +2532,56 @@ package body Landin.Stages.Checking.Flow is
                   end;
                end if;
 
+            when Syn.Member_Selection =>
+               if not Contains_Flow_Effects (Of_Tree, Node) then
+                  Read_Names (Of_Tree, Node, State, Whole_As);
+                  Edges := Fallthrough_Edge;
+                  return;
+               end if;
+
+               --  An effectful index still selects just this field, not
+               --  the whole array element.  Other access paths evaluate
+               --  their receiver, including calls returning references.
+               declare
+                  Indexed : constant Syn.Node_Id :=
+                    Chain_Index (Of_Tree, Node);
+                  Id : Res.Declaration_Id := Res.No_Declaration;
+                  Path : Field_Path;
+                  Position : Ty.Magnitude;
+               begin
+                  if Indexed /= Syn.No_Node
+                    and then Landin.Checking.Type_Of
+                      (Types.all, Of_Tree, Syn.Target_Of (Of_Tree, Indexed))
+                        = Ty.Fixed_Array
+                  then
+                     Array_Base
+                       (Of_Tree, Chain_Above (Of_Tree, Node), Id, Path);
+                  end if;
+                  if Id = Res.No_Declaration then
+                     Flow_Expression
+                       (Of_Tree, Syn.Target_Of (Of_Tree, Node), Result,
+                        State, Edges, Whole_As);
+                  else
+                     Flow_Expression
+                       (Of_Tree, Syn.Index_Of (Of_Tree, Indexed), Result,
+                        State, Edges, Whole_As);
+                     if Edges.Falls_Through
+                       and then Require_Live (Of_Tree, Node, State)
+                     then
+                        if Known_Index_Value
+                          (Of_Tree, Syn.Index_Of (Of_Tree, Indexed), Position)
+                        then
+                           Require_Element
+                             (Of_Tree, Node, Id, Path, Position, State,
+                              Below => Chain_Below (Of_Tree, Node));
+                        else
+                           Require_Computed_Element
+                             (Of_Tree, Node, Id, Path, State);
+                        end if;
+                     end if;
+                  end if;
+               end;
+
             when Syn.Element_Index =>
                --  [0410]: an index runs before the selected element is
                --  read.  A control-valued index may return, so only its
@@ -2512,28 +2594,53 @@ package body Landin.Stages.Checking.Flow is
                   Position : Ty.Magnitude;
                   Id : Res.Declaration_Id;
                   Path : Field_Path;
+                  Descriptor_Was_Live : Boolean;
                begin
                   if Landin.Checking.Type_Of
                        (Types.all, Of_Tree, From) = Ty.Slice_Value
-                    and then Landin.Checking.Descriptor_Of
-                      (Types.all,
-                       Landin.Checking.Reference_Of
-                         (Types.all, Of_Tree, From)).View = Ty.Utf8_View
                   then
-                     --  D182's result derives from the complete utf8 view,
-                     --  not one independently assigned array element.  The
-                     --  source is evaluated before the selecting argument.
+                     --  A slice index reads its descriptor, including any
+                     --  effects producing it, before evaluating the index.
+                     Descriptor_Was_Live := Require_Live
+                       (Of_Tree, From, State, Report_Error => False);
                      Flow_Expression
                        (Of_Tree, From, Result, State, Edges);
                      if Edges.Falls_Through then
-                        Flow_Expression
-                          (Of_Tree, Where, Result, State, Edges);
+                        declare
+                           Part : Edge_Facts;
+                        begin
+                           Flow_Expression
+                             (Of_Tree, Where, Result, State, Part);
+                           Edges.Returns := Edges.Returns or Part.Returns;
+                           Edges.Falls_Through := Part.Falls_Through;
+                           --  The descriptor read already diagnoses a dead
+                           --  base.  Do not repeat that report at the index.
+                           if Edges.Falls_Through and Descriptor_Was_Live then
+                              if not Require_Live (Of_Tree, Node, State) then
+                                 return;
+                              end if;
+                           end if;
+                        end;
                      end if;
                      return;
                   end if;
 
-                  Flow_Expression
-                    (Of_Tree, Where, Result, State, Edges);
+                  Array_Base (Of_Tree, From, Id, Path);
+                  Edges := Fallthrough_Edge;
+                  if Id = Res.No_Declaration then
+                     Flow_Expression
+                       (Of_Tree, From, Result, State, Edges, Whole_As);
+                  end if;
+                  if Edges.Falls_Through then
+                     declare
+                        Part : Edge_Facts;
+                     begin
+                        Flow_Expression
+                          (Of_Tree, Where, Result, State, Part);
+                        Edges.Returns := Edges.Returns or Part.Returns;
+                        Edges.Falls_Through := Part.Falls_Through;
+                     end;
+                  end if;
                   if not Edges.Falls_Through then
                      return;
                   end if;
@@ -2542,7 +2649,6 @@ package body Landin.Stages.Checking.Flow is
                      return;
                   end if;
 
-                  Array_Base (Of_Tree, From, Id, Path);
                   if Id /= Res.No_Declaration
                     and then Landin.Checking.Type_Of
                       (Types.all, Of_Tree, Node) /= Ty.Ill_Typed
@@ -2554,26 +2660,20 @@ package body Landin.Stages.Checking.Flow is
                         Require_Computed_Element
                           (Of_Tree, Node, Id, Path, State);
                      end if;
-                  elsif Landin.Checking.Type_Of
-                          (Types.all, Of_Tree, Node) /= Ty.Ill_Typed
-                    and then Syn.Kind (Of_Tree, From)
-                                   /= Syn.Name_Reference
-                  then
-                     Read_Names (Of_Tree, From, State);
                   end if;
                end;
 
             when others =>
-               if not Contains_Control (Of_Tree, Node) then
+               if not Contains_Flow_Effects (Of_Tree, Node) then
                   Read_Names (Of_Tree, Node, State, Whole_As);
                   Edges := Fallthrough_Edge;
                   return;
                end if;
 
-               --  A control expression nested under an ordinary operator,
-               --  call or literal is evaluated in slot/source order.  A
-               --  returned edge stops later operands; only the surviving
-               --  fallthrough state reaches them.
+               --  Nested calls must retain sink effects and try failure
+               --  edges even beneath an ordinary operator or literal.
+               --  Evaluate in slot/source order; a returned edge stops
+               --  later operands, and only fallthrough reaches them.
                Edges := Fallthrough_Edge;
                for Position in 1 .. Syn.Slot_Count (Of_Tree, Node) loop
                   exit when not Edges.Falls_Through;
@@ -2655,14 +2755,59 @@ package body Landin.Stages.Checking.Flow is
          Needs_Value : Boolean := False)
       is
          Cleanup_Base : constant Natural := Natural (Cleanup_Stack.Length);
-         procedure Mark
-           (Node              : Syn.Node_Id;
-            Index_Was_Checked : Boolean := False);
+         procedure Flow_Destination
+           (Node : Syn.Node_Id; Into : out Edge_Facts);
+
+         --  Evaluate a destination's address before its assigned value.
+         --  A local aggregate is storage, while a pointer or slice receiver
+         --  is a runtime descriptor.  Neither reads the selected contents.
+         procedure Flow_Destination
+           (Node : Syn.Node_Id; Into : out Edge_Facts) is
+         begin
+            Into := Fallthrough_Edge;
+            if Node = Syn.No_Node
+              or else Syn.Kind (Of_Tree, Node) = Syn.Name_Reference
+            then
+               return;
+            end if;
+            if Syn.Kind (Of_Tree, Node)
+              in Syn.Member_Selection | Syn.Element_Index
+            then
+               declare
+                  From : constant Syn.Node_Id :=
+                    Syn.Target_Of (Of_Tree, Node);
+               begin
+                  if Landin.Checking.Type_Of (Types.all, Of_Tree, From)
+                    in Ty.Pointer_Value | Ty.Slice_Value
+                  then
+                     Flow_Expression
+                       (Of_Tree, From, Result, State, Into);
+                  else
+                     Flow_Destination (From, Into);
+                  end if;
+                  if Into.Falls_Through
+                    and then Syn.Kind (Of_Tree, Node) = Syn.Element_Index
+                  then
+                     declare
+                        Part : Edge_Facts;
+                     begin
+                        Flow_Expression
+                          (Of_Tree, Syn.Index_Of (Of_Tree, Node), Result,
+                           State, Part);
+                        Into.Returns := Into.Returns or Part.Returns;
+                        Into.Falls_Through := Part.Falls_Through;
+                     end;
+                  end if;
+               end;
+            else
+               Flow_Expression (Of_Tree, Node, Result, State, Into);
+            end if;
+         end Flow_Destination;
+
+         procedure Mark (Node : Syn.Node_Id);
 
          --  A place written is assigned from here on.
-         procedure Mark
-           (Node              : Syn.Node_Id;
-            Index_Was_Checked : Boolean := False)
+         procedure Mark (Node : Syn.Node_Id)
          is
          begin
             if Node /= Syn.No_Node
@@ -2680,18 +2825,9 @@ package body Landin.Stages.Checking.Flow is
                   if Landin.Checking.Type_Of (Types.all, Of_Tree, From)
                        = Ty.Slice_Value
                   then
-                     Read_Names (Of_Tree, From, State);
-                     if not Index_Was_Checked then
-                        Read_Names (Of_Tree, Where, State);
-                     end if;
                      return;
                   end if;
 
-                  --  Reaching an element destination reads its index even
-                  --  though it does not read the element being selected.
-                  if not Index_Was_Checked then
-                     Read_Names (Of_Tree, Where, State);
-                  end if;
                   Array_Base (Of_Tree, From, Id, Path);
                   if Id /= Res.No_Declaration
                     and then Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
@@ -2704,11 +2840,6 @@ package body Landin.Stages.Checking.Flow is
                           (State.Elements,
                            (Id, Path, Position, No_Path));
                      end if;
-                  elsif Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
-                          /= Ty.Ill_Typed
-                    and then Syn.Kind (Of_Tree, From) /= Syn.Name_Reference
-                  then
-                     Read_Names (Of_Tree, From, State);
                   end if;
                end;
 
@@ -2738,7 +2869,6 @@ package body Landin.Stages.Checking.Flow is
                      Id : Res.Declaration_Id;
                      Path : Field_Path;
                   begin
-                     Read_Names (Of_Tree, Where, State);
                      Array_Base
                        (Of_Tree, Chain_Above (Of_Tree, Node), Id, Path);
                      if Id /= Res.No_Declaration
@@ -2928,8 +3058,6 @@ package body Landin.Stages.Checking.Flow is
                         declare
                            Place : constant Syn.Node_Id :=
                              Syn.Target_Of (Of_Tree, Item);
-                           Checked_Index : constant Boolean :=
-                             Syn.Kind (Of_Tree, Place) = Syn.Element_Index;
                            Updating : constant Boolean :=
                              Syn.Assignment_Operation (Of_Tree, Item)
                                /= Landin.Tokens.Plain_Assignment;
@@ -2941,10 +3069,8 @@ package body Landin.Stages.Checking.Flow is
                               --  the right-hand side.
                               Flow_Expression
                                 (Of_Tree, Place, Result, State, Step);
-                           elsif Checked_Index then
-                              Flow_Expression
-                                (Of_Tree, Syn.Index_Of (Of_Tree, Place),
-                                 Result, State, Step);
+                           else
+                              Flow_Destination (Place, Step);
                            end if;
 
                            if Step.Falls_Through then
@@ -2962,9 +3088,7 @@ package body Landin.Stages.Checking.Flow is
                            end if;
 
                            if Step.Falls_Through then
-                              Mark
-                                (Place,
-                                 Index_Was_Checked => Checked_Index);
+                              Mark (Place);
                               Revive_Place (Of_Tree, Place, State);
                            end if;
                         end;
@@ -2975,7 +3099,8 @@ package body Landin.Stages.Checking.Flow is
                        (Of_Tree, Syn.Target_Of (Of_Tree, Item), Result,
                         State, Step);
 
-                  when Syn.Discard | Syn.Call | Syn.Try_Expression
+                  when Syn.Discard | Syn.Call | Syn.Labeled_Application
+                     | Syn.Try_Expression
                      | Syn.If_Statement | Syn.Match_Statement
                      | Syn.Bare_Block | Syn.Loop_Statement
                      | Syn.While_Statement | Syn.For_Statement =>

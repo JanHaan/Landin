@@ -95,6 +95,13 @@ checker and lowering seam cases separately assert case identities and verified
 storage paths; driver cases assert that refused source writes no output and
 invokes no tool.
 
+The checker case `nested calls retain flow effects` uses paired small sources
+to pin labelled-call assignment checks, nested sink and try effects, descriptor
+reads and assignment-destination order. Slice descriptor reads preserve
+independent element liveness. It preserves unevaluated fixed-array measurements and separately checked anonymous bodies. The R4.91 driver refusal
+case requires the corresponding invalid sources to produce one L0302 before
+any output or tool invocation, for both assembly and executable requests.
+
 `negative/r491-operand-diagnostic-cascades` pins one type diagnostic for each
 invalid float remainder or shift while retaining an independent integer
 division-by-zero diagnostic inside a refused operator.
