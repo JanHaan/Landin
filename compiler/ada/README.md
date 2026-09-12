@@ -5,6 +5,10 @@ It is a real compiler under construction, not a prototype: `spec.md` is the
 normative language specification and `tour.md` explains the language, and
 nothing here may quietly decide language semantics.
 
+For an introduction to the intermediate representation and the reasons for
+its structure, read [the IR guide](../../docs/ir.md). It is a maintained,
+non-authoritative account derived from the implementation and its tests.
+
 ## Layout
 
 ```text

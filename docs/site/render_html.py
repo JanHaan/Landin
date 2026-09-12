@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import html
 import json
+import posixpath
 import re
 import sys
 from html.parser import HTMLParser
@@ -955,6 +956,10 @@ GUIDES = [
          nav="the bootstrap compiler", group="the implementation",
          blurb="The Ada 2022 chassis: what each package owns, what it may "
                "not own, and what is deliberately absent."),
+    dict(key="ir", src="docs/ir.md", out="ir.html",
+         nav="the intermediate representation", group="the implementation",
+         blurb="How checked source becomes verified, target-neutral IR, "
+               "and why it takes this form. A derived implementation guide."),
     dict(key="toolchain", src="compiler/ada/TOOLCHAIN.md", out="toolchain.html",
          nav="the pinned toolchain", group="the implementation",
          blurb="One compiler, recorded exactly, with the warning policy and "
@@ -1099,21 +1104,30 @@ BOLD = re.compile(r"\*\*([^*]+)\*\*")
 MD_LINK = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
 
 
-def guide_targets(docs):
+def guide_targets(docs, source_name=""):
     """Where a link to a source file should point on the site."""
     targets = {d["src"]: d["out"] for d in docs}
     for d in docs:
         #  A document may be named from a directory below it.
         targets[d["src"].split("/")[-1]] = d["out"]
+    if source_name:
+        #  Resolve Markdown links from this document's directory, including
+        #  README.md names which otherwise collide in the basename map.
+        directory = posixpath.dirname(source_name) or "."
+        for d in docs:
+            targets[posixpath.relpath(d["src"], directory)] = d["out"]
     return targets
 
 
-def rewrite_link(match, targets):
-    label, href = match.group(1), match.group(2)
+def link_destination(href, targets):
     bare = href.split("#")[0]
     anchor = href[len(bare):]
-    if bare in targets:
-        href = targets[bare] + anchor
+    return targets.get(bare, bare) + anchor
+
+
+def rewrite_link(match, targets):
+    label = match.group(1)
+    href = link_destination(match.group(2), targets)
     return f'<a href="{href}">{label}</a>'
 
 
@@ -2002,7 +2016,25 @@ def verify(src: Path, out: Path):
     #  A fence's info string names the language of the block; it is markup
     #  and not content, so it is not on the page and must not be counted as
     #  missing from it.  `landin` appears 145 times in the tour as a tag.
-    text = re.sub(r"(?m)^```\S*$", "```", src.read_text())
+    source_name = next((d["src"] for d in DOCS + GUIDES
+                        if d["out"] == out.name), "")
+    destinations = guide_targets(DOCS + GUIDES, source_name)
+    lines = []
+    fenced = False
+    for line in src.read_text().splitlines():
+        if line.startswith("```"):
+            fenced = not fenced
+            line = "```"
+        elif not fenced:
+            #  Link destinations are content too, but the page carries
+            #  their HTML names. Preserve checks of labels and targets
+            #  without demanding that rewritten Markdown paths survive.
+            line = MD_LINK.sub(
+                lambda m: "[%s](%s)" %
+                (m.group(1), link_destination(m.group(2), destinations)),
+                line)
+        lines.append(line)
+    text = "\n".join(lines)
     want = Counter(WORD.findall(text))
     # inside a listing a span sits between the halves of one name, so tags
     # go without a space there and with one everywhere else
@@ -2121,7 +2153,7 @@ def main(argv):
               or g["src"].split("/")[-1] in named]
     if not docs and not guides:
         print("nothing to render; the documents are "
-              + ", ".join(d["src"] for d in DOCS + GUIDES))
+                + ", ".join(d["src"] for d in DOCS + GUIDES))
         return 1
     SITE.mkdir(exist_ok=True)
     counts = {}
@@ -2140,7 +2172,6 @@ def main(argv):
         for found in re.findall(r"^([XYZW]\d+)\s", held, re.M):
             finding_page[found] = entry["out"]
 
-    link_targets = guide_targets(DOCS + GUIDES)
 
     for d in docs:
         text = (source / d["src"]).read_text()
@@ -2160,7 +2191,7 @@ def main(argv):
             return f"#{ref}" if where == _here else f"{where}#{ref}"
 
         title, hero, body, nav_sections = render_guide(
-            text, links, link_targets,
+            text, links, guide_targets(DOCS + GUIDES, d["src"]),
             Highlighter(*symbols, links=links))
         nav = nav_html(DOCS + GUIDES, d["out"], nav_sections)
         out = page(tab_title(title, d["nav"]), d["nav"],
@@ -2192,7 +2223,7 @@ def main(argv):
             return f"#{ref}" if where == _here else f"{where}#{ref}"
 
         title, hero, body, nav_sections = render_guide(
-            text, links, link_targets,
+            text, links, guide_targets(DOCS + GUIDES, g["src"]),
             Highlighter(*guide_symbols, links=links))
         nav = nav_html(DOCS + GUIDES, g["out"], nav_sections)
         out = page(tab_title(title, g["nav"]), g["nav"], title or g["nav"],

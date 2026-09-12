@@ -181,6 +181,11 @@ Two rules already hold in the chassis and must keep holding. Every host effect t
 
 The compiler checks whole programs and may use private caches. Its verified target-neutral IR is allowed to evolve from implementation evidence rather than being frozen as one flat or serialized form. Landin retains its own native backends, which emit assembly for platform assembler/linker tooling. Target order is Linux x86-64, native macOS arm64, then emulator-first Cortex-M; C and LLVM remain rejected backend alternatives.
 
+[`docs/ir.md`](docs/ir.md) explains the IR and its rationale for readers new to
+the project. Keep it current when the representation, verification boundary
+or optimization pipeline changes. It is derived from implementation and
+tests, never an authority for semantics, implementation decisions or work.
+
 Compiler stages are Ada packages behind tested seams so a future self-hosting roadmap may replace them incrementally. The current roadmap neither schedules self-hosting nor freezes a serialized cross-language stage protocol.
 
 `core/*` is reserved for the future standard library. `landin/compiler`, `landin/assembler`, and `landin/linker` are reserved toolchain modules. Package acquisition and arrangement of package roots belong to a separate companion tool rather than the compiler, and a program may contain only one version of a package name.

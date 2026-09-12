@@ -35,6 +35,7 @@ library is still to come.**
 | `AGENTS.md` | how to work in this repository: the authority order, the commands, and the rules the chassis already keeps. |
 | `check.py` | mechanical checks over the live documents, grammar and fixture corpus. Run it after touching any of them. |
 | `compiler/ada/` | the Ada 2022 bootstrap compiler: `refine`, its frontend and verified IR, the Linux x86-64 backend and toolchain path, and its own test harness. |
+| [docs/ir.md](docs/ir.md) | the intermediate representation explained: its structure and rationale, maintained as a derived account of the implementation, never an authority. |
 | `compiler/tests/` | fixtures, in a format that outlives the implementation checking them. |
 | `examples/config_parser/` | the complete lexer and recovering parser derived from prototype 2; its executable host and exact input/output oracle live in `compiler/tests/fixtures/runtime/derived-parser`. |
 | `examples/derived_containers/` | the complete prototype-3-derived client of the ordinary `core` containers and allocator capabilities; `compiler/tests/fixtures/runtime/derived-containers` supplies its host, status oracle and derivation manifest. |

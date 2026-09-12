@@ -1,8 +1,10 @@
 # The reading copies
 
 `render_html.py` renders every document in the repository as a
-self-contained HTML page and packages them for pages.sr.ht. The text files
-are the specification; these pages are a reading of them.
+self-contained HTML page and packages them for pages.sr.ht. The Markdown
+files are the rendering sources; publication does not change their authority.
+The specification remains normative, and derived guides such as
+[the IR explanation](../ir.md) remain non-authoritative.
 
 ## What it renders
 
