@@ -777,6 +777,7 @@ negative/r491-live-payload-aliases | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-malformed-public-start | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-match-extra-colon | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-match-extra-paren | linux-x86-64, macos-arm64, synthetic-32
+negative/r491-operand-diagnostic-cascades | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-public-conformance | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-public-fixed | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-public-import | linux-x86-64, macos-arm64, synthetic-32

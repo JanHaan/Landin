@@ -57568,6 +57568,57 @@ file negative/r491-match-extra-paren/main.ldn tokens 71
   274 276 42
   277 280 end
   281 286 later
+file negative/r491-operand-diagnostic-cascades/main.ldn tokens 50
+  0 1 f
+  1 2 :
+  3 4 (
+  4 5 )
+  6 8 ->
+  9 13 none
+  14 15 =
+  20 23 mut
+  24 29 value
+  29 30 :
+  31 34 f32
+  35 36 =
+  37 40 4.0
+  45 50 value
+  51 53 %=
+  54 55 0
+  60 65 value
+  66 69 <<=
+  70 71 -
+  71 72 1
+  77 82 value
+  83 86 >>=
+  87 88 -
+  88 89 1
+  94 103 remainder
+  104 106 :=
+  107 112 value
+  113 114 %
+  115 116 0
+  121 125 left
+  126 128 :=
+  129 134 value
+  135 137 <<
+  138 139 -
+  139 140 1
+  145 150 right
+  151 153 :=
+  154 159 value
+  160 162 >>
+  163 164 -
+  164 165 1
+  170 175 value
+  176 178 %=
+  179 180 (
+  180 181 1
+  182 183 /
+  184 185 0
+  185 186 )
+  187 190 end
+  191 192 f
 file negative/r491-public-conformance/main.ldn tokens 51
   0 8 readable
   8 9 :
