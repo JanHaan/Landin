@@ -771,6 +771,8 @@ negative/r491-construction-type-arguments | linux-x86-64, macos-arm64, synthetic
 negative/r491-construction-type-fills | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-consumed-subplace-reads | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-empty-slice-scalar-contexts | linux-x86-64, macos-arm64, synthetic-32
+negative/r491-function-final-value-prefix | linux-x86-64, macos-arm64, synthetic-32
+negative/r491-function-final-value-refusals | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-generic-array-field-shape | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-generic-array-field-unassigned | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-live-payload-aliases | linux-x86-64, macos-arm64, synthetic-32
@@ -1585,6 +1587,7 @@ runtime/r490-review-generic-distinct-atom-array | linux-x86-64
 runtime/r490-review-generic-distinct-bool | linux-x86-64
 runtime/r490-review-generic-empty-module-nonzeroable | linux-x86-64
 runtime/r491-consumed-place-restoration | linux-x86-64
+runtime/r491-function-final-values | linux-x86-64
 runtime/r491-generic-array-fields | linux-x86-64
 runtime/r491-generic-empty-slice-contexts | linux-x86-64
 runtime/r491-payload-alias-last-use | linux-x86-64

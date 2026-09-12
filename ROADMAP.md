@@ -5577,8 +5577,8 @@ and later slots; ordinary stores retain the origin check.
 The origin/payload group completes this batch's confirmed repairs. The third
 batch also repairs contextual constructor arguments and variant-array
 initialization, alongside the follow-up parser recovery/lookahead group.
-Remaining work includes final-body values, parser depth, native failures and
-bounded inference storage.
+Final-body values are now repaired as well. Remaining work includes parser
+depth, native failures and bounded inference storage.
 
 Development evidence for the preceding output/consume group: Linux debug and release pass the driver
 (46 cases), checking (85), lowering (93), complete recorded-diagnostic case
@@ -5634,6 +5634,18 @@ complete profile gate. Generated fixture tables and full `check.py` pass.
 No giant fixture, assembler sweep, debugger session or exact acceptance was
 run for this repair group. R4.91 remains active.
 
+Final-body validation uses nine selected cases in macOS debug and Linux
+release: two parser controls, three lowering controls, the R4.91 no-effects
+driver case, the two new negative fixtures and the existing return-payload
+refusal. Both compilers emit the small new runtime fixture successfully. Its
+single Linux `none/off` execution exits 42; the exact 33,582-byte assembly was
+inspected before one foreground pinned GNU-toolchain invocation capped at
+30 seconds. Its only size directives were `.zero 8` and `.zero 4`.
+The fixture also checks that cleanup may read a just-filled result and that a
+final local value is captured before cleanup changes that local. Full
+`check.py` and regenerated fixture tables pass. This is bounded development
+evidence, not all-profile or exact-revision acceptance; R4.91 stays active.
+
 #### Older review reconciliation
 
 Paseo coordinator `27030a0b-54d1-4423-ab3b-82dfe079ece4` commissioned the
@@ -5649,7 +5661,7 @@ session, destructive output-collision experiment or resource-exhaustion sweep.
 | --- | --- | --- |
 | A1: artifact/source collisions | Repaired: every actual output is compared with all discovered sources and other outputs through the filesystem identity seam before any write or tool call. Fake-host regressions cover explicit/imported sources, aliases, assembly/executable/map collisions and inactive-map controls. Existing build-report reservations remain intact. | Second batch implementation |
 | C1: diagnostic label contracts | All five sites still violated the catalogue at the baseline; the four sibling minimal cases still exited 70. Initial implementation repairs imports, fixed conditionals, conformances, unconditional completion and continue-with-value. | First batch |
-| A2, C2, M3: final values and silent recovery | Still present at the baseline. The grammar derives statement-prefix/final-value bodies, including `r = zeroed(1)` as an assignment followed by a parenthesized value. These must be parsed correctly, rather than recorded as negative syntax fixtures. Recovery now diagnoses unexpected tokens, but final-body value semantics remain open: a final none-returning call must stay a statement after a named result has been assigned. This requires coordinated checker, flow, origin and lowering changes. | Recovery in first batch; final values in third batch |
+| A2, C2, M3: final values and silent recovery | Repaired: function blocks admit the existing statement-prefix/final-value grammar, including `r = zeroed(42)` as an assignment followed by a parenthesized value. The final value fills named result storage before cleanup, with matching assignment and origin facts. Final none-returning calls, try calls and statement controls retain named assignments; mixed value/no-value control edges remain refused, including reference results. Unconditional exits and unchecked regions still cannot prefix a final expression. The runtime fixture covers scalar, shaped, reference, generic, anonymous and fallible results; negative controls retain early-return, typing, escape and grammar refusals. | Recovery in first batch; final values implemented in third batch |
 | A3: type-shaped construction arguments | Repaired: seven type-only field/payload cases receive L0301 before value access; four type-only trailing fills receive L0102 under the existing expression grammar. Controls cover module, local and instantiated types. The variant-array initializer had valid case metadata; its root-array destination had base field zero. Lowering now captures the reached aggregate in the existing typed-address form before selecting its variant. Construction also preserves the existing L0305 module storage-address exclusion, including nested fields and payload fills; runtime-local addresses and callback bodies remain allowed. | Third batch implementation |
 | C3: retained reference origins | Implemented: destination storage checks cover inout parameters, pointees, slice elements and reference-bearing ordinary/variant fields. Known local alias writes preserve stored frame/parameter origins; an untracked sibling cannot mask them. Runtime controls retain declared retention, same-origin updates and independent pointer descriptors. Both build modes pass the focused suites and fixture profiles. | Second batch implementation |
 | C4: variant payload alias lifetime | Implemented: payload storage lifetime is independent of reference-bearing type. Direct and known-alias replacements, inout calls, derived addresses, cleanup and reachable loop uses participate; runtime controls cover last use, siblings, copied computed subjects and descriptor rebinding. D217 pins the construction boundary, and pointer-backed retags preserve initializer effects. Both build modes pass the focused suites and fixture profiles. | Second batch implementation |
@@ -5746,8 +5758,8 @@ Each selected test has a 30-second timeout; the two diagnostic reproductions
 have 10-second timeouts. Release validation of this group remains outstanding.
 No Landin fixture was assembled, and existing broad coverage was not rerun.
 
-The next repair order is coordinated final-value handling; bounded call
-recovery/inference storage; target operand and native
+The next repair order is bounded call recovery and inference storage; target
+operand and native
 failure boundaries; then fixture accounting, explicit profiles and remaining
 documentation contracts. The new parser recovery fixes join M1 in the current
 third batch. The source review is reconciled; the implementation and acceptance

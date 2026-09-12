@@ -11028,6 +11028,7 @@ package body Landin.Stages.Lowering is
                      if Held = Ty.No_Value
                        and then Syn.Kind (Of_Tree, Stmt)
                                   in Syn.Call | Syn.Labeled_Application
+                                     | Syn.Try_Expression
                      then
                         --  Calls overlap statement and expression syntax.
                         --  The parser can only know that a final call is the
@@ -11037,7 +11038,7 @@ package body Landin.Stages.Lowering is
                         --  block's optional destination.
                         declare
                            Ignored : constant IR.Value_Id :=
-                             Lower_Call (Of_Tree, Stmt, Scope);
+                             Lower_Expression (Of_Tree, Stmt, Scope);
                         begin
                            pragma Unreferenced (Ignored);
                         end;
@@ -12985,7 +12986,8 @@ package body Landin.Stages.Lowering is
                  Res.Scope_At (Meanings.all, Of_Tree, Runs);
             begin
                Open (Fresh (Of_Tree, Runs, Inside));
-               Lower_Statements (Of_Tree, Runs, Inside, Result);
+               Lower_Statements
+                 (Of_Tree, Runs, Inside, Result, Destination => Result);
 
                --  [0930]: the named return is assigned by every path that
                --  reaches the end, so falling off it leaves with the

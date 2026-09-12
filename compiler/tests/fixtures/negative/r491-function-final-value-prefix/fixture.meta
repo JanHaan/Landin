@@ -1,0 +1,9 @@
+class: negative
+summary: unconditional return and unchecked remain statement-only prefixes under the function body grammar
+program: main.ldn
+codes: L0110, L0110
+constructs: 0930, 1080, 1120, 1800
+targets: linux-x86-64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/r491-function-final-value-prefix/main.ldn
+status: 1

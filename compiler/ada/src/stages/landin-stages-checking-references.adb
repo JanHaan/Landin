@@ -2819,6 +2819,27 @@ package body Landin.Stages.Checking.References is
               Syn.Statement_Count (Tree, Block) + 1;
             if Syn.Block_Value (Tree, Block) /= Syn.No_Node then
                Value := Fact_Of (Tree, Syn.Block_Value (Tree, Block));
+               if Falls_Through and then Block = Body_Node
+                 and then Syn.Source_Of (Tree) = Syn.Source_Of (Of_Tree)
+                 and then Landin.Checking.Type_Of
+                   (Types.all, Tree, Syn.Block_Value (Tree, Block))
+                     /= Ty.No_Value
+               then
+                  for Position in 1 .. Syn.Return_Count
+                    (Of_Tree, Function_Node)
+                  loop
+                     declare
+                        Returned : constant Syn.Node_Id :=
+                          Syn.Nth_Return (Of_Tree, Function_Node, Position);
+                        Id : constant Res.Declaration_Id :=
+                          Declaration_At (Of_Tree, Returned);
+                     begin
+                        Origins (Id) :=
+                          (if Syn.Return_Count (Of_Tree, Function_Node) = 1
+                           then Value else Nth_Result (Value, Position));
+                     end;
+                  end loop;
+               end if;
             end if;
             Run_Cleanups (Tree, Base + 1, Landin.Cleanup.Normal_Fallthrough);
          end if;

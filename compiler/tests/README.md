@@ -99,6 +99,15 @@ invokes no tool.
 invalid float remainder or shift while retaining an independent integer
 division-by-zero diagnostic inside a refused operator.
 
+`runtime/r491-function-final-values` covers statement prefixes followed by
+scalar, aggregate, array, pointer, slice, function and multiple-result values.
+It includes generic and anonymous functions, fallible calls, named assignments
+followed by none-returning calls or controls, and cleanup ordering.
+`negative/r491-function-final-value-refusals` preserves assignment, origin and
+complete-value checks. `negative/r491-function-final-value-prefix` preserves
+the grammar's exclusion of unconditional exits and unchecked regions from a
+final expression's statement prefix.
+
 ## Optimization profiles and object quality
 
 Every runtime and ABI fixture runs separately under `none/off`, `size/off`,
