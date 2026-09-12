@@ -8908,8 +8908,61 @@ package body Landin.Tests.Lowering_Suite is
       end;
    end Erased_Shaped_Arguments_Keep_Spill_Types;
 
+   procedure Construction_Storage_Stays_Addressable
+     (Item : in out Landin.Testing.Context);
+
+   procedure Construction_Storage_Stays_Addressable
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "choice: type = struct kind: variant"
+         & " pair: (first: i32, second: i32) | empty end kind"
+         & " end choice" & LF
+         & "f: () -> none =" & LF
+         & " mut values: [2]choice ="
+         & " [(kind: pair(first: 40, second: 2)), (kind: empty)]" & LF
+         & " mut nested: [1][2]choice ="
+         & " [[(kind: empty), (kind: pair(first: 1, second: 2))]]" & LF
+         & "end f" & LF, Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 5, "construction reaches IR");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "root and nested arrays retain valid variant initialization");
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         Routine : constant IR.Item_Id := Named_Item (Work, "f");
+         Selects : Natural := 0;
+      begin
+         for Position in 1 .. IR.Value_Count (Unit, Routine) loop
+            declare
+               Value : constant IR.Value_Id := IR.Value_Id (Position);
+            begin
+               if IR.Op_Of (Unit, Routine, Value) = IR.Select_Variant then
+                  Selects := Selects + 1;
+                  Landin.Testing.Check_Equal
+                    (Item, IR.Element_Field_Of (Unit, Routine, Value), 1,
+                     "selection names the field of a reached aggregate");
+               end if;
+            end;
+         end loop;
+         Landin.Testing.Check_Equal
+           (Item, Selects, 4, "every initializer selects exactly one case");
+         Landin.Testing.Check
+           (Item, IR.Verifier.Check (Unit).Kind = IR.Verifier.Nothing_Wrong,
+            "the verifier accepts each aggregate address and payload path");
+      end;
+   end Construction_Storage_Stays_Addressable;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "lowering", "construction storage stays addressable",
+         Construction_Storage_Stays_Addressable'Access);
       Landin.Testing.Register
         (Into, "lowering", "R4.70 field ranges lower recursive shapes",
          R470_Field_Ranges_Lower_Recursive_Shapes'Access);

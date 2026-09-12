@@ -766,6 +766,9 @@ negative/r490-union-alias-two-pointers | linux-x86-64, macos-arm64, synthetic-32
 negative/r490-union-alias-unused-nonatom | linux-x86-64, macos-arm64, synthetic-32
 negative/r490-union-alias-unused-pointer-shapes | linux-x86-64, macos-arm64, synthetic-32
 negative/r490-union-concrete-optional-widening | linux-x86-64, macos-arm64, synthetic-32
+negative/r491-construction-static-address | linux-x86-64, macos-arm64, synthetic-32
+negative/r491-construction-type-arguments | linux-x86-64, macos-arm64, synthetic-32
+negative/r491-construction-type-fills | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-consumed-subplace-reads | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-empty-slice-scalar-contexts | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-generic-array-field-shape | linux-x86-64, macos-arm64, synthetic-32
@@ -1167,6 +1170,7 @@ positive/r440-parameterized-struct-unused-numeric-array-shape | linux-x86-64, ma
 positive/r450-array-arithmetic-source | linux-x86-64, macos-arm64
 positive/r450-optimal-layout-source | linux-x86-64, macos-arm64
 positive/r490-conformance-input-keys | linux-x86-64, macos-arm64, synthetic-32
+positive/r491-construction-static-arguments | linux-x86-64, macos-arm64, synthetic-32
 positive/range-subtype-exit-before-the-check | linux-x86-64, macos-arm64
 positive/range-subtypes | linux-x86-64, macos-arm64
 positive/recursive-module-images | linux-x86-64, synthetic-32
@@ -1584,6 +1588,7 @@ runtime/r491-generic-array-fields | linux-x86-64
 runtime/r491-generic-empty-slice-contexts | linux-x86-64
 runtime/r491-payload-alias-last-use | linux-x86-64
 runtime/r491-reference-store-origins | linux-x86-64
+runtime/r491-variant-array-construction | linux-x86-64
 runtime/range-subtype-checks | linux-x86-64
 runtime/range-subtype-conversion-traps | linux-x86-64
 runtime/range-subtype-store-traps | linux-x86-64

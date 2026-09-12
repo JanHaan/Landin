@@ -270,6 +270,8 @@ package body Landin.Stages.Checking is
         (Of_Tree : Syn.Tree; Field : Syn.Node_Id) return Syn.Node_Id;
       function Construction_Fill
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Syn.Node_Id;
+      function Construction_Values_Present
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
 
       function Is_Struct_Construction
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
@@ -364,6 +366,50 @@ package body Landin.Stages.Checking is
          end loop;
          return Syn.No_Node;
       end Construction_Fill;
+
+      --  Labelled applications retain separate type and value projections.
+      --  Only static formals may use the former without the latter. Check
+      --  runtime roles before a field or fill asks for an expression node.
+      function Construction_Values_Present
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
+      is
+         Valid : Boolean := True;
+      begin
+         if Syn.Kind (Of_Tree, Node) /= Syn.Labeled_Application then
+            return True;
+         end if;
+         for Index in 1 .. Syn.Argument_Count (Of_Tree, Node) loop
+            declare
+               Argument : constant Syn.Node_Id :=
+                 Syn.Nth_Argument (Of_Tree, Node, Index);
+            begin
+               if Res.Role_Of (Meanings.all, Of_Tree, Argument)
+                    in Res.Field_Argument | Res.Payload_Argument
+                       | Res.Fill_Argument
+                 and then Syn.Expression_Projection (Of_Tree, Argument)
+                   = Syn.No_Node
+               then
+                  Bad.Report
+                    (Item    => Bad.Type_Mismatch,
+                     Source  => Syn.Source_Of (Of_Tree),
+                     Where   => Syn.Where (Of_Tree, Argument),
+                     Message => "a construction field or fill requires a"
+                                & " value, not a type argument",
+                     Note    => "[0720]: a stored field is initialized by"
+                                & " a value; static type arguments fill"
+                                & " type formals",
+                     Related => Syn.Origin (Of_Tree, Node),
+                     Because => "the constructed value",
+                     Into    => Found);
+                  Valid := False;
+               end if;
+            end;
+         end loop;
+         if not Valid then
+            Landin.Checking.Refuse (Types.all, Of_Tree, Node);
+         end if;
+         return Valid;
+      end Construction_Values_Present;
 
       --  Which declaration a declaring node is.  Resolution publishes the
       --  other direction, so the few stage-level callers scan the short,
@@ -19485,6 +19531,13 @@ package body Landin.Stages.Checking is
       begin
          pragma Assert (Syn.Kind (Body_Tree.all, Part) = Syn.Variant_Part);
 
+         if Landin.Checking.Type_Of (Types.all, Of_Tree, Value)
+              = Ty.Ill_Typed
+           or else not Construction_Values_Present (Of_Tree, Value)
+         then
+            return;
+         end if;
+
          if Syn.Kind (Of_Tree, Value) = Syn.Name_Reference then
             Nominal := Value;
          elsif Syn.Kind (Of_Tree, Value) = Syn.Labeled_Application
@@ -20579,6 +20632,7 @@ package body Landin.Stages.Checking is
 
          if Landin.Checking.Type_Of (Types.all, Of_Tree, Literal)
               = Ty.Ill_Typed
+           or else not Construction_Values_Present (Of_Tree, Literal)
          then
             return;
          elsif Landin.Checking.Type_Of (Types.all, Of_Tree, Literal)
@@ -25469,13 +25523,6 @@ package body Landin.Stages.Checking is
             Refuse_Unreadable_Subtree (Value);
          end if;
 
-         --  D66's contextual literal walk owns per-field static exclusions
-         --  and unknown-value reports.  It runs in Check_Statement just
-         --  after this generic module boundary.
-         if Module_Struct_Literal then
-            return;
-         end if;
-
          if Value /= Syn.No_Node then
             declare
                Taken : constant Syn.Node_Id := First_Address (Of_Tree, Value);
@@ -25499,6 +25546,13 @@ package body Landin.Stages.Checking is
                   return;
                end if;
             end;
+         end if;
+
+         --  D66's contextual literal walk owns per-field static exclusions
+         --  and unknown-value reports. The whole-image address exclusion
+         --  above still applies to its fields, fills and variant payloads.
+         if Module_Struct_Literal then
+            return;
          end if;
 
          if Value = Syn.No_Node or else Is_Known (Of_Tree, Value) then

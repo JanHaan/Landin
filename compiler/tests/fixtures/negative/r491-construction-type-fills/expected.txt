@@ -1,0 +1,40 @@
+error[L0102]: a construction fill requires an expression
+  --> ../tests/fixtures/negative/r491-construction-type-fills/main.ldn:6:37
+  |
+6 | module_fill: box = box(first: 0, of ptr u8)
+  |                                     ^^^^^^
+  --> ../tests/fixtures/negative/r491-construction-type-fills/main.ldn:6:34
+  |
+6 | module_fill: box = box(first: 0, of ptr u8)
+  |                                  ^^ the fill begins here
+  = note: [1810]: trailing `of` fills are expressions
+error[L0102]: a construction fill requires an expression
+  --> ../tests/fixtures/negative/r491-construction-type-fills/main.ldn:7:53
+  |
+7 | module_case_fill: choice = (kind: pair(first: 0, of ptr u8))
+  |                                                     ^^^^^^
+  --> ../tests/fixtures/negative/r491-construction-type-fills/main.ldn:7:50
+  |
+7 | module_case_fill: choice = (kind: pair(first: 0, of ptr u8))
+  |                                                  ^^ the fill begins here
+  = note: [1810]: trailing `of` fills are expressions
+error[L0102]: a construction fill requires an expression
+  --> ../tests/fixtures/negative/r491-construction-type-fills/main.ldn:10:36
+   |
+10 |     local_fill := box(first: 0, of [2]u8)
+   |                                    ^^^^^
+  --> ../tests/fixtures/negative/r491-construction-type-fills/main.ldn:10:33
+   |
+10 |     local_fill := box(first: 0, of [2]u8)
+   |                                 ^^ the fill begins here
+  = note: [1810]: trailing `of` fills are expressions
+error[L0102]: a construction fill requires an expression
+  --> ../tests/fixtures/negative/r491-construction-type-fills/main.ldn:11:56
+   |
+11 |     local_case_fill: choice = (kind: pair(first: 0, of ptr u8))
+   |                                                        ^^^^^^
+  --> ../tests/fixtures/negative/r491-construction-type-fills/main.ldn:11:53
+   |
+11 |     local_case_fill: choice = (kind: pair(first: 0, of ptr u8))
+   |                                                     ^^ the fill begins here
+  = note: [1810]: trailing `of` fills are expressions

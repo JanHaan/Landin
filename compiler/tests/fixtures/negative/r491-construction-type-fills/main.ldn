@@ -1,0 +1,12 @@
+box: type = struct first: i32 second: i32 end box
+choice: type = struct
+    kind: variant pair: (first: i32, second: i32) | empty end kind
+end choice
+
+module_fill: box = box(first: 0, of ptr u8)
+module_case_fill: choice = (kind: pair(first: 0, of ptr u8))
+
+f: () -> none =
+    local_fill := box(first: 0, of [2]u8)
+    local_case_fill: choice = (kind: pair(first: 0, of ptr u8))
+end f
