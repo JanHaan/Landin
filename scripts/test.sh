@@ -9,6 +9,8 @@
 
 . "$(dirname -- "$0")/env.sh"
 
+landin_build_lock mode "$@"
+
 Record_And_Run=no
 if [ "$#" -eq 1 ] && [ "$1" = "--record-and-run" ]; then
     Record_And_Run=yes

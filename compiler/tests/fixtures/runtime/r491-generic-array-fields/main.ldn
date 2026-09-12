@@ -1,0 +1,40 @@
+row: type = [2]i32
+box: type = struct values: row end box
+nested: type = struct inner: box end nested
+north, south: atom
+problem: type = north | south
+handler: type = () -> (result: i32)
+references: type = struct
+    atoms: [2]problem
+    callbacks: [2]handler
+    pointers: [2]ptr mut i32
+end references
+module_box: box = (values: [20, 22])
+mut module_value: i32 = 40
+answer: () -> (result: i32) = 42 end answer
+copy: (t: type, value: t) -> (result: t from value) = value end copy
+public main: () -> (code: i32) =
+    mut b: box = (values: [1, 42])
+    values := copy(b.values)
+    explicit := copy(t: row, value: b.values)
+    named := copy(value: b.values)
+    held: nested = (inner: b)
+    deep := copy(held.inner.values)
+    module_copy := copy(module_box.values)
+    b.values[1] = 9
+    refs: references = (atoms: [north, south],
+        callbacks: [answer, answer],
+        pointers: [addr module_value, addr module_value])
+    atoms := copy(refs.atoms)
+    callbacks := copy(refs.callbacks)
+    pointers := copy(refs.pointers)
+    selected := pointers[1]
+    selected.val = 42
+    callback := callbacks[0]
+    code = if values[1] == 42 and explicit[1] == 42
+      and named[1] == 42 and deep[1] == 42 and b.values[1] == 9
+      and module_copy[0] + module_copy[1] == 42
+      and atoms[0] == north and atoms[1] == south
+      and callback() == 42 and module_value == 42
+      then 42 else 1 end if
+end main

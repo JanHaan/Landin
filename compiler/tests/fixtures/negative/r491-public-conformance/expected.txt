@@ -1,0 +1,10 @@
+error[L0103]: `public` cannot modify a conformance
+  --> ../tests/fixtures/negative/r491-public-conformance/main.ldn:5:1
+  |
+5 | public i32 is readable (read: read_i32)
+  | ^^^^^^
+  --> ../tests/fixtures/negative/r491-public-conformance/main.ldn:5:8
+  |
+5 | public i32 is readable (read: read_i32)
+  |        ^^^ the conformance starts here
+  = note: [1280]: every reached conformance belongs to the whole-program register

@@ -133,7 +133,8 @@ Depends on: none
 class HostedParity(unittest.TestCase):
     def problems(self, *, kinds=("runtime",), targets="linux-x86-64",
                  program="main.ldn", applicability="hosted-now",
-                 static=False, codes="L0301", status="complete"):
+                 static=False, codes="L0301", status="complete",
+                 extra_statuses=None):
         rows = [(7, {"Construct": "`[0650]`", "Applicability": applicability,
                      "Owner": "R4.90", "Disposition": "audited"})]
         fixtures = {kind + "/probe": ("fixture.meta", {
@@ -143,7 +144,11 @@ class HostedParity(unittest.TestCase):
                             "Refused": "`negative/probe`",
                             "Rationale": "a compile-time prohibition"})] if static else []
         return CHECK.hosted_parity_problems(
-            {"R4.90": status}, rows, static_rows, fixtures)
+            {"R4.90": status, **(extra_statuses or {})}, rows, static_rows, fixtures)
+
+    def test_later_repairs_do_not_rewrite_prior_acceptance(self):
+        self.assertEqual(self.problems(extra_statuses={"R4.91": "active"}), [])
+        self.assertTrue(self.problems(extra_statuses={"R4.80": "active"}))
 
     def test_runtime_and_abi_are_linux_execution_witnesses(self):
         for kind in ("runtime", "abi"):

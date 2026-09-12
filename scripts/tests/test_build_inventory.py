@@ -12,7 +12,8 @@ SCRIPT = (ROOT / "scripts/build.sh").read_text()
 START = 'if [ -f "$Manifest" ] && [ "$Current" != "$(cat "$Manifest")" ]; then\n'
 DECISION = SCRIPT[SCRIPT.index(START):SCRIPT.index("\nNoop_Arguments=no")]
 BASE = ["1 10 /src/main.adb", "2 20 /src/host.c", "3 30 /src/host.h",
-        "4 40 /src/lib.gpr", "5 50 /scripts/build.sh", "mode debug tag test",
+        "4 40 /src/lib.gpr", "5 50 /scripts/build.sh",
+        "6 60 /scripts/build_lock.py", "mode debug tag test",
         "gnat pinned", "gprbuild pinned"]
 
 

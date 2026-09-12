@@ -1,0 +1,6 @@
+error[L0110]: this begins no statement
+  --> ../tests/fixtures/negative/r491-match-extra-paren/main.ldn:8:16
+  |
+8 |         empty: ) = false
+  |                ^^^^^^^^^
+  = note: [1810]: a statement must be a binding, assignment, call or control form

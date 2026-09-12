@@ -1,0 +1,9 @@
+class: negative
+summary: type-only trailing fills receive expression diagnostics and preserve list recovery
+program: main.ldn
+codes: L0102, L0102, L0102, L0102
+constructs: 0710, 0720, 0900, 1280
+targets: linux-x86-64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/r491-construction-type-fills/main.ldn
+status: 1

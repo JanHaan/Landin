@@ -1,0 +1,10 @@
+error[L0301]: this argument deduces a different type descriptor for repeated formal `t`
+  --> ../tests/fixtures/negative/r491-generic-array-field-shape/main.ldn:7:37
+  |
+7 |     values := copy(t: short, value: b.values)
+  |                                     ^^^^^^^^
+  --> ../tests/fixtures/negative/r491-generic-array-field-shape/main.ldn:7:20
+  |
+7 |     values := copy(t: short, value: b.values)
+  |                    ^^^^^^^^ the first argument relation for this formal
+  = note: D138: repeated exact structural deductions must agree; this call has no routine target

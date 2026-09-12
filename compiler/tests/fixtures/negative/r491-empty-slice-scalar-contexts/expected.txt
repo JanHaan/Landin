@@ -1,0 +1,60 @@
+error[L0301]: `[]` needs a slice context
+  --> ../tests/fixtures/negative/r491-empty-slice-scalar-contexts/main.ldn:3:30
+  |
+3 | result: () -> (value: i32) = [] end result
+  |                              ^^
+  --> ../tests/fixtures/negative/r491-empty-slice-scalar-contexts/main.ldn:3:30
+  |
+3 | result: () -> (value: i32) = [] end result
+  |                              ^^ the empty slice written here
+  = note: [0570]: an empty slice retains its element type and reference permission
+error[L0301]: `[]` needs a slice context
+  --> ../tests/fixtures/negative/r491-empty-slice-scalar-contexts/main.ldn:5:18
+  |
+5 |     value: i32 = []
+  |                  ^^
+  --> ../tests/fixtures/negative/r491-empty-slice-scalar-contexts/main.ldn:5:18
+  |
+5 |     value: i32 = []
+  |                  ^^ the empty slice written here
+  = note: [0570]: an empty slice retains its element type and reference permission
+error[L0301]: `[]` needs a slice context
+  --> ../tests/fixtures/negative/r491-empty-slice-scalar-contexts/main.ldn:6:17
+  |
+6 |     inferred := []
+  |                 ^^
+  --> ../tests/fixtures/negative/r491-empty-slice-scalar-contexts/main.ldn:6:17
+  |
+6 |     inferred := []
+  |                 ^^ the empty slice written here
+  = note: [0570]: an empty slice retains its element type and reference permission
+error[L0301]: `[]` needs a slice context
+  --> ../tests/fixtures/negative/r491-empty-slice-scalar-contexts/main.ldn:7:12
+  |
+7 |     accept([])
+  |            ^^
+  --> ../tests/fixtures/negative/r491-empty-slice-scalar-contexts/main.ldn:7:12
+  |
+7 |     accept([])
+  |            ^^ the empty slice written here
+  = note: [0570]: an empty slice retains its element type and reference permission
+error[L0301]: `[]` needs a slice context
+  --> ../tests/fixtures/negative/r491-empty-slice-scalar-contexts/main.ldn:8:27
+  |
+8 |     stored: box = (value: [])
+  |                           ^^
+  --> ../tests/fixtures/negative/r491-empty-slice-scalar-contexts/main.ldn:8:27
+  |
+8 |     stored: box = (value: [])
+  |                           ^^ the empty slice written here
+  = note: [0570]: an empty slice retains its element type and reference permission
+error[L0301]: `[]` needs a slice context
+  --> ../tests/fixtures/negative/r491-empty-slice-scalar-contexts/main.ldn:9:12
+  |
+9 |     code = []
+  |            ^^
+  --> ../tests/fixtures/negative/r491-empty-slice-scalar-contexts/main.ldn:9:12
+  |
+9 |     code = []
+  |            ^^ the empty slice written here
+  = note: [0570]: an empty slice retains its element type and reference permission

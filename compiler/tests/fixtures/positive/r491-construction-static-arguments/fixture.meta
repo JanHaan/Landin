@@ -1,0 +1,5 @@
+class: positive
+summary: static pointer type arguments remain distinct from valid stored fields and fills
+program: program.ldn
+constructs: 0430, 0710, 0720, 0900, 1280
+targets: linux-x86-64, macos-arm64, synthetic-32

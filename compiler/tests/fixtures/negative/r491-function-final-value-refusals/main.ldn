@@ -1,0 +1,17 @@
+noop: () -> none = end noop
+none_without_result: () -> (r: i32) = local: i32 = 1 noop() end none_without_result
+read_before_final: () -> (r: i32) = local := r 42 end read_before_final
+early_without_result: (early: bool) -> (r: i32) =
+    return when early
+    42
+end early_without_result
+frame_result: () -> (r: ptr i32) = local: i32 = 42 addr local end frame_result
+wrong_type: () -> (r: i32) = noop() true end wrong_type
+mixed: (choose: bool) -> (r: i32) =
+    r = 42
+    if choose then 42 else noop() end if
+end mixed
+mixed_pointer: (choose: bool, p: ptr i32) -> (r: ptr i32 from p) =
+    r = p
+    if choose then p else noop() end if
+end mixed_pointer

@@ -1366,10 +1366,14 @@ end bad
 ### [0780] Parameters are non-escaping by default
 
 Parameters are non-escaping by default, so a callee may use
-a pointer freely but not keep it. Keeping it is declared.
+a pointer freely but not keep it. Keeping it is declared. This applies to
+stores through caller-owned pointers, slices and `inout` fields as well as
+module bindings. An update within the same origin is permitted; retaining a
+reference from another parameter requires `escaping`. In `push_front`, both
+`head` and `item` are retained in storage reached through the other argument.
 
 ```landin
-push_front: (inout head: ptr mut node, escaping item: ptr mut node)
+push_front: (escaping inout head: ptr mut node, escaping item: ptr mut node)
             -> none =
     item.val.next = head
     head = item
@@ -1569,7 +1573,9 @@ saving `lenof xs` saves a number, not a borrow: the number may be used after
 `xs` or its container is changed. This does not exempt an operator's evaluated
 operands from their checks, or change [0370]'s unevaluated measurements.
 Taking an address or range is different: that reference still keeps the
-selected storage's origin [0430] [0790].
+selected storage's origin [0430] [0790]. Writing through a known address of a
+local updates the local's tracked origins too. Joining an integer-created
+pointer with a tracked reference does not hide the tracked origin.
 
 ### [0850] Volatile is exempt from the borrow rule and from every
 
@@ -1677,6 +1683,8 @@ A place that was sunk is dead. Reading it before it is
 assigned again is an error, and that is what closes the
 window between releasing storage and repointing the field
 — the window a temporary binding would have left open.
+Reading the enclosing aggregate also reads that field. Assigning a replacement
+aggregate restores its fields; unrelated fields and array elements stay live.
 Say plainly what this is and is not. It is a
 use-after-consume check on one place. It is not ownership:
 the value is copyable, so a copy made before the sink is
@@ -1687,7 +1695,9 @@ trigger in ROADMAP.md's inherited review register.
 A place sunk out of an inout parameter must be assigned
 again before the function returns, or the caller would get
 its struct back with a dead field and nobody tracking it.
-That is [0930]'s rule for named returns, applied to fields.
+This includes a failure the caller recovers from. Applicable cleanup runs
+before the check, so a `defer` or `undo` may restore the field. A failure needs
+no successful named result under [0930], but it still hands back `inout` storage.
 
 ```landin
 release: (T: type, A: type is allocator, inout l: list(T), inout a: A)
@@ -2369,10 +2379,16 @@ Nothing new is needed, because the conventions of [0900] are
 already the mechanism — and without them a [N]T payload
 would be copied in order to be read and could not be
 written at all.
-An inout binding borrows the matched value for the arm, by
-the rule at [0830]. So an arm may assign to the variant
-field it was bound out of, but only once the binding has
-had its last use, exactly as any other borrow ends.
+Both plain and inout payload bindings alias the matched storage, including
+scalar payloads. By [0830], an arm may replace the variant or a containing
+object only after the aliases' last use. Writing through an inout alias is a
+use, as is reading an address derived from it or evaluating a pending cleanup
+argument. A separate scalar copy keeps no borrow of the payload. A computed-value
+match has D134's separate temporary;
+replacing the original does not replace that temporary's payload. A direct case
+assignment selects its new tag before evaluating payload initializers (D76), so
+an initializer cannot use an alias of the old payload. For a whole containing
+construction, save needed scalar values before starting the construction too.
 
 ```landin
 spill: (inout s: store, v: i32) -> none =

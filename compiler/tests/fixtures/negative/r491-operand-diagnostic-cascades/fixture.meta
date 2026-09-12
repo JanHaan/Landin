@@ -1,0 +1,9 @@
+class: negative
+summary: invalid float operators report once while independent integer operand faults remain visible
+program: main.ldn
+codes: L0301, L0301, L0301, L0301, L0301, L0301, L0301, L0306
+constructs: 0170, 0290, 0320, 0390, 1890, 1950
+targets: linux-x86-64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/r491-operand-diagnostic-cascades/main.ldn
+status: 1

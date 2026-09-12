@@ -270,6 +270,8 @@ package body Landin.Stages.Checking is
         (Of_Tree : Syn.Tree; Field : Syn.Node_Id) return Syn.Node_Id;
       function Construction_Fill
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Syn.Node_Id;
+      function Construction_Values_Present
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
 
       function Is_Struct_Construction
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
@@ -364,6 +366,50 @@ package body Landin.Stages.Checking is
          end loop;
          return Syn.No_Node;
       end Construction_Fill;
+
+      --  Labelled applications retain separate type and value projections.
+      --  Only static formals may use the former without the latter. Check
+      --  runtime roles before a field or fill asks for an expression node.
+      function Construction_Values_Present
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
+      is
+         Valid : Boolean := True;
+      begin
+         if Syn.Kind (Of_Tree, Node) /= Syn.Labeled_Application then
+            return True;
+         end if;
+         for Index in 1 .. Syn.Argument_Count (Of_Tree, Node) loop
+            declare
+               Argument : constant Syn.Node_Id :=
+                 Syn.Nth_Argument (Of_Tree, Node, Index);
+            begin
+               if Res.Role_Of (Meanings.all, Of_Tree, Argument)
+                    in Res.Field_Argument | Res.Payload_Argument
+                       | Res.Fill_Argument
+                 and then Syn.Expression_Projection (Of_Tree, Argument)
+                   = Syn.No_Node
+               then
+                  Bad.Report
+                    (Item    => Bad.Type_Mismatch,
+                     Source  => Syn.Source_Of (Of_Tree),
+                     Where   => Syn.Where (Of_Tree, Argument),
+                     Message => "a construction field or fill requires a"
+                                & " value, not a type argument",
+                     Note    => "[0720]: a stored field is initialized by"
+                                & " a value; static type arguments fill"
+                                & " type formals",
+                     Related => Syn.Origin (Of_Tree, Node),
+                     Because => "the constructed value",
+                     Into    => Found);
+                  Valid := False;
+               end if;
+            end;
+         end loop;
+         if not Valid then
+            Landin.Checking.Refuse (Types.all, Of_Tree, Node);
+         end if;
+         return Valid;
+      end Construction_Values_Present;
 
       --  Which declaration a declaring node is.  Resolution publishes the
       --  other direction, so the few stage-level callers scan the short,
@@ -996,7 +1042,8 @@ package body Landin.Stages.Checking is
          Expected     : Value_Context;
          Site         : Landin.Provenance.Origin;
          Because      : String;
-         Static_Image : Boolean := False);
+         Static_Image : Boolean := False;
+         Optional_Value : Boolean := False);
       function Synthesise_Control
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind;
 
@@ -1141,7 +1188,8 @@ package body Landin.Stages.Checking is
          Value_Site : Landin.Provenance.Origin :=
            Landin.Provenance.No_Origin;
          Value_Because : String := "";
-         Discover_Only : Boolean := False);
+         Discover_Only : Boolean := False;
+         Optional_Value : Boolean := False);
       procedure Check_Mixed_Array_Repetition
         (Of_Tree      : Syn.Tree;
          Site_Node    : Syn.Node_Id;
@@ -1187,7 +1235,8 @@ package body Landin.Stages.Checking is
          Expected : Value_Context := No_Value_Context;
          Value_Site : Landin.Provenance.Origin :=
            Landin.Provenance.No_Origin;
-         Value_Because : String := "");
+         Value_Because : String := "";
+         Routine_Body : Boolean := False);
       procedure Check_Routine_Body
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
       procedure Check_External_Declaration
@@ -8975,13 +9024,15 @@ package body Landin.Stages.Checking is
                   end if;
 
                   --  Deduction remains context-free for an unresolved type
-                  --  formal.  A text literal whose written parameter pattern
+                  --  formal.  A literal whose written parameter pattern
                   --  is already concrete is different: [0260] gives the
-                  --  literal that exact reference context, just as an
+                  --  text literal that exact reference context, just as an
                   --  ordinary call does.  This must precede Synthesise,
-                  --  whose context-free text default is utf8.
+                  --  whose context-free text default is utf8. D141 likewise
+                  --  gives an empty slice its concrete parameter context.
                   if Syn.Kind (Caller_Tree, Argument)
                        in Syn.Text_Literal | Syn.Raw_Literal
+                          | Syn.Empty_Slice_Literal
                   then
                      declare
                         Expected : constant Type_Descriptor := Normalized_Type
@@ -9009,7 +9060,9 @@ package body Landin.Stages.Checking is
                     (if Syn.Kind (Caller_Tree, Argument)
                          in Syn.Name_Reference | Syn.Member_Selection
                             | Syn.Element_Index
-                     then Selected_From (Caller_Tree, Argument)
+                     then (if Admit_Array_Field (Caller_Tree, Argument)
+                           then Ty.Fixed_Array
+                           else Selected_From (Caller_Tree, Argument))
                      else Synthesise (Caller_Tree, Argument));
                   if Got = Ty.Untyped_Integer then
                      Commit_To (Caller_Tree, Argument, Ty.Default_Integer);
@@ -11470,6 +11523,7 @@ package body Landin.Stages.Checking is
                    (Is_Value_Control (Of_Tree, Argument)
                     or else Syn.Kind (Of_Tree, Argument)
                               in Syn.Text_Literal | Syn.Raw_Literal
+                                 | Syn.Empty_Slice_Literal
                     or else (Wants = Ty.Fixed_Array
                       and then Needs_Arithmetic_Context (Of_Tree, Argument)))
                then
@@ -16844,6 +16898,22 @@ package body Landin.Stages.Checking is
             when Syn.True_Literal | Syn.False_Literal =>
                return Kept (Ty.Bool);
 
+            when Syn.Empty_Slice_Literal =>
+               --  D141 supplies this literal's complete slice descriptor in
+               --  Check_Contextual_Value.  No scalar or inferred context
+               --  can give it a type; Not_Typed would silently pass Require.
+               Bad.Report
+                 (Item    => Bad.Type_Mismatch,
+                  Source  => Syn.Source_Of (Of_Tree),
+                  Where   => Syn.Where (Of_Tree, Node),
+                  Message => "`[]` needs a slice context",
+                  Note    => "[0570]: an empty slice retains its element"
+                             & " type and reference permission",
+                  Related => Syn.Origin (Of_Tree, Node),
+                  Because => "the empty slice written here",
+                  Into    => Found);
+               return Kept (Ty.Ill_Typed);
+
             when Syn.Zeroed_Literal =>
                Bad.Report
                  (Item    => Bad.Unsupported_Use,
@@ -19464,6 +19534,13 @@ package body Landin.Stages.Checking is
       begin
          pragma Assert (Syn.Kind (Body_Tree.all, Part) = Syn.Variant_Part);
 
+         if Landin.Checking.Type_Of (Types.all, Of_Tree, Value)
+              = Ty.Ill_Typed
+           or else not Construction_Values_Present (Of_Tree, Value)
+         then
+            return;
+         end if;
+
          if Syn.Kind (Of_Tree, Value) = Syn.Name_Reference then
             Nominal := Value;
          elsif Syn.Kind (Of_Tree, Value) = Syn.Labeled_Application
@@ -20558,6 +20635,7 @@ package body Landin.Stages.Checking is
 
          if Landin.Checking.Type_Of (Types.all, Of_Tree, Literal)
               = Ty.Ill_Typed
+           or else not Construction_Values_Present (Of_Tree, Literal)
          then
             return;
          elsif Landin.Checking.Type_Of (Types.all, Of_Tree, Literal)
@@ -20981,7 +21059,8 @@ package body Landin.Stages.Checking is
          Value_Site : Landin.Provenance.Origin :=
            Landin.Provenance.No_Origin;
          Value_Because : String := "";
-         Discover_Only : Boolean := False)
+         Discover_Only : Boolean := False;
+         Optional_Value : Boolean := False)
       is
          Subject : constant Syn.Node_Id := Syn.Match_Subject (Of_Tree, Node);
          Discovery : Natural := 0;
@@ -20997,7 +21076,8 @@ package body Landin.Stages.Checking is
             else
                Check_Block
                  (Of_Tree, Syn.Body_Of (Of_Tree, Arm), Returns,
-                  Expected, Value_Site, Value_Because);
+                  Expected, Value_Site, Value_Because,
+                  Routine_Body => Optional_Value);
             end if;
          end Visit_Arm;
 
@@ -22946,7 +23026,11 @@ package body Landin.Stages.Checking is
                                      (Of_Tree, Node)),
                                 Place, Value, Node);
                         begin
-                           pragma Unreferenced (Result);
+                           if Result = Ty.Ill_Typed then
+                              Landin.Checking.Refuse
+                                (Types.all, Of_Tree, Node);
+                              return;
+                           end if;
                         end;
 
                         --  D188: a compound assignment stores the
@@ -23604,13 +23688,39 @@ package body Landin.Stages.Checking is
          Expected : Value_Context := No_Value_Context;
          Value_Site : Landin.Provenance.Origin :=
            Landin.Provenance.No_Origin;
-         Value_Because : String := "")
+         Value_Because : String := "";
+         Routine_Body : Boolean := False)
       is
       begin
          for Index in 1 .. Syn.Statement_Count (Of_Tree, Node) loop
             Check_Statement
               (Of_Tree, Syn.Nth_Statement (Of_Tree, Node, Index), Returns);
          end loop;
+
+         --  A routine can also finish by calling a none-returning routine
+         --  after assigning its named results. Syntax alone cannot select
+         --  that statement interpretation of the final call.
+         if Routine_Body
+           and then Syn.Block_Value (Of_Tree, Node) /= Syn.No_Node
+         then
+            declare
+               Value : constant Syn.Node_Id := Syn.Block_Value (Of_Tree, Node);
+            begin
+               if Syn.Kind (Of_Tree, Value)
+                    in Syn.Call | Syn.Labeled_Application | Syn.Try_Expression
+                 and then not Is_Struct_Construction (Of_Tree, Value)
+               then
+                  declare
+                     Got : constant Ty.Type_Kind :=
+                       Synthesise (Of_Tree, Value);
+                  begin
+                     if Got = Ty.No_Value then
+                        return;
+                     end if;
+                  end;
+               end if;
+            end;
+         end if;
 
          if Expected.Kind /= Ty.Undecided
            and then Syn.Block_Value (Of_Tree, Node) /= Syn.No_Node
@@ -23621,7 +23731,8 @@ package body Landin.Stages.Checking is
                 then Value_Site else Syn.Origin (Of_Tree, Node)),
                (if Value_Because /= ""
                 then Value_Because
-                else "the value produced by this control block"));
+                else "the value produced by this control block"),
+               Optional_Value => Routine_Body);
          elsif Syn.Block_Value (Of_Tree, Node) /= Syn.No_Node then
             --  A control form may also occupy the statement slot shared by
             --  calls.  Its final expression is still checked even though no
@@ -24094,7 +24205,8 @@ package body Landin.Stages.Checking is
          Expected     : Value_Context;
          Site         : Landin.Provenance.Origin;
          Because      : String;
-         Static_Image : Boolean := False)
+         Static_Image : Boolean := False;
+         Optional_Value : Boolean := False)
       is
       begin
          if Node = Syn.No_Node then
@@ -24129,7 +24241,9 @@ package body Landin.Stages.Checking is
            and then Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
              = Ty.Undecided
          then
-            Note_Context (Of_Tree, Node, Expected);
+            if not Optional_Value then
+               Note_Context (Of_Tree, Node, Expected);
+            end if;
 
             case Syn.Kind (Of_Tree, Node) is
                when Syn.If_Statement =>
@@ -24144,24 +24258,28 @@ package body Landin.Stages.Checking is
                            "the condition of this branch");
                         Check_Block
                           (Of_Tree, Syn.Body_Of (Of_Tree, This),
-                           Ty.Not_Typed, Expected, Site, Because);
+                           Ty.Not_Typed, Expected, Site, Because,
+                           Routine_Body => Optional_Value);
                      end;
                   end loop;
 
                   if Syn.Else_Body (Of_Tree, Node) /= Syn.No_Node then
                      Check_Block
                        (Of_Tree, Syn.Else_Body (Of_Tree, Node),
-                        Ty.Not_Typed, Expected, Site, Because);
+                        Ty.Not_Typed, Expected, Site, Because,
+                        Routine_Body => Optional_Value);
                   end if;
 
                when Syn.Match_Statement =>
                   Check_Match
-                    (Of_Tree, Node, Ty.Not_Typed, Expected, Site, Because);
+                    (Of_Tree, Node, Ty.Not_Typed, Expected, Site, Because,
+                     Optional_Value => Optional_Value);
 
                when Syn.Bare_Block =>
                   Check_Block
                     (Of_Tree, Syn.Body_Of (Of_Tree, Node),
-                     Ty.Not_Typed, Expected, Site, Because);
+                     Ty.Not_Typed, Expected, Site, Because,
+                     Routine_Body => Optional_Value);
 
                when Syn.Loop_Statement | Syn.While_Statement
                   | Syn.For_Statement =>
@@ -24172,6 +24290,46 @@ package body Landin.Stages.Checking is
                when others =>
                   raise Landin.Compiler_Defect;
             end case;
+            if Optional_Value then
+               declare
+                  function Has_Answer (Block : Syn.Node_Id) return Boolean;
+
+                  function Has_Answer (Block : Syn.Node_Id) return Boolean is
+                    (Block /= Syn.No_Node
+                     and then Syn.Block_Value (Of_Tree, Block) /= Syn.No_Node
+                     and then Landin.Checking.Type_Of
+                       (Types.all, Of_Tree, Syn.Block_Value (Of_Tree, Block))
+                         /= Ty.No_Value);
+
+                  Answer : Boolean := False;
+               begin
+                  case Syn.Kind (Of_Tree, Node) is
+                     when Syn.If_Statement =>
+                        for Arm in 1 .. Syn.Arm_Count (Of_Tree, Node) loop
+                           Answer := Answer or else Has_Answer
+                             (Syn.Body_Of (Of_Tree,
+                              Syn.Nth_Arm (Of_Tree, Node, Arm)));
+                        end loop;
+                        Answer := Answer or else Has_Answer
+                          (Syn.Else_Body (Of_Tree, Node));
+                     when Syn.Match_Statement =>
+                        for Arm in 1 .. Syn.Match_Arm_Count (Of_Tree, Node)
+                        loop
+                           Answer := Answer or else Has_Answer
+                             (Syn.Body_Of (Of_Tree,
+                              Syn.Nth_Match_Arm (Of_Tree, Node, Arm)));
+                        end loop;
+                     when Syn.Bare_Block =>
+                        Answer := Has_Answer (Syn.Body_Of (Of_Tree, Node));
+                     when others =>
+                        Answer := True;
+                  end case;
+                  Note_Context
+                    (Of_Tree, Node,
+                     (if Answer then Expected
+                      else (Kind => Ty.No_Value, others => <>)));
+               end;
+            end if;
             return;
          end if;
 
@@ -24854,10 +25012,27 @@ package body Landin.Stages.Checking is
                if Expected.Kind = Ty.Slice_Value
                  and then Syn.Kind (Of_Tree, Node) = Syn.Empty_Slice_Literal
                then
-                  Landin.Checking.Note
-                    (Types.all, Of_Tree, Node, Ty.Slice_Value);
-                  Landin.Checking.Note_Reference
-                    (Types.all, Of_Tree, Node, Expected.Reference);
+                  if Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
+                    = Ty.Undecided
+                  then
+                     Landin.Checking.Note
+                       (Types.all, Of_Tree, Node, Ty.Slice_Value);
+                     Landin.Checking.Note_Reference
+                       (Types.all, Of_Tree, Node, Expected.Reference);
+                  elsif Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
+                    /= Ty.Ill_Typed
+                    and then
+                      (Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
+                         /= Ty.Slice_Value
+                       or else not Landin.Checking.References_Agree
+                         (Types.all,
+                          Landin.Checking.Reference_Of
+                            (Types.all, Of_Tree, Node),
+                          Expected.Reference))
+                  then
+                     Context_Mismatch
+                       (Of_Tree, Node, Expected, Site, Because);
+                  end if;
                   return;
                end if;
                --  D189/[0480]: the empty case of a pointer union is written
@@ -25431,13 +25606,6 @@ package body Landin.Stages.Checking is
             Refuse_Unreadable_Subtree (Value);
          end if;
 
-         --  D66's contextual literal walk owns per-field static exclusions
-         --  and unknown-value reports.  It runs in Check_Statement just
-         --  after this generic module boundary.
-         if Module_Struct_Literal then
-            return;
-         end if;
-
          if Value /= Syn.No_Node then
             declare
                Taken : constant Syn.Node_Id := First_Address (Of_Tree, Value);
@@ -25461,6 +25629,13 @@ package body Landin.Stages.Checking is
                   return;
                end if;
             end;
+         end if;
+
+         --  D66's contextual literal walk owns per-field static exclusions
+         --  and unknown-value reports. The whole-image address exclusion
+         --  above still applies to its fields, fills and variant payloads.
+         if Module_Struct_Literal then
+            return;
          end if;
 
          if Value = Syn.No_Node or else Is_Known (Of_Tree, Value) then
@@ -27997,6 +28172,14 @@ package body Landin.Stages.Checking is
 
          Operation := Syn.Kind (Of_Tree, Node);
 
+         --  An ill-typed operator has no numeric operand contract to check.
+         --  Its children were still visited for their independent faults.
+         if Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
+              = Ty.Ill_Typed
+         then
+            return;
+         end if;
+
          if Syn.Kind (Of_Tree, Node) = Syn.Assignment
            and then Syn.Assignment_Operation (Of_Tree, Node)
                       /= Landin.Tokens.Plain_Assignment
@@ -29068,7 +29251,7 @@ package body Landin.Stages.Checking is
             else
                Check_Block
                  (Of_Tree, Runs, Gives, Expected,
-                  Result_Site, "the returns this fills");
+                  Result_Site, "the returns this fills", Routine_Body => True);
             end if;
          else
             Check_Contextual_Value

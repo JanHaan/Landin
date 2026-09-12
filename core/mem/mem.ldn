@@ -121,7 +121,11 @@ public transfer: (item: type, source: raw(item), index: usize,
         end match
     else
         unchecked begin
-            target.prefix[admitted] = saved
+            --  The private transfer copies an already-retained value into
+            --  independent raw storage, as the first-slot path does above.
+            --  Capture that destination before publishing its new witness.
+            slot: ptr mut item = ptr(usize(addr target.prefix[admitted]))
+            slot.val = saved
             target.prefix = target.prefix[0..<wanted]
         end unchecked
     end if

@@ -1,0 +1,129 @@
+choice: type = struct
+    kind: variant
+        pair: (first: i32, second: i32) | empty
+    end kind
+end choice
+clear: (inout value: choice) -> none = value.kind = empty end clear
+use: (value: i32) -> none = end use
+
+read_after: () -> none =
+    mut value: choice = (kind: pair(first: 40, second: 2))
+    match value.kind
+        pair(first, inout second): begin
+            value.kind = empty
+            _ = first
+        end
+        empty: _ = 0
+    end match
+end read_after
+
+write_after: () -> none =
+    mut value: choice = (kind: pair(first: 40, second: 2))
+    match value.kind
+        pair(first, inout second): begin
+            value.kind = empty
+            second = 42
+        end
+        empty: _ = 0
+    end match
+end write_after
+
+whole_after: () -> none =
+    mut value: choice = (kind: pair(first: 40, second: 2))
+    match value.kind
+        pair(first, inout second): begin
+            value = (kind: empty)
+            _ = first
+        end
+        empty: _ = 0
+    end match
+end whole_after
+
+call_after: () -> none =
+    mut value: choice = (kind: pair(first: 40, second: 2))
+    match value.kind
+        pair(first, inout second): begin
+            clear(value)
+            second = 42
+        end
+        empty: _ = 0
+    end match
+end call_after
+
+address_after: () -> none =
+    mut value: choice = (kind: pair(first: 40, second: 2))
+    match value.kind
+        pair(first, inout second): begin
+            saved: ptr mut i32 = addr second
+            value.kind = empty
+            saved.val = 42
+        end
+        empty: _ = 0
+    end match
+end address_after
+
+cleanup_after: () -> none =
+    mut value: choice = (kind: pair(first: 40, second: 2))
+    match value.kind
+        pair(first, inout second): begin
+            defer use(first)
+            value.kind = empty
+        end
+        empty: _ = 0
+    end match
+end cleanup_after
+
+alias_after: () -> none =
+    mut value: choice = (kind: pair(first: 40, second: 2))
+    match value.kind
+        pair(first, inout second): begin
+            alias: ptr mut choice = addr value
+            alias.val.kind = empty
+            second = 42
+        end
+        empty: _ = 0
+    end match
+end alias_after
+
+loop_after: () -> none =
+    mut value: choice = (kind: pair(first: 40, second: 2))
+    match value.kind
+        pair(first, inout second): begin
+            loop do
+                _ = first
+                value.kind = empty
+            end loop
+        end
+        empty: _ = 0
+    end match
+end loop_after
+
+whole_alias_after: () -> none =
+    mut value: choice = (kind: pair(first: 40, second: 2))
+    alias: ptr mut choice = addr value
+    match value.kind
+        pair(first, inout second): begin
+            alias.val = (kind: empty)
+            second = 42
+        end
+        empty: begin end
+    end match
+end whole_alias_after
+
+payload_during_retag: () -> none =
+    mut value: choice = (kind: pair(first: 40, second: 2))
+    match value.kind
+        pair(first, second):
+            value.kind = pair(first: first, second: second)
+        empty: begin end
+    end match
+end payload_during_retag
+
+payload_during_whole_construction: () -> none =
+    mut value: choice = (kind: pair(first: 40, second: 2))
+    match value.kind
+        pair(first, second):
+            value = (kind: pair(first: first, second: second))
+        empty: begin end
+    end match
+end payload_during_whole_construction

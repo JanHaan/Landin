@@ -14,10 +14,10 @@
 --  its occurrences lives here.
 --
 --  A code is a name, not an address. The bands below record where a code was
---  born, not which stage owns it: `L0010` is raised by the scanner today and
---  by the parser at R1.40. A retired code keeps its row, so its number can
---  never be handed to a different rule -- that is how "codes remain stable"
---  becomes a fact in a file rather than a promise in a paragraph.
+--  born, not which stage owns it: `L0010` began in lexical refusal and is
+--  now raised only by the parser. A retired code keeps its row, so its
+--  number can never be handed to a different rule. This makes stable codes
+--  a fact in a file rather than a promise in a paragraph.
 --
 --     L0001-L0009  the driver and the chassis
 --     L0010-L0099  lexical, and the refusal of what is not enabled
@@ -400,8 +400,9 @@ package Landin.Diagnostics.Catalogue is
    --  and neither is prose.
    ------------------------------------------------------------------
 
-   --  Whether the diagnostic must name a source. The driver's own codes
-   --  are raised before any file is read, so they must not.
+   --  Whether the diagnostic must name a source. File-independent driver
+   --  failures need none; source-attached failures do. Retired No_Frontend
+   --  retains its original source-attached shape and is no longer raised.
    function Needs_Source (Of_Code : Code_Name) return Boolean
      is (case Of_Code is
             when No_Frontend           => True,

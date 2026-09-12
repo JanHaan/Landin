@@ -1,0 +1,74 @@
+noop: () -> none = end noop
+touch: (value: i32) -> none = end touch
+set: (inout value: i32, replacement: i32) -> none =
+    value = replacement
+end set
+consume: (sink value: i32) -> none = end consume
+value: () -> (r: i32) = 42 end value
+pair: () -> (first: i32, second: i32) = first = 40 second = 2 end pair
+box: type = struct value: i32 end box
+choice: type = struct kind: variant yes | no end kind end choice
+prefix: () -> (r: i32) = local: i32 = 40 local + 2 end prefix
+parenthesis: () -> (r: i32) = r = zeroed(42) end parenthesis
+called: () -> (r: i32) = local: i32 = 0 value() end called
+none_call: () -> (r: i32) = r = 42 noop() end none_call
+control: () -> (r: i32) =
+    local: i32 = 42
+    if true then local else zeroed end if
+end control
+none_control: () -> (r: i32) =
+    r = 42
+    if true then noop() else noop() end if
+end none_control
+matched: () -> (r: i32) =
+    item: choice = (kind: yes)
+    match item.kind yes: 42 no: 0 end match
+end matched
+none_match: () -> (r: i32) =
+    item: choice = (kind: yes)
+    r = 42
+    match item.kind yes: noop() no: noop() end match
+end none_match
+cleaned: () -> (r: i32) = defer touch(r) 42 end cleaned
+captured: () -> (r: i32) =
+    mut local: i32 = 42
+    defer set(local, 9)
+    local
+end captured
+restored: () -> (r: i32) = r = 0 consume(r) 42 end restored
+make_box: () -> (r: box) = local: i32 = 42 (value: local) end make_box
+make_array: () -> (r: [2]i32) = local: i32 = 40 [local, 2] end make_array
+many: () -> (first: i32, second: i32) = noop() pair() end many
+pointer: (p: ptr i32) -> (r: ptr i32 from p) = noop() p end pointer
+view: (p: []i32) -> (r: []i32 from p) = noop() p end view
+callback: () -> (r: () -> (r: i32)) = noop() value end callback
+echo: (t: type, input: t) -> (r: t) = noop() input end echo
+guarded: (early: bool) -> (r: i32) = r = 40 return when early 42 end guarded
+unavailable: atom
+fallible: () -> (r: i32) ! unavailable = 42 end fallible
+fallible_none: () -> none ! unavailable = end fallible_none
+tried: () -> (r: i32) ! unavailable = noop() try fallible() end tried
+tried_none: () -> (r: i32) ! unavailable = r = 42 try fallible_none() end tried_none
+public main: () -> (code: i32) =
+    code = 1
+    mut local: i32 = 42
+    array: [2]i32 = make_array()
+    record: box = make_box()
+    (first, second) := many()
+    callable := callback()
+    anonymous := () -> (r: i32) = noop() 42 end
+    answer := tried() else (error) _ = error 0 end
+    no_answer := tried_none() else (error) _ = error 0 end
+    if prefix() <> 42 or parenthesis() <> 42 or called() <> 42 then return end if
+    if none_call() <> 42 or control() <> 42 or none_control() <> 42 then return end if
+    if matched() <> 42 or none_match() <> 42 then return end if
+    if cleaned() <> 42 or captured() <> 42 or restored() <> 42 then return end if
+    if record.value <> 42 or array[0] + array[1] <> 42 then return end if
+    if first + second <> 42 or callable() <> 42 or anonymous() <> 42 then return end if
+    pointed := pointer(addr local)
+    viewed := view(array[0..<2])
+    if pointed.val <> 42 or viewed[0] <> 40 then return end if
+    if echo(42) <> 42 or guarded(true) <> 40 or guarded(false) <> 42 then return end if
+    if answer <> 42 or no_answer <> 42 then return end if
+    42
+end main

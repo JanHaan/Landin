@@ -1,0 +1,22 @@
+cell: type (t: type) = struct value: t end cell
+ref_cell: type = cell(ptr i32)
+ignore: (t: type, value: t) -> none = end ignore
+pair_box: type = struct first: i32 second: i32 end pair_box
+choice: type = struct
+    kind: variant pair: (first: i32, second: i32) | empty end kind
+end choice
+storage: i32 = 42
+module_fill := pair_box(first: 40, of 2)
+module_case: choice = (kind: pair(first: 40, of 2))
+f: () -> none =
+    ignore(t: ptr i32, value: addr storage)
+    local_ref := ref_cell(value: addr storage)
+    local_fill := pair_box(first: 40, of 2)
+    local_case: choice = (kind: pair(first: 40, of 2))
+end f
+callback_box: type = struct run: () -> (result: i32) end callback_box
+callback_image: callback_box = (run: () -> (result: i32) =
+    local: i32 = 42
+    view := addr local
+    result = view.val
+end)

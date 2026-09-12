@@ -1,0 +1,10 @@
+error[L0302]: the whole of `b.values` is read here and no path that arrives assigned every element
+  --> ../tests/fixtures/negative/r491-generic-array-field-unassigned/main.ldn:6:20
+  |
+6 |     values := copy(b.values)
+  |                    ^^^^^^^^
+  --> ../tests/fixtures/negative/r491-generic-array-field-unassigned/main.ldn:5:9
+  |
+5 |     mut b: box
+  |         ^ declared here with no value
+  = note: D21: a local array initializer reads every element of its source

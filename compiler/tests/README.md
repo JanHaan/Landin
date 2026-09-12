@@ -81,11 +81,66 @@ boundary in both directions for integer, float, pointer and mixed C-record
 bases. The IR atom-image unit case accepts a member identity and rejects a
 stored identity absent from the field's set.
 
+The R4.91 construction regressions distinguish runtime field/payload/fill
+arguments from static type arguments. `negative/r491-construction-type-arguments`
+pins value diagnostics in module and local contexts.
+`negative/r491-construction-type-fills` pins expression diagnostics for
+type-only trailing fills and preserves recovery through later declarations.
+`negative/r491-construction-static-address` preserves the existing static-image
+address exclusion. `positive/r491-construction-static-arguments` retains generic
+type arguments, local addresses, value fills and a callback body that takes a
+local address. `runtime/r491-variant-array-construction` exercises small root,
+nested and wrapped arrays, repetition and later variant replacement. The
+checker and lowering seam cases separately assert case identities and verified
+storage paths; driver cases assert that refused source writes no output and
+invokes no tool.
+
+The checker case `nested calls retain flow effects` uses paired small sources
+to pin labelled-call assignment checks, nested sink and try effects, descriptor
+reads and assignment-destination order. Slice descriptor reads preserve
+independent element liveness. It preserves unevaluated fixed-array measurements and separately checked anonymous bodies. The R4.91 driver refusal
+case requires the corresponding invalid sources to produce one L0302 before
+any output or tool invocation, for both assembly and executable requests.
+
+The checker case `joined destinations keep escape obligations` covers
+body-local joins of frame, parameter, module and untracked destinations, with
+accepted same-origin and escaping controls. Two driver refusal sources require
+one L0314 and no output or tool effects. `assigned children cover element
+descendants` checks whole-child initialization and branch containment in both
+orders, preserving independent siblings, indices and consumed leaves. These
+are small compiler checks; they neither assemble nor execute Landin programs.
+
+`try failures check reference cleanups` checks origins on propagated failure
+after call arguments run. Its 14 small sources preserve escaping/static
+arguments, recovered calls, early transfers and success-path isolation while
+refusing frame/non-escaping references retained by failure cleanups. The driver
+refusal case also requires L0314 before any output or tool call.
+
+`negative/r491-operand-diagnostic-cascades` pins one type diagnostic for each
+invalid float remainder or shift while retaining an independent integer
+division-by-zero diagnostic inside a refused operator.
+
+`runtime/r491-function-final-values` covers statement prefixes followed by
+scalar, aggregate, array, pointer, slice, function and multiple-result values.
+It includes generic and anonymous functions, fallible calls, named assignments
+followed by none-returning calls or controls, and cleanup ordering.
+`negative/r491-function-final-value-refusals` preserves assignment, origin and
+complete-value checks. `negative/r491-function-final-value-prefix` preserves
+the grammar's exclusion of unconditional exits and unchecked regions from a
+final expression's statement prefix.
+
+The platform cases `native timeout stops descendants` and `native arguments
+and capture are preserved` exercise the real host process adapter. The timeout
+witness in `tool_process_probe.py` forks one short-lived child and checks that
+it cannot write a delayed marker after the runner stops the group. These tests
+invoke no compiler, assembler or linker. Existing native cases retain ordinary
+exit, signal and default-capture coverage.
+
 ## Optimization profiles and object quality
 
 Every runtime and ABI fixture runs separately under `none/off`, `size/off`,
 `size/auto` and `speed/auto` (objective/specialization). Focused names containing
-`generic`, `any-` or `r450`, plus `allocator-vec-pressure`,
+`generic`, `any-`, `r450` or `r480`, plus `allocator-vec-pressure`,
 `diagnostic-loggers-dispatch`, `core-io-erased-system`, `derived-containers`
 and the complete derived hosted application fixtures,
 also run `none/all`
@@ -310,7 +365,7 @@ whose first code belongs to one of those must derive exactly as a positive
 fixture does. `check.py` reads which codes the frontend raises out of
 `Landin.Diagnostics.Lexical` and `Landin.Diagnostics.Syntactic` rather than out
 of the number, because the catalogue's own header forbids reading a stage off a
-code — `L0010` is raised by the scanner and by the parser both.
+code — `L0010` began in lexical refusal and is now raised only by the parser.
 
 `codes` is an ordered list and not a set. Two refused constructs in one file
 are two reports, and a regression that doubles a count is invisible to a set,

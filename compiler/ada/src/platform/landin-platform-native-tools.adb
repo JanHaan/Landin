@@ -1,32 +1,42 @@
-with Ada.Calendar;
+with Ada.Real_Time;
 with Ada.Strings.Unbounded;
 
 with GNAT.OS_Lib;
 
 with Interfaces.C;
+with Interfaces.C.Strings;
 
 package body Landin.Platform.Native.Tools is
 
    package Unbounded renames Ada.Strings.Unbounded;
    package OS renames GNAT.OS_Lib;
+   package C_Strings renames Interfaces.C.Strings;
 
-   use type Ada.Calendar.Time;
+   use type Ada.Real_Time.Time;
    use type Interfaces.C.int;
+   use type Interfaces.C.size_t;
    use type OS.File_Descriptor;
-   use type OS.Process_Id;
    use type OS.String_Access;
 
-   --  GNAT's own wait reports only whether the child exited zero, and the
-   --  harness needs the status a program chose.  waitpid is the one POSIX
-   --  call that answers both without blocking, on the two hosts this
-   --  adapter serves; its status word is decoded the way both spell it.
-   function Wait_Pid
-     (Pid     : Interfaces.C.int;
-      Status  : access Interfaces.C.int;
-      Options : Interfaces.C.int) return Interfaces.C.int
-     with Import, Convention => C, External_Name => "waitpid";
+   --  Host structs and wait/signal constants belong to the C adapter.
+   --  The spawn action establishes a private process group before exec.
+   function Start_Tool
+     (Args    : C_Strings.chars_ptr_array;
+      Capture : Interfaces.C.int;
+      Merged  : Interfaces.C.int;
+      Child   : access Interfaces.C.int) return Interfaces.C.int
+     with Import, Convention => C, External_Name => "landin_tool_start";
 
-   No_Hang : constant Interfaces.C.int := 1;
+   function Wait_Tool
+     (Child   : Interfaces.C.int;
+      Status  : access Interfaces.C.int;
+      No_Hang : Interfaces.C.int) return Interfaces.C.int
+     with Import, Convention => C, External_Name => "landin_tool_wait";
+
+   function Stop_Tool
+     (Child  : Interfaces.C.int;
+      Status : access Interfaces.C.int) return Interfaces.C.int
+     with Import, Convention => C, External_Name => "landin_tool_stop";
 
    procedure Set_Limit
      (Host : in out Native_Tool_Runner; Seconds : Duration) is
@@ -41,23 +51,38 @@ package body Landin.Platform.Native.Tools is
       Result    : out Tool_Result;
       Capture   : Capture_Mode := Merged)
    is
-      List           : OS.Argument_List (1 .. Integer (Arguments.Length)) :=
-        [others => null];
+      List           : C_Strings.chars_ptr_array
+        (0 .. Interfaces.C.size_t (Arguments.Length) + 1) :=
+          [others => C_Strings.Null_Ptr];
       Located        : OS.String_Access := null;
       Name           : OS.String_Access := null;
       FD             : OS.File_Descriptor := OS.Invalid_FD;
       Success        : Boolean;
-      Status         : Integer;
+      Status         : aliased Interfaces.C.int := 0;
+      Pid            : aliased Interfaces.C.int := 0;
       Exceeded_Limit : Boolean := False;
       Reader         : Native_Filesystem;
       Read           : Read_Status;
+
+      procedure Stop_Child;
+
+      procedure Stop_Child is
+      begin
+         if Pid > 0 then
+            if Stop_Tool (Pid, Status'Access) /= Pid then
+               raise External_Tool_Failed
+                 with "could not stop tool process group: " & Program;
+            end if;
+            Pid := 0;
+         end if;
+      end Stop_Child;
 
       procedure Release_Arguments;
 
       procedure Release_Arguments is
       begin
          for Item of List loop
-            OS.Free (Item);
+            C_Strings.Free (Item);
          end loop;
          OS.Free (Located);
       end Release_Arguments;
@@ -97,13 +122,15 @@ package body Landin.Platform.Native.Tools is
            with "tool not found on PATH: " & Program;
       end if;
 
-      for Index in List'Range loop
-         List (Index) := new String'(Arguments.Element (Index));
+      List (0) := C_Strings.New_String (Located.all);
+      for Index in 1 .. Natural (Arguments.Length) loop
+         List (Interfaces.C.size_t (Index)) :=
+           C_Strings.New_String (Arguments.Element (Index));
       end loop;
 
       --  The GNAT runtime chooses a name unique to this process and creates it
-      --  before returning.  The filename-based Spawn owns the descriptor it
-      --  uses, so the creation descriptor must not remain open across Spawn.
+      --  before returning. Pass that open descriptor to the spawn action,
+      --  avoiding a second filename lookup before the child captures output.
       OS.Create_Temp_Output_File (FD, Name);
 
       if FD = OS.Invalid_FD or else Name = null then
@@ -111,40 +138,32 @@ package body Landin.Platform.Native.Tools is
            with "could not create temporary tool output";
       end if;
 
-      OS.Close (FD, Success);
-      if not Success then
-         raise External_Tool_Failed
-           with "could not close temporary tool output";
-      end if;
-      FD := OS.Invalid_FD;
-
       declare
-         Pid : constant OS.Process_Id :=
-           OS.Non_Blocking_Spawn
-             (Program_Name => Located.all,
-              Args         => List,
-              Output_File  => Name.all,
-              Err_To_Out   => Capture = Merged);
-         Deadline : constant Ada.Calendar.Time :=
-           Ada.Calendar.Clock + Host.Limit;
-         Word   : aliased Interfaces.C.int := 0;
+         Deadline : constant Ada.Real_Time.Time :=
+           Ada.Real_Time.Clock + Ada.Real_Time.To_Time_Span (Host.Limit);
          Reaped : Interfaces.C.int := 0;
       begin
-         if Pid = OS.Invalid_Pid then
+         if Start_Tool
+           (List, Interfaces.C.int (FD),
+            Boolean'Pos (Capture = Merged), Pid'Access) /= 0
+         then
             raise External_Tool_Failed with "could not run tool: " & Program;
          end if;
+
+         OS.Close (FD, Success);
+         if not Success then
+            raise External_Tool_Failed
+              with "could not close temporary tool output";
+         end if;
+         FD := OS.Invalid_FD;
 
          Exceeded_Limit := False;
          loop
             Reaped :=
-              Wait_Pid (Interfaces.C.int (OS.Pid_To_Integer (Pid)),
-                        Word'Access, No_Hang);
+              Wait_Tool (Pid, Status'Access, No_Hang => 1);
             exit when Reaped /= 0;
-            if Ada.Calendar.Clock > Deadline then
-               OS.Kill (Pid, Hard_Kill => True);
-               Reaped :=
-                 Wait_Pid (Interfaces.C.int (OS.Pid_To_Integer (Pid)),
-                           Word'Access, 0);
+            if Ada.Real_Time.Clock > Deadline then
+               Stop_Child;
                Exceeded_Limit := True;
                exit;
             end if;
@@ -156,13 +175,7 @@ package body Landin.Platform.Native.Tools is
               with "could not wait for tool: " & Program;
          end if;
 
-         --  The low seven bits name a signal, or nothing; the next byte is
-         --  the exit status when there was one.
-         if Integer (Word) mod 128 /= 0 then
-            Status := -1;
-         else
-            Status := (Integer (Word) / 256) mod 256;
-         end if;
+         Pid := 0;
       end;
 
       Reader.Read_File (Name.all, Result.Output, Read);
@@ -177,13 +190,9 @@ package body Landin.Platform.Native.Tools is
             & ASCII.LF);
       end if;
 
-      --  A child that a signal killed is reported here as -1, and an
-      --  ordinary exit as its own status.  That is measured rather than
-      --  assumed: this exact call answers `success=TRUE code=-1` for a
-      --  child killed by SIGILL and by SIGSEGV, and `code=7` for one that
-      --  exited 7, on the pinned GNAT inside the linux/amd64 image.  A
-      --  POSIX exit status is one byte and so can never be -1, which is
-      --  what makes the two answerable apart.
+      --  The host adapter decodes wait status using the host's macros:
+      --  an ordinary exit retains its status; signal termination is -1.
+      --  The native platform cases check both outcomes on each host.
       --
       --  A watchdog kill has the same POSIX wait status as another signal,
       --  so Exceeded_Limit takes precedence over that decoding.  No signal
@@ -197,13 +206,18 @@ package body Landin.Platform.Native.Tools is
          Result.Exit_Code := 0;
       else
          Result.Ended := Landin.Platform.Exited;
-         Result.Exit_Code := Status;
+         Result.Exit_Code := Integer (Status);
       end if;
 
       Cleanup_Capture;
       Release_Arguments;
    exception
       when others =>
+         begin
+            Stop_Child;
+         exception
+            when others => null;
+         end;
          begin
             Cleanup_Capture;
          exception

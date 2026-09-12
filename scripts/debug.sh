@@ -1,6 +1,7 @@
 #!/bin/sh
 # Exercise an already-built compiler; never race a build or hide a non-run.
 . "$(dirname -- "$0")/env.sh"
+landin_build_lock mode "$@"
 : "${LANDIN_GNAT_HOME:?set LANDIN_GNAT_HOME to the pinned Linux installation}"
 landin_require python3
 

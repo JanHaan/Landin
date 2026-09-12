@@ -1,0 +1,9 @@
+class: negative
+summary: frame and non-escaping references cannot be retained through caller storage or hidden local alias writes
+program: main.ldn
+codes: L0314, L0314, L0314, L0314, L0314, L0314, L0314, L0314, L0316, L0314
+constructs: 0430, 0470, 0770, 0780, 0790, 0900, 1910
+targets: linux-x86-64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/r491-retained-reference-stores/main.ldn
+status: 1

@@ -1,0 +1,5 @@
+readable: type = concept (item: type)
+    read: (self: item) -> (result: i32)
+end readable
+read_i32: (self: i32) -> (result: i32) = self end read_i32
+public i32 is readable (read: read_i32)

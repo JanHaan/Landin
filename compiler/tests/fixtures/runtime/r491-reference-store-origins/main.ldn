@@ -1,0 +1,62 @@
+first: i32 = 40
+second: i32 = 2
+holder: type = struct
+    left: ptr i32
+    right: ptr i32
+end holder
+replace: (inout target: ptr i32, escaping source: ptr i32) -> none =
+    target = source
+end replace
+store: (target: ptr mut ptr i32, escaping source: ptr i32) -> none =
+    target.val = source
+end store
+store_element: (target: []mut ptr i32, escaping source: ptr i32) -> none =
+    target[0] = source
+end store_element
+same_origin: (inout value: holder) -> none =
+    value.left = value.right
+end same_origin
+local_alias: (source: ptr i32) -> (result: ptr i32 from source) =
+    mut slot: ptr i32 = addr first
+    view: ptr mut ptr i32 = addr slot
+    view.val = source
+    result = slot
+end local_alias
+local_use: () -> (result: i32) =
+    local: i32 = 40
+    mut slot: ptr i32 = addr first
+    view: ptr mut ptr i32 = addr slot
+    view.val = addr local
+    result = slot.val
+end local_use
+
+option: type = struct
+    kind: variant present: (value: ptr i32) | empty end kind
+end option
+retain_variant: (inout target: option, escaping source: ptr i32) -> none =
+    target.kind = present(value: source)
+end retain_variant
+
+public main: () -> (code: i32) =
+    code = 1
+    mut slot: ptr i32 = addr first
+    replace(slot, addr second)
+    return when slot.val <> 2
+    store(addr slot, addr first)
+    return when slot.val <> 40
+    mut slots: [2]ptr i32 = [addr first, addr second]
+    store_element(slots[0..<2], addr second)
+    return when slots[0].val <> 2
+    mut value: holder = (left: addr first, right: addr second)
+    same_origin(value)
+    return when value.left.val <> 2
+    selected: ptr i32 = local_alias(addr first)
+    return when selected.val <> 40
+    mut kept: option = (kind: empty)
+    retain_variant(kept, addr first)
+    match kept.kind
+        present(saved): return when saved.val <> 40
+        empty: return
+    end match
+    code = local_use() + value.left.val
+end main

@@ -1921,8 +1921,257 @@ package body Landin.Tests.Driver_Suite is
          "L0202", "hidden");
    end R440_Qualified_Alias_Conversions;
 
+   procedure R491_Refusals_Have_No_Effects
+     (Item : in out Landin.Testing.Context);
+
+   procedure R491_Refusals_Have_No_Effects
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check
+        (Source, Code : String; Count : Positive; Executable : Boolean);
+
+      procedure Check
+        (Source, Code : String; Count : Positive; Executable : Boolean)
+      is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : Landin.Platform.Path_List := Arguments_Of ("bad.ldn");
+      begin
+         Host.Add_File ("bad.ldn", Source);
+         Host.Refuse_Writes;
+         Tools.Raise_On_Run;
+         Args.Append ("--target=linux-x86-64");
+         Args.Append (if Executable then "--emit=exe" else "--emit=asm");
+         declare
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Driver.Execute (Args, Host, Tools);
+            Report : constant String := Unbounded.To_String (Result.Report);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Result.Status, Landin.Driver.Status_Reported,
+               "invalid source has an ordinary diagnostic");
+            Landin.Testing.Check
+              (Item, Contains (Report, "error[" & Code & "]")
+                 and then Occurrences (Report, "error[") = Count
+                 and then not Contains (Report, "internal compiler defect"),
+               "the source refusal retains its diagnostic contract");
+            Landin.Testing.Check_Equal
+              (Item, Host.Write_Count, 0, "no output write is attempted");
+            Landin.Testing.Check_Equal
+              (Item, Tools.Run_Count, 0, "no tool is invoked");
+         end;
+      end Check;
+   begin
+      for Executable in Boolean loop
+         Check
+           ("problem: atom "
+            & "retain: (escaping value: ptr i32) -> none = end retain "
+            & "leaf: () -> none ! problem = fail problem end leaf "
+            & "f: () -> none ! problem = local: i32 = 42 "
+            & "undo retain(addr local) try leaf() end f",
+            "L0314", 1, Executable);
+         Check
+           ("anchor: i32 = 0 "
+            & "f: (inout out: ptr i32, flag: bool) -> none = "
+            & "mut spare: ptr i32 = addr anchor "
+            & "mut view: ptr mut ptr i32 = addr spare "
+            & "if flag then view = addr out end if "
+            & "inner: i32 = 1 view.val = addr inner end f",
+            "L0314", 1, Executable);
+         Check
+           ("f: (inout a: ptr i32, inout b: ptr i32, flag: bool) "
+            & "-> none = mut view: ptr mut ptr i32 = addr a "
+            & "if flag then view = addr b end if view.val = a end f",
+            "L0314", 1, Executable);
+         Check
+           ("use: (value: i32, other: i32) -> none = end use "
+            & "f: () -> none = later: i32 "
+            & "use(value: 1, other: later) end f",
+            "L0302", 1, Executable);
+         Check
+           ("consume: (sink value: i32) -> (r: i32) = value end consume "
+            & "f: () -> (r: i32) = mut value: i32 = 1 "
+            & "_ = 1 + consume(value) r = value end f",
+            "L0302", 1, Executable);
+         Check
+           ("missing: atom "
+            & "consume: (sink value: i32) -> (r: i32) ! missing = "
+            & "fail missing when value == 0 r = value end consume "
+            & "f: (inout value: i32) -> none ! missing = "
+            & "_ = 1 + try consume(value) value = 7 end f",
+            "L0302", 1, Executable);
+         Check
+           ("f: () -> (r: usize) = values: []i32 r = lenof values end f",
+            "L0302", 1, Executable);
+         Check
+           ("box: type = struct value: ptr i32 end box "
+            & "storage: i32 = 42 x := box(value: addr storage)",
+            "L0305", 1, Executable);
+         Check
+           ("box: type = struct value: i32 end box "
+            & "x := box(value: ptr u8)", "L0301", 1, Executable);
+         Check
+           ("box: type = struct first: i32 second: i32 end box "
+            & "f: () -> none = x := box(first: 0, of ptr u8) end f",
+            "L0102", 1, Executable);
+         Check
+           ("choice: type = struct kind: variant pair: (value: i32)"
+            & " | empty end kind end choice "
+            & "x: choice = (kind: pair(value: ptr u8))",
+            "L0301", 1, Executable);
+         Check
+           ("f: () -> none = loop do complete end loop end f",
+            "L0110", 1, Executable);
+         Check
+           ("f: () -> none = loop do continue with 1 end loop end f",
+            "L0110", 1, Executable);
+         Check
+           ("public import core/mem", "L0103", 2, Executable);
+         Check
+           ("public fixed if true then value: i32 = 42 end if",
+            "L0103", 1, Executable);
+         Check
+           ("public main: () -> (code: i32) = code = [] end main",
+            "L0301", 1, Executable);
+         Check
+           ("consume: (sink value: i32) -> none = end consume" & LF
+            & "f: () -> (result: i32) = mut xs: [2]i32 = [1, 2] "
+            & "consume(xs[0]) result = xs[0] end f",
+            "L0302", 1, Executable);
+         Check
+           ("unavailable: atom" & LF
+            & "consume: (sink value: i32) -> none = end consume" & LF
+            & "f: (inout value: i32) -> none ! unavailable = "
+            & "consume(value) fail unavailable end f",
+            "L0302", 1, Executable);
+         Check
+           ("f: (inout target: ptr i32) -> none = "
+            & "local: i32 = 1 target = addr local end f",
+            "L0314", 1, Executable);
+         Check
+           ("choice: type = struct kind: variant "
+            & "pair: (first: i32, second: i32) | empty end kind end choice"
+            & LF & "f: () -> none = mut value: choice = "
+            & "(kind: pair(first: 40, second: 2)) match value.kind "
+            & "pair(first, inout second): begin value.kind = empty "
+            & "second = 42 end empty: begin end end match end f",
+            "L0315", 1, Executable);
+         Check
+           ("public main: () -> (code: i32) = code = 1 ) end main",
+            "L0110", 1, Executable);
+         Check
+           ("public []: () -> (code: i32) = code = 42 end main",
+            "L0103", 7, Executable);
+         Check
+           ("readable: type = concept (item: type)" & LF
+            & "read: (self: item) -> (result: i32) end readable" & LF
+            & "read_i32: (self: i32) -> (result: i32) = self end read_i32"
+            & LF & "public i32 is readable (read: read_i32)",
+            "L0103", 1, Executable);
+      end loop;
+   end R491_Refusals_Have_No_Effects;
+
+   procedure R491_Artifacts_Preserve_Inputs
+     (Item : in out Landin.Testing.Context);
+
+   procedure R491_Artifacts_Preserve_Inputs
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check
+        (Output, Left, Right : String; Executable : Boolean := False;
+         Debug : Boolean := False; Refused : Boolean := True);
+
+      procedure Check
+        (Output, Left, Right : String; Executable : Boolean := False;
+         Debug : Boolean := False; Refused : Boolean := True)
+      is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : Landin.Platform.Path_List;
+      begin
+         Host.Add_Directory ("entry");
+         Host.Add_Directory ("root");
+         Host.Add_Directory ("root/lib");
+         Host.Add_File
+           ("entry/main.ldn", "import lib" & LF
+            & "public main: () -> (code: i32) = "
+            & "code = lib.answer() end main");
+         Host.Add_File
+           ("root/lib/value.ldn",
+            "public answer: () -> (value: i32) = 42 end answer");
+         if Left /= "" then
+            Host.Add_Alias (Left, Right);
+         end if;
+         if Refused then
+            Host.Refuse_Writes;
+            Tools.Raise_On_Run;
+         end if;
+         Args.Append ("entry");
+         Args.Append ("--root=root");
+         Args.Append ("--target=linux-x86-64");
+         Args.Append (if Executable then "--emit=exe" else "--emit=asm");
+         if Debug then
+            Args.Append ("--debug=full");
+         end if;
+         Args.Append ("-o");
+         Args.Append (Output);
+         declare
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Driver.Execute (Args, Host, Tools);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Result.Status,
+               (if Refused then Landin.Driver.Status_Misuse
+                else Landin.Driver.Status_Success),
+               "artifact identity determines whether emission is allowed");
+            if Refused then
+               Landin.Testing.Check
+                 (Item, Contains (Unbounded.To_String (Result.Report),
+                                  "collide"),
+                  "the destination collision is diagnosed");
+               Landin.Testing.Check_Equal
+                 (Item, Host.Write_Count, 0, "no artifact write is attempted");
+               Landin.Testing.Check_Equal
+                 (Item, Tools.Run_Count, 0, "no tool is invoked");
+            else
+               Landin.Testing.Check
+                 (Item, Host.Write_Count > 0,
+                  "distinct active destinations produce artifacts");
+            end if;
+         end;
+      end Check;
+   begin
+      for Executable in Boolean loop
+         Check ("entry/main.ldn", "", "", Executable);
+         Check ("root/lib/value.ldn", "", "", Executable);
+         Check ("out", "out", "entry/main.ldn", Executable);
+         Check ("out", "out", "root/lib/value.ldn", Executable);
+         Check ("out", "out.sources.json", "entry/main.ldn",
+                Executable, Debug => True);
+         Check ("out", "out.sources.json", "root/lib/value.ldn",
+                Executable, Debug => True);
+         Check ("out", "out.sources.json", "out",
+                Executable, Debug => True);
+         Check ("out", "out.sources.json", "entry/main.ldn",
+                Executable, Refused => False);
+         Check ("out", "", "", Executable,
+                Debug => True, Refused => False);
+      end loop;
+      Check ("out", "out.s", "entry/main.ldn", Executable => True);
+      Check ("out", "out.s", "root/lib/value.ldn", Executable => True);
+      Check ("out", "out.s", "out", Executable => True);
+      Check ("out", "out.s", "out.sources.json",
+             Executable => True, Debug => True);
+   end R491_Artifacts_Preserve_Inputs;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "driver", "R4.91 artifacts preserve inputs",
+         R491_Artifacts_Preserve_Inputs'Access);
+      Landin.Testing.Register
+        (Into, "driver", "R4.91 refusals have no effects",
+         R491_Refusals_Have_No_Effects'Access);
       Landin.Testing.Register
         (Into, "driver", "R4.40 qualified alias conversions",
          R440_Qualified_Alias_Conversions'Access);

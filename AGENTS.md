@@ -5,7 +5,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Repository state
 
 Landin is a language specification with a working Ada bootstrap compiler. R0,
-R1, R2, R3 and R4 are complete. `refine` scans and parses every
+R1, R2 and R3 are complete; R4.91 is repairing reviewed R4 gaps. `refine`
+scans and parses every
 `.ldn` file it is given, resolves the files as one module, checks every type
 and definite assignment, lowers accepted functions into verified
 target-neutral IR, emits Linux x86-64 assembly, and can invoke a
@@ -113,7 +114,7 @@ Use the repository documents in this order:
 
 `check.py` also checks the grammar in `spec.md`: it reads the productions, holds every rule to being defined and reachable, and derives every `.ldn` under `compiler/tests/fixtures/positive`. A negative fixture is held to being *underivable* only when the frontend is what refuses it: one a later stage refuses is legal source and must derive, which its `codes:` is what says (see below). A grammar change that breaks a fixture, or a fixture the grammar cannot derive, fails there. Do not weaken a fixture to make a grammar change pass — the corpus is the agreement the parser has to meet, and the parser suite requires the same verdict from the other side.
 
-A negative fixture's `codes:` is an ordered list, and it also says which stage refused the fixture: `check.py` reads which codes the frontend raises out of the two packages that raise them and requires the grammar to derive a program that only a later stage refused. Do not read a stage off a code's number — the catalogue's header forbids it, and `L0010` is raised by both the scanner and the parser.
+A negative fixture's `codes:` is an ordered list, and it also says which stage refused the fixture: `check.py` reads which codes the frontend raises out of the two packages that raise them and requires the grammar to derive a program that only a later stage refused. Do not read a stage off a code's number — the catalogue's header forbids it, and `L0010` began in lexical refusal and is now raised only by the parser.
 
 Four tables in the compiler are transcriptions of the grammar rather than paraphrases of it, and `check.py` compares each with its source. `Landin.Tokens`' reserved words must be `spec.md`'s own `keyword` production. `Landin.Syntax.Precedence` must have [1820]'s levels in [1820]'s order, with the same operators at each, the same fold, the same prefix set and first sets that agree with the grammar's own. The parser's refusal tables cover the words [1760] does not reserve, so only the parser can meet them; the checker's refused-type table covers scalar type names the grammar admits but the kernel has deferred. Both tables must spell words the tour writes, cite paragraphs that exist, and name roadmap items that exist. `Landin.Types` spells the thirteen enabled scalar names separately because it maps each onto a machine width. Add a level, an operator, a refused construct or a type in one place and the check says which other place disagrees.
 
@@ -196,8 +197,9 @@ R0 established the bootstrap chassis, R1 built the executable language kernel
 and first Linux x86-64 path, R2 settled the semantic and representation core
 from executable cases, and R3 delivered the first major compiler milestone: a
 complete derived parser program with useful diagnostics, evidence-table
-dispatch, and `any` but without specialization. R4 completed the hosted
-Linux x86-64 path and its applicable parity audit. R5 remains planned;
+dispatch, and `any` but without specialization. R4 delivered the hosted
+Linux x86-64 path and its applicable parity audit; R4.91 repairs reviewed
+compiler, tooling and documentation gaps. R5 remains planned;
 `ROADMAP.md` names the next dependency-ready item and owns the exact revision's
 acceptance and delivery evidence.
 
