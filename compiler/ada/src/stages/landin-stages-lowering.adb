@@ -15559,12 +15559,17 @@ package body Landin.Stages.Lowering is
                return False;
             end Contains_Aggregate;
 
-            function Has_Value_Fill (Node : Syn.Node_Id) return Boolean;
+            function Has_Recursive_Value (Node : Syn.Node_Id) return Boolean;
 
-            function Has_Value_Fill (Node : Syn.Node_Id) return Boolean is
+            function Has_Recursive_Value (Node : Syn.Node_Id) return Boolean is
             begin
                if Node = Syn.No_Node then
                   return False;
+               elsif Type_At (Of_Tree, Node) = Ty.Slice_Value then
+                  --  A slice carries an address, length and element shape.
+                  --  The legacy numeric-array path cannot preserve that
+                  --  descriptor in a selected payload or copied field.
+                  return True;
                end if;
                if Syn.Kind (Of_Tree, Node) in Syn.Struct_Literal
                  | Syn.Labeled_Application | Syn.Call
@@ -15581,20 +15586,21 @@ package body Landin.Stages.Lowering is
                   end;
                end if;
                for Slot in 1 .. Syn.Slot_Count (Of_Tree, Node) loop
-                  if Has_Value_Fill (Syn.Slot (Of_Tree, Node, Slot)) then
+                  if Has_Recursive_Value (Syn.Slot (Of_Tree, Node, Slot)) then
                      return True;
                   end if;
                end loop;
                return Syn.Kind (Of_Tree, Node)
                         in Syn.Call | Syn.Labeled_Application
-                 and then Has_Value_Fill (Syn.Recovery_Of (Of_Tree, Node));
-            end Has_Value_Fill;
+                 and then Has_Recursive_Value
+                   (Syn.Recovery_Of (Of_Tree, Node));
+            end Has_Recursive_Value;
 
             function Needs_Recursive_Image return Boolean;
 
             function Needs_Recursive_Image return Boolean is
             begin
-               if Has_Value_Fill (Literal)
+               if Has_Recursive_Value (Literal)
                  or else Has_Distinct_Conversion (Of_Tree, Literal)
                then
                   return True;

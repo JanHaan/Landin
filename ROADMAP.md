@@ -5827,7 +5827,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J27 | Aggregate assignment to a computed or reference-borne place from a loop value raises "a contextual storage value has no rooted place" | C | Open accepted-value lowering group: reproduce this storage/result shape narrowly, then preserve checked shape and initialization across its lowering path in both modes. |
 | J28 | Anonymous function with a pointer result gets the wrong IR item result kind (exit 70) | C | Open accepted-value lowering group: reproduce this storage/result shape narrowly, then preserve checked shape and initialization across its lowering path in both modes. |
 | J29 | `Made` is set for an array-root image the code deliberately did not store, so the copy path violates `Image_Length`'s `Has_Image` precondition | C | Open accepted-value lowering group: reproduce this storage/result shape narrowly, then preserve checked shape and initialization across its lowering path in both modes. |
-| J30 | Module struct slice field initialized from a name or member selection raises "a static slice field has no image form" | C | Open accepted-value lowering group: route checked slice fields through the existing complete descriptor image path, preserving target, offset, length and element shape. The K1 follow-up also reproduces exit 70 for a small valid variant slice literal: the legacy variant image path treats its descriptor as a numeric array. Retain direct/nested/variant and module-name/member controls in both modes; evidence is in `.scratch/r491-static-fields/`. |
+| J30 | Module struct slice field initialized from a name or member selection raises "a static slice field has no image form" | C | Repaired: slice-bearing struct images use the existing complete descriptor builder; the verifier selects its recursive checker when any descriptor carries a slice. Direct, named, member, nested, empty and variant slice images retain backing targets, offsets, lengths, element shapes and tags on 32/64-bit targets. Explicit malformed descriptors retain bounds/shape refusals. This also repairs the valid variant slice literal found during K1. |
 | J31 | Module `ptr`/`cstring` binding with no initializer passes `Ty.Pointer_Value` to `IR.Emit_Number`'s `Integer_Name` parameter | C | Open accepted-value lowering group: reproduce this storage/result shape narrowly, then preserve checked shape and initialization across its lowering path in both modes. |
 | J32 | Module slice binding with no initializer calls `Slice_Shape` with `Syn.No_Node` | C | Open accepted-value lowering group: reproduce this storage/result shape narrowly, then preserve checked shape and initialization across its lowering path in both modes. |
 | J33 | Erased evidence table is built for a conformance whose sibling entry is not object-safe, with no D146 gate on that path | C | Open erased-conformance boundary: apply D146 object-safety checks to all entries required by a materialized table, with safe sibling controls. |
@@ -6120,8 +6120,23 @@ linker or generated Landin executable ran. J30's valid variant slice remains an
 explicit lowering gap, not a successful end-to-end positive control in this
 checker batch. Exact-revision acceptance remains outstanding.
 
-K1, K3, K4, K5, K6, K8, K11 and K36 are repaired. J30's accepted slice-image
-lowering is next, followed by the existing checker/conformance group.
+J30 development evidence: seven selected cases pass 94 checks in each of
+macOS debug and Linux release. The source-to-IR case checks complete slice
+images on 32-bit and 64-bit target facts; nine small verifier scenarios retain
+range, target, offset, shape and representation checks. Existing recursive
+image, relocation and backend text/placement controls pass. One 16-declaration
+source also emits a small inspected assembly text with the expected shared
+literal address, subslice offsets and variant placement. No assembler, linker
+or generated Landin executable ran. The existing recursive-static-selection
+case contains a billion-element array and was deliberately not rerun. Builds
+use one worker, selected tests have timeouts of at most 30 seconds, and the
+single text emission has a 15-second limit. Logs and text are retained in
+`.scratch/r491-slice-images/` and `.scratch/r491-final-values/`. This reuses the
+existing descriptor representation and is filtered development evidence;
+exact-revision acceptance remains outstanding.
+
+K1, K3, K4, K5, K6, K8, K11, K36 and J30 are repaired. Checker refusal
+boundaries J7/J10 are next, followed by J12 and the conformance group.
 Keep J2's call-return contract question active. K12 needs a semantic
 disposition before implementation. The verifier, optimization, build-identity
 and ABI items above remain owned by the corresponding later repair groups.

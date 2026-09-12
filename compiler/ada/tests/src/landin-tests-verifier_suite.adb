@@ -6522,8 +6522,75 @@ package body Landin.Tests.Verifier_Suite is
       end loop;
    end Erased_Single_Result_Carriers_Are_Checked;
 
+   procedure Slice_Field_Descriptors_Are_Checked
+     (Item : in out Landin.Testing.Context);
+
+   procedure Slice_Field_Descriptors_Are_Checked
+     (Item : in out Landin.Testing.Context)
+   is
+      type Scenario_Kind is
+        (Valid, Empty, Too_Long, Past_End, Wrong_Element, Missing_Target,
+         Nonempty_Null, Bad_Offset, Bad_Form);
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Site : Landin.Provenance.Origin;
+   begin
+      Ready (Work, Site);
+      for Scenario in Scenario_Kind loop
+         declare
+            Unit : IR.Unit;
+            Target, Datum : IR.Item_Id;
+            Image : IR.Aggregate_Field_Image;
+            Expected : constant V.Fault_Kind :=
+              (if Scenario in Valid | Empty then V.Nothing_Wrong
+               else V.Aggregate_Field_Image_Length_Disagrees);
+         begin
+            IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+            Target := IR.Add_Item
+              (Unit, IR.Datum, 6, Landin.Types.Fixed_Array, Site);
+            IR.Set_Array (Unit, Target, Landin.Types.U8, 2);
+            IR.Set_Array_Image (Unit, Target, [65, 66]);
+            Add_Empty_Body (Unit, Target, Site);
+            Datum := IR.Add_Item
+              (Unit, IR.Datum, 5, Landin.Types.Aggregate, Site);
+            IR.Add_Field
+              (Unit, Datum,
+               IR.Make_Array_Shape
+                 (Unit, 2, (Element => Landin.Types.Usize, others => <>)));
+            Image :=
+              (Slice => True, Target => Target, Value => 1, Slice_First => 1,
+               Slice_Element => (Element => Landin.Types.U8, others => <>),
+               others => <>);
+            case Scenario is
+               when Valid => null;
+               when Empty =>
+                  Image.Target := IR.No_Item;
+                  Image.Value := 0;
+                  Image.Slice_First := 0;
+               when Too_Long => Image.Value := 2;
+               when Past_End => Image.Slice_First := 3;
+               when Wrong_Element =>
+                  Image.Slice_Element.Element := Landin.Types.U16;
+               when Missing_Target => Image.Target := IR.Item_Id'Last;
+               when Nonempty_Null => Image.Target := IR.No_Item;
+               when Bad_Offset => Image.Offset := 1;
+               when Bad_Form => Image.Form := IR.Repeated;
+            end case;
+            IR.Set_Aggregate_Image (Unit, Datum, [0], [Image], []);
+            Add_Empty_Body (Unit, Datum, Site);
+            Expect (Item, V.Check (Unit, Landin.Targets.Linux_X86_64),
+                    Expected, "64-bit slice descriptor: " & Scenario'Image);
+            Expect (Item, V.Check (Unit, Landin.Targets.Synthetic_32),
+                    Expected, "32-bit slice descriptor: " & Scenario'Image);
+         end;
+      end loop;
+   end Slice_Field_Descriptors_Are_Checked;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "verifier", "slice field descriptors are checked",
+         Slice_Field_Descriptors_Are_Checked'Access);
       Landin.Testing.Register
         (Into, "verifier", "erased single-result carriers are checked",
          Erased_Single_Result_Carriers_Are_Checked'Access);

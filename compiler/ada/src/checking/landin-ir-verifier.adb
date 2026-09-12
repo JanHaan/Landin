@@ -1399,15 +1399,18 @@ package body Landin.IR.Verifier is
                return True;
             end if;
          end loop;
-         --  An inline scalar array may also use the recursive descriptor
-         --  representation. Its spelling, not just its child kind, selects
-         --  the walker; orphan descriptors are still rejected there.
+         --  Scalar arrays and slice fields can use recursive descriptors
+         --  without an aggregate child shape. Select the complete walker
+         --  from the image too; it still checks coverage and orphan entries.
          for Position in 1 .. Aggregate_Field_Image_Count (Of_Unit, Item) loop
-            if Nth_Image_Descriptor (Of_Unit, Item, Position).Form
-              = Element_Sequence
-            then
-               return True;
-            end if;
+            declare
+               Image : constant Aggregate_Field_Image :=
+                 Nth_Image_Descriptor (Of_Unit, Item, Position);
+            begin
+               if Image.Form = Element_Sequence or else Image.Slice then
+                  return True;
+               end if;
+            end;
          end loop;
          return False;
       end Item_Needs_Recursive_Image;
