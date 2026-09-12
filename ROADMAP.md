@@ -6007,6 +6007,79 @@ but a passing filtered run cannot close any untested group. Source-only giant
 layout findings remain source/seam work; no giant image reproduction is needed.
 The review intake is reconciled; implementation and acceptance remain active.
 
+#### Additional review consolidated at 1aa0746a
+
+Paseo agent `ea7e191d-6563-4a86-9dd7-8bb195813ec6` consolidated a review of
+`1aa0746a4e2d464f79142025fc10161c072aa4b4`, using the snapshot
+`/tmp/landin-review-1aa0746a.16TElI`. This predates the final-value and nested-flow
+repairs. Its 37 reported identifiers are reconciled into 36 rows below;
+D1a/D1b share one call-classification mechanism. K identifiers name this intake
+only, so the review's A/B/C identifiers cannot be confused with earlier ones.
+The original consolidation, available finder reports, source anchors and ten
+small current debug checks are retained in `.scratch/r491-review-ea7e191d/`.
+Current comparisons are against `ab2cc3fa`.
+
+The review mixes coordinator-reproduced cases, finder-only observations and
+explicitly unresolved contracts. Those distinctions survive intake: an old
+exit status is not current validation, and malformed-IR observations are not
+automatically source-reachable defects. Its C/G partitions were partial and
+the planned independent verification workflow did not complete. Historical
+debugger evidence for C1 is retained as provenance only; no debugger was run
+for this intake. No compiler build, Landin emission, assembly, linking,
+runtime execution or scaling campaign was performed here. The ten new source
+checks used the existing debug binary, sequentially, with 10-second timeouts.
+
+| Intake | Review identifier and observation | Current disposition and repair scope |
+| --- | --- | --- |
+| K1 | A1: runtime call in a reference-valued module struct field reaches lowering | Current debug witness exits 70; direct reference-field checking lacks the static-known gate. Add a source diagnostic for ordinary fields and variant payloads before image lowering, preserving permitted static references. Related to J30's image boundary, but a runtime call is distinct from J30's module-name/member form. |
+| K2 | A2: statements followed by a function's final value are refused | Already repaired by 7250d298 under A2/C2/M3. Reuse the final-value grammar, checking and runtime evidence; no replay needed. |
+| K3 | A3: labelled construction treats `any(...)` as a type | Current `Begins_Argument_Type` still treats every `Kw_Any` as a type start. Distinguish `any C` from the expression form, preserving contextual, nominal and generic type-argument controls. This is a separate follow-up to the repaired type-only construction refusals. |
+| K4 | A4: repeated or non-trailing `of` fills are accepted | Both tiny current debug witnesses exit 0. Enforce the grammar's single trailing fill without discarding later source or changing D214's evaluation order; keep valid fill and parser-recovery controls. |
+| K5 | A5: static-address search descends into unevaluated literal `lenof` | Current debug witness reports L0305 for an unevaluated address. Apply D31 consistently in the static-image address walk, retaining the actual module-address refusal and slice-descriptor evaluation boundaries. |
+| K6 | A6: distinct extraction inside a variant payload tests the outer node | Duplicate J55. The payload's `Given`, rather than the containing `Value`, owns the conversion exemption; preserve ordinary-field and static distinct-image controls. |
+| K7 | B1: indexed-field and pointer assignment destinations miss reads before the RHS | Repaired by 0f708770 under J1/J3/J74. Both imported current debug witnesses now produce exactly one L0302, including the formerly crashing unassigned pointer destination. |
+| K8 | B2: propagated `try` failure omits reference-origin cleanup checks | Current debug witness accepts `undo retain(addr local)` on a propagated failure; `Try_Expression` in the reference pass still returns only its operand fact. Repair failure-applicable origin cleanup traversal with direct-fail, successful-path, defer/undo and nested controls. J19 repaired definite assignment in a different pass and does not close this issue. |
+| K9 | B3: discard/operator wrappers hide nested sink effects | Already repaired by 0f708770 under J3. Preserve the selected nested-call controls and their debug/release evidence; no second dispatch repair or broad rerun is needed. |
+| K10 | B4: missing-value checking omits pointer, slice and erased carriers | Already repaired by 7250d298: current `Needs_Value` includes all three carriers. Retain the existing final-value refusal controls and both-mode evidence. |
+| K11 | B5: a fresh loop binding inherits a consumed fact from the previous iteration | Current debug witness rejects a freshly initialized scalar with L0302. Resolve the fresh-binding/reset behavior against [1910], covering ordinary and destructuring bindings and preserving genuinely loop-carried consumption. The source observation is reproduced; the review's broader semantic verdict was left open. |
+| K12 | B6: sink consumption occurs before later arguments finish evaluating | Current debug witness reports L0302 when a later argument returns before the call. This is a semantic sequencing question, not an adopted call-entry rule. Reconcile [0390]/[0910]/[1910], existing argument-order controls and cleanup before changing the sink point; include repeated-place arguments and early transfers. |
+| K13 | C1: multi-formal concept conformance loses its normalized key | Additional witness under J49, with historical coordinator reproduction/backtrace. Preserve both valid multi-formal conformance coverage and malformed-entry diagnostics; do not narrow the repair to one malformed list. No new debugger reproduction is required. |
+| K14 | C2: an all-return slice lower bound emits into terminated flow | Current tiny debug witness exits 70. Duplicate J22's terminated-expression lowering group, with an explicit lower-bound case and required upper-bound/ordinary-bound controls. |
+| K15 | D1a/D1b: scalar/text spelling overrides a resolved callable | Duplicate J8. Preserve both the scalar exit-70 and text false-refusal baseline witnesses and ordinary conversion controls; resolve meaning before intrinsic classification. |
+| K16 | D2: `Covers` accepts a different syntax forest with matching source ID and node count | API-seam identity question under the table-ownership audit. Establish the immutable-forest contract with small table tests before adding identity storage; no CLI defect was demonstrated. |
+| K17 | E1: array fill/element atom writes require exact sets | Source confirms `Fill_Array` and `Store_Element` still use exact atom metadata. Compare D216 subset writes with exact reads using small typed-IR and source controls. Finder source-reachability claims need their own bounded witness; the existing indirect-store repair is not evidence for these opcodes. |
+| K18 | E2: ordinary internal aggregate/array calls check only address carrier width | Source-only verifier gap under m24: validate hidden result and argument addresses against declared shape, extent and nominal identity, including valid generic/erased/C controls. The review's out-of-bounds consequence assumes malformed IR; no accepted-source overwrite was demonstrated. |
+| K19 | E3: pointer metadata can be erased or mixed in stores, calls and operations | Source-only verifier contract question under m24. Compare deliberate representation conversions and low-level address arithmetic with required pointee preservation before rejecting every plain-usize carrier. Add focused malformed-IR cases; source pointer rules alone do not define all IR operations. |
+| K20 | E4: scalar `Store` accepts a shaped slot or violates an accessor contract | Duplicate J95. Guard the slot kind before scalar access and require a verifier Fault in both modes; do not treat assertion-disabled predictions as measured release behavior. |
+| K21 | E5: instruction `In_Block` disagrees with its enclosing block run | Duplicate J91. Retain the no-result Leave/rewriter witness under m24 and validate ownership before consumers use it. |
+| K22 | E6: final run cursors allow trailing orphan entries | Additional complete-partition witness under m24/J91, covering values, fields and operands as well as block membership. Bound each cursor and require the final run to consume its owned vector; small direct seam tests only. |
+| K23 | F1: repeated module references cause exponential folding | Previously recorded in the R1 folding measurement above; attach the additional review provenance without treating its old timing samples as new results. Memoize completed facts with cycle and diagnostic controls when repairing this fold. Do not repeat the reported stress chain. |
+| K24 | F2: shared aggregate shapes are remeasured recursively without a cache | Distinct bounded-scaling item in `IR.Shape_Measurement`, not the module fold. Source retains recursive layout expansion. Establish cache ownership and target/shape invalidation using small shared graphs; the review's long timing runs are historical and must not be repeated. |
+| K25 | F3: devirtualization leaves a typed function-address projection live | Optimization candidate: the rewrite retains signature metadata and the simplifier's Plain predicate excludes it. Prove deadness and preserve any remaining users and verifier contracts before changing removal eligibility; do not clear a live function value's signature merely to satisfy that predicate. |
+| K26 | F4: address-exposure analysis rescans the unit per routine even with specialization off | Source confirms the per-routine query precedes the off decision. Compute shared exposure facts at the appropriate pass boundary or avoid unneeded work, preserving callback identity and observability; use small operation-count controls, not timing sweeps. |
+| K27 | F5: profitability recounts eligible instances for every instance | Source confirms the nested item scans. Count once per normalized template while preserving evidence proof, exposed roots and policy decisions; validate small mixed-template cases. |
+| K28 | F6: preflight, emission and full-debug output repeat allocation/frame planning | Maintenance/scaling observation, not wrong code. Evaluate reuse only with explicit unit/options/target ownership and debug-location agreement; retain J65's independent exception-classification question. No large-routine benchmark is needed. |
+| K29 | G1: wide slice stride uses an unencodable immediate multiply | Duplicate A7/M19/N6/J61. Keep source/seam evidence and the mandatory exact-file assembly limits; no giant extent or image reproduction. |
+| K30 | G3: first-class external C function address uses a bare PC-relative address | Open target/toolchain question: compare emitted address relocation with the supported PIE/shared-symbol link contract. The review established emission/reachability, not a native link failure. Preserve external/local callback controls; no linker run was made for intake. |
+| K31 | G4: outgoing stack sizes lack a wide-immediate fallback | Broad defect claim not established: current `Frame_Is_Addressable` already rejects over-wide C incoming and outgoing stack areas. Retain a focused encoding audit for any path that bypasses this preflight, including internal calls; do not claim all huge calls reach emission or construct huge arguments. |
+| K32 | G10: stack-argument start uses max(8, its alignment) | Unresolved ABI comparison, not a confirmed defect. Compare the C classifier's offset/alignment rule and existing native ABI fixtures against the supported contract before proposing a change. |
+| K33 | H1: build-report collision checks reserve inactive product/map paths | Source still reserves all three paths before the actual-output list is formed. Extend the artifact/source identity repair with fake-host inactive-map/product controls and preserve refusal of real collisions; no filesystem overwrite experiment. |
+| K34 | H2: help/identify bypass invalid deferred options | Source still returns before target/mode/root/option validation. Reconcile the existing no-misuse informational-action contract using fake-host cases for all four reported combinations; preserve valid informational requests and J45's invalid-CLI stage boundary. |
+| K35 | H3: build manifest omits the selected C compiler identity | Additional build-staleness item beside M13/J77: record the actual configured compiler/toolchain identity used for the native C adapter and invalidate both clean/checksum paths appropriately. Use disposable fake-toolchain controls, without changing the machine's compiler installation. |
+| K36 | H4: timeout kills only the direct tool PID | Current native runner confirms direct-PID kill and wait. Resolve process-tree termination and reaping under A4/M11 before further native tool execution/acceptance. Use an isolated harmless child process with short deadlines and guaranteed cleanup; never use assembler descendants to test it. |
+
+The intake adds two immediate reference/flow follow-ups, K8 and K11, and a
+resource-control prerequisite, K36. Resolve K36 before resuming native tool
+execution; compiler-only/source work can continue. Keep J2's call-return
+contract question active, then combine the existing checker/conformance group
+with K1/K3/K4/K5's static-image/parser boundaries. K12 needs a semantic
+disposition before implementation. The verifier, optimization, build-identity
+and ABI items above remain owned by the corresponding later repair groups.
+The review's passing backend observations and inconclusive long-routine/stack
+scaling notes are coverage limits, not additional confirmed defects or reasons
+to replay stress tests. Intake is complete; implementation and exact acceptance
+remain open.
+
 Resource limits for further work are mandatory: check for existing `clang` or
 `cc1as` processes before execution and stop to report their PIDs/full commands
 if any exist. Do not run blanket assembler/linker coverage or parallel assembler
