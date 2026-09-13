@@ -10480,8 +10480,193 @@ package body Landin.Tests.Lowering_Suite is
          & "image: callbacks = (first: one, of one)" & LF);
    end Scalar_Image_Leaves_Keep_Their_Bounds;
 
+   procedure Measurements_Use_Target_Carriers
+     (Item : in out Landin.Testing.Context);
+
+   procedure Measurements_Use_Target_Carriers
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Source
+        (Label, Text : String;
+         Carrier : Landin.Types.Scalar_Name;
+         Words : IR.Element_Total;
+         C_Signature : Boolean := False);
+
+      procedure Check_Source
+        (Label, Text : String;
+         Carrier : Landin.Types.Scalar_Name;
+         Words : IR.Element_Total;
+         C_Signature : Boolean := False)
+      is
+         procedure Check_Target (Facts : Landin.Targets.Target_Facts);
+
+         procedure Check_Target (Facts : Landin.Targets.Target_Facts) is
+            use type Landin.Targets.C_ABI_Kind;
+            Accepted : constant Boolean := not C_Signature
+              or else Landin.Targets.C_ABI_Of (Facts)
+                /= Landin.Targets.No_C_ABI;
+            Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+            Size : constant Landin.Targets.Scalar_Size :=
+              Landin.Types.Storage_Size (Carrier, Facts);
+            Ran : Natural;
+         begin
+            Lower (Work, Text, Ran);
+            Landin.Testing.Check
+              (Item,
+               (if Accepted
+                then Ran = 5 and then not Landin.Stages.Failed (Work)
+                else Landin.Stages.Failed (Work)),
+               Label & " follows the target's measurement and ABI support");
+            if not Accepted or else Landin.Stages.Failed (Work) then
+               return;
+            end if;
+            declare
+               Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+               Routine : constant IR.Item_Id := Named_Item (Work, "f");
+               Sizes : constant IR.Item_Id := Named_Item (Work, "sizes");
+               Alignments : constant IR.Item_Id :=
+                 Named_Item (Work, "alignments");
+               Measures : Natural := 0;
+               Correct : Boolean := True;
+            begin
+               Landin.Testing.Check
+                 (Item, IR.Nth_Image (Unit, Sizes, 1)
+                    = Landin.Types.Folded (Landin.Targets.Bytes (Size))
+                      * Landin.Types.Folded (Words),
+                  Label & " folds target storage size in a static image");
+               Landin.Testing.Check
+                 (Item, IR.Nth_Image (Unit, Alignments, 1)
+                    = Landin.Types.Folded
+                        (Landin.Targets.Alignment_Of (Facts, Size)),
+                  Label & " folds target alignment in a static image");
+               for V in IR.Value_Id range
+                 1 .. IR.Value_Id (IR.Value_Count (Unit, Routine))
+               loop
+                  if IR.Op_Of (Unit, Routine, V)
+                       in IR.Measure_Size | IR.Measure_Align
+                  then
+                     Measures := Measures + 1;
+                     Correct := Correct
+                       and then not IR.Is_Aggregate_Measurement
+                         (Unit, Routine, V)
+                       and then IR.Measured_Of (Unit, Routine, V) = Carrier;
+                  end if;
+               end loop;
+               Landin.Testing.Check
+                 (Item, Measures = 2 and then Correct,
+                  Label & " lowers both measurements with their carrier");
+               Landin.Testing.Check
+                 (Item, IR.Verifier.Check (Unit, Facts).Kind
+                    = IR.Verifier.Nothing_Wrong,
+                  Label & " retains valid target measurement operations");
+            end;
+         end Check_Target;
+      begin
+         Check_Target (Landin.Targets.Linux_X86_64);
+         Check_Target (Landin.Targets.Synthetic_32);
+      end Check_Source;
+   begin
+      Check_Source
+        ("atom name",
+         "ready: atom" & LF
+         & "sizes: [1]usize = [sizeof ready]" & LF
+         & "alignments: [1]usize = [alignof ready]" & LF
+         & "f: () -> (r: usize) = r = sizeof ready + alignof ready "
+         & "end f" & LF,
+         Landin.Types.U32, 1);
+      Check_Source
+        ("atom union",
+         "ready: atom" & LF
+         & "done: atom" & LF
+         & "measured: type = ready | done" & LF
+         & "sizes: [1]usize = [sizeof measured]" & LF
+         & "alignments: [1]usize = [alignof measured]" & LF
+         & "f: () -> (r: usize) = r = sizeof measured + alignof "
+         & "measured end f" & LF,
+         Landin.Types.U32, 1);
+      Check_Source
+        ("native function type",
+         "measured: type = (value: i32) -> (r: i32)" & LF
+         & "sizes: [1]usize = [sizeof measured]" & LF
+         & "alignments: [1]usize = [alignof measured]" & LF
+         & "f: () -> (r: usize) = r = sizeof measured + alignof "
+         & "measured end f" & LF,
+         Landin.Types.Usize, 1);
+      Check_Source
+        ("C function type",
+         "measured: type = extern(c) (value: i32) -> (r: i32)" & LF
+         & "sizes: [1]usize = [sizeof measured]" & LF
+         & "alignments: [1]usize = [alignof measured]" & LF
+         & "f: () -> (r: usize) = r = sizeof measured + alignof "
+         & "measured end f" & LF,
+         Landin.Types.Usize, 1, C_Signature => True);
+      Check_Source
+        ("pointer type",
+         "measured: type = ptr u8" & LF
+         & "sizes: [1]usize = [sizeof measured]" & LF
+         & "alignments: [1]usize = [alignof measured]" & LF
+         & "f: () -> (r: usize) = r = sizeof measured + alignof "
+         & "measured end f" & LF,
+         Landin.Types.Usize, 1);
+      Check_Source
+        ("cstring type",
+         "sizes: [1]usize = [sizeof cstring]" & LF
+         & "alignments: [1]usize = [alignof cstring]" & LF
+         & "f: () -> (r: usize) = r = sizeof cstring + alignof "
+         & "cstring end f" & LF,
+         Landin.Types.Usize, 1);
+      Check_Source
+        ("slice type",
+         "measured: type = []u8" & LF
+         & "sizes: [1]usize = [sizeof measured]" & LF
+         & "alignments: [1]usize = [alignof measured]" & LF
+         & "f: () -> (r: usize) = r = sizeof measured + alignof "
+         & "measured end f" & LF,
+         Landin.Types.Usize, 2);
+      Check_Source
+        ("utf8 type",
+         "sizes: [1]usize = [sizeof utf8]" & LF
+         & "alignments: [1]usize = [alignof utf8]" & LF
+         & "f: () -> (r: usize) = r = sizeof utf8 + alignof utf8 "
+         & "end f" & LF,
+         Landin.Types.Usize, 2);
+      Check_Source
+        ("utf16 type",
+         "sizes: [1]usize = [sizeof utf16]" & LF
+         & "alignments: [1]usize = [alignof utf16]" & LF
+         & "f: () -> (r: usize) = r = sizeof utf16 + alignof utf16 "
+         & "end f" & LF,
+         Landin.Types.Usize, 2);
+      Check_Source
+        ("any type",
+         "observer: type = concept (t: type) end observer" & LF
+         & "measured: type = any observer" & LF
+         & "sizes: [1]usize = [sizeof measured]" & LF
+         & "alignments: [1]usize = [alignof measured]" & LF
+         & "f: () -> (r: usize) = r = sizeof measured + alignof "
+         & "measured end f" & LF,
+         Landin.Types.Usize, 2);
+      Check_Source
+        ("integer control",
+         "sizes: [1]usize = [sizeof u16]" & LF
+         & "alignments: [1]usize = [alignof u16]" & LF
+         & "f: () -> (r: usize) = r = sizeof u16 + alignof u16 end "
+         & "f" & LF,
+         Landin.Types.U16, 1);
+      Check_Source
+        ("bool control",
+         "sizes: [1]usize = [sizeof bool]" & LF
+         & "alignments: [1]usize = [alignof bool]" & LF
+         & "f: () -> (r: usize) = r = sizeof bool + alignof bool "
+         & "end f" & LF,
+         Landin.Types.Bool, 1);
+   end Measurements_Use_Target_Carriers;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "lowering", "measurements use target carriers",
+         Measurements_Use_Target_Carriers'Access);
       Landin.Testing.Register
         (Into, "lowering", "scalar image leaves keep their bounds",
          Scalar_Image_Leaves_Keep_Their_Bounds'Access);

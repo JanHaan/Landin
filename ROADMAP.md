@@ -5851,7 +5851,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J51 | A used parameterized conformance with a bad entry list raises "selected conformance lost a provider" instead of reporting it | C | Repaired: parameterized provider selection skips declarations refused during collection. A missing entry retains L0301 and its consumer reports the ordinary L0318 unsatisfied constraint, without creating incomplete evidence or raising a compiler defect. Valid generic providers and signature refusals retain their contracts. |
 | J52 | Select_Iterable_Conformance calls Template_Of with No_Nominal_Type for a nominal-less aggregate traversal source | C | Repaired: iterable family matching requires an actual nominal identity before reading its template. A multi-result aggregate now reports the existing L0301 missing-iterable diagnostic; a real nominal family retains traversal selection. |
 | J53 | Restoration after sinking through a slice view of an inout array | P | Plausible scope question only: the verifier refuted the general aliasing rationale. Determine whether a view rooted in an inout array carries its restoration obligation; preserve the documented aliasing non-guarantee. |
-| J54 | `sizeof`/`alignof` of an atom, atom-union or function type raises Landin.Compiler_Defect (exit 70) | C | Open checker boundary group: handle all admitted measured types and conversion arities explicitly; source mistakes must not become an unlocated internal defect. |
+| J54 | `sizeof`/`alignof` of an atom, atom-union or function type raises Landin.Compiler_Defect (exit 70) | C | Repaired: checking admits atom and function measurements; lowering uses their U32 and target-word carriers. Static image folding also covers these carriers and pointer/slice/any measurements, with two words only for slice/any size. Existing target-independent array-bound and C-ABI restrictions remain in force. |
 | J55 | Check_Aggregate_Payload tests the distinct-conversion escape on the wrong node (`Value` instead of `Given`), falsely refusing a module variant payload | C | Repaired with K6: query the payload expression's distinct conversion, retaining matching, mismatched-nominal and ordinary-field controls. |
 | J56 | A range subtype's bounds are never applied to a value that arrives through a control expression, so a statically-known out-of-range value compiles into an unconditional `ud2` | C | Open known-bound check: compare contextual/control and direct values against the existing static-range rule; preserve dynamic runtime checks. J116 remains plausible until narrowly established. |
 | J57 | Module image `bool` elements are never range-checked, so a non-0/1 bool image reaches lowering and aborts the compiler (exit 70) | C | Repaired: one scalar/recursive image-field walk includes bool bounds for array elements, ordinary fields, variant payload constructors and value fills. Invalid known bool carriers report L0300 before lowering; false/true boundaries and callback relocations remain valid. A shared fill is checked once even when several fields consume it. |
@@ -6302,7 +6302,20 @@ timeouts of at most 30 seconds. No assembler, linker or generated Landin
 executable ran. Logs are retained in `.scratch/r491-image-folds/` and
 `.scratch/r491-final-values/`. Exact-revision acceptance remains open.
 
-Measured atom/function type handling J54 is next.
+J54 development evidence: four selected cases pass 133 checks in each of
+macOS debug and Linux release. Twelve tiny sources exercise atom, atom-union,
+function, pointer, cstring, slice, text, any and scalar measurements. Static
+array images retain exact target size/alignment, while ordinary expressions
+retain their IR carrier on both target widths; the synthetic target's absent
+C ABI keeps its existing refusal. The initial array-extent test draft correctly
+hit D136's target-independent-expression restriction and was replaced with
+one-element image initializers. Existing aggregate measurements and unresolved
+measured-type refusal pass. Builds use one worker and selected tests have
+30-second or shorter timeouts. No assembler, linker or generated Landin
+executable ran. Logs are retained in `.scratch/r491-measurements/` and
+`.scratch/r491-final-values/`. Exact-revision acceptance remains open.
+
+Result-layout diagnostic preservation J60 is next.
 Keep J2's call-return contract question active. K12 needs a semantic
 disposition before implementation. The verifier, optimization, build-identity
 and ABI items above remain owned by the corresponding later repair groups.

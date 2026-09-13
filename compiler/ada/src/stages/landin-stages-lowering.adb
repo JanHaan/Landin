@@ -6774,7 +6774,10 @@ package body Landin.Stages.Lowering is
                      return Measure_Nominal
                        (Landin.Checking.Nominal_Of
                           (Types.all, Of_Tree, Asked));
-                  elsif Held = Ty.Pointer_Value then
+                  elsif Held = Ty.Atom_Value then
+                     return IR.Emit_Measurement
+                       (Unit.all, Filling, Of_Code, Ty.U32, Result, Site);
+                  elsif Held in Ty.Pointer_Value | Ty.Function_Value then
                      return IR.Emit_Measurement
                        (Unit.all, Filling, Of_Code, Ty.Usize, Result, Site);
                   elsif Held in Ty.Slice_Value | Ty.Any_Value then
