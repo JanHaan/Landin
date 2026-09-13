@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: local scalar forwarding and constant branches preserve snapshots effects and cleanup order
 program: main.ldn
 status: 0

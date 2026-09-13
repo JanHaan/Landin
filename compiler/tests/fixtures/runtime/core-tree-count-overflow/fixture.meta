@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: shared index-tree edges count paths and reject u32 leaf-count overflow before publication
 program: main.ldn
 root: ../../../../..

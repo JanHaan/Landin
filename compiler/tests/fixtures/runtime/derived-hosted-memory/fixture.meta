@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: complete prototype-4 derived hosted application in deterministic memory worlds
 program: main.ldn
 root: ../../../../..

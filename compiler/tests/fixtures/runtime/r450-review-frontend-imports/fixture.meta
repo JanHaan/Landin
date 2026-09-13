@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: qualified aliased and selective array arithmetic preserves module identities
 program: main.ldn
 root: root

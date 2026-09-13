@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: pointer and erased vectors retain contents and rollback across all allocator providers
 program: main.ldn
 root: ../../../../..

@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: heap-backed pointer and heterogeneous any prefixes survive vector growth and writable view mutation
 program: main.ldn
 root: ../../../../..

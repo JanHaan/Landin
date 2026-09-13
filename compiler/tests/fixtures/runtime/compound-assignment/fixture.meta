@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: compound assignment applies every numeric and bit operator while evaluating a computed destination once before its value
 constructs: 0290, 0300, 0320, 0330, 0340, 0390, 0410, 0430, 0570, 1890, 1900
 program: main.ldn

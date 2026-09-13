@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: direct, nested, aliased and generic distinct bool images retain both truth values
 program: main.ldn
 status: 42

@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: erased system I/O validates dynamic paths and handles arguments, files, streams and failures
 program: main.ldn
 root: ../../../../..

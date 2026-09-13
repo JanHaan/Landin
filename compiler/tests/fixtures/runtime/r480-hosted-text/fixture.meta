@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: native hosted application reads a long final line and validates its real output file
 program: main.ldn
 root: ../../../../..

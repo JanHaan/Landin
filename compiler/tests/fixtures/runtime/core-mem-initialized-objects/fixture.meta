@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: allocated objects store complete initialized scalar and reference descriptors, survive independent allocations and release exactly once
 program: main.ldn
 root: ../../../../..

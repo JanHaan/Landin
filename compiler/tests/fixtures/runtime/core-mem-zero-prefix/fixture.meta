@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: zero-byte heap-backed raw prefixes retain logical length through bootstrap transfer and release
 program: main.ldn
 root: ../../../../..

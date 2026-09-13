@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: dynamic negation of the minimum signed value traps
 program: main.ldn
 traps: yes

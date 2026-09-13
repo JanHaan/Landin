@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: D187 never removes a conversion-to-bool edge, so one inside [1120]'s region still traps
 constructs: 0700, 1120, 1960
 program: main.ldn

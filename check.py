@@ -2888,6 +2888,37 @@ def check_catalogue(full_run):
     return out
 
 
+def fixture_profiles():
+    """Runtime/ABI profile policy is explicit metadata, independent of names."""
+    out = []
+    fixtures = os.path.join(ROOT, "compiler/tests/fixtures")
+    for kind in sorted(os.listdir(fixtures)):
+        directory = os.path.join(fixtures, kind)
+        if not os.path.isdir(directory):
+            continue
+        for name in sorted(os.listdir(directory)):
+            meta = os.path.join(directory, name, "fixture.meta")
+            if not os.path.isfile(meta):
+                continue
+            entries = []
+            for number, line in enumerate(
+                    io.open(meta, encoding="utf-8"), 1):
+                match = re.match(r"^\s*profiles\s*:(.*)$", line)
+                if match:
+                    entries.append((number, match.group(1).strip()))
+            where = os.path.relpath(meta, ROOT)
+            if kind not in ("runtime", "abi"):
+                if entries:
+                    out.append((where, entries[0][0],
+                                "profiles belongs only to runtime or ABI"))
+            elif len(entries) != 1:
+                out.append((where, 1, "exactly one profiles key is required"))
+            elif entries[0][1] not in ("standard", "specialization"):
+                out.append((where, entries[0][0],
+                            "profiles must be standard or specialization"))
+    return out
+
+
 def fixture_constructs():
     """Every `constructs:` a fixture names, held to a paragraph.
 
@@ -5231,6 +5262,7 @@ def main(argv):
     extra += check_coverage_registers(full_run)
     if full_run:
         extra += fixture_constructs()
+        extra += fixture_profiles()
         extra += fixture_sources()
         extra += pinned_fixtures()
         extra += lowering_verifies()

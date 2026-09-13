@@ -1,4 +1,5 @@
 class: abi
+profiles: standard
 summary: Code pointers through arguments results fields reentrancy and nullable data
 program: program.ldn
 c-sources: peer.c

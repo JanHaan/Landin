@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: erasing an integer-created untracked pointer creates no origin the checker can constrain
 program: main.ldn
 status: 42

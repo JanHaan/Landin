@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: literal numeric operands retain context and returning flow on either side
 program: main.ldn
 constructs: 0200, 0210, 0300, 1020, 1050, 1080, 1910, 1930

@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: [1870]'s one-byte bool crosses [1650]'s ABI as an argument and as a result
 constructs: 1650, 1770, 1800, 1870, 1920
 program: main.ldn

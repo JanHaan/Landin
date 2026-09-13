@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: undo evaluates late indirect stack aggregate and multiple-result calls on propagated failure
 program: main.ldn
 status: 42

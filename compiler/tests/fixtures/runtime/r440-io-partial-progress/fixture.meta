@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: fake I/O preserves completed write prefixes and distinguishes EOF from zero progress
 program: main.ldn
 root: ../../../../..

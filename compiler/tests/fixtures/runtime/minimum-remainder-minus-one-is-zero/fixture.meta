@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: signed minimum remainder minus one is zero at every width
 constructs: 0290, 0300, 1770, 1800, 1950
 program: main.ldn

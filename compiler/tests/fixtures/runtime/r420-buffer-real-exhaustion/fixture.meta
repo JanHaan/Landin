@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: exhausted arena and fixed pool publish no object or buffer and reuse an exactly freed slot
 program: main.ldn
 root: ../../../../..

@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: imported public result observes line/block/doc comments, comment token boundaries, grouped atoms and nested shadowing
 program: main.ldn
 root: .

@@ -1,4 +1,5 @@
 class: abi
+profiles: standard
 summary: Callback array fields preserve initialized code values through register memory image copy and pointer paths
 program: program.ldn
 c-sources: peer.c

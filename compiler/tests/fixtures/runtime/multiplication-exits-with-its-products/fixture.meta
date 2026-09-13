@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: checked multiplication keeps representable signed and unsigned products
 constructs: 0290, 0300, 1770, 1800, 1880
 program: main.ldn

@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: a break hidden in a value-position block still gives its enclosing loop an exit
 program: main.ldn
 status: 42

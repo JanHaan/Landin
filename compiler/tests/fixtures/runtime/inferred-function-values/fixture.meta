@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: an inferred local function value calls its code address indirectly
 constructs: 0050, 0870, 1000, 1920
 program: main.ldn

@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: lifted floating arithmetic retains IEEE zero division and ordinary reduction order
 constructs: 0240, 0370, 0520, 0590, 1010, 1890
 program: main.ldn

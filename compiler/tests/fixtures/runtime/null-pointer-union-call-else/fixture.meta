@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: R4.40 call-else widens the successful pointer and failed atom into a named union without inventing a bare null pointer
 program: main.ldn
 constructs: 0480, 0780, 0940, 1210, 1870

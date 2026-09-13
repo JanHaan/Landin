@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: concrete ptr T fields retain scalar nested-pointer and any-concept descriptors through generic construction
 program: main.ldn
 status: 42

@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: tree append failures preserve names and indices across heap arena and reclaiming fixed providers
 program: main.ldn
 root: ../../../../..

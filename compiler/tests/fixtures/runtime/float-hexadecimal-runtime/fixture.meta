@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: hexadecimal f32 and f64 literals preserve exact normal and subnormal values and round ties to even
 constructs: 0170, 0210, 0220, 0230, 0290, 0350, 1880, 1890, 1940
 program: main.ldn

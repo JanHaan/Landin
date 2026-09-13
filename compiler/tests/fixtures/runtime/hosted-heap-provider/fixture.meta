@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: hosted heap aligns and reclaims exact live extents through pointer-vector growth
 program: main.ldn
 root: ../../../../..

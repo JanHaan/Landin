@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: collection traversal walks slices and fixed arrays through element places that write back through mutable storage, with indices, labels, completion, and produced values
 program: main.ldn
 status: 42

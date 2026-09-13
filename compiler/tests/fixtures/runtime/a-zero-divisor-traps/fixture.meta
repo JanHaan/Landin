@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: [1950] a divisor the compiler could not read is left to the trap, and [1960] stops the program there
 constructs: 1800, 1920, 1950, 1960
 program: main.ldn

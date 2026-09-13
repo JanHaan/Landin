@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: sibling and enclosing contexts reach nested control answers without default rounding
 program: main.ldn
 constructs: 0190, 0200, 0210, 0300, 0590, 1030, 1050, 1080, 1880, 1910

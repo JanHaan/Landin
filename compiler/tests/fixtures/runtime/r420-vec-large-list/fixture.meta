@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: core/vec iteratively transfers and drains a materially large initialized list
 program: main.ldn
 root: ../../../../..

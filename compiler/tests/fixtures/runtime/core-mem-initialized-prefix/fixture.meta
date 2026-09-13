@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: heap-backed initialized prefix transitions expose only admitted values and preserve failed states
 program: main.ldn
 root: ../../../../..

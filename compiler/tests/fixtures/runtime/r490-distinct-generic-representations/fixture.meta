@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: opaque distinct views preserve scalar, array, record, pointer, slice, callback and atom representations
 program: main.ldn
 status: 42

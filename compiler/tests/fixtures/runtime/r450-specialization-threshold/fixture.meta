@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: two concrete evidence instances exercise capped loop benefit under every optimization profile
 program: main.ldn
 status: 0

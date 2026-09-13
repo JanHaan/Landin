@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: D85 array payload aliases support scalar and generic traversal plus indexed updates
 constructs: 0080, 0190, 0410, 0520, 0560, 0580, 0670, 0680, 0690, 0710, 1150, 1210, 1220, 1280, 1740, 1790, 1795, 1810, 1900, 1950
 program: main.ldn

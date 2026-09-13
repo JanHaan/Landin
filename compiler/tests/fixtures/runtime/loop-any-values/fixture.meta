@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: an any-valued loop fills caller-owned erased storage before leaving its body
 program: main.ldn
 status: 42

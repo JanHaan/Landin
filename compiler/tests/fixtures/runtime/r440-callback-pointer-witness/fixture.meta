@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: Callback pointers retain complete reached types through aliases, casts, inout forwarding and pointer-bearing struct copies
 program: main.ldn
 status: 42

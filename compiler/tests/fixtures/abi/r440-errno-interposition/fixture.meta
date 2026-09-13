@@ -1,4 +1,5 @@
 class: abi
+profiles: standard
 summary: actual hosted bridge preserves errno and partial I/O policy under C interposition
 program: program.ldn
 root: ../../../../..

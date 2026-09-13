@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: constrained provider entries bind transitive evidence through direct and erased aggregate calls
 program: main.ldn
 status: 42

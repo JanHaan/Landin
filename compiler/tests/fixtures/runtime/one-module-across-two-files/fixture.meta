@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: [1840] the module scope is every file compiled together, so two files are one module and each may name the other's declarations
 constructs: 0130, 1840, 1920, 1940, 1970
 program: main.ldn

@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: loops execute guarded and labelled transfers, unwind lexical defers, and distinguish completion from break
 program: main.ldn
 status: 42

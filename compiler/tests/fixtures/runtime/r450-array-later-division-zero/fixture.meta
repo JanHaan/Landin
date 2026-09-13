@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: lifted arithmetic retains scalar runtime traps
 constructs: 0300, 0370, 0520, 0590, 0760, 1890
 program: main.ldn

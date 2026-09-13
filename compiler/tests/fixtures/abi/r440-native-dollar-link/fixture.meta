@@ -1,4 +1,5 @@
 class: abi
+profiles: standard
 summary: Dollar-prefixed ELF names preserve identity in calls, function addresses, static relocations and exported definitions
 program: main.ldn
 c-sources: companion.c

@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: two stateful filter implementations retain independent dispatch and state through vector growth
 program: main.ldn
 root: ../../../../..

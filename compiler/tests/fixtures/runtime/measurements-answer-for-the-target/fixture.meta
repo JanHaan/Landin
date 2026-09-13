@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: [0370] scalar, fixed-array and scalar/array-field struct measurements answer with the x86-64 target facts
 constructs: 0160, 0370, 0520, 0670, 0710, 0750, 1770, 1795, 1800, 1940, 1970
 program: main.ldn

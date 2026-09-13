@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: pointer-array destination bounds trap before an RHS that would return from the routine
 program: main.ldn
 traps: yes

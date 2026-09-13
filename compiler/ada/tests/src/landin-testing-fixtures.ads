@@ -56,6 +56,12 @@ package Landin.Testing.Fixtures is
    function Run_Expect (Item : Fixture) return String;
    function Status  (Item : Fixture) return Integer;
 
+   --  Required runtime/ABI metadata selects the four standard profiles or
+   --  those four plus both forced-specialization profiles. Names do not
+   --  select compiler policy, and a renamed fixture retains its matrix.
+   function Profile_Count (Item : Fixture) return Positive
+     with Pre => Class (Item) in Runtime | Abi;
+
    --  Whether the fixture's program must end without exiting.  [1960] says
    --  a trap's operating-system encoding is not stable program behaviour,
    --  so what a fixture may assert is that the program did not return a
@@ -139,6 +145,8 @@ private
 
    package Unbounded renames Ada.Strings.Unbounded;
 
+   type Profile_Policy is (Standard, Specialization);
+
    type Fixture is record
       Class   : Fixture_Class := Unit;
       Name    : Unbounded.Unbounded_String;
@@ -158,6 +166,7 @@ private
       C_Files   : Ada.Strings.Unbounded.Unbounded_String;
       C_Options : Ada.Strings.Unbounded.Unbounded_String;
       Stream    : Stream_Choice := Merged;
+      Profiles  : Profile_Policy := Standard;
    end record;
 
    package Fixture_Vectors is new Ada.Containers.Indefinite_Vectors

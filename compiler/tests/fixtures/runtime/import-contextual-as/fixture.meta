@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: contextual as remains a declaration after an import and namespace qualification shadows only qualified module lookup
 program: main.ldn
 root: root

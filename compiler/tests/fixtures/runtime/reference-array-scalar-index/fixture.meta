@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: scalar indexing of pointer and slice backed fixed arrays preserves once-only evaluation and recovery
 program: main.ldn
 root: ../../../../..

@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: [1910] tracks known elements of a local array independently
 constructs: 0080, 0410, 0520, 0570, 1810, 1910
 program: main.ldn

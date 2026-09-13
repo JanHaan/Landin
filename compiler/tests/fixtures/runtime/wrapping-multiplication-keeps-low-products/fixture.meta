@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: wrapping multiplication keeps low signed and unsigned products
 constructs: 0300, 1770, 1800, 1880
 program: main.ldn

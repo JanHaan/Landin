@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: a hosted entry's named return reaches the host as the program's status
 constructs: 1660, 1770, 1800, 1970
 program: main.ldn

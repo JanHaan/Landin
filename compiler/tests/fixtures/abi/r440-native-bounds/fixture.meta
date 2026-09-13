@@ -1,4 +1,5 @@
 class: abi
+profiles: standard
 summary: C page-end and canary objects pin partial chunk and MEMORY copy bounds
 program: program.ldn
 c-sources: peer.c

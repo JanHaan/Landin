@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: declared inline struct bodies retain nominal aliases, generic instances, callbacks, module copies and optimal layout
 program: main.ldn
 status: 42

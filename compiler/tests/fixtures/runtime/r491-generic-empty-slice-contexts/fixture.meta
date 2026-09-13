@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: empty slices retain ordinary contextual element types and permissions
 program: main.ldn
 status: 42

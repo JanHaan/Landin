@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: A dynamic conversion through a qualified imported range alias retains its runtime bound check
 program: main.ldn
 root: .

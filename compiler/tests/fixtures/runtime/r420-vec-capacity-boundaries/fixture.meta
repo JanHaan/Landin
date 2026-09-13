@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: core/vec checks byte extents before provider calls and gives zero-sized items logical capacity
 program: main.ldn
 root: ../../../../..

@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: R3.20 derives honest raw-storage transitions from a growing pointer vector and a failing allocator
 program: main.ldn
 status: 42

@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: core/vec preserves pointer items across failed growth and retry while freeing exact extents once
 program: main.ldn
 root: ../../../../..

@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: discarding an unchecked division result never erases its mandatory zero-divisor trap
 program: main.ldn
 traps: yes

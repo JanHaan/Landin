@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: declared retention same-origin updates and local alias writes retain correct reference origins
 program: main.ldn
 status: 42

@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: named array aliases and uninitialized storage have nonreading lengths
 program: main.ldn
 constructs: 0120, 0300, 0370, 0520, 1900

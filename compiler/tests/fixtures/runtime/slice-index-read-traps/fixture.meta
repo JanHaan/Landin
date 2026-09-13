@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: a computed read beyond a slice length traps
 program: main.ldn
 traps: yes

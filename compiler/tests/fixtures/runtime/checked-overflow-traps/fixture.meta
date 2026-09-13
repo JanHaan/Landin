@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: [0300] a checked overflow the compiler could not read traps, and [1960] stops the program there
 constructs: 0300, 1770, 1800, 1920, 1960
 program: main.ldn

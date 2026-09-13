@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: Pointer-union dispatch preserves scalar and recursive pointee witnesses through both present-arm orders.
 program: main.ldn
 status: 42

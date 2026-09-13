@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: core/mem arenas align absolute addresses and reject boundary arithmetic without mutation
 program: main.ldn
 root: ../../../../..

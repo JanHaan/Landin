@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: conversion discovery preserves fixed-formal values through match bodies and nested generic forwarding
 program: main.ldn
 status: 42

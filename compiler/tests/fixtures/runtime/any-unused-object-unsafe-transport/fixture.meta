@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: unused object-unsafe any copies coexist with heterogeneous dispatch and an unconstructed shape witness
 program: main.ldn
 status: 42

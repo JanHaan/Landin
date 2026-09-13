@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: initialized vector views support allocation-free generic sort and copied slice traversal
 program: main.ldn
 root: ../../../../..

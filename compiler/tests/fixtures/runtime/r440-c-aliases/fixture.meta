@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: R4.40 C scalar aliases have the selected Linux x86-64 SysV LP64 widths, alignments, constants and conversions
 program: main.ldn
 root: ../../../../..

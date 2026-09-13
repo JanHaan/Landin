@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: a runtime pointer address that does not fit its integer target traps
 program: main.ldn
 traps: yes

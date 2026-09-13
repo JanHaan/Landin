@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: an ordinary struct variant payload is constructed, copied, matched and read through its match alias
 constructs: 0420, 0670, 0680, 0700, 0710, 0750, 1810, 1970
 program: main.ldn

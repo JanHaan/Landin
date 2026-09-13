@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: variant literals construct root nested and wrapped array elements with preserved case payloads and replacement
 program: main.ldn
 status: 42

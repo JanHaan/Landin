@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: distinct scalar identities preserve their representations through explicit construction and extraction
 program: main.ldn
 status: 42

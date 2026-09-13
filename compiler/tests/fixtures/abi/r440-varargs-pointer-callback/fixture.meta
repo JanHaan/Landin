@@ -1,4 +1,5 @@
 class: abi
+profiles: standard
 summary: C va_arg checks data pointers both optional pointer arms and invoked fixed callbacks in register and spilled direct and indirect tails
 program: program.ldn
 c-sources: peer.c

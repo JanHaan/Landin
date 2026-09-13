@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: core/text keeps byte positions opaque while traversing and slicing parser input
 program: main.ldn
 root: ../../../../..

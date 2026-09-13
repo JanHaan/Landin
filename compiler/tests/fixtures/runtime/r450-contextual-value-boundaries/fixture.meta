@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: labelled fields nested initializers arguments and assignments retain complete operand context
 program: main.ldn
 constructs: 0590, 0710, 0900, 0930, 0970, 1050, 1080, 1880, 1910

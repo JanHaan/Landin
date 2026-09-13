@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: each loop declaration creates a fresh view after mutating its source without retaining the prior iteration's borrow
 program: main.ldn
 status: 42

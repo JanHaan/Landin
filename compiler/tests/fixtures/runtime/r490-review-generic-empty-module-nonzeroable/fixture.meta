@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: independent empty module initialization boundary probe
 program: main.ldn
 status: 42

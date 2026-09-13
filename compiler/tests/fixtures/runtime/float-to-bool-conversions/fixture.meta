@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: explicit float-to-bool conversion accepts signed zero and exactly positive one across both widths
 constructs: 0150, 0170, 0180, 0190, 0210, 0310, 0350, 0700, 1880, 1940, 1960
 program: main.ldn

@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: scalar and storage-shaped loop expressions receive guarded, completion, and labelled break values through caller-owned joins
 program: main.ldn
 status: 42

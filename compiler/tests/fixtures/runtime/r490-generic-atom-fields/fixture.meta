@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: recovered atom sets retain generic field identity through erased providers
 program: main.ldn
 status: 42

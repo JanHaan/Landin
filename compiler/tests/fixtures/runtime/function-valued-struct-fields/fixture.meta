@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: function-valued struct fields retain signatures through static and runtime storage, copies, calls, variants, nesting and arrays
 constructs: 0050, 0060, 0420, 0520, 0670, 0680, 0700, 0870, 0900, 0930, 0940, 1000, 1010, 1030, 1790, 1800, 1840, 1900, 1910, 1920, 1940
 program: main.ldn

@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: core/small retains nominal aggregate item identity in inline and spilled prefixes
 program: main.ldn
 root: ../../../../..

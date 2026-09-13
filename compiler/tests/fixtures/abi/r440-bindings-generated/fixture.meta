@@ -1,4 +1,5 @@
 class: abi
+profiles: standard
 summary: Generated Clang-AST bindings cover native, opaque, callback, TLS, global, and incoming-varargs adapters
 program: program.ldn
 root: ../../../../..

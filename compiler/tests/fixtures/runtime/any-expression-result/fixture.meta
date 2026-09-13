@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: an erased expression body fills caller-owned two-word result storage
 program: main.ldn
 status: 42

@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: constant nested scalar stores and updates preserve array paths in module and frame storage
 program: main.ldn
 constructs: 0390, 0400, 0410, 0520, 0530, 1900, 1910

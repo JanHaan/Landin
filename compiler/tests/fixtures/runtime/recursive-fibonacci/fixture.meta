@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: a doubly recursive function computes Fibonacci and returns its own answer as the program's status
 constructs: 0950, 1770, 1800, 1820, 1920, 1970
 program: main.ldn

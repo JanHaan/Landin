@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: erased deliveries and core diagnostic streaming share one caller-backed memory world with partial output and explicit cleanup
 program: main.ldn
 root: ../../../../..

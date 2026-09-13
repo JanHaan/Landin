@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: bounded and streaming diagnostic loggers receive one ordered sequence through any dispatch while overflow and I/O failure keep distinct channels
 program: main.ldn
 root: ../../../../..

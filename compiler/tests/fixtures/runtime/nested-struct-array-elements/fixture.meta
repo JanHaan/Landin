@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: a fixed array inside a depth-one ordinary child carries scalar elements through module and local storage
 constructs: 0420, 0520, 0570, 0670, 0750, 1810, 1820, 1950, 1970
 program: main.ldn

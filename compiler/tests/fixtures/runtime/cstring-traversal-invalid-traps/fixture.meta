@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: malformed foreign C text traps during scalar traversal even inside unchecked and stops at NUL
 constructs: 0430, 0470, 0600, 1120, 1150, 1320, 1650, 1950, 1960
 program: main.ldn

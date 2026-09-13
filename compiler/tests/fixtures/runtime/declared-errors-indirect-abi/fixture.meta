@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: indirect failing aggregate calls retain hidden results and register plus stack arguments
 constructs: 0670, 0940, 1000, 1030, 1920
 program: main.ldn

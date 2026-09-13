@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: compound assignments stay statements at function, value-block and direct match-arm boundaries
 program: main.ldn
 status: 42

@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: an erased concept is an exact generic type actual and stored field
 program: main.ldn
 status: 42

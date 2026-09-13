@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: buffered memory reader closes acquired handles and frees buffers on every exit
 program: main.ldn
 root: ../../../../..

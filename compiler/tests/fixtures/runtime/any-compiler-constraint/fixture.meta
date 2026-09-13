@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: a proof-only compiler constraint contributes no erased runtime entry
 program: main.ldn
 status: 42

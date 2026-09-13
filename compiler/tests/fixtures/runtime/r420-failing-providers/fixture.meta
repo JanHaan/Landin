@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: counted allocator evidence wraps local fixed and heap providers and preserves vector rollback and retry
 program: main.ldn
 root: ../../../../..

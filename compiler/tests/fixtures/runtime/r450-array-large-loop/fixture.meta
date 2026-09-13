@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: large fixed arrays keep compact arithmetic loops and ordinary reduction
 constructs: 0300, 0370, 0520, 0590, 0760, 1890
 program: main.ldn

@@ -1,4 +1,5 @@
 class: abi
+profiles: specialization
 summary: page-boundary C entry scratch preserves GP and SSE carriers and a hidden MEMORY result address
 program: program.ldn
 c-sources: peer.c

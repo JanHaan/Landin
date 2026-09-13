@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: memory world preserves exact argument zero-progress EOF and refusal boundaries without host input
 program: main.ldn
 root: ../../../../..

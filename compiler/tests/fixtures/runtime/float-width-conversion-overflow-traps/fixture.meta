@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: narrowing a finite runtime f64 beyond f32 range traps instead of producing infinity
 constructs: 0170, 0210, 0310, 0700, 1950, 1960
 program: main.ldn

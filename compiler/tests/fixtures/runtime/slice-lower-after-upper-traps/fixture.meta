@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: a dynamic slice lower after its upper traps
 program: main.ldn
 traps: yes

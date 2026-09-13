@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: a dynamic float-to-integer conversion traps when its truncated value exceeds the destination range
 constructs: 0150, 0170, 0210, 0310, 0700, 1950, 1960
 program: main.ldn

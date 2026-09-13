@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: core/mem bump and budgeted arenas align extents and make exhaustion deterministic
 program: main.ldn
 root: ../../../../..

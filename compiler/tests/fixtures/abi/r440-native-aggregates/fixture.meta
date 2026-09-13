@@ -1,4 +1,5 @@
 class: abi
+profiles: standard
 summary: Native C aggregates in both directions with independent result banks
 program: program.ldn
 c-sources: peer.c

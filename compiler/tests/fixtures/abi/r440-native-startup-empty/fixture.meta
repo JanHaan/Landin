@@ -1,4 +1,5 @@
 class: abi
+profiles: standard
 summary: Initialized zero user arguments retain the real nonnull C table
 program: program.ldn
 root: ../../../../..

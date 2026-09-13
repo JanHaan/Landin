@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: heterogeneous mutable any values retain data and evidence through nominal deduction and pointer results
 program: main.ldn
 status: 42

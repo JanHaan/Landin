@@ -1,4 +1,5 @@
 class: abi
+profiles: standard
 summary: opaque scalar, floating, pointer and C record identities cross SysV in both directions
 program: program.ldn
 c-sources: peer.c

@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: text literals deduce generic reference returns with source clauses in block and expression bodies
 program: main.ldn
 root: ../../../../..

@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: computed scalar operators retain effects but not slice or array-field origins across later mutation
 program: main.ldn
 status: 42

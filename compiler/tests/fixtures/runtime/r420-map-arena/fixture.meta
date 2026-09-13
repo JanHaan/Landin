@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: a map grows and preserves its old contents on exhaustion in the monotonic core arena
 program: main.ldn
 root: ../../../../..

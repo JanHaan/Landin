@@ -1,4 +1,5 @@
 class: abi
+profiles: standard
 summary: Aligned assembly observes the original hidden sret pointer in rax and C checks every result field
 program: program.ldn
 c-sources: peer.c
