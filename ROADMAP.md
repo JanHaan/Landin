@@ -5825,7 +5825,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J25 | Assignment to an anonymous multi-result aggregate from a labelled call, `try`, or loop value violates `Res.Bound_To`'s precondition | C | Repaired: anonymous-result assignments route labelled calls, try and loop/while/for values through caller-owned result storage instead of name-only storage lookup. Positional, labelled, propagated-error and all three loop forms pass in both modes. |
 | J26 | A `complete` body that never falls through leaves the post-loop block with no predecessor, producing malformed IR | C | Repaired: breaks and completing bodies allocate their shared exit only when an emitted edge reaches it. Returning, continuing and failing complete bodies leave no orphan post-loop block. Nested labelled breaks, break values, cleanup and continuing completion controls pass in both modes; source-only break scanning is removed. |
 | J27 | Aggregate assignment to a computed or reference-borne place from a loop value raises "a contextual storage value has no rooted place" | C | Repaired: dynamic/reference aggregate destinations admit loop/while/for values into the existing shaped temporary and copy path. Array-indexed, pointer and inout destinations pass; explicit call-order checks retain one destination evaluation before the RHS, and an all-return RHS skips copying its temporary. |
-| J28 | Anonymous function with a pointer result gets the wrong IR item result kind (exit 70) | C | Open accepted-value lowering group: reproduce this storage/result shape narrowly, then preserve checked shape and initialization across its lowering path in both modes. |
+| J28 | Anonymous function with a pointer result gets the wrong IR item result kind (exit 70) | C | Repaired: anonymous routine items lower pointer results to the same usize carrier as named routines. Read-only/mutable, array, nominal and cstring referents, local callbacks and named/scalar controls retain their full signature and from metadata on both target widths in both modes. |
 | J29 | `Made` is set for an array-root image the code deliberately did not store, so the copy path violates `Image_Length`'s `Has_Image` precondition | C | Open accepted-value lowering group: reproduce this storage/result shape narrowly, then preserve checked shape and initialization across its lowering path in both modes. |
 | J30 | Module struct slice field initialized from a name or member selection raises "a static slice field has no image form" | C | Repaired: slice-bearing struct images use the existing complete descriptor builder; the verifier selects its recursive checker when any descriptor carries a slice. Direct, named, member, nested, empty and variant slice images retain backing targets, offsets, lengths, element shapes and tags on 32/64-bit targets. Explicit malformed descriptors retain bounds/shape refusals. This also repairs the valid variant slice literal found during K1. |
 | J31 | Module `ptr`/`cstring` binding with no initializer passes `Ty.Pointer_Value` to `IR.Emit_Number`'s `Integer_Name` parameter | C | Open accepted-value lowering group: reproduce this storage/result shape narrowly, then preserve checked shape and initialization across its lowering path in both modes. |
@@ -6265,7 +6265,18 @@ linker or generated Landin executable ran. Logs are retained in
 `.scratch/r491-stored-control-values/` and `.scratch/r491-final-values/`.
 Exact-revision acceptance remains open.
 
-Anonymous pointer-result lowering J28 is next.
+J28 development evidence: three selected cases pass 88 checks in each of
+macOS debug and Linux release. Eight tiny sources check anonymous pointer
+result carriers, exact referent and return-source metadata, local callback
+storage and named/scalar controls on both target widths. Existing capture and
+incompatible-function-signature refusals pass. Builds use one worker and
+selected tests have timeouts of at most 30 seconds. No assembler, linker or
+generated Landin executable ran. Logs are retained in
+`.scratch/r491-anonymous-results/` and `.scratch/r491-final-values/`.
+Exact-revision acceptance remains open.
+
+Missing module reference initializers J31/J32 and zero aggregate-array image
+copying J29 are next.
 Keep J2's call-return contract question active. K12 needs a semantic
 disposition before implementation. The verifier, optimization, build-identity
 and ABI items above remain owned by the corresponding later repair groups.

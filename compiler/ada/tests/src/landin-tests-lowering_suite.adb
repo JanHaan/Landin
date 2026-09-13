@@ -10057,8 +10057,165 @@ package body Landin.Tests.Lowering_Suite is
          & "end loop r = 0 end f" & LF);
    end Stored_Control_Values_Keep_Their_Shapes;
 
+   procedure Anonymous_Results_Keep_Pointer_Carriers
+     (Item : in out Landin.Testing.Context);
+
+   procedure Anonymous_Results_Keep_Pointer_Carriers
+     (Item : in out Landin.Testing.Context)
+   is
+      use type IR.Pointee_Id;
+
+      procedure Check_Source
+        (Label, Text : String;
+         Carrier : Landin.Types.Type_Kind := Landin.Types.Usize;
+         Pointer_Result : Boolean := True;
+         Anonymous : Boolean := True);
+
+      procedure Check_Source
+        (Label, Text : String;
+         Carrier : Landin.Types.Type_Kind := Landin.Types.Usize;
+         Pointer_Result : Boolean := True;
+         Anonymous : Boolean := True)
+      is
+         procedure Check_Target (Facts : Landin.Targets.Target_Facts);
+
+         procedure Check_Target (Facts : Landin.Targets.Target_Facts) is
+            Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+            Ran : Natural;
+            Routine : IR.Item_Id := IR.No_Item;
+            Count : Natural := 0;
+         begin
+            Lower (Work, Text, Ran);
+            Landin.Testing.Check
+              (Item, Ran = 5 and then not Landin.Stages.Failed (Work),
+               Label & " reaches accepted IR");
+            if Landin.Stages.Failed (Work) then
+               return;
+            end if;
+            declare
+               Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+            begin
+               if Anonymous then
+                  for Position in 1 .. IR.Item_Count (Unit) loop
+                     declare
+                        Candidate : constant IR.Item_Id :=
+                          IR.Item_Id (Position);
+                     begin
+                        if IR.Kind_Of (Unit, Candidate) = IR.Routine
+                          and then IR.Declares (Unit, Candidate)
+                            = Landin.Resolution.No_Declaration
+                        then
+                           Count := Count + 1;
+                           Routine := Candidate;
+                        end if;
+                     end;
+                  end loop;
+                  Landin.Testing.Check
+                    (Item, Count = 1, Label & " has one anonymous body");
+               else
+                  Routine := Named_Item (Work, "callback");
+               end if;
+               if Routine = IR.No_Item then
+                  return;
+               end if;
+               declare
+                  Signature : constant IR.Signature_Id :=
+                    IR.Signature_Of (Unit, Routine);
+                  Part : constant IR.Signature_Part :=
+                    IR.Nth_Signature_Result (Unit, Signature, 1);
+                  Parameter : constant IR.Signature_Part :=
+                    IR.Nth_Signature_Parameter (Unit, Signature, 1);
+               begin
+                  Landin.Testing.Check
+                    (Item, IR.Result_Of (Unit, Routine) = Carrier
+                       and then Part.Kind = Carrier,
+                     Label & " agrees with its signature carrier");
+                  Landin.Testing.Check
+                    (Item,
+                     (if Pointer_Result
+                      then Part.Pointee /= IR.No_Pointee
+                        and then Part.Pointee = Parameter.Pointee
+                        and then IR.Signature_Return_Source_Count
+                          (Unit, Signature, 1) = 1
+                      else Part.Pointee = IR.No_Pointee),
+                     Label & " retains its referent and source contract");
+               end;
+               Landin.Testing.Check
+                 (Item, IR.Verifier.Check (Unit, Facts).Kind
+                          = IR.Verifier.Nothing_Wrong,
+                  Label & " satisfies the target verifier");
+            end;
+         end Check_Target;
+      begin
+         Check_Target (Landin.Targets.Linux_X86_64);
+         Check_Target (Landin.Targets.Synthetic_32);
+      end Check_Source;
+   begin
+      Check_Source
+        ("scalar pointer",
+         "handler: type = (value: ptr i32) -> (r: ptr i32 from value)" & LF
+         & "callback: handler = (value: ptr i32) -> (r: ptr i32 from "
+         & "value) = value end" & LF
+         & "f: (value: ptr i32) -> (r: ptr i32 from value) = r = "
+         & "callback(value) end f" & LF);
+      Check_Source
+        ("mutable pointer",
+         "handler: type = (value: ptr mut i32) -> (r: ptr mut i32 "
+         & "from value)" & LF
+         & "callback: handler = (value: ptr mut i32) -> (r: ptr mut i32 "
+         & "from value) = value end" & LF
+         & "f: (value: ptr mut i32) -> (r: ptr mut i32 from value) = r "
+         & "= callback(value) end f" & LF);
+      Check_Source
+        ("array pointer",
+         "handler: type = (value: ptr [2]u8) -> (r: ptr [2]u8 from "
+         & "value)" & LF
+         & "callback: handler = (value: ptr [2]u8) -> (r: ptr [2]u8 "
+         & "from value) = value end" & LF
+         & "f: (value: ptr [2]u8) -> (r: ptr [2]u8 from value) = r = "
+         & "callback(value) end f" & LF);
+      Check_Source
+        ("nominal pointer",
+         "pair: type = struct value: i32 end pair" & LF
+         & "handler: type = (value: ptr pair) -> (r: ptr pair from "
+         & "value)" & LF
+         & "callback: handler = (value: ptr pair) -> (r: ptr pair from "
+         & "value) = value end" & LF
+         & "f: (value: ptr pair) -> (r: ptr pair from value) = r = "
+         & "callback(value) end f" & LF);
+      Check_Source
+        ("cstring pointer",
+         "handler: type = (value: cstring) -> (r: cstring from value)" & LF
+         & "callback: handler = (value: cstring) -> (r: cstring from "
+         & "value) = value end" & LF
+         & "f: (value: cstring) -> (r: cstring from value) = r = "
+         & "callback(value) end f" & LF);
+      Check_Source
+        ("local anonymous pointer",
+         "handler: type = (value: ptr i32) -> (r: ptr i32 from value)" & LF
+         & "f: (value: ptr i32) -> (r: ptr i32 from value) = callback: "
+         & "handler = (value: ptr i32) -> (r: ptr i32 from value) = "
+         & "value end r = callback(value) end f" & LF);
+      Check_Source
+        ("named pointer control",
+         "callback: (value: ptr i32) -> (r: ptr i32 from value) = r = "
+         & "value end callback" & LF
+         & "f: (value: ptr i32) -> (r: ptr i32 from value) = r = "
+         & "callback(value) end f" & LF,
+         Anonymous => False);
+      Check_Source
+        ("anonymous scalar control",
+         "handler: type = (value: i32) -> (r: i32)" & LF
+         & "callback: handler = (value: i32) -> (r: i32) = value end" & LF
+         & "f: (value: i32) -> (r: i32) = r = callback(value) end f" & LF,
+         Carrier => Landin.Types.I32, Pointer_Result => False);
+   end Anonymous_Results_Keep_Pointer_Carriers;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "lowering", "anonymous results keep pointer carriers",
+         Anonymous_Results_Keep_Pointer_Carriers'Access);
       Landin.Testing.Register
         (Into, "lowering", "stored control values keep their shapes",
          Stored_Control_Values_Keep_Their_Shapes'Access);
