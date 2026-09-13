@@ -7520,6 +7520,8 @@ package body Landin.Stages.Lowering is
                           Scalar_At (Of_Tree, Left_Node),
                           Res.No_Declaration,
                           Site_Of (Of_Tree, Left_Node),
+                          Signature => IR.Signature_Of
+                            (Unit.all, Filling, Left),
                           Pointee => IR.Pointee_Of (Unit.all, Filling, Left),
                           Atoms =>
                             (if Type_At (Of_Tree, Left_Node) = Ty.Atom_Value

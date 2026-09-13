@@ -9221,8 +9221,164 @@ package body Landin.Tests.Lowering_Suite is
          "", 0, 0, 0, Landin.Types.I32);
    end Calls_Respect_Resolved_Declarations;
 
+   procedure Function_Comparisons_Keep_Signatures
+     (Item : in out Landin.Testing.Context);
+
+   procedure Function_Comparisons_Keep_Signatures
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Source
+        (Label, Text : String; Ordered_Call : String := "");
+
+      procedure Check_Source
+        (Label, Text : String; Ordered_Call : String := "")
+      is
+         procedure Check_Target (Facts : Landin.Targets.Target_Facts);
+
+         procedure Check_Target (Facts : Landin.Targets.Target_Facts) is
+            Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+            Ran : Natural;
+            Comparisons : Natural := 0;
+            Typed : Boolean := True;
+         begin
+            Lower (Work, Text, Ran);
+            Landin.Testing.Check
+              (Item, Ran = 5 and then not Landin.Stages.Failed (Work),
+               Label & " reaches accepted IR");
+            if Landin.Stages.Failed (Work) then
+               return;
+            end if;
+            declare
+               Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+               Routine : constant IR.Item_Id := Named_Item (Work, "f");
+            begin
+               for Position in 1 .. IR.Value_Count (Unit, Routine) loop
+                  declare
+                     Value : constant IR.Value_Id := IR.Value_Id (Position);
+                  begin
+                     if IR.Op_Of (Unit, Routine, Value)
+                          in IR.Equal_To | IR.Not_Equal_To
+                     then
+                        Comparisons := Comparisons + 1;
+                        declare
+                           Left : constant IR.Value_Id :=
+                             IR.Nth_Operand (Unit, Routine, Value, 1);
+                           Right : constant IR.Value_Id :=
+                             IR.Nth_Operand (Unit, Routine, Value, 2);
+                           Left_Type : constant IR.Signature_Id :=
+                             IR.Signature_Of (Unit, Routine, Left);
+                           Right_Type : constant IR.Signature_Id :=
+                             IR.Signature_Of (Unit, Routine, Right);
+                        begin
+                           Typed := Typed and then
+                             Left_Type /= IR.No_Signature and then
+                             Right_Type /= IR.No_Signature and then
+                             IR.Signatures_Agree (Unit, Left_Type, Right_Type);
+                           if Ordered_Call /= "" then
+                              declare
+                                 Saved : constant IR.Slot_Id :=
+                                   IR.Slot_Of (Unit, Routine, Left);
+                                 Saved_At : IR.Value_Id := IR.No_Value;
+                                 Called_At : IR.Value_Id := IR.No_Value;
+                                 Callee : constant IR.Item_Id :=
+                                   Named_Item (Work, Ordered_Call);
+                              begin
+                                 for Index in 1 .. Position - 1 loop
+                                    declare
+                                       Prior : constant IR.Value_Id :=
+                                         IR.Value_Id (Index);
+                                    begin
+                                       if IR.Op_Of (Unit, Routine, Prior)
+                                            = IR.Store
+                                         and then IR.Slot_Of
+                                           (Unit, Routine, Prior) = Saved
+                                       then
+                                          Saved_At := Prior;
+                                       elsif IR.Op_Of (Unit, Routine, Prior)
+                                               = IR.Call
+                                         and then IR.Callee_Of
+                                           (Unit, Routine, Prior) = Callee
+                                       then
+                                          Called_At := Prior;
+                                       end if;
+                                    end;
+                                 end loop;
+                                 Landin.Testing.Check
+                                   (Item, Saved_At /= IR.No_Value
+                                      and then Saved_At < Called_At
+                                      and then Called_At < Left,
+                                    "the left value is saved before the"
+                                    & " right call changes its source");
+                              end;
+                           end if;
+                        end;
+                     end if;
+                  end;
+               end loop;
+               Landin.Testing.Check
+                 (Item, Comparisons = 1 and then Typed,
+                  Label & " keeps both function signatures");
+               Landin.Testing.Check
+                 (Item, IR.Verifier.Check (Unit, Facts).Kind
+                          = IR.Verifier.Nothing_Wrong,
+                  Label & " satisfies the target verifier");
+            end;
+         end Check_Target;
+      begin
+         Check_Target (Landin.Targets.Linux_X86_64);
+         Check_Target (Landin.Targets.Synthetic_32);
+      end Check_Source;
+   begin
+      Check_Source
+        ("named equality",
+         "one: () -> (r: i32) = r = 1 end one" & LF
+         & "two: () -> (r: i32) = r = 2 end two" & LF
+         & "f: () -> (r: bool) = r = one == two end f" & LF);
+      Check_Source
+        ("named inequality",
+         "one: () -> (r: i32) = r = 1 end one" & LF
+         & "two: () -> (r: i32) = r = 2 end two" & LF
+         & "f: () -> (r: bool) = r = one <> two end f" & LF);
+      Check_Source
+        ("parameter equality",
+         "handler: type = () -> (r: i32)" & LF
+         & "f: (a: handler, b: handler) -> (r: bool) = r = a == b "
+         & "end f" & LF);
+      Check_Source
+        ("local inequality",
+         "one: () -> (r: i32) = r = 1 end one" & LF
+         & "two: () -> (r: i32) = r = 2 end two" & LF
+         & "f: () -> (r: bool) = a: () -> (r: i32) = one" & LF
+         & "b: () -> (r: i32) = two r = a <> b end f" & LF);
+      Check_Source
+        ("right control value",
+         "one: () -> (r: i32) = r = 1 end one" & LF
+         & "two: () -> (r: i32) = r = 2 end two" & LF
+         & "f: (flag: bool) -> (r: bool) = r = one == if flag "
+         & "then one else two end if end f" & LF);
+      Check_Source
+        ("left control value",
+         "one: () -> (r: i32) = r = 1 end one" & LF
+         & "two: () -> (r: i32) = r = 2 end two" & LF
+         & "f: (flag: bool) -> (r: bool) = r = (if flag then one "
+         & "else two end if) <> two end f" & LF);
+      Check_Source
+        ("right changes storage",
+         "one: () -> (r: i32) = r = 1 end one" & LF
+         & "two: () -> (r: i32) = r = 2 end two" & LF
+         & "handler: type = () -> (r: i32)" & LF
+         & "mut saved: handler = one" & LF
+         & "choose: () -> (r: handler) = saved = two r = two end "
+         & "choose" & LF
+         & "f: () -> (r: bool) = r = saved == choose() end f" & LF,
+         "choose");
+   end Function_Comparisons_Keep_Signatures;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "lowering", "function comparisons keep signatures",
+         Function_Comparisons_Keep_Signatures'Access);
       Landin.Testing.Register
         (Into, "lowering", "calls respect resolved declarations",
          Calls_Respect_Resolved_Declarations'Access);

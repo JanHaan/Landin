@@ -1964,6 +1964,11 @@ package body Landin.Tests.Driver_Suite is
    begin
       for Executable in Boolean loop
          Check
+           ("one: () -> (r: i32) = r = 1 end one "
+            & "two: (v: i32) -> (r: i32) = r = v end two "
+            & "same: () -> (r: bool) = r = one == two end same",
+            "L0301", 1, Executable);
+         Check
            ("f: () -> (r: u8) = r = u8() end f",
             "L0301", 1, Executable);
          Check
