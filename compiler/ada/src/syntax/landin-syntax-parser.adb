@@ -548,6 +548,51 @@ package body Landin.Syntax.Parser is
                return False;
             end Starts_Conformance;
 
+            function Starts_Named_Declaration return Boolean;
+
+            function Starts_Named_Declaration return Boolean is
+               Step : Tok.Token_Index := 1;
+            begin
+               if Peek /= Tok.Identifier then
+                  return False;
+               elsif Ahead (1) in Tok.Colon | Tok.Colon_Equal then
+                  return True;
+               elsif Named_Here = Option_Id
+                 and then Ahead (1) = Tok.Identifier
+               then
+                  return True;
+               elsif Named_Here in Compiler_Id | Assembler_Id | Linker_Id
+                 and then Ahead (1) = Tok.Dot
+               then
+                  return True;
+               elsif Landin.Source.Names.Spelling (Names, Named_Here) = "link"
+                 and then Ahead (1) = Tok.Left_Paren
+               then
+                  return True;
+               end if;
+
+               --  [1740]: an atom declaration may begin with several names.
+               while Ahead (Step) = Tok.Comma
+                 and then Ahead (Step + 1) = Tok.Identifier
+               loop
+                  Step := Step + 2;
+               end loop;
+               if Step > 1 then
+                  return Ahead (Step) = Tok.Colon
+                    and then Ahead (Step + 1) = Tok.Kw_Atom;
+               end if;
+
+               --  A declaration reference or type application may begin a
+               --  conformance.  Do not scan across a separate identifier:
+               --  an explicit end name can precede another target's `is`.
+               if Ahead (1) = Tok.Identifier then
+                  return Named_Ahead (1) = Is_Id;
+               elsif Ahead (1) in Tok.Dot | Tok.Left_Paren then
+                  return Starts_Conformance;
+               end if;
+               return False;
+            end Starts_Named_Declaration;
+
             --  Whether a labelled argument's RHS begins one of the type-only
             --  shapes that ordinary expression parsing cannot consume.  This
             --  lookahead only balances the outer brackets; it creates no
@@ -4536,7 +4581,13 @@ package body Landin.Syntax.Parser is
                elsif Peek = Tok.Kw_End then
                   Advance;
 
-                  if Peek = Tok.Identifier then
+                  --  [1800]: the repeated name is optional.  A matching
+                  --  name retains its closing role; another declaration
+                  --  must keep its own first token for Parse_Declaration.
+                  if Peek = Tok.Identifier
+                    and then (Named_Here = Named
+                              or else not Starts_Named_Declaration)
+                  then
                      if Named /= Landin.Source.Names.No_Name
                        and then Named_Here /= Named
                      then

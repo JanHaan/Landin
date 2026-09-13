@@ -2693,8 +2693,156 @@ package body Landin.Tests.Parser_Suite is
          1);
    end List_Recovery_Preserves_Current_Anchors;
 
+   procedure Optional_End_Names_Preserve_Declarations
+     (Item : in out Landin.Testing.Context);
+
+   procedure Optional_End_Names_Preserve_Declarations
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check
+        (Label, Suffix : String);
+
+      procedure Check
+        (Label, Suffix : String) is
+         Sources : Landin.Source.Sets.Source_Set;
+         Names   : Landin.Source.Names.Table;
+         Clean, Broken : Landin.Tokens.Token_Stream;
+         Clean_Report, Broken_Report : Landin.Diagnostics.Diagnostic_List;
+         Clean_Id : constant Landin.Source.Source_Id :=
+           Sources.Add ("clean.ldn",
+             "f: () -> (r: i32) = 1 end f " & Suffix & ASCII.LF);
+         Broken_Id : constant Landin.Source.Source_Id :=
+           Sources.Add ("bare.ldn",
+             "f: () -> (r: i32) = 1 end " & Suffix & ASCII.LF);
+      begin
+         Landin.Tokens.Lexer.Lex (Sources.Get (Clean_Id), Names, Clean);
+         Landin.Tokens.Lexer.Lex (Sources.Get (Broken_Id), Names, Broken);
+         declare
+            Expected : constant Landin.Syntax.Tree :=
+              Landin.Syntax.Parser.Parse (Clean, Names, Clean_Report);
+            Actual : constant Landin.Syntax.Tree :=
+              Landin.Syntax.Parser.Parse (Broken, Names, Broken_Report);
+            Same : Boolean := Landin.Syntax.Node_Count (Expected)
+                              = Landin.Syntax.Node_Count (Actual);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Landin.Diagnostics.Count (Clean_Report), 0,
+               "valid recovery control: " & Label);
+            Landin.Testing.Check_Equal
+              (Item, Landin.Diagnostics.Count (Broken_Report), 0,
+               "a bare end keeps the next declaration: " & Label);
+            if Same then
+               for Node in Landin.Syntax.Node_Id'(1)
+                 .. Landin.Syntax.Last_Node (Expected)
+               loop
+                  Same := Same and then
+                    Landin.Syntax.Kind (Expected, Node)
+                      = Landin.Syntax.Kind (Actual, Node);
+                  if Same and then Landin.Syntax.Has_Name
+                    (Landin.Syntax.Kind (Expected, Node))
+                  then
+                     Same := Landin.Syntax.Name (Expected, Node)
+                               = Landin.Syntax.Name (Actual, Node);
+                  end if;
+                  if Same and then Landin.Syntax.Kind (Expected, Node)
+                    in Landin.Syntax.Binding | Landin.Syntax.Match_Binding
+                  then
+                     Same := Landin.Syntax.Is_Mutable (Expected, Node)
+                       = Landin.Syntax.Is_Mutable (Actual, Node);
+                  end if;
+                  if Same then
+                     Same := Landin.Syntax.Slot_Count (Expected, Node)
+                               = Landin.Syntax.Slot_Count (Actual, Node);
+                     if Same then
+                        for Slot in 1 .. Landin.Syntax.Slot_Count
+                          (Expected, Node)
+                        loop
+                           Same := Same and then Landin.Syntax.Slot
+                             (Expected, Node, Slot) = Landin.Syntax.Slot
+                               (Actual, Node, Slot);
+                        end loop;
+                     end if;
+                  end if;
+                  if Landin.Syntax.Kind (Expected, Node)
+                    = Landin.Syntax.Function_Declaration
+                    and then Landin.Syntax.Kind (Actual, Node)
+                      = Landin.Syntax.Function_Declaration
+                  then
+                     Same := Same and then
+                       Landin.Syntax.Is_External (Expected, Node)
+                         = Landin.Syntax.Is_External (Actual, Node)
+                       and then Landin.Syntax.Uses_C_ABI (Expected, Node)
+                         = Landin.Syntax.Uses_C_ABI (Actual, Node);
+                  end if;
+               end loop;
+            end if;
+            Landin.Testing.Check
+              (Item, Same, "both end forms retain the same syntax: " & Label);
+         end;
+      end Check;
+
+   begin
+      Check
+        ("next function",
+         "g: () -> (r: i32) = 2 end g");
+      Check
+        ("typed binding",
+         "value: u8 = 3");
+      Check
+        ("inferred binding",
+         "value := 3");
+      Check
+        ("type declaration",
+         "number: type = u8");
+      Check
+        ("single atom",
+         "ready: atom");
+      Check
+        ("several atoms",
+         "ready, done: atom");
+      Check
+        ("option declaration",
+         "option count: u32 = 2");
+      Check
+        ("compiler directive",
+         "compiler.assert(true)");
+      Check
+        ("assembler directive",
+         "assembler.flag(""-x"")");
+      Check
+        ("linker directive",
+         "linker.flag(""-x"")");
+      Check
+        ("link symbol",
+         "link(symbol: ""later"") g: () -> (r: i32) = 2 end g");
+      Check
+        ("plain conformance",
+         "u8 is marker ()");
+      Check
+        ("qualified conformance",
+         "types.number is marker ()");
+      Check
+        ("applied conformance",
+         "box(u8) is marker ()");
+      Check
+        ("pointer conformance",
+         "ptr u8 is marker ()");
+      Check
+        ("array conformance",
+         "[2]u8 is marker ()");
+      Check
+        ("public function",
+         "public g: () -> (r: i32) = 2 end g");
+      Check
+        ("external function",
+         "extern(c) g: () -> (r: i32)");
+   end Optional_End_Names_Preserve_Declarations;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "parser", "optional end names preserve declarations",
+         Optional_End_Names_Preserve_Declarations'Access);
       Landin.Testing.Register
         (Into, "parser", "list recovery preserves current anchors",
          List_Recovery_Preserves_Current_Anchors'Access);

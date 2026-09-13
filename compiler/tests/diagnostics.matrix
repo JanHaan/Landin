@@ -23,7 +23,7 @@ L0105  Live     true  nonempty    0..0 1     landin-diagnostics-syntactic.ads   
 L0106  Live     true  nonempty    1..1 1     landin-diagnostics-syntactic.ads    negative/chained-comparison
 L0107  Live     true  nonempty    1..1 1     landin-diagnostics-syntactic.ads    negative/return-with-value
 L0108  Live     true  nonempty    1..1 1     landin-diagnostics-syntactic.ads    negative/public-on-statement
-L0109  Live     true  nonempty    1..1 1     landin-diagnostics-syntactic.ads    negative/variant-part-end-name-mismatch
+L0109  Live     true  nonempty    1..1 1     landin-diagnostics-syntactic.ads    negative/variant-part-end-name-mismatch,test:landin-tests-driver_suite.adb
 L0110  Live     true  nonempty    0..0 1     landin-diagnostics-syntactic.ads    negative/r491-function-final-value-prefix,negative/r491-malformed-public-start,negative/r491-match-extra-colon,negative/r491-match-extra-paren,negative/selection-from-a-call,test:landin-tests-diagnostics_suite.adb,test:landin-tests-driver_suite.adb
 L0111  Live     true  nonempty    1..1 1     landin-diagnostics-syntactic.ads    test:landin-tests-diagnostics_suite.adb,test:landin-tests-parser_suite.adb,unit/parser-nesting-limit
 L0112  Live     true  nonempty    0..0 1     landin-diagnostics-syntactic.ads    negative/named-call-positional-after-named,test:landin-tests-parser_suite.adb

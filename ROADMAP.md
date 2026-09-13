@@ -5832,7 +5832,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J32 | Module slice binding with no initializer calls `Slice_Shape` with `Syn.No_Node` | C | Repaired with J31: omitted module slice/utf8/utf16 initializers report L0301 before image lowering. Explicit empty slices retain their non-null base; explicit text, aliases and mutable-slice controls preserve the existing zeroability rule. |
 | J33 | Erased evidence table is built for a conformance whose sibling entry is not object-safe, with no D146 gate on that path | C | Open erased-conformance boundary: apply D146 object-safety checks to all entries required by a materialized table, with safe sibling controls. |
 | J34 | A struct field whose type is a user type named `variant` is misparsed as a variant part when the field name equals the struct name | C | Open parser boundary group: compare the normative grammar, preserve enclosing context and following declarations, and add small accepted/refused controls. |
-| J35 | A function closed with a bare `end` swallows the next declaration's name, rejecting a valid file | C | Open parser boundary group: compare the normative grammar, preserve enclosing context and following declarations, and add small accepted/refused controls. |
+| J35 | A function closed with a bare `end` swallows the next declaration's name, rejecting a valid file | C | Repaired: optional function-end names leave recognizable following declarations intact. A matching repeated name retains its closing role; a different explicit closing name still reports L0109. Paired syntax controls cover eighteen declaration forms, and both target widths retain distinct module items and the correct direct callee. |
 | J36 | `Else_Closes_Arm` leaks into loops, bare blocks and unchecked regions nested in an `if` arm, rejecting a valid `call else value` | C | Open parser boundary group: compare the normative grammar, preserve enclosing context and following declarations, and add small accepted/refused controls. |
 | J37 | Nested call expressions have no depth guard: unhandled STORAGE_ERROR, raw traceback, exit 1 | C | Duplicate C6, extended to recursive public parser entry points. Add balanced depth guards and bounded recovery cases; no stack-overflow reproduction. |
 | J38 | A bare `break`/`continue` consumes the following `complete` as its label, deleting the complete clause's scope | C | Open parser boundary group: compare the normative grammar, preserve enclosing context and following declarations, and add small accepted/refused controls. |
@@ -6367,7 +6367,20 @@ tests have 30-second or shorter timeouts. No assembler, linker or generated
 Landin executable ran. Logs are retained in `.scratch/r491-list-recovery/`
 and `.scratch/r491-final-values/`. Exact-revision acceptance remains open.
 
-Optional function-end names J35 are next.
+J35 development evidence: four selected cases pass 770 checks in each of
+macOS debug and Linux release. Eighteen paired explicit/bare-end sources keep
+identical declaration syntax, including functions, bindings, types, atoms,
+options, directives, linkage and conformances. Both target widths retain
+three module items and the later function's direct call to the first. Two
+mismatched-name sources extend driver refusals to 672 checks; existing list
+recovery still preserves current anchors. The prior version-banner script
+change correctly triggered clean builds on both hosts. Builds use one worker
+and selected tests have 30-second or shorter timeouts. No assembler, linker
+or generated Landin executable ran. Logs are retained in
+`.scratch/r491-function-ends/` and `.scratch/r491-final-values/`.
+Exact-revision acceptance remains open.
+
+Contextual variant fields J34 are next.
 Keep J2's call-return contract question active. K12 needs a semantic
 disposition before implementation. The verifier, optimization, build-identity
 and ABI items above remain owned by the corresponding later repair groups.
