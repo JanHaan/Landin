@@ -13027,9 +13027,9 @@ package body Landin.Stages.Checking is
          end;
       end Evidence_Selection_Signature;
 
-      --  An erased call's source type is the exact concept identity, while
-      --  the concrete provider table is a later staging product.  Build the
-      --  entry signature from the already-interned conformance key and the
+      --  Erased calls and implicit traversal use the exact concept contract,
+      --  while the concrete provider table is a later staging product. Build
+      --  each entry signature from the interned conformance key and the
       --  concept declaration, retaining every nested descriptor and `from`
       --  association.  Validate_Conformance_Entries later proves that the
       --  provider has this shape; typing an inferred result does not need to
@@ -15490,32 +15490,43 @@ package body Landin.Stages.Checking is
             Landin.Checking.Refuse (Types.all, Of_Tree, Source);
          end Report;
 
-         function Provider_Signature
+         function Entry_Signature
            (Row : Landin.Checking.Conformance_Id;
             Position : Positive) return Landin.Checking.Signature_Id;
 
          function Contract_Holds
            (Row : Landin.Checking.Conformance_Id) return Boolean;
 
-         function Provider_Signature
+         function Entry_Signature
            (Row : Landin.Checking.Conformance_Id;
             Position : Positive) return Landin.Checking.Signature_Id
          is
-            Instance : constant Landin.Checking.Routine_Instance_Id :=
-              Landin.Checking.Conformance_Provider_Instance
-                (Types.all, Row, Position);
-            Provider : constant Res.Declaration_Id :=
-              Landin.Checking.Conformance_Provider_Declaration
-                (Types.all, Row, Position);
          begin
-            if Instance /= Landin.Checking.No_Routine_Instance then
-               return Landin.Checking.Routine_Signature_Of
-                 (Types.all, Instance);
-            elsif Provider /= Res.No_Declaration then
-               return Landin.Checking.Signature_Of (Types.all, Provider);
+            if Position > Landin.Checking.Conformance_Entry_Count
+              (Types.all, Row)
+            then
+               --  Early local inference can reach this header before the
+               --  provider pass. Its source contract is already available;
+               --  ordinary conformance validation still checks each provider.
+               return Exact_Concept_Entry_Signature (Row, Position);
             end if;
+            declare
+               Instance : constant Landin.Checking.Routine_Instance_Id :=
+                 Landin.Checking.Conformance_Provider_Instance
+                   (Types.all, Row, Position);
+               Provider : constant Res.Declaration_Id :=
+                 Landin.Checking.Conformance_Provider_Declaration
+                   (Types.all, Row, Position);
+            begin
+               if Instance /= Landin.Checking.No_Routine_Instance then
+                  return Landin.Checking.Routine_Signature_Of
+                    (Types.all, Instance);
+               elsif Provider /= Res.No_Declaration then
+                  return Landin.Checking.Signature_Of (Types.all, Provider);
+               end if;
+            end;
             return Landin.Checking.No_Signature;
-         end Provider_Signature;
+         end Entry_Signature;
 
          function Contract_Holds
            (Row : Landin.Checking.Conformance_Id) return Boolean
@@ -15576,7 +15587,7 @@ package body Landin.Stages.Checking is
             for Position in Expected'Range loop
                declare
                   Got : constant Landin.Checking.Signature_Id :=
-                    Provider_Signature (Row, Position);
+                    Entry_Signature (Row, Position);
                begin
                   if Got = Landin.Checking.No_Signature
                     or else not Landin.Checking.Signatures_Agree

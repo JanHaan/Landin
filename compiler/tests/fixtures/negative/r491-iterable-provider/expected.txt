@@ -1,0 +1,10 @@
+error[L0301]: this conformance function does not have the concept entry's signature
+  --> ../tests/fixtures/negative/r491-iterable-provider/main.ldn:12:1
+   |
+12 | bag is iterable (cur: usize, item_type: u32, first: first,
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/r491-iterable-provider/main.ldn:4:5
+  |
+4 |     item: (s: t, c: cur) -> (v: item_type)
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the required entry
+  = note: [1240]: each supplied function has exactly the requirement's concrete shape

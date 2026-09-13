@@ -300,6 +300,12 @@ that captured backing; returned-array temporaries, iterable results, text
 scalars and index bindings keep frame storage. Nested payload aliases remain
 subject to the same live-use checks as direct matches.
 
+Early iterable headers use the exact declared concept signature while the
+concrete provider table is still being prepared, sharing the query used by
+erased-call typing. This supplies the Item and Cur types needed by local
+inference without accessing an absent provider. Conformance validation still
+checks every provider before lowering can consume the table.
+
 Parser lookahead keeps a per-parse delimiter index and caches conformance
 suffix decisions only outside nested delimiters. The index balances parentheses
 and brackets independently, preserving the existing lookahead rules. Signature

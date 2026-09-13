@@ -1,0 +1,54 @@
+iterable: type = concept (t: type, cur: type, item_type: type)
+    first: (s: t) -> (c: cur)
+    at_end: (s: t, c: cur) -> (yes: bool)
+    item: (s: t, c: cur) -> (v: item_type)
+    next: (s: t, c: cur) -> (c2: cur)
+end iterable
+bag: type = struct value: u32 end bag
+first: (s: bag) -> (c: usize) = 0 end first
+at_end: (s: bag, c: usize) -> (yes: bool) = c == 1 end at_end
+bag_item: (s: bag, c: usize) -> (v: u32) = s.value end bag_item
+next: (s: bag, c: usize) -> (c2: usize) = c + 1 end next
+bag is iterable (cur: usize, item_type: u32, first: first,
+                 at_end: at_end, item: bag_item, next: next)
+identity: (t: type, value: t) -> (result: t) = value end identity
+sum: (source: bag) -> (total: u32) =
+    total = 0
+    for element in source do
+        copied := identity(element)
+        total += copied
+    end for
+end sum
+
+pick: (source: bag) -> (result: u32) =
+    selected := for element in source do
+        break with element
+    complete
+        break with u32(0)
+    end for
+    result = selected
+end pick
+
+problem: atom
+attempt: (t: type, value: t) -> (result: t) ! ... =
+    result = value
+    fail problem when false
+end attempt
+propagate: (source: bag) -> (result: u32) ! ... =
+    result = 0
+    for element in source do
+        result = try attempt(element)
+    end for
+end propagate
+
+generic_walk: (t: type, source: bag) -> (result: u32) =
+    result = 0
+    for element in source do
+        copied := identity(element)
+        result += copied
+    end for
+end generic_walk
+call_walk: (source: bag) -> (result: u32) =
+    inferred := generic_walk(t: u8, source: source)
+    result = inferred
+end call_walk

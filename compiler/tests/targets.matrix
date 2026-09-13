@@ -783,6 +783,8 @@ negative/r491-generic-template-reports | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-generic-written-range | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-inferred-repetition-refusals | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-integer-argument-context | linux-x86-64, macos-arm64, synthetic-32
+negative/r491-iterable-contract | linux-x86-64, macos-arm64, synthetic-32
+negative/r491-iterable-provider | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-lexical-signature-recovery | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-live-payload-aliases | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-lookahead-recovery | linux-x86-64, macos-arm64, synthetic-32
@@ -1188,6 +1190,7 @@ positive/r490-conformance-input-keys | linux-x86-64, macos-arm64, synthetic-32
 positive/r491-alias-backing | linux-x86-64
 positive/r491-construction-static-arguments | linux-x86-64, macos-arm64, synthetic-32
 positive/r491-generic-pointee-layout | linux-x86-64
+positive/r491-ordinary-iterable | linux-x86-64
 positive/r491-symbolic-c-layout | linux-x86-64
 positive/range-subtype-exit-before-the-check | linux-x86-64, macos-arm64
 positive/range-subtypes | linux-x86-64, macos-arm64

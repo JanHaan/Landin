@@ -1,0 +1,5 @@
+class: positive
+summary: early iterable headers preserve generic calls inferred values and error discovery
+program: main.ldn
+constructs: 0430, 1150, 1240, 1280, 1320
+targets: linux-x86-64

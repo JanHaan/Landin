@@ -1079,6 +1079,74 @@ package body Landin.Tests.Checking_Suite is
       end loop;
    end Iterable_Elements_Are_Copies;
 
+   procedure Ordinary_Iterable_Elements_Are_Copies
+     (Item : in out Landin.Testing.Context);
+
+   procedure Ordinary_Iterable_Elements_Are_Copies
+     (Item : in out Landin.Testing.Context)
+   is
+   begin
+      for Addressed in Boolean loop
+         declare
+            Work : Landin.Stages.Compilation :=
+              Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+            Order : Landin.Stages.Pipeline;
+            Ran : Natural;
+            Src : Landin.Source.Source_Id;
+            pragma Unreferenced (Src);
+         begin
+            Src := Landin.Stages.Add_Source
+              (Work, "iterable-copy.ldn",
+            "anchor: u32 = 0" & LF
+            & "iterable: type = concept (t: type, cur: type, "
+            & "item_type: type)" & LF
+            & "    first: (s: t) -> (c: cur)" & LF
+            & "    at_end: (s: t, c: cur) -> (yes: bool)" & LF
+            & "    item: (s: t, c: cur) -> (v: item_type)" & LF
+            & "    next: (s: t, c: cur) -> (c2: cur)" & LF
+            & "end iterable" & LF
+            & "bag: type = struct value: u32 end bag" & LF
+            & "first: (s: bag) -> (c: usize) = 0 end first" & LF
+            & "at_end: (s: bag, c: usize) -> (yes: bool) = c == 1 end "
+            & "at_end" & LF
+            & "bag_item: (s: bag, c: usize) -> (v: u32) = s.value end "
+            & "bag_item" & LF
+            & "next: (s: bag, c: usize) -> (c2: usize) = c + 1 end next" & LF
+            & "bag is iterable (cur: usize, item_type: u32, first: first," & LF
+            & "                 at_end: at_end, item: bag_item, next: "
+            & "next)" & LF
+            & "iterable_copy: (source: bag) -> (result: ptr u32) =" & LF
+            & "    result = addr anchor" & LF
+            & "    for element in source do" & LF
+            & (if Addressed then "result = addr element"
+               else "_ = element") & LF
+            & "    end for" & LF
+            & "end iterable_copy" & LF);
+            Landin.Stages.Append (Order, Frontend'Access);
+            Landin.Stages.Append (Order, Configurer'Access);
+            Landin.Stages.Append (Order, Names'Access);
+            Landin.Stages.Append (Order, Checker'Access);
+            Ran := Landin.Stages.Run (Order, Work);
+            declare
+               Reports : constant Landin.Diagnostics.Diagnostic_List :=
+                 Landin.Stages.Report (Work);
+            begin
+               Landin.Testing.Check_Equal
+                 (Item, Ran, 4, "the iterable reaches reference checking");
+               Landin.Testing.Check
+                 (Item, Landin.Stages.Failed (Work) = Addressed
+                  and then
+                    (if Addressed
+                     then Landin.Diagnostics.Count (Reports) = 1
+                       and then Landin.Diagnostics.Code
+                         (Landin.Diagnostics.Get (Reports, 1)) = "L0314"
+                     else Landin.Diagnostics.Count (Reports) = 0),
+                  "a copied iterable value has independent frame storage");
+            end;
+         end;
+      end loop;
+   end Ordinary_Iterable_Elements_Are_Copies;
+
    procedure C_Metadata_Is_Independent_Of_Storage
      (Item : in out Landin.Testing.Context);
 
@@ -12276,6 +12344,9 @@ package body Landin.Tests.Checking_Suite is
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "checking", "ordinary iterable elements are copies",
+         Ordinary_Iterable_Elements_Are_Copies'Access);
       Landin.Testing.Register
         (Into, "checking", "iterable elements are copies",
          Iterable_Elements_Are_Copies'Access);

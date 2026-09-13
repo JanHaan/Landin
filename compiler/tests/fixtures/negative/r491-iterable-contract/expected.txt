@@ -1,0 +1,6 @@
+error[L0301]: this iterable evidence does not implement [1320]'s exact call contract
+  --> ../tests/fixtures/negative/r491-iterable-contract/main.ldn:16:20
+   |
+16 |     for element in source do
+   |                    ^^^^^^ this traversal source
+  = note: D180: first, at_end, item and next are infallible in-value calls with one retained Cur and Item identity
