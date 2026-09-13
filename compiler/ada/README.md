@@ -262,6 +262,12 @@ when the roadmap needs a longer-lived process it will be revisited there. R1.50
 extends it to the trees for the same reason, and to the four tables a
 compilation now owns.
 
+Owed runtime range checks belong to the active routine view. Unwritten views
+inherit the global answer; instance writes preserve the global layer and other
+instances. Repeating a constraint is idempotent, while a conflicting rewrite
+within one view raises a compiler defect. Written range constraints remain
+source facts shared across views.
+
 Array-field element queries use the complete child shape, including nominal,
 reference and nested-array identity. The former scalar-only field accessor,
 which could expose a default `bool` for those children, has been removed.

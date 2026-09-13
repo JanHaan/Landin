@@ -1674,7 +1674,17 @@ package body Landin.Checking is
      (Of_Table : Table;
       Of_Tree  : Landin.Syntax.Tree;
       Node     : Landin.Syntax.Node_Id) return Constraint_Id
-     is (Of_Table.Node_Owed_Checks (Slot (Of_Table, Of_Tree, Node)));
+   is
+      Where : constant Positive := Slot (Of_Table, Of_Tree, Node);
+      Overlay : constant Natural := Node_Overlay_Position (Of_Table, Where);
+   begin
+      if Overlay /= 0
+        and then Of_Table.Node_Overlays (Overlay).Has_Owed_Check
+      then
+         return Of_Table.Node_Overlays (Overlay).Owed_Check;
+      end if;
+      return Of_Table.Node_Owed_Checks (Where);
+   end Owed_Check;
 
    procedure Note_Owed_Check
      (Into       : in out Table;
@@ -1683,8 +1693,25 @@ package body Landin.Checking is
       Constraint : Constraint_Id)
    is
       Where : constant Positive := Slot (Into, Of_Tree, Node);
+      Overlay : constant Natural :=
+        (if Into.Current_Routine = No_Routine_Instance then 0
+         else Ensure_Node_Overlay (Into, Where));
+      Previous : constant Constraint_Id :=
+        (if Overlay = 0 then Into.Node_Owed_Checks (Where)
+         else Into.Node_Overlays (Overlay).Owed_Check);
    begin
-      Into.Node_Owed_Checks (Where) := Constraint;
+      --  Check the layer being written, not an inherited global answer:
+      --  unlike a written range, an owed runtime check is a derived fact.
+      if Previous not in No_Constraint | Constraint then
+         raise Landin.Compiler_Defect with
+           "one node was assigned two owed range checks in one view";
+      end if;
+      if Overlay = 0 then
+         Into.Node_Owed_Checks (Where) := Constraint;
+      else
+         Into.Node_Overlays (Overlay).Has_Owed_Check := True;
+         Into.Node_Overlays (Overlay).Owed_Check := Constraint;
+      end if;
    end Note_Owed_Check;
 
    function Reference_Count (Of_Table : Table) return Natural

@@ -12076,8 +12076,137 @@ package body Landin.Tests.Checking_Suite is
          & "use: () -> none = _ = h(1) _ = h(true) end use" & LF, 2);
    end Generic_Body_Reports_Coalesce_Across_Instances;
 
+   procedure Owed_Checks_Belong_To_Routine_Views
+     (Item : in out Landin.Testing.Context);
+
+   procedure Owed_Checks_Belong_To_Routine_Views
+     (Item : in out Landin.Testing.Context)
+   is
+      package C renames Landin.Checking;
+      package Syn renames Landin.Syntax;
+      use type C.Constraint_Id;
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Src : Landin.Source.Source_Id;
+      Ran : Natural;
+   begin
+      Src := Landin.Stages.Add_Source
+        (Work, "owed-views.ldn",
+         "identity: (t: type, value: t) -> (result: t) =" & LF
+         & "result = value end identity" & LF
+         & "other: () -> none = end other" & LF);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Configurer'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+      Landin.Testing.Check
+        (Item, Ran = 3 and then not Landin.Stages.Failed (Work),
+         "the two small declarations reach the table seam");
+      if Landin.Stages.Failed (Work) then
+         return;
+      end if;
+      declare
+         Tree : constant not null access constant Syn.Tree :=
+           Syn.Forest.Tree_Of (Landin.Stages.Trees (Work).all, Src);
+         Types : constant not null access C.Table :=
+           Landin.Stages.Types (Work);
+         Meanings : Landin.Resolution.Table renames
+           Landin.Stages.Meanings (Work).all;
+         Node : constant Syn.Node_Id := Syn.Nth_Declaration (Tree.all, 1);
+         Other : constant Syn.Node_Id := Syn.Nth_Declaration (Tree.all, 2);
+         Site : constant Landin.Provenance.Origin :=
+           Syn.Origin (Tree.all, Node);
+         Template : Landin.Provenance.Declaration_Id :=
+           Landin.Provenance.No_Declaration;
+         Actuals : C.Actual_Tuple := C.Empty_Actuals;
+         First, Second, Previous, Nested : C.Routine_Instance_Id;
+         A, B, D : C.Constraint_Id;
+
+         procedure Expect (At_Node : Syn.Node_Id; Wanted : C.Constraint_Id;
+                           Message : String);
+
+         procedure Expect (At_Node : Syn.Node_Id; Wanted : C.Constraint_Id;
+                           Message : String) is
+         begin
+            Landin.Testing.Check
+              (Item, C.Owed_Check (Types.all, Tree.all, At_Node) = Wanted,
+               Message);
+         end Expect;
+
+         procedure Refuse_Rewrite (Wanted, Retained : C.Constraint_Id);
+
+         procedure Refuse_Rewrite (Wanted, Retained : C.Constraint_Id) is
+         begin
+            C.Note_Owed_Check (Types.all, Tree.all, Node, Wanted);
+            Landin.Testing.Fail (Item, "a differing owed check overwrote");
+         exception
+            when Landin.Compiler_Defect =>
+               Expect (Node, Retained, "a refused rewrite preserves its fact");
+         end Refuse_Rewrite;
+      begin
+         C.Prepare
+           (Types.all, Landin.Stages.Trees (Work).all, Meanings,
+            Landin.Stages.Identities (Work).all);
+         for Id in Landin.Provenance.Declaration_Id'(1)
+           .. Landin.Provenance.Declaration_Id
+             (Landin.Resolution.Declaration_Count (Meanings))
+         loop
+            if Landin.Resolution.Node_Of (Meanings, Id) = Node then
+               Template := Id;
+               exit;
+            end if;
+         end loop;
+         C.Append_Actual (Actuals, C.Scalar_Type_Actual (Landin.Types.U8));
+         First := C.Intern_Routine_Instance (Types.all, Template, Actuals);
+         Actuals := C.Empty_Actuals;
+         C.Append_Actual (Actuals, C.Scalar_Type_Actual (Landin.Types.I32));
+         Second := C.Intern_Routine_Instance (Types.all, Template, Actuals);
+         A := C.Add_Constraint
+           (Types.all, (Base => Landin.Types.U8, Lower => 0, Upper => 10,
+                        Site => Site));
+         B := C.Add_Constraint
+           (Types.all, (Base => Landin.Types.U8, Lower => 2, Upper => 8,
+                        Site => Site));
+         D := C.Add_Constraint
+           (Types.all, (Base => Landin.Types.U8, Lower => 3, Upper => 7,
+                        Site => Site));
+         Expect (Node, C.No_Constraint, "an untouched node owes no check");
+         C.Note_Owed_Check (Types.all, Tree.all, Node, A);
+         C.Note_Owed_Check (Types.all, Tree.all, Node, A);
+         Expect (Node, A, "a global repeated write is idempotent");
+         Refuse_Rewrite (B, A);
+         C.Activate_Routine_View (Types.all, First, Previous);
+         Expect (Node, A, "an unwritten view sees the global fact");
+         C.Note_Owed_Check (Types.all, Tree.all, Node, B);
+         C.Note_Owed_Check (Types.all, Tree.all, Node, B);
+         Expect (Node, B, "the first instance owns its repeated write");
+         Refuse_Rewrite (D, B);
+         C.Note_Owed_Check (Types.all, Tree.all, Other, B);
+         C.Activate_Routine_View (Types.all, Second, Nested);
+         Expect (Node, A, "another instance still inherits the global fact");
+         Expect (Other, C.No_Constraint,
+                 "another node's instance fact is local");
+         C.Note_Owed_Check (Types.all, Tree.all, Node, D);
+         Expect (Node, D, "the nested instance owns its distinct check");
+         C.Restore_Routine_View (Types.all, Nested);
+         Expect (Node, B, "restoring a nested view recovers its own check");
+         Expect (Other, B, "the first instance keeps its other node");
+         C.Restore_Routine_View (Types.all, Previous);
+         Expect (Node, A, "instance writes never alter the global check");
+         Expect (Other, C.No_Constraint,
+                 "instance writes never create globals");
+         C.Activate_Routine_View (Types.all, Second, Previous);
+         Expect (Node, D, "reactivation retains the second instance check");
+         C.Restore_Routine_View (Types.all, Previous);
+      end;
+   end Owed_Checks_Belong_To_Routine_Views;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "checking", "owed checks belong to routine views",
+         Owed_Checks_Belong_To_Routine_Views'Access);
       Landin.Testing.Register
         (Into, "checking", "generic body reports coalesce across instances",
          Generic_Body_Reports_Coalesce_Across_Instances'Access);
