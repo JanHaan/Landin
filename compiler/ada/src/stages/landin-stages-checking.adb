@@ -12633,6 +12633,26 @@ package body Landin.Stages.Checking is
          Item : constant Landin.Checking.Reference_Descriptor :=
            Landin.Checking.Descriptor_Of (Types.all, Reference);
       begin
+         --  Declaring a pointer needs only identity. Reading its referent
+         --  is a value site: field offsets and element strides need the
+         --  concrete layout before either checking or lowering can use it.
+         if Item.Referent = Ty.Fixed_Array
+           or else (Item.Referent = Ty.Aggregate
+             and then Item.Nominal /= Landin.Checking.No_Nominal_Type)
+         then
+            declare
+               Complete : constant Type_Descriptor := Require_Value_Layout
+                 ((Kind => Item.Referent, Nominal => Item.Nominal,
+                   Length => Item.Length, Element => Item.Element,
+                   Element_Shape => Item.Element_Shape,
+                   Element_Nominal => Item.Element_Nominal, others => <>),
+                  Of_Tree, Node, Syn.Origin (Of_Tree, Node));
+            begin
+               if Complete.Kind = Ty.Ill_Typed then
+                  return Ty.Ill_Typed;
+               end if;
+            end;
+         end if;
          if Landin.Checking.Type_Of (Types.all, Of_Tree, Node) = Ty.Undecided
          then
             Landin.Checking.Note

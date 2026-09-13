@@ -814,8 +814,8 @@ package body Landin.IR is
      is (Of_Unit.Signatures (Positive (Signature)).Errors);
 
    function Same_Shape
-     (Of_Unit : Unit; Left, Right : Field_Shape; Budget : Natural)
-      return Boolean;
+     (Of_Unit : Unit; Left, Right : Field_Shape; Budget : Natural;
+      Nominal_Identity : Boolean := False) return Boolean;
 
    function Pointees_Agree
      (Of_Unit : Unit; Left, Right : Pointee_Id; Budget : Natural)
@@ -837,12 +837,11 @@ package body Landin.IR is
          A : constant Field_Shape := Pointee_Shape (Of_Unit, Left);
          B : constant Field_Shape := Pointee_Shape (Of_Unit, Right);
       begin
-         if A.Kind = Aggregate_Field_Shape
-           and then B.Kind = Aggregate_Field_Shape
-         then
-            return A.Nominal = B.Nominal;
-         end if;
-         return Same_Shape (Of_Unit, A, B, Budget - 1);
+         --  A pointer's nominal identity edge stays an identity when it
+         --  appears below an array; following its body would recurse through
+         --  otherwise legal pointer/nominal cycles.
+         return Same_Shape
+           (Of_Unit, A, B, Budget - 1, Nominal_Identity => True);
       end;
    end Pointees_Agree;
 
@@ -3102,8 +3101,8 @@ package body Landin.IR is
    --  The walk carries a budget for the reason Field_Shape_Is_Malformed's
    --  does: nothing in the vector proves a run does not name itself.
    function Same_Shape
-     (Of_Unit : Unit; Left, Right : Field_Shape; Budget : Natural)
-      return Boolean
+     (Of_Unit : Unit; Left, Right : Field_Shape; Budget : Natural;
+      Nominal_Identity : Boolean := False) return Boolean
    is
    begin
       if Left.Kind /= Right.Kind
@@ -3147,9 +3146,12 @@ package body Landin.IR is
                 (Of_Unit,
                  Array_Element_Shape (Of_Unit, Left),
                  Array_Element_Shape (Of_Unit, Right),
-                 Budget - 1);
+                 Budget - 1, Nominal_Identity);
 
          when Aggregate_Field_Shape =>
+            if Nominal_Identity then
+               return Holds (Of_Unit, Left.Nominal);
+            end if;
             if not Aggregate_Field_Run_Is_Valid (Of_Unit, Left)
               or else not Aggregate_Field_Run_Is_Valid (Of_Unit, Right)
               or else Aggregate_Field_Count (Of_Unit, Left)

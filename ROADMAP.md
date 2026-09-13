@@ -7251,14 +7251,21 @@ assembly, generated executable, debugger or giant image ran. Evidence is in
 `.scratch/r491-symbolic-c-layout/` and `.scratch/r491-final-values/`.
 Exact-revision acceptance remains open.
 
-R4.91-F3, found while validating J121, remains open: a five-line generic record
-with a `ptr plain(t)` field and a concrete type alias exits 70 with an internal
-compiler defect. This occurs with ordinary as well as C record layout; the
-corresponding pointer-to-symbolic-slice control is accepted. The compile-only
-baseline and post-J121 reproduction are retained in
-`.scratch/r491-symbolic-c-layout/pointer-plain*.ldn` and their adjacent logs.
-Locate the failing stage and preserve identity-only pointer references without
-forcing a pointee layout or weakening verification. This is the next repair.
+R4.91-F3, found while validating J121, is implemented: pointer metadata
+retains nominal identity through nested arrays without requiring a value body.
+Value access materializes generic pointee layouts before field or stride
+queries. Verification still refuses malformed identities, structural cycles,
+contradictory explicit bodies and opaque by-value storage. Pointer equality
+stops at nominal identities even beneath arrays. Full debug text describes an
+unmaterialized pointee as a declaration without invented size or members;
+materialized types retain their complete descriptions. The original five-line
+record case, pointer-array case and field access all exited 70 before repair.
+Tiny reproductions and logs are retained in `.scratch/r491-pointer-nominal/`
+and `.scratch/r491-symbolic-c-layout/`. Seven exact selectors pass 73 checks in each of macOS debug and Linux
+release; both single-worker builds and the fixture inventories pass.
+No native assembly, generated executable, debugger or giant image ran.
+Exact-revision acceptance remains open. J18/J73 reference-shape agreement is
+the next implementation repair.
 J116's slice-endpoint claim
 still needs a separate normative disposition. J48 also requires an explicit
 static-selection collision rule: D146's existing uniqueness sentence is

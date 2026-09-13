@@ -1160,7 +1160,8 @@ package body Landin.IR.Verifier is
       function Field_Shape_Is_Malformed
         (Shape : Field_Shape;
          Aggregate_Allowed : Boolean := False;
-         Budget : Natural := Natural'Last)
+         Budget : Natural := Natural'Last;
+         Nominal_Identity : Boolean := False)
         return Boolean;
 
       function Shape_Needs_Recursive_Image
@@ -1241,7 +1242,8 @@ package body Landin.IR.Verifier is
 
       function Register_Shape
         (Shape : Field_Shape;
-         Budget : Natural) return Fault_Kind;
+         Budget : Natural;
+         Nominal_Identity : Boolean := False) return Fault_Kind;
 
       function Signature_Carrier_Count
         (Signature : Signature_Id) return Natural;
@@ -1286,7 +1288,8 @@ package body Landin.IR.Verifier is
       function Field_Shape_Is_Malformed
         (Shape : Field_Shape;
          Aggregate_Allowed : Boolean := False;
-         Budget : Natural := Natural'Last)
+         Budget : Natural := Natural'Last;
+         Nominal_Identity : Boolean := False)
         return Boolean
       is
          Left : constant Natural :=
@@ -1342,7 +1345,8 @@ package body Landin.IR.Verifier is
                  or else Child.Element /= Shape.Element
                  or else Left = 0
                  or else Field_Shape_Is_Malformed
-                   (Child, Aggregate_Allowed => True, Budget => Left - 1);
+                   (Child, Aggregate_Allowed => True, Budget => Left - 1,
+                    Nominal_Identity => Nominal_Identity);
             end;
          elsif Shape.Kind = Aggregate_Field_Shape then
             if not Aggregate_Allowed
@@ -1356,8 +1360,15 @@ package body Landin.IR.Verifier is
                     > Variant_Field_Shape_Count (Of_Unit)
                   or else Shape.Cases > Variant_Field_Shape_Count (Of_Unit)
                     - Shape.Payloads_First + 1))
-              or else not Aggregate_Field_Run_Is_Valid (Of_Unit, Shape)
             then
+               return True;
+            end if;
+
+            --  A pointer may name an opaque nominal without requiring its
+            --  value layout. Any explicit occurrence body still gets checked.
+            if Nominal_Identity and then Shape.Cases = 0 then
+               return False;
+            elsif not Aggregate_Field_Run_Is_Valid (Of_Unit, Shape) then
                return True;
             end if;
 
@@ -1833,7 +1844,8 @@ package body Landin.IR.Verifier is
 
       function Register_Shape
         (Shape : Field_Shape;
-         Budget : Natural) return Fault_Kind
+         Budget : Natural;
+         Nominal_Identity : Boolean := False) return Fault_Kind
       is
          Bad : Fault_Kind;
       begin
@@ -1850,9 +1862,13 @@ package body Landin.IR.Verifier is
                   return Nothing_Wrong;
                end if;
                return Register_Shape
-                 (Array_Element_Shape (Of_Unit, Shape), Budget - 1);
+                 (Array_Element_Shape (Of_Unit, Shape), Budget - 1,
+                  Nominal_Identity);
 
             when Aggregate_Field_Shape =>
+               if Nominal_Identity and then Shape.Cases = 0 then
+                  return Nothing_Wrong;
+               end if;
                Bad := Register
                  ((Kind    => Nested_Aggregate_Source,
                    Shape   => Shape,
@@ -2953,9 +2969,21 @@ package body Landin.IR.Verifier is
       end loop;
 
       for Shape of Of_Unit.Pointees loop
-         if Field_Shape_Is_Malformed (Shape, Aggregate_Allowed => True) then
+         if Field_Shape_Is_Malformed
+           (Shape, Aggregate_Allowed => True, Nominal_Identity => True)
+         then
             return (Kind => Field_Shape_Malformed, others => <>);
          end if;
+         declare
+            Bad : constant Fault_Kind := Register_Shape
+              (Shape, Variant_Field_Shape_Count (Of_Unit)
+                 + Nominal_Type_Count (Of_Unit) + 1,
+               Nominal_Identity => True);
+         begin
+            if Bad /= Nothing_Wrong then
+               return (Kind => Bad, others => <>);
+            end if;
+         end;
       end loop;
 
       --  Callable/array recursion is structural, unlike a nominal identity
@@ -2985,6 +3013,11 @@ package body Landin.IR.Verifier is
                when Array_Field_Shape =>
                   return Visit_Shape (Array_Element_Shape (Of_Unit, Shape));
                when Aggregate_Field_Shape =>
+                  --  Nominal edges remain identities inside arrays too.
+                  --  Canonical bodies are validated independently.
+                  if Shape.Cases = 0 then
+                     return True;
+                  end if;
                   for Field in 1 .. Local_Field_Count (Shape) loop
                      if not Visit_Shape (Nth_Local_Field (Shape, Field)) then
                         return False;

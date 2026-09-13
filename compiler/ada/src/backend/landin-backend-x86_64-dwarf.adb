@@ -280,9 +280,21 @@ package body Landin.Backend.X86_64.Dwarf is
               (Info.Trees.all, Desc.Source);
          end if;
          Put (T (Index) & ":");
-         if Desc.Item /= No_Item then
+         if Shape.Kind = Aggregate_Field_Shape
+           and then Shape.Nominal /= No_Nominal_Type
+           and then not Has_Nominal_Shape (Of_Unit, Shape.Nominal)
+         then
+            --  DWARF4 2.13.1: an opaque pointee is a declaration, with no
+            --  invented byte size or member layout.
+            U (12);
+            Str (Decl_Name (Template_Of (Of_Unit, Shape.Nominal)));
+            Put (HT & ".byte 1");
+            return;
+         elsif Desc.Item /= No_Item then
             Size := Slot_Layout (Of_Unit, Desc.Item, Desc.Slot, Facts).Size;
-         else
+         elsif Shape.Kind /= Array_Field_Shape then
+            --  An array DIE carries its element type and count. Its total
+            --  byte extent need not be known for a pointer-to-array type.
             Field_Extent (Of_Unit, Shape, Facts, Size, Alignment);
          end if;
          case Shape.Kind is
@@ -835,6 +847,8 @@ package body Landin.Backend.X86_64.Dwarf is
       Abbreviation (10, 16#34#, False,
         "0x03,0x08,0x49,0x13,0x3a,0x0f,0x3b,0x0f,0x39,0x0f,0x02,0x17");
       Abbreviation (11, 16#0b#, True, "0x55,0x17");
+      --  structure_type: name/string and declaration/flag, no children.
+      Abbreviation (12, 16#13#, False, "0x03,0x08,0x3c,0x0c");
       U (0);
       Put (HT & ".section .debug_info,"""",@progbits");
       Put (CU & ":");

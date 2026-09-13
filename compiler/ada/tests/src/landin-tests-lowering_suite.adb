@@ -12373,8 +12373,67 @@ package body Landin.Tests.Lowering_Suite is
          & "mut value: level = 7 inc value r = value end g", 2);
    end Generic_Written_Ranges_Keep_Checks;
 
+   procedure Generic_Pointer_Fields_Keep_Nominal_Identity
+     (Item : in out Landin.Testing.Context);
+
+   procedure Generic_Pointer_Fields_Keep_Nominal_Identity
+     (Item : in out Landin.Testing.Context)
+   is
+   begin
+      for C_Layout in Boolean loop
+         declare
+            Work : Landin.Stages.Compilation :=
+              Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+            Ran : Natural;
+         begin
+            Lower
+              (Work, "plain: type (t: type) = struct member: t end plain "
+               & "holder: type (t: type) = "
+               & (if C_Layout then "layout(c) " else "")
+               & "struct address: ptr plain(t) "
+               & "array: ptr [2]plain(t) nested: ptr [2][1]plain(t) "
+               & "indirect: ptr ptr plain(t) end holder "
+               & "accepted: type = holder(u32)", Ran);
+            Landin.Testing.Check_Equal
+              (Item, Ran, 5, "generic pointer fields reach verified IR");
+            Landin.Testing.Check
+              (Item, not Landin.Stages.Failed (Work),
+               Landin.Stages.Rendered_Report (Work));
+         end;
+      end loop;
+   end Generic_Pointer_Fields_Keep_Nominal_Identity;
+
+   procedure Generic_Pointees_Materialize_On_Access
+     (Item : in out Landin.Testing.Context);
+
+   procedure Generic_Pointees_Materialize_On_Access
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work, "plain: type (t: type) = struct member: t end plain "
+         & "read: (p: ptr plain(u32)) -> (r: u32) = "
+         & "r = p.val.member end read "
+         & "array: (p: ptr [2]plain(u32)) -> (r: u32) = "
+         & "r = p.val[0].member end array", Ran);
+      Landin.Testing.Check_Equal
+        (Item, Ran, 5, "pointee access reaches verified IR");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         Landin.Stages.Rendered_Report (Work));
+   end Generic_Pointees_Materialize_On_Access;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "lowering", "generic pointees materialize on access",
+         Generic_Pointees_Materialize_On_Access'Access);
+      Landin.Testing.Register
+        (Into, "lowering", "generic pointer fields keep nominal identity",
+         Generic_Pointer_Fields_Keep_Nominal_Identity'Access);
       Landin.Testing.Register
         (Into, "lowering", "generic written ranges keep checks",
          Generic_Written_Ranges_Keep_Checks'Access);

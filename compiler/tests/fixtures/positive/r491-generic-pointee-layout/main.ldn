@@ -1,0 +1,20 @@
+plain: type (t: type) = struct member: t end plain
+holder: type (t: type) = struct
+    address: ptr plain(t)
+    array: ptr [2]plain(t)
+    nested: ptr [2][1]plain(t)
+    indirect: ptr ptr plain(t)
+end holder
+c_holder: type (t: type) = layout(c) struct
+    address: ptr plain(t)
+    array: ptr [2]plain(t)
+end c_holder
+ordinary: type = holder(u32)
+c_record: type = c_holder(u32)
+node: type = struct next: ptr [2]node end node
+read: (p: ptr plain(u32)) -> (r: u32) =
+    r = p.val.member
+end read
+read_array: (p: ptr [2]plain(u32)) -> (r: u32) =
+    r = p.val[0].member
+end read_array
