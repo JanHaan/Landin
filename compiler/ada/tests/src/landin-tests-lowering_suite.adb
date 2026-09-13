@@ -11243,8 +11243,85 @@ package body Landin.Tests.Lowering_Suite is
          & "lenof sub end f" & LF);
    end Slice_Access_Paths_Are_Evaluated_Once;
 
+   procedure Struct_Labels_Have_Local_Namespaces
+     (Item : in out Landin.Testing.Context);
+
+   procedure Struct_Labels_Have_Local_Namespaces
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Source
+        (Label, Text : String; Fields : Positive);
+
+      procedure Check_Source
+        (Label, Text : String; Fields : Positive)
+      is
+         procedure Check_Target (Facts : Landin.Targets.Target_Facts);
+
+         procedure Check_Target (Facts : Landin.Targets.Target_Facts) is
+            Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+            Ran : Natural;
+         begin
+            Lower (Work, Text & LF & "size: usize = sizeof s" & LF, Ran);
+            Landin.Testing.Check
+              (Item, Ran = 5 and then not Landin.Stages.Failed (Work),
+               Label & " keeps independent field-name scopes");
+            if Landin.Stages.Failed (Work) then
+               return;
+            end if;
+            declare
+               Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+               Datum : constant IR.Item_Id := Named_Item (Work, "size");
+            begin
+               Landin.Testing.Check
+                 (Item, IR.Is_Aggregate_Measurement (Unit, Datum, 1)
+                    and then IR.Measurement_Field_Count
+                      (Unit, Datum, 1) = Fields,
+                  Label & " retains every independent field position");
+               Landin.Testing.Check
+                 (Item, IR.Verifier.Check (Unit, Facts).Kind
+                    = IR.Verifier.Nothing_Wrong,
+                  Label & " retains a valid measurable layout");
+            end;
+         end Check_Target;
+      begin
+         Check_Target (Landin.Targets.Linux_X86_64);
+         Check_Target (Landin.Targets.Synthetic_32);
+      end Check_Source;
+   begin
+      Check_Source
+        ("ordinary",
+         "s: type = struct left: u8 right: u32 end s", 2);
+      Check_Source
+        ("compact",
+         "s: type = (left: u8, right: u32)", 2);
+      Check_Source
+        ("nested labels",
+         "inner: type = struct value: u8 end inner s: type = struct "
+         & "value: inner end s", 1);
+      Check_Source
+        ("separate payloads",
+         "s: type = struct kind: variant first: (value: u8) | "
+         & "second: (value: u32) end kind end s", 1);
+      Check_Source
+        ("common and payload labels",
+         "s: type = struct value: u8 kind: variant first: (value: "
+         & "u32) end kind end s", 2);
+      Check_Source
+        ("generic fields",
+         "box: type(t: type) = struct left: t right: u32 end box s: "
+         & "type = box(u8)", 2);
+      Check_Source
+        ("generic payload labels",
+         "box: type(t: type) = struct kind: variant first: (value: "
+         & "t) | second: (value: u32) end kind end box s: type = "
+         & "box(u8)", 1);
+   end Struct_Labels_Have_Local_Namespaces;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "lowering", "struct labels have local namespaces",
+         Struct_Labels_Have_Local_Namespaces'Access);
       Landin.Testing.Register
         (Into, "lowering", "slice access paths are evaluated once",
          Slice_Access_Paths_Are_Evaluated_Once'Access);

@@ -1695,6 +1695,12 @@ package body Landin.Stages.Checking is
          At_Node     : Syn.Node_Id;
          Application : Landin.Provenance.Origin) return Type_Descriptor;
 
+      function Field_Names_Are_Unique
+        (Of_Tree : Syn.Tree;
+         Node : Syn.Node_Id;
+         Payload : Boolean := False;
+         Template : Boolean := False) return Boolean;
+
       procedure Build_Struct_Instance
         (Of_Tree     : Syn.Tree;
          Struct_Node        : Syn.Node_Id;
@@ -3971,6 +3977,56 @@ package body Landin.Stages.Checking is
          end;
       end Normalized_Type;
 
+      function Field_Names_Are_Unique
+        (Of_Tree : Syn.Tree;
+         Node : Syn.Node_Id;
+         Payload : Boolean := False;
+         Template : Boolean := False) return Boolean
+      is
+         Count : constant Natural :=
+           (if Payload then Syn.Payload_Field_Count (Of_Tree, Node)
+            else Syn.Field_Count (Of_Tree, Node));
+         Valid : Boolean := True;
+         function Field_At (Position : Positive) return Syn.Node_Id;
+
+         function Field_At (Position : Positive) return Syn.Node_Id is
+           (if Payload then Syn.Nth_Payload_Field (Of_Tree, Node, Position)
+            else Syn.Nth_Field (Of_Tree, Node, Position));
+      begin
+         --  Labels select positions within one structural run.  Separate
+         --  payloads and nested structs each have their own label namespace.
+         for Right in 2 .. Count loop
+            for Left in 1 .. Right - 1 loop
+               declare
+                  Earlier : constant Syn.Node_Id := Field_At (Left);
+                  Later : constant Syn.Node_Id := Field_At (Right);
+               begin
+                  if Syn.Name (Of_Tree, Earlier) = Syn.Name (Of_Tree, Later)
+                  then
+                     Bad.Report
+                       (Item    => Bad.Field_Named_Twice,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Anchor (Of_Tree, Later),
+                        Message => (if Template then "this template"
+                                    else "this type") & " declares the same"
+                          & (if Payload then " payload" else " struct")
+                          & " field twice",
+                        Note    => "[0750]: one "
+                          & (if Payload then "payload" else "struct")
+                          & " field name selects one declared position",
+                        Related => Syn.Origin (Of_Tree, Earlier),
+                        Because => "the first "
+                          & (if Payload then "payload field" else "field")
+                          & " with that name",
+                        Into    => Found);
+                     Valid := False;
+                  end if;
+               end;
+            end loop;
+         end loop;
+         return Valid;
+      end Field_Names_Are_Unique;
+
       procedure Build_Struct_Instance
         (Of_Tree     : Syn.Tree;
          Struct_Node        : Syn.Node_Id;
@@ -4164,37 +4220,9 @@ package body Landin.Stages.Checking is
             end case;
          end Check_Leaf;
       begin
-         Valid := True;
-
-         --  Field and variant-part labels are one structural namespace.
-         --  They are not resolver declarations, so validate the template's
-         --  own run even when no application reaches it.
-         for Right in 2 .. Syn.Field_Count (Of_Tree, Struct_Node) loop
-            for Left in 1 .. Right - 1 loop
-               declare
-                  Earlier : constant Syn.Node_Id :=
-                    Syn.Nth_Field (Of_Tree, Struct_Node, Left);
-                  Later : constant Syn.Node_Id :=
-                    Syn.Nth_Field (Of_Tree, Struct_Node, Right);
-               begin
-                  if Syn.Name (Of_Tree, Earlier) = Syn.Name (Of_Tree, Later)
-                  then
-                     Bad.Report
-                       (Item    => Bad.Field_Named_Twice,
-                        Source  => Syn.Source_Of (Of_Tree),
-                        Where   => Syn.Anchor (Of_Tree, Later),
-                        Message => "this template declares the same struct"
-                                   & " field twice",
-                        Note    => "[0750]: one struct field name selects one"
-                                   & " declared position",
-                        Related => Syn.Origin (Of_Tree, Earlier),
-                        Because => "the first field with that name",
-                        Into    => Found);
-                     Valid := False;
-                  end if;
-               end;
-            end loop;
-         end loop;
+         --  This declaration's labels are checked even without an actual.
+         Valid := Field_Names_Are_Unique
+           (Of_Tree, Struct_Node, Template => True);
 
          for Index in 1 .. Syn.Field_Count (Of_Tree, Struct_Node) loop
             declare
@@ -4232,41 +4260,12 @@ package body Landin.Stages.Checking is
                               Count => Payload_Count);
                            Next_Case := Next_Case + 1;
 
-                           for Right in 2 .. Payload_Count loop
-                              for Left in 1 .. Right - 1 loop
-                                 declare
-                                    Earlier : constant Syn.Node_Id :=
-                                      Syn.Nth_Payload_Field
-                                        (Of_Tree, Variant, Left);
-                                    Later : constant Syn.Node_Id :=
-                                      Syn.Nth_Payload_Field
-                                        (Of_Tree, Variant, Right);
-                                 begin
-                                    if Syn.Name (Of_Tree, Earlier)
-                                      = Syn.Name (Of_Tree, Later)
-                                    then
-                                       Bad.Report
-                                         (Item    => Bad.Field_Named_Twice,
-                                          Source  =>
-                                            Syn.Source_Of (Of_Tree),
-                                          Where   =>
-                                            Syn.Anchor (Of_Tree, Later),
-                                          Message => "this template declares"
-                                             & " the same payload field"
-                                             & " twice",
-                                          Note    => "[0750]: one payload"
-                                             & " field name selects one"
-                                             & " declared position",
-                                          Related => Syn.Origin
-                                            (Of_Tree, Earlier),
-                                          Because => "the first payload"
-                                             & " field with that name",
-                                          Into    => Found);
-                                       Valid := False;
-                                    end if;
-                                 end;
-                              end loop;
-                           end loop;
+                           if not Field_Names_Are_Unique
+                             (Of_Tree, Variant, Payload => True,
+                              Template => True)
+                           then
+                              Valid := False;
+                           end if;
 
                            for Position in 1 .. Payload_Count loop
                               Check_Leaf
@@ -5226,7 +5225,8 @@ package body Landin.Stages.Checking is
                                Element => Ty.U8,
                                Length  => 1,
                                others  => <>)];
-               Can_Lay_Out : Boolean := True;
+               Can_Lay_Out : Boolean;
+               Labels_Valid : Boolean;
                Next_Case : Natural := 1;
                Next_Payload : Natural := 1;
                Prior_Body : constant Landin.Provenance.Origin :=
@@ -5411,6 +5411,8 @@ package body Landin.Stages.Checking is
             begin
                Struct_Layout_Depth := Struct_Layout_Depth + 1;
                Active_Struct_Body := Syn.Origin (Of_Tree, Written);
+               Labels_Valid := Field_Names_Are_Unique (Of_Tree, Written);
+               Can_Lay_Out := Labels_Valid;
                for Index in 1 .. Syn.Field_Count (Of_Tree, Written) loop
                   declare
                      Each : constant Syn.Node_Id :=
@@ -5450,6 +5452,13 @@ package body Landin.Stages.Checking is
                                        then 0 else Next_Payload),
                                     Count => Payload_Count);
                                  Next_Case := Next_Case + 1;
+
+                                 if not Field_Names_Are_Unique
+                                   (Of_Tree, Variant, Payload => True)
+                                 then
+                                    Can_Lay_Out := False;
+                                    Labels_Valid := False;
+                                 end if;
 
                                  for Position in 1 .. Payload_Count loop
                                     --  D120: a payload field may be an
@@ -5515,6 +5524,11 @@ package body Landin.Stages.Checking is
                Struct_Layout_Depth := Struct_Layout_Depth - 1;
                Active_Struct_Body := Prior_Body;
                Active_Struct_Field := Prior_Field;
+               if not Labels_Valid then
+                  --  Consumers retain the duplicate-label diagnostic rather
+                  --  than treating this as an enabled type without layout.
+                  return Ty.Ill_Typed;
+               end if;
             end;
 
             return Ty.Aggregate;
