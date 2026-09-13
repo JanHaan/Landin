@@ -3121,8 +3121,120 @@ package body Landin.Tests.Parser_Suite is
          1, 1);
    end Transfers_Preserve_Completion_Boundaries;
 
+   --  Exact boundary cases, each under two KiB; no overflow probing.
+   procedure Calls_Respect_The_Nesting_Limit
+     (Item : in out Landin.Testing.Context);
+
+   procedure Calls_Respect_The_Nesting_Limit
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check (Label, Text, Codes, Declarations : String);
+
+      procedure Check (Label, Text, Codes, Declarations : String) is
+         Sources : Landin.Source.Sets.Source_Set;
+         Names : Landin.Source.Names.Table;
+         Stream : Landin.Tokens.Token_Stream;
+         Found : Landin.Diagnostics.Diagnostic_List;
+         Id : constant Landin.Source.Source_Id :=
+           Sources.Add ("bounded-call.ldn", Text & ASCII.LF);
+         Actual_Codes, Actual_Names : Unbounded.Unbounded_String;
+      begin
+         Landin.Tokens.Lexer.Lex (Sources.Get (Id), Names, Stream);
+         declare
+            Parsed : constant Landin.Syntax.Tree :=
+              Landin.Syntax.Parser.Parse (Stream, Names, Found);
+         begin
+            for Node in Landin.Syntax.Node_Id'(1)
+              .. Landin.Syntax.Last_Node (Parsed)
+            loop
+               if Landin.Syntax.Kind (Parsed, Node)
+                 in Landin.Syntax.Type_Declaration
+                    | Landin.Syntax.Function_Declaration
+               then
+                  if Unbounded.Length (Actual_Names) > 0 then
+                     Unbounded.Append (Actual_Names, ",");
+                  end if;
+                  Unbounded.Append
+                    (Actual_Names, Landin.Source.Names.Spelling
+                       (Names, Landin.Syntax.Name (Parsed, Node)));
+               end if;
+            end loop;
+         end;
+         for Position in 1 .. Landin.Diagnostics.Count (Found) loop
+            if Position > 1 then
+               Unbounded.Append (Actual_Codes, ",");
+            end if;
+            Unbounded.Append
+              (Actual_Codes, Landin.Diagnostics.Code
+                 (Landin.Diagnostics.Get (Found, Position)));
+         end loop;
+         Landin.Testing.Check_Equal
+           (Item, Unbounded.To_String (Actual_Codes), Codes,
+            Label & " reports only the intended refusal");
+         Landin.Testing.Check_Equal
+           (Item, Unbounded.To_String (Actual_Names), Declarations,
+            Label & " keeps every declaration in source order");
+      end Check;
+
+      function Nested (Count : Positive; Labelled : Boolean := False)
+        return String;
+
+      function Nested (Count : Positive; Labelled : Boolean := False)
+        return String
+      is
+         Text : Unbounded.Unbounded_String;
+      begin
+         Unbounded.Append (Text, "f: () -> (r: i32) = ");
+         for Position in 1 .. Count loop
+            pragma Unreferenced (Position);
+            Unbounded.Append
+              (Text, (if Labelled then "call(value: " else "call("));
+         end loop;
+         Unbounded.Append (Text, "0");
+         for Position in 1 .. Count loop
+            pragma Unreferenced (Position);
+            Unbounded.Append (Text, ")");
+         end loop;
+         Unbounded.Append
+           (Text, " end f g: () -> (r: i32) = call(0) end g");
+         return Unbounded.To_String (Text);
+      end Nested;
+      function Recovered return String;
+
+      function Recovered return String is
+         Text : Unbounded.Unbounded_String;
+      begin
+         Unbounded.Append (Text, "f: () -> (r: i32) = ");
+         for Position in 1 .. Landin.Syntax.Parser.Nesting_Limit loop
+            pragma Unreferenced (Position);
+            Unbounded.Append (Text, "call() else ");
+         end loop;
+         Unbounded.Append
+           (Text, "call() end f g: () -> (r: i32) = call(0) end g");
+         return Unbounded.To_String (Text);
+      end Recovered;
+   begin
+      Check ("last permitted call",
+         Nested (Landin.Syntax.Parser.Nesting_Limit), "", "f,g");
+      Check ("first refused call",
+         Nested (Landin.Syntax.Parser.Nesting_Limit + 1), "L0111", "f,g");
+      Check ("first refused labelled call",
+         Nested (Landin.Syntax.Parser.Nesting_Limit + 1, Labelled => True),
+         "L0111", "f,g");
+      Check ("recovery contributes to nesting", Recovered, "L0111", "f,g");
+      Check ("recovery restores depth",
+         "f: () -> (r: i32) = call(call(0) else 1) else call(2) "
+         & "end f g: () -> (r: i32) = call(0) end g", "", "f,g");
+      Check ("public prefixes retain the statement",
+         "f: () -> (r: i32) = public public public r = 1 end f "
+         & "g: () -> (r: i32) = 2 end g", "L0108,L0108,L0108", "f,g");
+   end Calls_Respect_The_Nesting_Limit;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "parser", "calls respect the nesting limit",
+         Calls_Respect_The_Nesting_Limit'Access);
       Landin.Testing.Register
         (Into, "parser", "transfers preserve completion boundaries",
          Transfers_Preserve_Completion_Boundaries'Access);
