@@ -346,6 +346,11 @@ end grown
 
 ```
 
+The local type-scope witness `positive/r491-local-type-scope` derives a small
+list-element copy from this shape. Its local `t: t = source.items[0]` uses the
+enclosing generic type formal before introducing the runtime name (D218).
+The returned element retains its source under [0790].
+
 The allocator is threaded, not stored, and the reason turned out
 sharper than the visibility argument that was made for it. If list
 stored its allocator it would be `list(t, provider)`, so a list in an arena

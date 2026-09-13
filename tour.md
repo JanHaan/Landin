@@ -133,6 +133,13 @@ north, south, east, west: atom
 Left of ':' is always the name being introduced.
 Right of ':' is what fills it: a type, or (with '=') a value.
 
+In a local declaration, both the written type and the initializer use the
+names visible before that declaration. If an enclosing `t` names a type,
+`mut t: t = value` uses that type and then introduces the local `t`; later
+statements see the local. Condition bindings follow the same rule [1070].
+Module declarations and routine signatures retain their collected scopes
+[0130] [1290].
+
 ### [0120] Types are declared like any other value, with 'type'
 
 Types are declared like any other value, with 'type'.

@@ -1,0 +1,5 @@
+class: positive
+summary: D218 local written types and initializers precede the new name, including generic list elements
+constructs: 0110, 0140, 1070, 1290, 1840, 1850
+program: program.ldn
+targets: linux-x86-64, macos-arm64

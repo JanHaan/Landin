@@ -787,6 +787,9 @@ negative/r491-iterable-contract | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-iterable-provider | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-lexical-signature-recovery | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-live-payload-aliases | linux-x86-64, macos-arm64, synthetic-32
+negative/r491-local-self-initializer | linux-x86-64, macos-arm64
+negative/r491-local-self-reference | linux-x86-64, macos-arm64
+negative/r491-local-shadowed-type | linux-x86-64, macos-arm64
 negative/r491-lookahead-recovery | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-loop-assignment | linux-x86-64
 negative/r491-malformed-public-start | linux-x86-64, macos-arm64, synthetic-32
@@ -1193,6 +1196,7 @@ positive/r491-alias-backing | linux-x86-64
 positive/r491-construction-static-arguments | linux-x86-64, macos-arm64, synthetic-32
 positive/r491-contextual-statements | linux-x86-64
 positive/r491-generic-pointee-layout | linux-x86-64
+positive/r491-local-type-scope | linux-x86-64, macos-arm64
 positive/r491-loop-assignment | linux-x86-64
 positive/r491-noreturn-name | linux-x86-64
 positive/r491-ordinary-iterable | linux-x86-64

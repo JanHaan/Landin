@@ -1,0 +1,5 @@
+scalar: type = i32
+f: () -> none =
+    scalar: i32 = 1
+    mut later: scalar = 2
+end f
