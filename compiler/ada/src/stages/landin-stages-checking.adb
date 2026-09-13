@@ -10134,47 +10134,25 @@ package body Landin.Stages.Checking is
          return Ty.Undecided;
       end Float_Special_Type;
 
-      function Conversion_Target
-        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind
-      is
+      function Scalar_Conversion_Type
+        (Of_Tree : Syn.Tree; Callee : Syn.Node_Id) return Ty.Type_Kind;
+
+      function Scalar_Conversion_Type
+        (Of_Tree : Syn.Tree; Callee : Syn.Node_Id) return Ty.Type_Kind is
       begin
-         if Syn.Kind (Of_Tree, Node) /= Syn.Call
-           or else Syn.Argument_Count (Of_Tree, Node) /= 1
-           or else Syn.Kind
-             (Of_Tree, Syn.Callee_Of (Of_Tree, Node))
-               not in Syn.Name_Reference | Syn.Member_Selection
+         if Syn.Kind (Of_Tree, Callee)
+              not in Syn.Name_Reference | Syn.Member_Selection
          then
             return Ty.Ill_Typed;
          end if;
 
-         if Syn.Kind (Of_Tree, Syn.Callee_Of (Of_Tree, Node))
-              = Syn.Name_Reference
-           and then Res.Verdict_Of
-             (Meanings.all, Of_Tree, Syn.Callee_Of (Of_Tree, Node))
-               /= Res.Bound
-           and then Landin.Checking.Named
-              (Types.all,
-               Syn.Name (Of_Tree, Syn.Callee_Of (Of_Tree, Node)))
-                in Ty.Scalar_Name
-         then
-            return Landin.Checking.Named
-              (Types.all,
-               Syn.Name (Of_Tree, Syn.Callee_Of (Of_Tree, Node)));
-         end if;
-
-         --  D15/D188: a `type` declaration naming a scalar is that scalar
-         --  everywhere, so `count(x)` over an alias and `percent(x)` over
-         --  [0660]'s range subtype are [0700] conversions written with the
-         --  name the program declared.  Only a type declaration is read
-         --  this way; a function of the same name is still a call.
-         declare
-            Callee : constant Syn.Node_Id := Syn.Callee_Of (Of_Tree, Node);
-         begin
-            if Res.Verdict_Of (Meanings.all, Of_Tree, Callee) = Res.Bound
-              and then Res.Sort_Of
-                (Meanings.all,
-                 Res.Bound_To (Meanings.all, Of_Tree, Callee))
-                  = Res.Module_Type
+         --  D15/D188: a scalar alias or range subtype names its declared
+         --  conversion.  A resolved callable keeps its ordinary call, even
+         --  when its spelling is a builtin type name.
+         if Res.Verdict_Of (Meanings.all, Of_Tree, Callee) = Res.Bound then
+            if Res.Sort_Of
+              (Meanings.all, Res.Bound_To (Meanings.all, Of_Tree, Callee))
+                = Res.Module_Type
             then
                declare
                   Held : constant Ty.Type_Kind := Settled_Type
@@ -10185,28 +10163,44 @@ package body Landin.Stages.Checking is
                   end if;
                end;
             end if;
-         end;
-
+         elsif Syn.Kind (Of_Tree, Callee) = Syn.Name_Reference then
+            declare
+               Held : constant Ty.Type_Kind := Landin.Checking.Named
+                 (Types.all, Syn.Name (Of_Tree, Callee));
+            begin
+               if Held in Ty.Scalar_Name then
+                  return Held;
+               end if;
+            end;
+         end if;
          return Ty.Ill_Typed;
-      end Conversion_Target;
+      end Scalar_Conversion_Type;
 
-      function Text_Conversion_Target
-        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Type_Descriptor
+      function Conversion_Target
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind
+      is
+        (if Syn.Kind (Of_Tree, Node) = Syn.Call
+           and then Syn.Argument_Count (Of_Tree, Node) = 1
+         then Scalar_Conversion_Type
+           (Of_Tree, Syn.Callee_Of (Of_Tree, Node))
+         else Ty.Ill_Typed);
+
+      function Text_Conversion_Type
+        (Of_Tree : Syn.Tree; Callee : Syn.Node_Id) return Type_Descriptor;
+
+      function Text_Conversion_Type
+        (Of_Tree : Syn.Tree; Callee : Syn.Node_Id) return Type_Descriptor
       is
          function Invalid return Type_Descriptor
            is ((Kind => Ty.Ill_Typed, others => <>));
       begin
-         if Syn.Kind (Of_Tree, Node) /= Syn.Call
-           or else Syn.Argument_Count (Of_Tree, Node) /= 1
-           or else Syn.Kind
-             (Of_Tree, Syn.Callee_Of (Of_Tree, Node))
-               not in Syn.Name_Reference | Syn.Member_Selection
+         if Syn.Kind (Of_Tree, Callee)
+              not in Syn.Name_Reference | Syn.Member_Selection
          then
             return Invalid;
          end if;
 
          declare
-            Callee : constant Syn.Node_Id := Syn.Callee_Of (Of_Tree, Node);
             Name : constant Landin.Source.Names.Name_Id :=
               (if Syn.Kind (Of_Tree, Callee) = Syn.Name_Reference
                then Syn.Name (Of_Tree, Callee)
@@ -10258,7 +10252,16 @@ package body Landin.Stages.Checking is
          end;
 
          return Invalid;
-      end Text_Conversion_Target;
+      end Text_Conversion_Type;
+
+      function Text_Conversion_Target
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Type_Descriptor
+      is
+        (if Syn.Kind (Of_Tree, Node) = Syn.Call
+           and then Syn.Argument_Count (Of_Tree, Node) = 1
+         then Text_Conversion_Type
+           (Of_Tree, Syn.Callee_Of (Of_Tree, Node))
+         else (Kind => Ty.Ill_Typed, others => <>));
 
       function Conversion_Constraint
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
@@ -17986,6 +17989,29 @@ package body Landin.Stages.Checking is
                end;
 
             when Syn.Call | Syn.Labeled_Application =>
+               if Syn.Kind (Of_Tree, Node) = Syn.Call
+                 and then Syn.Argument_Count (Of_Tree, Node) /= 1
+                 and then
+                   (Scalar_Conversion_Type
+                      (Of_Tree, Syn.Callee_Of (Of_Tree, Node))
+                        in Ty.Scalar_Name
+                    or else Text_Conversion_Type
+                      (Of_Tree, Syn.Callee_Of (Of_Tree, Node)).Kind
+                        /= Ty.Ill_Typed)
+               then
+                  Bad.Report
+                    (Item    => Bad.Type_Mismatch,
+                     Source  => Syn.Source_Of (Of_Tree),
+                     Where   => Syn.Where (Of_Tree, Node),
+                     Message => "a conversion requires exactly one value",
+                     Note    => "[0700]: a conversion applies its target"
+                                & " type to one source value",
+                     Related => Syn.Origin
+                       (Of_Tree, Syn.Callee_Of (Of_Tree, Node)),
+                     Because => "the conversion type",
+                     Into    => Found);
+                  return Kept (Ty.Ill_Typed);
+               end if;
                declare
                   Callee : constant Syn.Node_Id :=
                     Syn.Callee_Of (Of_Tree, Node);

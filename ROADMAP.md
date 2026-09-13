@@ -5856,7 +5856,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J56 | A range subtype's bounds are never applied to a value that arrives through a control expression, so a statically-known out-of-range value compiles into an unconditional `ud2` | C | Open known-bound check: compare contextual/control and direct values against the existing static-range rule; preserve dynamic runtime checks. J116 remains plausible until narrowly established. |
 | J57 | Module image `bool` elements are never range-checked, so a non-0/1 bool image reaches lowering and aborts the compiler (exit 70) | C | Open static-image validation group: use the actual payload/conversion node and validate bool/distinct leaves consistently before image lowering. Use tiny images only. |
 | J58 | `Check_Struct_Image`'s ordinary aggregate-field branch drops the distinct-conversion alternative its three sibling branches have, so a distinct-typed struct field image is never folded (exit 70) | C | Open static-image validation group: use the actual payload/conversion node and validate bool/distinct leaves consistently before image lowering. Use tiny images only. |
-| J59 | A scalar or text conversion written with any argument count other than 1 crashes the compiler (exit 70, no diagnostic) | C | Open checker boundary group: handle all admitted measured types and conversion arities explicitly; source mistakes must not become an unlocated internal defect. |
+| J59 | A scalar or text conversion written with any argument count other than 1 crashes the compiler (exit 70, no diagnostic) | C | Repaired: scalar/text conversion identities are classified independently of arity, and a malformed conversion reports L0301 before indexing operands or lowering. Aliases and range subtypes keep the same rule; resolved user functions retain their own arities. Refused origin facts no longer manufacture a secondary from-clause mismatch. |
 | J60 | Two named returns where one names a struct whose field type failed to resolve: Layout_Size precondition failure loses the whole report | C | Open result-layout boundary group: use checked target-byte arithmetic and settled layouts before placement; retain prior diagnostics. Source/seam tests only for enormous extents, never giant generated images. |
 | J61 | Slice_Address scales the slice lower bound with an unguarded imm32 `imulq`, so an element extent >= 2 GiB emits an unencodable instruction | C | Duplicate A7/M19/N6. Guard wide slice-stride operands; any later assembler check must satisfy the exact-file expansion and process limits below. |
 | J62 | Storage_Address's Frame_Slot arm has no unhomed-slot guard, unlike Slot_Address and Value_Address | P | Plausible backend guard concern: establish a reachable source or focused seam witness before repair. No large image or debugger run is authorized. |
@@ -6184,7 +6184,22 @@ use one worker and selected checks have timeouts of at most 30 seconds. Logs and
 in `.scratch/r491-call-classification/` and `.scratch/r491-final-values/`.
 Exact-revision acceptance remains open.
 
-The conversion-arity boundary J59 is next.
+J59 development evidence: eight selected cases pass 541 checks in each of
+macOS debug and Linux release.
+Twenty-four tiny checker sources cover missing/excess scalar and text operands,
+aliases, range subtypes, and ordinary user functions with zero/two arguments.
+A refused value now carries an invalid origin fact through joins, separately
+from raw-address origins, so text refusals do not manufacture L0316. The
+existing joined-origin, try-cleanup and genuine wrong-from controls pass.
+The driver case checks 344 refusal/output invariants; the preceding 68 IR
+call/conversion checks also pass after the classification refactor. Builds
+use one worker and selected checks have
+timeouts of at most 30 seconds. No assembler, linker or generated Landin
+executable ran in this batch. Logs are retained in
+`.scratch/r491-conversion-arity/` and `.scratch/r491-final-values/`.
+Exact-revision acceptance remains open.
+
+Function-value comparison J9 is next.
 Keep J2's call-return contract question active. K12 needs a semantic
 disposition before implementation. The verifier, optimization, build-identity
 and ABI items above remain owned by the corresponding later repair groups.
