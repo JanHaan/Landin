@@ -3461,8 +3461,68 @@ package body Landin.Tests.Parser_Suite is
       end loop;
    end Match_Arms_Classify_All_Loop_Kinds;
 
+   procedure Contextual_Names_Start_Ordinary_Statements
+     (Item : in out Landin.Testing.Context);
+
+   procedure Contextual_Names_Start_Ordinary_Statements
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check (Name : String);
+
+      procedure Check (Name : String) is
+         Codes : Unbounded.Unbounded_String;
+         Total, Nodes : Natural;
+         Held : Boolean;
+      begin
+         Read_And_Parse
+           ("f: () -> none = " & Name & ": i32 = 0 end f",
+            Codes, Total, Nodes, Held);
+         Landin.Testing.Check
+           (Item, Total = 0 and then Held and then Nodes > 0,
+            Name & " remains a declaration name");
+         Read_And_Parse
+           ("f: () -> none = mut " & Name & ": [1]i32 "
+            & Name & "[0] = 1 " & Name & "[0] += 2 end f",
+            Codes, Total, Nodes, Held);
+         Landin.Testing.Check
+           (Item, Total = 0 and then Held and then Nodes > 0,
+            Name & " remains an indexed assignment root");
+         Read_And_Parse
+           ("a: atom f: (v: a) -> none = mut " & Name & ": i32 = 0 "
+            & "match v a: " & Name & " = 1 end match end f",
+            Codes, Total, Nodes, Held);
+         Landin.Testing.Check
+           (Item, Total = 0 and then Held and then Nodes > 0,
+            Name & " starts an assignment in a match arm");
+         Read_And_Parse
+           ("f: () -> none = mut " & Name & ": i32 = 0 "
+            & "while false do " & Name & " = 1 complete "
+            & Name & " = 2 end while end f",
+            Codes, Total, Nodes, Held);
+         Landin.Testing.Check
+           (Item, Total = 0 and then Held and then Nodes > 0,
+            Name & " remains an assignment in loop and completion bodies");
+      end Check;
+   begin
+      Check ("loop");
+      Check ("while");
+      Check ("for");
+      Check ("break");
+      Check ("continue");
+      Check ("defer");
+      Check ("undo");
+      Check ("match");
+      Check ("begin");
+      Check ("complete");
+      Check ("unchecked");
+      Check ("arena");
+   end Contextual_Names_Start_Ordinary_Statements;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "parser", "contextual names start ordinary statements",
+         Contextual_Names_Start_Ordinary_Statements'Access);
       Landin.Testing.Register
         (Into, "parser", "lexical recovery keeps signature boundaries",
          Lexical_Recovery_Keeps_Signature_Boundaries'Access);

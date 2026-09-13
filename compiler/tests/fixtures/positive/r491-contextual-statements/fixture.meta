@@ -1,0 +1,5 @@
+class: positive
+summary: contextual control words remain binding names and assignment roots in ordinary and arm contexts
+program: main.ldn
+constructs: 0110, 0520, 1140, 1220, 1760, 1810
+targets: linux-x86-64
