@@ -11,6 +11,7 @@
 with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 
+with Landin.Checking;
 with Landin.Driver;
 with Landin.Platform;
 with Landin.Testing.Fakes;
@@ -962,8 +963,104 @@ package body Landin.Tests.Resolution_Suite is
       Check ("f: () -> none = compiler.assert(true) end f", "module");
    end Import_Scopes_And_Refusals;
 
+   procedure Tables_Keep_Their_Tree_Identity
+     (Item : in out Landin.Testing.Context);
+
+   procedure Tables_Keep_Their_Tree_Identity
+     (Item : in out Landin.Testing.Context)
+   is
+      Original, Different, Identical : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+
+      procedure Prepare
+        (Work : in out Landin.Stages.Compilation; Source : String;
+         Extra : Boolean := False);
+
+      procedure Prepare
+        (Work : in out Landin.Stages.Compilation; Source : String;
+         Extra : Boolean := False)
+      is
+         Order : Landin.Stages.Pipeline;
+         Id : Landin.Source.Source_Id;
+         Ran : Natural;
+      begin
+         Id := Landin.Stages.Add_Source (Work, "first.ldn", Source);
+         pragma Assert (Id = 1);
+         if Extra then
+            Id := Landin.Stages.Add_Source
+              (Work, "second.ldn", "g: () -> (r: i32) = 3 end g");
+            pragma Assert (Id = 2);
+         end if;
+         Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
+         Landin.Stages.Append (Order, Names'Access);
+         Landin.Stages.Append (Order, Checker'Access);
+         Ran := Landin.Stages.Run (Order, Work);
+         Landin.Testing.Check_Equal
+           (Item, Ran, 4, "the small forest reaches checking");
+         Landin.Testing.Check
+           (Item, not Landin.Stages.Failed (Work),
+            "the independently prepared source is accepted");
+      end Prepare;
+
+      procedure Check_Alien
+        (Tree : Landin.Syntax.Tree; Label : String);
+
+      procedure Check_Alien
+        (Tree : Landin.Syntax.Tree; Label : String) is
+      begin
+         Landin.Testing.Check
+           (Item, not Landin.Resolution.Covers
+              (Landin.Stages.Meanings (Original).all, Tree),
+            Label & " is outside the resolution table");
+         Landin.Testing.Check
+           (Item, not Landin.Checking.Covers
+              (Landin.Stages.Types (Original).all, Tree),
+            Label & " is outside the checking table");
+      end Check_Alien;
+   begin
+      Prepare (Original, "f: () -> (r: i32) = 1 end f");
+      Prepare (Different, "f: () -> (r: i32) = 2 end f", Extra => True);
+      Prepare (Identical, "f: () -> (r: i32) = 1 end f");
+      declare
+         Own : constant not null access constant Landin.Syntax.Tree :=
+           Landin.Syntax.Forest.Tree_Of
+             (Landin.Stages.Trees (Original).all, 1);
+         Other : constant not null access constant Landin.Syntax.Tree :=
+           Landin.Syntax.Forest.Tree_Of
+             (Landin.Stages.Trees (Different).all, 1);
+         Same_Text : constant not null access constant Landin.Syntax.Tree :=
+           Landin.Syntax.Forest.Tree_Of
+             (Landin.Stages.Trees (Identical).all, 1);
+      begin
+         Landin.Testing.Check
+           (Item, Landin.Syntax.Source_Of (Own.all)
+                    = Landin.Syntax.Source_Of (Other.all)
+            and then Landin.Syntax.Node_Count (Own.all)
+                    = Landin.Syntax.Node_Count (Other.all)
+            and then Landin.Syntax.Node_Count (Own.all)
+                    = Landin.Syntax.Node_Count (Same_Text.all),
+            "foreign trees deliberately have the same numeric shape");
+         Landin.Testing.Check
+           (Item, Landin.Resolution.Covers
+              (Landin.Stages.Meanings (Original).all, Own.all)
+            and then Landin.Checking.Covers
+              (Landin.Stages.Types (Original).all, Own.all),
+            "both tables cover the original immutable object");
+         Check_Alien (Other.all, "a same-size tree with different text");
+         Check_Alien (Same_Text.all, "an independently parsed identical text");
+         Check_Alien
+           (Landin.Syntax.Forest.Tree_Of
+              (Landin.Stages.Trees (Different).all, 2).all,
+            "a source number absent from the original forest");
+      end;
+   end Tables_Keep_Their_Tree_Identity;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "resolution", "tables keep their tree identity",
+         Tables_Keep_Their_Tree_Identity'Access);
       Landin.Testing.Register
         (Into, "resolution", "import bindings preserve identity",
          Import_Bindings_Preserve_Identity'Access);

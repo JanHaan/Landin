@@ -6046,7 +6046,7 @@ checks used the existing debug binary, sequentially, with 10-second timeouts.
 | K13 | C1: multi-formal concept conformance loses its normalized key | Integrated under repaired J49. The finder transcript says its conformances omitted associated input labels, contrary to D142. The current valid multi-input fixture passes; omitting its required input reproduces J49. The broad claim that every multi-formal conformance crashes is not supported. Valid keys, reordered labels and malformed-entry refusals have separate controls; no debugger was run. |
 | K14 | C2: an all-return slice lower bound emits into terminated flow | Repaired with J22: lower/upper returns, array/slice/text sources and ordinary/partially returning bound controls pass in both modes. |
 | K15 | D1a/D1b: scalar/text spelling overrides a resolved callable | Repaired under J8: resolved user functions and callback bindings keep their call semantics, including scalar and text names. The source-to-IR controls retain direct/indirect calls and the small before/after assembly text restores the missing call to u8. |
-| K16 | D2: `Covers` accepts a different syntax forest with matching source ID and node count | API-seam identity question under the table-ownership audit. Establish the immutable-forest contract with small table tests before adding identity storage; no CLI defect was demonstrated. |
+| K16 | D2: `Covers` accepts a different syntax forest with matching source ID and node count | API contract repaired: both semantic tables retain immutable tree object identities and compare them in Covers, in addition to source membership and node count. Same-sized different text, independently parsed identical text and absent-source controls accompany acceptance of the owned tree. Three exact cases pass 29 checks on each of macOS debug and Linux release; no CLI failure is claimed and exact acceptance remains open. |
 | K17 | E1: array fill/element atom writes require exact sets | Implemented: Fill_Array and Store_Element allow source atom subsets under D216; reads and whole copies retain exact descriptors. A two-element source fill reproduced exit 70 and now exits 0. Named/parameter direct-store source controls already passed; their Store_Element contract is independently pinned with small IR cases. Exact acceptance remains open. |
 | K18 | E2: ordinary internal aggregate/array calls check only address carrier width | Source-only verifier gap under m24: validate hidden result and argument addresses against declared shape, extent and nominal identity, including valid generic/erased/C controls. The review's out-of-bounds consequence assumes malformed IR; no accepted-source overwrite was demonstrated. |
 | K19 | E3: pointer metadata can be erased or mixed in stores, calls and operations | Source-only verifier contract question under m24. Compare deliberate representation conversions and low-level address arithmetic with required pointee preservation before rejecting every plain-usize carrier. Add focused malformed-IR cases; source pointer rules alone do not define all IR operations. |
@@ -7444,6 +7444,23 @@ build and unknown-file refusals. Every subprocess has a ten-second timeout;
 the only assembly input is a tiny text hash witness and is never assembled.
 No Ada build, native assembly, generated executable, debugger or giant image
 is needed for this Python-only repair. Exact-revision acceptance remains open.
+
+K16's API-seam ownership check now fulfills its documented identity promise.
+Resolution and checking retain one immutable tree address per source, separate
+from the dense node runs and reusable nominal-actual runs. `Covers` first checks
+source membership, then exact object identity and node count. No address enters
+source numbering, iteration order, target layout or emitted output. A tiny
+three-compilation control rejects both different and identical source text
+parsed into an alien tree, plus an absent source number, while accepting the
+owned object. Existing scope and collected-formal controls stay green.
+Three exact cases pass 29 checks on each of macOS debug and Linux release.
+The first macOS build stopped on a duplicate `use type System.Address` warning;
+removing the redundant clause and running the required clean single-worker
+build succeeded. The Linux single-worker build also passes. No native Landin
+assembler, generated executable, debugger or stress case ran. Evidence is in
+`.scratch/r491-tree-identity/` and `.scratch/r491-final-values/`. This repairs a
+contract check rather than claiming a previously demonstrated CLI failure;
+exact acceptance remains open.
 
 K25's unused specialization projection is now eligible for ordinary backward
 removal. `Function_Address` is already classified as having no read, write,

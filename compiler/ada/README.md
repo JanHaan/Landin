@@ -158,6 +158,11 @@ conservative neutral rewrites, and x86 allocation/selection owns registers.
 Backward demand removes a pure function address when it has no users,
 including a projection left after specialization turns a call direct. A live
 function value retains its signature; numeric folding still excludes it.
+Resolution and checking tables retain the identity of each immutable forest
+tree when prepared. `Covers` checks that exact object as well as its source
+number and node count; an equally sized tree from another compilation is not
+interchangeable. Host addresses serve only this internal equality check, never
+source numbering, target layout, output or iteration order.
 Generic instance ownership follows the resolver's lexical scopes. A nested
 no-capture anonymous signature begins from file scope, so its declarations
 remain independent of the enclosing generic routine's instance overlays.
