@@ -306,6 +306,13 @@ erased-call typing. This supplies the Item and Cur types needed by local
 inference without accessing an absent provider. Conformance validation still
 checks every provider before lowering can consume the table.
 
+Module discovery preserves the first directory spelling for reads and
+source diagnostics. Before loading another selected directory, the driver
+asks the platform whether it names an existing module's directory object.
+Proven aliases share one module identity and one set of state; uncertain
+identities stay separate. The target-neutral module table retains topology
+and original paths without performing host queries.
+
 Parser lookahead keeps a per-parse delimiter index and caches conformance
 suffix decisions only outside nested delimiters. The index balances parentheses
 and brackets independently, preserving the existing lookahead rules. Signature
