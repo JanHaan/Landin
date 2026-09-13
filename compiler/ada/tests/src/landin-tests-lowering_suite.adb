@@ -11867,8 +11867,129 @@ package body Landin.Tests.Lowering_Suite is
          & "end f", 0, 0);
    end Atom_Array_Fills_Keep_Narrow_Values;
 
+   procedure Struct_Payload_Aliases_Initialize_Copies
+     (Item : in out Landin.Testing.Context);
+
+   procedure Struct_Payload_Aliases_Initialize_Copies
+     (Item : in out Landin.Testing.Context)
+   is
+      type Copy_Kind is
+        (Typed, Mutable, Inferred, Assigned, Unused, Chained, Generic_Copy,
+         Wrong_Nominal);
+   begin
+      for Small in Boolean loop
+         for Writable in Boolean loop
+            for Form in Copy_Kind loop
+               declare
+                  Facts : constant Landin.Targets.Target_Facts :=
+                    (if Small then Landin.Targets.Synthetic_32
+                     else Landin.Targets.Linux_X86_64);
+                  Work : Landin.Stages.Compilation :=
+                    Landin.Stages.Create (Facts);
+                  Source : constant String :=
+                    "point: type = struct x: i32 end point" & LF
+                    & "other: type = struct x: i32 end other" & LF
+                    & "choice: type = struct kind: variant leaf | spot: "
+                    & "(at: point) end kind end choice" & LF
+                    & (if Form = Generic_Copy then
+                         "identity: (t: type, value: t) -> (result: t) = "
+                         & "result = value end identity" & LF else "")
+                    & "run: (" & (if Writable then "inout" else "in")
+                    & " value: choice) -> (result: i32) =" & LF
+                    & "match value.kind leaf: result = 0 spot("
+                    & (if Writable then "inout " else "")
+                    & "at): begin "
+                    & (case Form is
+                         when Typed => "copy: point = at",
+                         when Mutable => "mut copy: point = at",
+                         when Inferred | Unused => "copy := at",
+                         when Chained => "seed := at copy := seed",
+                         when Generic_Copy => "copy := identity(at)",
+                         when Assigned => "mut copy: point copy = at",
+                         when Wrong_Nominal => "copy: other = at")
+                    & LF & "result = "
+                    & (if Form = Unused then "0" else "copy.x")
+                    & " end end match end run" & LF;
+                  Ran : Natural;
+               begin
+                  Lower (Work, Source, Ran);
+                  Landin.Testing.Check_Equal
+                    (Item, Ran, (if Form = Wrong_Nominal then 4 else 5),
+                     "payload copy reaches its intended stage: "
+                     & Form'Image);
+                  if Form = Wrong_Nominal then
+                     Landin.Testing.Check
+                       (Item, Landin.Stages.Failed (Work)
+                          and then Ada.Strings.Fixed.Count
+                            (Landin.Stages.Rendered_Report (Work), "error[")
+                              = 1
+                          and then Ada.Strings.Fixed.Index
+                            (Landin.Stages.Rendered_Report (Work),
+                             "error[L0301]") > 0,
+                        "a copy keeps nominal identity: "
+                        & Landin.Stages.Rendered_Report (Work));
+                  else
+                     Landin.Testing.Check
+                       (Item, not Landin.Stages.Failed (Work),
+                        "payload alias is a copy source: " & Form'Image
+                        & Landin.Stages.Rendered_Report (Work));
+                     if not Landin.Stages.Failed (Work) then
+                        declare
+                           Unit : IR.Unit renames
+                             Landin.Stages.Code (Work).all;
+                           Routine : constant IR.Item_Id :=
+                             Named_Item (Work, "run");
+                           Copies : Natural := 0;
+                        begin
+                           for Position in 1 .. IR.Slot_Count (Unit, Routine)
+                           loop
+                              declare
+                                 Cell : constant IR.Slot_Id :=
+                                   IR.Slot_Id (Position);
+                                 Declared : constant IR.Declaration_Id :=
+                                   IR.Declares (Unit, Routine, Cell);
+                              begin
+                                 if Declared /= IR.No_Declaration
+                                   and then Landin.Source.Names.Spelling
+                                     (Landin.Stages.Identities (Work).all,
+                                      Landin.Resolution.Name_Of
+                                        (Landin.Stages.Meanings (Work).all,
+                                         Declared)) = "copy"
+                                 then
+                                    Copies := Copies + 1;
+                                    Landin.Testing.Check
+                                      (Item,
+                                       IR.Is_Aggregate (Unit, Routine, Cell)
+                                         and then IR.Slot_Field_Count
+                                           (Unit, Routine, Cell) = 1
+                                         and then IR.Nth_Slot_Field
+                                           (Unit, Routine, Cell, 1)
+                                             = Landin.Types.I32,
+                                       "the copy has its own complete slot");
+                                 end if;
+                              end;
+                           end loop;
+                           Landin.Testing.Check_Equal
+                             (Item, Copies, 1,
+                              "one local copy is independent of its alias");
+                           Landin.Testing.Check
+                             (Item, IR.Verifier.Check (Unit, Facts).Kind
+                                = IR.Verifier.Nothing_Wrong,
+                              "payload copy paths satisfy the verifier");
+                        end;
+                     end if;
+                  end if;
+               end;
+            end loop;
+         end loop;
+      end loop;
+   end Struct_Payload_Aliases_Initialize_Copies;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "lowering", "struct payload aliases initialize copies",
+         Struct_Payload_Aliases_Initialize_Copies'Access);
       Landin.Testing.Register
         (Into, "lowering", "atom array fills keep narrow values",
          Atom_Array_Fills_Keep_Narrow_Values'Access);

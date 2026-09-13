@@ -6763,8 +6763,20 @@ package body Landin.Stages.Checking is
               Held = Ty.Aggregate
               and then Syn.Kind (Of_Tree, Node) = Syn.Binding
               and then Syn.Value_Of (Of_Tree, Node) /= Syn.No_Node
-              and then Chain_Names_Element_Storage
-                (Of_Tree, Syn.Value_Of (Of_Tree, Node))
+              and then
+                (Chain_Names_Element_Storage
+                   (Of_Tree, Syn.Value_Of (Of_Tree, Node))
+                 or else
+                   (Is_Local_Binding (Of_Tree, Node)
+                    and then Syn.Kind (Of_Tree, Syn.Value_Of (Of_Tree, Node))
+                      = Syn.Name_Reference
+                    and then Res.Verdict_Of
+                      (Meanings.all, Of_Tree, Syn.Value_Of (Of_Tree, Node))
+                        = Res.Bound
+                    and then Res.Sort_Of
+                      (Meanings.all, Res.Bound_To
+                         (Meanings.all, Of_Tree, Syn.Value_Of (Of_Tree, Node)))
+                           = Res.Pattern_Binding))
               and then
                 (Is_Local_Binding (Of_Tree, Node)
                  or else Syn.Kind (Of_Tree, Syn.Value_Of (Of_Tree, Node))
@@ -9774,7 +9786,13 @@ package body Landin.Stages.Checking is
                        and then Res.Sort_Of (Meanings.all, Id)
                          in Res.Local_Binding | Res.Module_Binding)
                   then
-                     if Res.Sort_Of (Meanings.all, Id) = Res.Error_Binding then
+                     if Res.Sort_Of (Meanings.all, Id)
+                       in Res.Error_Binding | Res.Pattern_Binding
+                     then
+                        --  Match aliases also have no initializer. Their
+                        --  header publishes the descriptor before its arms
+                        --  resume discovery, just as recovery supplies its
+                        --  error name after the callee's graph is closed.
                         return True;
                      elsif Res.Sort_Of (Meanings.all, Id)
                        in Res.Local_Binding | Res.Module_Binding
@@ -22530,6 +22548,16 @@ package body Landin.Stages.Checking is
                            Zero_Image   => True);
                      end if;
                   elsif Wants = Ty.Undecided then
+                     declare
+                        Id : constant Res.Declaration_Id :=
+                          Declaration_At (Syn.Source_Of (Of_Tree), Node);
+                     begin
+                        if Landin.Checking.State_Of (Types.all, Id)
+                          = Landin.Checking.Untouched
+                        then
+                           Infer (Id);
+                        end if;
+                     end;
                      --  [0050]: the inferred form takes the value's type,
                      --  and [0200] settles a literal that has none.  D21's
                      --  narrow array case reads the shape from a direct
@@ -22549,7 +22577,8 @@ package body Landin.Stages.Checking is
                                      (Types.all, Of_Tree, Value)
                                    = Ty.Fixed_Array;
                         Inferred_Struct : constant Boolean :=
-                          Is_Direct_Binding_Name (Of_Tree, Value)
+                          (Is_Direct_Binding_Name (Of_Tree, Value)
+                           or else Is_Aggregate_Alias_Name (Of_Tree, Value))
                           and then Landin.Checking.Type_Of
                             (Types.all, Of_Tree, Value) = Ty.Aggregate;
                         Inferred_Construction : constant Boolean :=
@@ -22678,6 +22707,8 @@ package body Landin.Stages.Checking is
                            declare
                               Got : constant Ty.Type_Kind :=
                                 (if Is_Direct_Binding_Name (Of_Tree, Value)
+                                      or else Is_Aggregate_Alias_Name
+                                        (Of_Tree, Value)
                                       or else Syn.Kind (Of_Tree, Value)
                                                 = Syn.Member_Selection
                                  then Selected_From (Of_Tree, Value)
@@ -26219,7 +26250,8 @@ package body Landin.Stages.Checking is
                     /= Landin.Checking.No_Nominal_Type
                   or else Landin.Checking.Result_Shape_Of (Types.all, Named)
                     /= Landin.Checking.No_Signature))
-              or else Direct_Child;
+              or else Direct_Child
+              or else Is_Aggregate_Alias_Name (Of_Tree.all, Value);
             Direct_Source : constant Boolean :=
               Direct_Name or else Direct_Field or else Direct_Struct;
             Got : constant Ty.Type_Kind :=

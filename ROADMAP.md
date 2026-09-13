@@ -5927,7 +5927,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J127 | Out-of-range constant index diagnostic is missing its noun: "this index is outside the 2 this array has" | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
 | J128 | Is_Zeroed_Scalar_Place's Is_Direct_Named_Return alternative is dead | C | Maintenance observation, not an accepted-source defect: confirm reachability/readers before removing redundant code; preserve behavior and update ownership documentation where affected. |
 | J129 | Inferred `[n of x]` with a non-scalar repeated element emits no diagnostic of its own and leaves the value un-refused, so the user gets only a false "needs a counted inferred binding" message | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
-| J130 | A match arm's ordinary-struct payload alias may be copied by assignment but not used as an explicitly typed binding's initializer | C | Open type/shape agreement group: compare both equivalent spellings or contexts and preserve actual element, bound, payload and reference identity before changing acceptance. |
+| J130 | A match arm's ordinary-struct payload alias may be copied by assignment but not used as an explicitly typed binding's initializer | C | Implemented: local typed payload copies are admitted before match-header types are available, then checked against their nominal destination. Inferred aliases and chains wait for the match header, retain their nominal descriptor and resume in the body walk; this also repairs a related inferred-copy internal defect. Read-only/writable, unused, chained, generic and different-nominal controls cover both target widths. Exact acceptance remains open. |
 | J131 | Two refusal sites lack the `Ill_Typed` guard their siblings have, so an already-refused operand draws a second, wrong-first diagnostic | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
 | J132 | `any(...)` over a refused pointer union runs conformance selection before the union guard, emitting a spurious L0318 ahead of the real refusal | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
 | J133 | One mistake in a generic template body is reported once per instantiation, so an actual-independent error is printed N times with identical span and text | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
@@ -6709,7 +6709,23 @@ shorter timeouts. No Landin assembler, linker or generated executable ran.
 Logs are retained in `.scratch/r491-any-reference-identity/` and
 `.scratch/r491-final-values/`. Exact-revision acceptance remains open.
 
-J130's struct payload binding copies are next. J116's slice-endpoint claim
+J130 development evidence: four selected cases pass 240 checks in each of
+macOS debug and Linux release. Thirty-two tiny source forms cover typed,
+mutable, inferred, assigned, unused, chained and generic-call copies, plus
+nominal mismatches, through read-only and writable aliases on both target
+facts. Accepted copies have independent complete local slots and verified IR.
+The original typed form exited 1 and the related inferred form exited 70;
+both now exit 0 under the ten-second compile-only limit, while the assignment
+control stays accepted. Initial tests exposed the additional pre-header
+admission/inference timing issue; aliases now wait for their owning match
+header, and unused inferred bindings resume during the body check. Existing
+traversal, erased-recovery and alias-origin controls pass. Both single-worker
+builds passed; selected tests have 30-second or shorter timeouts. No Landin
+assembler, linker or generated executable ran. Logs are retained in
+`.scratch/r491-payload-copy/` and `.scratch/r491-final-values/`.
+Exact-revision acceptance remains open.
+
+J125's fixed-formal array measurements are next. J116's slice-endpoint claim
 still needs a separate normative disposition. J48 also requires an explicit
 static-selection collision rule: D146's existing uniqueness sentence is
 about erased dispatch, while D144 currently specifies table traversal order.
