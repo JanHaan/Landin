@@ -871,6 +871,105 @@ package body Landin.Tests.Driver_Suite is
       end;
    end Misuse_Outranks_Help;
 
+   procedure Information_Validates_Deferred_Options
+     (Item : in out Landin.Testing.Context);
+
+   procedure Information_Validates_Deferred_Options
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check
+        (Help, First : Boolean; Option : String; Expected : Integer;
+         Needle : String := ""; Extra : String := "";
+         Input : Boolean := True);
+
+      procedure Check
+        (Help, First : Boolean; Option : String; Expected : Integer;
+         Needle : String := ""; Extra : String := "";
+         Input : Boolean := True)
+      is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : Landin.Platform.Path_List;
+         Action : constant String :=
+           (if Help then "--help" else "--identify");
+         Result : Landin.Driver.Outcome;
+      begin
+         Host.Raise_On_Read;
+         Host.Refuse_Writes;
+         Tools.Raise_On_Run;
+         if First then
+            Args.Append (Action);
+         end if;
+         Args.Append (Option);
+         if Extra /= "" then
+            Args.Append (Extra);
+         end if;
+         if Input then
+            Args.Append ("unread.ldn");
+         end if;
+         if not First then
+            Args.Append (Action);
+         end if;
+         Result := Landin.Driver.Execute (Args, Host, Tools);
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Expected,
+            "information preserves deferred validation: " & Option);
+         if Expected = Landin.Driver.Status_Success then
+            Landin.Testing.Check_Equal
+              (Item, Unbounded.To_String (Result.Output),
+               (if Help then Landin.Driver.Usage else Landin.Driver.Identity),
+               "valid information does not read or discover source inputs");
+            Landin.Testing.Check_Equal
+              (Item, Unbounded.To_String (Result.Report), "",
+               "valid information has no source or option reports");
+         else
+            Landin.Testing.Check
+              (Item, Contains (Unbounded.To_String (Result.Report), Needle),
+               "the deferred option keeps its diagnostic");
+            Landin.Testing.Check_Equal
+              (Item, Unbounded.To_String (Result.Output), "",
+               "a refused request does not print success information");
+         end if;
+         Landin.Testing.Check_Equal
+           (Item, Host.Write_Count, 0, "information never writes artifacts");
+         Landin.Testing.Check_Equal
+           (Item, Tools.Run_Count, 0, "information never requests a tool");
+      end Check;
+   begin
+      for Help in Boolean loop
+         for First in Boolean loop
+            Check (Help, First, "--target=unknown",
+                   Landin.Driver.Status_Reported, "unknown target");
+            Check (Help, First, "--build-mode=fast",
+                   Landin.Driver.Status_Misuse, "one debug or release");
+            Check (Help, First, "--option=broken",
+                   Landin.Driver.Status_Misuse, "invalid or repeated");
+            Check (Help, First, "--root=",
+                   Landin.Driver.Status_Misuse, "names no directory");
+            Check (Help, First, "--build-mode=debug",
+                   Landin.Driver.Status_Misuse, "one debug or release",
+                   "--build-mode=release");
+            Check (Help, First, "--option=x=1",
+                   Landin.Driver.Status_Misuse, "invalid or repeated",
+                   "--option=x=2");
+            Check (Help, First, "--root=lib",
+                   Landin.Driver.Status_Misuse, "exactly one entry",
+                   Input => False);
+            Check (Help, First, "--emit=asm",
+                   Landin.Driver.Status_Misuse, "need a source",
+                   Input => False);
+            Check (Help, First, "--target=synthetic-32",
+                   Landin.Driver.Status_Success);
+            Check (Help, First, "--build-mode=release",
+                   Landin.Driver.Status_Success);
+            Check (Help, First, "--option=x=1",
+                   Landin.Driver.Status_Success);
+            Check (Help, First, "--root=lib",
+                   Landin.Driver.Status_Success);
+         end loop;
+      end loop;
+   end Information_Validates_Deferred_Options;
+
    --  The target a compilation gets when nobody asked for one, and the
    --  64-bit target by name.  Both were unpinned: the default could be
    --  changed and the linux-x86-64 branch removed with the suite green.
@@ -3015,6 +3114,9 @@ package body Landin.Tests.Driver_Suite is
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "driver", "information validates deferred options",
+         Information_Validates_Deferred_Options'Access);
       Landin.Testing.Register
         (Into, "driver", "module directories keep identity",
          Module_Directories_Keep_Identity'Access);

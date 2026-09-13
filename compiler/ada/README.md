@@ -171,6 +171,10 @@ source numbering, target layout, output or iteration order.
 Generic instance ownership follows the resolver's lexical scopes. A nested
 no-capture anonymous signature begins from file scope, so its declarations
 remain independent of the enclosing generic routine's instance overlays.
+Help and identity responses follow complete command-line validation, including
+deferred target, mode, override and root checks. Valid informational requests
+return before source discovery and reads. Source-dependent option typing remains
+a compilation-stage check, so information alone does not load option declarations.
 Build-report collision preflight uses the same actual artifact list as source
 protection. A source-map path is reserved only when full debug information or
 caller coordinates require a map; filesystem identity still decides aliases
