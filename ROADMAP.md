@@ -5665,7 +5665,7 @@ session, destructive output-collision experiment or resource-exhaustion sweep.
 | A3: type-shaped construction arguments | Repaired: seven type-only field/payload cases receive L0301 before value access; four type-only trailing fills receive L0102 under the existing expression grammar. Controls cover module, local and instantiated types. The variant-array initializer had valid case metadata; its root-array destination had base field zero. Lowering now captures the reached aggregate in the existing typed-address form before selecting its variant. Construction also preserves the existing L0305 module storage-address exclusion, including nested fields and payload fills; runtime-local addresses and callback bodies remain allowed. | Third batch implementation |
 | C3: retained reference origins | Implemented: destination storage checks cover inout parameters, pointees, slice elements and reference-bearing ordinary/variant fields. Known local alias writes preserve stored frame/parameter origins; an untracked sibling cannot mask them. Runtime controls retain declared retention, same-origin updates and independent pointer descriptors. Both build modes pass the focused suites and fixture profiles. | Second batch implementation |
 | C4: variant payload alias lifetime | Implemented: payload storage lifetime is independent of reference-bearing type. Direct and known-alias replacements, inout calls, derived addresses, cleanup and reachable loop uses participate; runtime controls cover last use, siblings, copied computed subjects and descriptor rebinding. D217 pins the construction boundary, and pointer-backed retags preserve initializer effects. Both build modes pass the focused suites and fixture profiles. | Second batch implementation |
-| C5: dense inference matrices | Still present in source: effects, required sets and call edges are dense stack arrays. The old exhaustion threshold was not rerun. Move program-sized storage off the host stack and measure scaling without weakening inference completion. | Third batch |
+| C5: dense inference matrices | Implemented: the three dense matrices and four signature/declaration arrays now use heap storage owned by one limited controlled object, including partial-allocation, incomplete-pass and exceptional exits. The existing fixed-point algorithm and completeness boundary remain intact. Six exact selectors pass 33 checks in each build mode; no exhaustion threshold or scaling stress was rerun. Dense storage growth remains an explicit limitation. | Third batch |
 | C6: nested-call depth | Implemented with J37: shared call-depth accounting includes recovery clauses, and refused calls skip their balanced argument list. Exact boundary and following-declaration controls pass in both modes; no overflow reproduction. | Exact acceptance open |
 | M1: conformance lookahead | Repaired in the follow-up parser group: lookahead stops at the binding initializer delimiter. Small literal/call initializer controls preserve a following `is` binding; existing parameterized and ordinary conformance syntax stays covered. | Third batch implementation |
 | M2: consumed subplaces | Repaired bare element, enclosing-aggregate and descendant reads after sink. Field paths above and below an array index retain separate identities; computed reads account for possibly consumed elements. Assigning an ancestor restores its consumed descendants without reviving a consumed ancestor through a partial write. Ten negative cases and runtime sibling/copy/restoration controls pin the result. | Second batch implementation |
@@ -7444,6 +7444,23 @@ build and unknown-file refusals. Every subprocess has a ten-second timeout;
 the only assembly input is a tiny text hash witness and is never assembled.
 No Ada build, native assembly, generated executable, debugger or giant image
 is needed for this Python-only repair. Exact-revision acceptance remains open.
+
+C5 error-inference storage is moved off the host stack. The finalizer owns
+all three dense Boolean matrices and four linear flag/signature arrays
+through one limited controlled object. Allocations occur after the empty-graph
+exit; finalization releases every successful allocation when a later allocation
+fails, an inference pass suspends or an exception leaves the procedure. The
+existing atom propagation, recursive closure, deferred recovery and completion
+algorithm is retained. The graph still stores two signature-by-declaration
+matrices and one signature-by-signature matrix; this repair makes no sparse
+storage or improved asymptotic complexity claim. Both single-worker builds and
+six exact selectors pass, with 33 checks in each of macOS debug and Linux
+release. Controls cover recovery-triggered deduction, concrete and inferred
+generic error sets, erased recovery and public/unhandled-error refusals.
+No large generated case, allocation-failure injection, stack-limit experiment,
+assembler, generated executable or debugger ran. Evidence is retained in
+`.scratch/r491-error-inference-storage/` and `.scratch/r491-final-values/`.
+Exact-revision acceptance remains open.
 
 J15's `noreturn` facet now follows [1830]'s named-refusal contract.
 Function bodies, function types and foreign signatures receive one L0010

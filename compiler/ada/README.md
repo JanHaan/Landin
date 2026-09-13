@@ -598,6 +598,12 @@ sets that can enter generic keys; newly enabled handlers may discover further
 instances before the final inventory assertion. The queue also retains recursive
 expansion ancestry. Circular key/effect deduction is a source diagnostic, while
 ordinary recursive effect graphs remain least-fixed-point inference.
+The error finalizer's effect, requirement and call-edge matrices, plus its
+signature/declaration flags, live in heap storage owned by one limited
+controlled object. Normal completion, a suspended inference pass and partial
+allocation or later exceptions release the same tables. Dense graph storage
+still grows with program dimensions; it no longer reserves those matrices in
+the host stack frame.
 
 Concrete error sets are part of recursive function signatures; private `! ...`
 routines, including separate concrete generic identities, are solved as one

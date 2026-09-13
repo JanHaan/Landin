@@ -1,9 +1,11 @@
 with Ada.Containers.Hashed_Maps;
 with Ada.Containers.Hashed_Sets;
 with Ada.Containers.Vectors;
+with Ada.Finalization;
 with Ada.Strings.Fixed;
 with Ada.Strings.Hash;
 with Ada.Strings.Unbounded;
+with Ada.Unchecked_Deallocation;
 
 with Landin.Checking;
 with Landin.Configuration;
@@ -29062,28 +29064,59 @@ package body Landin.Stages.Checking is
          --  descriptors or concrete boundaries rather than guessed routines.
          type Effect_Matrix is array
            (Positive range <>, Positive range <>) of Boolean;
-         Effects : Effect_Matrix
-           (1 .. Signature_Last, 1 .. Declaration_Last) :=
-             [others => [others => False]];
-         Required : Effect_Matrix
-           (1 .. Signature_Last, 1 .. Declaration_Last) :=
-             [others => [others => False]];
-         Edges : Effect_Matrix
-           (1 .. Signature_Last, 1 .. Signature_Last) :=
-             [others => [others => False]];
-         Owns_Body : array (1 .. Signature_Last) of Boolean :=
-           [others => False];
-         --  Unknown propagated targets or failed values can still enlarge
-         --  an inferred set.  Their openness follows effect edges, so a
-         --  closed recursive component is solved exactly before publishing;
-         --  an open component retains Inferred and never supplies a key.
-         Open_Body : array (1 .. Signature_Last) of Boolean :=
-           [others => False];
-         Recovery_Signatures : array (1 .. Declaration_Last) of
-           Landin.Checking.Signature_Id :=
-             [others => Landin.Checking.No_Signature];
-         Including_Alias : array (1 .. Declaration_Last) of Boolean :=
-           [others => False];
+         type Effect_Matrix_Access is access Effect_Matrix;
+         type Flag_Array is array (Positive range <>) of Boolean;
+         type Flag_Array_Access is access Flag_Array;
+         type Signature_Array is array (Positive range <>) of
+           Landin.Checking.Signature_Id;
+         type Signature_Array_Access is access Signature_Array;
+
+         --  These extents follow the whole program. Only their owners live
+         --  on the host stack; partial allocation, incomplete inference and
+         --  exceptional exits release every table through the same owner.
+         type Working_Tables is new Ada.Finalization.Limited_Controlled with
+         record
+            Effects : Effect_Matrix_Access;
+            Required : Effect_Matrix_Access;
+            Edges : Effect_Matrix_Access;
+            Owns_Body : Flag_Array_Access;
+            --  Unknown propagated targets retain an open inferred set.
+            Open_Body : Flag_Array_Access;
+            Recovery_Signatures : Signature_Array_Access;
+            Including_Alias : Flag_Array_Access;
+         end record;
+
+         overriding procedure Finalize (Item : in out Working_Tables);
+
+         procedure Free is new Ada.Unchecked_Deallocation
+           (Effect_Matrix, Effect_Matrix_Access);
+         procedure Free is new Ada.Unchecked_Deallocation
+           (Flag_Array, Flag_Array_Access);
+         procedure Free is new Ada.Unchecked_Deallocation
+           (Signature_Array, Signature_Array_Access);
+
+         overriding procedure Finalize (Item : in out Working_Tables) is
+         begin
+            Free (Item.Effects);
+            Free (Item.Required);
+            Free (Item.Edges);
+            Free (Item.Owns_Body);
+            Free (Item.Open_Body);
+            Free (Item.Recovery_Signatures);
+            Free (Item.Including_Alias);
+         end Finalize;
+
+         Tables : Working_Tables;
+         Effects : Effect_Matrix_Access renames Tables.Effects;
+         Required : Effect_Matrix_Access renames Tables.Required;
+         Edges : Effect_Matrix_Access renames Tables.Edges;
+         Owns_Body : Flag_Array_Access renames Tables.Owns_Body;
+         --  Openness follows effect edges. A closed recursive component is
+         --  solved exactly; an open component never supplies an inferred key.
+         Open_Body : Flag_Array_Access renames Tables.Open_Body;
+         Recovery_Signatures : Signature_Array_Access
+           renames Tables.Recovery_Signatures;
+         Including_Alias : Flag_Array_Access renames Tables.Including_Alias;
 
          type Call_Issue is record
             Source : Landin.Source.Source_Id := Landin.Source.No_Source;
@@ -29343,7 +29376,7 @@ package body Landin.Stages.Checking is
                when Syn.Fail_Statement =>
                   Include_Expression
                     (Of_Tree, Syn.Value_Of (Of_Tree, Node), Caller,
-                     Required);
+                     Required.all);
                   Scan (Of_Tree, Syn.Value_Of (Of_Tree, Node), Caller);
                   Scan
                     (Of_Tree, Syn.Condition_Of (Of_Tree, Node), Caller);
@@ -29524,6 +29557,18 @@ package body Landin.Stages.Checking is
             return;
          end if;
 
+         Effects := new Effect_Matrix'
+           [1 .. Signature_Last => [1 .. Declaration_Last => False]];
+         Required := new Effect_Matrix'
+           [1 .. Signature_Last => [1 .. Declaration_Last => False]];
+         Edges := new Effect_Matrix'
+           [1 .. Signature_Last => [1 .. Signature_Last => False]];
+         Owns_Body := new Flag_Array'[1 .. Signature_Last => False];
+         Open_Body := new Flag_Array'[1 .. Signature_Last => False];
+         Recovery_Signatures := new Signature_Array'
+           [1 .. Declaration_Last => Landin.Checking.No_Signature];
+         Including_Alias := new Flag_Array'[1 .. Declaration_Last => False];
+
          --  A concrete callee promises its whole written set, independent
          --  of which atoms its present body happens to use.
          for Signature in 1 .. Signature_Total loop
@@ -29532,7 +29577,7 @@ package body Landin.Stages.Checking is
                  = Landin.Checking.Concrete
             then
                Include_Set
-                 (Effects, Signature,
+                 (Effects.all, Signature,
                   Landin.Checking.Signature_Errors
                     (Types.all,
                      Landin.Checking.Signature_Id (Signature)));
