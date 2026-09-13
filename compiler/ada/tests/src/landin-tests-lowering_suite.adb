@@ -6317,6 +6317,62 @@ package body Landin.Tests.Lowering_Suite is
    --  Driver.Execute does not expose its Compilation, which the IR dump needs.
    --  Follow its reachable-module route here: parse each newly loaded suffix,
    --  record the same module graph, then run the ordinary five-stage pipeline.
+   procedure Generic_Bodies_Keep_Anonymous_Routines_Independent
+     (Item : in out Landin.Testing.Context);
+
+   procedure Generic_Bodies_Keep_Anonymous_Routines_Independent
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check (Text, What : String);
+
+      procedure Check (Text, What : String) is
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Ran : Natural;
+      begin
+         Lower (Work, Text, Ran);
+         Landin.Testing.Check
+           (Item, Ran = 5 and then not Landin.Stages.Failed (Work), What);
+         Check_Terminators
+           (Item, Landin.Stages.Code (Work).all,
+            "generic and anonymous routines have complete control flow");
+      end Check;
+   begin
+      Check
+        ("wrap: (t: type, v: t) -> (r: t) =" & LF
+         & "    idf: (x: t) -> (y: t) = (x: i32) -> (y: i32) =" & LF
+         & "        y = x" & LF
+         & "    end" & LF
+         & "    r = v" & LF
+         & "end wrap" & LF
+         & "public main: () -> (code: i32) =" & LF
+         & "    code = wrap(1)" & LF
+         & "end main" & LF,
+         "a concrete no-capture routine inside a generic body is accepted");
+      Check
+        ("wrap: (t: type, v: t) -> (r: t) =" & LF
+         & "    idf := (x: i32) -> (y: i32) = y = x end" & LF
+         & "    _ = idf(7)" & LF
+         & "    r = v" & LF
+         & "end wrap" & LF
+         & "public main: () -> (code: i32) =" & LF
+         & "    code = wrap(1)" & LF
+         & "    checked: bool = wrap(true)" & LF
+         & "end main" & LF,
+         "two generic instances share an independent anonymous body");
+      Check
+        ("wrap: (t: type, v: t) -> (r: t) =" & LF
+         & "    idf := (x: i32) -> (y: i32) =" & LF
+         & "        inner := (a: i32) -> (b: i32) = b = a end" & LF
+         & "        y = inner(x)" & LF
+         & "    end" & LF
+         & "    _ = idf(7)" & LF
+         & "    r = v" & LF
+         & "end wrap" & LF
+         & "public main: () -> (code: i32) = code = wrap(1) end main" & LF,
+         "nested no-capture signatures retain their own declaration facts");
+   end Generic_Bodies_Keep_Anonymous_Routines_Independent;
+
    procedure Lower_Rooted_Fixture
      (Work    : in out Landin.Stages.Compilation;
       Each    : Landin.Testing.Fixtures.Fixture;
@@ -12143,6 +12199,10 @@ package body Landin.Tests.Lowering_Suite is
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "lowering",
+         "generic bodies keep anonymous routines independent",
+         Generic_Bodies_Keep_Anonymous_Routines_Independent'Access);
       Landin.Testing.Register
         (Into, "lowering", "fixed measurement bounds keep refusals",
          Fixed_Measurement_Bounds_Keep_Refusals'Access);
