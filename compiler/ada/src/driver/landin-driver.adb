@@ -869,17 +869,24 @@ package body Landin.Driver is
          begin
             --  All destinations are checked before the first artifact write,
             --  including source files discovered through module roots.
+            Destinations.Append (Assembly_Path);
+            if Emit = Emit_Executable then
+               Destinations.Append (Product_Path);
+            end if;
+            if Emit_Map then
+               Destinations.Append (Map_Path);
+            end if;
             if Report_Seen then
-               if Conflicts_With (Assembly_Path)
-                 or else Conflicts_With (Product_Path)
-                 or else Conflicts_With (Map_Path)
-               then
-                  Bad_Use := True;
-                  Note_Failure
-                    (Code_Unknown_Option,
-                     "build report collides with an artifact: " & Report_Path);
-                  return;
-               end if;
+               for Path of Destinations loop
+                  if Conflicts_With (Path) then
+                     Bad_Use := True;
+                     Note_Failure
+                       (Code_Unknown_Option,
+                        "build report collides with an artifact: "
+                        & Report_Path);
+                     return;
+                  end if;
+               end loop;
                for Index in 1 .. Landin.Stages.Source_Count (Context) loop
                   declare
                      Path : constant String := Landin.Source.Name
@@ -899,13 +906,6 @@ package body Landin.Driver is
                end loop;
             end if;
 
-            Destinations.Append (Assembly_Path);
-            if Emit = Emit_Executable then
-               Destinations.Append (Product_Path);
-            end if;
-            if Emit_Map then
-               Destinations.Append (Map_Path);
-            end if;
             for Index in Destinations.First_Index .. Destinations.Last_Index
             loop
                for Earlier in Destinations.First_Index .. Index - 1 loop

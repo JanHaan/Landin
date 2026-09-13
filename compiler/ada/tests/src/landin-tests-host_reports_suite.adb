@@ -210,11 +210,13 @@ package body Landin.Tests.Host_Reports_Suite is
    procedure Host_Identity (Item : in out Landin.Testing.Context) is
       procedure Compile
         (Input, Output, Report : String; Alias : String := "";
-         Executable : Boolean := False; Many : Boolean := False);
+         Executable : Boolean := False; Many : Boolean := False;
+         Debug : Boolean := False);
 
       procedure Compile
         (Input, Output, Report : String; Alias : String := "";
-         Executable : Boolean := False; Many : Boolean := False)
+         Executable : Boolean := False; Many : Boolean := False;
+         Debug : Boolean := False)
       is
          Host : Landin.Testing.Fakes.Fake_Filesystem;
          Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
@@ -242,6 +244,9 @@ package body Landin.Tests.Host_Reports_Suite is
          Args.Append ("-o");
          Args.Append (Output);
          Args.Append ("--build-report=" & Report);
+         if Debug then
+            Args.Append ("--debug=full");
+         end if;
          Result := Landin.Driver.Execute (Args, Host, Tools);
          Landin.Testing.Check_Equal
            (Item, Result.Status,
@@ -272,14 +277,102 @@ package body Landin.Tests.Host_Reports_Suite is
       Compile ("main.ldn", "PROGRAM", "program.s", Alias => "PROGRAM.s",
                Executable => True);
       Compile ("main.ldn", "PROGRAM", "program.sources.json",
-               Alias => "PROGRAM.sources.json", Executable => True);
+               Alias => "PROGRAM.sources.json", Executable => True,
+               Debug => True);
       Compile ("main.ldn", "out.s", "MAIN.ldn", Alias => "main.ldn");
       Compile ("main.ldn", "out.s", "last.json", Alias => "f64.ldn",
                Many => True);
    end Host_Identity;
 
+   procedure Reports_Reserve_Active_Artifacts
+     (Item : in out Landin.Testing.Context);
+
+   procedure Reports_Reserve_Active_Artifacts
+     (Item : in out Landin.Testing.Context)
+   is
+      type Map_Mode is (Absent, Full_Debug, Caller);
+      Caller_Source : constant String :=
+        "site: type = struct file_id: u32 line: u32 column: u32 end site"
+        & LF & "capture: (caller where: site) -> (r: u32) ="
+        & " where.line end capture" & LF
+        & "public main: () -> (code: i32) = i32(capture()) end main";
+   begin
+      --  All writes and executable tool requests use fake host adapters.
+      for Executable in Boolean loop
+         for Mode in Map_Mode loop
+            for Alias in Boolean loop
+               declare
+                  Host : Landin.Testing.Fakes.Fake_Filesystem;
+                  Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+                  Args : Landin.Platform.Path_List;
+                  Map : constant String :=
+                    Landin.Driver.Source_Map_Beside ("out");
+                  Report : constant String :=
+                    (if Alias then "report.json" else Map);
+                  Result : Landin.Driver.Outcome;
+               begin
+                  Host.Add_File
+                    ("main.ldn",
+                     (if Mode = Caller then Caller_Source else Source));
+                  if Alias then
+                     Host.Add_Alias (Report, Map);
+                  end if;
+                  if Mode /= Absent then
+                     Host.Refuse_Writes;
+                     Tools.Raise_On_Run;
+                  end if;
+                  Args.Append ("main.ldn");
+                  Args.Append ("--target=linux-x86-64");
+                  Args.Append
+                    (if Executable then "--emit=exe" else "--emit=asm");
+                  Args.Append ("-o");
+                  Args.Append ("out");
+                  Args.Append ("--build-report=" & Report);
+                  if Mode = Full_Debug then
+                     Args.Append ("--debug=full");
+                  end if;
+                  Result := Landin.Driver.Execute (Args, Host, Tools);
+                  Landin.Testing.Check_Equal
+                    (Item, Result.Status,
+                     (if Mode = Absent then Landin.Driver.Status_Success
+                      else Landin.Driver.Status_Misuse),
+                     "only an emitted map reserves its destination");
+                  if Mode = Absent then
+                     Landin.Testing.Check
+                       (Item, Ada.Strings.Fixed.Index
+                          (Host.Written (Report), "landin-build-report-1") > 0,
+                        "an inactive map path holds the requested report");
+                     Landin.Testing.Check_Equal
+                       (Item, Host.Write_Count, 2,
+                        "only assembly and report use the fake filesystem");
+                     Landin.Testing.Check_Equal
+                       (Item, Tools.Run_Count,
+                        (if Executable then 1 else 0),
+                        "only executable emission asks the fake tool");
+                  else
+                     Landin.Testing.Check
+                       (Item, Ada.Strings.Fixed.Index
+                          (US.To_String (Result.Report),
+                           "build report collides with an artifact") > 0,
+                        "both map producers report the active collision");
+                     Landin.Testing.Check_Equal
+                       (Item, Host.Write_Count, 0,
+                        "the collision precedes every artifact write");
+                     Landin.Testing.Check_Equal
+                       (Item, Tools.Run_Count, 0,
+                        "the collision precedes every tool request");
+                  end if;
+               end;
+            end loop;
+         end loop;
+      end loop;
+   end Reports_Reserve_Active_Artifacts;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "host reports", "reports reserve active artifacts",
+         Reports_Reserve_Active_Artifacts'Access);
       Landin.Testing.Register
         (Into, "host reports", "all byte values and slices",
          Byte_Encoding'Access);

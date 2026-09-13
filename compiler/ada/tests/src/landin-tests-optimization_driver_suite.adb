@@ -84,7 +84,8 @@ package body Landin.Tests.Optimization_Driver_Suite is
       Refuses ("--specialize=auto", "--identify");
       Refuses ("--build-report=./out.s");
       Refuses ("--build-report=a/../main.ldn");
-      Refuses ("--build-report=" & Landin.Driver.Source_Map_Beside ("out.s"));
+      Refuses ("--build-report=" & Landin.Driver.Source_Map_Beside ("out.s"),
+               "--debug=full");
       declare
          Host : Landin.Testing.Fakes.Fake_Filesystem;
          Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
@@ -137,6 +138,9 @@ package body Landin.Tests.Optimization_Driver_Suite is
             Host.Add_File ("main.ldn", Source);
             Host.Add_Alias ("linked-report.json", Target);
             Args.Append ("--build-report=linked-report.json");
+            if Kind = 3 then
+               Args.Append ("--debug=full");
+            end if;
             Result := Landin.Driver.Execute (Args, Host, Tools);
             Landin.Testing.Check
               (Item, Result.Status = Landin.Driver.Status_Misuse
