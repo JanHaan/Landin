@@ -5821,10 +5821,10 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J21 | Array-literal element containing a variant part crashes lowering (Constraint_Error on Positive (Destination.Base)) | C | Already repaired by 1aa0746a under A3: normalize the root variant-array destination into typed storage. Retain the existing debug/release and runtime evidence; do not replay it. |
 | J22 | Several expression-lowering paths emit IR after the flow has already terminated, so a program the frontend accepts dies with an internal compiler defect (exit 70) | C | Repaired: slice bounds/sources, descriptor copies, addresses, inout and slice actuals, conversions and any operands stop after terminated evaluation. UTF8 indexing creates decoder blocks only after its ordinal continues. Twenty-five tiny sources verify reachable calls and complete IR on both target widths in both modes. J23/J26 retain their separate merge/loop work. |
 | J23 | Lower_If leaves an orphan merge block when a later arm's condition terminates the flow, and the IR verifier then rejects the unit | C | Repaired: a terminating later condition reopens an existing merge from earlier continuing arms before returning to its caller. Remaining tests/arms stay unevaluated. First-condition, all-return, multiple-arm and value-position controls pass on both target widths in both modes. |
-| J24 | Destructuring binding from a labelled-argument call or `try` raises a compiler defect (exit 70) | C | Open accepted-value lowering group: reproduce this storage/result shape narrowly, then preserve checked shape and initialization across its lowering path in both modes. |
-| J25 | Assignment to an anonymous multi-result aggregate from a labelled call, `try`, or loop value violates `Res.Bound_To`'s precondition | C | Open accepted-value lowering group: reproduce this storage/result shape narrowly, then preserve checked shape and initialization across its lowering path in both modes. |
+| J24 | Destructuring binding from a labelled-argument call or `try` raises a compiler defect (exit 70) | C | Repaired: destructuring dispatch admits labelled calls and try expressions into the existing typed temporary path. Positional, reordered-labelled, try and labelled-try forms retain their named fields and verified IR on both target widths in both modes. |
+| J25 | Assignment to an anonymous multi-result aggregate from a labelled call, `try`, or loop value violates `Res.Bound_To`'s precondition | C | Repaired: anonymous-result assignments route labelled calls, try and loop/while/for values through caller-owned result storage instead of name-only storage lookup. Positional, labelled, propagated-error and all three loop forms pass in both modes. |
 | J26 | A `complete` body that never falls through leaves the post-loop block with no predecessor, producing malformed IR | C | Repaired: breaks and completing bodies allocate their shared exit only when an emitted edge reaches it. Returning, continuing and failing complete bodies leave no orphan post-loop block. Nested labelled breaks, break values, cleanup and continuing completion controls pass in both modes; source-only break scanning is removed. |
-| J27 | Aggregate assignment to a computed or reference-borne place from a loop value raises "a contextual storage value has no rooted place" | C | Open accepted-value lowering group: reproduce this storage/result shape narrowly, then preserve checked shape and initialization across its lowering path in both modes. |
+| J27 | Aggregate assignment to a computed or reference-borne place from a loop value raises "a contextual storage value has no rooted place" | C | Repaired: dynamic/reference aggregate destinations admit loop/while/for values into the existing shaped temporary and copy path. Array-indexed, pointer and inout destinations pass; explicit call-order checks retain one destination evaluation before the RHS, and an all-return RHS skips copying its temporary. |
 | J28 | Anonymous function with a pointer result gets the wrong IR item result kind (exit 70) | C | Open accepted-value lowering group: reproduce this storage/result shape narrowly, then preserve checked shape and initialization across its lowering path in both modes. |
 | J29 | `Made` is set for an array-root image the code deliberately did not store, so the copy path violates `Image_Length`'s `Has_Image` precondition | C | Open accepted-value lowering group: reproduce this storage/result shape narrowly, then preserve checked shape and initialization across its lowering path in both modes. |
 | J30 | Module struct slice field initialized from a name or member selection raises "a static slice field has no image form" | C | Repaired: slice-bearing struct images use the existing complete descriptor builder; the verifier selects its recursive checker when any descriptor carries a slice. Direct, named, member, nested, empty and variant slice images retain backing targets, offsets, lengths, element shapes and tags on 32/64-bit targets. Explicit malformed descriptors retain bounds/shape refusals. This also repairs the valid variant slice literal found during K1. |
@@ -6254,7 +6254,18 @@ Logs are retained in `.scratch/r491-traversal-inference/`,
 `.scratch/r491-control-continuations/` and `.scratch/r491-final-values/`.
 Exact-revision acceptance remains open.
 
-Accepted-value lowering J24/J25/J27 is next.
+J24/J25/J27 development evidence: five selected cases pass 254 checks in each
+of macOS debug and Linux release. Eighteen tiny sources run against both target
+widths, checking positional/labelled/try result destructuring, result assignment
+from each loop form, indexed/pointer/inout aggregate assignment, exact call
+order and all-return temporary handling. Existing construction storage,
+control-value, continuation and failure-cleanup cases pass. Builds use one
+worker and selected tests have timeouts of at most 30 seconds. No assembler,
+linker or generated Landin executable ran. Logs are retained in
+`.scratch/r491-stored-control-values/` and `.scratch/r491-final-values/`.
+Exact-revision acceptance remains open.
+
+Anonymous pointer-result lowering J28 is next.
 Keep J2's call-return contract question active. K12 needs a semantic
 disposition before implementation. The verifier, optimization, build-identity
 and ABI items above remain owned by the corresponding later repair groups.
