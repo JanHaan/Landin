@@ -11766,8 +11766,102 @@ package body Landin.Tests.Lowering_Suite is
          0);
    end Control_Ranges_Keep_One_Store_Check;
 
+   procedure Atom_Array_Fills_Keep_Narrow_Values
+     (Item : in out Landin.Testing.Context);
+
+   procedure Atom_Array_Fills_Keep_Narrow_Values
+     (Item : in out Landin.Testing.Context)
+   is
+      Common : constant String :=
+        "north, south: atom problems: type = north | south ";
+
+      procedure Check_Source
+        (Label, Text : String; Expected_Fills, Source_Atoms : Natural);
+
+      procedure Check_Source
+        (Label, Text : String; Expected_Fills, Source_Atoms : Natural)
+      is
+         procedure Check_Target (Facts : Landin.Targets.Target_Facts);
+
+         procedure Check_Target (Facts : Landin.Targets.Target_Facts) is
+            Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+            Ran, Fills : Natural := 0;
+         begin
+            Lower (Work, Common & Text, Ran);
+            Landin.Testing.Check
+              (Item, Ran = 5 and then not Landin.Stages.Failed (Work),
+               Label & " accepts the atom subset source");
+            if Landin.Stages.Failed (Work) then
+               return;
+            end if;
+            declare
+               Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+               Routine : constant IR.Item_Id := Named_Item (Work, "f");
+            begin
+               for Position in 1 .. IR.Value_Count (Unit, Routine) loop
+                  declare
+                     Value : constant IR.Value_Id := IR.Value_Id (Position);
+                  begin
+                     if IR.Op_Of (Unit, Routine, Value) = IR.Fill_Array then
+                        Fills := Fills + 1;
+                        Landin.Testing.Check_Equal
+                          (Item, IR.Atom_Count
+                             (Unit, IR.Atom_Set_Of
+                                (Unit, Routine,
+                                 IR.Nth_Operand (Unit, Routine, Value, 1))),
+                           Source_Atoms,
+                           Label & " retains the source's own atom set");
+                     end if;
+                  end;
+               end loop;
+               Landin.Testing.Check_Equal
+                 (Item, Fills, Expected_Fills,
+                  Label & " retains compact array fills");
+               Landin.Testing.Check
+                 (Item, IR.Verifier.Check (Unit, Facts).Kind
+                    = IR.Verifier.Nothing_Wrong,
+                  Label & " verifies with target facts");
+            end;
+         end Check_Target;
+      begin
+         Check_Target (Landin.Targets.Linux_X86_64);
+         Check_Target (Landin.Targets.Synthetic_32);
+      end Check_Source;
+   begin
+      Check_Source
+        ("named singleton fill",
+         "f: () -> none = narrow: north = north "
+         & "local: [2]problems = [2 of narrow] end f", 1, 1);
+      Check_Source
+        ("parameter singleton fill",
+         "f: (value: north) -> none = "
+         & "local: [2]problems = [2 of value] end f", 1, 1);
+      Check_Source
+        ("complete-set fill",
+         "f: (value: problems) -> none = "
+         & "local: [2]problems = [2 of value] end f", 1, 2);
+      Check_Source
+        ("struct field fill",
+         "box: type = struct values: [2]problems end box "
+         & "f: (value: north) -> none = "
+         & "local: box = (values: [2 of value]) end f", 1, 1);
+      Check_Source
+        ("named singleton store",
+         "f: (index: usize) -> none = mut local: [2]problems = "
+         & "[north, south] narrow: north = north local[index] = narrow "
+         & "end f", 0, 0);
+      Check_Source
+        ("parameter singleton store",
+         "f: (index: usize, value: north) -> none = "
+         & "mut local: [2]problems = [north, south] local[index] = value "
+         & "end f", 0, 0);
+   end Atom_Array_Fills_Keep_Narrow_Values;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "lowering", "atom array fills keep narrow values",
+         Atom_Array_Fills_Keep_Narrow_Values'Access);
       Landin.Testing.Register
         (Into, "lowering", "control ranges keep one store check",
          Control_Ranges_Keep_One_Store_Check'Access);
