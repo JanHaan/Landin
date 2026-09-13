@@ -11643,8 +11643,134 @@ package body Landin.Tests.Lowering_Suite is
          1, 2);
    end Erased_Tables_Validate_Their_Closure;
 
+   procedure Control_Ranges_Keep_One_Store_Check
+     (Item : in out Landin.Testing.Context);
+
+   procedure Control_Ranges_Keep_One_Store_Check
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Source
+        (Label, Text : String; Expected_Checks : Natural);
+
+      procedure Check_Source
+        (Label, Text : String; Expected_Checks : Natural)
+      is
+         procedure Check_Target (Facts : Landin.Targets.Target_Facts);
+
+         procedure Check_Target (Facts : Landin.Targets.Target_Facts) is
+            Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+            Ran : Natural;
+            Checks : Natural := 0;
+         begin
+            Lower (Work, Text, Ran);
+            Landin.Testing.Check
+              (Item, Ran = 5 and then not Landin.Stages.Failed (Work),
+               Label & " preserves the existing known-value boundary");
+            if Landin.Stages.Failed (Work) then
+               return;
+            end if;
+            declare
+               Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+               Routine : constant IR.Item_Id := Named_Item (Work, "f");
+            begin
+               for Position in 1 .. IR.Value_Count (Unit, Routine) loop
+                  if IR.Op_Of (Unit, Routine, IR.Value_Id (Position))
+                    = IR.Range_Check
+                  then
+                     Checks := Checks + 1;
+                  end if;
+               end loop;
+               Landin.Testing.Check_Equal
+                 (Item, Checks, Expected_Checks,
+                  Label & " keeps the store's single owed range check");
+               Landin.Testing.Check
+                 (Item, IR.Verifier.Check (Unit, Facts).Kind
+                    = IR.Verifier.Nothing_Wrong,
+                  Label & " retains verified control and constraint edges");
+            end;
+         end Check_Target;
+      begin
+         Check_Target (Landin.Targets.Linux_X86_64);
+         Check_Target (Landin.Targets.Synthetic_32);
+      end Check_Source;
+   begin
+      Check_Source
+        ("dynamic bare",
+         "level: type = u8 range 5 .. 10 f: (flag: bool, input: u8) -> "
+         & "(r: u8) = value: level = begin input end r = value end f",
+         1);
+      Check_Source
+        ("dynamic branches",
+         "level: type = u8 range 5 .. 10 f: (flag: bool, input: u8) -> "
+         & "(r: u8) = value: level = if flag then input else 7 end if r "
+         & "= value end f",
+         1);
+      Check_Source
+        ("dynamic break",
+         "level: type = u8 range 5 .. 10 f: (flag: bool, input: u8) -> "
+         & "(r: u8) = value: level = loop do break with input end loop r "
+         & "= value end f",
+         1);
+      Check_Source
+        ("nested break belongs elsewhere",
+         "level: type = u8 range 5 .. 10 f: (flag: bool, input: u8) -> "
+         & "(r: u8) = value: level = loop do local: u8 = loop do break "
+         & "with 3 end loop break with input end loop r = value end f",
+         1);
+      Check_Source
+        ("anonymous break belongs elsewhere",
+         "level: type = u8 range 5 .. 10 f: (flag: bool, input: u8) -> "
+         & "(r: u8) = value: level = loop do callback := () -> (r: u8) = "
+         & "loop do break with 3 end loop end break with input end loop "
+         & "r = value end f",
+         1);
+      Check_Source
+        ("arithmetic remains dynamic",
+         "level: type = u8 range 5 .. 10 f: (flag: bool, input: u8) -> "
+         & "(r: u8) = value: level = begin 3 + 0 end r = value end f",
+         1);
+      Check_Source
+        ("known direct proof",
+         "level: type = u8 range 5 .. 10 f: (flag: bool, input: u8) -> "
+         & "(r: u8) = value: level = 7 r = value end f",
+         0);
+      Check_Source
+        ("early return has no arriving value",
+         "level: type = u8 range 5 .. 10 f: () -> (r: u8) = r = 1 "
+         & "value: level = begin return end end f",
+         0);
+      Check_Source
+        ("dynamic complete",
+         "level: type = u8 range 5 .. 10 f: (flag: bool, input: u8) -> "
+         & "(r: u8) = value: level = while flag do break with input "
+         & "complete break with 7 end while r = value end f",
+         1);
+      Check_Source
+        ("implicit dynamic result",
+         "level: type = u8 range 5 .. 10 f: (input: u8) -> (r: level) "
+         & "= input end f",
+         1);
+      Check_Source
+        ("implicit dynamic branch",
+         "level: type = u8 range 5 .. 10 f: (flag: bool, input: u8) -> "
+         & "(r: level) = if flag then input else 7 end if end f",
+         1);
+      Check_Source
+        ("implicit known proof",
+         "level: type = u8 range 5 .. 10 f: () -> (r: level) = 7 end f",
+         0);
+      Check_Source
+        ("final none call is a statement",
+         "level: type = u8 range 5 .. 10 done: () -> none = end done "
+         & "f: () -> (r: level) = r = 7 done() end f",
+         0);
+   end Control_Ranges_Keep_One_Store_Check;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "lowering", "control ranges keep one store check",
+         Control_Ranges_Keep_One_Store_Check'Access);
       Landin.Testing.Register
         (Into, "lowering", "erased tables validate their closure",
          Erased_Tables_Validate_Their_Closure'Access);

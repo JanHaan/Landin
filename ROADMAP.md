@@ -5853,7 +5853,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J53 | Restoration after sinking through a slice view of an inout array | P | Plausible scope question only: the verifier refuted the general aliasing rationale. Determine whether a view rooted in an inout array carries its restoration obligation; preserve the documented aliasing non-guarantee. |
 | J54 | `sizeof`/`alignof` of an atom, atom-union or function type raises Landin.Compiler_Defect (exit 70) | C | Repaired: checking admits atom and function measurements; lowering uses their U32 and target-word carriers. Static image folding also covers these carriers and pointer/slice/any measurements, with two words only for slice/any size. Existing target-independent array-bound and C-ABI restrictions remain in force. |
 | J55 | Check_Aggregate_Payload tests the distinct-conversion escape on the wrong node (`Value` instead of `Given`), falsely refusing a module variant payload | C | Repaired with K6: query the payload expression's distinct conversion, retaining matching, mismatched-nominal and ordinary-field controls. |
-| J56 | A range subtype's bounds are never applied to a value that arrives through a control expression, so a statically-known out-of-range value compiles into an unconditional `ud2` | C | Open known-bound check: compare contextual/control and direct values against the existing static-range rule; preserve dynamic runtime checks. J116 remains plausible until narrowly established. |
+| J56 | A range subtype's bounds are never applied to a value that arrives through a control expression, so a statically-known out-of-range value compiles into an unconditional `ud2` | C | Implemented: check literal control results and matching loop transfers without broadening the known-value rule; preserve one owed store check. Scalar implicit routine results now meet their declared range too. Selected controls pass in both modes; J116 remains a separate normative question and exact acceptance remains open. |
 | J57 | Module image `bool` elements are never range-checked, so a non-0/1 bool image reaches lowering and aborts the compiler (exit 70) | C | Repaired: one scalar/recursive image-field walk includes bool bounds for array elements, ordinary fields, variant payload constructors and value fills. Invalid known bool carriers report L0300 before lowering; false/true boundaries and callback relocations remain valid. A shared fill is checked once even when several fields consume it. |
 | J58 | `Check_Struct_Image`'s ordinary aggregate-field branch drops the distinct-conversion alternative its three sibling branches have, so a distinct-typed struct field image is never folded (exit 70) | C | Repaired with J57: ordinary and variant aggregate fields use the same distinct-conversion recursion as array elements and distinct representations. Nested distinct overflow, including value fills, reports L0300; valid nominal images retain their identity and pass both modes. |
 | J59 | A scalar or text conversion written with any argument count other than 1 crashes the compiler (exit 70, no diagnostic) | C | Repaired: scalar/text conversion identities are classified independently of arity, and a malformed conversion reports L0301 before indexing operands or lowering. Aliases and range subtypes keep the same rule; resolved user functions retain their own arities. Refused origin facts no longer manufacture a secondary from-clause mismatch. |
@@ -6517,7 +6517,25 @@ linker or generated Landin executable ran. Logs are retained in
 `.scratch/r491-erased-closure/` and `.scratch/r491-final-values/`.
 Exact-revision acceptance remains open.
 
-Control-value range constraints J56 are next; J116's slice-endpoint claim
+J56 development evidence: four selected cases pass 1,224 checks in each of
+macOS debug and Linux release. A tiny bare-block literal reproduction was
+accepted before the repair. A further scalar implicit-result reproduction
+exposed a missing return constraint; declared and anonymous routine bodies
+now apply the same constraint as explicit named-result assignment. Sixteen
+refused sources extend driver refusal/output checks to 1,136, covering block,
+branch, match, loop/complete, recovery, conversion, assignment, argument and
+result boundaries. Thirteen accepted sources verify both target widths and
+pin one range check per dynamic store, zero for direct known proofs and
+non-arriving values, and isolation of nested-loop/anonymous transfers.
+Arithmetic stays outside the literal-only rule. The first refusal run caught
+an incorrect recovery-body accessor and an invalid atom-set test spelling;
+both were corrected. Existing direct-literal and zeroed-exclusion negative
+fixtures pass. Builds use one worker and selected tests have 30-second or
+shorter timeouts. No assembler, linker or generated Landin executable ran.
+Logs are retained in `.scratch/r491-control-ranges/` and
+`.scratch/r491-final-values/`. Exact-revision acceptance remains open.
+
+Negative fixture contracts J79/N9 are next. J116's slice-endpoint claim
 still needs a separate normative disposition. J48 also requires an explicit
 static-selection collision rule: D146's existing uniqueness sentence is
 about erased dispatch, while D144 currently specifies table traversal order.
