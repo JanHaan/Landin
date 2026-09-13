@@ -11317,8 +11317,87 @@ package body Landin.Tests.Lowering_Suite is
          & "box(u8)", 1);
    end Struct_Labels_Have_Local_Namespaces;
 
+   procedure Labelled_Callees_Keep_Their_Expression
+     (Item : in out Landin.Testing.Context);
+
+   procedure Labelled_Callees_Keep_Their_Expression
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Source (Label, Text : String);
+
+      procedure Check_Source (Label, Text : String) is
+         procedure Check_Target (Facts : Landin.Targets.Target_Facts);
+
+         procedure Check_Target (Facts : Landin.Targets.Target_Facts) is
+            Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+            Ran : Natural;
+         begin
+            Lower (Work, Text, Ran);
+            Landin.Testing.Check
+              (Item, Ran = 5 and then not Landin.Stages.Failed (Work),
+               Label & " resolves the complete function-valued callee");
+            if Landin.Stages.Failed (Work) then
+               return;
+            end if;
+            declare
+               Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+               Routine : constant IR.Item_Id := Named_Item (Work, "f");
+               Calls : Natural := 0;
+            begin
+               for V in 1 .. IR.Value_Count (Unit, Routine) loop
+                  if IR.Op_Of (Unit, Routine, IR.Value_Id (V))
+                    = IR.Indirect_Call
+                  then
+                     Calls := Calls + 1;
+                  end if;
+               end loop;
+               Landin.Testing.Check_Equal
+                 (Item, Calls, 1,
+                  Label & " retains one indirect call through the value");
+               Landin.Testing.Check
+                 (Item, IR.Verifier.Check (Unit, Facts).Kind
+                    = IR.Verifier.Nothing_Wrong,
+                  Label & " preserves the stored callable's signature");
+            end;
+         end Check_Target;
+      begin
+         Check_Target (Landin.Targets.Linux_X86_64);
+         Check_Target (Landin.Targets.Synthetic_32);
+      end Check_Source;
+   begin
+      Check_Source
+        ("indexed labelled",
+         "operation: type = (value: i32) -> (r: i32)" & LF
+         & "next: (value: i32) -> (r: i32) = value + 1 end next" & LF
+         & "f: () -> (r: i32) = callbacks: [1]operation = [next] "
+         & "callbacks[0](value: 1) end f" & LF);
+      Check_Source
+        ("slice indexed labelled",
+         "operation: type = (value: i32) -> (r: i32)" & LF
+         & "next: (value: i32) -> (r: i32) = value + 1 end next" & LF
+         & "f: () -> (r: i32) = callbacks: [1]operation = [next] "
+         & "view: []operation = callbacks[0 ..< 1] view[0](value: 1) "
+         & "end f" & LF);
+      Check_Source
+        ("selected labelled",
+         "operation: type = (value: i32) -> (r: i32)" & LF
+         & "next: (value: i32) -> (r: i32) = value + 1 end next" & LF
+         & "holder: type = struct callback: operation end holder" & LF
+         & "f: () -> (r: i32) = local: holder = holder(callback: "
+         & "next) local.callback(value: 1) end f" & LF);
+      Check_Source
+        ("indexed positional",
+         "operation: type = (value: i32) -> (r: i32)" & LF
+         & "next: (value: i32) -> (r: i32) = value + 1 end next" & LF
+         & "f: () -> (r: i32) = callbacks: [1]operation = [next] "
+         & "callbacks[0](1) end f" & LF);
+   end Labelled_Callees_Keep_Their_Expression;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "lowering", "labelled callees keep their expression",
+         Labelled_Callees_Keep_Their_Expression'Access);
       Landin.Testing.Register
         (Into, "lowering", "struct labels have local namespaces",
          Struct_Labels_Have_Local_Namespaces'Access);

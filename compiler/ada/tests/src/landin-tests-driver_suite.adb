@@ -1964,6 +1964,35 @@ package body Landin.Tests.Driver_Suite is
    begin
       for Executable in Boolean loop
          Check
+           ("f: () -> (r: i32) = nums: [2]i32 = [1, 2] nums[0](x: 1) "
+            & "end f" & ASCII.LF,
+            "L0301", 1, Executable);
+         Check
+           ("f: () -> (r: i32) = nums: [2]i32 = [1, 2] nums[0 ..< "
+            & "1](x: 1) end f" & ASCII.LF,
+            "L0301", 1, Executable);
+         Check
+           ("f: () -> (r: i32) = nosuch(x: alsomissing) end f" & ASCII.LF,
+            "L0201", 2, Executable);
+         Check
+           ("point: type = struct x: i32 end point f: () -> none = "
+            & "value: point = nosuch(x: alsomissing) end f" & ASCII.LF,
+            "L0201", 2, Executable);
+         Check
+           ("f: () -> (r: i32) = nosuch(x: absent(value: missing)) end "
+            & "f" & ASCII.LF,
+            "L0201", 3, Executable);
+         Check
+           ("f: () -> (r: i32) = nosuch(x: ptr u8) end f" & ASCII.LF,
+            "L0201", 1, Executable);
+         Check
+           ("f: () -> (r: u8) = u8(value: 1) end f" & ASCII.LF,
+            "L0304", 1, Executable);
+         Check
+           ("f: () -> (r: i32) = nums: [2]i32 = [1, 2] nums[0](x: "
+            & "missing) end f" & ASCII.LF,
+            "L0201", 1, Executable);
+         Check
            ("s: type = struct a: u8 a: u32 end s" & ASCII.LF,
             "L0309", 1, Executable);
          Check

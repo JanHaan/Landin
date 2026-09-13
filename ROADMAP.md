@@ -5839,8 +5839,8 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J39 | Parser recovery skips the very anchor token it needs, producing a false "function is never closed" and corrupting all following declarations | C | Repaired: list recovery preserves an already-current anchor and advances only when it must find one. Its callers consume their opener or exit the list before handing the boundary back. Paired valid/broken syntax tests preserve following functions, mutability, calls, fields and array elements; existing same-token diagnostic suppression still reports nested missing closers once. |
 | J40 | A labelled bare block `scope: begin ... end scope` is parsed as a binding, and its `end` closes the enclosing function | C | Open refusal/document agreement: read [1830] and the enabled grammar first. Labelled bare blocks are absent from that grammar; do not enable them solely from the tour example. |
 | J41 | `break`/`continue` inside an anonymous function body is accepted by the parser when the enclosing function has a loop, then crashes the checker (exit 70) | C | Repaired: an anonymous function establishes a loop-stack floor, so neither unnamed nor labelled transfers can target its enclosing routine. The outer label stack survives nested anonymous functions. Its body also clears the outer contextual complete marker and restores it on return. Invalid transfers retain L0110 before checking; local loops and outer completion remain valid. |
-| J42 | Labelled application with an indexed or sliced callee raises an internal compiler defect (exit 70) in resolution | C | Open resolution group: preserve callee/type scope distinctions and report invalid source before consuming unresolved identities. Pin argument/binder order with small controls. |
-| J43 | An unclassified labelled application leaves callee and arguments unresolved; the typo is reported as a struct-construction context error | C | Open resolution group: preserve callee/type scope distinctions and report invalid source before consuming unresolved identities. Pin argument/binder order with small controls. |
+| J42 | Labelled application with an indexed or sliced callee raises an internal compiler defect (exit 70) in resolution | C | Repaired: only a Name_Reference supplies a lexical callee name. Indexed, sliced and selected callees resolve their complete expression before arguments. Stored callbacks reach verified indirect calls; indexed/sliced non-functions retain L0301 instead of an accessor failure. |
+| J43 | An unclassified labelled application leaves callee and arguments unresolved; the typo is reported as a struct-construction context error | C | Repaired: absent direct callee names and available runtime argument projections use ordinary resolution, even when the application cannot be classified. Missing names report L0201; type-only arguments await known formals. A shared conversion-name predicate preserves builtin checker ownership and declared-name shadowing. |
 | J44 | Runtime parameters and named returns resolve their types before later binders are collected, so parameter order changes acceptance | C | Open resolution group: preserve callee/type scope distinctions and report invalid source before consuming unresolved identities. Pin argument/binder order with small controls. |
 | J45 | Any pre-flight CLI diagnostic silently disables the entire frontend (syntax/name/type checking) for the given sources | C | Disposition question, not accepted as a compiler correctness defect: invalid CLI input already returns nonzero. Compare the driver contract before expanding diagnostics or running stages without valid configuration. |
 | J46 | Multi-result placement check overflows Byte_Count and crashes with exit 70 on a written function type | C | Repaired with J60: result placement uses the existing recursive shape measurement with a non-raising Fits result, which guards every target-sized product before multiplication. Final placement still checks field and tail padding. The oversized source witness was not executed; bounded result signatures and scalar placement-boundary checks provide development evidence. |
@@ -6448,7 +6448,21 @@ No assembler, linker or generated Landin executable ran. Logs are retained in
 `.scratch/r491-field-names/` and `.scratch/r491-final-values/`.
 Exact-revision acceptance remains open.
 
-Labelled callee resolution J42/J43 is next.
+J42/J43 development evidence: three selected cases pass 940 checks in each
+of macOS debug and Linux release. Four tiny accepted sources retain one
+verified indirect call through an indexed array, indexed slice, selected
+field and positional control on both target widths. Eight driver sources
+extend refusal/output checks to 848: indexed/sliced non-functions report
+L0301, missing callees and runtime arguments report L0201, and the existing
+builtin labelled-conversion refusal remains L0304. Typed construction
+contexts, nested missing names and type-only arguments retain those stage
+boundaries. All 68 existing builtin/alias/shadowed call checks pass. Builds
+use one worker and selected tests have 30-second or shorter timeouts. No
+assembler, linker or generated Landin executable ran. Logs are retained in
+`.scratch/r491-labeled-callees/` and `.scratch/r491-final-values/`.
+Exact-revision acceptance remains open.
+
+Signature binder visibility J44 is next.
 Keep J2's call-return contract question active. K12 needs a semantic
 disposition before implementation. The verifier, optimization, build-identity
 and ABI items above remain owned by the corresponding later repair groups.
