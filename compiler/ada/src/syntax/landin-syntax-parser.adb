@@ -1450,7 +1450,7 @@ package body Landin.Syntax.Parser is
             function Parse_Fixed_Conditional return Node_Id is
                At_Fixed : constant Landin.Source.Span := Here;
                Arms     : Slot_Vectors.Vector;
-               Is_Else  : Boolean := False;
+               At_Arm   : Landin.Source.Span;
             begin
                if Too_Deep (At_Fixed) then
                   Advance;
@@ -1462,45 +1462,37 @@ package body Landin.Syntax.Parser is
 
                Depth := Depth + 1;
                Advance;
-               if Peek /= Tok.Kw_If then
-                  declare
-                     Ignored : constant Boolean := Expect
-                       (Wanted  => Tok.Kw_If,
-                        Message => "`fixed` conditional is followed by `if`",
-                        Note    => "D139: fixed if expression then"
-                                   & " declaration* end if",
-                        Related => At_Fixed,
-                        Because => "this `fixed`");
-                  begin
-                     pragma Unreferenced (Ignored);
-                  end;
-               end if;
+               At_Arm := Here;
+               declare
+                  Kept : constant Boolean := Expect
+                    (Wanted  => Tok.Kw_If,
+                     Message => "`fixed` conditional is followed by `if`",
+                     Note    => "D139: fixed if expression then"
+                                & " declaration* end if",
+                     Related => At_Fixed,
+                     Because => "this `fixed`");
+               begin
+                  pragma Unreferenced (Kept);
+               end;
 
                loop
                   declare
-                     At_Arm : constant Landin.Source.Span :=
-                       (if Is_Else then Previous else Here);
-                     Condition : Node_Id := No_Node;
+                     --  A missing `if` leaves the condition in hand.
+                     Condition : constant Node_Id := Parse_Expression;
                      Items : Slot_Vectors.Vector;
                   begin
-                     if not Is_Else then
-                        --  The first arm arrives at `if`; later ones at
-                        --  `elsif`.  Both words are consumed here.
-                        Advance;
-                        Condition := Parse_Expression;
-                        declare
-                           Kept : constant Boolean := Expect
-                             (Wanted  => Tok.Kw_Then,
-                              Message => "a fixed conditional condition is"
-                                         & " followed by `then`",
-                              Note    => "D139: fixed if expression then"
-                                         & " declaration*",
-                              Related => At_Fixed,
-                              Because => "this fixed conditional arm");
-                        begin
-                           pragma Unreferenced (Kept);
-                        end;
-                     end if;
+                     declare
+                        Kept : constant Boolean := Expect
+                          (Wanted  => Tok.Kw_Then,
+                           Message => "a fixed conditional condition is"
+                                      & " followed by `then`",
+                           Note    => "D139: fixed if expression then"
+                                      & " declaration*",
+                           Related => At_Fixed,
+                           Because => "this fixed conditional arm");
+                     begin
+                        pragma Unreferenced (Kept);
+                     end;
 
                      while Peek not in Tok.Kw_Elsif | Tok.Kw_Else | Tok.Kw_End
                        and then Peek /= Tok.End_Of_Input
@@ -1538,15 +1530,13 @@ package body Landin.Syntax.Parser is
                            Children => [Condition] & To_List (Items)));
                   end;
 
-                  exit when Is_Else or else Peek /= Tok.Kw_Elsif;
-                  Is_Else := False;
-                  --  Leave `elsif` in hand for the arm's common reader.
-                  --  The next loop consumes it as it does the first `if`.
+                  exit when Peek /= Tok.Kw_Elsif;
+                  At_Arm := Here;
+                  Advance;
                end loop;
 
                if Peek = Tok.Kw_Else then
                   Advance;
-                  Is_Else := True;
                   declare
                      Items : Slot_Vectors.Vector;
                      At_Else : constant Landin.Source.Span := Previous;
@@ -6184,7 +6174,7 @@ package body Landin.Syntax.Parser is
                            if Kind (Result, Value)
                                 in If_Statement | Match_Statement
                                    | Bare_Block | Loop_Statement
-                                   | While_Statement
+                                   | While_Statement | For_Statement
                              and then not Control_Offers_Value (Value)
                            then
                               Body_Items.Append (Value);

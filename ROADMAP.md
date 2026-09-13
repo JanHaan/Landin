@@ -5899,12 +5899,12 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J99 | An upper-case letter gets the generic L0012 'no rule spells these bytes' citing [1750] | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
 | J100 | Repeated delimiter-free conformance/signature lookahead on malformed input | C | Open malformed-input lookahead cost, distinct from M1: 326e6a32 adds the := delimiter but does not bound delimiter-free identifier runs or unmatched-signature lookahead. No old scaling case was rerun. |
 | J101 | Expect's post-lexical-error forward scan crosses construct boundaries and mangles the parse | C | Duplicate N11: preserve construct/list boundaries after a scanner refusal without re-reporting that refused lexeme. |
-| J102 | Parse_Fixed_Conditional consumes the arm's condition when `if` is missing, producing a three-diagnostic cascade | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
-| J103 | Dead Is_Else guard in Parse_Fixed_Conditional's arm loop | C | Maintenance observation, not an accepted-source defect: confirm reachability/readers before removing redundant code; preserve behavior and update ownership documentation where affected. |
+| J102 | Parse_Fixed_Conditional consumes the arm's condition when `if` is missing, producing a three-diagnostic cascade | C | Implemented with J103: fixed-conditional openers are consumed once when present; a missing if leaves its condition in hand. The bounded source reproduction now reports only the original L0103. One-, two- and three-arm syntax controls preserve conditions and following declarations. Exact acceptance remains open. |
+| J103 | Dead Is_Else guard in Parse_Fixed_Conditional's arm loop | C | Removed with J102: the fixed-conditional loop handles only conditional arms and exits before the separately parsed else arm, so its never-true Is_Else guard and assignments are gone. Accepted and missing-opener controls cover the remaining branches. |
 | J104 | Nine contextual words cannot be assigned to as ordinary bindings, contradicting spec.md's identifier guarantee | C | Open parser boundary group: compare the normative grammar, preserve enclosing context and following declarations, and add small accepted/refused controls. |
 | J105 | Diagnostic and recovery for return followed by a name | C | Partly superseded by 7250d298: the final-value-prefix regression now reports one L0110. The targeted return-carries-value wording remains a diagnostic choice; the old cascade is not a current reproduction. |
 | J106 | Two `link(symbol:)` diagnostics cite [1580] (Importing from C) instead of [1610] | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
-| J107 | Match-arm control classification omits For_Statement, diverging from the three sibling lists | C | Open parser boundary group: compare the normative grammar, preserve enclosing context and following declarations, and add small accepted/refused controls. |
+| J107 | Match-arm control classification omits For_Statement, diverging from the three sibling lists | C | Implemented: a match arm classifies For_Statement alongside loop and while before assigning its value slot. Small syntax controls preserve loops with value-carrying breaks and place ordinary loops in the statement run. No accepted-source miscompilation is claimed; exact acceptance remains open. |
 | J108 | The same source passed twice under two spellings is read twice, so every declaration in it is reported as declared twice | C | Open module/source identity group: define canonical identity through the platform seam while preserving diagnostic spelling; test relative paths, trailing slashes and duplicate inputs with a fake filesystem. |
 | J109 | Only Compiler_Defect is caught around the pipeline, so an internal Constraint_Error/Program_Error discards the already-decided report | P | Open exception/report boundary audit under A4/M11: distinguish compiler invariant failures from host outcomes and retain already-decided diagnostics. J109/J112 are plausible; do not infer release behavior from disabled assertions. |
 | J110 | --root= with an empty value is left in the Roots list and could in principle drive a filesystem-root search | P | Plausible driver-input concern: investigate empty-root handling through fake filesystem effects only, never by traversing the real filesystem root. |
@@ -6684,7 +6684,21 @@ assembler, linker or generated executable ran. Logs are retained in
 `.scratch/r491-variant-slice-images/` and `.scratch/r491-final-values/`.
 Exact-revision acceptance remains open.
 
-J102/J103's fixed-conditional recovery is next. J116's slice-endpoint claim
+J102/J103/J107 development evidence: three selected parser cases pass 95
+checks in each of macOS debug and Linux release. Six fixed-conditional forms
+preserve arm conditions, declarations and the following module binding, with
+one L0103 only when the first if is absent. The tiny compile-only reproduction
+retains exit 1 while its former L0103/L0102/L0103 cascade becomes one L0103.
+Six match-arm forms classify loop, while and for consistently with and without
+value-carrying breaks. The first match test wrote break 7; correcting that test
+to the required break with 7 made its positive controls valid. Existing import
+and directive boundary controls pass. Both single-worker builds passed;
+selected tests have 30-second or shorter timeouts, and the compile-only
+reproduction has a ten-second limit. No Landin assembler, linker or generated
+executable ran. Logs are retained in `.scratch/r491-fixed-conditional/` and
+`.scratch/r491-final-values/`. Exact-revision acceptance remains open.
+
+J135's erased reference identity is next. J116's slice-endpoint claim
 still needs a separate normative disposition. J48 also requires an explicit
 static-selection collision rule: D146's existing uniqueness sentence is
 about erased dispatch, while D144 currently specifies table traversal order.
