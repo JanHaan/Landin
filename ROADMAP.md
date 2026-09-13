@@ -5804,10 +5804,10 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J4 | Lower_Slice loads a slice descriptor's two words through two independent lowerings of the same place, so a call in the access path runs twice and base/length can come from different objects | C | Open lowering repair: capture the reached slice descriptor once and load both words from that storage. Use a tiny side-effecting access-path control. |
 | J5 | A block struct whose closer does not name it swallows every declaration up to a later matching `end <name>`, with no diagnostic | C | Open parser boundary group: compare the normative grammar, preserve enclosing context and following declarations, and add small accepted/refused controls. |
 | J6 | Module identity is the raw directory string, so a non-canonical or relative entry-directory spelling loads the entry module twice and splits its module state | C | Open module/source identity group: define canonical identity through the platform seam while preserving diagnostic spelling; test relative paths, trailing slashes and duplicate inputs with a fake filesystem. |
-| J7 | An inline parameterized type application in a declared type makes the R2.20 "not enabled yet" refusal silent, so checking accepts and lowering exits 70 | C | Current debug reproduction exits 70 with no source diagnostic. Repair the checker refusal/report-once path and require rejection before lowering/output in both modes. |
+| J7 | An inline parameterized type application in a declared type makes the R2.20 "not enabled yet" refusal silent, so checking accepts and lowering exits 70 | C | Repaired: unsupported array/struct initializers report L0304 even when the written application already has a normalized type. Existing refusals report once; valid literal/construction initializers retain acceptance. Driver controls reject before output or host tools in both modes. |
 | J8 | A call to a user declaration whose name is a builtin scalar or text name is silently read as a [0700] conversion, so the declaration is never called | C | Open call-classification repair: distinguish a resolved user declaration from an intrinsic conversion. Preserve shadowing and conversion controls. |
 | J9 | Comparing two function values is accepted by the checker and then crashes the IR verifier (exit 70) | C | Current debug reproduction exits 70. D200 admits matching function signatures; repair lowering/verifier agreement and test equality and inequality without changing that rule. |
-| J10 | Range slicing a non-array, non-slice value is accepted with no diagnostic and crashes lowering (exit 70) | C | Current debug reproduction exits 70 with no source diagnostic. Repair the checker refusal/report-once path and require rejection before lowering/output in both modes. |
+| J10 | Range slicing a non-array, non-slice value is accepted with no diagnostic and crashes lowering (exit 70) | C | Repaired: a non-array/non-slice target reports L0301 before lowering. Scalar, pointer, aggregate and callback refusals preserve the existing cstring and bound-type diagnostics; fixed-array, slice and utf8 controls remain accepted. Driver controls reject before output or host tools in both modes. |
 | J11 | Runtime variant case construction accepts a non-storage aggregate payload that lowering can only copy from storage (exit 70) | C | Open accepted-value lowering group: reproduce this storage/result shape narrowly, then preserve checked shape and initialization across its lowering path in both modes. |
 | J12 | Actual_Key erases [0660] range-subtype constraints, so a parameterized type application silently turns `percent` into `u8` | C | Current debug reproduction accepts cell(percent), an out-of-range field store and assignment to cell(u8). Apply the existing D188/R7.20 named refusal to parameterized type actuals before interning; do not silently enable constrained composites. |
 | J13 | Rendered diagnostic report is quadratic and unbounded; past Integer'Last the run dies with exit 70 and loses every diagnostic | P | Duplicate M10 with an additional report-size overflow concern. Bound rendering and preserve diagnostics; retain plausible status for the exhaustion claim and do not rerun the old stress case. |
@@ -6135,8 +6135,17 @@ single text emission has a 15-second limit. Logs and text are retained in
 existing descriptor representation and is filtered development evidence;
 exact-revision acceptance remains outstanding.
 
-K1, K3, K4, K5, K6, K8, K11, K36 and J30 are repaired. Checker refusal
-boundaries J7/J10 are next, followed by J12 and the conformance group.
+J7/J10 development evidence: five selected cases pass 344 checks in each of
+macOS debug and Linux release. Thirty small checker sources cover invalid and valid initializers and
+range-slice targets; the driver case now checks 248 refusal/output invariants.
+Existing parameterized alias, nominal interning and construction controls pass.
+Single-worker builds and selected checks with timeouts of at most 30 seconds
+pass. No assembler, linker or generated Landin executable ran in this batch. Logs are retained in
+`.scratch/r491-refusal-boundaries/` and `.scratch/r491-final-values/`.
+Exact-revision acceptance remains outstanding.
+
+K1, K3, K4, K5, K6, K8, K11, K36, J7, J10 and J30 are repaired. J12
+and the conformance group are next.
 Keep J2's call-return contract question active. K12 needs a semantic
 disposition before implementation. The verifier, optimization, build-identity
 and ABI items above remain owned by the corresponding later repair groups.

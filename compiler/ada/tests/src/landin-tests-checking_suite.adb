@@ -10923,8 +10923,245 @@ package body Landin.Tests.Checking_Suite is
          Accepted => True);
    end Static_Fields_Check_Evaluated_Values;
 
+   procedure Refused_Values_Always_Report
+     (Item : in out Landin.Testing.Context);
+
+   procedure Refused_Values_Always_Report
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Source
+        (Label, Text : String; Accepted : Boolean;
+         Code : String := "L0304");
+
+      procedure Check_Source
+        (Label, Text : String; Accepted : Boolean;
+         Code : String := "L0304")
+      is
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Order : Landin.Stages.Pipeline;
+         Ran : Natural;
+         Src : Landin.Source.Source_Id;
+         pragma Unreferenced (Src);
+      begin
+         Src := Landin.Stages.Add_Source (Work, "refused-values.ldn", Text);
+         Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
+         Landin.Stages.Append (Order, Names'Access);
+         Landin.Stages.Append (Order, Checker'Access);
+         Ran := Landin.Stages.Run (Order, Work);
+         declare
+            Reports : constant Landin.Diagnostics.Diagnostic_List :=
+              Landin.Stages.Report (Work);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Ran, 4, Label & " reaches checking");
+            Landin.Testing.Check
+              (Item, Landin.Stages.Failed (Work) /= Accepted
+                 and then
+                   (if Accepted then Landin.Diagnostics.Count (Reports) = 0
+                    else Landin.Diagnostics.Count (Reports) = 1
+                      and then Landin.Diagnostics.Code
+                        (Landin.Diagnostics.Get (Reports, 1)) = Code),
+               Label & " retains its exact source verdict");
+         end;
+      end Check_Source;
+
+   begin
+      Check_Source
+        ("module struct refusal",
+         "box: type (t: type) = struct value: t end box" & LF
+         & "item: box(u8) = 5" & LF,
+         Accepted => False);
+      Check_Source
+        ("module struct initializer",
+         "box: type (t: type) = struct value: t end box" & LF
+         & "item: box(u8) = (value: 5)" & LF,
+         Accepted => True);
+      Check_Source
+        ("local struct refusal",
+         "box: type (t: type) = struct value: t end box" & LF
+         & "f: () -> none =" & LF
+         & "item: box(u8) = 5" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("local struct initializer",
+         "box: type (t: type) = struct value: t end box" & LF
+         & "f: () -> none =" & LF
+         & "item: box(u8) = (value: 5)" & LF
+         & "end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("module nested struct refusal",
+         "box: type (t: type) = struct value: t end box" & LF
+         & "outer: type (t: type) = struct child: box(t) end outer" & LF
+         & "item: outer(u8) = 5" & LF,
+         Accepted => False);
+      Check_Source
+        ("module nested struct initializer",
+         "box: type (t: type) = struct value: t end box" & LF
+         & "outer: type (t: type) = struct child: box(t) end outer" & LF
+         & "item: outer(u8) = (child: (value: 5))" & LF,
+         Accepted => True);
+      Check_Source
+        ("local nested struct refusal",
+         "box: type (t: type) = struct value: t end box" & LF
+         & "outer: type (t: type) = struct child: box(t) end outer" & LF
+         & "f: () -> none =" & LF
+         & "item: outer(u8) = 5" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("local nested struct initializer",
+         "box: type (t: type) = struct value: t end box" & LF
+         & "outer: type (t: type) = struct child: box(t) end outer" & LF
+         & "f: () -> none =" & LF
+         & "item: outer(u8) = (child: (value: 5))" & LF
+         & "end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("module variant struct refusal",
+         "choice: type (t: type) = struct tag: variant empty "
+         & "| value: (held: t) end tag end choice" & LF
+         & "item: choice(u8) = 5" & LF,
+         Accepted => False);
+      Check_Source
+        ("module variant struct initializer",
+         "choice: type (t: type) = struct tag: variant empty "
+         & "| value: (held: t) end tag end choice" & LF
+         & "item: choice(u8) = (tag: value(held: 5))" & LF,
+         Accepted => True);
+      Check_Source
+        ("local variant struct refusal",
+         "choice: type (t: type) = struct tag: variant empty "
+         & "| value: (held: t) end tag end choice" & LF
+         & "f: () -> none =" & LF
+         & "item: choice(u8) = 5" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("local variant struct initializer",
+         "choice: type (t: type) = struct tag: variant empty "
+         & "| value: (held: t) end tag end choice" & LF
+         & "f: () -> none =" & LF
+         & "item: choice(u8) = (tag: value(held: 5))" & LF
+         & "end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("module array refusal",
+         "row: type (t: type, fixed n: usize) = [n]t" & LF
+         & "item: row(u8, 2) = 5" & LF,
+         Accepted => False);
+      Check_Source
+        ("module array initializer",
+         "row: type (t: type, fixed n: usize) = [n]t" & LF
+         & "item: row(u8, 2) = [5, 6]" & LF,
+         Accepted => True);
+      Check_Source
+        ("local array refusal",
+         "row: type (t: type, fixed n: usize) = [n]t" & LF
+         & "f: () -> none =" & LF
+         & "item: row(u8, 2) = 5" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("local array initializer",
+         "row: type (t: type, fixed n: usize) = [n]t" & LF
+         & "f: () -> none =" & LF
+         & "item: row(u8, 2) = [5, 6]" & LF
+         & "end f" & LF,
+         Accepted => True);
+      Check_Source
+        ("named struct alias refusal",
+         "box: type (t: type) = struct value: t end box" & LF
+         & "alias: type = box(u8)" & LF
+         & "item: alias = 5" & LF,
+         Accepted => False);
+      Check_Source
+        ("named array alias refusal",
+         "row: type (t: type, fixed n: usize) = [n]t" & LF
+         & "alias: type = row(u8, 2)" & LF
+         & "item: alias = 5" & LF,
+         Accepted => False);
+      Check_Source
+        ("inline array refusal",
+         "item: [2]u8 = 5" & LF,
+         Accepted => False);
+      Check_Source
+        ("integer slice",
+         "f: (value: u32) -> none =" & LF
+         & "_ = value[0..2]" & LF
+         & "end f" & LF,
+         Accepted => False, Code => "L0301");
+      Check_Source
+        ("boolean slice",
+         "f: (value: bool) -> none =" & LF
+         & "_ = value[0..<2]" & LF
+         & "end f" & LF,
+         Accepted => False, Code => "L0301");
+      Check_Source
+        ("ordinary pointer slice",
+         "f: (value: ptr u32) -> none =" & LF
+         & "_ = value[0..2]" & LF
+         & "end f" & LF,
+         Accepted => False, Code => "L0301");
+      Check_Source
+        ("half-open pointer slice",
+         "f: (value: ptr u32) -> none =" & LF
+         & "_ = value[0..<2]" & LF
+         & "end f" & LF,
+         Accepted => False, Code => "L0301");
+      Check_Source
+        ("cstring slice",
+         "f: (value: cstring) -> none =" & LF
+         & "_ = value[0..<2]" & LF
+         & "end f" & LF,
+         Accepted => False, Code => "L0301");
+      Check_Source
+        ("aggregate slice",
+         "box: type = struct value: i32 end box" & LF
+         & "f: (value: box) -> none =" & LF
+         & "_ = value[0..2]" & LF
+         & "end f" & LF,
+         Accepted => False, Code => "L0301");
+      Check_Source
+        ("callback slice",
+         "f: (value: () -> none) -> none =" & LF
+         & "_ = value[0..<2]" & LF
+         & "end f" & LF,
+         Accepted => False, Code => "L0301");
+      Check_Source
+        ("array slice",
+         "f: (value: [3]u8) -> none =" & LF
+         & "_ = value[0..2]" & LF
+         & "end f" & LF,
+         Accepted => True, Code => "L0301");
+      Check_Source
+        ("slice view",
+         "f: (value: []u8) -> none =" & LF
+         & "_ = value[0..<2]" & LF
+         & "end f" & LF,
+         Accepted => True, Code => "L0301");
+      Check_Source
+        ("text slice",
+         "f: (value: utf8) -> none =" & LF
+         & "_ = value[0..<2]" & LF
+         & "end f" & LF,
+         Accepted => True, Code => "L0301");
+      Check_Source
+        ("slice bound type refusal",
+         "f: (value: [3]u8) -> none =" & LF
+         & "_ = value[false ..< 2]" & LF
+         & "end f" & LF,
+         Accepted => False, Code => "L0301");
+   end Refused_Values_Always_Report;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "checking", "refused values always report",
+         Refused_Values_Always_Report'Access);
       Landin.Testing.Register
         (Into, "checking", "static fields check evaluated values",
          Static_Fields_Check_Evaluated_Values'Access);

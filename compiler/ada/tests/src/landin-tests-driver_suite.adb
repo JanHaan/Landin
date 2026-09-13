@@ -1964,6 +1964,20 @@ package body Landin.Tests.Driver_Suite is
    begin
       for Executable in Boolean loop
          Check
+           ("box: type (t: type) = struct value: t end box "
+            & "item: box(u8) = 5",
+            "L0304", 1, Executable);
+         Check
+           ("row: type (t: type, fixed n: usize) = [n]t "
+            & "f: () -> none = item: row(u8, 2) = 5 end f",
+            "L0304", 1, Executable);
+         Check
+           ("f: (value: u32) -> none = _ = value[0 .. 2] end f",
+            "L0301", 1, Executable);
+         Check
+           ("f: (value: ptr u32) -> none = _ = value[0 ..< 2] end f",
+            "L0301", 1, Executable);
+         Check
            ("make: () -> (r: utf8) = r = ""ok"" end make "
             & "holder: type = struct value: utf8 end holder "
             & "image: holder = (value: make())",
