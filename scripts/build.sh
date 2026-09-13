@@ -29,19 +29,43 @@ Manifest="$LANDIN_BUILD_DIR/source-manifest.txt"
 #  scripts that decide all of this.  A pin file names what should be on
 #  PATH; the tools themselves say what is.
 landin_manifest() {
-    find "$LANDIN_ADA_DIR/src" "$LANDIN_ADA_DIR/tests/src" \
+    Source_Rows="$(find "$LANDIN_ADA_DIR/src" "$LANDIN_ADA_DIR/tests/src" \
          -type f \( -name '*.ad[bs]' -o -name '*.c' -o -name '*.h' \) \
-         -exec cksum {} + | sort
-    cksum "$LANDIN_ADA_DIR"/*.gpr | sort
-    cksum "$LANDIN_ROOT/scripts/build.sh" "$LANDIN_ROOT/scripts/env.sh" \
-        "$LANDIN_ROOT/scripts/build_lock.py" \
-        | sort
+         -exec cksum {} +)" || return
+    printf '%s\n' "$Source_Rows" | sort || return
+    Project_Rows="$(cksum "$LANDIN_ADA_DIR"/*.gpr)" || return
+    printf '%s\n' "$Project_Rows" | sort || return
+    Script_Rows="$(cksum "$LANDIN_ROOT/scripts/build.sh" \
+        "$LANDIN_ROOT/scripts/env.sh" \
+        "$LANDIN_ROOT/scripts/build_lock.py")" || return
+    printf '%s\n' "$Script_Rows" | sort || return
+    Gnat_Banner="$(gnat --version 2>/dev/null)" || return
+    Gnat_First="$(printf '%s\n' "$Gnat_Banner" | sed -n '1p')" || return
+    Gpr_Banner="$(gprbuild --version 2>/dev/null)" || return
+    Gpr_First="$(printf '%s\n' "$Gpr_Banner" | sed -n '1p')" || return
     printf 'mode %s tag %s\n' "$LANDIN_BUILD_MODE" "$LANDIN_BUILD_TAG"
-    printf 'gnat %s\n' "$(gnat --version 2>/dev/null | sed -n '1p')"
-    printf 'gprbuild %s\n' "$(gprbuild --version 2>/dev/null | sed -n '1p')"
+    printf 'gnat %s\n' "$Gnat_First"
+    printf 'gprbuild %s\n' "$Gpr_First"
 }
 
-Current="$(landin_manifest)"
+#  Capture each fallible producer before a downstream command can hide its
+#  status.  These functions also fail when used in a guarded substitution,
+#  where POSIX shells need not apply errexit to commands inside the function.
+landin_paths() {
+    Paths="$(awk '$NF ~ /[.](ad[bs]|c|h|gpr|sh|py)$/ {print $NF}' <<EOF
+$1
+EOF
+)" || return
+    printf '%s\n' "$Paths" | sort
+}
+
+landin_fixed() {
+    grep -E '^(mode |gnat |gprbuild )|[.](gpr|sh|py)$' <<EOF
+$1
+EOF
+}
+
+Current="$(landin_manifest)" || exit
 Incremental="${LANDIN_BUILD_INCREMENTAL:-no}"
 
 case "$Incremental" in
@@ -57,18 +81,20 @@ if [ -d "$LANDIN_BUILD_DIR" ] && [ ! -f "$Manifest" ]; then
     rm -rf "$LANDIN_BUILD_DIR"
 fi
 
-if [ -f "$Manifest" ] && [ "$Current" != "$(cat "$Manifest")" ]; then
+Previous=''
+if [ -f "$Manifest" ]; then
+    Previous="$(cat "$Manifest")" || exit
+fi
+
+if [ -f "$Manifest" ] && [ "$Current" != "$Previous" ]; then
     if [ "$Incremental" = "yes" ]; then
         #  The manifest is sorted by its whole checksum row, so changing a
         #  file can move its path.  Inventory equality is set equality:
         #  extract the paths and sort those independently.
-        Old_Paths="$(awk '$NF ~ /[.](ad[bs]|c|h|gpr|sh|py)$/ {print $NF}' "$Manifest" \
-            | sort)"
-        New_Paths="$(printf '%s\n' "$Current" \
-            | awk '$NF ~ /[.](ad[bs]|c|h|gpr|sh|py)$/ {print $NF}' | sort)"
-        Old_Fixed="$(grep -E '^(mode |gnat |gprbuild )|[.](gpr|sh|py)$' "$Manifest")"
-        New_Fixed="$(printf '%s\n' "$Current" \
-            | grep -E '^(mode |gnat |gprbuild )|[.](gpr|sh|py)$')"
+        Old_Paths="$(landin_paths "$Previous")" || exit
+        New_Paths="$(landin_paths "$Current")" || exit
+        Old_Fixed="$(landin_fixed "$Previous")" || exit
+        New_Fixed="$(landin_fixed "$Current")" || exit
 
         if [ "$Old_Paths" != "$New_Paths" ] \
            || [ "$Old_Fixed" != "$New_Fixed" ]
@@ -98,7 +124,7 @@ esac
 if [ "$Incremental" = "yes" ] \
    && [ "$Noop_Arguments" = "yes" ] \
    && [ -f "$Manifest" ] \
-   && [ "$Current" = "$(cat "$Manifest")" ] \
+   && [ "$Current" = "$Previous" ] \
    && [ -x "$LANDIN_BUILD_DIR/bin/refine" ] \
    && [ -x "$LANDIN_BUILD_DIR/bin/landin_tests" ]
 then
