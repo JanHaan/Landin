@@ -16182,6 +16182,7 @@ package body Landin.Stages.Checking is
                Where   => Syn.Where (Of_Tree, Where),
                Message => "this index is outside the "
                           & Written (Ty.Folded (Length))
+                          & (if Length = 1 then " element" else " elements")
                           & " this array has",
                Note    => "[1950]: an index the compiler knows is refused"
                           & " where it cannot be taken, and one it does"

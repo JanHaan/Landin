@@ -4486,12 +4486,12 @@ package body Landin.Syntax.Parser is
                         Complain
                           (Syn.Token_Expected, Here,
                            "`link` requires the label `symbol`",
-                           Note => "[1610]: link(symbol: string)",
+                           Note => "[1610]: link(symbol: text)",
                            Related => Opened, Because => "this annotation");
                      end if;
                      if Expect
                        (Tok.Colon, "`symbol` is followed by `:`",
-                        "[1580]: link(symbol: string)", Opened,
+                        "[1610]: link(symbol: text)", Opened,
                         "this annotation")
                      then
                         if Peek = Tok.Text_Literal then
@@ -4501,14 +4501,14 @@ package body Landin.Syntax.Parser is
                            Complain
                              (Syn.Token_Expected, Here,
                               "a link symbol is a string literal",
-                              Note => "[1610]: link(symbol: string)",
+                              Note => "[1610]: link(symbol: text)",
                               Related => Opened,
                               Because => "this annotation");
                         end if;
                      end if;
                      if not Expect
                        (Tok.Right_Paren, "a link annotation closes with `)`",
-                        "[1580]: link(symbol: string)", Opened,
+                        "[1610]: link(symbol: text)", Opened,
                         "this annotation")
                      then
                         Recover_Annotation_Closer;
