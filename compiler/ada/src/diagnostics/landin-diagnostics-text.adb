@@ -12,6 +12,52 @@ package body Landin.Diagnostics.Text is
 
    LF : constant Character := Character'Val (10);
 
+   Truncated : constant String := LF
+     & "  = note: diagnostic text truncated at the output limit"
+     & LF;
+
+   type Text_Buffer (Limit : Report_Byte_Limit) is record
+      Content : Unbounded.Unbounded_String;
+      Full    : Boolean := False;
+   end record;
+
+   procedure Append (Into : in out Text_Buffer; Text : String);
+   function Finish (Buffer : Text_Buffer) return String;
+
+   procedure Append (Into : in out Text_Buffer; Text : String) is
+      Room : constant Natural := Into.Limit - Unbounded.Length (Into.Content);
+   begin
+      if Into.Full then
+         return;
+      elsif Text'Length <= Room then
+         Unbounded.Append (Into.Content, Text);
+      else
+         if Room > 0 then
+            Unbounded.Append
+              (Into.Content, Text (Text'First .. Text'First + Room - 1));
+         end if;
+         Into.Full := True;
+      end if;
+   end Append;
+
+   function Finish (Buffer : Text_Buffer) return String is
+   begin
+      if Buffer.Full then
+         declare
+            Keep : Natural := Buffer.Limit - Truncated'Length;
+         begin
+            for Step in 1 .. 3 loop
+               exit when Keep = 0 or else Character'Pos
+                 (Unbounded.Element (Buffer.Content, Keep + 1))
+                   not in 128 .. 191;
+               Keep := Keep - 1;
+            end loop;
+            return Unbounded.Slice (Buffer.Content, 1, Keep) & Truncated;
+         end;
+      end if;
+      return Unbounded.To_String (Buffer.Content);
+   end Finish;
+
    function Image (Level : Severity) return String is
      (case Level is
          when Error   => "error",
@@ -42,21 +88,23 @@ package body Landin.Diagnostics.Text is
    ---------------------------------------------------------------------
 
    procedure Render_Label
-     (Into         : in out Unbounded.Unbounded_String;
+     (Into         : in out Text_Buffer;
       Item         : Label;
       Sources      : Landin.Source.Sets.Source_Set;
       Show_Message : Boolean);
 
    procedure Render_Label
-     (Into         : in out Unbounded.Unbounded_String;
+     (Into         : in out Text_Buffer;
       Item         : Label;
       Sources      : Landin.Source.Sets.Source_Set;
       Show_Message : Boolean)
    is
       use Landin.Source;
    begin
-      if not Sources.Contains (Source_Of (Item)) then
-         Unbounded.Append (Into, "  --> <unknown source>" & LF);
+      if Into.Full then
+         return;
+      elsif not Sources.Contains (Source_Of (Item)) then
+         Append (Into, "  --> <unknown source>" & LF);
          return;
       end if;
 
@@ -64,58 +112,102 @@ package body Landin.Diagnostics.Text is
       --  be wrong about a byte, and a report that crashes while explaining
       --  an error is worse than the error.  Say so and carry on.
       if not Is_Valid (Sources.Get (Source_Of (Item)), Span_Of (Item)) then
-         Unbounded.Append
-           (Into,
-            "  --> " & Name (Sources.Get (Source_Of (Item)))
-            & ": <span outside this source>" & LF);
+         Append (Into, "  --> ");
+         Append (Into, Name (Sources.Get (Source_Of (Item))));
+         Append (Into, ": <span outside this source>" & LF);
          return;
       end if;
 
       declare
-         Snap    : constant Snapshot :=
-           Sources.Get (Source_Of (Item));
-         Where   : constant Span := Span_Of (Item);
-         Start   : constant Position := Position_Of (Snap, Where.First);
-         Content : constant String := Line_Text (Snap, Start.Line);
-         Width   : constant Natural := Gutter_Width (Start.Line);
-         Blank   : constant String := Fixed."*" (Width, ' ');
-         Column  : constant Natural := Natural (Start.Column);
-         Room    : constant Natural :=
-           (if Content'Length + 1 > Column
-            then Content'Length + 1 - Column
-            else 0);
-         Carets  : constant Natural :=
-           Natural'Min (Natural'Max (Natural (Length (Where)), 1),
-                        Natural'Max (Room, 1));
+         Snap : constant Snapshot := Sources.Get (Source_Of (Item));
+         Where : constant Span := Span_Of (Item);
+         Start : constant Position := Position_Of (Snap, Where.First);
+         Line : constant Span := Line_Text_Span (Snap, Start.Line);
+         Anchor : constant Byte_Offset := Byte_Offset'Min
+           (Where.First, Line.Last);
+         First : Byte_Offset :=
+           (if Length (Line) > 160 and then Anchor - Line.First > 48
+            then Anchor - 48 else Line.First);
+         Last : Byte_Offset := First
+           + Byte_Offset'Min (160, Line.Last - First);
+         Width : constant Natural := Gutter_Width (Start.Line);
+         Blank : constant String := Fixed."*" (Width, ' ');
+
+         function Continuation (Offset : Byte_Offset) return Boolean;
+
+         function Continuation (Offset : Byte_Offset) return Boolean is
+            Byte : constant String := Slice (Snap, (Offset, Offset + 1));
+         begin
+            return Character'Pos (Byte (Byte'First)) in 128 .. 191;
+         end Continuation;
       begin
-         Unbounded.Append
-           (Into,
-            "  --> " & Name (Snap) & ":" & Decimal (Integer (Start.Line))
-            & ":" & Decimal (Column) & LF);
-         Unbounded.Append (Into, Blank & " |" & LF);
-         Unbounded.Append
-           (Into,
-            Decimal (Integer (Start.Line)) & " | " & Content & LF);
-         Unbounded.Append
-           (Into,
-            Blank & " | " & Fixed."*" (Column - 1, ' ')
-            & Fixed."*" (Carets, '^')
-            & (if not Show_Message or else Message (Item) = ""
-               then "" else " " & Message (Item))
-            & LF);
+         --  Preserve complete UTF-8 sequences at excerpt edges. These two
+         --  bounded adjustments do not scan the omitted prefix or suffix.
+         for Step in 1 .. 3 loop
+            exit when First = Line.First or else not Continuation (First);
+            First := First - 1;
+         end loop;
+         for Step in 1 .. 3 loop
+            exit when Last = Line.Last or else not Continuation (Last);
+            Last := Last - 1;
+         end loop;
+         declare
+            Content : constant String := Slice (Snap, (First, Last));
+            Prefix : constant String :=
+              (if First > Line.First then "... " else "");
+            Suffix : constant String :=
+              (if Last < Line.Last then " ..." else "");
+            Column : constant Natural :=
+              Natural (Anchor - First) + Prefix'Length;
+            Room : constant Natural := Natural (Last - Anchor);
+            Carets : constant Natural := Natural'Min
+              (Natural'Max (Natural (Length (Where)), 1),
+               Natural'Max (Room, 1));
+         begin
+            Append (Into, "  --> ");
+            Append (Into, Name (Snap));
+            Append
+              (Into, ":" & Decimal (Integer (Start.Line)) & ":"
+               & Decimal (Integer (Start.Column)) & LF);
+            Append (Into, Blank & " |" & LF);
+            Append
+              (Into, Decimal (Integer (Start.Line)) & " | " & Prefix
+               & Content & Suffix & LF);
+            Append
+              (Into, Blank & " | " & Fixed."*" (Column, ' ')
+               & Fixed."*" (Carets, '^'));
+            if Show_Message and then not Into.Full then
+               declare
+                  Text : constant String := Message (Item);
+               begin
+                  if Text /= "" then
+                     Append (Into, " ");
+                     Append (Into, Text);
+                  end if;
+               end;
+            end if;
+            Append (Into, LF & "");
+         end;
       end;
    end Render_Label;
 
-   function Render
-     (Item    : Diagnostic;
-      Sources : Landin.Source.Sets.Source_Set) return String
+   procedure Render_Item
+     (Buffer  : in out Text_Buffer;
+      Item    : Diagnostic;
+      Sources : Landin.Source.Sets.Source_Set);
+
+   procedure Render_Item
+     (Buffer  : in out Text_Buffer;
+      Item    : Diagnostic;
+      Sources : Landin.Source.Sets.Source_Set)
    is
-      Buffer : Unbounded.Unbounded_String;
    begin
-      Unbounded.Append
-        (Buffer,
-         Image (Level (Item)) & "[" & Code (Item) & "]: "
-         & Message (Primary (Item)) & LF);
+      Append (Buffer, Image (Level (Item)) & "[" & Code (Item) & "]: ");
+      Append (Buffer, Message (Primary (Item)));
+      Append (Buffer, LF & "");
+      if Buffer.Full then
+         return;
+      end if;
       --  The first related label can explain the primary span itself.
       --  Render that snippet once, with its label, while retaining the
       --  complete structured report and the order of all related labels.
@@ -128,29 +220,43 @@ package body Landin.Diagnostics.Text is
       end if;
 
       for Index in 1 .. Label_Count (Item) loop
+         exit when Buffer.Full;
          Render_Label
            (Buffer, Nth_Label (Item, Index), Sources, True);
       end loop;
 
       for Index in 1 .. Note_Count (Item) loop
-         Unbounded.Append
-           (Buffer, "  = note: " & Nth_Note (Item, Index) & LF);
+         exit when Buffer.Full;
+         Append (Buffer, "  = note: ");
+         Append (Buffer, Nth_Note (Item, Index));
+         Append (Buffer, LF & "");
       end loop;
+   end Render_Item;
 
-      return Unbounded.To_String (Buffer);
+   function Render
+     (Item    : Diagnostic;
+      Sources : Landin.Source.Sets.Source_Set;
+      Byte_Limit : Report_Byte_Limit := Default_Byte_Limit) return String
+   is
+      Buffer : Text_Buffer (Byte_Limit);
+   begin
+      Render_Item (Buffer, Item, Sources);
+      return Finish (Buffer);
    end Render;
 
    function Render
      (List    : Diagnostic_List;
-      Sources : Landin.Source.Sets.Source_Set) return String
+      Sources : Landin.Source.Sets.Source_Set;
+      Byte_Limit : Report_Byte_Limit := Default_Byte_Limit) return String
    is
       Ordered : constant Diagnostic_List := Sorted (List);
-      Buffer  : Unbounded.Unbounded_String;
+      Buffer  : Text_Buffer (Byte_Limit);
    begin
       for Index in 1 .. Count (Ordered) loop
-         Unbounded.Append (Buffer, Render (Get (Ordered, Index), Sources));
+         exit when Buffer.Full;
+         Render_Item (Buffer, Get (Ordered, Index), Sources);
       end loop;
-      return Unbounded.To_String (Buffer);
+      return Finish (Buffer);
    end Render;
 
 end Landin.Diagnostics.Text;

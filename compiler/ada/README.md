@@ -262,6 +262,16 @@ when the roadmap needs a longer-lived process it will be revisited there. R1.50
 extends it to the trees for the same reason, and to the four tables a
 compilation now owns.
 
+Diagnostic text rendering reads at most a 160-byte window around each label,
+with up to three extra bytes to preserve a UTF-8 boundary. Omission markers
+identify clipped line ends, while locations and structured spans retain the
+original byte coordinates. The complete rendered report defaults to a 1 MiB
+text budget and ends with an explicit notice if truncated. This presentation
+limit does not remove diagnostics, related labels or notes from the structured
+report. Small explicit budgets let tests cover the same boundary without large
+sources. The source layer exposes a terminator-free line span so rendering
+never needs to copy an entire long line merely to select its excerpt.
+
 A compilation owns everything a stage builds that outlives the stage that built
 it: the interned identities, the declaration sites, the trees, and what every
 name in them means. Two facts about the seam decide that it has to be there
