@@ -5815,7 +5815,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J15 | The named refusal [1830] promises is missing for `noreturn`, `volatile` and multi-name bindings | C | Open refusal/document agreement: read [1830] and the enabled grammar first. Labelled bare blocks are absent from that grammar; do not enable them solely from the tour example. |
 | J16 | `lenof` on a slice is treated as a non-reading type constant, so an unassigned or sunk slice descriptor is read | C | Repaired: lenof reads a live, assigned slice descriptor. Fixed-array names and measured literal elements remain unevaluated. Slice length and index refusals include consumed descriptors without duplicate reports; both compiler modes pass the controls. |
 | J17 | `Require_Element` compares the sub-element run for equality instead of prefix containment, so a whole-child write inside an array element does not cover its leaves | C | Repaired: reads and branch merges use ancestor containment for an element's field path. Eleven paired controls pass in both modes: whole-child writes cover descendants, either branch order preserves common leaves, and siblings, other indices, parents and consumed descendants retain their independent obligations. Lookup walks only the selected path's ancestors. |
-| J18 | Match_Subject_Is_Copied disagrees with Lower_Variant_Match about a payload alias root, rejecting valid code as a frame escape | C | Open reference-shape agreement: align copied match/traversal roots with lowering and declared origins, retaining C4 alias-lifetime controls. |
+| J18 | Match_Subject_Is_Copied disagrees with Lower_Variant_Match about a payload alias root, rejecting valid code as a frame escape | C | Implemented: checking retains runtime-address aliases through nested computed match subjects and builtin collection elements. Captured slice and array backing supplies address origins and store destinations; frame temporaries and copied iterable/text/index values remain distinct. Nested retags now retain C4 payload-lifetime checks. Bounded controls pass in both modes. |
 | J19 | A `try` nested in a non-control expression skips its failure-propagation edge: sunk `inout` parameters and `undo` arguments go unchecked | C | Repaired: nested try expressions retain their propagated failure edge, including undo reads and inout restoration after applicable cleanup. The success-only restoration is refused; restoration inside a failure cleanup is accepted. Both modes pass. |
 | J20 | Forced-specialization profiles silently skip the runtime/erased-* evidence-dispatch fixtures | C | Duplicate M15/N17: make specialization coverage explicit and validated; include erased dispatch fixtures through policy rather than filename prefixes. |
 | J21 | Array-literal element containing a variant part crashes lowering (Constraint_Error on Positive (Destination.Base)) | C | Already repaired by 1aa0746a under A3: normalize the root variant-array destination into typed storage. Retain the existing debug/release and runtime evidence; do not replay it. |
@@ -5870,7 +5870,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J70 | A `while ... complete` block establishes definite assignment after the loop, which spec.md:505 says it must not | C | Semantic agreement question: reconcile completion-block assignment with [1810]/D157 and the existing loop decisions. Sounder flow precision alone does not authorize changing the normative rule. |
 | J71 | tour [0220]'s `hex_value := 0xDEAD_BEEF` does not compile | C | Duplicate M4/M16 document parity work. Check complete examples against the enabled grammar, preserving historical finding sections. |
 | J72 | tour [0990]'s destructuring block cannot be written as printed: `whole.rem` glues onto the next line's `(` | C | Duplicate M4/M16 document parity work. Check complete examples against the enabled grammar, preserving historical finding sections. |
-| J73 | `addr` of a D160 traversal element binding is classified frame origin, refusing a legal `from`-declared return | C | Open reference-shape agreement: align copied match/traversal roots with lowering and declared origins, retaining C4 alias-lifetime controls. |
+| J73 | `addr` of a D160 traversal element binding is classified frame origin, refusing a legal `from`-declared return | C | Implemented: checking retains runtime-address aliases through nested computed match subjects and builtin collection elements. Captured slice and array backing supplies address origins and store destinations; frame temporaries and copied iterable/text/index values remain distinct. Nested retags now retain C4 payload-lifetime checks. Bounded controls pass in both modes. |
 | J74 | A compound assignment through an indexed member selection reads its index twice and emits a duplicate diagnostic | C | Repaired: destination evaluation reads the index once before the assigned value. Assignment marking only updates facts, so an unassigned compound indexed-field index reports L0302 once. Small write-order and independent-field controls pass in both modes. |
 | J75 | `Widest_Struct` rescans every node of every source file on each call and is invoked once per read | C | Implemented: the ten later queries reuse `Tracked_Field'Last`, whose subtype elaboration already computes the immutable forest width once per flow invocation. No cross-compilation cache or invalidation state is introduced. |
 | J76 | First_Derivation points the escape diagnostic's related span at a module binding and calls it "the shorter-lived reference source" | C | Implemented: frame-source selection includes frame-backed payload bindings and value parameters, while excluding external payload storage and inout parameters from that preference. Four exact L0314 reports preserve refusal behavior and identify the actual shorter-lived source. |
@@ -7264,8 +7264,35 @@ Tiny reproductions and logs are retained in `.scratch/r491-pointer-nominal/`
 and `.scratch/r491-symbolic-c-layout/`. Seven exact selectors pass 73 checks in each of macOS debug and Linux
 release; both single-worker builds and the fixture inventories pass.
 No native assembly, generated executable, debugger or giant image ran.
-Exact-revision acceptance remains open. J18/J73 reference-shape agreement is
-the next implementation repair.
+Exact-revision acceptance remains open.
+J18/J73 development evidence: eight exact selectors pass 49 checks in each
+of macOS debug and Linux release. The new positive fixture retains nested
+payload addresses through computed indexes, builtin traversal aliases,
+captured slices after descriptor rebinding, inout arrays and module arrays.
+Same-source element stores remain valid. Nine exact negative reports cover
+frame-backed arrays and payloads, a nested live retag, local slice/array
+storage, copied indexes and text scalars, returned-array temporaries, and a
+frame reference stored through an external collection element. Generic
+iterable copies retain their independent frame storage. Existing payload
+lifetime, copied-subject, source-free iterable-contract and related-source
+controls pass. The existing payload last-use and collection programs also
+compile through verified IR in both modes, without running their executables.
+All arrays contain at most five elements. Single-worker builds and inventories
+pass; positive fixture execution means assembly text emission only. No native
+assembly, generated executable, debugger or giant image ran. Evidence is in
+`.scratch/r491-alias-backing/` and `.scratch/r491-final-values/`.
+Exact-revision acceptance remains open.
+
+R4.91-F4, found while validating J73, remains open: a small ordinary `iterable`
+conformance and traversal over a named parameter exit 70, even when the body
+only reads the element. The checker asks for a provider before the row's
+entries have been populated. The preceding `f17e4772` Linux release build
+reproduces the same failure; a generic conformance control succeeds. Preserve
+provider validation and exact Item/Cur identity while deferring dependent
+traversal inference until the evidence is ready. The tiny sources, failed
+checking seam and compile-only baseline are retained in
+`.scratch/r491-alias-backing/`. This is the next implementation repair.
+
 J116's slice-endpoint claim
 still needs a separate normative disposition. J48 also requires an explicit
 static-selection collision rule: D146's existing uniqueness sentence is

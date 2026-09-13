@@ -1,0 +1,86 @@
+cell: type = struct
+    kind: variant item: (value: u32) | empty end kind
+end cell
+group: type = struct cells: [1]cell end group
+box: type = struct
+    fallback: u32
+    kind: variant full: (contents: group) | vacant end kind
+end box
+anchor: u32 = 0
+index_anchor: usize = 0
+
+value_array: (source: [1]u32) -> (result: ptr u32 from source) =
+    result = addr source[0]
+    for element in source do
+        result = addr element
+    end for
+end value_array
+
+nested_frame: (source: box, index: usize) -> (result: ptr u32 from source) =
+    result = addr source.fallback
+    match source.kind
+        full(inout contents): match contents.cells[index].kind
+            item(value): result = addr value
+            empty: begin end
+        end match
+        vacant: begin end
+    end match
+end nested_frame
+
+nested_live: (inout source: box, index: usize) -> none =
+    match source.kind
+        full(inout contents): match contents.cells[index].kind
+            item(value): begin
+                contents.cells[index].kind = empty
+                _ = value
+            end
+            empty: begin end
+        end match
+        vacant: begin end
+    end match
+end nested_live
+
+local_slice: () -> (result: ptr u32) =
+    result = addr anchor
+    mut local: [1]u32 = [7]
+    for element in local[0..<1] do
+        result = addr element
+    end for
+end local_slice
+
+local_array: () -> (result: ptr u32) =
+    result = addr anchor
+    mut local: [1]u32 = [7]
+    for element in local do
+        result = addr element
+    end for
+end local_array
+
+index_copy: (source: []u32) -> (result: ptr usize) =
+    result = addr index_anchor
+    for element, index in source do
+        result = addr index
+    end for
+end index_copy
+
+text_copy: (source: utf8) -> (result: ptr u32) =
+    result = addr anchor
+    for scalar in source do
+        result = addr scalar
+    end for
+end text_copy
+
+make: () -> (values: [1]u32) = [7] end make
+array_result: () -> (result: ptr u32) =
+    result = addr anchor
+    for element in make() do
+        result = addr element
+    end for
+end array_result
+
+store_through_element: (source: []mut ptr u32) -> none =
+    mut local: u32 = 7
+    for element in source do
+        element = addr local
+    end for
+end store_through_element
