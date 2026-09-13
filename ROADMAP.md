@@ -5883,11 +5883,11 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J83 | Set_Slice_Image has no `not Has_Image` guard, unlike the five other image setters | P | Plausible IR API precondition concern: distinguish the documented caller contract from an observable source defect before adding release-time guards. |
 | J84 | Specialization reports retains_fallback=false for any specialized instance, even when indirect calls it could not devirtualize survive in that body | C | Implemented: decisions report actual surviving indirect calls, including partial erased dispatch, and scalar measurement dumps name the measured type. Independent IR/report assertions cover both target widths; the nine affected scalar golden lines and compiler reader guide are updated. Exact golden comparison and acceptance remain open. |
 | J85 | The IR dump never renders Measured_Of, so every scalar sizeof/alignof records as the same line and a wrong measured type cannot move the golden file | C | Implemented: decisions report actual surviving indirect calls, including partial erased dispatch, and scalar measurement dumps name the measured type. Independent IR/report assertions cover both target widths; the nine affected scalar golden lines and compiler reader guide are updated. Exact golden comparison and acceptance remain open. |
-| J86 | Dead first branch in Rooted_Steps: its guard is strictly implied by the next one and the bodies are identical | C | Maintenance observation, not an accepted-source defect: confirm reachability/readers before removing redundant code; preserve behavior and update ownership documentation where affected. |
-| J87 | The slice-element arm of Lower_Unconstrained is unreachable, because every slice index already satisfies Has_Reference_Storage and is taken by the earlier guard | C | Maintenance observation, not an accepted-source defect: confirm reachability/readers before removing redundant code; preserve behavior and update ownership documentation where affected. |
-| J88 | Redundant inout test inside a branch already known to be non-inout | C | Maintenance observation, not an accepted-source defect: confirm reachability/readers before removing redundant code; preserve behavior and update ownership documentation where affected. |
-| J89 | `Held = Ty.Bool` arm in `Lower_Datum`'s zero path is unreachable | C | Maintenance observation, not an accepted-source defect: confirm reachability/readers before removing redundant code; preserve behavior and update ownership documentation where affected. |
-| J90 | `Set_Image_From_Struct_Field` and its dispatch arm are unreachable since the member-selection redirect | C | Maintenance observation, not an accepted-source defect: confirm reachability/readers before removing redundant code; preserve behavior and update ownership documentation where affected. |
+| J86 | Dead first branch in Rooted_Steps: its guard is strictly implied by the next one and the bodies are identical | C | Implemented maintenance: one active-alias branch owns Rooted_Steps, and Storage_For alone supplies alias storage. The aggregate-only duplicate branches are removed; the predicate's independent initializer use remains. Exact acceptance remains open. |
+| J87 | The slice-element arm of Lower_Unconstrained is unreachable, because every slice index already satisfies Has_Reference_Storage and is taken by the earlier guard | C | Implemented maintenance: removed the slice-index branch and its similarly dominated reference-array sibling. The earlier complete stored-place guard owns both, including single evaluation and typed indirect loads. Exact acceptance remains open. |
+| J88 | Redundant inout test inside a branch already known to be non-inout | C | Implemented maintenance: removed the always-true non-inout conjunct inside the non-inout aggregate-argument branch. Argument copying and evaluation order are unchanged. Exact acceptance remains open. |
+| J89 | `Held = Ty.Bool` arm in `Lower_Datum`'s zero path is unreachable | C | Implemented maintenance: removed the unreachable bool arm from scalar zero emission and replaced the obsolete zero-only aggregate-image comment with the current static-image ownership. Exact acceptance remains open. |
+| J90 | `Set_Image_From_Struct_Field` and its dispatch arm are unreachable since the member-selection redirect | C | Implemented maintenance: removed the obsolete shallow field-image helper and dispatch. Accepted array/aggregate selections return through recursive image resolution; scalar/function/bool/slice/C-string paths return separately, other pointer selections are refused, and any data are outside this resolver inventory. Exact acceptance remains open. |
 | J91 | Block membership is never verified: block-run/In_Block agreement and the block partition of an item's value run go unchecked | C | Implemented with K21/K22: bounded block runs partition each item and agree with instruction membership before consumers read them; final item and operand cursors consume their vectors. Small malformed-IR seams and valid reordered/prefixed controls cover both target widths. No accepted-source defect is inferred; exact acceptance remains open. |
 | J92 | A variant shape's tag type is not held to being wide enough for its case count | C | Implemented: variant shapes require D74's smallest unsigned tag that represents every zero-based case. Bounded 255/256/257-case metadata controls cover datum fields, slot fields and measurements on both target widths, rejecting narrow and nonminimal tags. No giant case-count witness ran; exact acceptance remains open. |
 | J93 | The item's Aliases run, and the Paths run inside each alias, are never bounded or validated by the verifier | C | Implemented: alias runs are bounded and partition their vector, alias path runs are bounded before allocation, and every binding/provenance/storage selection is checked after all root shapes. Small malformed-IR controls and existing source alias/payload cases pass in debug and release. No debugger session was started; exact acceptance remains open. |
@@ -6749,7 +6749,22 @@ executable ran. Native probe output and local build/fixture logs are retained
 in `.scratch/r491-diagnostic-wording/` and `.scratch/r491-final-values/`.
 Exact-revision acceptance remains open.
 
-J86-J90's redundant lowering paths are next. J116's slice-endpoint claim
+J86-J90 development evidence: six selected source-to-IR cases pass 239 checks
+in each of macOS debug and Linux release. They cover struct and scalar/array
+payload aliases, computed slice access with one evaluation, static bools,
+finite/repeated/hybrid/zero array-field images, and aggregate call carriers.
+The deleted branches are dominated by their existing live paths; the
+non-inout conjunct is true from its enclosing branch. A ten-second
+compile-only pointer-field probe confirms that the checker closes the
+remaining non-C-string pointer route to the obsolete image helper. Any data
+are excluded from that resolver's inventory. Both single-worker builds passed;
+selected tests have 30-second or shorter timeouts. No Landin assembler, linker
+or generated executable ran. Logs are retained in
+`.scratch/r491-lowering-maintenance/` and `.scratch/r491-final-values/`.
+Exact-revision acceptance remains open.
+
+J120/J131/J132's refused-operand diagnostic cascades are next. J116's
+slice-endpoint claim
 still needs a separate normative disposition. J48 also requires an explicit
 static-selection collision rule: D146's existing uniqueness sentence is
 about erased dispatch, while D144 currently specifies table traversal order.
