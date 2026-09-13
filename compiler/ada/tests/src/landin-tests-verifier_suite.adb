@@ -7692,8 +7692,98 @@ package body Landin.Tests.Verifier_Suite is
       end loop;
    end Slot_Element_Queries_Follow_Selectors;
 
+   procedure Variant_Slice_Images_Are_Checked
+     (Item : in out Landin.Testing.Context);
+
+   procedure Variant_Slice_Images_Are_Checked
+     (Item : in out Landin.Testing.Context)
+   is
+      type Scenario_Kind is
+        (Valid, Empty, Reported_Array, Wrong_Carrier, Scalar_Flag,
+         Too_Long, Past_End, Wrong_Element, Missing_Target,
+         Nonempty_Null, Bad_Offset, Bad_Form, Orphan);
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Site : Landin.Provenance.Origin;
+   begin
+      Ready (Work, Site);
+      for Scenario in Scenario_Kind loop
+         declare
+            Unit : IR.Unit;
+            Target, Datum : IR.Item_Id;
+            Shape : IR.Field_Shape;
+            Image : IR.Aggregate_Field_Image;
+            Children : IR.Aggregate_Field_Image_Array (1 .. 2);
+            Expected : constant V.Fault_Kind :=
+              (case Scenario is
+                 when Valid | Empty => V.Nothing_Wrong,
+                 when Scalar_Flag =>
+                   V.Aggregate_Field_Image_On_Scalar_Field,
+                 when others => V.Aggregate_Field_Image_Length_Disagrees);
+         begin
+            IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+            Target := IR.Add_Item
+              (Unit, IR.Datum, 6, Landin.Types.Fixed_Array, Site);
+            IR.Set_Array (Unit, Target, Landin.Types.U8, 2);
+            IR.Set_Array_Image (Unit, Target, [65, 66]);
+            Add_Empty_Body (Unit, Target, Site);
+            Datum := IR.Add_Item
+              (Unit, IR.Datum, 5, Landin.Types.Aggregate, Site);
+            Shape := IR.Make_Array_Shape
+              (Unit, (if Scenario = Reported_Array then 3 else 2),
+               (Element =>
+                  (if Scenario in Reported_Array | Wrong_Carrier
+                   then Landin.Types.U8 else Landin.Types.Usize),
+                others => <>));
+            if Scenario = Scalar_Flag then
+               Shape := (Element => Landin.Types.U8, others => <>);
+            end if;
+            IR.Add_Field (Unit, Datum, Landin.Types.U8);
+            IR.Add_Field
+              (Unit, Datum,
+               (Kind => IR.Variant_Field_Shape, Element => Landin.Types.U8,
+                Cases => 2, Payloads_First => 1, others => <>),
+               [(First => 0, Count => 0), (First => 1, Count => 1)],
+               [1 => Shape]);
+            Image :=
+              (Slice => True, Target => Target, Value => 1, Slice_First => 1,
+               Slice_Element => (Element => Landin.Types.U8, others => <>),
+               others => <>);
+            case Scenario is
+               when Valid | Wrong_Carrier | Orphan => null;
+               when Empty | Reported_Array | Scalar_Flag =>
+                  Image.Target := IR.No_Item;
+                  Image.Value := 0;
+                  Image.Slice_First := 0;
+               when Too_Long => Image.Value := 2;
+               when Past_End => Image.Slice_First := 3;
+               when Wrong_Element =>
+                  Image.Slice_Element.Element := Landin.Types.U16;
+               when Missing_Target => Image.Target := IR.Item_Id'Last;
+               when Nonempty_Null => Image.Target := IR.No_Item;
+               when Bad_Offset => Image.Offset := 1;
+               when Bad_Form => Image.Form := IR.Repeated;
+            end case;
+            Children := [others => Image];
+            IR.Set_Aggregate_Image
+              (Unit, Datum, [7, 0],
+               [(others => <>),
+                (Form => IR.Selected, Value => 2, Count => 1, others => <>)],
+               Children (1 .. (if Scenario = Orphan then 2 else 1)), []);
+            Add_Empty_Body (Unit, Datum, Site);
+            Expect (Item, V.Check (Unit, Landin.Targets.Linux_X86_64),
+                    Expected, "64-bit variant slice: " & Scenario'Image);
+            Expect (Item, V.Check (Unit, Landin.Targets.Synthetic_32),
+                    Expected, "32-bit variant slice: " & Scenario'Image);
+         end;
+      end loop;
+   end Variant_Slice_Images_Are_Checked;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "verifier", "variant slice images are checked",
+         Variant_Slice_Images_Are_Checked'Access);
       Landin.Testing.Register
         (Into, "verifier", "slot element queries follow selectors",
          Slot_Element_Queries_Follow_Selectors'Access);
