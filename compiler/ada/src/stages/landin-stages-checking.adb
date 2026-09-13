@@ -892,7 +892,9 @@ package body Landin.Stages.Checking is
          Of_Tree     : Syn.Tree;
          Application : Landin.Provenance.Origin;
          Inputs      : Landin.Checking.Actual_Tuple :=
-           Landin.Checking.Empty_Actuals) return Boolean;
+           Landin.Checking.Empty_Actuals;
+         Required_At : Landin.Provenance.Origin :=
+           Landin.Provenance.No_Origin) return Boolean;
       function Select_Iterable_Conformance
         (Actual  : Type_Descriptor;
          Of_Tree : Syn.Tree;
@@ -14226,7 +14228,9 @@ package body Landin.Stages.Checking is
          Of_Tree     : Syn.Tree;
          Application : Landin.Provenance.Origin;
          Inputs      : Landin.Checking.Actual_Tuple :=
-           Landin.Checking.Empty_Actuals) return Boolean
+           Landin.Checking.Empty_Actuals;
+         Required_At : Landin.Provenance.Origin :=
+           Landin.Provenance.No_Origin) return Boolean
       is
          Concept : constant Landin.Checking.Concept_Id :=
            Concept_For (Of_Tree, Constraint);
@@ -14344,8 +14348,12 @@ package body Landin.Stages.Checking is
                              & Spelled (Syn.Name (Of_Tree, Constraint)) & "`",
                   Note    => "[1290]: every constrained type actual must"
                              & " have one whole-program conformance",
-                  Related => Syn.Origin (Of_Tree, Constraint),
-                  Because => "the constraint declared here",
+                  Related => (if Required_At.Source = Landin.Source.No_Source
+                              then Syn.Origin (Of_Tree, Constraint)
+                              else Required_At),
+                  Because => (if Required_At.Source = Landin.Source.No_Source
+                              then "the constraint declared here"
+                              else "the required type"),
                   Into    => Found);
                return False;
             end;
@@ -15183,8 +15191,12 @@ package body Landin.Stages.Checking is
                        & Spelled (Syn.Name (Of_Tree, Constraint)) & "`",
             Note    => "[1290]: every constrained type actual must have one"
                        & " whole-program conformance",
-            Related => Syn.Origin (Of_Tree, Constraint),
-            Because => "the constraint declared here",
+            Related => (if Required_At.Source = Landin.Source.No_Source
+                              then Syn.Origin (Of_Tree, Constraint)
+                              else Required_At),
+            Because => (if Required_At.Source = Landin.Source.No_Source
+                              then "the constraint declared here"
+                              else "the required type"),
             Into    => Found);
          return False;
       end Require_Conformance;
@@ -19169,6 +19181,17 @@ package body Landin.Stages.Checking is
               Res.Node_Of (Meanings.all, Means);
             Writable : Boolean;
          begin
+            --  A refused root has no usable reference permission. Do not
+            --  reinterpret its failed projection as replacing the binding.
+            if Landin.Checking.State_Of (Types.all, Means)
+                 = Landin.Checking.Settled
+              and then Landin.Checking.Type_Of (Types.all, Means)
+                 = Ty.Ill_Typed
+            then
+               Landin.Checking.Refuse (Types.all, Of_Tree, Node);
+               return;
+            end if;
+
             Writable :=
               (case Sort is
                   when Res.Named_Return    => True,
@@ -22495,7 +22518,9 @@ package body Landin.Stages.Checking is
                   if Range_Type = Ty.Untyped_Integer then
                      Range_Type := Ty.Default_Integer;
                      Commit_To (Of_Tree, Lower, Ty.Default_Integer);
-                  elsif Range_Type not in Ty.Integer_Name then
+                  elsif Range_Type /= Ty.Ill_Typed
+                    and then Range_Type not in Ty.Integer_Name
+                  then
                      Bad.Report
                        (Item    => Bad.Type_Mismatch,
                         Source  => Syn.Source_Of (Of_Tree),
@@ -24827,6 +24852,14 @@ package body Landin.Stages.Checking is
                           (Types.all, Of_Tree, Node);
                         return;
                      end if;
+                     --  D189/[0480]: reject the empty pointer-union case
+                     --  before looking up or requiring conformance evidence.
+                     if Pointer_Union_Refused
+                       (Of_Tree, Value, "`any` construction")
+                     then
+                        Landin.Checking.Refuse (Types.all, Of_Tree, Node);
+                        return;
+                     end if;
                      declare
                         function Ensure_Conformance
                           (Actual : Type_Descriptor) return Boolean;
@@ -24854,7 +24887,8 @@ package body Landin.Stages.Checking is
                                        return Require_Conformance
                                          (Actual, Candidate,
                                           Candidate_Tree.all,
-                                          Syn.Origin (Of_Tree, Node));
+                                          Syn.Origin (Of_Tree, Node),
+                                          Required_At => Site);
                                     end if;
                                  end loop;
                               end;
@@ -25023,13 +25057,6 @@ package body Landin.Stages.Checking is
                              and then Entry_Total > 0;
                         end Dispatchable;
 
-                        --  D189/[0480]: erasing a union behind `any` would
-                        --  hand the empty case to a dispatch that reads it
-                        --  as the data pointer.
-                        Union_Refused : constant Boolean :=
-                          Pointer_Union_Refused
-                            (Of_Tree, Value, "`any` construction");
-
                         Pointer : constant Landin.Checking.Reference_Id :=
                           Landin.Checking.Reference_Of
                             (Types.all, Of_Tree, Value);
@@ -25067,11 +25094,6 @@ package body Landin.Stages.Checking is
                         Valid : Boolean := Satisfied
                           and then Evidence /= Landin.Checking.No_Conformance;
                      begin
-                        if Union_Refused then
-                           Landin.Checking.Refuse
-                             (Types.all, Of_Tree, Node);
-                           return;
-                        end if;
                         if Valid then
                            Valid := Dispatchable
                              (Expected.Concept, Evidence, Pointer);
@@ -25168,6 +25190,10 @@ package body Landin.Stages.Checking is
                      if Got = Ty.Untyped_Integer then
                         Commit_To (Of_Tree, Value, Ty.Usize);
                         Got := Ty.Usize;
+                     end if;
+                     if Got = Ty.Ill_Typed then
+                        Landin.Checking.Refuse (Types.all, Of_Tree, Node);
+                        return;
                      end if;
                      if Got not in Ty.Integer_Name then
                         Bad.Report

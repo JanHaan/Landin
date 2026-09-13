@@ -1,0 +1,9 @@
+class: negative
+summary: refused operands keep their root cause without place, traversal, conversion or conformance cascades
+program: main.ldn
+codes: L0304, L0301, L0301, L0301, L0318, L0301
+constructs: 0430, 0470, 0480, 0660, 1150, 1370, 1890
+targets: linux-x86-64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/r491-refused-operand-cascades/main.ldn
+status: 1

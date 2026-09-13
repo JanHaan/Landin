@@ -783,6 +783,7 @@ negative/r491-operand-diagnostic-cascades | linux-x86-64, macos-arm64, synthetic
 negative/r491-public-conformance | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-public-fixed | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-public-import | linux-x86-64, macos-arm64, synthetic-32
+negative/r491-refused-operand-cascades | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-retained-reference-stores | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-sunk-inout-exit-edges | linux-x86-64, macos-arm64, synthetic-32
 negative/range-subtype-address | linux-x86-64, macos-arm64

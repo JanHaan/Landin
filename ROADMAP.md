@@ -5917,7 +5917,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J117 | An untyped literal lower bound of a `for` range is committed to i32 before the upper bound is consulted, and the diagnostic blames the upper bound | C | Open type/shape agreement group: compare both equivalent spellings or contexts and preserve actual element, bound, payload and reference identity before changing acceptance. |
 | J118 | `zeroed` against a pointer/slice/atom context reports L0304 'needs a directly supplied initializer' pointing at completed R2.20, though the context is supplied and the refusal is permanent (also docs-code) | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
 | J119 | Distinct-type identity and zeroed mismatches are reported with struct wording and notes citing [0710] and function addresses | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
-| J120 | A refused range-subtype reference target cascades into a spurious L0303 about writing through an `in` parameter | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
+| J120 | A refused range-subtype reference target cascades into a spurious L0303 about writing through an `in` parameter | C | Implemented: Check_Place stops at a settled ill-typed root instead of treating a failed reference projection as replacement of its in parameter. The original range-reference refusal remains the sole report for that write. Exact acceptance remains open. |
 | J121 | A parameterized layout(c) struct's C-representation check is skipped in the symbolic template pass | C | Open template-only validation gap: check actual-independent invalid C fields. Do not hoist concrete-layout validation over symbolic fields, which would reject valid generic templates. |
 | J122 | Shown returns phrases that already carry an article, producing "this does not have the a pointer shape required here" (also check-5, behave-types, docs-code, check-3) | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
 | J123 | Reject_C_Signature and Validate_C_Layout pass the same origin as both primary span and Related span, printing the snippet twice | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
@@ -5928,8 +5928,8 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J128 | Is_Zeroed_Scalar_Place's Is_Direct_Named_Return alternative is dead | C | Maintenance observation, not an accepted-source defect: confirm reachability/readers before removing redundant code; preserve behavior and update ownership documentation where affected. |
 | J129 | Inferred `[n of x]` with a non-scalar repeated element emits no diagnostic of its own and leaves the value un-refused, so the user gets only a false "needs a counted inferred binding" message | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
 | J130 | A match arm's ordinary-struct payload alias may be copied by assignment but not used as an explicitly typed binding's initializer | C | Implemented: local typed payload copies are admitted before match-header types are available, then checked against their nominal destination. Inferred aliases and chains wait for the match header, retain their nominal descriptor and resume in the body walk; this also repairs a related inferred-copy internal defect. Read-only/writable, unused, chained, generic and different-nominal controls cover both target widths. Exact acceptance remains open. |
-| J131 | Two refusal sites lack the `Ill_Typed` guard their siblings have, so an already-refused operand draws a second, wrong-first diagnostic | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
-| J132 | `any(...)` over a refused pointer union runs conformance selection before the union guard, emitting a spurious L0318 ahead of the real refusal | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
+| J131 | Two refusal sites lack the `Ill_Typed` guard their siblings have, so an already-refused operand draws a second, wrong-first diagnostic | C | Implemented: range traversal preserves an ill-typed lower endpoint without a second type report, and pointer conversion refuses an already ill-typed operand before numeric checks or pointer facts. Independent non-integer refusals remain. Exact acceptance remains open. |
+| J132 | `any(...)` over a refused pointer union runs conformance selection before the union guard, emitting a spurious L0318 ahead of the real refusal | C | Implemented: pointer-union refusal precedes all any-construction conformance lookup and instantiation. A real missing conformance still reports L0318; its related origin now names the current required any type rather than the first same-concept reference elsewhere in the program. Exact acceptance remains open. |
 | J133 | One mistake in a generic template body is reported once per instantiation, so an actual-independent error is printed N times with identical span and text | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
 | J134 | `Checked_Instance_Count` is set to the post-loop instance count, so any routine instance created while the ready-instance loop itself runs is never offered to `Check_Routine_Body` | P | Plausible checking-table concern: prove the late-instance window or non-scalar query is reachable before treating it as a missed source check. |
 | J135 | Referents_Agree returns False for an erased `any` carrier, so References_Agree says an `any C` reference is not equal to itself | C | Implemented: erased carriers compare their directly held concept before the referent-kind switch; pointers and slices to any retain their existing referent checks. Small table controls pin reflexivity, duplicate identity, concept mismatches, permissions and nested references. No reached source miscompilation was established; exact acceptance remains open. |
@@ -6763,8 +6763,22 @@ or generated executable ran. Logs are retained in
 `.scratch/r491-lowering-maintenance/` and `.scratch/r491-final-values/`.
 Exact-revision acceptance remains open.
 
-J120/J131/J132's refused-operand diagnostic cascades are next. J116's
-slice-endpoint claim
+J120/J131/J132 development evidence: seven selected negative cases pass 39
+checks in each of macOS debug and Linux release. The new exact-report fixture
+retains the four root errors from an eight-report bounded reproduction, then
+pins independent missing-conformance and non-integer-pointer controls. The
+former exposed a first-reference related-span error; conformance reporting now
+accepts the current required-type origin while ordinary constraints retain
+their declared origin. Existing read-only caller/slice, non-integer traversal,
+pointer-union-with-conformance, operand-cascade and ordinary constraint
+refusals pass unchanged. Both single-worker builds passed; selected tests have
+30-second or shorter limits, and the direct reproductions have ten-second
+limits. No Landin assembler, linker or generated executable ran. Logs are
+retained in `.scratch/r491-refused-operands/` and
+`.scratch/r491-final-values/`. Exact-revision acceptance remains open.
+
+J115/J128's unused resolution fact and redundant zeroed guard are next.
+J116's slice-endpoint claim
 still needs a separate normative disposition. J48 also requires an explicit
 static-selection collision rule: D146's existing uniqueness sentence is
 about erased dispatch, while D144 currently specifies table traversal order.
