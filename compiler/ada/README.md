@@ -171,6 +171,10 @@ source numbering, target layout, output or iteration order.
 Generic instance ownership follows the resolver's lexical scopes. A nested
 no-capture anonymous signature begins from file scope, so its declarations
 remain independent of the enclosing generic routine's instance overlays.
+Build-report collision preflight uses the same actual artifact list as source
+protection. A source-map path is reserved only when full debug information or
+caller coordinates require a map; filesystem identity still decides aliases
+between reports, emitted artifacts and every discovered source.
 A first-class imported C routine address is loaded through its ELF GOT entry,
 so Linux PIE linking does not require an invalid PC-relative relocation to an
 external definition. Defined routines retain direct relative addresses; symbol

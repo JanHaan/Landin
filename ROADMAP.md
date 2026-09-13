@@ -5659,7 +5659,7 @@ session, destructive output-collision experiment or resource-exhaustion sweep.
 
 | Older finding | Current disposition and evidence | Repair order |
 | --- | --- | --- |
-| A1: artifact/source collisions | Repaired: every actual output is compared with all discovered sources and other outputs through the filesystem identity seam before any write or tool call. Fake-host regressions cover explicit/imported sources, aliases, assembly/executable/map collisions and inactive-map controls. Existing build-report reservations remain intact. | Second batch implementation |
+| A1: artifact/source collisions | Repaired: every actual output is compared with all discovered sources and other outputs through the filesystem identity seam before any write or tool call. Fake-host regressions cover explicit/imported sources, aliases, assembly/executable/map collisions and inactive-map controls. K33 aligns build-report reservations with that same actual-output list. | Second batch implementation |
 | C1: diagnostic label contracts | All five sites still violated the catalogue at the baseline; the four sibling minimal cases still exited 70. Initial implementation repairs imports, fixed conditionals, conformances, unconditional completion and continue-with-value. | First batch |
 | A2, C2, M3: final values and silent recovery | Repaired: function blocks admit the existing statement-prefix/final-value grammar, including `r = zeroed(42)` as an assignment followed by a parenthesized value. The final value fills named result storage before cleanup, with matching assignment and origin facts. Final none-returning calls, try calls and statement controls retain named assignments; mixed value/no-value control edges remain refused, including reference results. Unconditional exits and unchecked regions still cannot prefix a final expression. The runtime fixture covers scalar, shaped, reference, generic, anonymous and fallible results; negative controls retain early-return, typing, escape and grammar refusals. | Recovery in first batch; final values implemented in third batch |
 | A3: type-shaped construction arguments | Repaired: seven type-only field/payload cases receive L0301 before value access; four type-only trailing fills receive L0102 under the existing expression grammar. Controls cover module, local and instantiated types. The variant-array initializer had valid case metadata; its root-array destination had base field zero. Lowering now captures the reached aggregate in the existing typed-address form before selecting its variant. Construction also preserves the existing L0305 module storage-address exclusion, including nested fields and payload fills; runtime-local addresses and callback bodies remain allowed. | Third batch implementation |
@@ -6063,7 +6063,7 @@ checks used the existing debug binary, sequentially, with 10-second timeouts.
 | K30 | G3: first-class external C function address uses a bare PC-relative address | Confirmed with one inspected 1,275-byte assembly file and a foreground 20-second-capped invocation of the pinned triplet-selected GNU driver: PIE linking refuses the PC32 puts relocation. Imported runtime function addresses now load through GOTPCREL; defined routines retain relative addresses and quoting is preserved. Two exact backend cases pass eight checks on each host. The inspected replacement links as a PIE and readelf confirms the puts GLOB_DAT relocation; no generated program was executed and exact acceptance remains open. |
 | K31 | G4: outgoing stack sizes lack a wide-immediate fallback | Broad defect claim not established: current `Frame_Is_Addressable` already rejects over-wide C incoming and outgoing stack areas. Retain a focused encoding audit for any path that bypasses this preflight, including internal calls; do not claim all huge calls reach emission or construct huge arguments. |
 | K32 | G10: stack-argument start uses max(8, its alignment) | Unresolved ABI comparison, not a confirmed defect. Compare the C classifier's offset/alignment rule and existing native ABI fixtures against the supported contract before proposing a change. |
-| K33 | H1: build-report collision checks reserve inactive product/map paths | Source still reserves all three paths before the actual-output list is formed. Extend the artifact/source identity repair with fake-host inactive-map/product controls and preserve refusal of real collisions; no filesystem overwrite experiment. |
+| K33 | H1: build-report collision checks reserve inactive product/map paths | Confirmed for an inactive map: report preflight now shares the actual artifact list. Product_Path already equals the assembly destination for non-executable emission, so no independent inactive-product defect was established. Fake-host controls cover both emission modes, map production by full debug or caller coordinates, aliases and real source/artifact collisions. Four exact cases pass 194 checks on each host; no real overwrite or tool run is used. Exact acceptance remains open. |
 | K34 | H2: help/identify bypass invalid deferred options | Source still returns before target/mode/root/option validation. Reconcile the existing no-misuse informational-action contract using fake-host cases for all four reported combinations; preserve valid informational requests and J45's invalid-CLI stage boundary. |
 | K35 | H3: build manifest omits the selected C compiler identity | Additional build-staleness item beside M13/J77: record the actual configured compiler/toolchain identity used for the native C adapter and invalidate both clean/checksum paths appropriately. Use disposable fake-toolchain controls, without changing the machine's compiler installation. |
 | K36 | H4: timeout kills only the direct tool PID | Repaired: POSIX spawn establishes a private process group before exec; a monotonic timeout kills that group and reaps the direct child. Adapter exceptions also stop an owned child. Five focused native cases pass in both modes, including a short-lived descendant's delayed write, literal argument bytes, capture modes, exit/signal distinctions and missing executables. This supervises ordinary group members, not descendants deliberately leaving the group; all assembly limits still apply. |
@@ -7444,6 +7444,22 @@ build and unknown-file refusals. Every subprocess has a ten-second timeout;
 the only assembly input is a tiny text hash witness and is never assembled.
 No Ada build, native assembly, generated executable, debugger or giant image
 is needed for this Python-only repair. Exact-revision acceptance remains open.
+
+K33 repairs a false build-report collision with an unused source-map path.
+The report and artifact/source guards now share the actual destination list.
+Both full debug information and caller coordinates reserve their emitted maps;
+without either, that path may hold a build report. The reported inactive-product
+case is not independent: non-executable Product_Path already equals the assembly
+path. Existing map-refusal cases now explicitly request full debug information.
+
+Four exact fake-host cases pass 194 checks in each of macOS debug and Linux
+release, including 12 small combinations of emission mode, map producer and
+path alias. Active map/source/assembly/executable collisions still precede every
+write and tool request. Both single-worker builds and the full document check
+pass. Logs are retained in `.scratch/r491-active-reports/` and
+`.scratch/r491-final-values/`; no native assembler, generated executable or
+filesystem overwrite experiment is part of this repair. These filtered checks
+do not replace exact-revision acceptance.
 
 K30 is now a confirmed and repaired GNU-toolchain finding. The retained minimal
 C-callback source emitted 1,275 bytes of assembly before the change, with no
