@@ -3230,8 +3230,174 @@ package body Landin.Tests.Parser_Suite is
          & "g: () -> (r: i32) = 2 end g", "L0108,L0108,L0108", "f,g");
    end Calls_Respect_The_Nesting_Limit;
 
+   procedure Fixed_Conditions_Survive_Missing_Openers
+     (Item : in out Landin.Testing.Context);
+
+   procedure Fixed_Conditions_Survive_Missing_Openers
+     (Item : in out Landin.Testing.Context)
+   is
+      package Syn renames Landin.Syntax;
+      procedure Check (Missing : Boolean; Arms : Positive);
+
+      procedure Check (Missing : Boolean; Arms : Positive) is
+         Text : constant String :=
+           "fixed " & (if Missing then "" else "if ")
+           & "flag then alpha: i32 = 1 "
+           & (if Arms >= 2 then "elsif other then beta: i32 = 2 " else "")
+           & (if Arms = 3 then "else gamma: i32 = 3 " else "")
+           & "end if tail: i32 = 4" & ASCII.LF;
+         Sources : Landin.Source.Sets.Source_Set;
+         Names : Landin.Source.Names.Table;
+         Stream : Landin.Tokens.Token_Stream;
+         Found : Landin.Diagnostics.Diagnostic_List;
+         Id : constant Landin.Source.Source_Id :=
+           Sources.Add ("fixed.ldn", Text);
+         Actual_Codes : Unbounded.Unbounded_String;
+      begin
+         Landin.Tokens.Lexer.Lex (Sources.Get (Id), Names, Stream);
+         declare
+            Parsed : constant Syn.Tree :=
+              Landin.Syntax.Parser.Parse (Stream, Names, Found);
+         begin
+            for Position in 1 .. Landin.Diagnostics.Count (Found) loop
+               if Position > 1 then
+                  Unbounded.Append (Actual_Codes, ",");
+               end if;
+               Unbounded.Append
+                 (Actual_Codes, Landin.Diagnostics.Code
+                    (Landin.Diagnostics.Get (Found, Position)));
+            end loop;
+            Landin.Testing.Check_Equal
+              (Item, Unbounded.To_String (Actual_Codes),
+               (if Missing then "L0103" else ""),
+               "only the omitted fixed-if opener is reported");
+            Landin.Testing.Check_Equal
+              (Item, Syn.Declaration_Count (Parsed), 2,
+               "the following module declaration survives");
+            Landin.Testing.Check
+              (Item, Syn.Declaration_Count (Parsed) = 2
+                 and then Syn.Kind
+                   (Parsed, Syn.Nth_Declaration (Parsed, 1))
+                     = Syn.Fixed_Conditional
+                 and then Landin.Source.Names.Spelling
+                   (Names, Syn.Name
+                      (Parsed, Syn.Nth_Declaration (Parsed, 2))) = "tail",
+               "the conditional and following named binding remain intact");
+            if Missing and then Landin.Diagnostics.Count (Found) = 1 then
+               Landin.Testing.Check_Equal
+                 (Item, Landin.Diagnostics.Message
+                    (Landin.Diagnostics.Primary
+                       (Landin.Diagnostics.Get (Found, 1))),
+                  "`fixed` conditional is followed by `if`",
+                  "the report identifies the missing opener");
+            end if;
+            for Node in Syn.Node_Id'(1) .. Syn.Last_Node (Parsed) loop
+               if Syn.Kind (Parsed, Node) = Syn.Fixed_Conditional then
+                  Landin.Testing.Check_Equal
+                    (Item, Syn.Fixed_Arm_Count (Parsed, Node), Arms,
+                     "conditional and else arms retain their boundaries");
+                  for Position in 1 .. Syn.Fixed_Arm_Count (Parsed, Node) loop
+                     declare
+                        Arm : constant Syn.Node_Id :=
+                          Syn.Nth_Fixed_Arm (Parsed, Node, Position);
+                        Condition : constant Syn.Node_Id :=
+                          Syn.Fixed_Condition (Parsed, Arm);
+                     begin
+                        Landin.Testing.Check
+                          (Item,
+                           (if Position = 3 then Condition = Syn.No_Node
+                            else Condition /= Syn.No_Node
+                              and then Syn.Kind (Parsed, Condition)
+                                = Syn.Name_Reference
+                              and then Landin.Source.Names.Spelling
+                                (Names, Syn.Name (Parsed, Condition))
+                                  = (if Position = 1 then "flag"
+                                     else "other")),
+                           "each arm keeps its original condition");
+                        Landin.Testing.Check_Equal
+                          (Item, Syn.Fixed_Declaration_Count (Parsed, Arm), 1,
+                           "the arm's declaration survives");
+                     end;
+                  end loop;
+               end if;
+            end loop;
+         end;
+      end Check;
+   begin
+      for Missing in Boolean loop
+         Check (Missing, 1);
+         Check (Missing, 2);
+         Check (Missing, 3);
+      end loop;
+   end Fixed_Conditions_Survive_Missing_Openers;
+
+   procedure Match_Arms_Classify_All_Loop_Kinds
+     (Item : in out Landin.Testing.Context);
+
+   procedure Match_Arms_Classify_All_Loop_Kinds
+     (Item : in out Landin.Testing.Context)
+   is
+      package Syn renames Landin.Syntax;
+      procedure Check (Opener, Closer : String; Offers_Value : Boolean);
+
+      procedure Check (Opener, Closer : String; Offers_Value : Boolean) is
+         Sources : Landin.Source.Sets.Source_Set;
+         Names : Landin.Source.Names.Table;
+         Stream : Landin.Tokens.Token_Stream;
+         Found : Landin.Diagnostics.Diagnostic_List;
+         Id : constant Landin.Source.Source_Id := Sources.Add
+           ("match-loop.ldn", "f: () -> none = match value north: "
+            & Opener & " do break " & (if Offers_Value then "with 7 " else "")
+            & "end " & Closer & " end match end f" & ASCII.LF);
+         Arms : Natural := 0;
+      begin
+         Landin.Tokens.Lexer.Lex (Sources.Get (Id), Names, Stream);
+         declare
+            Parsed : constant Syn.Tree :=
+              Landin.Syntax.Parser.Parse (Stream, Names, Found);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Landin.Diagnostics.Count (Found), 0,
+               "the match arm's loop parses: " & Closer);
+            for Node in Syn.Node_Id'(1) .. Syn.Last_Node (Parsed) loop
+               if Syn.Kind (Parsed, Node) = Syn.Match_Arm then
+                  Arms := Arms + 1;
+                  declare
+                     Block : constant Syn.Node_Id := Syn.Body_Of
+                       (Parsed, Node);
+                  begin
+                     Landin.Testing.Check
+                       (Item, (Syn.Block_Value (Parsed, Block) /= Syn.No_Node)
+                          = Offers_Value,
+                        "only a loop offering a value occupies the arm value"
+                        & ": " & Closer);
+                     Landin.Testing.Check_Equal
+                       (Item, Syn.Statement_Count (Parsed, Block),
+                        (if Offers_Value then 0 else 1),
+                        "a statement loop stays in the arm's statement run");
+                  end;
+               end if;
+            end loop;
+            Landin.Testing.Check_Equal
+              (Item, Arms, 1, "the complete match arm survives");
+         end;
+      end Check;
+   begin
+      for Offers_Value in Boolean loop
+         Check ("loop", "loop", Offers_Value);
+         Check ("while flag", "while", Offers_Value);
+         Check ("for index in 0 ..< 2", "for", Offers_Value);
+      end loop;
+   end Match_Arms_Classify_All_Loop_Kinds;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "parser", "match arms classify all loop kinds",
+         Match_Arms_Classify_All_Loop_Kinds'Access);
+      Landin.Testing.Register
+        (Into, "parser", "fixed conditions survive missing openers",
+         Fixed_Conditions_Survive_Missing_Openers'Access);
       Landin.Testing.Register
         (Into, "parser", "calls respect the nesting limit",
          Calls_Respect_The_Nesting_Limit'Access);
