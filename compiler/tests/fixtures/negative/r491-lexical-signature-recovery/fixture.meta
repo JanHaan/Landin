@@ -1,0 +1,9 @@
+class: negative
+summary: invalid bytes before parameter types preserve list boundaries without inventing missing return arrows
+program: main.ldn
+codes: L0012, L0012
+constructs: 1750, 1800
+targets: linux-x86-64, macos-arm64, synthetic-32
+expect: expected.txt
+args: ../tests/fixtures/negative/r491-lexical-signature-recovery/main.ldn
+status: 1

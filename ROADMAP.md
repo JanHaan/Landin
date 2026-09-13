@@ -5811,7 +5811,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J11 | Runtime variant case construction accepts a non-storage aggregate payload that lowering can only copy from storage (exit 70) | C | Open accepted-value lowering group: reproduce this storage/result shape narrowly, then preserve checked shape and initialization across its lowering path in both modes. |
 | J12 | Actual_Key erases [0660] range-subtype constraints, so a parameterized type application silently turns `percent` into `u8` | C | Repaired: type-template actuals retain D188/R7.20 refusal before interning an unconstrained identity. Normalized pointer/slice targets and array elements also enforce the existing constrained-composition boundary. Direct, aliased, nested and unused actuals refuse once; ordinary constrained values and unconstrained type/deduction controls remain accepted. |
 | J13 | Rendered diagnostic report is quadratic and unbounded; past Integer'Last the run dies with exit 70 and loses every diagnostic | P | Duplicate M10 with an additional report-size overflow concern. Bound rendering and preserve diagnostics; retain plausible status for the exhaustion claim and do not rerun the old stress case. |
-| J14 | The optional struct end name in [1795] is not optional: a bare `end` on a struct is refused as a stray token | C | Open parser boundary group: compare the normative grammar, preserve enclosing context and following declarations, and add small accepted/refused controls. |
+| J14 | The optional struct end name in [1795] is not optional: a bare `end` on a struct is refused as a stray token | C | Already repaired with J5: block structs consume their immediate `end`, optionally consume a repeated name, and preserve following declarations. The retained J5 bare-closer/parser and source-to-IR controls cover this duplicate finding; no separate feature or stress run is needed. |
 | J15 | The named refusal [1830] promises is missing for `noreturn`, `volatile` and multi-name bindings | C | Open refusal/document agreement: read [1830] and the enabled grammar first. Labelled bare blocks are absent from that grammar; do not enable them solely from the tour example. |
 | J16 | `lenof` on a slice is treated as a non-reading type constant, so an unassigned or sunk slice descriptor is read | C | Repaired: lenof reads a live, assigned slice descriptor. Fixed-array names and measured literal elements remain unevaluated. Slice length and index refusals include consumed descriptors without duplicate reports; both compiler modes pass the controls. |
 | J17 | `Require_Element` compares the sub-element run for equality instead of prefix containment, so a whole-child write inside an array element does not cover its leaves | C | Repaired: reads and branch merges use ancestor containment for an element's field path. Eleven paired controls pass in both modes: whole-child writes cover descendants, either branch order preserves common leaves, and siblings, other indices, parents and consumed descendants retain their independent obligations. Lookup walks only the selected path's ancestors. |
@@ -5898,7 +5898,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J98 | Block_Unreachable only checks that an edge exists, so an unreachable cycle of blocks passes | C | Refuted on current and reviewed source: the cited incoming-edge scan is followed unconditionally by Pointer_Provenance, which checks true entry reachability through Control_Flow.Make. Both 0a3d0a28 and 66927e93 already contain this check. Tiny self/pair islands are refused without slots or pointers; reachable cycles pass. No reachability implementation change was needed. |
 | J99 | An upper-case letter gets the generic L0012 'no rule spells these bytes' citing [1750] | C | Repaired: an all-uppercase invalid-byte run retains L0012 and its original token/span boundaries while explaining lower-case identifier spelling with [1760]. Mixed invalid runs retain the generic byte report and recovery. Exact lexer and rendered-report controls pin both paths. |
 | J100 | Repeated delimiter-free conformance/signature lookahead on malformed input | C | Open malformed-input lookahead cost, distinct from M1: 326e6a32 adds the := delimiter but does not bound delimiter-free identifier runs or unmatched-signature lookahead. No old scaling case was rerun. |
-| J101 | Expect's post-lexical-error forward scan crosses construct boundaries and mangles the parse | C | Duplicate N11: preserve construct/list boundaries after a scanner refusal without re-reporting that refused lexeme. |
+| J101 | Expect's post-lexical-error forward scan crosses construct boundaries and mangles the parse | C | Implemented with N11: Expect skips only scanner-refused tokens, leaving the next kernel token to its caller. Missing parameter/return colons recover locally through type parsing, preserving nested type delimiters, sibling parameters and subsequent declarations without duplicate lexical reports. |
 | J102 | Parse_Fixed_Conditional consumes the arm's condition when `if` is missing, producing a three-diagnostic cascade | C | Implemented with J103: fixed-conditional openers are consumed once when present; a missing if leaves its condition in hand. The bounded source reproduction now reports only the original L0103. One-, two- and three-arm syntax controls preserve conditions and following declarations. Exact acceptance remains open. |
 | J103 | Dead Is_Else guard in Parse_Fixed_Conditional's arm loop | C | Removed with J102: the fixed-conditional loop handles only conditional arms and exits before the separately parsed else arm, so its never-true Is_Else guard and assignments are gone. Accepted and missing-opener controls cover the remaining branches. |
 | J104 | Nine contextual words cannot be assigned to as ordinary bindings, contradicting spec.md's identifier guarantee | C | Open parser boundary group: compare the normative grammar, preserve enclosing context and following declarations, and add small accepted/refused controls. |
@@ -7006,9 +7006,23 @@ linker, generated executable or debugger session ran. Evidence is retained in
 `.scratch/r491-generic-anonymous/`, `.scratch/r491-anonymous-type-reports/`
 and `.scratch/r491-final-values/`. Exact-revision acceptance remains open.
 
-J101's post-lexical-error recovery scan is next. Keep the small malformed
-signature's punctuation boundaries and subsequent declarations; do not replay
-parser stress, truncation or mutation campaigns.
+J101/N11 development evidence: five selected cases pass 135 checks in each
+of macOS debug and Linux release. Seven short signature controls cover refused
+bytes before types and punctuation, sibling parameters, a nested function type,
+a named return and an ordinary missing-colon control. The new three-line
+negative golden retains exactly two L0012 reports without spurious missing
+arrows. Existing head, list-anchor and struct-closer controls also pass; the
+last confirms J14 was already covered by J5. Both single-worker builds passed,
+selected tests have 30-second or shorter limits, and the direct golden probe
+had a 10-second limit. Diagnostic, lexical and target inventories record the
+new fixture. No Landin assembler, linker, generated executable, parser stress,
+truncation or mutation campaign ran. Evidence is retained in
+`.scratch/r491-lexical-recovery/` and `.scratch/r491-final-values/`.
+Exact-revision acceptance remains open.
+
+J75's repeated whole-forest width queries are next. Reuse the flow invocation's
+already fixed field bound; validate small fieldwise and multiple-result controls
+without timing sweeps or persistent cache state.
 J116's slice-endpoint claim
 still needs a separate normative disposition. J48 also requires an explicit
 static-selection collision rule: D146's existing uniqueness sentence is

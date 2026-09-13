@@ -1,0 +1,3 @@
+f: (a@ i32) -> (r: i32) = r = 0 end f
+g: (a@ i32, b: i32) -> (r: i32) = r = b end g
+keep: () -> (r: i32) = r = 1 end keep
