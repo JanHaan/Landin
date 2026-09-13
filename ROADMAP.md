@@ -5901,7 +5901,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J101 | Expect's post-lexical-error forward scan crosses construct boundaries and mangles the parse | C | Implemented with N11: Expect skips only scanner-refused tokens, leaving the next kernel token to its caller. Missing parameter/return colons recover locally through type parsing, preserving nested type delimiters, sibling parameters and subsequent declarations without duplicate lexical reports. |
 | J102 | Parse_Fixed_Conditional consumes the arm's condition when `if` is missing, producing a three-diagnostic cascade | C | Implemented with J103: fixed-conditional openers are consumed once when present; a missing if leaves its condition in hand. The bounded source reproduction now reports only the original L0103. One-, two- and three-arm syntax controls preserve conditions and following declarations. Exact acceptance remains open. |
 | J103 | Dead Is_Else guard in Parse_Fixed_Conditional's arm loop | C | Removed with J102: the fixed-conditional loop handles only conditional arms and exits before the separately parsed else arm, so its never-true Is_Else guard and assignments are gone. Accepted and missing-opener controls cover the remaining branches. |
-| J104 | Nine contextual words cannot be assigned to as ordinary bindings, contradicting spec.md's identifier guarantee | C | Open parser boundary group: compare the normative grammar, preserve enclosing context and following declarations, and add small accepted/refused controls. |
+| J104 | Nine contextual words cannot be assigned to as ordinary bindings, contradicting spec.md's identifier guarantee | C | Binding and assignment repair implemented: explicit declaration/assignment punctuation precedes contextual control dispatch, including match arms. Twelve contextual names retain immutable bindings, indexed and compound assignments, and loop/completion-body assignments. Primary-expression dispatch still intercepts ordinary reads of match, begin and loop words; that facet remains open. |
 | J105 | Diagnostic and recovery for return followed by a name | C | Partly superseded by 7250d298: the final-value-prefix regression now reports one L0110. The targeted return-carries-value wording remains a diagnostic choice; the old cascade is not a current reproduction. |
 | J106 | Two `link(symbol:)` diagnostics cite [1580] (Importing from C) instead of [1610] | C | Implemented: all link-annotation notes consistently cite [1610] and the normative `text` parameter type. Missing-colon and missing-close probes retain their original L0103 code and single report. Exact acceptance remains open. |
 | J107 | Match-arm control classification omits For_Statement, diverging from the three sibling lists | C | Implemented: a match arm classifies For_Statement alongside loop and while before assigning its value slot. Small syntax controls preserve loops with value-carrying breaks and place ordinary loops in the statement run. No accepted-source miscompilation is claimed; exact acceptance remains open. |
@@ -7314,8 +7314,23 @@ emit one object in both modes. The macOS assembly texts are each 5,270 bytes.
 Single-worker builds pass. These are text-emission and fake-tool checks; no
 native assembly, generated executable, debugger or giant image ran. Evidence
 is in `.scratch/r491-module-identity/` and `.scratch/r491-final-values/`.
-Exact-revision acceptance remains open. J104's contextual-identifier parsing
-is the next implementation repair.
+Exact-revision acceptance remains open.
+
+J104's statement repair preserves ordinary contextual-name bindings and
+assignments by recognizing their existing punctuation before control-word
+dispatch. Match arms use the same distinction; labelled loops retain their
+existing priority. Twelve explicit names have small immutable-binding,
+indexed-assignment, compound-assignment, match-arm, loop-body and completion
+controls. Seven exact selectors pass 107 checks in each of macOS debug and
+Linux release, including existing control expressions and cleanup/transfer
+boundaries. Both single-worker builds and the inventories pass. The positive
+fixture emits assembly text only; no native assembly, generated executable,
+debugger or giant image ran. Evidence is in
+`.scratch/r491-contextual-names/` and `.scratch/r491-final-values/`.
+The primary-expression facet remains open: an ordinary read such as a named
+result assigned from a parameter named `match` is still intercepted as a
+control expression. Continue that boundary review without reserving words or
+introducing newline semantics. Exact-revision acceptance remains open.
 
 J116's slice-endpoint claim
 still needs a separate normative disposition. J48 also requires an explicit

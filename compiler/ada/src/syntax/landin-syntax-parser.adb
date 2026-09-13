@@ -5237,6 +5237,41 @@ package body Landin.Syntax.Parser is
                                 (Context, Starts => Label_At, Label => Label);
                            end if;
                         end;
+                     --  Binding/assignment punctuation keeps this token an
+                     --  identifier even when its word can open a control form.
+                     elsif Ahead (1) in Tok.Colon | Tok.Colon_Equal then
+                        return Parse_Binding
+                          (False, Landin.Source.Empty_Span);
+                     elsif After_Selectors in Tok.Equal | Tok.Compound_Assign
+                     then
+                        declare
+                           Target : constant Node_Id := Parse_Place;
+                           At_Op  : Landin.Source.Span;
+                           Operation : Tok.Assignment_Operator;
+                           Value  : Node_Id := No_Node;
+                        begin
+                           --  After_Selectors is a non-consuming lookahead.
+                           --  A damaged selector can satisfy that lookahead
+                           --  while Parse_Place recovers somewhere else; do
+                           --  not read assignment metadata from that token.
+                           if Peek not in Tok.Equal | Tok.Compound_Assign then
+                              return Add
+                                (Error_Statement, Start,
+                                 Join (Start, After_Previous));
+                           end if;
+                           At_Op := Here;
+                           Operation := Tok.Assignment_Operation
+                             (Tok.Token_At (From, Index));
+                           Advance;
+                           Value := Parse_Expression;
+
+                           return Add
+                             (Of_Kind  => Assignment,
+                              At_Token => At_Op,
+                              Extent   => Join (Start, After_Previous),
+                              Children => [Target, Value],
+                              Assignment_Op => Operation);
+                        end;
                      elsif Named_Here in Loop_Id | While_Id | For_Id
                      then
                         if Named_Here = For_Id then
@@ -5358,47 +5393,6 @@ package body Landin.Syntax.Parser is
                         return Parse_Bare_Block (Context);
                      elsif Opens_Unchecked then
                         return Parse_Unchecked_Block (Context);
-                     end if;
-
-                     if Ahead (1) in Tok.Colon | Tok.Colon_Equal then
-                        return Parse_Binding
-                          (False, Landin.Source.Empty_Span);
-                     end if;
-
-                     --  A place is [1820]'s indexed selection [1810], so
-                     --  what follows the whole of it -- every dot and
-                     --  every bracket group -- is what makes this an
-                     --  assignment.
-                     if After_Selectors in Tok.Equal | Tok.Compound_Assign
-                     then
-                        declare
-                           Target : constant Node_Id := Parse_Place;
-                           At_Op  : Landin.Source.Span;
-                           Operation : Tok.Assignment_Operator;
-                           Value  : Node_Id := No_Node;
-                        begin
-                           --  After_Selectors is a non-consuming lookahead.
-                           --  A damaged selector can satisfy that lookahead
-                           --  while Parse_Place recovers somewhere else; do
-                           --  not read assignment metadata from that token.
-                           if Peek not in Tok.Equal | Tok.Compound_Assign then
-                              return Add
-                                (Error_Statement, Start,
-                                 Join (Start, After_Previous));
-                           end if;
-                           At_Op := Here;
-                           Operation := Tok.Assignment_Operation
-                             (Tok.Token_At (From, Index));
-                           Advance;
-                           Value := Parse_Expression;
-
-                           return Add
-                             (Of_Kind  => Assignment,
-                              At_Token => At_Op,
-                              Extent   => Join (Start, After_Previous),
-                              Children => [Target, Value],
-                              Assignment_Op => Operation);
-                        end;
                      end if;
 
                      if Ahead (1) = Tok.Left_Paren then
@@ -6216,9 +6210,7 @@ package body Landin.Syntax.Parser is
                                 or else Opens_Unchecked
                                 or else Opens_Arena_Block
                                 or else
-                                  (Named_Here not in Match_Id | Begin_Id
-                                     | Loop_Id | While_Id | For_Id
-                                   and then not
+                                  (not
                                      (Ahead (1) = Tok.Colon
                                       and then Ahead (2) = Tok.Identifier
                                       and then Named_Ahead (2)
