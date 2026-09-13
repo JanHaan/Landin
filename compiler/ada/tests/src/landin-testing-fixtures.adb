@@ -40,6 +40,9 @@ package body Landin.Testing.Fixtures is
 
    function Class (Item : Fixture) return Fixture_Class is (Item.Class);
 
+   function Profile_Count (Item : Fixture) return Positive
+     is (if Item.Profiles = Specialization then 6 else 4);
+
    function Name (Item : Fixture) return String
      is (Unbounded.To_String (Item.Name));
 
@@ -276,6 +279,7 @@ package body Landin.Testing.Fixtures is
       Seen_C_Sources : Boolean := False;
       Seen_C_Args  : Boolean := False;
       Seen_Stream  : Boolean := False;
+      Seen_Profiles : Boolean := False;
       Seen_Lex     : Boolean := False;
       Seen_Codes   : Boolean := False;
       Line_Number  : Natural := 0;
@@ -476,6 +480,22 @@ package body Landin.Testing.Fixtures is
                end if;
                Seen_Run_Expect := True;
                Item.Run_Expect := Unbounded.To_Unbounded_String (Value);
+
+            elsif Key = "profiles" then
+               if Seen_Profiles then
+                  Complain ("duplicate key: profiles");
+                  return;
+               end if;
+               Seen_Profiles := True;
+
+               if Value = "standard" then
+                  Item.Profiles := Standard;
+               elsif Value = "specialization" then
+                  Item.Profiles := Specialization;
+               else
+                  Complain ("profiles is not standard or specialization: "
+                            & Value);
+               end if;
 
             elsif Key = "stream" then
                if Seen_Stream then
@@ -706,7 +726,8 @@ package body Landin.Testing.Fixtures is
                Root    => Unbounded.Null_Unbounded_String,
                C_Files => Unbounded.Null_Unbounded_String,
                C_Options => Unbounded.Null_Unbounded_String,
-               Stream  => Merged);
+               Stream  => Merged,
+               Profiles => Standard);
 
       for Index in Content'Range loop
          if Content (Index) = Character'Val (10) then
@@ -742,6 +763,14 @@ package body Landin.Testing.Fixtures is
 
       if Seen_Args and then not Seen_Expect then
          Complain ("args without expect: nothing would be compared");
+      end if;
+
+      if Expected in Runtime | Abi then
+         if not Seen_Profiles then
+            Complain ("missing required key: profiles");
+         end if;
+      elsif Seen_Profiles then
+         Complain ("profiles belong only to a runtime or ABI fixture");
       end if;
 
       if Seen_Run_Args

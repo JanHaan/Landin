@@ -1,4 +1,5 @@
 class: abi
+profiles: standard
 summary: Independent C banks rollback stack ordering and physical sret
 program: program.ldn
 c-sources: peer.c

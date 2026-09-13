@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: zero-length nominal arrays retain their element identity through generic and nested function signature transport
 constructs: 0520, 1000, 1290, 1350, 1920
 program: main.ldn

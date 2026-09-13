@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: core/mem enforces an initialized prefix over non-zeroable pointer elements using ordinary address conversions and no privileged pointer-to-slice primitive
 program: main.ldn
 root: ../../../../..

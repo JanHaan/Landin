@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: a caller-backed fixed pool aligns finite slots and reclaims exact extents without heap fallback
 program: main.ldn
 root: ../../../../..

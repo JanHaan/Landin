@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: a struct local holds each field at its own [0750] offset in the frame, and two of them do not overlap
 constructs: 0420, 0670, 0750, 1810, 1900, 1910
 program: main.ldn

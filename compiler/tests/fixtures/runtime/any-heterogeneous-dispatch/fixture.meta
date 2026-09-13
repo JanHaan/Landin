@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: two erased concrete types use immutable and mutable entries through real tables
 program: main.ldn
 status: 42

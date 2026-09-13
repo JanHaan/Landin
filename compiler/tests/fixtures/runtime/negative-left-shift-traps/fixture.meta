@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: a dynamic negative left shift amount traps
 program: main.ldn
 traps: yes

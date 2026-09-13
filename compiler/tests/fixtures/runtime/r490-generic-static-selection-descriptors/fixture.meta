@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: forward static callback aliases and selected atom arrays retain complete descriptors through distinct wrappers and generic copies
 program: main.ldn
 status: 42

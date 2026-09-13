@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: D24 emits an explicitly typed module array literal as one .data image and D21 chains copy that image byte for byte
 constructs: 0040, 0080, 0110, 0410, 0520, 1740, 1940
 program: main.ldn

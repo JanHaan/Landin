@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: inferred errors and generic recovery in trailing constructor fill
 program: main.ldn
 status: 42

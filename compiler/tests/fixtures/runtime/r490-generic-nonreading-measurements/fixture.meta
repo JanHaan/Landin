@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: generic and ordinary array type measurements preserve nonreading shape semantics
 program: main.ldn
 status: 42

@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: inferred and typed erased calls keep concept labels and exact results across provider staging
 program: main.ldn
 status: 42

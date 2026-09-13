@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: D48 traps a computed module array-field index before forming its address
 constructs: 0520, 0580, 0670, 0750, 1740, 1820, 1950
 program: main.ldn

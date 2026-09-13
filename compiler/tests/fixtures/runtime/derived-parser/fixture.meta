@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: the prototype-2 parser builds nested arena ASTs, recovers in order through any loggers, and propagates allocation and I/O failures
 program: main.ldn
 root: ../../../../..

@@ -1,4 +1,5 @@
 class: abi
+profiles: standard
 summary: C-owned startup initializes real core/io arguments once across callbacks
 program: program.ldn
 root: ../../../../..

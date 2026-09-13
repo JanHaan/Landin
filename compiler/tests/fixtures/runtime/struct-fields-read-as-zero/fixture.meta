@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: every field of zeroed module state reads as zero at its own [0750] offset
 constructs: 0420, 0670, 0750, 1740, 1820
 program: main.ldn

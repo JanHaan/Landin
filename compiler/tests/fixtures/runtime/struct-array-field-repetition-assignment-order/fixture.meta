@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: D53 fills module and local fields once and preserves ordered prefixes and siblings
 constructs: 0080, 0190, 0340, 0350, 0410, 0520, 0560, 0670, 0750, 1740, 1760, 1770, 1810, 1900
 program: main.ldn

@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: the complete prototype-3 derivative composes initialized containers, heterogeneous evidence, and exact reclaiming-provider rollback
 program: main.ldn
 root: ../../../../..

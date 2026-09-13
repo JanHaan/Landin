@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: generic pointer and slice fields survive nominal construction copy return and deduction
 program: main.ldn
 status: 42

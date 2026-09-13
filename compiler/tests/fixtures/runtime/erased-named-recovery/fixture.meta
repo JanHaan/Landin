@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: typed and statement erased calls retain exact named recovery errors and once-only dispatch
 program: main.ldn
 status: 42

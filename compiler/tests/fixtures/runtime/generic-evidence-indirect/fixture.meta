@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: two scalar conformances share one generic body and dispatch through evidence
 program: main.ldn
 status: 42

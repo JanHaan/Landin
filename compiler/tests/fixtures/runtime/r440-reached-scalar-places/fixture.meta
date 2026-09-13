@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: Pointer and inout array leaves retain scalar address witnesses across reads, writes and compound recovery.
 program: main.ldn
 status: 42

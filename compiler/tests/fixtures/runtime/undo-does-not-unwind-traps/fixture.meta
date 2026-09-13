@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: a trap stops before failure-only cleanup and never unwinds undo
 program: main.ldn
 traps: yes

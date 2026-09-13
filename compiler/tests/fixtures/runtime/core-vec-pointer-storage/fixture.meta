@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: core/vec grows non-zeroable pointers transactionally through a deterministic failing allocator
 program: main.ldn
 root: ../../../../..

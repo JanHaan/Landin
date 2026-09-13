@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: aliases and selected imports preserve declaration identities across generic types, concepts, errors, cases and mutable storage in a rooted whole program
 program: main.ldn
 root: root

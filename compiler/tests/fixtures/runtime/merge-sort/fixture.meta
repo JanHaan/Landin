@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: merge sort recurses only for partitioning and loops over caller-owned input and work storage
 constructs: 0040, 0290, 0370, 0520, 0570, 0900, 1140, 1150, 1800, 1810, 1920, 1950, 1970
 program: main.ldn

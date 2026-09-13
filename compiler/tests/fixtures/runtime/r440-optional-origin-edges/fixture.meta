@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: Empty optional edges select fallback values and present early, control, recovery, narrowed and multi-result edges preserve the caller's real pointer
 constructs: 0480, 0770, 0790, 0990, 1050, 1150, 1210
 program: main.ldn

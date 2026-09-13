@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: explicit static type arguments normalize compact parameterized alias and nominal call projections, including nesting
 constructs: 0980, 1290, 1300, 1350, 1800, 1920, 1970
 program: main.ldn

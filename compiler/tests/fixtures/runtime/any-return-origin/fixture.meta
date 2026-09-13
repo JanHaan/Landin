@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: an erased result carries its source origin and two-word return ABI
 program: main.ldn
 status: 42

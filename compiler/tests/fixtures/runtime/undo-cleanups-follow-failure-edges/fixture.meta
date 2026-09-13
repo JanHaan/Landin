@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: undo and defer compose in lexical reverse order only while failure propagates
 program: main.ldn
 status: 42

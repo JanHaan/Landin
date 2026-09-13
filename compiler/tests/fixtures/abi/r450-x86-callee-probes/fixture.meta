@@ -1,4 +1,5 @@
 class: abi
+profiles: specialization
 summary: C observes all GP callee saves and large MEMORY arguments cross probed frames and outgoing areas
 program: program.ldn
 c-sources: peer.c

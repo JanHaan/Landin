@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: D139 selects a D138 generic routine whose deduced instance executes
 program: main.ldn
 status: 42

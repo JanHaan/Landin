@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: D162 a decimal literal rounds once to its target width: binary32 and binary64 midpoints tie to even, a digit anywhere past a midpoint rounds up, subnormals and the smallest normal are exact
 program: main.ldn
 status: 42

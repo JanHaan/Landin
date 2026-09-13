@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: a trap stops before normal block cleanup and never unwinds defer
 program: main.ldn
 traps: yes

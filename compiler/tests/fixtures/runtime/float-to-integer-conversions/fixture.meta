@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: explicit float-to-integer conversion truncates toward zero across widths and the complete signed and unsigned range
 constructs: 0150, 0170, 0190, 0210, 0230, 0310, 0700, 1880, 1940, 1960
 program: main.ldn

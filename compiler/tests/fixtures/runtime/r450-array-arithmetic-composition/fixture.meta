@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: array operators compose through parameters, returns, fields and pointers
 constructs: 0300, 0370, 0520, 0590, 0760, 1890
 program: main.ldn

@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: static nested and callback fills preserve recursive images
 program: main.ldn
 status: 42

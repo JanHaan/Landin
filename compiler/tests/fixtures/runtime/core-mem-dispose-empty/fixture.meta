@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: R4.40 unallocated and disposed typed storage carry an atom, cannot expose a pointer or value, and differ from a genuine zero-slot allocation
 program: main.ldn
 root: ../../../../..

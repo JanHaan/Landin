@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: erased calls pair distinct layouts and snapshot receivers before argument effects and control flow
 program: main.ldn
 status: 42

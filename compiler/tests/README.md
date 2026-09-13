@@ -139,18 +139,21 @@ exit, signal and default-capture coverage.
 ## Optimization profiles and object quality
 
 Every runtime and ABI fixture runs separately under `none/off`, `size/off`,
-`size/auto` and `speed/auto` (objective/specialization). Focused names containing
-`generic`, `any-`, `r450` or `r480`, plus `allocator-vec-pressure`,
-`diagnostic-loggers-dispatch`, `core-io-erased-system`, `derived-containers`
-and the complete derived hosted application fixtures,
-also run `none/all`
-and `speed/all`. A selected runtime/ABI fixture uses the same matrix. Artifact
+`size/auto` and `speed/auto` (objective/specialization). Every runtime and
+ABI fixture explicitly records `profiles: standard` for those four, or
+`profiles: specialization` to add `none/all` and `speed/all`. The latter
+covers the generic, erased-dispatch and complete hosted workloads that need
+forced-specialization evidence. Policy travels with the metadata when a
+fixture is renamed; no part of its directory name selects coverage.
+Missing, duplicate, unknown or misplaced profile policy is a metadata error.
+A selected runtime/ABI fixture uses the same matrix. Artifact
 names and assertion labels include the profile. Each profile independently
 checks the original exact status, trap and output oracle; agreement with another
 profile alone is never success. Timeout never satisfies `traps: yes`.
 
 The harness adds compiler controls directly, not through a fixture's `args` or
-`run_args`; metadata remains the program's original request and oracle.
+`run_args`; `profiles` selects the harness matrix separately from the
+program's original request and oracle.
 `--build-mode` is a separate source-configuration axis, and building the Ada
 compiler in debug/release does not select an emitted-code objective either.
 
@@ -340,6 +343,7 @@ and checks all ten during explicit complete native acceptance.
 | --- | --- | --- |
 | `class` | yes | must match the directory the fixture sits in |
 | `summary` | yes | one line, what the fixture proves |
+| `profiles` | yes for runtime and ABI only | `standard` for the four baseline compiler profiles, or `specialization` for all six; independent of fixture name |
 | `program` | yes for runtime, ABI, and a rooted positive or negative | the `.ldn` program the fixture runs or uses as its compile-only corpus file |
 | `with` | no | the rest of the Landin module, when one file is not enough; never a C source |
 | `root` | no | a positive, negative, runtime or ABI fixture's import root, relative to its directory; the directory itself becomes the entry module |

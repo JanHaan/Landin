@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: each map replacement allocation failure rolls back exactly and a reclaiming provider retries
 program: main.ldn
 root: ../../../../..

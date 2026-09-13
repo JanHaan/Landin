@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: collection traversal aliases fixed-array and slice elements with one source evaluation, ordered indices, mutation, cleanup, control transfer, and aggregate loop results
 program: main.ldn
 status: 42

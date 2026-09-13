@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: GP pressure retains narrow carriers and values across direct indirect and failing calls
 program: main.ldn
 status: 0

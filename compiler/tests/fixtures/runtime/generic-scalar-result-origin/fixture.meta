@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: a concrete scalar generic result carries no source origin across a later inout call
 program: main.ldn
 status: 42

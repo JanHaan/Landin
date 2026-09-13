@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: lexical defers run in reverse across fallthrough returns nested controls and cleanup-argument exits
 program: main.ldn
 status: 42

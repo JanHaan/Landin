@@ -1,4 +1,5 @@
 class: abi
+profiles: standard
 summary: A C callback named main in Landin never initializes or replaces the hosted argument root
 program: main.ldn
 c-sources: companion.c

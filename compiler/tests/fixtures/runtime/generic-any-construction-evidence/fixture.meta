@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: generic-only any constructions register composed evidence under each concrete view
 program: main.ldn
 root: ../../../../..

@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: a non-final for traversal remains a statement in a value-producing block
 program: main.ldn
 constructs: 1080, 1150, 1160

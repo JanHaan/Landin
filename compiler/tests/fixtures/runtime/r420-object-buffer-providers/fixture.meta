@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: initialized reference objects and byte buffers retain exact cleanup across providers
 program: main.ldn
 root: ../../../../..

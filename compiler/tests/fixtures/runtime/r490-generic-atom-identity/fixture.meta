@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: atom identity equality spans disjoint and overlapping structural sets with preserved generic values and written operand order
 program: main.ldn
 status: 42

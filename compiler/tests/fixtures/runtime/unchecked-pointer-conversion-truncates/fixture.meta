@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: D187 a pointer-to-integer conversion inside [1120]'s region keeps the low-order bits of the address instead of trapping
 constructs: 0380, 0470, 0700, 1120
 program: main.ldn

@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: an erased pair survives storage in and selection from an aggregate
 program: main.ldn
 status: 42

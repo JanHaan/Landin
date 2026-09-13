@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: vector views traverse copied pointers and heterogeneous any values and permit element replacement
 program: main.ldn
 root: ../../../../..

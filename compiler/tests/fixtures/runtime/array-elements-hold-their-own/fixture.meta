@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: each element of module array state is written and read at its own offset, and the rest stay D10 zero
 constructs: 0520, 0570, 1740, 1820
 program: main.ldn

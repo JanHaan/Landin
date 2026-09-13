@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: one exact conformance supplies the omitted erased concept context
 program: main.ldn
 status: 42

@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: a computed write beyond a writable slice length traps
 program: main.ldn
 traps: yes

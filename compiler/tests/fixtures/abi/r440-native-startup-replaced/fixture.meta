@@ -1,4 +1,5 @@
 class: abi
+profiles: standard
 summary: Reentrant C initialization cannot replace a live argument root
 program: program.ldn
 root: ../../../../..

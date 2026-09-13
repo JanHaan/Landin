@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: core/small preserves inline and spilled values across failed first spill and later growth
 program: main.ldn
 root: ../../../../..

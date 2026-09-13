@@ -1,4 +1,5 @@
 class: abi
+profiles: standard
 summary: Recursive C array fields preserve layout images pointers and register or memory transport
 program: program.ldn
 c-sources: peer.c

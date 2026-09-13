@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: hosted I/O retains exact terminal errno detail after stable atom mapping
 program: main.ldn
 root: ../../../../..

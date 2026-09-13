@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: [1920] narrow scalars in the seventh and later positions cross the call through their eight-byte stack slots with their own width and sign
 program: main.ldn
 status: 42

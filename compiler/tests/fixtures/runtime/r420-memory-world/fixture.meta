@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: caller-backed memory world performs bounded reads writes and deterministic failure cleanup
 program: main.ldn
 root: ../../../../..

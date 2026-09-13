@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: recovery-dependent nominal providers retain exact tables in each generic caller view
 program: main.ldn
 status: 42

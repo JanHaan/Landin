@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: append-only index trees preserve names and counts through deep growth and reject invalid child ranges
 program: main.ldn
 root: ../../../../..

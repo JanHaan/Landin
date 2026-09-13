@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: deferred argument recoveries keep evaluation timing, failure-only undo and concrete generic error deduction
 program: main.ldn
 status: 42

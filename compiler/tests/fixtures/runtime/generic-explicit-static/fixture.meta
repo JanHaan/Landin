@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: saturated named static arguments and generic type/fixed forwarding create no runtime argument positions
 constructs: 0980, 1290, 1300, 1350, 1490, 1520, 1800, 1920, 1970
 program: main.ldn

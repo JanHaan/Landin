@@ -1,4 +1,5 @@
 class: abi
+profiles: standard
 summary: C scalar and narrow direct indirect and callback transport
 program: program.ldn
 c-sources: peer.c

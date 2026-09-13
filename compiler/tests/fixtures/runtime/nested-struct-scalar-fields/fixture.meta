@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: a depth-one ordinary child carries scalar field reads and writes through module and local storage
 constructs: 0420, 0540, 0670, 0750, 1810, 1820, 1970
 program: main.ldn

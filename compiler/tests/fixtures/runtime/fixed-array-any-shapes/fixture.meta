@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: singleton and larger any arrays retain heterogeneous data and evidence through generic copies typed stores and slices
 program: main.ldn
 status: 42

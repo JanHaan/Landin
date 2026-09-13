@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: scalar arguments after the six-register prefix cross an ordinary call in aligned stack slots
 constructs: 0190, 0410, 1650, 1800, 1920, 1970
 program: main.ldn

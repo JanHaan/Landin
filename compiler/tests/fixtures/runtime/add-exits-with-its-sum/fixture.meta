@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: checked addition and subtraction reach the host as the program's status
 constructs: 0290, 0300, 1770, 1790, 1800, 1970
 program: main.ldn

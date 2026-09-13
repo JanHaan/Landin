@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: deferred direct and indirect calls evaluate stack and aggregate arguments at cleanup time
 program: main.ldn
 status: 42

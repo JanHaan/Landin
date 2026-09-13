@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: inferred recovery discovers an erased parameterized provider
 program: main.ldn
 status: 42

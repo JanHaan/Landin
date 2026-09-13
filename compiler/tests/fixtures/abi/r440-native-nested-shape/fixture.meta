@@ -1,4 +1,5 @@
 class: abi
+profiles: standard
 summary: Three nested float structs merge into two SSE eightbytes in both directions
 program: program.ldn
 c-sources: peer.c

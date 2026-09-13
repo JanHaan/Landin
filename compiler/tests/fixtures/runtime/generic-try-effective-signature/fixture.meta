@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: nested generic try uses per-view fallible targets through deduced and reordered named calls
 constructs: 0940, 0960, 0980, 1030, 1290, 1920, 1970
 program: main.ldn

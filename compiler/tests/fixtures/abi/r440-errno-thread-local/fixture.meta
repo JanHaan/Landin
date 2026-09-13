@@ -1,4 +1,5 @@
 class: abi
+profiles: standard
 summary: pthreads preserve distinct thread-local errno across C to Landin to hosted bridge calls
 program: program.ldn
 root: ../../../../..

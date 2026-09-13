@@ -1,4 +1,5 @@
 class: abi
+profiles: standard
 summary: Actual core/io argument capability acquisition traps before C initialization
 program: program.ldn
 root: ../../../../..

@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: distinct construction and exact extraction preserve module scalar and aggregate images
 program: main.ldn
 status: 42

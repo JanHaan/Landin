@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: an inferred module literal supplies static data copied into distinct array storage
 constructs: 0040, 0050, 0080, 0200, 0410, 0520, 0530, 1740, 1940
 program: main.ldn

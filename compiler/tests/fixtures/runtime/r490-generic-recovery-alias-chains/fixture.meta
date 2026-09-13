@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: chained recovery aliases preserve exact failed sets across generic views and a mutual component
 program: main.ldn
 status: 42

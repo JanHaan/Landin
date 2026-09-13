@@ -1,4 +1,5 @@
 class: abi
+profiles: standard
 summary: Promoted scalar C varargs exhaust both banks and pin al directly and indirectly
 program: program.ldn
 c-sources: peer.c

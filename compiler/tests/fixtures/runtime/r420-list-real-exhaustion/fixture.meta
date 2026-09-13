@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: bounded arena and fixed-slot exhaustion preserve pointer and erased list contents before reuse
 program: main.ldn
 root: ../../../../..

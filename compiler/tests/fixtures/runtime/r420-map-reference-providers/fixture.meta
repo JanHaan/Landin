@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: pointer keys and values retain transactional rehash across all allocator providers
 program: main.ldn
 root: ../../../../..

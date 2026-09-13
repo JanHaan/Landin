@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: D212 independent explicit backing exhausts deterministically and nested defer cleanup runs on failure return break and continue
 program: main.ldn
 root: ../../../../..

@@ -1,4 +1,5 @@
 class: abi
+profiles: standard
 summary: C-owned startup can use startup-independent hosted service shims
 program: program.ldn
 c-sources: peer.c

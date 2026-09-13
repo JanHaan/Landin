@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: a dynamic zero remainder divisor traps
 program: main.ldn
 traps: yes

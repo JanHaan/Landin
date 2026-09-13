@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: recursive D138 patterns deduce through nominal tuples, phantom actuals, arrays, aliases, computed checks and function signatures
 constructs: 0520, 1000, 1290, 1350, 1920
 program: main.ldn

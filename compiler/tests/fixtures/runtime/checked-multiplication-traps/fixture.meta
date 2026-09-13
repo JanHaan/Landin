@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: a dynamic checked multiplication that overflows traps
 program: main.ldn
 traps: yes

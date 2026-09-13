@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: core/vec geometric growth rejects doubling past usize without a provider or large allocation
 program: main.ldn
 with: ../../../../../core/vec/growth.ldn

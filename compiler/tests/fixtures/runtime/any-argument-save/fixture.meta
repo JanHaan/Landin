@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: any arguments survive later runtime evaluation in written order across positional named pointer-loaded and terminating calls
 program: main.ldn
 status: 42

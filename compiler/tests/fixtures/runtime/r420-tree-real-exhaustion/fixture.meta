@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: actual arena and fixed-slot exhaustion preserve tree nodes and names before cleanup
 program: main.ldn
 root: ../../../../..

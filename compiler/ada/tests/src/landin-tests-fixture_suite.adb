@@ -96,6 +96,88 @@ package body Landin.Tests.Fixture_Suite is
          "normalization changes spacing without sorting or deduplicating");
    end Diagnostic_Code_Boundaries_Are_Normalized;
 
+   procedure Profiles_Are_Explicit
+     (Item : in out Landin.Testing.Context);
+
+   procedure Profiles_Are_Explicit
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check
+        (Kind : Fixture_Class;
+         Name : String;
+         Metadata : String;
+         Expected : Natural;
+         Fault : String := "");
+
+      procedure Check
+        (Kind : Fixture_Class;
+         Name : String;
+         Metadata : String;
+         Expected : Natural;
+         Fault : String := "")
+      is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Found : Catalogue;
+         Directory : constant String :=
+           "root/" & Class_Directory (Kind) & "/" & Name;
+      begin
+         Host.Add_Directory ("root");
+         Host.Add_Directory ("root/" & Class_Directory (Kind));
+         Host.Add_Directory (Directory);
+         Host.Add_File (Directory & "/main.ldn", "");
+         Host.Add_File (Directory & "/peer.c", "");
+         Host.Add_File
+           (Directory & "/fixture.meta",
+            "class: " & Class_Directory (Kind) & LF
+            & "summary: explicit profile policy" & LF
+            & "targets: linux-x86-64" & LF & "constructs: 1740" & LF
+            & "program: main.ldn" & LF
+            & (if Kind = Abi then "c-sources: peer.c" & LF else "")
+            & Metadata);
+         Discover (Found, "root", Host);
+         if Expected > 0 then
+            Landin.Testing.Check_Equal
+              (Item, Problem_Count (Found), 0, Name & " metadata accepted");
+            Landin.Testing.Check_Equal
+              (Item, Count (Found), 1, Name & " remains discoverable");
+            if Count (Found) = 1 then
+               Landin.Testing.Check_Equal
+                 (Item, Profile_Count (Nth (Found, 1)), Expected,
+                  Name & " selects its written policy");
+            end if;
+         else
+            Landin.Testing.Check_Equal
+              (Item, Problem_Count (Found), 1, Name & " has one fault");
+            Landin.Testing.Check_Equal
+              (Item, Count (Found), 0, Name & " cannot silently run");
+            Landin.Testing.Check
+              (Item, Mentions (Found, Fault), Name & " names its fault");
+         end if;
+      end Check;
+   begin
+      Check (Runtime, "ordinary", "profiles: standard" & LF, 4);
+      Check (Runtime, "generic-r480-any", "profiles: standard" & LF, 4);
+      Check (Runtime, "ordinary", "profiles: specialization" & LF, 6);
+      Check (Runtime, "renamed", "profiles: specialization" & LF, 6);
+      Check (Abi, "ordinary", "profiles: standard" & LF, 4);
+      Check (Abi, "renamed", "profiles: specialization" & LF, 6);
+      Check (Runtime, "missing", "", 0, "missing required key: profiles");
+      Check (Abi, "missing", "", 0, "missing required key: profiles");
+      Check
+        (Runtime, "empty", "profiles:" & LF, 0,
+         "profiles is not standard or specialization");
+      Check
+        (Runtime, "unknown", "profiles: all" & LF, 0,
+         "profiles is not standard or specialization");
+      Check
+        (Abi, "duplicate",
+         "profiles: standard" & LF & "profiles: specialization" & LF, 0,
+         "duplicate key: profiles");
+      Check
+        (Positive_Program, "wrong-class", "profiles: standard" & LF, 0,
+         "profiles belong only to a runtime or ABI fixture");
+   end Profiles_Are_Explicit;
+
    procedure Well_Formed_Fixtures_Are_Discovered
      (Item : in out Landin.Testing.Context);
 
@@ -153,7 +235,8 @@ package body Landin.Tests.Fixture_Suite is
       Host.Add_File ("root/abi/c-bridge/expected.txt", "42" & LF);
       Host.Add_File
         ("root/abi/c-bridge/fixture.meta",
-         "class: abi" & LF & "summary: C and Landin call each other" & LF
+         "class: abi" & LF & "profiles: standard" & LF
+         & "summary: C and Landin call each other" & LF
          & "program: program.ldn" & LF & "root: imports" & LF
          & "c-sources: peer.c, native/helper.c" & LF
          & "c-args: -DVALUE=42" & ASCII.HT & "-lm" & LF
@@ -167,7 +250,8 @@ package body Landin.Tests.Fixture_Suite is
       Host.Add_File ("root/abi/c-with/peer.c", "");
       Host.Add_File
         ("root/abi/c-with/fixture.meta",
-         "class: abi" & LF & "summary: a multifile Landin side" & LF
+         "class: abi" & LF & "profiles: standard" & LF
+         & "summary: a multifile Landin side" & LF
          & "program: program.ldn" & LF & "with: second.ldn" & LF
          & "c-sources: peer.c" & LF & "status: 42" & LF
          & "constructs: 1570" & LF & "targets: linux-x86-64" & LF);
@@ -351,7 +435,8 @@ package body Landin.Tests.Fixture_Suite is
       Host.Add_Directory ("root/runtime/traps-and-a-status");
       Host.Add_File
         ("root/runtime/traps-and-a-status/fixture.meta",
-         "class: runtime" & LF & "summary: both" & LF
+         "class: runtime" & LF & "profiles: standard" & LF
+         & "summary: both" & LF
          & "constructs: 1960" & LF
          & "program: main.ldn" & LF & "status: 42" & LF
          & "traps: yes" & LF);
@@ -359,7 +444,8 @@ package body Landin.Tests.Fixture_Suite is
       Host.Add_Directory ("root/runtime/traps-is-not-a-verdict");
       Host.Add_File
         ("root/runtime/traps-is-not-a-verdict/fixture.meta",
-         "class: runtime" & LF & "summary: odd" & LF
+         "class: runtime" & LF & "profiles: standard" & LF
+         & "summary: odd" & LF
          & "constructs: 1960" & LF
          & "program: main.ldn" & LF & "traps: perhaps" & LF);
 
@@ -412,7 +498,8 @@ package body Landin.Tests.Fixture_Suite is
       Host.Add_Directory ("root/runtime/traps-twice");
       Host.Add_File
         ("root/runtime/traps-twice/fixture.meta",
-         "class: runtime" & LF & "summary: twice" & LF
+         "class: runtime" & LF & "profiles: standard" & LF
+         & "summary: twice" & LF
          & "constructs: 1960" & LF
          & "program: main.ldn" & LF & "traps: yes" & LF
          & "traps: no" & LF);
@@ -429,14 +516,16 @@ package body Landin.Tests.Fixture_Suite is
       Host.Add_Directory ("root/abi/missing-c-sources");
       Host.Add_File
         ("root/abi/missing-c-sources/fixture.meta",
-         "class: abi" & LF & "summary: no C companion" & LF
+         "class: abi" & LF & "profiles: standard" & LF
+         & "summary: no C companion" & LF
          & "program: program.ldn" & LF & "constructs: 1570" & LF
          & "targets: linux-x86-64" & LF);
 
       Host.Add_Directory ("root/abi/duplicate-c-sources");
       Host.Add_File
         ("root/abi/duplicate-c-sources/fixture.meta",
-         "class: abi" & LF & "summary: twice" & LF
+         "class: abi" & LF & "profiles: standard" & LF
+         & "summary: twice" & LF
          & "program: program.ldn" & LF & "constructs: 1570" & LF
          & "targets: linux-x86-64" & LF & "c-sources: peer.c" & LF
          & "c-sources: other.c" & LF);
@@ -444,7 +533,8 @@ package body Landin.Tests.Fixture_Suite is
       Host.Add_Directory ("root/abi/duplicate-c-args");
       Host.Add_File
         ("root/abi/duplicate-c-args/fixture.meta",
-         "class: abi" & LF & "summary: arguments twice" & LF
+         "class: abi" & LF & "profiles: standard" & LF
+         & "summary: arguments twice" & LF
          & "program: program.ldn" & LF & "constructs: 1570" & LF
          & "targets: linux-x86-64" & LF & "c-sources: peer.c" & LF
          & "c-args: -DONE" & LF & "c-args: -DTWO" & LF);
@@ -452,7 +542,8 @@ package body Landin.Tests.Fixture_Suite is
       Host.Add_Directory ("root/abi/duplicate-c-source-path");
       Host.Add_File
         ("root/abi/duplicate-c-source-path/fixture.meta",
-         "class: abi" & LF & "summary: same companion twice" & LF
+         "class: abi" & LF & "profiles: standard" & LF
+         & "summary: same companion twice" & LF
          & "program: program.ldn" & LF & "constructs: 1570" & LF
          & "targets: linux-x86-64" & LF
          & "c-sources: peer.c, peer.c" & LF);
@@ -460,7 +551,8 @@ package body Landin.Tests.Fixture_Suite is
       Host.Add_Directory ("root/abi/invalid-c-source-path");
       Host.Add_File
         ("root/abi/invalid-c-source-path/fixture.meta",
-         "class: abi" & LF & "summary: path escapes" & LF
+         "class: abi" & LF & "profiles: standard" & LF
+         & "summary: path escapes" & LF
          & "program: program.ldn" & LF & "constructs: 1570" & LF
          & "targets: linux-x86-64" & LF
          & "c-sources: ../peer.c" & LF);
@@ -468,7 +560,8 @@ package body Landin.Tests.Fixture_Suite is
       Host.Add_Directory ("root/abi/missing-c-source-file");
       Host.Add_File
         ("root/abi/missing-c-source-file/fixture.meta",
-         "class: abi" & LF & "summary: absent companion" & LF
+         "class: abi" & LF & "profiles: standard" & LF
+         & "summary: absent companion" & LF
          & "program: program.ldn" & LF & "constructs: 1570" & LF
          & "targets: linux-x86-64" & LF & "c-sources: absent.c" & LF);
 
@@ -476,7 +569,8 @@ package body Landin.Tests.Fixture_Suite is
       Host.Add_File ("root/abi/c-source-in-with/peer.c", "");
       Host.Add_File
         ("root/abi/c-source-in-with/fixture.meta",
-         "class: abi" & LF & "summary: mixed source lists" & LF
+         "class: abi" & LF & "profiles: standard" & LF
+         & "summary: mixed source lists" & LF
          & "program: program.ldn" & LF & "constructs: 1570" & LF
          & "targets: linux-x86-64" & LF & "with: peer.c" & LF
          & "c-sources: peer.c" & LF);
@@ -807,6 +901,9 @@ package body Landin.Tests.Fixture_Suite is
       Landin.Testing.Register
         (Into, "fixtures", "diagnostic code boundaries are normalized",
          Diagnostic_Code_Boundaries_Are_Normalized'Access);
+      Landin.Testing.Register
+        (Into, "fixtures", "profiles are explicit",
+         Profiles_Are_Explicit'Access);
       Landin.Testing.Register
         (Into, "fixtures", "well formed fixtures are discovered",
          Well_Formed_Fixtures_Are_Discovered'Access);

@@ -1,4 +1,5 @@
 class: abi
+profiles: standard
 summary: Landin main calls C, which calls a Landin export
 program: program.ldn
 c-sources: peer.c

@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: folded module values hold their answers and module state is updated
 constructs: 1460, 1770, 1790, 1800, 1820, 1900, 1940
 program: main.ldn

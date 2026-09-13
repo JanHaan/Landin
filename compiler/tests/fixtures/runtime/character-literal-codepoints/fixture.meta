@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: character literals are u32 Unicode scalar values through raw UTF-8, escapes, static images and runtime arithmetic
 constructs: 0250, 0270, 0290, 1770, 1880, 1890, 1940
 program: main.ldn

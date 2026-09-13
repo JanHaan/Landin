@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: real native hosted argument root runs heterogeneous filters and the count destination
 program: main.ldn
 root: ../../../../..

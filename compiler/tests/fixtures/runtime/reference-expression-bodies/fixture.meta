@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: expression bodies retain declared pointer and slice result descriptors
 program: main.ldn
 constructs: 0430, 0520, 0570, 0580, 0770, 0790, 0800, 0830

@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: variant-bearing structs cross calls by value and keep their selected payload
 constructs: 0080, 0410, 0670, 0750, 0770, 0930, 1920
 program: main.ldn

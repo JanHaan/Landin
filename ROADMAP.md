@@ -5680,7 +5680,7 @@ session, destructive output-collision experiment or resource-exhaustion sweep.
 | M12: stage organization | Large nested stage procedures and duplicated construction helpers remain. Refactor only with established behavioural controls; size alone is not a correctness finding. | Fourth batch |
 | M13: build mode and locks | Repaired: mode validation precedes path construction. Inherited OS locks cover build plus test execution; cleanup takes both mode locks or an exclusive all-tag lock. Permanent lock files survive cleanup, with no PID reclamation race. Disposable-tree regressions cover contention, nested builds, concurrent modes/tags, cleanup, stale context and termination. Rejected modes are tested only by loading the environment. | Second batch implementation |
 | M14: harness contracts | Runtime stream selection is still ignored, suite inventory remains incomplete, and coarse corpus floors remain. Replace these with exact discovery/contract checks without manufacturing fixed historical corpus counts. | Fourth batch |
-| M15: profile selection | Name-based selection remains. Some workload coverage expanded, but renaming a fixture still changes specialization coverage. Introduce explicit, validated profile policy. | Fourth batch |
+| M15: profile selection | Implemented with N17/J20: every runtime/ABI fixture declares standard or specialization profiles in validated metadata. Renaming cannot alter its matrix. The migration preserves all previous profiles and adds forced specialization to the four erased-dispatch fixtures. Metadata-only development validation is recorded below; executing the expanded matrix remains exact-acceptance work under the resource limits. | Fourth batch implementation |
 | A8, M18: publication and CI | The old automatic compiler manifest was replaced by native acceptance. Current publication verifies exact accepted canonical main, so the former unguarded-publication description is obsolete. Serialization during upload and private-font/highlighter/guide coverage still need checks against the new policy. No stale publication was observed. | Fourth batch |
 | A6: text traversal wording | Reconciled: [1810] and the tour distinguish validated utf8/utf16 and literal C strings from D199 foreign C strings. D184 already requires scalar validation and malformed-encoding traps even in unchecked; no atom error or runtime contract changed. Existing fixture and prototype coverage is retained. | Fourth batch documentation repair |
 | A7, M19: emitted operand identities and stride | The stride guard is implemented with J61/N6/K29 using bounded scalar and emitted-text evidence. Special symbol names still require exact-identity controls on supported tools; an LLVM-only failure is not automatically a pinned-GNU defect. Mandatory resource limits govern any assembler work. | Third batch |
@@ -5817,7 +5817,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J17 | `Require_Element` compares the sub-element run for equality instead of prefix containment, so a whole-child write inside an array element does not cover its leaves | C | Repaired: reads and branch merges use ancestor containment for an element's field path. Eleven paired controls pass in both modes: whole-child writes cover descendants, either branch order preserves common leaves, and siblings, other indices, parents and consumed descendants retain their independent obligations. Lookup walks only the selected path's ancestors. |
 | J18 | Match_Subject_Is_Copied disagrees with Lower_Variant_Match about a payload alias root, rejecting valid code as a frame escape | C | Implemented: checking retains runtime-address aliases through nested computed match subjects and builtin collection elements. Captured slice and array backing supplies address origins and store destinations; frame temporaries and copied iterable/text/index values remain distinct. Nested retags now retain C4 payload-lifetime checks. Bounded controls pass in both modes. |
 | J19 | A `try` nested in a non-control expression skips its failure-propagation edge: sunk `inout` parameters and `undo` arguments go unchecked | C | Repaired: nested try expressions retain their propagated failure edge, including undo reads and inout restoration after applicable cleanup. The success-only restoration is refused; restoration inside a failure cleanup is accepted. Both modes pass. |
-| J20 | Forced-specialization profiles silently skip the runtime/erased-* evidence-dispatch fixtures | C | Duplicate M15/N17: make specialization coverage explicit and validated; include erased dispatch fixtures through policy rather than filename prefixes. |
+| J20 | Forced-specialization profiles silently skip the runtime/erased-* evidence-dispatch fixtures | C | Implemented with M15/N17: all four erased-dispatch fixtures explicitly select the six-profile specialization matrix. Required profile metadata replaces name matching for runtime and ABI selection. Validation checks metadata and selection only; no expanded runtime sweep was run. |
 | J21 | Array-literal element containing a variant part crashes lowering (Constraint_Error on Positive (Destination.Base)) | C | Already repaired by 1aa0746a under A3: normalize the root variant-array destination into typed storage. Retain the existing debug/release and runtime evidence; do not replay it. |
 | J22 | Several expression-lowering paths emit IR after the flow has already terminated, so a program the frontend accepts dies with an internal compiler defect (exit 70) | C | Repaired: slice bounds/sources, descriptor copies, addresses, inout and slice actuals, conversions and any operands stop after terminated evaluation. UTF8 indexing creates decoder blocks only after its ordinal continues. Twenty-five tiny sources verify reachable calls and complete IR on both target widths in both modes. J23/J26 retain their separate merge/loop work. |
 | J23 | Lower_If leaves an orphan merge block when a later arm's condition terminates the flow, and the IR verifier then rejects the unit | C | Repaired: a terminating later condition reopens an existing merge from earlier continuing arms before returning to its caller. Remaining tests/arms stay unevaluated. First-condition, all-return, multiple-arm and value-position controls pass on both target widths in both modes. |
@@ -7331,6 +7331,24 @@ The primary-expression facet remains open: an ordinary read such as a named
 result assigned from a parameter named `match` is still intercepted as a
 control expression. Continue that boundary review without reserving words or
 introducing newline semantics. Exact-revision acceptance remains open.
+
+M15/N17/J20 development evidence: five exact metadata/discovery selectors
+pass 124 checks in each of macOS debug and Linux release. Fake fixtures
+prove that ordinary and renamed cases retain six profiles, names formerly
+recognized by substring cannot override an explicit four-profile policy,
+and missing, empty, unknown, duplicate or misplaced policy is refused.
+All 495 runtime/ABI metadata files are migrated: 114 retain their existing
+six-profile matrix, 377 retain four profiles, and the four erased-dispatch
+cases gain the two forced-specialization profiles. The same profile-count
+query controls selected and complete runtime/ABI execution. Single-worker
+builds and repository metadata discovery pass. `check.py` independently
+requires the key and its two defined values in the appropriate classes.
+This is metadata and policy evidence only; none of those runtime or ABI
+fixtures was assembled or executed. No native assembly, generated executable,
+debugger or giant image ran. Evidence is in `.scratch/r491-fixture-profiles/`
+and `.scratch/r491-final-values/`. Expanded matrix execution and exact-revision
+acceptance remain open under the existing resource limits. M14's separate
+stream and inventory contracts remain active.
 
 J116's slice-endpoint claim
 still needs a separate normative disposition. J48 also requires an explicit

@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: distinct identities survive aliases, direct and indirect calls, generic deduction and erased conformance dispatch
 program: main.ldn
 status: 42

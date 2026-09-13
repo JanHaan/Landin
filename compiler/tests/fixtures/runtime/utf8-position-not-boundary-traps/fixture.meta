@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: a utf8 position on a continuation byte is not a codepoint boundary and traps
 constructs: 0260, 0270, 0570, 0600, 0610, 1410, 1420, 1950, 1960
 program: main.ldn

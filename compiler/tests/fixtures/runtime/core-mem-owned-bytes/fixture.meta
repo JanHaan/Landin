@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: byte owners initialize complete extents and release independent heap allocations after failures
 program: main.ldn
 root: ../../../../..

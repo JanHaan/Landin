@@ -1,4 +1,5 @@
 class: abi
+profiles: standard
 summary: Foreign link names cannot capture native routines, generated mangled candidates or module data
 program: main.ldn
 c-sources: companion.c

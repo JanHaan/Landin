@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: indirect calls share aggregate results and stack arguments with direct calls
 constructs: 0670, 0870, 1000, 1800, 1920
 program: main.ldn

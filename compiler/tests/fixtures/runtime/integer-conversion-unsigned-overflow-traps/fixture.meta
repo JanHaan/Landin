@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: an unsigned-to-signed conversion traps above the destination maximum
 constructs: 0150, 0310, 0700, 1670, 1950, 1960
 program: main.ldn

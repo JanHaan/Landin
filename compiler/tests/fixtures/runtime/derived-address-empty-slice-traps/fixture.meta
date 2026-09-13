@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: taking the address of a slice element still checks the dynamic bound before forming its pointer
 program: main.ldn
 traps: yes

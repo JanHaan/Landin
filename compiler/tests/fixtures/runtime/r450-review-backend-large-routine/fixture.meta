@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: 24000 straight-line wrapping increments retain reference homes without instruction-sized host-stack scratch
 program: main.ldn
 status: 0

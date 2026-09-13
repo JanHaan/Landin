@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: erased aggregate, array, slice and any arguments retain typed spills across later control flow and binding changes
 program: main.ldn
 status: 42

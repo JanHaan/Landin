@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: an erased child concept dispatches direct and separately conformed parent entries
 program: main.ldn
 status: 42

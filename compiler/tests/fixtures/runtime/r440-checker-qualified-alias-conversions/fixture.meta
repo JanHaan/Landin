@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: Imported qualified aliases retain scalar identity, range checks and the distinction between types and calls
 program: main.ldn
 root: .

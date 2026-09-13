@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: scalar traversal values do not make an accumulator borrow source storage
 program: main.ldn
 status: 42

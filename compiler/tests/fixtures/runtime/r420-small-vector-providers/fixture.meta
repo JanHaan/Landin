@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: core/small spills and grows through heap arena fixed and failing providers with exact reclaiming frees
 program: main.ldn
 root: ../../../../..

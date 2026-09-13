@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: system and memory user arguments copy through exact caller scratch into checked UTF-8 without forged slices
 program: main.ldn
 root: ../../../../..

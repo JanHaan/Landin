@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: referenced payload places support indexed inc and dec and scalar addresses with one subject and index evaluation
 program: main.ldn
 status: 42

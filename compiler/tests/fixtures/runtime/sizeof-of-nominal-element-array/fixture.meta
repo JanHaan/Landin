@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: [0520] an array is its element repeated: sizeof of arrays of structs, nested arrays and reference elements measures the element's own extent
 program: main.ldn
 status: 42

@@ -1,4 +1,5 @@
 class: runtime
+profiles: standard
 summary: core/io captures one hosted argument, reads parser input, writes a diagnostic stream, and reports a missing file as a declared atom
 program: main.ldn
 root: ../../../../..

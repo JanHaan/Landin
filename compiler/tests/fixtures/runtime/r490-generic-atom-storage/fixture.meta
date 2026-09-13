@@ -1,4 +1,5 @@
 class: runtime
+profiles: specialization
 summary: atom fields retain identity across static images, fills, copies and variant bindings
 program: main.ldn
 status: 42
