@@ -7,6 +7,8 @@ package body Landin.Diagnostics.Text is
    package Unbounded renames Ada.Strings.Unbounded;
 
    use type Landin.Source.Byte_Offset;
+   use type Landin.Source.Source_Id;
+   use type Landin.Source.Span;
 
    LF : constant Character := Character'Val (10);
 
@@ -114,7 +116,16 @@ package body Landin.Diagnostics.Text is
         (Buffer,
          Image (Level (Item)) & "[" & Code (Item) & "]: "
          & Message (Primary (Item)) & LF);
-      Render_Label (Buffer, Primary (Item), Sources, False);
+      --  The first related label can explain the primary span itself.
+      --  Render that snippet once, with its label, while retaining the
+      --  complete structured report and the order of all related labels.
+      if Label_Count (Item) = 0
+        or else Source_Of (Nth_Label (Item, 1))
+          /= Source_Of (Primary (Item))
+        or else Span_Of (Nth_Label (Item, 1)) /= Span_Of (Primary (Item))
+      then
+         Render_Label (Buffer, Primary (Item), Sources, False);
+      end if;
 
       for Index in 1 .. Label_Count (Item) loop
          Render_Label
