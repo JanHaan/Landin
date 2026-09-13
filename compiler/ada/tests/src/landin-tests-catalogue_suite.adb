@@ -218,6 +218,34 @@ package body Landin.Tests.Catalogue_Suite is
          "a malformed float renders exactly with its lexical rule");
    end Rendering_Is_Golden;
 
+   procedure Uppercase_And_Mixed_Bytes_Have_Exact_Reports
+     (Item : in out Landin.Testing.Context);
+
+   procedure Uppercase_And_Mixed_Bytes_Have_Exact_Reports
+     (Item : in out Landin.Testing.Context)
+   is
+      Sources : Landin.Source.Sets.Source_Set;
+      Report  : Landin.Diagnostics.Diagnostic_List;
+      Expected : constant String :=
+        "error[L0012]: identifiers use lower-case letters" & LF
+        & "  --> case.ldn:1:1" & LF
+        & "  |" & LF
+        & "1 | ABC A;B" & LF
+        & "  | ^^^" & LF
+        & "  = note: [1760]: identifier letters are lower-case ASCII" & LF
+        & "error[L0012]: no rule spells these bytes" & LF
+        & "  --> case.ldn:1:5" & LF
+        & "  |" & LF
+        & "1 | ABC A;B" & LF
+        & "  |     ^^^" & LF
+        & "  = note: no rule of the grammar spells these bytes [1750]" & LF;
+   begin
+      Lex_And_Report ("ABC A;B", Sources, Report);
+      Landin.Testing.Check_Equal
+        (Item, Landin.Diagnostics.Text.Render (Report, Sources), Expected,
+         "uppercase and mixed runs keep their code, span and explanation");
+   end Uppercase_And_Mixed_Bytes_Have_Exact_Reports;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -234,6 +262,9 @@ package body Landin.Tests.Catalogue_Suite is
       Landin.Testing.Register
         (Into, "catalogue", "rendering is golden",
          Rendering_Is_Golden'Access);
+      Landin.Testing.Register
+        (Into, "catalogue", "uppercase and mixed bytes have exact reports",
+         Uppercase_And_Mixed_Bytes_Have_Exact_Reports'Access);
    end Register;
 
 end Landin.Tests.Catalogue_Suite;

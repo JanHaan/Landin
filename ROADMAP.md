@@ -5896,7 +5896,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J96 | Load_Datum / Store_Datum refuse only an aggregate datum, not a fixed-array datum, and Load_Datum's result is never checked at all | C | Implemented: scalar datum operations refuse nonscalar storage; Load_Datum checks retained callable and atom metadata against its datum. Tiny builder-only controls expose metadata attached after a load. The alleged caller-supplied result-kind mismatch remains refuted: the builder derives that immutable result. Exact acceptance remains open. |
 | J97 | Flat aggregate-image path never checks Aggregate_Field_Image.Slice on variant payload leaves, but the backend acts on it | C | Superseded by J30 (abbdb466): any slice-bearing descriptor, including a variant payload, selects the complete recursive verifier. The reported three-byte array descriptor is now refused; genuine slice payloads retain target/range/shape checks. Dedicated small regressions pin that disposition without changing the verifier again. Exact acceptance remains open. |
 | J98 | Block_Unreachable only checks that an edge exists, so an unreachable cycle of blocks passes | C | Refuted on current and reviewed source: the cited incoming-edge scan is followed unconditionally by Pointer_Provenance, which checks true entry reachability through Control_Flow.Make. Both 0a3d0a28 and 66927e93 already contain this check. Tiny self/pair islands are refused without slots or pointers; reachable cycles pass. No reachability implementation change was needed. |
-| J99 | An upper-case letter gets the generic L0012 'no rule spells these bytes' citing [1750] | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
+| J99 | An upper-case letter gets the generic L0012 'no rule spells these bytes' citing [1750] | C | Repaired: an all-uppercase invalid-byte run retains L0012 and its original token/span boundaries while explaining lower-case identifier spelling with [1760]. Mixed invalid runs retain the generic byte report and recovery. Exact lexer and rendered-report controls pin both paths. |
 | J100 | Repeated delimiter-free conformance/signature lookahead on malformed input | C | Open malformed-input lookahead cost, distinct from M1: 326e6a32 adds the := delimiter but does not bound delimiter-free identifier runs or unmatched-signature lookahead. No old scaling case was rerun. |
 | J101 | Expect's post-lexical-error forward scan crosses construct boundaries and mangles the parse | C | Duplicate N11: preserve construct/list boundaries after a scanner refusal without re-reporting that refused lexeme. |
 | J102 | Parse_Fixed_Conditional consumes the arm's condition when `if` is missing, producing a three-diagnostic cascade | C | Implemented with J103: fixed-conditional openers are consumed once when present; a missing if leaves its condition in hand. The bounded source reproduction now reports only the original L0103. One-, two- and three-arm syntax controls preserve conditions and following declarations. Exact acceptance remains open. |
@@ -6918,8 +6918,19 @@ generated executable ran. Logs are retained in
 `.scratch/r491-inferred-repetition/` and `.scratch/r491-final-values/`.
 Exact-revision acceptance remains open.
 
-J99's upper-case spelling diagnostic is next; L0012, fault/token boundaries
-and ordinary invalid-byte recovery must remain intact.
+J99 development evidence: six exact selectors pass 33 checks in each of
+macOS debug and Linux release. Lexer controls preserve token counts, maximal
+invalid-byte runs and spans; a rendered golden distinguishes uppercase-only
+and mixed runs. Six compile-only probes cover both refusals and accepted
+uppercase text, character, hexadecimal and comment contents. Both
+single-worker builds passed; selected tests have 30-second or shorter limits
+and probes have 10-second limits. No Landin assembler, linker or generated
+executable ran. Logs are retained in `.scratch/r491-uppercase-diagnostics/`
+and `.scratch/r491-final-values/`. Exact-revision acceptance remains open.
+
+J108's duplicate explicit-source identity is next. Establish identity through
+the platform seam without treating uncertain identity as equality, preserve
+the first diagnostic spelling and retain distinct files with identical bytes.
 J116's slice-endpoint claim
 still needs a separate normative disposition. J48 also requires an explicit
 static-selection collision rule: D146's existing uniqueness sentence is
