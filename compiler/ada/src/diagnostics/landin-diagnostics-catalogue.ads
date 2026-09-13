@@ -424,9 +424,9 @@ package Landin.Diagnostics.Catalogue is
             when Reserved_Tool_Name    => True,
             when Literal_Out_Of_Range
                .. Malformed_Raw_Literal => True,
-            --  None of the backend codes is about a place in a file: they
-            --  are the host failing to finish an accepted program or a
-            --  verified shape this backend cannot encode.
+            --  Backend reports need not have a source. Missing entry uses
+            --  an entry-module anchor when available, but permits a point
+            --  in an empty file or a source-free fallback.
             when No_Toolchain .. Frame_Not_Addressable => False);
 
    --  Whether the primary span must cover at least one byte. An empty span

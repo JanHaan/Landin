@@ -605,6 +605,13 @@ package body Landin.Tests.Driver_Suite is
          Landin.Testing.Check
            (Item, Contains (Unbounded.To_String (Result.Report), "L0502"),
             "the ordinary missing-entry diagnostic is reported");
+         Landin.Testing.Check
+           (Item, Contains (Unbounded.To_String (Result.Report),
+              "--> entry/start.ldn:1:1" & LF)
+              and then not Contains (Unbounded.To_String (Result.Report),
+                "--> root/lib/main.ldn:")
+              and then Tools.Run_Count = 0,
+            "the imported main cannot supply the entry location");
       end;
    end Imported_Main_Is_Not_The_Entry;
 
@@ -1067,6 +1074,57 @@ package body Landin.Tests.Driver_Suite is
             "", "and nothing was written first");
       end;
    end A_Hosted_Program_Needs_Its_Entry;
+
+   procedure Missing_Entry_Uses_Entry_Source
+     (Item : in out Landin.Testing.Context);
+
+   procedure Missing_Entry_Uses_Entry_Source
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check (Source, Location, Underline : String);
+
+      procedure Check (Source, Location, Underline : String) is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      begin
+         Host.Add_File ("entry.ldn", Source);
+         Host.Refuse_Writes;
+         Tools.Raise_On_Run;
+         declare
+            Result : constant Landin.Driver.Outcome := Landin.Driver.Execute
+              (Both ("entry.ldn", "--emit=exe"), Host, Tools);
+            Report : constant String := Unbounded.To_String (Result.Report);
+         begin
+            Landin.Testing.Check
+              (Item, Result.Status = Landin.Driver.Status_Reported
+                 and then Occurrences (Report, "error[") = 1
+                 and then Contains (Report, "error[L0502]:"),
+               "missing entry keeps its sole refusal code");
+            Landin.Testing.Check
+              (Item, Contains (Report, "--> entry.ldn:" & Location & LF)
+                 and then Contains (Report, Underline & LF)
+                 and then not Contains (Report, "<unknown source>"),
+               "the entry source supplies the expected name or point");
+            Landin.Testing.Check
+              (Item, Tools.Run_Count = 0
+                 and then Host.Written
+                   (Landin.Driver.Default_Executable & ".s") = "",
+               "entry refusal precedes output and tools");
+         end;
+      end Check;
+   begin
+      Check ("", "1:1", "  | ^");
+      Check ("-- private entry" & LF
+         & "main: () -> (code: i32) = code = 0 end main" & LF,
+         "2:1", "  | ^^^^");
+      Check ("public main: () -> none = end main" & LF,
+         "1:8", "  |        ^^^^");
+      Check ("fixed if false then" & LF
+         & "public main: () -> (code: i32) = code = 0 end main" & LF
+         & "end if" & LF, "1:1", "  | ^");
+      Check ("f: () -> none = main: i32 = 0 end f" & LF,
+         "1:1", "  | ^");
+   end Missing_Entry_Uses_Entry_Source;
 
    procedure A_Failing_Toolchain_Is_Reported
      (Item : in out Landin.Testing.Context);
@@ -1940,6 +1998,7 @@ package body Landin.Tests.Driver_Suite is
                  and then Occurrences (Report, "error[") = 1
                  and then Contains (Report, "L0502")
                  and then not Contains (Report, "L0301")
+                 and then Contains (Report, "--> renamed.ldn:1:34" & LF)
                  and then Tools.Run_Count = 0
                  and then Host.Written
                    (Landin.Driver.Default_Executable & ".s") = "",
@@ -2850,6 +2909,9 @@ package body Landin.Tests.Driver_Suite is
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "driver", "missing entry uses entry source",
+         Missing_Entry_Uses_Entry_Source'Access);
       Landin.Testing.Register
         (Into, "driver", "explicit sources keep identity",
          Explicit_Sources_Keep_Identity'Access);

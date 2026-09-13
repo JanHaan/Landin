@@ -381,6 +381,67 @@ package body Landin.Driver is
                   Message => Text));
          end Note_Failure;
 
+         procedure Note_No_Entry;
+
+         procedure Note_No_Entry is
+            package Res renames Landin.Resolution;
+            Grouped : Landin.Modules.Table renames
+              Landin.Stages.Modules (Context).all;
+            Meanings : Res.Table renames
+              Landin.Stages.Meanings (Context).all;
+            Source : Landin.Source.Source_Id := Landin.Source.No_Source;
+            Where : Landin.Source.Span := Landin.Source.Empty_Span;
+         begin
+            --  With no candidate, point at the start of the first entry
+            --  source, including an empty file where main could be added.
+            for Index in 1 .. Landin.Modules.Source_Count (Grouped) loop
+               if Landin.Modules.Module_Of
+                 (Grouped, Landin.Source.Source_Id (Index))
+                 = Landin.Modules.Entry_Module
+               then
+                  Source := Landin.Source.Source_Id (Index);
+                  exit;
+               end if;
+            end loop;
+            --  A wrong-shaped, private or renamed main is more useful than
+            --  that insertion point. Imported and local names are not entry
+            --  candidates; inactive declarations cannot supply the anchor.
+            for Index in 1 .. Res.Declaration_Count (Meanings) loop
+               declare
+                  Id : constant Res.Declaration_Id :=
+                    Res.Declaration_Id (Index);
+                  From : constant Landin.Source.Source_Id :=
+                    Res.Source_Of (Meanings, Id);
+                  Node : constant Landin.Syntax.Node_Id :=
+                    Res.Node_Of (Meanings, Id);
+               begin
+                  if Res.Sort_Of (Meanings, Id) in
+                    Res.Module_Function .. Res.Module_Binding
+                    and then Natural (From)
+                      <= Landin.Modules.Source_Count (Grouped)
+                    and then Landin.Modules.Module_Of (Grouped, From)
+                      = Landin.Modules.Entry_Module
+                    and then Landin.Source.Names.Spelling
+                      (Landin.Stages.Identities (Context).all,
+                       Res.Name_Of (Meanings, Id)) = "main"
+                    and then Landin.Configuration.Is_Active
+                      (Landin.Stages.Configurations (Context).all, From, Node)
+                  then
+                     Source := From;
+                     Where := Landin.Syntax.Anchor
+                       (Landin.Syntax.Forest.Tree_Of
+                          (Landin.Stages.Trees (Context).all, From).all, Node);
+                     exit;
+                  end if;
+               end;
+            end loop;
+            Landin.Stages.Report
+              (Context, Landin.Diagnostics.Make
+                 (Code_No_Entry, Landin.Diagnostics.Error, Source, Where,
+                  "a hosted program needs "
+                  & Landin.Backend.Entry_Point.Required_Shape));
+         end Note_No_Entry;
+
          --  L0500 owes a note, because it is the one diagnostic here a
          --  reader is stuck on rather than informed by.
          procedure Note_No_Toolchain (Text : String; Advice : String);
@@ -869,10 +930,7 @@ package body Landin.Driver is
                           Landin.Stages.Identities (Context).all)
                        = Landin.IR.No_Item
             then
-               Note_Failure
-                 (Code_No_Entry,
-                  "a hosted program needs "
-                  & Landin.Backend.Entry_Point.Required_Shape);
+               Note_No_Entry;
                return;
             end if;
 
