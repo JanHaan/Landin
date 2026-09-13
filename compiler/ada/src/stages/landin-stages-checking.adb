@@ -16088,9 +16088,9 @@ package body Landin.Stages.Checking is
               (Item    => Bad.Type_Mismatch,
                Source  => Syn.Source_Of (Of_Tree),
                Where   => Syn.Where (Of_Tree, Node),
-               Message => "this struct has no all-bits-zero value",
-               Note    => "[0540]: a function address has no zero image,"
-                          & " so neither does a value that contains one",
+               Message => "this type does not permit a zeroed initializer",
+               Note    => "[0540]/[0630]/D213: zeroed is available only when"
+                          & " the complete type permits a zero image",
                Related => Site,
                Because => Because,
                Into    => Found);
@@ -22764,7 +22764,7 @@ package body Landin.Stages.Checking is
                               Landin.Checking.Nominal_Of
                                 (Types.all, Of_Tree, Written),
                               Syn.Origin (Of_Tree, Written),
-                              "the struct type written here");
+                              "the type written here");
                         else
                            --  D55: a direct storage name is the other
                            --  contextual aggregate initializer.  Identity
@@ -22793,11 +22793,11 @@ package body Landin.Stages.Checking is
                                     Source  => Syn.Source_Of (Of_Tree),
                                     Where   => Syn.Where (Of_Tree, Value),
                                     Message => "this is not a value of the"
-                                               & " struct type written here",
-                                    Note    => "[0710]: two structs are one"
-                                               & " type when one declaration"
-                                               & " wrote both, and never"
-                                               & " otherwise",
+                                               & " nominal type required here",
+                                    Note    => "[0710]/D213: nominal identity"
+                                               & " remains distinct even when"
+                                               & " representation layouts"
+                                               & " agree",
                                     Related => Syn.Origin (Of_Tree, Node),
                                     Because => "the type declared here",
                                     Into    => Found);
@@ -23506,7 +23506,7 @@ package body Landin.Stages.Checking is
                            Landin.Checking.Nominal_Of
                              (Types.all, Of_Tree, Place),
                            Syn.Origin (Of_Tree, Place),
-                           "the struct place written here");
+                           "the place written here");
                      else
                         --  [0710]: a whole struct is copied into a place of
                         --  the same type.  A copy is the one expression
@@ -23535,11 +23535,10 @@ package body Landin.Stages.Checking is
                                  Source  => Syn.Source_Of (Of_Tree),
                                  Where   => Syn.Where (Of_Tree, Value),
                                  Message => "this is not a value of the"
-                                            & " struct type written here",
-                                 Note    => "[0710]: two structs are one"
-                                            & " type when one declaration"
-                                            & " wrote both, and never"
-                                            & " otherwise",
+                                            & " nominal type required here",
+                                 Note    => "[0710]/D213: nominal identity"
+                                            & " remains distinct even when"
+                                            & " representation layouts agree",
                                  Related => Syn.Origin (Of_Tree, Place),
                                  Because => "the place written here",
                                  Into    => Found);
@@ -24332,7 +24331,12 @@ package body Landin.Stages.Checking is
                              when Ty.Slice_Value => "slice",
                              when Ty.Function_Value => "function",
                              when Ty.Any_Value => "erased",
-                             when Ty.Aggregate => "aggregate",
+                             when Ty.Aggregate =>
+                                (if Landin.Checking.Holds
+                                   (Types.all, Expected.Nominal)
+                                 and then Landin.Checking.Is_Distinct
+                                   (Types.all, Expected.Nominal)
+                                 then "distinct" else "aggregate"),
                              when Ty.Fixed_Array => "array",
                              when Ty.Atom_Value => "atom",
                              when Ty.Scalar_Name =>
@@ -25824,12 +25828,12 @@ package body Landin.Stages.Checking is
               (Item    => Bad.Type_Mismatch,
                Source  => Syn.Source_Of (Of_Tree),
                Where   => Syn.Where (Of_Tree, Node),
-               Message => "this module struct needs an explicit initial"
+               Message => "this module value needs an explicit initial"
                           & " value",
-               Note    => "[0540]: a function address has no zero image,"
-                          & " so omitted storage cannot initialize it",
+               Note    => "[0540]/[0630]/D213: zeroed is available only when"
+                          & " the complete type permits a zero image",
                Related => Syn.Origin (Of_Tree, Written),
-               Because => "the struct type written here",
+               Because => "the type written here",
                Into    => Found);
             Landin.Checking.Refuse (Types.all, Of_Tree, Node);
             return;
