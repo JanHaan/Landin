@@ -1,0 +1,28 @@
+plain: type (t: type) = struct member: t end plain
+empty: type (t: type) = [0]t
+bad_variant: type (t: type) = layout(c) struct
+    member: t
+    kind: variant left | right end kind
+end bad_variant
+bad_slice: type (t: type) = layout(c) struct
+    member: t
+    values: []u32
+end bad_slice
+bad_symbolic_slice: type (t: type) = layout(c) struct
+    values: []t
+end bad_symbolic_slice
+bad_nested_slice: type (t: type) = layout(c) struct
+    values: [2][]t
+end bad_nested_slice
+bad_zero_array: type (t: type) = layout(c) struct
+    values: [0]t
+end bad_zero_array
+bad_aliased_zero: type (t: type) = layout(c) struct
+    values: empty(t)
+end bad_aliased_zero
+bad_nominal: type (t: type) = layout(c) struct
+    value: plain(t)
+end bad_nominal
+bad_callback: type (t: type) = layout(c) struct
+    call: (value: t) -> none
+end bad_callback

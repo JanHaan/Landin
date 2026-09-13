@@ -795,6 +795,7 @@ negative/r491-public-import | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-refused-operand-cascades | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-retained-reference-stores | linux-x86-64, macos-arm64, synthetic-32
 negative/r491-sunk-inout-exit-edges | linux-x86-64, macos-arm64, synthetic-32
+negative/r491-symbolic-c-layout | linux-x86-64
 negative/range-subtype-address | linux-x86-64, macos-arm64
 negative/range-subtype-base-is-not-an-integer | linux-x86-64, macos-arm64
 negative/range-subtype-bound-outside-base | linux-x86-64, macos-arm64
@@ -1184,6 +1185,7 @@ positive/r450-array-arithmetic-source | linux-x86-64, macos-arm64
 positive/r450-optimal-layout-source | linux-x86-64, macos-arm64
 positive/r490-conformance-input-keys | linux-x86-64, macos-arm64, synthetic-32
 positive/r491-construction-static-arguments | linux-x86-64, macos-arm64, synthetic-32
+positive/r491-symbolic-c-layout | linux-x86-64
 positive/range-subtype-exit-before-the-check | linux-x86-64, macos-arm64
 positive/range-subtypes | linux-x86-64, macos-arm64
 positive/recursive-module-images | linux-x86-64, synthetic-32
