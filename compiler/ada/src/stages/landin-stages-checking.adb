@@ -296,6 +296,9 @@ package body Landin.Stages.Checking is
          --  diagnose a tagged pointer; none of these facts is a type key,
          --  a guessed pointee descriptor or a cached syntax answer.
          Symbolic_Pointer : Boolean := False;
+         --  No substitution can make this symbolic value a C field. This
+         --  negative proof survives aliases without inventing a layout.
+         Symbolic_Non_C : Boolean := False;
          Symbolic_Atom_1 : Res.Declaration_Id := Res.No_Declaration;
          Symbolic_Atom_2 : Res.Declaration_Id := Res.No_Declaration;
       end record;
@@ -692,6 +695,8 @@ package body Landin.Stages.Checking is
          Node : Syn.Node_Id;
          Parameters, Results : Landin.Checking.Signature_Part_Array;
          Valid : in out Boolean);
+      procedure Reject_C_Layout (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
+
       procedure Validate_C_Layout
         (Of_Tree : Syn.Tree;
          Node : Syn.Node_Id;
@@ -836,6 +841,21 @@ package body Landin.Stages.Checking is
          end if;
       end Validate_C_Signature;
 
+      procedure Reject_C_Layout (Of_Tree : Syn.Tree; Node : Syn.Node_Id) is
+      begin
+         Bad.Report
+           (Item => Bad.Type_Mismatch,
+            Source => Syn.Source_Of (Of_Tree),
+            Where => Syn.Where (Of_Tree, Node),
+            Message => "this layout(c) struct has a non-C representation",
+            Note => "[1580]: C fields are scalars, pointers, fixed C"
+                    & " callbacks, nonempty fixed arrays or recursively"
+                    & " layout(c) structs; tagged variants are not"
+                    & " C unions",
+            Related => Syn.Origin (Of_Tree, Node),
+            Because => "this C layout", Into => Found);
+      end Reject_C_Layout;
+
       procedure Validate_C_Layout
         (Of_Tree : Syn.Tree;
          Node : Syn.Node_Id;
@@ -847,17 +867,7 @@ package body Landin.Stages.Checking is
                      or else (for some Field of Fields =>
                        not C_Field_Allowed (Field)))
          then
-            Bad.Report
-              (Item => Bad.Type_Mismatch,
-               Source => Syn.Source_Of (Of_Tree),
-               Where => Syn.Where (Of_Tree, Node),
-               Message => "this layout(c) struct has a non-C representation",
-               Note => "[1580]: C fields are scalars, pointers, fixed C"
-                       & " callbacks, nonempty fixed arrays or recursively"
-                       & " layout(c) structs; tagged variants are not"
-                       & " C unions",
-               Related => Syn.Origin (Of_Tree, Node),
-               Because => "this C layout", Into => Found);
+            Reject_C_Layout (Of_Tree, Node);
          end if;
       end Validate_C_Layout;
 
@@ -3027,6 +3037,8 @@ package body Landin.Stages.Checking is
                     (Kind => Ty.Undecided,
                      Symbolic_Pointer =>
                        Syn.Kind (Of_Tree, Written) = Syn.Pointer_Type,
+                     Symbolic_Non_C =>
+                       Syn.Kind (Of_Tree, Written) = Syn.Slice_Type,
                      others => <>);
                elsif Target.Kind not in
                  Ty.Scalar_Name | Ty.Pointer_Value | Ty.Slice_Value
@@ -3106,6 +3118,10 @@ package body Landin.Stages.Checking is
                        (if Element.Symbolic = No_Symbolic_Layout
                         then No_Symbolic_Layout
                         else Remember_Symbolic_Array (Element)),
+                     Symbolic_Non_C => Element.Symbolic_Non_C
+                       or else (Is_Known and then Folded_Value = 0)
+                       or else (Element.Kind /= Ty.Undecided and then
+                         not C_Field_Allowed (Descriptor_Shape (Element))),
                      others   => <>);
                end if;
 
@@ -3464,7 +3480,11 @@ package body Landin.Stages.Checking is
                if not Valid then
                   return Invalid;
                elsif not Concrete then
-                  return (Kind => Ty.Undecided, others => <>);
+                  return
+                    (Kind => Ty.Undecided,
+                     Symbolic_Non_C => not Syn.Uses_C_ABI (Of_Tree, Written)
+                       or else Syn.Is_Variadic (Of_Tree, Written),
+                     others => <>);
                end if;
 
                return
@@ -3993,6 +4013,11 @@ package body Landin.Stages.Checking is
                                       (Kind     => Ty.Undecided,
                                        Symbolic => Remember_Symbolic_Nominal
                                          (Means, Bound),
+                                       Symbolic_Non_C => not
+                                         (Syn.Kind (Template.all, Struct_Node)
+                                            = Syn.Struct_Body
+                                          and then Syn.Has_C_Layout
+                                            (Template.all, Struct_Node)),
                                        others   => <>);
                                  end if;
 
@@ -4004,7 +4029,13 @@ package body Landin.Stages.Checking is
                                    Was_Expanding;
                                  return
                                    (if Valid
-                                    then (Kind => Ty.Undecided, others => <>)
+                                    then (Kind => Ty.Undecided,
+                                      Symbolic_Non_C => not
+                                        (Syn.Kind (Template.all, Struct_Node)
+                                           = Syn.Struct_Body
+                                         and then Syn.Has_C_Layout
+                                           (Template.all, Struct_Node)),
+                                      others => <>)
                                     else Invalid);
                               end if;
 
@@ -4256,6 +4287,7 @@ package body Landin.Stages.Checking is
                          Length  => 1,
                          others  => <>)];
          Concrete : Boolean := True;
+         C_Impossible : Boolean := False;
          Next_Case : Natural := 1;
          Next_Payload : Natural := 1;
 
@@ -4383,6 +4415,11 @@ package body Landin.Stages.Checking is
                             & " enabled");
                   Valid := False;
             end case;
+            if Valid then
+               C_Impossible := C_Impossible or else Descriptor.Symbolic_Non_C
+                 or else (Descriptor.Kind /= Ty.Undecided
+                   and then not C_Field_Allowed (Into));
+            end if;
          end Check_Leaf;
       begin
          --  This declaration's labels are checked even without an actual.
@@ -4397,6 +4434,7 @@ package body Landin.Stages.Checking is
                if Syn.Kind (Of_Tree, Member) = Syn.Field then
                   Check_Leaf (Member, Fields (Index));
                else
+                  C_Impossible := True;
                   declare
                      Count : constant Natural :=
                        Syn.Case_Count (Of_Tree, Member);
@@ -4445,6 +4483,17 @@ package body Landin.Stages.Checking is
                end if;
             end;
          end loop;
+
+         --  Symbolic validation uses only negative C proofs. A type formal
+         --  or pointer to one remains unknown until its concrete instance.
+         if Valid and then Instance = Landin.Checking.No_Nominal_Type
+           and then Syn.Has_C_Layout (Of_Tree, Struct_Node)
+           and then (C_Impossible or else Fields'Length = 0
+             or else Landin.Targets.C_ABI_Of (Facts) = Landin.Targets.No_C_ABI)
+         then
+            Reject_C_Layout (Of_Tree, Struct_Node);
+            Valid := False;
+         end if;
 
          if not Valid or else not Concrete
            or else Instance = Landin.Checking.No_Nominal_Type

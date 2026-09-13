@@ -5918,7 +5918,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J118 | `zeroed` against a pointer/slice/atom context reports L0304 'needs a directly supplied initializer' pointing at completed R2.20, though the context is supplied and the refusal is permanent (also docs-code) | C | Implemented: the generic zeroed fallback reports L0301 with the permanent contextual requirement at [0540], instead of L0304 promising completed R2.20 enablement. Seven fixture code lists are corrected; unrelated deferred aggregate-initializer refusals remain L0304. Admitted scalar, array and struct zeroed paths remain accepted. Exact acceptance remains open. |
 | J119 | Distinct-type identity and zeroed mismatches are reported with struct wording and notes citing [0710] and function addresses | C | Implemented: nominal copy and assignment refusals describe identity independently of representation, contextual distinct results name the distinct type category, and zeroed diagnostics use general type/place labels. The reported distinct-u32 refusal no longer invents a struct or function address. Exact acceptance remains open. |
 | J120 | A refused range-subtype reference target cascades into a spurious L0303 about writing through an `in` parameter | C | Implemented: Check_Place stops at a settled ill-typed root instead of treating a failed reference projection as replacement of its in parameter. The original range-reference refusal remains the sole report for that write. Exact acceptance remains open. |
-| J121 | A parameterized layout(c) struct's C-representation check is skipped in the symbolic template pass | C | Open template-only validation gap: check actual-independent invalid C fields. Do not hoist concrete-layout validation over symbolic fields, which would reject valid generic templates. |
+| J121 | A parameterized layout(c) struct's C-representation check is skipped in the symbolic template pass | C | Implemented: symbolic descriptors preserve proven non-C shapes through aliases, arrays and nominal applications. Unused C-layout templates reject those proofs and tagged variants without guessing unknown fields' layouts. Eight exact L0301 reports and valid formal/pointer/array/C-callback controls pass. |
 | J122 | Shown returns phrases that already carry an article, producing "this does not have the a pointer shape required here" (also check-5, behave-types, docs-code, check-3) | C | Implemented: contextual mismatches name the required pointer, slice, function, aggregate or erased type without doubled articles or the unknown-type fallback. Their explanation applies to the complete required context rather than asserting every site is a D124 control expression. Exact acceptance remains open. |
 | J123 | Reject_C_Signature and Validate_C_Layout pass the same origin as both primary span and Related span, printing the snippet twice | C | Implemented in text rendering: a first related label sharing the primary source and complete span supplies the one rendered snippet. C signature/layout labels, every structured diagnostic field and catalogue requirements remain intact; different files or span ends remain separate. Exact acceptance remains open. |
 | J124 | Multi-result placement sizes a fixed-array result by its U8 element placeholder, so the too-large check under-counts by the element size | C | Repaired with J46/J60: placement measures each result's complete descriptor, including nested arrays, nominal elements and reference carriers, instead of its scalar placeholder. Tiny nested/reference/empty array signature controls pass; no oversized source or generated image was executed. |
@@ -7237,8 +7237,28 @@ assembly, generated executable, debugger or giant image ran. Evidence is in
 `.scratch/r491-stack-limits/` and `.scratch/r491-final-values/`.
 Exact-revision acceptance remains open.
 
-J121's actual-independent C-layout validation is next; symbolic type-formal
-fields must remain deferred until a concrete application.
+J121 development evidence: six selected fixtures pass 27 checks in each of
+macOS debug and Linux release. Eight formerly accepted unused templates now
+produce exact L0301 reports for tagged variants, concrete and symbolic slices,
+nested slice arrays, zero-length symbolic arrays (direct and aliased),
+ordinary nominal instances and Landin callbacks. A valid fixture retains
+unknown type fields, bounded array fields, pointers to symbolic slices, nested
+C records and fixed C callbacks, and concretely instantiates the record with
+two array elements. Existing empty/zero-array/variadic C refusals and recursive
+C callback acceptance remain intact. Both single-worker builds, exact fixture
+runs and inventories pass; positive fixtures emitted text only. No native
+assembly, generated executable, debugger or giant image ran. Evidence is in
+`.scratch/r491-symbolic-c-layout/` and `.scratch/r491-final-values/`.
+Exact-revision acceptance remains open.
+
+R4.91-F3, found while validating J121, remains open: a five-line generic record
+with a `ptr plain(t)` field and a concrete type alias exits 70 with an internal
+compiler defect. This occurs with ordinary as well as C record layout; the
+corresponding pointer-to-symbolic-slice control is accepted. The compile-only
+baseline and post-J121 reproduction are retained in
+`.scratch/r491-symbolic-c-layout/pointer-plain*.ldn` and their adjacent logs.
+Locate the failing stage and preserve identity-only pointer references without
+forcing a pointee layout or weakening verification. This is the next repair.
 J116's slice-endpoint claim
 still needs a separate normative disposition. J48 also requires an explicit
 static-selection collision rule: D146's existing uniqueness sentence is

@@ -1,0 +1,48 @@
+error[L0301]: this layout(c) struct has a non-C representation
+  --> ../tests/fixtures/negative/r491-symbolic-c-layout/main.ldn:3:41
+  |
+3 | bad_variant: type (t: type) = layout(c) struct
+  |                                         ^^^^^^ this C layout
+  = note: [1580]: C fields are scalars, pointers, fixed C callbacks, nonempty fixed arrays or recursively layout(c) structs; tagged variants are not C unions
+error[L0301]: this layout(c) struct has a non-C representation
+  --> ../tests/fixtures/negative/r491-symbolic-c-layout/main.ldn:7:39
+  |
+7 | bad_slice: type (t: type) = layout(c) struct
+  |                                       ^^^^^^ this C layout
+  = note: [1580]: C fields are scalars, pointers, fixed C callbacks, nonempty fixed arrays or recursively layout(c) structs; tagged variants are not C unions
+error[L0301]: this layout(c) struct has a non-C representation
+  --> ../tests/fixtures/negative/r491-symbolic-c-layout/main.ldn:11:48
+   |
+11 | bad_symbolic_slice: type (t: type) = layout(c) struct
+   |                                                ^^^^^^ this C layout
+  = note: [1580]: C fields are scalars, pointers, fixed C callbacks, nonempty fixed arrays or recursively layout(c) structs; tagged variants are not C unions
+error[L0301]: this layout(c) struct has a non-C representation
+  --> ../tests/fixtures/negative/r491-symbolic-c-layout/main.ldn:14:46
+   |
+14 | bad_nested_slice: type (t: type) = layout(c) struct
+   |                                              ^^^^^^ this C layout
+  = note: [1580]: C fields are scalars, pointers, fixed C callbacks, nonempty fixed arrays or recursively layout(c) structs; tagged variants are not C unions
+error[L0301]: this layout(c) struct has a non-C representation
+  --> ../tests/fixtures/negative/r491-symbolic-c-layout/main.ldn:17:44
+   |
+17 | bad_zero_array: type (t: type) = layout(c) struct
+   |                                            ^^^^^^ this C layout
+  = note: [1580]: C fields are scalars, pointers, fixed C callbacks, nonempty fixed arrays or recursively layout(c) structs; tagged variants are not C unions
+error[L0301]: this layout(c) struct has a non-C representation
+  --> ../tests/fixtures/negative/r491-symbolic-c-layout/main.ldn:20:46
+   |
+20 | bad_aliased_zero: type (t: type) = layout(c) struct
+   |                                              ^^^^^^ this C layout
+  = note: [1580]: C fields are scalars, pointers, fixed C callbacks, nonempty fixed arrays or recursively layout(c) structs; tagged variants are not C unions
+error[L0301]: this layout(c) struct has a non-C representation
+  --> ../tests/fixtures/negative/r491-symbolic-c-layout/main.ldn:23:41
+   |
+23 | bad_nominal: type (t: type) = layout(c) struct
+   |                                         ^^^^^^ this C layout
+  = note: [1580]: C fields are scalars, pointers, fixed C callbacks, nonempty fixed arrays or recursively layout(c) structs; tagged variants are not C unions
+error[L0301]: this layout(c) struct has a non-C representation
+  --> ../tests/fixtures/negative/r491-symbolic-c-layout/main.ldn:26:42
+   |
+26 | bad_callback: type (t: type) = layout(c) struct
+   |                                          ^^^^^^ this C layout
+  = note: [1580]: C fields are scalars, pointers, fixed C callbacks, nonempty fixed arrays or recursively layout(c) structs; tagged variants are not C unions

@@ -1,0 +1,9 @@
+class: negative
+summary: unused C-layout templates reject known non-C fields through symbolic aliases and nested arrays
+program: main.ldn
+codes: L0301, L0301, L0301, L0301, L0301, L0301, L0301, L0301
+constructs: 0660, 0670, 1350, 1580
+targets: linux-x86-64
+expect: expected.txt
+args: ../tests/fixtures/negative/r491-symbolic-c-layout/main.ldn
+status: 1

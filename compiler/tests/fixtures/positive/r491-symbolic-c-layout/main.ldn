@@ -1,0 +1,9 @@
+cbox: type (t: type) = layout(c) struct member: t end cbox
+good: type (t: type, fixed count: u32) = layout(c) struct
+    member: t
+    address: ptr []t
+    cells: [count]t
+    nested: cbox(t)
+    call: extern(c) (value: u32) -> none
+end good
+accepted: type = good(u32, 2)

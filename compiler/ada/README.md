@@ -278,6 +278,12 @@ implicit return whose source anchor precedes the binding. Each terminal's
 location range ends before any saved register is restored or the frame is
 removed; following blocks cannot extend that range across an epilogue.
 
+Symbolic type normalization retains proven incompatibility with C field
+representation through aliases and arrays. Template validation uses those
+negative facts to reject unavoidable C-layout errors while leaving unknown
+fields for concrete instantiation. A pointer's own representation remains
+independent of its referent's C compatibility.
+
 Parser lookahead keeps a per-parse delimiter index and caches conformance
 suffix decisions only outside nested delimiters. The index balances parentheses
 and brackets independently, preserving the existing lookahead rules. Signature
