@@ -5674,7 +5674,7 @@ session, destructive output-collision experiment or resource-exhaustion sweep.
 | M6: historical closure anchors | Historical rewrite provenance remains distinct from exact current acceptance. Reconcile the affected old anchors and phase-gate evidence without rewriting old acceptance claims as current ones. | Fourth batch |
 | M7: R4.70 obligations | Superseded by R4.70/R4.90: closure now records complete derivation, scalar-origin normalization, nested field ranges and direct parameter coverage. Preserve their fixtures and later full acceptance evidence. | Existing coverage |
 | M8: stale decisions/citations | Still present in sampled text, including active-R4.40 wording and pending pins. Audit the named citations against their actual rules before changing prose. | Fourth batch |
-| A5, M9: source-path bytes | Decoder still uses decoded text through ordinary stdout. The default check's result depends on stdout error policy; pin strict UTF-8 output and preserve original path bytes explicitly. | Third batch |
+| A5, M9: source-path bytes | Implemented: the offline decoder writes exact path bytes and an ASCII coordinate suffix through binary stdout. Build identity remains mandatory. The existing non-UTF-8/quoted/colon path control now runs under strict UTF-8 and strict ASCII output policies with bounded subprocess timeouts. | Third batch implementation |
 | M10: diagnostic rendering growth | Implemented with J13: terminator-free line spans support bounded local excerpts, and the report renderer shares one explicit text budget across messages, labels and notes. Structured reports and original byte locations remain intact. The old stress measurement was not rerun. | Third batch |
 | A4, M11: native failures | Implemented with J112: native reads/writes retain ordinary device-failure outcomes; failed capture reads raise External_Tool_Failed through owned cleanup instead of becoming empty successful output. Tiny file/capture and fake host-exception controls pass. Device exhaustion and active-capture fault injection were not run. Layout exception conflation remains J65. | Third batch implementation |
 | M12: stage organization | Large nested stage procedures and duplicated construction helpers remain. Refactor only with established behavioural controls; size alone is not a correctness finding. | Fourth batch |
@@ -7416,6 +7416,17 @@ M5's historical font question remains a separate maintainer disposition.
 Source URLs, byte comparisons and hashes are retained in
 `.scratch/r491-third-party-inventory/tree-sitter-provenance.json`.
 This is a source/notice audit; no compiler, assembler or generated program ran.
+
+A5/M9's baseline source-location lookup failed both matching-build controls
+under `PYTHONIOENCODING=utf-8:strict`: converting filesystem bytes to text
+made success depend on stdout's encoding error policy. The decoder now keeps
+`resolve`'s byte result through binary output and appends only ASCII
+coordinates. The focused check exercises matching build-ID and assembly-hash
+lookups under strict UTF-8 and strict ASCII, then retains absent/mismatched
+build and unknown-file refusals. Every subprocess has a ten-second timeout;
+the only assembly input is a tiny text hash witness and is never assembled.
+No Ada build, native assembly, generated executable, debugger or giant image
+is needed for this Python-only repair. Exact-revision acceptance remains open.
 
 J116's slice-endpoint claim
 still needs a separate normative disposition. J48 also requires an explicit

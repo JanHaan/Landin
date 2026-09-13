@@ -4961,20 +4961,26 @@ def check_source_locations(full_run):
             "files": [{"file_id": 7, "path_hex": path.hex()}],
         }), encoding="ascii")
         base = [sys.executable, script, str(table), "7", "42", "9"]
-        for identity in (["--build-id", "abc123"],
-                         ["--assembly", str(assembly)]):
-            result = subprocess.run(base + identity, capture_output=True)
-            if result.returncode or result.stdout != path + b":42:9\n":
-                out.append((script, 1, "matching lookup loses source path bytes"))
+        for encoding in ("utf-8:strict", "ascii:strict"):
+            env = dict(os.environ, PYTHONIOENCODING=encoding)
+            for identity in (["--build-id", "abc123"],
+                             ["--assembly", str(assembly)]):
+                result = subprocess.run(base + identity, capture_output=True,
+                                        env=env, timeout=10)
+                if (result.returncode or result.stderr or
+                        result.stdout != path + b":42:9\n"):
+                    out.append((script, 1, "matching lookup loses source path "
+                                "bytes under " + encoding))
         assembly.write_bytes(b"different assembly\n")
         for identity in ([], ["--build-id", "def456"],
                          ["--assembly", str(assembly)]):
-            result = subprocess.run(base + identity, capture_output=True)
+            result = subprocess.run(base + identity, capture_output=True,
+                                    env=env, timeout=10)
             if result.returncode != 2 or result.stdout:
                 out.append((script, 1, "lookup accepts an absent or wrong build"))
         base[3] = "8"
         result = subprocess.run(base + ["--build-id", "abc123"],
-                                capture_output=True)
+                                capture_output=True, env=env, timeout=10)
         if result.returncode != 2 or result.stdout:
             out.append((script, 1, "lookup accepts an unknown file ID"))
     return out

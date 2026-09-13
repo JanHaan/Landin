@@ -4,7 +4,7 @@
 import argparse
 import hashlib
 import json
-import os
+import sys
 from pathlib import Path
 
 
@@ -36,10 +36,12 @@ def main():
             digest = hashlib.sha256(args.assembly.read_bytes()).hexdigest()
             if digest != table["assembly_sha256"]:
                 raise ValueError("assembly does not match the source table")
-        path = os.fsdecode(resolve(table, args.file_id))
+        path = resolve(table, args.file_id)
     except (OSError, ValueError, KeyError, TypeError) as error:
         parser.error(str(error))
-    print(f"{path}:{args.line}:{args.column}")
+    # The table records filesystem bytes, not text in stdout's encoding.
+    # In particular, strict UTF-8 stdout must not reject a non-UTF-8 name.
+    sys.stdout.buffer.write(path + f":{args.line}:{args.column}\n".encode("ascii"))
 
 
 if __name__ == "__main__":
