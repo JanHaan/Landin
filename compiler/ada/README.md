@@ -155,6 +155,11 @@ the command-line default never inherits that reference convenience.
 `Landin.Optimization` owns typed controls; `Landin.IR.Specialization` owns
 incoming-evidence proof and profitability, `Landin.IR.Simplification` owns
 conservative neutral rewrites, and x86 allocation/selection owns registers.
+Call verification checks the addressed storage shape of every aggregate or
+array argument and hidden result, for direct calls, ordinary function values
+and erased dispatch. A usize carrier alone does not establish an extent,
+element type or nominal identity. C nominal checks and erased-self adjacency
+remain separate requirements.
 Backward demand removes a pure function address when it has no users,
 including a projection left after specialization turns a call direct. A live
 function value retains its signature; numeric folding still excludes it.

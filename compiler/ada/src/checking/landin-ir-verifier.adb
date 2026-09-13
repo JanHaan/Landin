@@ -2222,18 +2222,18 @@ package body Landin.IR.Verifier is
          end case;
       end Address_Agrees;
 
-      --  Marked dispatch erases only self, not the storage addressed by a
-      --  hidden result or another shaped parameter. Parameter zero denotes
+      --  Every call preserves the storage shape of its hidden result and
+      --  shaped parameters. Erased self is separate. Parameter zero denotes
       --  the hidden result. Nominal bodies and operand definitions have been
       --  verified before this walk; an anonymous result tuple instead keeps
       --  its actual field source. No synthetic shape is added to the unit.
-      function Erased_Carrier_Agrees
+      function Call_Carrier_Agrees
         (Item      : Item_Id;
          Value     : Value_Id;
          Signature : Signature_Id;
          Parameter : Natural := 0) return Boolean;
 
-      function Erased_Carrier_Agrees
+      function Call_Carrier_Agrees
         (Item      : Item_Id;
          Value     : Value_Id;
          Signature : Signature_Id;
@@ -2344,7 +2344,7 @@ package body Landin.IR.Verifier is
             end if;
          end loop;
          return True;
-      end Erased_Carrier_Agrees;
+      end Call_Carrier_Agrees;
 
       function Is_Erased_Function
         (Item : Item_Id; Value : Value_Id) return Boolean
@@ -7323,9 +7323,7 @@ package body Landin.IR.Verifier is
                                  end if;
 
                                  if Hidden = 1
-                                   and then Signature_Has_Erased_Self
-                                     (Of_Unit, Signature)
-                                   and then not Erased_Carrier_Agrees
+                                   and then not Call_Carrier_Agrees
                                      (Id, Nth_Operand
                                         (Of_Unit, Id, V, Offset + 1),
                                       Signature)
@@ -7396,13 +7394,10 @@ package body Landin.IR.Verifier is
                                               (Id, Argument,
                                                Parameter.Nominal))
                                          or else
-                                           (P > 1
-                                            and then Signature_Has_Erased_Self
-                                              (Of_Unit, Signature)
-                                            and then Parameter.Kind in
+                                           (Parameter.Kind in
                                               Landin.Types.Aggregate
                                                 | Landin.Types.Fixed_Array
-                                            and then not Erased_Carrier_Agrees
+                                            and then not Call_Carrier_Agrees
                                               (Id, Argument, Signature, P))
                                          or else not Atom_Metadata_Is_Subset
                                            (Atom_Set_Of
