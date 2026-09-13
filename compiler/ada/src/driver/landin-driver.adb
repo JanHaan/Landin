@@ -1213,34 +1213,47 @@ package body Landin.Driver is
                Load_Reachable_Program (Inputs.Element (1));
             end if;
          else
-            for Path of Inputs loop
-               declare
-                  Content : Unbounded.Unbounded_String;
-                  Status  : Landin.Platform.Read_Status;
-               begin
-                  Host.Read_File (Path, Content, Status);
+            declare
+               Loaded : Landin.Platform.Path_List;
+            begin
+               for Path of Inputs loop
+                  --  Preserve the first successful spelling and snapshot.
+                  --  Uncertain identities still take the ordinary read path.
+                  if not (for some Previous of Loaded =>
+                            Path = Previous
+                            or else Host.Same_File (Path, Previous))
+                  then
+                     declare
+                        Content : Unbounded.Unbounded_String;
+                        Status  : Landin.Platform.Read_Status;
+                     begin
+                        Host.Read_File (Path, Content, Status);
 
-                  case Status is
-                     when Landin.Platform.Read_Ok =>
-                        declare
-                           Id : constant Landin.Source.Source_Id :=
-                             Landin.Stages.Add_Source
-                               (Context, Path, Unbounded.To_String (Content));
-                           pragma Unreferenced (Id);
-                        begin
-                           null;
-                        end;
+                        case Status is
+                           when Landin.Platform.Read_Ok =>
+                              declare
+                                 Id : constant Landin.Source.Source_Id :=
+                                   Landin.Stages.Add_Source
+                                     (Context, Path,
+                                      Unbounded.To_String (Content));
+                                 pragma Unreferenced (Id);
+                              begin
+                                 Loaded.Append (Path);
+                              end;
 
-                     when Landin.Platform.Not_Found =>
-                        Note_Failure
-                          (Code_Unreadable, "source not found: " & Path);
+                           when Landin.Platform.Not_Found =>
+                              Note_Failure
+                                (Code_Unreadable, "source not found: " & Path);
 
-                     when Landin.Platform.Not_Readable =>
-                        Note_Failure
-                          (Code_Unreadable, "source not readable: " & Path);
-                  end case;
-               end;
-            end loop;
+                           when Landin.Platform.Not_Readable =>
+                              Note_Failure
+                                (Code_Unreadable,
+                                 "source not readable: " & Path);
+                        end case;
+                     end;
+                  end if;
+               end loop;
+            end;
          end if;
 
          --  Every source that was read is scanned and parsed together, as

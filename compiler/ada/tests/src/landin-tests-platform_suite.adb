@@ -730,6 +730,27 @@ package body Landin.Tests.Platform_Suite is
            (Root & "/new.s", Root & "/parent/new.s")
          and then not Host.Paths_Overlap (Original, Root & "/new.json"),
          "links, absolute names and missing leaves use host identity");
+      Host.Write_File (Root & "/copy.ldn", "source bytes", Written);
+      Landin.Testing.Check
+        (Item, Written = Landin.Platform.Write_Ok
+         and then Host.Same_File (Original, Original)
+         and then Host.Same_File (Original, Root & "/./source.ldn")
+         and then Host.Same_File (Original, Root & "/hard.json")
+         and then Host.Same_File (Original, Root & "/symbolic.json")
+         and then Host.Same_File
+           (Original, Ada.Directories.Full_Name (Original))
+         and then Host.Same_File (Original, Root & "/parent/source.ldn"),
+         "existing input aliases require positive host identity");
+      Landin.Testing.Check
+        (Item, not Host.Same_File (Original, Root & "/copy.ldn")
+         and then not Host.Same_File (Original, Original & "/")
+         and then not Host.Same_File (Original, Root & "/absent.ldn")
+         and then not Host.Same_File
+           (Root & "/absent.ldn", Root & "/parent/absent.ldn")
+         and then not Host.Same_File ("", "")
+         and then not Host.Same_File
+           (Original, Original & Character'Val (0) & "ignored"),
+         "contents, missing leaves and invalid paths cannot prove identity");
    end Native_Path_Identity;
 
    procedure Register (Into : in out Landin.Testing.Registry) is

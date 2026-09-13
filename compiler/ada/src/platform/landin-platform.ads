@@ -45,6 +45,12 @@ package Landin.Platform is
    function Paths_Overlap
      (Host : Filesystem; Left, Right : String) return Boolean is abstract;
 
+   --  True only for proven identity of existing objects. Unknown identity
+   --  is False: source deduplication must never discard an uncertain input.
+   --  Like Paths_Overlap, this assumes no concurrent namespace replacement.
+   function Same_File
+     (Host : Filesystem; Left, Right : String) return Boolean is abstract;
+
    function Is_Directory (Host : Filesystem; Path : String) return Boolean
      is abstract;
 

@@ -83,6 +83,11 @@ package body Landin.Testing.Fakes is
       Host.Aliases.Append (Right);
    end Add_Alias;
 
+   overriding function Same_File
+     (Host : Fake_Filesystem; Left, Right : String) return Boolean
+     is (Host.Exists (Left) and then Host.Exists (Right)
+         and then Host.Paths_Overlap (Left, Right));
+
    overriding function Paths_Overlap
      (Host : Fake_Filesystem; Left, Right : String) return Boolean is
    begin

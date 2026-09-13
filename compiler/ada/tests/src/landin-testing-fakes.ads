@@ -35,6 +35,9 @@ package Landin.Testing.Fakes is
    --  The fake does not guess native symlink or volume case semantics.
    procedure Add_Alias
      (Host : in out Fake_Filesystem; Left, Right : String);
+   overriding function Same_File
+     (Host : Fake_Filesystem; Left, Right : String) return Boolean;
+
    overriding function Paths_Overlap
      (Host : Fake_Filesystem; Left, Right : String) return Boolean;
 

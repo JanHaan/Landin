@@ -669,6 +669,11 @@ for report/source/artifact preflight, including hard links, symbolic links and
 not-yet-created output leaves. An unresolved identity is refused conservatively;
 this does not protect against concurrent filesystem replacement. No host
 identity operation determines Landin target layout or emits program code.
+The separate `Same_File` query answers true only for existing host objects
+with matching identity. Explicit source arguments load each proven object
+once, retaining its first successful spelling and snapshot for diagnostics.
+Unknown identity still reads and reports normally; equal bytes in distinct
+files do not merge declarations. Rooted module ownership remains separate.
 `src/platform/landin_tool_process.c` owns POSIX spawn attributes and wait/signal
 constants. `Native.Tools` passes the already-open capture descriptor and
 literal argument vector, starts each tool in its own process group, and uses a

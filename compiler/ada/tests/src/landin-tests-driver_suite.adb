@@ -203,6 +203,92 @@ package body Landin.Tests.Driver_Suite is
         (Item, Contains (Text, "absent.ldn"), "the path is named");
    end Missing_Sources_Are_Data;
 
+   procedure Explicit_Sources_Keep_Identity
+     (Item : in out Landin.Testing.Context);
+
+   procedure Explicit_Sources_Keep_Identity
+     (Item : in out Landin.Testing.Context)
+   is
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+
+      procedure Accepted (Left, Right : String);
+      procedure Accepted (Left, Right : String) is
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute (Both (Left, Right), Host, Tools);
+      begin
+         Landin.Testing.Check
+           (Item, Result.Status = Landin.Driver.Status_Success
+            and then Unbounded.Length (Result.Report) = 0,
+            "one existing source is compiled once");
+      end Accepted;
+   begin
+      Host.Add_File ("a.ldn", "value: u32 = 1" & LF);
+      Host.Add_File ("./a.ldn", "value: u32 = 1" & LF);
+      Host.Add_File ("/virtual/a.ldn", "value: u32 = 1" & LF);
+      Host.Add_File ("distinct.ldn", "value: u32 = 1" & LF);
+      Host.Add_Alias ("a.ldn", "./a.ldn");
+      Host.Add_Alias ("a.ldn", "/virtual/a.ldn");
+      Accepted ("a.ldn", "a.ldn");
+      Accepted ("a.ldn", "./a.ldn");
+      Accepted ("/virtual/a.ldn", "a.ldn");
+      --  An already loaded alias must be skipped before a second read.
+      Host.Add_Unreadable ("unreadable-alias.ldn");
+      Host.Add_Alias ("a.ldn", "unreadable-alias.ldn");
+      Accepted ("a.ldn", "unreadable-alias.ldn");
+      declare
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute
+             (Both ("a.ldn", "distinct.ldn"), Host, Tools);
+      begin
+         Landin.Testing.Check
+           (Item, Result.Status = Landin.Driver.Status_Reported
+            and then Occurrences
+              (Unbounded.To_String (Result.Report), "error[L0200]") = 1,
+            "equal bytes in distinct files retain distinct declarations");
+      end;
+      Host.Add_File ("first.ldn", "value: u32 = absent" & LF);
+      Host.Add_File ("second.ldn", "value: u32 = absent" & LF);
+      Host.Add_Alias ("first.ldn", "second.ldn");
+      declare
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute
+             (Both ("first.ldn", "second.ldn"), Host, Tools);
+         Text : constant String := Unbounded.To_String (Result.Report);
+      begin
+         Landin.Testing.Check
+           (Item, Result.Status = Landin.Driver.Status_Reported
+            and then Occurrences (Text, "error[L0201]") = 1
+            and then Contains (Text, "first.ldn:1:")
+            and then not Contains (Text, "second.ldn"),
+            "diagnostics retain the first source spelling");
+      end;
+      declare
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute
+             (Both ("a.ldn", "a.ldn/"), Host, Tools);
+      begin
+         Landin.Testing.Check
+           (Item, Result.Status = Landin.Driver.Status_Reported
+            and then Contains (Unbounded.To_String (Result.Report),
+                               "source not found: a.ldn/"),
+            "a trailing separator is not guessed to be a file alias");
+      end;
+      Host.Add_Alias ("missing.ldn", "./missing.ldn");
+      declare
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute
+             (Both ("missing.ldn", "./missing.ldn"), Host, Tools);
+      begin
+         Landin.Testing.Check
+           (Item, Result.Status = Landin.Driver.Status_Reported
+            and then Occurrences
+              (Unbounded.To_String (Result.Report), "error[L0003]") = 2
+            and then not Host.Same_File ("missing.ldn", "./missing.ldn"),
+            "unread inputs do not acquire a shared source identity");
+      end;
+   end Explicit_Sources_Keep_Identity;
+
    --  The frontend, reached the way a user reaches it.  The suites above
    --  hold the scanner and the parser to the corpus; what this one asserts
    --  is that the driver runs them, and that a syntax diagnostic renders
@@ -2764,6 +2850,9 @@ package body Landin.Tests.Driver_Suite is
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "driver", "explicit sources keep identity",
+         Explicit_Sources_Keep_Identity'Access);
       Landin.Testing.Register
         (Into, "driver", "R4.91 artifacts preserve inputs",
          R491_Artifacts_Preserve_Inputs'Access);
