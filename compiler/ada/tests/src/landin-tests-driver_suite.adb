@@ -1964,6 +1964,30 @@ package body Landin.Tests.Driver_Suite is
    begin
       for Executable in Boolean loop
          Check
+           ("mut p: ptr i32",
+            "L0301", 1, Executable);
+         Check
+           ("mut text: cstring",
+            "L0301", 1, Executable);
+         Check
+           ("mut items: []i32",
+            "L0301", 1, Executable);
+         Check
+           ("mut items: []mut u8",
+            "L0301", 1, Executable);
+         Check
+           ("mut text: utf8",
+            "L0301", 1, Executable);
+         Check
+           ("mut text: utf16",
+            "L0301", 1, Executable);
+         Check
+           ("address: type = ptr i32 mut p: address",
+            "L0301", 1, Executable);
+         Check
+           ("view: type = []i32 mut items: view",
+            "L0301", 1, Executable);
+         Check
            ("f: () -> none = for n in true ..< 2 do v := n end for end f",
             "L0301", 1, Executable);
          Check

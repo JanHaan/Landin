@@ -15531,12 +15531,13 @@ package body Landin.Stages.Lowering is
                   if Images (1).Form /= IR.Absent then
                      IR.Set_Array_Image
                        (Unit.all, Item, Images (1), Descendants, Folds);
+                     Made (Id) := True;
                   end if;
                else
                   IR.Set_Aggregate_Image
                     (Unit.all, Item, Values, Images, Descendants, Folds);
+                  Made (Id) := True;
                end if;
-               Made (Id) := True;
             end;
          end Set_Recursive_Image;
 

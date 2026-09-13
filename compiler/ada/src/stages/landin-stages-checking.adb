@@ -25630,6 +25630,27 @@ package body Landin.Stages.Checking is
             end;
          end Refuse_Unreadable_Subtree;
       begin
+         if Value = Syn.No_Node
+           and then Landin.Checking.Type_Of
+             (Types.all, Declaration_At (Syn.Source_Of (Of_Tree), Node))
+               in Ty.Pointer_Value | Ty.Slice_Value
+         then
+            Bad.Report
+              (Item    => Bad.Type_Mismatch,
+               Source  => Syn.Source_Of (Of_Tree),
+               Where   => Syn.Where (Of_Tree, Node),
+               Message => "a module reference binding needs an explicit"
+                          & " initial value",
+               Note    => "[0540]: pointers and slices have no all-zero"
+                          & " value; an empty slice has a non-null base",
+               Related => Syn.Origin
+                 (Of_Tree, (if Written = Syn.No_Node then Node else Written)),
+               Because => "this reference binding",
+               Into    => Found);
+            Landin.Checking.Refuse (Types.all, Of_Tree, Node);
+            return;
+         end if;
+
          if Landin.Checking.Type_Of
               (Types.all,
                Declaration_At (Syn.Source_Of (Of_Tree), Node)) = Ty.Any_Value
