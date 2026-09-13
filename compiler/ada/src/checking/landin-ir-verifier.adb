@@ -1316,8 +1316,10 @@ package body Landin.IR.Verifier is
 
          if Shape.Nominal /= No_Nominal_Type
            or else Shape.Length /= 1
-           or else Shape.Element not in
-             Landin.Types.U8 | Landin.Types.U16 | Landin.Types.U32
+           or else Shape.Element /=
+             (if Shape.Cases <= 2 ** 8 then Landin.Types.U8
+              elsif Shape.Cases <= 2 ** 16 then Landin.Types.U16
+              else Landin.Types.U32)
            or else Shape.Cases = 0
            or else Shape.Payloads_First = 0
            or else Shape.Payloads_First > Variant_Case_Run_Count (Of_Unit)

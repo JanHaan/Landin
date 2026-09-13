@@ -5889,7 +5889,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J89 | `Held = Ty.Bool` arm in `Lower_Datum`'s zero path is unreachable | C | Maintenance observation, not an accepted-source defect: confirm reachability/readers before removing redundant code; preserve behavior and update ownership documentation where affected. |
 | J90 | `Set_Image_From_Struct_Field` and its dispatch arm are unreachable since the member-selection redirect | C | Maintenance observation, not an accepted-source defect: confirm reachability/readers before removing redundant code; preserve behavior and update ownership documentation where affected. |
 | J91 | Block membership is never verified: block-run/In_Block agreement and the block partition of an item's value run go unchecked | C | Implemented with K21/K22: bounded block runs partition each item and agree with instruction membership before consumers read them; final item and operand cursors consume their vectors. Small malformed-IR seams and valid reordered/prefixed controls cover both target widths. No accepted-source defect is inferred; exact acceptance remains open. |
-| J92 | A variant shape's tag type is not held to being wide enough for its case count | C | Open verifier contract audit under m24: establish each malformed-IR witness with small direct seam tests, then return the intended Fault instead of accepting it or raising accidentally. These are not all demonstrated accepted-source defects. |
+| J92 | A variant shape's tag type is not held to being wide enough for its case count | C | Implemented: variant shapes require D74's smallest unsigned tag that represents every zero-based case. Bounded 255/256/257-case metadata controls cover datum fields, slot fields and measurements on both target widths, rejecting narrow and nonminimal tags. No giant case-count witness ran; exact acceptance remains open. |
 | J93 | The item's Aliases run, and the Paths run inside each alias, are never bounded or validated by the verifier | C | Open verifier contract audit under m24: establish each malformed-IR witness with small direct seam tests, then return the intended Fault instead of accepting it or raising accidentally. These are not all demonstrated accepted-source defects. |
 | J94 | Scalar_Field_Of converts an unbounded Part_Position with Natural() on the runtime-address path, turning a Fault into a Constraint_Error | C | Implemented: runtime-address field comparisons widen the field count before narrowing a validated index. One-field load/store controls include the first excluded index, an index beyond Natural and the Part_Position maximum, on both target widths. Exact acceptance remains open. |
 | J95 | Store into an aggregate or array slot is not refused, while Load from one is | C | Implemented: scalar stores refuse struct and array slots before Type_Of is called. Tiny controls retain scalar, struct-field and array-element stores in debug and release; this is a malformed-IR backstop, not a source miscompilation claim. Exact acceptance remains open. |
@@ -6619,7 +6619,19 @@ linker or generated executable ran. Logs are retained in
 `.scratch/r491-datum-loads/` and `.scratch/r491-final-values/`.
 Exact-revision acceptance remains open.
 
-J92's variant tag width is next. J116's slice-endpoint claim
+J92 development evidence: the selected verifier case passes 36 checks in each
+of macOS debug and Linux release. D74 already requires the smallest unsigned
+tag; the verifier now enforces that count-dependent rule. The controls contain
+at most 257 empty case descriptors, with no payload storage, and cover both
+sides of the u8 boundary in datum fields, slot fields and measurements. They
+also refuse nonminimal u16/u32 tags. The u16 upper transition is source-inspected,
+not exercised by a large generated case. Both single-worker builds passed;
+selected tests have 30-second or shorter timeouts. No Landin assembler, linker
+or generated executable ran. Logs are retained in
+`.scratch/r491-variant-tag-width/` and `.scratch/r491-final-values/`.
+Exact-revision acceptance remains open.
+
+J93's source-alias run and selection checks are next. J116's slice-endpoint claim
 still needs a separate normative disposition. J48 also requires an explicit
 static-selection collision rule: D146's existing uniqueness sentence is
 about erased dispatch, while D144 currently specifies table traversal order.

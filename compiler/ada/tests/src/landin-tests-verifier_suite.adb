@@ -7129,8 +7129,96 @@ package body Landin.Tests.Verifier_Suite is
       end loop;
    end Reachability_Starts_At_The_Entry;
 
+   procedure Variant_Tags_Represent_Their_Cases
+     (Item : in out Landin.Testing.Context);
+
+   procedure Variant_Tags_Represent_Their_Cases
+     (Item : in out Landin.Testing.Context)
+   is
+      type Scenario_Kind is
+        (Byte_Below, Byte_Limit, Byte_Overflow, Word_First,
+         Word_Too_Wide, Dword_Too_Wide);
+      type Place_Kind is (Datum_Field, Slot_Field, Measurement);
+   begin
+      for Small in Boolean loop
+         for Place in Place_Kind loop
+            for Scenario in Scenario_Kind loop
+               declare
+                  Facts : constant Landin.Targets.Target_Facts :=
+                    (if Small then Landin.Targets.Synthetic_32
+                     else Landin.Targets.Linux_X86_64);
+                  Work : Landin.Stages.Compilation :=
+                    Landin.Stages.Create (Facts);
+                  Unit : IR.Unit;
+                  Site : Landin.Provenance.Origin;
+                  Routine : IR.Item_Id;
+                  Datum : IR.Item_Id := IR.No_Item;
+                  Slot : IR.Slot_Id;
+                  Block : IR.Block_Id;
+                  Value : IR.Value_Id;
+                  Count : constant Positive :=
+                    (case Scenario is
+                        when Byte_Below => 255,
+                        when Byte_Limit | Word_Too_Wide => 256,
+                        when others => 257);
+                  Tag : constant Landin.Types.Scalar_Name :=
+                    (case Scenario is
+                        when Word_First | Word_Too_Wide => Landin.Types.U16,
+                        when Dword_Too_Wide => Landin.Types.U32,
+                        when others => Landin.Types.U8);
+                  Shape : constant IR.Field_Shape :=
+                    (Kind => IR.Variant_Field_Shape, Element => Tag,
+                     Cases => Count, Payloads_First => 1, others => <>);
+                  Cases : constant IR.Case_Run_Array (1 .. Count) :=
+                    [others => (First => 0, Count => 0)];
+               begin
+                  Ready (Work, Site);
+                  IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+                  Routine := IR.Add_Item
+                    (Unit, IR.Routine, 1, Landin.Types.No_Value, Site);
+                  if Place = Datum_Field then
+                     Datum := IR.Add_Item
+                       (Unit, IR.Datum, 5, Landin.Types.Aggregate, Site);
+                     IR.Add_Field
+                       (Unit, Datum, Shape, Cases, IR.No_Field_Shapes);
+                  elsif Place = Slot_Field then
+                     Slot := IR.Add_Aggregate_Slot
+                       (Unit, Routine, IR.No_Declaration, Site);
+                     IR.Add_Slot_Field
+                       (Unit, Routine, Slot, Shape, Cases, IR.No_Field_Shapes);
+                  end if;
+                  Block := IR.Add_Block
+                    (Unit, Routine, Landin.Resolution.Program_Scope, Site);
+                  IR.Enter (Unit, Routine, Block);
+                  if Place = Measurement then
+                     Value := IR.Emit_Aggregate_Measurement
+                       (Unit, Routine, IR.Measure_Size, [1 => Shape],
+                        Landin.Types.Usize, Site, Cases => Cases);
+                     pragma Assert (Value /= IR.No_Value);
+                  end if;
+                  IR.Emit_Leave (Unit, Routine, IR.No_Value, Site);
+                  IR.Leave_Block (Unit, Routine);
+                  if Place = Datum_Field then
+                     Add_Empty_Body (Unit, Datum, Site);
+                  end if;
+                  Expect
+                    (Item, V.Check (Unit, Facts),
+                     (if Scenario in Byte_Overflow | Word_Too_Wide
+                        | Dword_Too_Wide
+                      then V.Field_Shape_Malformed else V.Nothing_Wrong),
+                     "the smallest complete tag: " & Place'Image
+                     & " " & Scenario'Image);
+               end;
+            end loop;
+         end loop;
+      end loop;
+   end Variant_Tags_Represent_Their_Cases;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "verifier", "variant tags represent their cases",
+         Variant_Tags_Represent_Their_Cases'Access);
       Landin.Testing.Register
         (Into, "verifier", "reachability starts at the entry",
          Reachability_Starts_At_The_Entry'Access);
