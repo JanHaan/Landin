@@ -5931,7 +5931,7 @@ from every J identifier to its raw record. No source was assembled or linked.
 | J131 | Two refusal sites lack the `Ill_Typed` guard their siblings have, so an already-refused operand draws a second, wrong-first diagnostic | C | Implemented: range traversal preserves an ill-typed lower endpoint without a second type report, and pointer conversion refuses an already ill-typed operand before numeric checks or pointer facts. Independent non-integer refusals remain. Exact acceptance remains open. |
 | J132 | `any(...)` over a refused pointer union runs conformance selection before the union guard, emitting a spurious L0318 ahead of the real refusal | C | Implemented: pointer-union refusal precedes all any-construction conformance lookup and instantiation. A real missing conformance still reports L0318; its related origin now names the current required any type rather than the first same-concept reference elsewhere in the program. Exact acceptance remains open. |
 | J133 | One mistake in a generic template body is reported once per instantiation, so an actual-independent error is printed N times with identical span and text | C | Open diagnostic quality group: preserve stage/code/order and fix the named span, wording, suppression or duplicate-report issue with a small exact report. J131 is separate from repaired N10. |
-| J134 | `Checked_Instance_Count` is set to the post-loop instance count, so any routine instance created while the ready-instance loop itself runs is never offered to `Check_Routine_Body` | P | Plausible checking-table concern: prove the late-instance window or non-scalar query is reachable before treating it as a missed source check. |
+| J134 | `Checked_Instance_Count` is set to the post-loop instance count, so any routine instance created while the ready-instance loop itself runs is never offered to `Check_Routine_Body` | P | Bookkeeping contract repaired: capture the initial instance count before its fixed-bound body pass and retain that exact visited boundary for the late pass. Any instances created during body checking remain eligible afterward. The small provider witness already accepted/refused correctly before this change, so no reached source miscompilation is claimed. Exact acceptance remains open. |
 | J135 | Referents_Agree returns False for an erased `any` carrier, so References_Agree says an `any C` reference is not equal to itself | C | Implemented: erased carriers compare their directly held concept before the referent-kind switch; pointers and slices to any retain their existing referent checks. Small table controls pin reflexivity, duplicate identity, concept mismatches, permissions and nested references. No reached source miscompilation was established; exact acceptance remains open. |
 | J136 | Note_Owed_Check is the only node fact with neither a routine-instance overlay nor a double-write guard | C | Open checking-table invariant audit: establish the owed-check write/instance ownership contract with a focused seam and compare existing fact overlays. |
 | J137 | Field_Array_Element answers `bool` for an array field whose element is a struct, reference or nested array | P | Plausible checking-table concern: prove the late-instance window or non-scalar query is reachable before treating it as a missed source check. |
@@ -6891,11 +6891,23 @@ Landin assembler, linker or generated executable ran. Logs are retained in
 `.scratch/r491-namespace-values/` and `.scratch/r491-final-values/`.
 Exact-revision acceptance remains open.
 
-J134's instance-pass bookkeeping is next. A small generic wrapper with a
-parameterized conformance provider accepts i32 and correctly refuses its
-u32-to-i32 body mismatch, so it does not establish the proposed missed-check
-window. Any repair must distinguish the bookkeeping contract from a proven
-source failure.
+J134 development evidence: three selected generic source-to-IR/checking
+controls pass 12 checks in each of macOS debug and Linux release, preserving
+instance-key reuse and declared/inferred error sets. Four compile-only
+provider controls cover acceptance, actual-dependent type mismatch, definite
+assignment refusal and a nested generic relay. The initial two cases also ran
+before the repair and answered correctly; they establish no missed source
+check. The correction makes the saved boundary equal to the initial loop's
+actual range instead of a possibly larger count observed after that loop.
+Both single-worker builds passed; selected tests have 30-second or shorter
+limits and probes have 10-second limits. The sole fixed array has two i32
+elements. No Landin assembler, linker or generated executable ran. Logs are
+retained in `.scratch/r491-late-ready-instances/` and
+`.scratch/r491-final-values/`. Exact-revision acceptance remains open.
+
+J129's inferred-repetition refusal is next. Four tiny two-element cases
+currently yield seven reports, including misleading counted-binding errors
+and duplicated child refusals.
 J116's slice-endpoint claim
 still needs a separate normative disposition. J48 also requires an explicit
 static-selection collision rule: D146's existing uniqueness sentence is
